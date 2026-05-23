@@ -15,11 +15,13 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
     <form
       action={(fd) =>
         startTransition(async () => {
-          const res = await inviteTeacher(fd);
-          if (res.ok) {
+          try {
+            await inviteTeacher(fd);
             toast.success("Invite sent");
             (document.getElementById("invite-form") as HTMLFormElement)?.reset();
-          } else toast.error(res.error);
+          } catch (e: any) {
+            toast.error(e?.message || "Failed to send invite");
+          }
         })
       }
       id="invite-form"
