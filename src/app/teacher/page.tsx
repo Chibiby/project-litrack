@@ -31,7 +31,7 @@ export default async function TeacherDashboard() {
       {grades.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">
-            You haven't been assigned to any grade level yet. Ask your School Head.
+            You haven&apos;t been assigned to any grade level yet. Ask your School Head.
           </CardContent>
         </Card>
       ) : (
