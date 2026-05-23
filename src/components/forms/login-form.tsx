@@ -52,7 +52,7 @@ export function LoginForm({ schools }: { schools: { id: string; name: string }[]
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Teachers can only log in once they've been enrolled by their School Head.
+            Teachers can only log in once they&apos;ve been enrolled by their School Head.
           </p>
         </CardContent>
       </Card>

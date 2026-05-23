@@ -26,7 +26,7 @@ export default async function TeacherSetupPage({ params }: { params: Promise<{ t
           <h1 className="text-2xl font-bold">Set up your account</h1>
           {valid ? (
             <p className="text-sm text-muted-foreground">
-              You're invited to join <strong>{invite.school.name}</strong>
+              You&apos;re invited to join <strong>{invite.school.name}</strong>
             </p>
           ) : null}
         </div>

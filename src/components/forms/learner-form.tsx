@@ -83,7 +83,7 @@ export function LearnerForm({ gradeLevelId }: { gradeLevelId: string }) {
 
       <Separator />
       <div>
-        <p className="text-sm font-medium mb-2">Parents' Educational Background *</p>
+        <p className="text-sm font-medium mb-2">Parents&apos; Educational Background *</p>
         <FieldRadioGroup name="parentEducation" options={toOptions(PARENT_EDUCATION_LABELS)} />
       </div>
 

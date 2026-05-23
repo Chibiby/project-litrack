@@ -15,3 +15,6 @@ playwright-report/
 test-results/
 playwright/.cache/
 prisma/migrations/dev.db*
+
+.vercel
+.env*

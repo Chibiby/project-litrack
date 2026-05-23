@@ -95,7 +95,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
             <p className="text-sm font-medium mb-2">Frequency of Absenteeism *</p>
             <FieldRadioGroup name="absenteeismFrequency" options={toOptions(ABSENTEEISM_LABELS)} defaultValue={defaultValues.absenteeismFrequency} />
             <div className="mt-3 space-y-1">
-              <Label htmlFor="absenteeismOtherReason">If 'Other', specify reason</Label>
+              <Label htmlFor="absenteeismOtherReason">If &apos;Other&apos;, specify reason</Label>
               <Input id="absenteeismOtherReason" name="absenteeismOtherReason" defaultValue={defaultValues.absenteeismOtherReason ?? ""} />
             </div>
           </div>
@@ -158,7 +158,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
             <p className="text-sm font-medium mb-2">Recommendation for Further Assessment</p>
             <FieldCheckboxList name="furtherAssessment" options={toOptions(FURTHER_ASSESSMENT_LABELS)} defaultValues={defaultValues.furtherAssessment ?? []} />
             <div className="mt-3 space-y-1">
-              <Label htmlFor="furtherAssessmentOther">If 'Other', specify</Label>
+              <Label htmlFor="furtherAssessmentOther">If &apos;Other&apos;, specify</Label>
               <Input id="furtherAssessmentOther" name="furtherAssessmentOther" defaultValue={defaultValues.furtherAssessmentOther ?? ""} />
             </div>
           </div>
