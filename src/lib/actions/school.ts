@@ -89,14 +89,13 @@ export async function listSchoolsPublic() {
   });
 }
 
-export async function deleteSchool(formData: FormData): Promise<ActionResult> {
+export async function deleteSchool(formData: FormData): Promise<void> {
   await requireUser("SUPER_ADMIN");
   const id = String(formData.get("id") ?? "");
-  if (!id) return { ok: false, error: "Missing id" };
+  if (!id) throw new Error("Missing id");
   await prisma.school.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
   });
   revalidatePath("/admin/schools");
-  return { ok: true };
 }
