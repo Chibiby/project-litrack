@@ -89,6 +89,29 @@ export async function listSchoolsPublic() {
   });
 }
 
+export async function listSchoolsWithTeacherStatus() {
+  const schools = await prisma.school.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      _count: {
+        select: {
+          users: {
+            where: { role: "TEACHER", deletedAt: null, isActive: true },
+          },
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+  return schools.map((s) => ({
+    id: s.id,
+    name: s.name,
+    hasTeachers: s._count.users > 0,
+  }));
+}
+
 export async function deleteSchool(formData: FormData): Promise<void> {
   await requireUser("SUPER_ADMIN");
   const id = String(formData.get("id") ?? "");

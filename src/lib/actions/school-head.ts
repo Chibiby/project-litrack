@@ -7,6 +7,8 @@ import { schoolHeadProfileSchema } from "@/lib/validators/profile.schema";
 import { createGradeLevelSchema, teacherInviteSchema } from "@/lib/validators/teacher-invite.schema";
 import { generateInviteToken } from "@/lib/auth/invites";
 import { sendTeacherInviteEmail } from "@/lib/email/resend";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { randomBytes } from "crypto";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -165,4 +167,74 @@ export async function assignTeacherToGrade(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/school-head/teachers");
+}
+
+function generateTempPassword(): string {
+  return randomBytes(4).toString("hex").toUpperCase(); // 8 chars, e.g., "A1B2C3D4"
+}
+
+export async function createTeacherDirect(formData: FormData): Promise<{ username: string; tempPassword: string }> {
+  const user = await requireUser("SCHOOL_HEAD");
+  if (!user.schoolId || !user.profileCompleted) {
+    throw new Error("Complete your profile first");
+  }
+
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const middleName = String(formData.get("middleName") ?? "").trim() || null;
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const gradeLevelId = String(formData.get("gradeLevelId") ?? "");
+
+  if (!firstName || !lastName || !gradeLevelId) {
+    throw new Error("First name, last name, and grade level are required");
+  }
+
+  // Verify grade belongs to school
+  const grade = await prisma.gradeLevel.findFirst({
+    where: { id: gradeLevelId, schoolId: user.schoolId, deletedAt: null },
+  });
+  if (!grade) throw new Error("Invalid grade level");
+
+  // Generate unique username based on last name + random suffix
+  const baseUsername = `teacher.${lastName.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+  const randomSuffix = randomBytes(2).toString("hex"); // 4 chars
+  const username = `${baseUsername}.${randomSuffix}`;
+
+  // Generate temporary password
+  const tempPassword = generateTempPassword();
+
+  // Generate synthetic email for Supabase (not used for login, but required)
+  const syntheticEmail = `${username}@school.local`;
+
+  // Create Supabase auth user
+  const admin = createSupabaseAdminClient();
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: syntheticEmail,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: { role: "TEACHER", schoolId: user.schoolId, username },
+  });
+  if (createErr || !created.user) {
+    throw new Error(createErr?.message ?? "Failed to create teacher account");
+  }
+
+  // Create User record in database
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+  await prisma.user.create({
+    data: {
+      authId: created.user.id,
+      email: syntheticEmail, // Store synthetic email
+      role: "TEACHER",
+      schoolId: user.schoolId,
+      firstName,
+      middleName,
+      lastName,
+      fullName,
+      isActive: true,
+      profileCompleted: false,
+      taughtGrades: { connect: { id: gradeLevelId } },
+    },
+  });
+
+  revalidatePath("/school-head/teachers");
+  return { username, tempPassword };
 }

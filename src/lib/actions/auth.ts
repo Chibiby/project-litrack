@@ -46,25 +46,28 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
 }
 
 /**
- * Teacher login: select School, then enter own email + password.
- * Teacher password is set during invite acceptance.
+ * Teacher login: select School, then enter username + password.
+ * Username and password are provided by School Head during account creation.
  */
 export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   const schoolId = String(formData.get("schoolId") ?? "");
-  const email = String(formData.get("email") ?? "");
+  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!schoolId || !email || !password) return { ok: false, error: "All fields required" };
+  if (!schoolId || !username || !password) return { ok: false, error: "All fields required" };
+
+  // Construct synthetic email from username
+  const syntheticEmail = `${username}@school.local`;
 
   // Verify the user exists and belongs to this school
   const user = await prisma.user.findFirst({
-    where: { email, role: "TEACHER", schoolId, deletedAt: null, isActive: true },
+    where: { email: syntheticEmail, role: "TEACHER", schoolId, deletedAt: null, isActive: true },
     select: { id: true },
   });
   if (!user) return { ok: false, error: "Teacher not found in this school" };
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { ok: false, error: "Incorrect email or password" };
+  const { error } = await supabase.auth.signInWithPassword({ email: syntheticEmail, password });
+  if (error) return { ok: false, error: "Incorrect username or password" };
 
   redirect("/teacher");
 }

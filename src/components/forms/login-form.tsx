@@ -11,10 +11,19 @@ import { loginSchoolHead, loginTeacher } from "@/lib/actions/auth";
 
 type Mode = "select-role" | "school-head" | "teacher";
 
-export function LoginForm({ schools }: { schools: { id: string; name: string }[] }) {
+type SchoolWithStatus = { id: string; name: string; hasTeachers: boolean };
+
+export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
   const [mode, setMode] = useState<Mode>("select-role");
   const [schoolId, setSchoolId] = useState<string>("");
+  const [hasTeachers, setHasTeachers] = useState<boolean>(false);
   const [pending, startTransition] = useTransition();
+
+  const handleSchoolChange = (value: string) => {
+    setSchoolId(value);
+    const selected = schools.find((s) => s.id === value);
+    setHasTeachers(selected?.hasTeachers ?? false);
+  };
 
   if (mode === "select-role") {
     return (
@@ -22,7 +31,7 @@ export function LoginForm({ schools }: { schools: { id: string; name: string }[]
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label>School Name</Label>
-            <Select value={schoolId} onValueChange={setSchoolId}>
+            <Select value={schoolId} onValueChange={handleSchoolChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select your school" />
               </SelectTrigger>
@@ -42,8 +51,9 @@ export function LoginForm({ schools }: { schools: { id: string; name: string }[]
           <div className="grid grid-cols-2 gap-3 pt-2">
             <Button
               variant="outline"
-              disabled={!schoolId}
+              disabled={!schoolId || !hasTeachers}
               onClick={() => setMode("teacher")}
+              title={!schoolId ? "Select a school first" : !hasTeachers ? "No teachers enrolled yet. School Head must add teachers first." : ""}
             >
               Teachers
             </Button>
@@ -52,7 +62,11 @@ export function LoginForm({ schools }: { schools: { id: string; name: string }[]
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Teachers can only log in once they&apos;ve been enrolled by their School Head.
+            {!schoolId
+              ? "Select a school to continue."
+              : !hasTeachers
+                ? "Teachers button disabled: No teachers enrolled yet. School Head must log in first and add teachers."
+                : "Teachers can now log in."}
           </p>
         </CardContent>
       </Card>
@@ -101,8 +115,8 @@ export function LoginForm({ schools }: { schools: { id: string; name: string }[]
           <form action={handleTeacherSubmit} className="space-y-4">
             <h2 className="text-lg font-semibold">Teacher Login</h2>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoFocus />
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" name="username" type="text" required autoFocus placeholder="e.g., teacher.smith.a1b2" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>

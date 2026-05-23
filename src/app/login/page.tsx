@@ -1,11 +1,11 @@
-import { listSchoolsPublic } from "@/lib/actions/school";
+import { listSchoolsWithTeacherStatus } from "@/lib/actions/school";
 import { LoginForm } from "@/components/forms/login-form";
 import { GraduationCap } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const schools = await listSchoolsPublic();
+  const schools = await listSchoolsWithTeacherStatus();
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-white p-4">

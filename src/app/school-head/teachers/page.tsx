@@ -15,7 +15,7 @@ export default async function TeachersPage() {
   if (!user.profileCompleted) redirect("/school-head/profiling");
   if (!user.schoolId) redirect("/login");
 
-  const [grades, teachers, invites] = await Promise.all([
+  const [grades, teachers] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId: user.schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
@@ -23,10 +23,6 @@ export default async function TeachersPage() {
     prisma.user.findMany({
       where: { schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
       include: { taughtGrades: { select: { type: true } } },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.teacherInvite.findMany({
-      where: { schoolId: user.schoolId, consumedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -51,22 +47,20 @@ export default async function TeachersPage() {
           <div className="space-y-4">
             <Card>
               <CardContent className="p-0">
-                <div className="px-4 py-3 border-b text-sm font-medium">Active teachers ({teachers.length})</div>
+                <div className="px-4 py-3 border-b text-sm font-medium">Teachers ({teachers.length})</div>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
                       <TableHead>Grades</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {teachers.length === 0 ? (
-                      <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No teachers yet</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-6">No teachers yet. Create one above.</TableCell></TableRow>
                     ) : teachers.map((t) => (
                       <TableRow key={t.id}>
                         <TableCell className="font-medium">{t.fullName}</TableCell>
-                        <TableCell className="text-muted-foreground">{t.email}</TableCell>
                         <TableCell>
                           {t.taughtGrades.length === 0 ? (
                             <Badge variant="outline">Unassigned</Badge>
@@ -80,32 +74,6 @@ export default async function TeachersPage() {
                 </Table>
               </CardContent>
             </Card>
-
-            {invites.length > 0 && (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="px-4 py-3 border-b text-sm font-medium">Pending invites ({invites.length})</div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Expires</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invites.map((inv) => (
-                        <TableRow key={inv.id}>
-                          <TableCell>{[inv.firstName, inv.lastName].join(" ")}</TableCell>
-                          <TableCell className="text-muted-foreground">{inv.email}</TableCell>
-                          <TableCell>{inv.expiresAt.toLocaleDateString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       )}
