@@ -45,11 +45,13 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
     <form
       action={(fd) =>
         startTransition(async () => {
-          const res = await saveSchoolHeadProfile(fd);
-          if (res.ok) {
+          try {
+            await saveSchoolHeadProfile(fd);
             toast.success("Profile saved");
             router.push("/school-head");
-          } else toast.error(res.error);
+          } catch (e: any) {
+            toast.error(e?.message || "Failed to save profile");
+          }
         })
       }
       className="space-y-6"

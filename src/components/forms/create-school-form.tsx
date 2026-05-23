@@ -19,12 +19,12 @@ export function CreateSchoolForm() {
         <form
           action={(fd) =>
             startTransition(async () => {
-              const res = await createSchool(fd);
-              if (res.ok) {
+              try {
+                await createSchool(fd);
                 toast.success("School created. The School Head can now log in.");
                 router.push("/admin/schools");
-              } else {
-                toast.error(res.error);
+              } catch (e: any) {
+                toast.error(e?.message || "Failed to create school");
               }
             })
           }
@@ -68,3 +68,4 @@ export function CreateSchoolForm() {
     </Card>
   );
 }
+
