@@ -1,0 +1,564 @@
+// PROJECT LITRACK - Prisma Schema
+// Datasource: Supabase Postgres
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  SCHOOL_HEAD
+  TEACHER
+}
+
+enum GradeLevelType {
+  KINDER
+  G1
+  G2
+  G3
+  G4
+  G5
+  G6
+  G7
+  G8
+  G9
+  G10
+  G11
+  G12
+  FLOATING
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ReadingProfile {
+  NON_DECODER_LOW_EMERGENT
+  FRUSTRATION_HIGH_EMERGENT
+  INSTRUCTIONAL_DEVELOPING
+  INDEPENDENT_GRADE_READY
+}
+
+enum FrustrationSubtype {
+  DECODING
+  COMPREHENSION_ALL
+  COMPREHENSION_CRITICAL
+}
+
+enum EducationalAttainment {
+  BACHELORS
+  WITH_MASTERS_UNITS
+  MASTERS
+  WITH_DOCTORAL_UNITS
+  DOCTORAL
+}
+
+enum YearsInService {
+  Y0_3
+  Y4_10
+  Y11_20
+  Y21_PLUS
+}
+
+enum TrainingLevel {
+  INTERNATIONAL
+  NATIONAL
+  REGION
+  DIVISION
+  DISTRICT
+  SCHOOL
+  NA
+}
+
+enum SchoolHeadPosition {
+  TEACHER_I_TIC
+  TEACHER_II_TIC
+  TEACHER_III_TIC
+  TEACHER_IV_TIC
+  TEACHER_V_TIC
+  HEAD_TEACHER_I
+  HEAD_TEACHER_II
+  HEAD_TEACHER_III
+  HEAD_TEACHER_IV
+  HEAD_TEACHER_V
+  HEAD_TEACHER_VI
+  HEAD_TEACHER_VII
+  PRINCIPAL_I
+  PRINCIPAL_II
+  PRINCIPAL_III
+  PRINCIPAL_IV
+  TECHVOC_AD
+}
+
+enum TeacherPosition {
+  TEACHER_I
+  TEACHER_II
+  TEACHER_III
+  TEACHER_IV
+  TEACHER_V
+  TEACHER_VI
+  TEACHER_VII
+  MASTER_TEACHER_I
+  MASTER_TEACHER_II
+  MASTER_TEACHER_III
+  MASTER_TEACHER_IV
+}
+
+enum Specialization {
+  GENERAL_EDUCATION
+  ENGLISH
+  MATH
+  SCIENCE
+  FILIPINO
+  TLE_EPP
+  ARALPAN
+  MAPEH
+  TECHVOC
+  VALUES_ED
+  OTHERS
+}
+
+enum Subject {
+  ENGLISH
+  MATH
+  SCIENCE
+  FILIPINO
+  TLE_EPP
+  ARALPAN
+  MAPEH
+  TECHVOC
+  VALUES_ED
+  ABM
+}
+
+enum ReadingTraining {
+  ARAL
+  TEACHING_READING
+  ELLN
+  TEACEP
+  NONE
+}
+
+enum EnglishTraining {
+  MATATAG_TRAINING
+  UPSKILLING_ENGLISH_COMPETENCE
+  NONE
+}
+
+enum GovernmentBenefit {
+  FOUR_PS
+  IPS
+}
+
+enum ParentEducation {
+  NO_FORMAL
+  ELEMENTARY_LEVEL
+  ELEMENTARY_GRADUATE
+  SECONDARY_LEVEL
+  SECONDARY_GRADUATE
+  COLLEGE_LEVEL
+  COLLEGE_GRADUATE
+}
+
+enum ModeOfTransportation {
+  WALKING
+  MOTORCYCLE
+  BUS_JEEP_CAR
+}
+
+enum DistanceToSchool {
+  LESS_THAN_1KM
+  ONE_TO_FIVE_KM
+  MORE_THAN_5KM
+}
+
+enum SchoolTransfers {
+  NONE
+  ONE
+  MULTIPLE
+}
+
+enum AbsenteeismFrequency {
+  ONE_TO_THREE_PER_MONTH
+  THREE_TO_FIVE_PER_MONTH
+  MORE_THAN_FIVE_PER_MONTH
+  WEEKLY
+  OTHER
+}
+
+enum LetterRecognition {
+  ALL_EASY
+  CONFUSES_SIMILAR
+  STRUGGLES_RECALL
+  NA
+}
+
+enum LetterSoundCorrespondence {
+  ACCURATE
+  INCONSISTENT
+  UNABLE
+  NA
+}
+
+enum WordRecognition {
+  READS_HF_FLUENT
+  GUESSES
+  OMITS_ADDS_REPLACES
+  STRUGGLES_SIGHT_WORDS
+  NA
+}
+
+enum HomeLiteracyEnvironment {
+  HAS_ACCESS
+  LIMITED
+  NONE
+  NA
+}
+
+enum ParentalSupport {
+  REGULAR
+  LIMITED
+  NONE
+  NA
+}
+
+enum ClassroomEnvironment {
+  SMALL_CLASS
+  LARGE_CLASS
+  NA
+}
+
+enum LanguageConsideration {
+  MATCHES_LOI
+  DIFFERENT_DIALECT
+  STRUGGLES_TRANSITION
+  NA
+}
+
+enum Intervention {
+  PHONEMIC_AWARENESS
+  LETTER_SOUND_DRILLS
+  SIGHT_WORD_PRACTICE
+  STRUCTURED_PHONICS
+  ONE_ON_ONE
+  HOME_READING
+  LSEN_OTHER
+}
+
+enum FurtherAssessment {
+  MFAT
+  OTHER
+}
+
+// =====================================================
+// MODELS
+// =====================================================
+
+model School {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  schoolIdCode String   @unique // password used for login
+  address      String?
+  region       String?
+  division     String?
+  district     String?
+  isActive     Boolean  @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  users        User[]
+  gradeLevels  GradeLevel[]
+  learners     Learner[]
+  schoolYears  SchoolYear[]
+  teacherInvites TeacherInvite[]
+
+  @@index([deletedAt])
+  @@index([isActive])
+}
+
+model SchoolYear {
+  id        String   @id @default(uuid())
+  schoolId  String
+  label     String   // e.g. "2025-2026"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, label])
+  @@index([schoolId, isActive])
+}
+
+model User {
+  id         String   @id @default(uuid())
+  authId     String   @unique // Supabase auth.users.id
+  email      String   @unique
+  role       UserRole
+  schoolId   String?
+  firstName  String
+  middleName String?
+  lastName   String
+  fullName   String
+  isActive   Boolean  @default(false)
+  // Profile completion flags
+  profileCompleted Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  school            School?            @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile SchoolHeadProfile?
+  teacherProfile    TeacherProfile?
+  taughtGrades      GradeLevel[]       @relation("TeacherGrades")
+  managedLearners   Learner[]          @relation("TeacherLearners")
+  recordedAttendance Attendance[]      @relation("AttendanceRecorder")
+  recordedReadingLevels ReadingLevelRecord[] @relation("ReadingRecorder")
+
+  @@index([schoolId, role, deletedAt])
+  @@index([authId])
+}
+
+model SchoolHeadProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  // I. Respondent Information
+  contactNumber String?
+  designation   String?
+  position      SchoolHeadPosition
+
+  // II. Professional Background
+  educationalAttainment EducationalAttainment
+  fieldOfSpecialization Specialization
+  specializationOther   String?
+  yearsInService        YearsInService
+
+  // IV. Training & Professional Development
+  hasReadingTraining   Boolean
+  readingTrainings     ReadingTraining[]
+  hasEnglishTraining   Boolean
+  englishTrainings     EnglishTraining[]
+  highestTrainingLevel TrainingLevel
+
+  completedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeacherProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  // I. Respondent Information
+  contactNumber String?
+  designation   String?
+  position      TeacherPosition
+
+  // II. Professional Background
+  educationalAttainment   EducationalAttainment
+  fieldOfSpecialization   Specialization
+  specializationOther     String?
+  yearsInService          YearsInService
+  currentGradeAssignment  GradeLevelType?
+
+  // III. Teaching Assignment
+  mostSubjectHandled Subject
+
+  // IV. Training & Professional Development
+  hasReadingTraining   Boolean
+  readingTrainings     ReadingTraining[]
+  hasEnglishTraining   Boolean
+  englishTrainings     EnglishTraining[]
+  highestTrainingLevel TrainingLevel
+
+  completedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeacherInvite {
+  id         String    @id @default(uuid())
+  schoolId   String
+  email      String
+  firstName  String
+  middleName String?
+  lastName   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, email])
+  @@index([expiresAt])
+}
+
+model GradeLevel {
+  id        String         @id @default(uuid())
+  schoolId  String
+  type      GradeLevelType
+  createdAt DateTime       @default(now())
+  deletedAt DateTime?
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teachers User[]    @relation("TeacherGrades")
+  learners Learner[]
+
+  @@unique([schoolId, type])
+  @@index([deletedAt])
+}
+
+model Learner {
+  id           String  @id @default(uuid())
+  schoolId     String
+  gradeLevelId String
+  teacherId    String
+
+  // Section A - Initial Profile
+  firstName  String
+  middleName String?
+  lastName   String
+  fullName   String
+  age        Int
+  gender     Gender
+
+  englishReadingProfile        ReadingProfile
+  englishFrustrationSubtypes   FrustrationSubtype[]
+  filipinoReadingProfile       ReadingProfile
+  filipinoFrustrationSubtypes  FrustrationSubtype[]
+
+  governmentBenefits GovernmentBenefit[]
+  parentEducation    ParentEducation
+
+  // ARAL flag
+  isAralLearner   Boolean   @default(false)
+  aralEnrolledAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeLevel    GradeLevel           @relation(fields: [gradeLevelId], references: [id])
+  teacher       User                 @relation("TeacherLearners", fields: [teacherId], references: [id])
+  aralProfile   AralProfile?
+  attendances   Attendance[]
+  readingLevels ReadingLevelRecord[]
+
+  @@index([schoolId, gradeLevelId, isAralLearner, deletedAt])
+  @@index([teacherId])
+}
+
+model AralProfile {
+  id        String @id @default(uuid())
+  learnerId String @unique
+
+  // B. Attendance & School Background
+  modeOfTransportation ModeOfTransportation
+  distanceHomeToSchool DistanceToSchool
+  previousTransfers    SchoolTransfers
+  transferDetails      String?
+
+  // C. Reading Behavior
+  absenteeismFrequency      AbsenteeismFrequency
+  absenteeismOtherReason    String?
+  letterRecognition         LetterRecognition
+  letterSoundCorrespondence LetterSoundCorrespondence
+  wordRecognition           WordRecognition
+
+  // D. External Factors
+  homeLiteracyEnvironment HomeLiteracyEnvironment
+  parentalSupport         ParentalSupport
+  classroomEnvironment    ClassroomEnvironment
+  languageConsiderations  LanguageConsideration[]
+
+  // E. Interventions & Recommendations
+  suggestedInterventions Intervention[]
+  lsenObservations       String?
+  furtherAssessment      FurtherAssessment[]
+  furtherAssessmentOther String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  learner Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+model Attendance {
+  id           String           @id @default(uuid())
+  learnerId    String
+  date         DateTime         @db.Date
+  weekStart    DateTime         @db.Date // Monday of that week, for aggregation
+  status       AttendanceStatus
+  notes        String?
+  recordedById String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("AttendanceRecorder", fields: [recordedById], references: [id])
+
+  @@unique([learnerId, date])
+  @@index([learnerId, weekStart])
+  @@index([date])
+}
+
+model ReadingLevelRecord {
+  id              String         @id @default(uuid())
+  learnerId       String
+  monthYear       String         // "2026-05"
+  englishProfile  ReadingProfile
+  filipinoProfile ReadingProfile
+  notes           String?
+  recordedById    String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("ReadingRecorder", fields: [recordedById], references: [id])
+
+  @@unique([learnerId, monthYear])
+  @@index([monthYear])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  schoolId   String?
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([schoolId, timestamp])
+  @@index([resource, resourceId])
+}
