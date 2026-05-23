@@ -1,6 +1,6 @@
 # LITRACK User Guide
 
-**Live URL:** https://project-litrack-pp547jwqx-fesbeautyparlor-1341s-projects.vercel.app
+**Live URL:** https://project-litrack.vercel.app
 
 A comprehensive guide for all users of the PROJECT LITRACK school reading-profiling system.
 
@@ -32,7 +32,7 @@ A comprehensive guide for all users of the PROJECT LITRACK school reading-profil
 
 - **School Management** - Create and manage schools with unique School IDs
 - **Grade Level Management** - Set up grade levels (Kinder, Grades 1-12, Floating)
-- **Teacher Management** - Invite teachers via email with secure tokens
+- **Teacher Management** - Create teacher accounts with auto-generated credentials
 - **Learner Profiling** - Track student reading profiles (English & Filipino)
 - **ARAL Program** - Identify struggling readers and track interventions
 - **Attendance Tracking** - Daily P/A/L/E (Present/Absent/Late/Excused) records
@@ -172,50 +172,54 @@ Available grade levels:
 
 Navigate to `/school-head/teachers` or click **Invite** from dashboard.
 
-#### Inviting a Teacher
+#### Creating a Teacher Account
 
 1. Select **Grade level** from dropdown (teacher's initial assignment)
 2. Enter teacher details:
    - **First name** *(required)*
    - **Middle name** *(optional)*
    - **Last name** *(required)*
-   - **Email** *(required)* - Must be unique in system
-3. Click **Send invite**
+3. Click **Create teacher account**
 
 **What happens next:**
-- Teacher receives email with invite link
-- Link expires after a set time (configurable)
-- Pending invites appear in "Pending invites" table
-- Teacher clicks link, sets password, and is automatically logged in
+- System generates a unique **username** (format: `teacher.lastname.xxxx`)
+- System generates a temporary **password** (8 characters)
+- A **green success card** appears showing the credentials
+- Click **Copy credentials** to copy username and password to clipboard
+- **Share these credentials securely with the teacher**
+- The teacher can now log in using the **Teachers** button on the main login page
 
-**Note:** If email sending fails (no Resend API key configured), the invite is still created in the system. Contact your administrator for manual setup.
+⚠️ **Important:** The temporary password must be shared securely. Teachers will be able to change their password after first login.
 
 #### Viewing Teachers
 
-The page shows two tables:
-1. **Active teachers** - Those who have accepted invites
-   - Name, Email, Assigned Grades
-2. **Pending invites** - Awaiting acceptance
-   - Name, Email, Expiration date
+The page shows a table of all teachers:
+- **Name** - Full name of the teacher
+- **Grades** - Badge showing assigned grade levels
+
+Teachers with no grades assigned show as "Unassigned".
 
 #### Assigning Teachers to Grades
 
-After a teacher accepts an invite, you can assign them to additional grades. Teachers can be assigned to multiple grade levels.
+After creating a teacher, you can assign them to additional grades. Teachers can be assigned to multiple grade levels.
 
 ---
 
 ## Teacher Guide
 
-### Accepting an Invite (First-Time Setup)
+### First-Time Login
 
-1. Check your email for an invite from LITRACK
-2. Click the **invite link** (format: `https://project-litrack...vercel.app/teacher-setup/{token}`)
-3. You'll see: "You're invited to join [School Name]"
-4. Set your password:
-   - **Password** *(required)* - Minimum requirements apply
-   - **Confirm Password** *(required)* - Must match
-5. Click **Create Account**
-6. You're automatically logged in and redirected to complete your profile
+Your School Head will provide you with a **username** and **temporary password**.
+
+1. Navigate to the main login page: `/login`
+2. Select your **school name** from the dropdown
+3. Click **"Teachers"** button (enabled only after teachers are added)
+4. Enter your **username** (e.g., `teacher.smith.a1b2`)
+5. Enter your **temporary password** (provided by School Head)
+6. Click **Sign In**
+7. You'll be redirected to complete your profile
+
+**Note:** If the **Teachers** button is disabled, it means no teachers have been enrolled yet. Contact your School Head.
 
 ### Profile Completion (Required First Step)
 
@@ -365,12 +369,13 @@ Click **Reading Level** on any ARAL learner:
 
 **"Teacher not found in this school"**
 - Ensure you're selecting the correct school
-- Teacher account must be activated via invite link first
-- Contact School Head to verify email address on file
+- Verify you're using the correct username (not email)
+- Contact School Head to confirm your account was created
 
-**"This invite link is invalid or expired"**
-- Invite links expire after a set time (default: configurable)
-- Ask School Head to send a new invite
+**"Incorrect username or password"**
+- Usernames are case-sensitive and follow format: `teacher.lastname.xxxx`
+- Check that you haven't accidentally typed the password with extra spaces
+- If you forgot your password, contact your School Head to reset it
 
 ### Profile Issues
 
@@ -420,7 +425,6 @@ If issues persist:
 | Grade Detail | `/teacher/grade/{gradeId}` |
 | ARAL Dashboard | `/teacher/aral/{gradeId}` |
 | Teacher Profile | `/teacher/profiling` |
-| Teacher Setup | `/teacher-setup/{token}` |
 
 ---
 
