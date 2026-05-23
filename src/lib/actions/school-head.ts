@@ -27,9 +27,9 @@ function formToObj(formData: FormData): Record<string, unknown> {
   return obj;
 }
 
-export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionResult> {
+export async function saveSchoolHeadProfile(formData: FormData): Promise<void> {
   const user = await requireUser("SCHOOL_HEAD");
-  if (!user.schoolId) return { ok: false, error: "User has no school" };
+  if (!user.schoolId) throw new Error("User has no school");
 
   const raw = formToObj(formData);
   // Booleans in checkboxes
@@ -37,7 +37,7 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   raw.hasEnglishTraining = raw.hasEnglishTraining === true || raw.hasEnglishTraining === "true" || raw.hasEnglishTraining === "on";
 
   const parsed = schoolHeadProfileSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  if (!parsed.success) throw new Error(parsed.error.errors[0]?.message ?? "Invalid input");
 
   // Optional: full name from form (since SH was bootstrapped with placeholder)
   const firstName = String(formData.get("firstName") ?? user.firstName).trim();
@@ -58,16 +58,15 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   ]);
 
   revalidatePath("/school-head");
-  return { ok: true };
 }
 
-export async function createGradeLevel(formData: FormData): Promise<ActionResult> {
+export async function createGradeLevel(formData: FormData): Promise<void> {
   const user = await requireUser("SCHOOL_HEAD");
   if (!user.schoolId || !user.profileCompleted) {
-    return { ok: false, error: "Complete your profile first" };
+    throw new Error("Complete your profile first");
   }
   const parsed = createGradeLevelSchema.safeParse({ type: formData.get("type") });
-  if (!parsed.success) return { ok: false, error: "Invalid grade level" };
+  if (!parsed.success) throw new Error("Invalid grade level");
 
   await prisma.gradeLevel.upsert({
     where: { schoolId_type: { schoolId: user.schoolId, type: parsed.data.type } },
@@ -76,13 +75,12 @@ export async function createGradeLevel(formData: FormData): Promise<ActionResult
   });
 
   revalidatePath("/school-head/grade-levels");
-  return { ok: true };
 }
 
-export async function inviteTeacher(formData: FormData): Promise<ActionResult> {
+export async function inviteTeacher(formData: FormData): Promise<void> {
   const user = await requireUser("SCHOOL_HEAD");
   if (!user.schoolId || !user.profileCompleted) {
-    return { ok: false, error: "Complete your profile first" };
+    throw new Error("Complete your profile first");
   }
 
   const parsed = teacherInviteSchema.safeParse({
@@ -92,17 +90,17 @@ export async function inviteTeacher(formData: FormData): Promise<ActionResult> {
     middleName: formData.get("middleName"),
     lastName: formData.get("lastName"),
   });
-  if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  if (!parsed.success) throw new Error(parsed.error.errors[0]?.message ?? "Invalid input");
 
   // Validate grade belongs to school
   const grade = await prisma.gradeLevel.findFirst({
     where: { id: parsed.data.gradeLevelId, schoolId: user.schoolId, deletedAt: null },
   });
-  if (!grade) return { ok: false, error: "Invalid grade level" };
+  if (!grade) throw new Error("Invalid grade level");
 
   // Check email uniqueness
   const exists = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  if (exists) return { ok: false, error: "Email is already in use" };
+  if (exists) throw new Error("Email is already in use");
 
   const { token, tokenHash, expiresAt } = generateInviteToken();
   await prisma.teacherInvite.create({
@@ -144,23 +142,22 @@ export async function inviteTeacher(formData: FormData): Promise<ActionResult> {
   // (out of scope for MVP; SH can assign grade after teacher accepts).
 
   revalidatePath("/school-head/teachers");
-  return { ok: true };
 }
 
-export async function assignTeacherToGrade(formData: FormData): Promise<ActionResult> {
+export async function assignTeacherToGrade(formData: FormData): Promise<void> {
   const user = await requireUser("SCHOOL_HEAD");
-  if (!user.schoolId) return { ok: false, error: "No school" };
+  if (!user.schoolId) throw new Error("No school");
 
   const teacherId = String(formData.get("teacherId") ?? "");
   const gradeLevelId = String(formData.get("gradeLevelId") ?? "");
-  if (!teacherId || !gradeLevelId) return { ok: false, error: "Missing fields" };
+  if (!teacherId || !gradeLevelId) throw new Error("Missing fields");
 
   // Verify both belong to the SH's school
   const [teacher, grade] = await Promise.all([
     prisma.user.findFirst({ where: { id: teacherId, schoolId: user.schoolId, role: "TEACHER" } }),
     prisma.gradeLevel.findFirst({ where: { id: gradeLevelId, schoolId: user.schoolId } }),
   ]);
-  if (!teacher || !grade) return { ok: false, error: "Invalid teacher or grade" };
+  if (!teacher || !grade) throw new Error("Invalid teacher or grade");
 
   await prisma.user.update({
     where: { id: teacherId },
@@ -168,5 +165,4 @@ export async function assignTeacherToGrade(formData: FormData): Promise<ActionRe
   });
 
   revalidatePath("/school-head/teachers");
-  return { ok: true };
 }
