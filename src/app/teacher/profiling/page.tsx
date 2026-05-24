@@ -10,7 +10,12 @@ export default async function TeacherProfilingPage() {
   const profile = await prisma.teacherProfile.findUnique({ where: { userId: user.id } });
 
   return (
-    <AppShell title="Teacher Profiling" subtitle="Complete this to start adding learners">
+    <AppShell 
+      title="Teacher Profiling" 
+      subtitle="Complete this to start adding learners"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+    >
       <TeacherProfileForm defaultValues={profile ?? {}} />
     </AppShell>
   );

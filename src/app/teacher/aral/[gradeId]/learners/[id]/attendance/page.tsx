@@ -13,17 +13,29 @@ import { getMonday } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+interface AttendancePageProps {
+  params: Promise<{ gradeId: string; id: string }>;
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
 export default async function AttendancePage({
   params,
-}: {
-  params: Promise<{ gradeId: string; id: string }>;
-}) {
+  searchParams,
+}: AttendancePageProps) {
   const { gradeId, id } = await params;
+  const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
+  
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+
+  // For Super Admin: can access any learner; for Teacher: only their learners
+  const learnerFilter = isSuperAdmin
+    ? { id, deletedAt: null }
+    : { id, teacherId: user.id, deletedAt: null };
 
   const learner = await prisma.learner.findFirst({
-    where: { id, teacherId: user.id, deletedAt: null },
+    where: learnerFilter,
   });
   if (!learner) notFound();
 
@@ -40,7 +52,10 @@ export default async function AttendancePage({
   return (
     <AppShell
       title={`Attendance — ${learner.fullName}`}
-      subtitle={`Week of ${weekStart.toLocaleDateString()}`}
+      subtitle={`Week of ${weekStart.toLocaleDateString()}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">

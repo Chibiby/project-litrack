@@ -12,17 +12,29 @@ import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+interface ReadingLevelPageProps {
+  params: Promise<{ gradeId: string; id: string }>;
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
 export default async function ReadingLevelPage({
   params,
-}: {
-  params: Promise<{ gradeId: string; id: string }>;
-}) {
+  searchParams,
+}: ReadingLevelPageProps) {
   const { gradeId, id } = await params;
+  const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
+  
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+
+  // For Super Admin: can access any learner; for Teacher: only their learners
+  const learnerFilter = isSuperAdmin
+    ? { id, deletedAt: null }
+    : { id, teacherId: user.id, deletedAt: null };
 
   const learner = await prisma.learner.findFirst({
-    where: { id, teacherId: user.id, deletedAt: null },
+    where: learnerFilter,
     include: {
       readingLevels: { orderBy: { monthYear: "desc" }, take: 12 },
     },
@@ -30,7 +42,13 @@ export default async function ReadingLevelPage({
   if (!learner) notFound();
 
   return (
-    <AppShell title={`Reading Level — ${learner.fullName}`} subtitle="Monthly reading level records">
+    <AppShell 
+      title={`Reading Level — ${learner.fullName}`} 
+      subtitle={`Monthly reading level records${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      isSuperAdminView={isSuperAdmin && !!sp.schoolId}
+    >
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/teacher/aral/${gradeId}`}><ArrowLeft className="h-4 w-4" /> Back</Link>

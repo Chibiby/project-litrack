@@ -9,17 +9,29 @@ import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+interface UpdateAralDataPageProps {
+  params: Promise<{ gradeId: string; id: string }>;
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
 export default async function UpdateAralDataPage({
   params,
-}: {
-  params: Promise<{ gradeId: string; id: string }>;
-}) {
+  searchParams,
+}: UpdateAralDataPageProps) {
   const { gradeId, id } = await params;
+  const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
+  
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+
+  // For Super Admin: can access any ARAL learner; for Teacher: only their learners
+  const learnerFilter = isSuperAdmin
+    ? { id, isAralLearner: true, deletedAt: null }
+    : { id, teacherId: user.id, isAralLearner: true, deletedAt: null };
 
   const learner = await prisma.learner.findFirst({
-    where: { id, teacherId: user.id, isAralLearner: true, deletedAt: null },
+    where: learnerFilter,
     include: { aralProfile: true },
   });
   if (!learner) notFound();
@@ -27,7 +39,10 @@ export default async function UpdateAralDataPage({
   return (
     <AppShell
       title={`Update Data — ${learner.fullName}`}
-      subtitle="Additional ARAL profiling (sections B–E)"
+      subtitle={`Additional ARAL profiling${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
