@@ -10,34 +10,46 @@ import { InviteTeacherForm } from "@/components/forms/invite-teacher-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeachersPage() {
+interface TeachersPageProps {
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
+export default async function TeachersPage({ searchParams }: TeachersPageProps) {
+  const params = await searchParams;
   const user = await requireUser("SCHOOL_HEAD");
-  if (!user.profileCompleted) redirect("/school-head/profiling");
-  if (!user.schoolId) redirect("/login");
+  
+  // Super Admin can view any school via query param
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  const targetSchoolId = isSuperAdmin && params.schoolId ? params.schoolId : user.schoolId;
+  
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/school-head/profiling");
+  if (!targetSchoolId) redirect("/login");
 
   const [grades, teachers, school] = await Promise.all([
     prisma.gradeLevel.findMany({
-      where: { schoolId: user.schoolId, deletedAt: null },
+      where: { schoolId: targetSchoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
     }),
     prisma.user.findMany({
-      where: { schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
+      where: { schoolId: targetSchoolId, role: "TEACHER", deletedAt: null },
       include: { taughtGrades: { select: { type: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.school.findUnique({
-      where: { id: user.schoolId },
+      where: { id: targetSchoolId },
       select: { name: true },
     }),
   ]);
 
   return (
     <AppShell 
-      title="Teachers" 
-      subtitle="Invite teachers to your school"
+      title={isSuperAdmin ? `Teachers - ${school?.name || "Unknown"}` : "Teachers"}
+      subtitle={isSuperAdmin ? "Super Admin View" : "Invite teachers to your school"}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       schoolName={school?.name}
+      isSuperAdminView={isSuperAdmin && !!params.schoolId}
+      viewedSchoolName={school?.name}
     >
       {grades.length === 0 ? (
         <Card>

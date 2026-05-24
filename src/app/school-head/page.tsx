@@ -11,35 +11,45 @@ import { CheckCircle2, GraduationCap, UserPlus, ListChecks } from "lucide-react"
 
 export const dynamic = "force-dynamic";
 
-export default async function SchoolHeadDashboard() {
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.profileCompleted) redirect("/school-head/profiling");
-  if (!user.schoolId) redirect("/login");
+interface SchoolHeadDashboardProps {
+  searchParams: Promise<{ schoolId?: string }>;
+}
 
-  const [grades, teachers] = await Promise.all([
+export default async function SchoolHeadDashboard({ searchParams }: SchoolHeadDashboardProps) {
+  const params = await searchParams;
+  const user = await requireUser("SCHOOL_HEAD");
+  
+  // Super Admin can view any school via query param
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  const targetSchoolId = isSuperAdmin && params.schoolId ? params.schoolId : user.schoolId;
+  
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/school-head/profiling");
+  if (!targetSchoolId) redirect("/login");
+
+  const [grades, teachers, school] = await Promise.all([
     prisma.gradeLevel.findMany({
-      where: { schoolId: user.schoolId, deletedAt: null },
+      where: { schoolId: targetSchoolId, deletedAt: null },
       include: { _count: { select: { teachers: true, learners: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.user.count({
-      where: { schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
+      where: { schoolId: targetSchoolId, role: "TEACHER", deletedAt: null },
+    }),
+    prisma.school.findUnique({
+      where: { id: targetSchoolId },
+      select: { name: true },
     }),
   ]);
 
-  // Get school name for display
-  const school = user.schoolId ? await prisma.school.findUnique({
-    where: { id: user.schoolId },
-    select: { name: true },
-  }) : null;
-
   return (
     <AppShell 
-      title={`Welcome, ${user.firstName}`} 
-      subtitle="School Head dashboard"
+      title={isSuperAdmin ? `School: ${school?.name || "Unknown"}` : `Welcome, ${user.firstName}`} 
+      subtitle={isSuperAdmin ? "Super Admin View - School Head Dashboard" : "School Head dashboard"}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       schoolName={school?.name}
+      isSuperAdminView={isSuperAdmin && !!params.schoolId}
+      viewedSchoolName={school?.name}
     >
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
