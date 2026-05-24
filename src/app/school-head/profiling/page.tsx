@@ -13,6 +13,8 @@ export default async function SHProfilingPage() {
     <AppShell
       title="School Head Profiling"
       subtitle="Complete this profile to unlock the rest of the app"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
       <SchoolHeadProfileForm
         defaultValues={{
