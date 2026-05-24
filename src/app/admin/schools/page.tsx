@@ -11,7 +11,7 @@ import { deleteSchool } from "@/lib/actions/school";
 export const dynamic = "force-dynamic";
 
 export default async function SchoolsListPage() {
-  await requireUser("SUPER_ADMIN");
+  const user = await requireUser("SUPER_ADMIN");
   const schools = await prisma.school.findMany({
     where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
@@ -22,7 +22,12 @@ export default async function SchoolsListPage() {
   });
 
   return (
-    <AppShell title="Schools" subtitle="All registered schools">
+    <AppShell 
+      title="Schools" 
+      subtitle="All registered schools"
+      role={user.role}
+      userName={user.fullName || user.email}
+    >
       <div className="mb-4 flex justify-end">
         <Button asChild>
           <Link href="/admin/schools/new"><Plus className="h-4 w-4" /> New school</Link>
