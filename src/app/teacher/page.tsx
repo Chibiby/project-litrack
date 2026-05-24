@@ -10,14 +10,29 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherDashboard() {
+interface TeacherDashboardProps {
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
+export default async function TeacherDashboard({ searchParams }: TeacherDashboardProps) {
+  const params = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
-  if (!user.schoolId) redirect("/login");
+  
+  // Super Admin can view any school's grades via query param
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  const targetSchoolId = isSuperAdmin && params.schoolId ? params.schoolId : user.schoolId;
+  
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+  if (!targetSchoolId) redirect("/login");
+
+  // For Super Admin: show all grades in school; for Teacher: show only assigned grades
+  const gradeFilter = isSuperAdmin 
+    ? { schoolId: targetSchoolId, deletedAt: null }
+    : { schoolId: targetSchoolId, deletedAt: null, teachers: { some: { id: user.id } } };
 
   const [grades, school] = await Promise.all([
     prisma.gradeLevel.findMany({
-      where: { schoolId: user.schoolId, deletedAt: null, teachers: { some: { id: user.id } } },
+      where: gradeFilter,
       include: {
         _count: { select: { learners: { where: { deletedAt: null } } } },
         learners: {
@@ -27,7 +42,7 @@ export default async function TeacherDashboard() {
       },
     }),
     prisma.school.findUnique({
-      where: { id: user.schoolId },
+      where: { id: targetSchoolId },
       select: { name: true },
     }),
   ]);
@@ -41,12 +56,14 @@ export default async function TeacherDashboard() {
 
   return (
     <AppShell 
-      title={`Hi, ${user.firstName}`} 
-      subtitle="Your assigned grade levels"
+      title={isSuperAdmin ? `Teacher View - ${school?.name || "Unknown"}` : `Hi, ${user.firstName}`} 
+      subtitle={isSuperAdmin ? "Super Admin View - All Grade Levels" : "Your assigned grade levels"}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       schoolName={school?.name}
       grades={sidebarGrades}
+      isSuperAdminView={isSuperAdmin && !!params.schoolId}
+      viewedSchoolName={school?.name}
     >
       {grades.length === 0 ? (
         <Card>

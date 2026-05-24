@@ -14,13 +14,26 @@ import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherGradePage({ params }: { params: Promise<{ id: string }> }) {
+interface TeacherGradePageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
+export default async function TeacherGradePage({ params, searchParams }: TeacherGradePageProps) {
   const { id } = await params;
+  const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
+  
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+
+  // For Super Admin: access any grade; for Teacher: only assigned grades
+  const gradeFilter = isSuperAdmin
+    ? { id, deletedAt: null }
+    : { id, deletedAt: null, teachers: { some: { id: user.id } } };
 
   const grade = await prisma.gradeLevel.findFirst({
-    where: { id, deletedAt: null, teachers: { some: { id: user.id } } },
+    where: gradeFilter,
     include: {
       learners: {
         where: { deletedAt: null },
@@ -33,7 +46,13 @@ export default async function TeacherGradePage({ params }: { params: Promise<{ i
   const aralCount = grade.learners.filter((l) => l.isAralLearner).length;
 
   return (
-    <AppShell title={GRADE_LEVEL_LABELS[grade.type]} subtitle={`${grade.learners.length} learners · ${aralCount} ARAL`}>
+    <AppShell 
+      title={GRADE_LEVEL_LABELS[grade.type]} 
+      subtitle={`${grade.learners.length} learners · ${aralCount} ARAL${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      isSuperAdminView={isSuperAdmin && !!sp.schoolId}
+    >
       <div className="mb-4 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
           <Link href="/teacher"><ArrowLeft className="h-4 w-4" /> Back</Link>

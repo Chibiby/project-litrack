@@ -12,13 +12,26 @@ import { ArrowLeft, Edit3, Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function AralDashboard({ params }: { params: Promise<{ gradeId: string }> }) {
+interface AralDashboardProps {
+  params: Promise<{ gradeId: string }>;
+  searchParams: Promise<{ schoolId?: string }>;
+}
+
+export default async function AralDashboard({ params, searchParams }: AralDashboardProps) {
   const { gradeId } = await params;
+  const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  if (!user.profileCompleted) redirect("/teacher/profiling");
+  
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
+
+  // For Super Admin: access any grade; for Teacher: only assigned grades
+  const gradeFilter = isSuperAdmin
+    ? { id: gradeId, deletedAt: null }
+    : { id: gradeId, deletedAt: null, teachers: { some: { id: user.id } } };
 
   const grade = await prisma.gradeLevel.findFirst({
-    where: { id: gradeId, deletedAt: null, teachers: { some: { id: user.id } } },
+    where: gradeFilter,
     include: {
       learners: {
         where: { isAralLearner: true, deletedAt: null },
@@ -32,7 +45,10 @@ export default async function AralDashboard({ params }: { params: Promise<{ grad
   return (
     <AppShell
       title={`ARAL Dashboard — ${GRADE_LEVEL_LABELS[grade.type]}`}
-      subtitle={`${grade.learners.length} ARAL learner${grade.learners.length === 1 ? "" : "s"}`}
+      subtitle={`${grade.learners.length} ARAL learner${grade.learners.length === 1 ? "" : "s"}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
