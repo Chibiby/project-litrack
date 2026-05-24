@@ -24,12 +24,16 @@ A comprehensive guide for all users of the PROJECT LITRACK school reading-profil
 
 | Role | Description | Access Level |
 |------|-------------|--------------|
-| **Super Admin** | System administrator who manages all schools | Full system access |
+| **Super Admin** | System administrator with universal access to all schools, grades, and data | Full system access + Cross-role impersonation |
 | **School Head** | Principal or school administrator | Single school management |
 | **Teacher** | Classroom teachers | Assigned grade levels only |
 
 ### Key Features
 
+- **Universal Admin Access** - Super Admin can view any school's data via context switching
+- **Sidebar Navigation** - Collapsible sidebar with role-based menus and mobile drawer
+- **Breadcrumb Navigation** - Dynamic breadcrumbs showing current location
+- **Data Management** - Search, filter, pagination, and CSV export on data tables
 - **School Management** - Create and manage schools with unique School IDs
 - **Grade Level Management** - Set up grade levels (Kinder, Grades 1-12, Floating)
 - **Teacher Management** - Create teacher accounts with auto-generated credentials
@@ -54,10 +58,20 @@ A comprehensive guide for all users of the PROJECT LITRACK school reading-profil
 
 ### Dashboard Overview
 
-After login, you'll see:
+After login, you'll see the **Super Admin Dashboard** with:
 - **Total Schools** - Number of registered schools
 - **Total Users** - Combined count of all School Heads and Teachers
 - **Quick Actions** - Create new school or manage existing ones
+- **Cross-Role Navigation** - Direct links to School Head and Teacher views
+
+**Navigation:**
+- **Left Sidebar** - Collapsible menu with all admin sections
+  - Dashboard
+  - Schools
+  - School Head View (with school selector)
+  - Teacher View (with school/grade selector)
+- **Breadcrumbs** - Shows current path at top of page
+- **Mobile** - Sidebar becomes a drawer on small screens
 
 ### Creating a New School
 
@@ -82,29 +96,90 @@ After login, you'll see:
 
 ### Managing Schools
 
-Navigate to `/admin/schools` to view all schools:
+Navigate to `/admin/schools` to view all schools with **enhanced data table features**:
+
+| Feature | Description |
+|---------|-------------|
+| **Search** | Filter schools by name, ID, region, or division |
+| **Region Filter** | Dropdown to filter by DepEd region |
+| **Pagination** | Navigate through large school lists (10 per page) |
+| **Export** | Download CSV of all filtered results |
+| **Quick View** | External link icon to enter School Head view for any school |
 
 | Column | Description |
 |--------|-------------|
-| Name | School name |
+| School Name | School name with link to School Head view |
 | School ID | Unique identifier (also SH password) |
 | Region / Division | Location info |
-| Users | Count of School Head + Teachers |
-| Learners | Total enrolled learners |
+| Users | Count of School Head + Teachers (badge) |
+| Learners | Total enrolled learners (badge) |
+| Actions | Delete button |
 
 **Delete School:**
-- Click **Delete** button next to a school
+- Click **Delete** (trash icon) next to a school
 - This performs a soft delete (marks as inactive, can be restored via database if needed)
+
+### Super Admin Cross-Role Access
+
+Super Admins have **universal access** to view any school's data as if they were a School Head or Teacher.
+
+#### Accessing School Head View
+
+**Method 1: From Schools List**
+1. Go to `/admin/schools`
+2. Find the school you want to view
+3. Click the **external link icon** (↗️) next to the school name
+4. You'll be taken to the School Head dashboard for that school
+
+**Method 2: Direct URL**
+- Navigate to `/school-head?schoolId=xxx` (replace xxx with school ID)
+- The page will show a **"Super Admin View"** badge at the top
+
+**What you can do in School Head view:**
+- View grade levels and learner counts
+- View teachers list
+- Access all School Head functionality
+- No modifications are restricted (full read access)
+
+#### Accessing Teacher View
+
+**Direct URL:**
+- Navigate to `/teacher?schoolId=xxx`
+- Shows all grade levels in that school
+- Access ARAL dashboards for any grade
+
+**View specific grade:**
+- `/teacher/grade/{gradeId}?schoolId=xxx` - View learners in any grade
+- `/teacher/aral/{gradeId}?schoolId=xxx` - Access ARAL tracking for any grade
+
+#### Visual Indicators
+
+When viewing as Super Admin:
+- **Orange badge** appears: "Super Admin View"
+- Title shows the school name being viewed
+- All navigation remains available
 
 ### Security Notes
 
 - Keep your Super Admin credentials secure
 - School ID codes are case-sensitive
 - When creating schools, communicate the School ID securely to the School Head
+- All Super Admin actions are tracked (audit trail)
 
 ---
 
 ## School Head Guide
+
+### Navigation
+
+As a School Head, you have access to:
+- **Sidebar Menu** - Collapsible navigation with:
+  - Dashboard
+  - Grade Levels
+  - Teachers
+  - Logout
+- **Breadcrumbs** - Shows your current location
+- **Mobile Drawer** - Swipe from left on mobile devices
 
 ### First-Time Login
 
@@ -145,10 +220,16 @@ Click **Save Profile** when complete. You'll then be taken to your dashboard.
 
 ### School Head Dashboard
 
-Your dashboard displays:
+Your **School Head Dashboard** displays:
+- **Welcome Message** - Personalized with your name
 - **Profile Status** - Shows "Completed" with edit option
 - **Grade Levels** - Number of active grade levels (click to manage)
 - **Teachers** - Count of invited/accepted teachers (click to invite more)
+
+**Quick Stats:**
+- Total grade levels with learner counts
+- Teacher assignments overview
+- School summary card
 
 ### Managing Grade Levels
 
@@ -207,6 +288,14 @@ After creating a teacher, you can assign them to additional grades. Teachers can
 
 ## Teacher Guide
 
+### Navigation
+
+As a Teacher, you have access to:
+- **Sidebar Menu** - Shows your assigned grade levels with direct links
+- **ARAL Indicators** - Grades with ARAL learners show special badge
+- **Breadcrumbs** - Navigate back from learner detail pages
+- **Mobile Drawer** - Collapsible menu on mobile devices
+
 ### First-Time Login
 
 Your School Head will provide you with a **username** and **temporary password**.
@@ -240,16 +329,25 @@ Click **Save Profile** when done.
 
 ### Teacher Dashboard
 
-After profile completion, your dashboard shows:
+After profile completion, your **Teacher Dashboard** shows:
+
+**Welcome Section**
+- Personalized greeting with your name
+- Current school name
+- Quick overview of your assignments
 
 **Assigned Grade Levels**
 
 Each grade card displays:
 - Grade level name (e.g., "Grade 1")
 - Total number of learners
-- ARAL learner count (if any)
+- ARAL learner count (if any) - shown with violet badge
 - **Open** button - View/manage all learners
 - **ARAL Dashboard** button - Only appears if ARAL learners exist
+
+**Sidebar Grade List**
+- Your assigned grades appear in the left sidebar for quick navigation
+- ARAL grades are highlighted
 
 **No grades assigned?**
 - Message: "You haven't been assigned to any grade level yet. Ask your School Head."
@@ -410,21 +508,31 @@ If issues persist:
 
 ## Quick Reference: URLs
 
-| Page | URL Path |
-|------|----------|
-| Main Login | `/login` |
-| Admin Login | `/admin/login` |
-| Super Admin Dashboard | `/admin` |
-| Schools List | `/admin/schools` |
-| New School | `/admin/schools/new` |
-| School Head Dashboard | `/school-head` |
-| Grade Levels | `/school-head/grade-levels` |
-| Teachers | `/school-head/teachers` |
-| SH Profile | `/school-head/profiling` |
-| Teacher Dashboard | `/teacher` |
-| Grade Detail | `/teacher/grade/{gradeId}` |
-| ARAL Dashboard | `/teacher/aral/{gradeId}` |
-| Teacher Profile | `/teacher/profiling` |
+| Page | URL Path | Notes |
+|------|----------|-------|
+| Main Login | `/login` | Select school and role |
+| Admin Login | `/admin/login` | Super Admin only |
+| **SUPER ADMIN ROUTES** ||
+| Super Admin Dashboard | `/admin` | System overview with cross-role links |
+| Schools List | `/admin/schools` | With search, filter, pagination, export |
+| New School | `/admin/schools/new` | Create school + School Head account |
+| School Head View | `/school-head?schoolId=xxx` | View any school as Super Admin |
+| Teacher View | `/teacher?schoolId=xxx` | View grades in any school |
+| Grade View | `/teacher/grade/{id}?schoolId=xxx` | View any grade's learners |
+| ARAL View | `/teacher/aral/{id}?schoolId=xxx` | View ARAL data for any grade |
+| **SCHOOL HEAD ROUTES** ||
+| School Head Dashboard | `/school-head` | Your school's overview |
+| Grade Levels | `/school-head/grade-levels` | Create/manage grade levels |
+| Teachers | `/school-head/teachers` | Invite and manage teachers |
+| SH Profile | `/school-head/profiling` | Complete/edit your profile |
+| **TEACHER ROUTES** ||
+| Teacher Dashboard | `/teacher` | Your assigned grades |
+| Grade Detail | `/teacher/grade/{gradeId}` | Learners in your grade |
+| ARAL Dashboard | `/teacher/aral/{gradeId}` | ARAL learner tracking |
+| ARAL Update | `/teacher/aral/{gradeId}/learners/{id}/update` | Edit ARAL profile |
+| Attendance | `/teacher/aral/{gradeId}/learners/{id}/attendance` | Mark attendance |
+| Reading Level | `/teacher/aral/{gradeId}/learners/{id}/reading-level` | Monthly records |
+| Teacher Profile | `/teacher/profiling` | Complete/edit your profile |
 
 ---
 
