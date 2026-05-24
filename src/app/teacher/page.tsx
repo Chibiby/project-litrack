@@ -15,19 +15,39 @@ export default async function TeacherDashboard() {
   if (!user.profileCompleted) redirect("/teacher/profiling");
   if (!user.schoolId) redirect("/login");
 
-  const grades = await prisma.gradeLevel.findMany({
-    where: { schoolId: user.schoolId, deletedAt: null, teachers: { some: { id: user.id } } },
-    include: {
-      _count: { select: { learners: { where: { deletedAt: null } } } },
-      learners: {
-        where: { isAralLearner: true, deletedAt: null },
-        select: { id: true },
+  const [grades, school] = await Promise.all([
+    prisma.gradeLevel.findMany({
+      where: { schoolId: user.schoolId, deletedAt: null, teachers: { some: { id: user.id } } },
+      include: {
+        _count: { select: { learners: { where: { deletedAt: null } } } },
+        learners: {
+          where: { isAralLearner: true, deletedAt: null },
+          select: { id: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { name: true },
+    }),
+  ]);
+
+  // Format grades for sidebar navigation
+  const sidebarGrades = grades.map((g) => ({
+    id: g.id,
+    label: GRADE_LEVEL_LABELS[g.type],
+    hasAral: g.learners.length > 0,
+  }));
 
   return (
-    <AppShell title={`Hi, ${user.firstName}`} subtitle="Your assigned grade levels">
+    <AppShell 
+      title={`Hi, ${user.firstName}`} 
+      subtitle="Your assigned grade levels"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      schoolName={school?.name}
+      grades={sidebarGrades}
+    >
       {grades.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">

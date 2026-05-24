@@ -27,8 +27,20 @@ export default async function SchoolHeadDashboard() {
     }),
   ]);
 
+  // Get school name for display
+  const school = user.schoolId ? await prisma.school.findUnique({
+    where: { id: user.schoolId },
+    select: { name: true },
+  }) : null;
+
   return (
-    <AppShell title={`Welcome, ${user.firstName}`} subtitle="School Head dashboard">
+    <AppShell 
+      title={`Welcome, ${user.firstName}`} 
+      subtitle="School Head dashboard"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      schoolName={school?.name}
+    >
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">

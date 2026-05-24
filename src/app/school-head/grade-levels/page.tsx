@@ -20,14 +20,26 @@ export default async function GradeLevelsPage() {
   if (!user.profileCompleted) redirect("/school-head/profiling");
   if (!user.schoolId) redirect("/login");
 
-  const existing = await prisma.gradeLevel.findMany({
-    where: { schoolId: user.schoolId, deletedAt: null },
-    select: { type: true, _count: { select: { teachers: true, learners: true } } },
-  });
+  const [existing, school] = await Promise.all([
+    prisma.gradeLevel.findMany({
+      where: { schoolId: user.schoolId, deletedAt: null },
+      select: { type: true, _count: { select: { teachers: true, learners: true } } },
+    }),
+    prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { name: true },
+    }),
+  ]);
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
   return (
-    <AppShell title="Grade Levels" subtitle="Click any tile to create that grade for your school">
+    <AppShell 
+      title="Grade Levels" 
+      subtitle="Click any tile to create that grade for your school"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      schoolName={school?.name}
+    >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
         {ALL_TYPES.map((type) => {
           const has = existingMap.get(type);

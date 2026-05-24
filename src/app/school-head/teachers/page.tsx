@@ -15,7 +15,7 @@ export default async function TeachersPage() {
   if (!user.profileCompleted) redirect("/school-head/profiling");
   if (!user.schoolId) redirect("/login");
 
-  const [grades, teachers] = await Promise.all([
+  const [grades, teachers, school] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId: user.schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
@@ -25,10 +25,20 @@ export default async function TeachersPage() {
       include: { taughtGrades: { select: { type: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { name: true },
+    }),
   ]);
 
   return (
-    <AppShell title="Teachers" subtitle="Invite teachers to your school">
+    <AppShell 
+      title="Teachers" 
+      subtitle="Invite teachers to your school"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      schoolName={school?.name}
+    >
       {grades.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">

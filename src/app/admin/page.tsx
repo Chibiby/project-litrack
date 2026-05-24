@@ -9,7 +9,7 @@ import { School, Users, Plus } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  await requireUser("SUPER_ADMIN");
+  const user = await requireUser("SUPER_ADMIN");
 
   const [schoolCount, userCount] = await Promise.all([
     prisma.school.count({ where: { deletedAt: null } }),
@@ -17,7 +17,12 @@ export default async function AdminDashboard() {
   ]);
 
   return (
-    <AppShell title="Admin Dashboard" subtitle="System-wide overview">
+    <AppShell 
+      title="Admin Dashboard" 
+      subtitle="System-wide overview"
+      role={user.role}
+      userName={user.fullName || user.email}
+    >
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
