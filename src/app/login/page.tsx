@@ -5,7 +5,15 @@ import { GraduationCap } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const schools = await listSchoolsWithTeacherStatus();
+  let schools: Awaited<ReturnType<typeof listSchoolsWithTeacherStatus>> = [];
+  let configUnavailable = false;
+
+  try {
+    schools = await listSchoolsWithTeacherStatus();
+  } catch {
+    // DATABASE_URL missing or Prisma unavailable — still render login UI.
+    configUnavailable = true;
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-white p-4">
@@ -17,6 +25,11 @@ export default async function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight">PROJECT LITRACK</h1>
           <p className="text-sm text-muted-foreground">School reading-profiling system</p>
         </div>
+        {configUnavailable ? (
+          <p className="text-center text-sm text-muted-foreground">
+            App is not fully configured. No schools available.
+          </p>
+        ) : null}
         <LoginForm schools={schools} />
         <p className="text-center text-xs text-muted-foreground">
           Super Admin? <a className="underline" href="/admin/login">Admin login</a>

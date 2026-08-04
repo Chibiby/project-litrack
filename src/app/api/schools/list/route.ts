@@ -6,6 +6,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const schools = await listSchoolsPublic();
-  return NextResponse.json({ schools });
+  try {
+    const schools = await listSchoolsPublic();
+    return NextResponse.json({ schools });
+  } catch {
+    // DATABASE_URL missing or Prisma unavailable — return empty list instead of 500.
+    return NextResponse.json({ schools: [] }, { status: 200 });
+  }
 }
