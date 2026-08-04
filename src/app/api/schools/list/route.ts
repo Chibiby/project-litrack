@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { listSchoolsPublic } from "@/lib/actions/school";
 
-export const revalidate = 60; // cache 1 min
+// Must stay dynamic: Prisma needs DATABASE_URL at request time, not build/prerender.
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
   const schools = await listSchoolsPublic();
