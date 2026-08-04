@@ -5,14 +5,16 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
 export async function createSupabaseServerClient() {
+  // Must touch cookies() before any env throw so Next marks the route dynamic
+  // and does not try to statically prerender auth-gated pages at build time.
+  const cookieStore = await cookies();
+
   const env = getSupabasePublicEnv();
   if (!env.ok) {
     throw new Error(
       "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
     );
   }
-
-  const cookieStore = await cookies();
 
   return createServerClient(env.url, env.anonKey, {
     cookies: {
