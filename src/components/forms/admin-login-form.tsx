@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginAdmin } from "@/lib/actions/auth";
 
-export function AdminLoginForm() {
+export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -25,13 +25,26 @@ export function AdminLoginForm() {
         >
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoFocus />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoFocus
+              disabled={disabled || pending}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" required />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              disabled={disabled || pending}
+            />
           </div>
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button type="submit" className="w-full" disabled={disabled || pending}>
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>

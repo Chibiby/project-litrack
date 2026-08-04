@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -11,17 +12,16 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
  * (set these in Vercel for auth to work in production).
  */
 export async function updateSession(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const env = getSupabasePublicEnv();
 
   // Avoid Edge crash when Supabase env is unset (e.g. fresh Vercel project).
-  if (!url || !anonKey) {
+  if (!env.ok) {
     return { supabaseResponse: NextResponse.next({ request }), user: null };
   }
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient(env.url, env.anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

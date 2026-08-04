@@ -6,16 +6,29 @@ import { prisma } from "@/lib/prisma";
 import { schoolLoginSchema, adminLoginSchema, teacherSetupSchema } from "@/lib/validators/auth.schema";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { hashToken } from "@/lib/auth/invites";
-import { roleHomePath } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  isSupabaseConfigured,
+  SUPABASE_NOT_CONFIGURED_MESSAGE,
+} from "@/lib/supabase/env";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
+
+function requireSupabaseConfigured(): ActionResult | null {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
+  }
+  return null;
+}
 
 /**
  * School Head login: provides School name, password = School ID code.
  * Maps to a synthetic email; Supabase password = schoolIdCode.
  */
 export async function loginSchoolHead(formData: FormData): Promise<ActionResult> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
   const parsed = schoolLoginSchema.safeParse({
     schoolId: formData.get("schoolId"),
     role: "SCHOOL_HEAD",
@@ -50,6 +63,9 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
  * Username and password are provided by School Head during account creation.
  */
 export async function loginTeacher(formData: FormData): Promise<ActionResult> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
   const schoolId = String(formData.get("schoolId") ?? "");
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -73,23 +89,40 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
 }
 
 export async function loginAdmin(formData: FormData): Promise<ActionResult> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
   const parsed = adminLoginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
   });
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error || !data.user) return { ok: false, error: "Incorrect credentials" };
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+    if (error || !data.user) return { ok: false, error: "Incorrect credentials" };
 
-  const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
-  if (!user || user.role !== "SUPER_ADMIN") {
-    await supabase.auth.signOut();
-    return { ok: false, error: "Not authorized" };
+    const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
+    if (!user || user.role !== "SUPER_ADMIN") {
+      await supabase.auth.signOut();
+      return { ok: false, error: "Not authorized" };
+    }
+
+    redirect("/admin");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Login failed";
+    if (message.includes("SUPABASE") || message.includes("Missing NEXT_PUBLIC")) {
+      return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
+    }
+    if (message.includes("DATABASE") || message.includes("Prisma") || message.includes("Environment variable not found")) {
+      return {
+        ok: false,
+        error: "Database is not configured. Set DATABASE_URL on Vercel and run migrations/seed.",
+      };
+    }
+    throw err;
   }
-
-  redirect("/admin");
 }
 
 export async function logoutAction(): Promise<void> {
@@ -104,6 +137,9 @@ export async function logoutAction(): Promise<void> {
  * the invite consumed, and signs the user in.
  */
 export async function acceptTeacherInvite(formData: FormData): Promise<ActionResult> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
   const parsed = teacherSetupSchema.safeParse({
     token: formData.get("token"),
     password: formData.get("password"),

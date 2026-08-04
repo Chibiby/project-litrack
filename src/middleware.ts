@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 function isPublicPath(pathname: string) {
   return (
@@ -17,11 +18,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Vercel must set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY for auth.
-  const supabaseConfigured =
-    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseConfigured) {
+  if (!isSupabaseConfigured()) {
     if (isPublicPath(pathname)) {
       return NextResponse.next();
     }
