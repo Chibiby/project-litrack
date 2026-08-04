@@ -1,28 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_PATHS = [
-  "/",
-  "/login",
-  "/admin/login",
-  "/teacher-setup",
-  "/api/schools/list",
-];
-
-const ADMIN_PATHS = ["/admin"];
-const SCHOOL_HEAD_PATHS = ["/school-head"];
-const TEACHER_PATHS = ["/teacher"];
-
-function isPathPrefixed(pathname: string, prefixes: string[]) {
-  return prefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
-}
-
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const { supabaseResponse, user } = await updateSession(request);
-
-  // Allow public paths and the admin login
-  if (
+function isPublicPath(pathname: string) {
+  return (
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/admin/login" ||
@@ -30,7 +10,31 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/schools/list") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
-  ) {
+  );
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Vercel must set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY for auth.
+  const supabaseConfigured =
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseConfigured) {
+    if (isPublicPath(pathname)) {
+      return NextResponse.next();
+    }
+    const loginUrl = pathname.startsWith("/admin")
+      ? new URL("/admin/login", request.url)
+      : new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const { supabaseResponse, user } = await updateSession(request);
+
+  // Allow public paths and the admin login
+  if (isPublicPath(pathname)) {
     return supabaseResponse;
   }
 
