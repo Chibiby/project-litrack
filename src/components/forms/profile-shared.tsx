@@ -14,18 +14,16 @@ export function FieldRadioGroup({
   options,
   defaultValue,
   required = true,
-  "aria-labelledby": ariaLabelledBy,
 }: {
   name: string;
   options: { value: string; label: string }[];
   defaultValue?: string;
   required?: boolean;
-  "aria-labelledby"?: string;
 }) {
   return (
-    <div className="space-y-2" role="radiogroup" aria-labelledby={ariaLabelledBy}>
+    <div className="space-y-2">
       {options.map((opt) => (
-        <label key={opt.value} className="flex cursor-pointer items-start gap-3">
+        <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
           <input
             type="radio"
             name={name}
@@ -45,17 +43,15 @@ export function FieldCheckboxList({
   name,
   options,
   defaultValues = [],
-  "aria-labelledby": ariaLabelledBy,
 }: {
   name: string;
   options: { value: string; label: string }[];
   defaultValues?: string[];
-  "aria-labelledby"?: string;
 }) {
   return (
-    <div className="space-y-2" role="group" aria-labelledby={ariaLabelledBy}>
+    <div className="space-y-2">
       {options.map((opt) => (
-        <label key={opt.value} className="flex cursor-pointer items-start gap-3">
+        <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
             name={`${name}[]`}

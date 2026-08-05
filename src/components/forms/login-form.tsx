@@ -30,9 +30,9 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
-            <Label htmlFor="school-select">School Name</Label>
+            <Label>School Name</Label>
             <Select value={schoolId} onValueChange={handleSchoolChange}>
-              <SelectTrigger id="school-select">
+              <SelectTrigger>
                 <SelectValue placeholder="Select your school" />
               </SelectTrigger>
               <SelectContent>

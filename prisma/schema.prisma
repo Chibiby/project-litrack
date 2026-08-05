@@ -401,20 +401,18 @@ model TeacherProfile {
 }
 
 model TeacherInvite {
-  id           String    @id @default(uuid())
-  schoolId     String
-  gradeLevelId String?
-  email        String
-  firstName    String
-  middleName   String?
-  lastName     String
-  tokenHash    String    @unique
-  expiresAt    DateTime
-  consumedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  id         String    @id @default(uuid())
+  schoolId   String
+  email      String
+  firstName  String
+  middleName String?
+  lastName   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  gradeLevel GradeLevel? @relation(fields: [gradeLevelId], references: [id], onDelete: SetNull)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, email])
   @@index([expiresAt])
@@ -427,10 +425,9 @@ model GradeLevel {
   createdAt DateTime       @default(now())
   deletedAt DateTime?
 
-  school   School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teachers User[]          @relation("TeacherGrades")
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teachers User[]    @relation("TeacherGrades")
   learners Learner[]
-  invites  TeacherInvite[]
 
   @@unique([schoolId, type])
   @@index([deletedAt])

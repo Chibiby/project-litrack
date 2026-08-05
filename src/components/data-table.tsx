@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Search, Download } from "lucide-react";
 
 interface DataTableProps<T> {
@@ -37,7 +36,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export function DataTable<T extends Record<string, unknown>>({
+export function DataTable<T extends Record<string, any>>({
   data,
   columns,
   filterColumn,
@@ -51,13 +50,16 @@ export function DataTable<T extends Record<string, unknown>>({
   const [filterValue, setFilterValue] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Filter and search data
   const filteredData = useMemo(() => {
     let result = [...data];
 
+    // Apply filter
     if (filterColumn && filterValue && filterValue !== "all") {
       result = result.filter((item) => String(item[filterColumn]) === filterValue);
     }
 
+    // Apply search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter((item) =>
@@ -73,19 +75,21 @@ export function DataTable<T extends Record<string, unknown>>({
     return result;
   }, [data, searchQuery, filterValue, filterColumn, columns]);
 
+  // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredData.slice(start, start + itemsPerPage);
   }, [filteredData, currentPage, itemsPerPage]);
 
+  // Export to CSV
   const handleExport = () => {
     const headers = columns.map((col) => col.header).join(",");
     const rows = filteredData.map((item) =>
       columns.map((col) => `"${String(item[col.key]).replace(/"/g, '""')}"`).join(",")
     );
     const csv = [headers, ...rows].join("\n");
-
+    
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -97,6 +101,7 @@ export function DataTable<T extends Record<string, unknown>>({
     window.URL.revokeObjectURL(url);
   };
 
+  // Reset page when filters change
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setCurrentPage(1);
@@ -109,60 +114,54 @@ export function DataTable<T extends Record<string, unknown>>({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         {searchable && (
           <div className="relative w-full sm:w-72">
-            <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
-              aria-label="Search table"
             />
           </div>
         )}
-
-        <div className="flex flex-wrap items-center gap-2">
+        
+        <div className="flex gap-2 items-center">
           {filterOptions && filterColumn && (
-            <div className="space-y-1">
-              <Label htmlFor="data-table-filter" className="sr-only">
-                Filter
-              </Label>
-              <Select value={filterValue} onValueChange={handleFilterChange}>
-                <SelectTrigger id="data-table-filter" className="w-[160px]" aria-label="Filter table">
-                  <SelectValue placeholder="Filter by..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  {filterOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={filterValue} onValueChange={handleFilterChange}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {filterOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
-
+          
           {exportable && (
             <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
           )}
         </div>
       </div>
 
+      {/* Results count */}
       <div className="text-sm text-muted-foreground">
         Showing {filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{" "}
         {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      {/* Table */}
+      <div className="border rounded-md">
         <Table>
           <TableHeader>
             <TableRow>
@@ -174,7 +173,7 @@ export function DataTable<T extends Record<string, unknown>>({
           <TableBody>
             {paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
                   {emptyMessage}
                 </TableCell>
               </TableRow>
@@ -193,15 +192,16 @@ export function DataTable<T extends Record<string, unknown>>({
         </Table>
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center justify-between">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+            <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
           </Button>
           <span className="text-sm text-muted-foreground">
@@ -214,7 +214,7 @@ export function DataTable<T extends Record<string, unknown>>({
             disabled={currentPage === totalPages}
           >
             Next
-            <ChevronRight className="ml-1 h-4 w-4" aria-hidden="true" />
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
       )}

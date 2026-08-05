@@ -4,11 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { logoutAction } from "@/lib/actions/auth";
-import { isNavItemActive } from "@/lib/nav-active";
 import type { UserRole } from "@prisma/client";
 import {
   LayoutDashboard,
@@ -29,8 +27,6 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
-  /** When true, only pathname === href is active (dashboard roots). */
-  exact?: boolean;
 }
 
 interface AppSidebarProps {
@@ -40,52 +36,30 @@ interface AppSidebarProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
-  /** Appended as ?schoolId= for school-head links when Super Admin is in a school context. */
-  schoolIdQuery?: string;
 }
 
-function withSchoolId(href: string, schoolId?: string): string {
-  if (!schoolId) return href;
-  const sep = href.includes("?") ? "&" : "?";
-  return `${href}${sep}schoolId=${encodeURIComponent(schoolId)}`;
-}
-
-function getNavItems(
-  role: UserRole,
-  grades: AppSidebarProps["grades"] = [],
-  schoolIdQuery?: string
-): NavItem[] {
+function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): NavItem[] {
   switch (role) {
     case "SUPER_ADMIN":
       return [
-        { label: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
+        { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
         { label: "Schools", href: "/admin/schools", icon: School },
-        ...(schoolIdQuery
-          ? [
-              {
-                label: "Grade Levels",
-                href: withSchoolId("/school-head/grade-levels", schoolIdQuery),
-                icon: GraduationCap,
-              },
-              {
-                label: "Teachers",
-                href: withSchoolId("/school-head/teachers", schoolIdQuery),
-                icon: Users,
-              },
-            ]
-          : []),
+        { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
+        { label: "Teachers", href: "/school-head/teachers", icon: Users },
+        { label: "Profile", href: "/admin/profile", icon: UserCircle },
       ];
     case "SCHOOL_HEAD":
       return [
-        { label: "Dashboard", href: "/school-head", icon: LayoutDashboard, exact: true },
+        { label: "Dashboard", href: "/school-head", icon: LayoutDashboard },
         { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
         { label: "Teachers", href: "/school-head/teachers", icon: Users },
         { label: "Profile", href: "/school-head/profiling", icon: UserCircle },
       ];
-    case "TEACHER": {
+    case "TEACHER":
       const items: NavItem[] = [
-        { label: "Dashboard", href: "/teacher", icon: LayoutDashboard, exact: true },
+        { label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
       ];
+      // Add assigned grades as menu items
       grades?.forEach((grade) => {
         items.push({
           label: grade.label,
@@ -103,7 +77,6 @@ function getNavItems(
       });
       items.push({ label: "Profile", href: "/teacher/profiling", icon: UserCircle });
       return items;
-    }
     default:
       return [];
   }
@@ -114,22 +87,21 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
   return (
     <Link
       href={item.href}
-      aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         isActive
-          ? "bg-primary/10 text-primary"
+          ? "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       )}
     >
-      <Icon className={cn("h-4 w-4", isActive && "text-primary")} aria-hidden="true" />
+      <Icon className="h-4 w-4" />
       <span className="flex-1">{item.label}</span>
-      {item.badge ? (
-        <Badge variant={isActive ? "outline" : "amber"} className="h-5 px-1.5 text-[10px]">
-          ARAL
-        </Badge>
-      ) : null}
-      {isActive ? <ChevronRight className="h-4 w-4 opacity-50" aria-hidden="true" /> : null}
+      {item.badge && (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+          {item.badge}
+        </span>
+      )}
+      {isActive && <ChevronRight className="h-4 w-4 opacity-50" />}
     </Link>
   );
 }
@@ -141,63 +113,64 @@ export function AppSidebar({
   grades,
   isSuperAdminView,
   viewedSchoolName,
-  schoolIdQuery,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const navItems = getNavItems(role, grades, schoolIdQuery);
+  const navItems = getNavItems(role, grades);
 
   const SidebarContent = (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-4 py-4">
+      {/* Header */}
+      <div className="border-b px-4 py-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <School className="h-5 w-5" aria-hidden="true" />
+            <School className="h-5 w-5" />
           </span>
           <div className="flex flex-col">
             <span className="text-sm leading-none">LITRACK</span>
             {schoolName && (
-              <span className="max-w-[140px] truncate text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground truncate max-w-[140px]">
                 {schoolName}
               </span>
             )}
           </div>
         </Link>
-
+        
+        {/* Super Admin View Indicator */}
         {isSuperAdminView && viewedSchoolName && (
-          <div className="mt-2 flex items-center gap-1.5 rounded-md border border-border bg-amber-muted px-2 py-1.5 text-xs text-amber-foreground">
-            <Shield className="h-3 w-3" aria-hidden="true" />
+          <div className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700 border border-amber-200">
+            <Shield className="h-3 w-3" />
             <span className="truncate">Viewing: {viewedSchoolName}</span>
           </div>
         )}
       </div>
 
+      {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4">
-        <nav aria-label="Primary" className="space-y-1">
+        <div className="space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.href}
               item={item}
-              isActive={isNavItemActive(pathname, navItems, item)}
+              isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
             />
           ))}
-        </nav>
+        </div>
       </ScrollArea>
 
-      <div className="border-t border-border p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-            <UserCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+      {/* Footer */}
+      <div className="border-t p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+            <UserCircle className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="flex flex-col overflow-hidden">
-            <span className="truncate text-sm font-medium">{userName}</span>
-            <span className="text-xs capitalize text-muted-foreground">
-              {role.toLowerCase().replace("_", " ")}
-            </span>
+            <span className="text-sm font-medium truncate">{userName}</span>
+            <span className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace("_", " ")}</span>
           </div>
         </div>
         <form action={logoutAction}>
           <Button variant="ghost" size="sm" className="w-full justify-start" type="submit">
-            <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+            <LogOut className="mr-2 h-4 w-4" />
             Sign out
           </Button>
         </form>
@@ -207,23 +180,24 @@ export function AppSidebar({
 
   return (
     <>
-      <aside className="fixed inset-y-0 hidden w-64 flex-col border-r border-border bg-card lg:flex">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-white border-r">
         {SidebarContent}
       </aside>
 
+      {/* Mobile Sidebar */}
       <Sheet>
         <SheetTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
-            className="absolute left-4 top-4 z-50 lg:hidden"
-            aria-label="Open navigation menu"
+            className="lg:hidden absolute left-4 top-4 z-50"
           >
-            <Menu className="h-5 w-5" aria-hidden="true" />
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 bg-card p-0">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SheetContent side="left" className="w-64 p-0">
           {SidebarContent}
         </SheetContent>
       </Sheet>

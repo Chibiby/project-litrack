@@ -22,10 +22,11 @@ interface GradeLevelsPageProps {
 export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageProps) {
   const params = await searchParams;
   const user = await requireUser("SCHOOL_HEAD");
-
+  
+  // Super Admin can view any school via query param
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   const targetSchoolId = isSuperAdmin && params.schoolId ? params.schoolId : user.schoolId;
-
+  
   if (!user.profileCompleted && !isSuperAdmin) redirect("/school-head/profiling");
   if (!targetSchoolId) redirect("/login");
 
@@ -42,7 +43,7 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
   return (
-    <AppShell
+    <AppShell 
       title={isSuperAdmin ? `Grade Levels - ${school?.name || "Unknown"}` : "Grade Levels"}
       subtitle={isSuperAdmin ? "Super Admin View" : "Click any tile to create that grade for your school"}
       role={user.role}
@@ -50,7 +51,6 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
       schoolName={school?.name}
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
       viewedSchoolName={school?.name}
-      schoolIdQuery={isSuperAdmin ? targetSchoolId : undefined}
     >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
         {ALL_TYPES.map((type) => {
@@ -69,9 +69,6 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
                 ) : (
                   <form action={createGradeLevel}>
                     <input type="hidden" name="type" value={type} />
-                    {isSuperAdmin ? (
-                      <input type="hidden" name="schoolId" value={targetSchoolId} />
-                    ) : null}
                     <Button type="submit" size="sm" variant="outline" className="w-full">
                       <Plus className="h-4 w-4" /> Create
                     </Button>

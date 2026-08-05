@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GRADE_LEVEL_LABELS, READING_PROFILE_LABELS, GENDER_LABELS } from "@/lib/constants/enum-labels";
 import { LearnerForm } from "@/components/forms/learner-form";
@@ -22,10 +23,11 @@ export default async function TeacherGradePage({ params, searchParams }: Teacher
   const { id } = await params;
   const sp = await searchParams;
   const user = await requireUser("TEACHER");
-
+  
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
+  // For Super Admin: access any grade; for Teacher: only assigned grades
   const gradeFilter = isSuperAdmin
     ? { id, deletedAt: null }
     : { id, deletedAt: null, teachers: { some: { id: user.id } } };
@@ -44,18 +46,16 @@ export default async function TeacherGradePage({ params, searchParams }: Teacher
   const aralCount = grade.learners.filter((l) => l.isAralLearner).length;
 
   return (
-    <AppShell
-      title={GRADE_LEVEL_LABELS[grade.type]}
+    <AppShell 
+      title={GRADE_LEVEL_LABELS[grade.type]} 
       subtitle={`${grade.learners.length} learners · ${aralCount} ARAL${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-4 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/teacher">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
-          </Link>
+          <Link href="/teacher"><ArrowLeft className="h-4 w-4" /> Back</Link>
         </Button>
         {aralCount > 0 && (
           <Button asChild variant="outline">
@@ -66,7 +66,7 @@ export default async function TeacherGradePage({ params, searchParams }: Teacher
 
       <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
         <Card>
-          <CardContent className="overflow-x-auto p-0">
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -80,25 +80,19 @@ export default async function TeacherGradePage({ params, searchParams }: Teacher
               </TableHeader>
               <TableBody>
                 {grade.learners.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                      No learners yet. Add one →
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No learners yet. Add one →</TableCell></TableRow>
+                ) : grade.learners.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">{l.fullName}</TableCell>
+                    <TableCell>{l.age}</TableCell>
+                    <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
+                    <TableCell className="text-xs">{READING_PROFILE_LABELS[l.englishReadingProfile]}</TableCell>
+                    <TableCell className="text-xs">{READING_PROFILE_LABELS[l.filipinoReadingProfile]}</TableCell>
+                    <TableCell className="text-right">
+                      <AralToggleButton learnerId={l.id} isAral={l.isAralLearner} />
                     </TableCell>
                   </TableRow>
-                ) : (
-                  grade.learners.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="font-medium">{l.fullName}</TableCell>
-                      <TableCell>{l.age}</TableCell>
-                      <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
-                      <TableCell className="text-xs">{READING_PROFILE_LABELS[l.englishReadingProfile]}</TableCell>
-                      <TableCell className="text-xs">{READING_PROFILE_LABELS[l.filipinoReadingProfile]}</TableCell>
-                      <TableCell className="text-right">
-                        <AralToggleButton learnerId={l.id} isAral={l.isAralLearner} />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           </CardContent>
@@ -106,7 +100,7 @@ export default async function TeacherGradePage({ params, searchParams }: Teacher
 
         <Card>
           <CardContent className="pt-6">
-            <h2 className="mb-3 font-semibold">Add new learner</h2>
+            <h2 className="font-semibold mb-3">Add new learner</h2>
             <LearnerForm gradeLevelId={grade.id} />
           </CardContent>
         </Card>

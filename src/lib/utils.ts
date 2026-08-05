@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
 export function getMonday(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay(); // 0 Sun..6 Sat

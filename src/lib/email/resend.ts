@@ -14,11 +14,7 @@ export async function sendTeacherInviteEmail(args: {
   const from = process.env.RESEND_FROM_EMAIL || "LITRACK <onboarding@resend.dev>";
 
   if (!resend) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[email] RESEND_API_KEY not set — invite link:", args.inviteUrl);
-    } else {
-      console.warn("[email] RESEND_API_KEY not set — invite email not sent");
-    }
+    console.warn("[email] RESEND_API_KEY not set — invite link:", args.inviteUrl);
     return { id: "dev-no-email", devLink: args.inviteUrl };
   }
 
@@ -28,13 +24,13 @@ export async function sendTeacherInviteEmail(args: {
     subject: `You've been invited to ${args.schoolName} on PROJECT LITRACK`,
     html: `
       <div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:24px">
-        <h2 style="color:#0B6EF3">Welcome to PROJECT LITRACK</h2>
+        <h2 style="color:#7c3aed">Welcome to PROJECT LITRACK</h2>
         <p>Hi <strong>${escapeHtml(args.teacherName)}</strong>,</p>
         <p>You've been invited to join <strong>${escapeHtml(args.schoolName)}</strong> as a teacher on PROJECT LITRACK.</p>
         <p>Click the button below to set up your password:</p>
         <p style="margin:24px 0">
           <a href="${args.inviteUrl}"
-             style="background:#0B6EF3;color:white;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block">
+             style="background:#7c3aed;color:white;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block">
             Set up your account
           </a>
         </p>

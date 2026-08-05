@@ -31,14 +31,14 @@ export function ReadingLevelForm({ learnerId }: { learnerId: string }) {
         <Label htmlFor="monthYear">Month *</Label>
         <Input id="monthYear" name="monthYear" placeholder="YYYY-MM" defaultValue={currentMonth} pattern="\d{4}-\d{2}" required />
       </div>
-      <fieldset>
-        <legend id="reading-english-legend" className="mb-2 text-sm font-medium">English *</legend>
-        <FieldRadioGroup aria-labelledby="reading-english-legend" name="englishProfile" options={toOptions(READING_PROFILE_LABELS)} />
-      </fieldset>
-      <fieldset>
-        <legend id="reading-filipino-legend" className="mb-2 text-sm font-medium">Filipino *</legend>
-        <FieldRadioGroup aria-labelledby="reading-filipino-legend" name="filipinoProfile" options={toOptions(READING_PROFILE_LABELS)} />
-      </fieldset>
+      <div>
+        <p className="text-sm font-medium mb-2">English *</p>
+        <FieldRadioGroup name="englishProfile" options={toOptions(READING_PROFILE_LABELS)} />
+      </div>
+      <div>
+        <p className="text-sm font-medium mb-2">Filipino *</p>
+        <FieldRadioGroup name="filipinoProfile" options={toOptions(READING_PROFILE_LABELS)} />
+      </div>
       <div className="space-y-1">
         <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" name="notes" rows={2} />

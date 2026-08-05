@@ -17,10 +17,11 @@ interface TeachersPageProps {
 export default async function TeachersPage({ searchParams }: TeachersPageProps) {
   const params = await searchParams;
   const user = await requireUser("SCHOOL_HEAD");
-
+  
+  // Super Admin can view any school via query param
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   const targetSchoolId = isSuperAdmin && params.schoolId ? params.schoolId : user.schoolId;
-
+  
   if (!user.profileCompleted && !isSuperAdmin) redirect("/school-head/profiling");
   if (!targetSchoolId) redirect("/login");
 
@@ -41,15 +42,14 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
   ]);
 
   return (
-    <AppShell
+    <AppShell 
       title={isSuperAdmin ? `Teachers - ${school?.name || "Unknown"}` : "Teachers"}
-      subtitle={isSuperAdmin ? "Super Admin View" : "Create teacher accounts for your school"}
+      subtitle={isSuperAdmin ? "Super Admin View" : "Invite teachers to your school"}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       schoolName={school?.name}
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
       viewedSchoolName={school?.name}
-      schoolIdQuery={isSuperAdmin ? targetSchoolId : undefined}
     >
       {grades.length === 0 ? (
         <Card>
@@ -61,11 +61,8 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardContent className="pt-6">
-              <h2 className="font-semibold mb-4">Create a teacher</h2>
-              <InviteTeacherForm
-                grades={grades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] }))}
-                schoolId={isSuperAdmin ? targetSchoolId : undefined}
-              />
+              <h2 className="font-semibold mb-4">Invite a teacher</h2>
+              <InviteTeacherForm grades={grades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] }))} />
             </CardContent>
           </Card>
 

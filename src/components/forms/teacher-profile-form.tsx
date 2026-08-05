@@ -63,8 +63,8 @@ export function TeacherProfileForm({ defaultValues }: { defaultValues: Defaults 
             <FieldText name="designation" label="Designation" defaultValue={defaultValues.designation ?? ""} />
           </div>
           <div>
-            <p id="group-label-teacherprofileformtsx-1" className="mb-2 text-sm font-medium">Position *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-1" name="position" options={toOptions(TEACHER_POSITION_LABELS)} defaultValue={defaultValues.position} />
+            <p className="text-sm font-medium mb-2">Position *</p>
+            <FieldRadioGroup name="position" options={toOptions(TEACHER_POSITION_LABELS)} defaultValue={defaultValues.position} />
           </div>
         </CardContent>
       </Card>
@@ -73,26 +73,26 @@ export function TeacherProfileForm({ defaultValues }: { defaultValues: Defaults 
         <CardHeader><CardTitle className="text-base">II. Professional Background</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <p id="group-label-teacherprofileformtsx-2" className="mb-2 text-sm font-medium">Highest Educational Attainment *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-2" name="educationalAttainment" options={toOptions(EDUCATIONAL_ATTAINMENT_LABELS)} defaultValue={defaultValues.educationalAttainment} />
+            <p className="text-sm font-medium mb-2">Highest Educational Attainment *</p>
+            <FieldRadioGroup name="educationalAttainment" options={toOptions(EDUCATIONAL_ATTAINMENT_LABELS)} defaultValue={defaultValues.educationalAttainment} />
           </div>
           <Separator />
           <div>
-            <p id="group-label-teacherprofileformtsx-3" className="mb-2 text-sm font-medium">Field of Specialization *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-3" name="fieldOfSpecialization" options={toOptions(SPECIALIZATION_LABELS)} defaultValue={defaultValues.fieldOfSpecialization} />
+            <p className="text-sm font-medium mb-2">Field of Specialization *</p>
+            <FieldRadioGroup name="fieldOfSpecialization" options={toOptions(SPECIALIZATION_LABELS)} defaultValue={defaultValues.fieldOfSpecialization} />
             <div className="mt-3">
               <FieldText name="specializationOther" label="If 'Others', specify" defaultValue={defaultValues.specializationOther ?? ""} />
             </div>
           </div>
           <Separator />
           <div>
-            <p id="group-label-teacherprofileformtsx-4" className="mb-2 text-sm font-medium">Years in Service *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-4" name="yearsInService" options={toOptions(YEARS_IN_SERVICE_LABELS)} defaultValue={defaultValues.yearsInService} />
+            <p className="text-sm font-medium mb-2">Years in Service *</p>
+            <FieldRadioGroup name="yearsInService" options={toOptions(YEARS_IN_SERVICE_LABELS)} defaultValue={defaultValues.yearsInService} />
           </div>
           <Separator />
           <div>
-            <p id="group-label-teacherprofileformtsx-5" className="mb-2 text-sm font-medium">Current Grade Level / Assignment</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-5" name="currentGradeAssignment" options={toOptions(GRADE_LEVEL_LABELS)} defaultValue={defaultValues.currentGradeAssignment ?? undefined} required={false} />
+            <p className="text-sm font-medium mb-2">Current Grade Level / Assignment</p>
+            <FieldRadioGroup name="currentGradeAssignment" options={toOptions(GRADE_LEVEL_LABELS)} defaultValue={defaultValues.currentGradeAssignment ?? undefined} required={false} />
           </div>
         </CardContent>
       </Card>
@@ -100,8 +100,8 @@ export function TeacherProfileForm({ defaultValues }: { defaultValues: Defaults 
       <Card>
         <CardHeader><CardTitle className="text-base">III. Teaching Assignment</CardTitle></CardHeader>
         <CardContent>
-          <p id="group-label-teacherprofileformtsx-6" className="mb-2 text-sm font-medium">Most Subject Currently Handled *</p>
-          <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-6" name="mostSubjectHandled" options={toOptions(SUBJECT_LABELS)} defaultValue={defaultValues.mostSubjectHandled} />
+          <p className="text-sm font-medium mb-2">Most Subject Currently Handled *</p>
+          <FieldRadioGroup name="mostSubjectHandled" options={toOptions(SUBJECT_LABELS)} defaultValue={defaultValues.mostSubjectHandled} />
         </CardContent>
       </Card>
 
@@ -109,34 +109,34 @@ export function TeacherProfileForm({ defaultValues }: { defaultValues: Defaults 
         <CardHeader><CardTitle className="text-base">IV. Training & Professional Development</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <p id="group-label-teacherprofileformtsx-7" className="mb-2 text-sm font-medium">Trainings related to literacy/reading? *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-7"
+            <p className="text-sm font-medium mb-2">Trainings related to literacy/reading? *</p>
+            <FieldRadioGroup
               name="hasReadingTraining"
               options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
               defaultValue={defaultValues.hasReadingTraining ? "true" : "false"}
             />
           </div>
           <div>
-            <p id="group-label-teacherprofileformtsx-8" className="mb-2 text-sm font-medium">Recent reading trainings (last 5y)</p>
-            <FieldCheckboxList aria-labelledby="group-label-teacherprofileformtsx-8" name="readingTrainings" options={toOptions(READING_TRAINING_LABELS)} defaultValues={defaultValues.readingTrainings ?? []} />
+            <p className="text-sm font-medium mb-2">Recent reading trainings (last 5y)</p>
+            <FieldCheckboxList name="readingTrainings" options={toOptions(READING_TRAINING_LABELS)} defaultValues={defaultValues.readingTrainings ?? []} />
           </div>
           <Separator />
           <div>
-            <p id="group-label-teacherprofileformtsx-9" className="mb-2 text-sm font-medium">Trainings related to English Curriculum? *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-9"
+            <p className="text-sm font-medium mb-2">Trainings related to English Curriculum? *</p>
+            <FieldRadioGroup
               name="hasEnglishTraining"
               options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
               defaultValue={defaultValues.hasEnglishTraining ? "true" : "false"}
             />
           </div>
           <div>
-            <p id="group-label-teacherprofileformtsx-10" className="mb-2 text-sm font-medium">Recent English trainings (last 5y)</p>
-            <FieldCheckboxList aria-labelledby="group-label-teacherprofileformtsx-10" name="englishTrainings" options={toOptions(ENGLISH_TRAINING_LABELS)} defaultValues={defaultValues.englishTrainings ?? []} />
+            <p className="text-sm font-medium mb-2">Recent English trainings (last 5y)</p>
+            <FieldCheckboxList name="englishTrainings" options={toOptions(ENGLISH_TRAINING_LABELS)} defaultValues={defaultValues.englishTrainings ?? []} />
           </div>
           <Separator />
           <div>
-            <p id="group-label-teacherprofileformtsx-11" className="mb-2 text-sm font-medium">Highest level of trainings attended *</p>
-            <FieldRadioGroup aria-labelledby="group-label-teacherprofileformtsx-11" name="highestTrainingLevel" options={toOptions(TRAINING_LEVEL_LABELS)} defaultValue={defaultValues.highestTrainingLevel} />
+            <p className="text-sm font-medium mb-2">Highest level of trainings attended *</p>
+            <FieldRadioGroup name="highestTrainingLevel" options={toOptions(TRAINING_LEVEL_LABELS)} defaultValue={defaultValues.highestTrainingLevel} />
           </div>
         </CardContent>
       </Card>

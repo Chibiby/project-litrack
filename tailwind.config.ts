@@ -9,9 +9,6 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -39,16 +36,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
-        amber: {
-          DEFAULT: "hsl(var(--accent-amber))",
-          foreground: "hsl(var(--accent-amber-foreground))",
-          muted: "hsl(var(--accent-amber-muted))",
-        },
-        success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
-        },
-        warning: "hsl(var(--warning))",
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
@@ -56,14 +43,16 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        violet: {
+          DEFAULT: "hsl(262 83% 58%)",
+          50: "hsl(262 100% 97%)",
+          100: "hsl(262 96% 93%)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      boxShadow: {
-        card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06)",
       },
     },
   },

@@ -20,16 +20,11 @@ export function CreateSchoolForm() {
           action={(fd) =>
             startTransition(async () => {
               try {
-                const res = await createSchool(fd);
-                if (!res.ok) {
-                  toast.error(res.error);
-                  return;
-                }
+                await createSchool(fd);
                 toast.success("School created. The School Head can now log in.");
                 router.push("/admin/schools");
-              } catch (e) {
-                const message = e instanceof Error ? e.message : "Failed to create school";
-                toast.error(message);
+              } catch (e: any) {
+                toast.error(e?.message || "Failed to create school");
               }
             })
           }

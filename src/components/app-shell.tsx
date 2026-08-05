@@ -12,7 +12,6 @@ interface AppShellProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
-  schoolIdQuery?: string;
 }
 
 export function AppShell({
@@ -25,10 +24,10 @@ export function AppShell({
   grades,
   isSuperAdminView,
   viewedSchoolName,
-  schoolIdQuery,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50">
+      {/* Sidebar Navigation */}
       <AppSidebar
         role={role}
         userName={userName}
@@ -36,32 +35,33 @@ export function AppShell({
         grades={grades}
         isSuperAdminView={isSuperAdminView}
         viewedSchoolName={viewedSchoolName}
-        schoolIdQuery={schoolIdQuery}
       />
 
+      {/* Main Content Area */}
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur-sm">
+        {/* Top Header */}
+        <header className="sticky top-0 z-30 border-b bg-white/80 backdrop-blur-sm">
           <div className="flex h-16 items-center gap-4 px-4 lg:px-8">
+            {/* Spacer for mobile menu button */}
             <div className="w-8 lg:hidden" />
-
-            {/* Desktop breadcrumb trail */}
+            
+            {/* Breadcrumbs */}
             <Breadcrumbs className="hidden md:flex" />
-
-            {/* Mobile page context */}
-            <p className="truncate text-sm font-medium text-foreground md:hidden" aria-live="polite">
-              {title}
-            </p>
-
-            <div className="ml-auto flex items-center gap-4" />
+            
+            <div className="ml-auto flex items-center gap-4">
+              {/* Notifications could go here */}
+            </div>
           </div>
         </header>
 
+        {/* Page Content */}
         <main className="p-4 lg:p-8">
+          {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
-            {subtitle ? <p className="mt-1 text-lg text-muted-foreground">{subtitle}</p> : null}
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
+            {subtitle && <p className="mt-1 text-lg text-muted-foreground">{subtitle}</p>}
           </div>
-
+          
           {children}
         </main>
       </div>

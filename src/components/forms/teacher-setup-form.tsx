@@ -29,31 +29,12 @@ export function TeacherSetupForm({ token, email, name }: { token: string; email:
             <p className="text-sm">{name}</p>
           </div>
           <div className="space-y-1">
-            <Label>Invite email</Label>
+            <Label>Email</Label>
             <p className="text-sm">{email}</p>
-            <p className="text-xs text-muted-foreground">
-              You will log in with a username (not this email) plus the password you choose below.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="username">Choose a username *</Label>
-            <Input
-              id="username"
-              name="username"
-              required
-              minLength={3}
-              maxLength={40}
-              pattern="[a-zA-Z0-9._-]+"
-              autoComplete="username"
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              Letters, digits, dot, underscore, dash. Used at teacher login.
-            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Choose a password *</Label>
-            <Input id="password" name="password" type="password" required minLength={8} />
+            <Input id="password" name="password" type="password" required minLength={8} autoFocus />
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm password *</Label>
