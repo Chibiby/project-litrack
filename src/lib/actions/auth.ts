@@ -111,14 +111,37 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
 
     redirect("/admin");
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Login failed";
+    // next/navigation redirect() throws; must not be turned into an ActionResult
+    const digest =
+      typeof err === "object" && err !== null && "digest" in err
+        ? String((err as { digest?: unknown }).digest)
+        : "";
+    if (digest.includes("NEXT_REDIRECT")) throw err;
+
+    const message = err instanceof Error ? err.message : String(err ?? "Login failed");
     if (message.includes("SUPABASE") || message.includes("Missing NEXT_PUBLIC")) {
       return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
     }
-    if (message.includes("DATABASE") || message.includes("Prisma") || message.includes("Environment variable not found")) {
+    const isDbFailure =
+      message.includes("DATABASE") ||
+      message.includes("Prisma") ||
+      message.includes("Environment variable not found") ||
+      message.includes("ENOTFOUND") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("ETIMEDOUT") ||
+      message.includes("P1001") ||
+      message.includes("P1000") ||
+      message.includes("P1017") ||
+      message.includes("Can't reach database") ||
+      message.includes("can't reach database") ||
+      message.includes("tenant/user") ||
+      message.includes("Connection refused") ||
+      message.includes("connection timed out");
+    if (isDbFailure) {
       return {
         ok: false,
-        error: "Database is not configured. Set DATABASE_URL on Vercel and run migrations/seed.",
+        error:
+          "Database connection failed. Check DATABASE_URL / DIRECT_URL, that the database is reachable, and that migrations/seed have been run.",
       };
     }
     throw err;

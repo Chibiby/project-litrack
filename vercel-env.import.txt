@@ -1,0 +1,32 @@
+# Vercel Environment Variables — copy/paste into Project → Settings → Environment Variables
+# Or use: vercel env add <NAME> (paste each value when prompted)
+#
+# SAFE TO COMMIT: public URL/anon key + placeholders only. Never put service_role or DB password here.
+# Project: litrack (okmqgbnxdgdqhqjrkuqn) · region: ap-southeast-1
+#
+# After pasting secrets, set each var for Production (and Preview if needed), then Redeploy.
+
+# --- Database ---
+# Prefer a dedicated app role (recommended). Format for Supavisor pooler:
+#   postgresql://[DB-USER].okmqgbnxdgdqhqjrkuqn:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:PORT/postgres
+# Or use the postgres user password from Supabase → Settings → Database.
+# Do NOT leave YOUR_DB_PASSWORD — that causes "tenant/user ... not found" at runtime.
+DATABASE_URL=postgresql://postgres.okmqgbnxdgdqhqjrkuqn:YOUR_DB_PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
+DIRECT_URL=postgresql://postgres.okmqgbnxdgdqhqjrkuqn:YOUR_DB_PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+
+# --- Supabase Auth (URL + anon are public; service_role is secret) ---
+NEXT_PUBLIC_SUPABASE_URL=https://okmqgbnxdgdqhqjrkuqn.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rbXFnYm54ZGdkcWhxanJrdXFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTY4MzUsImV4cCI6MjA5NTA3MjgzNX0.BQRjlaHn3C8Yyg3BbRmpgVv-96_4eFKWa3VsPwcEGGs
+SUPABASE_SERVICE_ROLE_KEY=PASTE_SERVICE_ROLE_KEY_HERE
+
+# --- Email (Resend) ---
+RESEND_API_KEY=PASTE_RESEND_API_KEY_HERE
+RESEND_FROM_EMAIL=LITRACK <noreply@yourdomain.com>
+
+# --- App ---
+NEXT_PUBLIC_APP_URL=https://project-litrack-black.vercel.app
+SYNTHETIC_EMAIL_DOMAIN=litrack.local
+
+# --- Super Admin Bootstrap (seed only; change password in production) ---
+SEED_SUPER_ADMIN_EMAIL=admin@litrack.local
+SEED_SUPER_ADMIN_PASSWORD=ChangeMe123!
