@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -122,9 +123,13 @@ export function AppSidebar({
       {/* Header */}
       <div className="border-b px-4 py-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <School className="h-5 w-5" />
-          </span>
+          <Image
+            src="/logo.png"
+            alt="LiTrack logo"
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0"
+          />
           <div className="flex flex-col">
             <span className="text-sm leading-none">LITRACK</span>
             {schoolName && (
