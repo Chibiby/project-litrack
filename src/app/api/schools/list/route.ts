@@ -9,7 +9,13 @@ export async function GET() {
   try {
     const schools = await listSchoolsPublic();
     return NextResponse.json({ schools });
-  } catch {
-    return NextResponse.json({ schools: [] });
+  } catch (error) {
+    // An unreachable database must not masquerade as "there are no schools" —
+    // that renders an empty picker on /login and hides the outage entirely.
+    console.error("[/api/schools/list] school lookup failed", error);
+    return NextResponse.json(
+      { schools: [], error: "Database unavailable" },
+      { status: 503 },
+    );
   }
 }
