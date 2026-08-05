@@ -49,8 +49,9 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
             await saveSchoolHeadProfile(fd);
             toast.success("Profile saved");
             router.push("/school-head");
-          } catch (e: any) {
-            toast.error(e?.message || "Failed to save profile");
+          } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to save profile";
+            toast.error(message);
           }
         })
       }
@@ -60,7 +61,7 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
       <Card>
         <CardHeader><CardTitle className="text-base">I. Respondent Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <FieldText name="firstName" label="First name" defaultValue={defaultValues.firstName} required />
             <FieldText name="middleName" label="Middle name" defaultValue={defaultValues.middleName ?? ""} />
             <FieldText name="lastName" label="Last name" defaultValue={defaultValues.lastName} required />
@@ -70,8 +71,8 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
             <FieldText name="designation" label="Designation" defaultValue={defaultValues.designation ?? ""} />
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Position *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-1" className="mb-2 text-sm font-medium">Position *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-1"
               name="position"
               options={toOptions(SCHOOL_HEAD_POSITION_LABELS)}
               defaultValue={defaultValues.position}
@@ -85,8 +86,8 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
         <CardHeader><CardTitle className="text-base">II. Professional Background</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <p className="text-sm font-medium mb-2">Highest Educational Attainment *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-2" className="mb-2 text-sm font-medium">Highest Educational Attainment *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-2"
               name="educationalAttainment"
               options={toOptions(EDUCATIONAL_ATTAINMENT_LABELS)}
               defaultValue={defaultValues.educationalAttainment}
@@ -94,8 +95,8 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
           </div>
           <Separator />
           <div>
-            <p className="text-sm font-medium mb-2">Field of Specialization *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-3" className="mb-2 text-sm font-medium">Field of Specialization *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-3"
               name="fieldOfSpecialization"
               options={toOptions(SPECIALIZATION_LABELS)}
               defaultValue={defaultValues.fieldOfSpecialization}
@@ -106,8 +107,8 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
           </div>
           <Separator />
           <div>
-            <p className="text-sm font-medium mb-2">Years in Service *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-4" className="mb-2 text-sm font-medium">Years in Service *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-4"
               name="yearsInService"
               options={toOptions(YEARS_IN_SERVICE_LABELS)}
               defaultValue={defaultValues.yearsInService}
@@ -121,16 +122,16 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
         <CardHeader><CardTitle className="text-base">IV. Training & Professional Development</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <p className="text-sm font-medium mb-2">Have you attended trainings related to literacy/reading instruction? *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-5" className="mb-2 text-sm font-medium">Have you attended trainings related to literacy/reading instruction? *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-5"
               name="hasReadingTraining"
               options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
               defaultValue={defaultValues.hasReadingTraining ? "true" : "false"}
             />
           </div>
           <div>
-            <p className="text-sm font-medium mb-2">Recent reading trainings (last 5 years)</p>
-            <FieldCheckboxList
+            <p id="group-label-shprofileformtsx-6" className="mb-2 text-sm font-medium">Recent reading trainings (last 5 years)</p>
+            <FieldCheckboxList aria-labelledby="group-label-shprofileformtsx-6"
               name="readingTrainings"
               options={toOptions(READING_TRAINING_LABELS)}
               defaultValues={defaultValues.readingTrainings ?? []}
@@ -138,16 +139,16 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
           </div>
           <Separator />
           <div>
-            <p className="text-sm font-medium mb-2">Have you attended trainings related to English Curriculum Instruction? *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-7" className="mb-2 text-sm font-medium">Have you attended trainings related to English Curriculum Instruction? *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-7"
               name="hasEnglishTraining"
               options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
               defaultValue={defaultValues.hasEnglishTraining ? "true" : "false"}
             />
           </div>
           <div>
-            <p className="text-sm font-medium mb-2">Recent English curriculum trainings (last 5 years)</p>
-            <FieldCheckboxList
+            <p id="group-label-shprofileformtsx-8" className="mb-2 text-sm font-medium">Recent English curriculum trainings (last 5 years)</p>
+            <FieldCheckboxList aria-labelledby="group-label-shprofileformtsx-8"
               name="englishTrainings"
               options={toOptions(ENGLISH_TRAINING_LABELS)}
               defaultValues={defaultValues.englishTrainings ?? []}
@@ -155,8 +156,8 @@ export function SchoolHeadProfileForm({ defaultValues }: { defaultValues: Defaul
           </div>
           <Separator />
           <div>
-            <p className="text-sm font-medium mb-2">Highest level of trainings attended *</p>
-            <FieldRadioGroup
+            <p id="group-label-shprofileformtsx-9" className="mb-2 text-sm font-medium">Highest level of trainings attended *</p>
+            <FieldRadioGroup aria-labelledby="group-label-shprofileformtsx-9"
               name="highestTrainingLevel"
               options={toOptions(TRAINING_LEVEL_LABELS)}
               defaultValue={defaultValues.highestTrainingLevel}

@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/data-table";
-import { Plus, ExternalLink, Trash2 } from "lucide-react";
-import { deleteSchool } from "@/lib/actions/school";
+import { DeleteSchoolButton } from "@/components/delete-school-button";
+import { Plus, ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-// Define unique regions for filter
 const REGIONS = [
   { value: "NCR", label: "NCR - National Capital Region" },
   { value: "CAR", label: "CAR - Cordillera Administrative Region" },
@@ -43,10 +42,14 @@ export default async function SchoolsListPage() {
       key: "name",
       header: "School Name",
       render: (school: (typeof tableData)[0]) => (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-[10rem] items-center gap-2">
           <span className="font-medium">{school.name}</span>
-          <Link href={`/school-head?schoolId=${school.id}`}>
-            <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary" />
+          <Link
+            href={`/school-head?schoolId=${school.id}`}
+            aria-label={`Open school head view for ${school.name}`}
+            className="inline-flex rounded-sm text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
           </Link>
         </div>
       ),
@@ -55,7 +58,7 @@ export default async function SchoolsListPage() {
       key: "schoolIdCode",
       header: "School ID",
       render: (school: (typeof tableData)[0]) => (
-        <code className="text-xs bg-muted px-1 py-0.5 rounded">{school.schoolIdCode}</code>
+        <code className="rounded bg-muted px-1 py-0.5 text-xs">{school.schoolIdCode}</code>
       ),
     },
     {
@@ -88,15 +91,12 @@ export default async function SchoolsListPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Actions",
       searchable: false,
       render: (school: (typeof tableData)[0]) => (
-        <form action={deleteSchool} className="flex justify-end">
-          <input type="hidden" name="id" value={school.id} />
-          <Button variant="ghost" size="sm" type="submit" className="text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </form>
+        <div className="flex justify-end">
+          <DeleteSchoolButton schoolId={school.id} schoolName={school.name} />
+        </div>
       ),
     },
   ];
@@ -109,7 +109,7 @@ export default async function SchoolsListPage() {
       userName={user.fullName || user.email}
     >
       {!dbAvailable ? (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-4 rounded-lg border border-border bg-amber-muted px-4 py-3 text-sm text-amber-foreground">
           Database is unavailable. School list cannot load until{" "}
           <code className="text-xs">DATABASE_URL</code> is fixed on Vercel.
         </div>
@@ -117,12 +117,14 @@ export default async function SchoolsListPage() {
 
       <div className="mb-4 flex justify-end">
         <Button asChild>
-          <Link href="/admin/schools/new"><Plus className="h-4 w-4 mr-2" /> New School</Link>
+          <Link href="/admin/schools/new">
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> New School
+          </Link>
         </Button>
       </div>
 
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <DataTable
             data={tableData}
             columns={columns}

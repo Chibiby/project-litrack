@@ -2,12 +2,16 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { findAppUserByAuthId } from "@/lib/auth/app-user";
+import { isSuperAdmin, roleHomePath } from "@/lib/auth/roles";
 import type { User, UserRole } from "@prisma/client";
+
+export { isSuperAdmin, roleHomePath };
 
 /**
  * Returns the authenticated app User, or null.
  * Prefers PostgREST public."User" (works without Prisma DATABASE_URL), then Prisma,
- * then SUPER_ADMIN JWT claims as last resort.
+ * then SUPER_ADMIN via app_metadata.role as last resort.
+ * Inactive / soft-deleted users resolve to null (caller redirects to login).
  */
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createSupabaseServerClient();
@@ -42,24 +46,6 @@ export async function requireUser(roles?: UserRole | UserRole[], allowSuperAdmin
     }
   }
   return user;
-}
-
-/**
- * Check if user is Super Admin
- */
-export function isSuperAdmin(user: User): boolean {
-  return user.role === "SUPER_ADMIN";
-}
-
-export function roleHomePath(role: UserRole): string {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return "/admin";
-    case "SCHOOL_HEAD":
-      return "/school-head";
-    case "TEACHER":
-      return "/teacher";
-  }
 }
 
 export async function signOut() {

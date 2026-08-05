@@ -17,6 +17,14 @@ export const adminLoginSchema = z.object({
 export const teacherSetupSchema = z
   .object({
     token: nonEmpty(),
+    /** Login username → synthetic email `<username>@school.local` */
+    username: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .min(3, "Username must be at least 3 characters")
+      .max(40)
+      .regex(/^[a-z0-9._-]+$/, "Username: letters, digits, dot, underscore, dash only"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
   })

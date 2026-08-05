@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { attendanceMarkSchema } from "@/lib/validators/attendance.schema";
 import { getMonday } from "@/lib/utils";
+import { parseLocalDateYmd } from "@/lib/date-local";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -24,8 +25,8 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
   });
   if (!learner) return { ok: false, error: "Learner not found" };
 
-  const date = new Date(parsed.data.date);
-  date.setHours(0, 0, 0, 0);
+  // Local calendar date → Date at local midnight for @db.Date storage (see date-local.ts).
+  const date = parseLocalDateYmd(parsed.data.date);
   const weekStart = getMonday(date);
 
   await prisma.attendance.upsert({

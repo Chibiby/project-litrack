@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { schoolLoginSchema, adminLoginSchema, teacherSetupSchema } from "@/lib/validators/auth.schema";
-import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { schoolHeadSyntheticEmail, teacherSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { hashToken } from "@/lib/auth/invites";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
@@ -14,7 +14,7 @@ import {
 import {
   findUserByAuthIdViaPostgrest,
   isPrismaConnectionError,
-  isSuperAdminAuthClaim,
+  isUsableAppUser,
 } from "@/lib/auth/app-user";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -41,31 +41,43 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
   });
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const school = await prisma.school.findUnique({
-    where: { id: parsed.data.schoolId },
-    select: { id: true, name: true, schoolIdCode: true, isActive: true, deletedAt: true },
-  });
-  if (!school || !school.isActive || school.deletedAt) {
-    return { ok: false, error: "School not found or inactive" };
-  }
-  if (school.schoolIdCode !== parsed.data.password) {
-    return { ok: false, error: "Incorrect School ID" };
-  }
+  try {
+    const school = await prisma.school.findUnique({
+      where: { id: parsed.data.schoolId },
+      select: { id: true, name: true, schoolIdCode: true, isActive: true, deletedAt: true },
+    });
+    if (!school || !school.isActive || school.deletedAt) {
+      return { ok: false, error: "School not found or inactive" };
+    }
+    if (school.schoolIdCode !== parsed.data.password) {
+      return { ok: false, error: "Incorrect School ID" };
+    }
 
-  const supabase = await createSupabaseServerClient();
-  const email = schoolHeadSyntheticEmail(school.schoolIdCode);
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password: school.schoolIdCode,
-  });
-  if (error) return { ok: false, error: "Login failed. Please contact your administrator." };
+    const supabase = await createSupabaseServerClient();
+    const email = schoolHeadSyntheticEmail(school.schoolIdCode);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: school.schoolIdCode,
+    });
+    if (error) return { ok: false, error: "Login failed. Please contact your administrator." };
 
-  redirect("/school-head");
+    redirect("/school-head");
+  } catch (err) {
+    const digest =
+      typeof err === "object" && err !== null && "digest" in err
+        ? String((err as { digest?: unknown }).digest)
+        : "";
+    if (digest.includes("NEXT_REDIRECT")) throw err;
+    if (isPrismaConnectionError(err)) {
+      return { ok: false, error: "Service temporarily unavailable. Please try again later." };
+    }
+    throw err;
+  }
 }
 
 /**
  * Teacher login: select School, then enter username + password.
- * Username and password are provided by School Head during account creation.
+ * Username maps to synthetic email `<username>@school.local` (same as create/invite-accept).
  */
 export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   const missing = requireSupabaseConfigured();
@@ -76,21 +88,39 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   const password = String(formData.get("password") ?? "");
   if (!schoolId || !username || !password) return { ok: false, error: "All fields required" };
 
-  // Construct synthetic email from username
-  const syntheticEmail = `${username}@school.local`;
+  const syntheticEmail = teacherSyntheticEmail(username);
 
-  // Verify the user exists and belongs to this school
-  const user = await prisma.user.findFirst({
-    where: { email: syntheticEmail, role: "TEACHER", schoolId, deletedAt: null, isActive: true },
-    select: { id: true },
-  });
-  if (!user) return { ok: false, error: "Teacher not found in this school" };
+  try {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { id: true, isActive: true, deletedAt: true },
+    });
+    if (!school || !school.isActive || school.deletedAt) {
+      return { ok: false, error: "School not found or inactive" };
+    }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email: syntheticEmail, password });
-  if (error) return { ok: false, error: "Incorrect username or password" };
+    const user = await prisma.user.findFirst({
+      where: { email: syntheticEmail, role: "TEACHER", schoolId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (!user) return { ok: false, error: "Teacher not found in this school" };
 
-  redirect("/teacher");
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signInWithPassword({ email: syntheticEmail, password });
+    if (error) return { ok: false, error: "Incorrect username or password" };
+
+    redirect("/teacher");
+  } catch (err) {
+    const digest =
+      typeof err === "object" && err !== null && "digest" in err
+        ? String((err as { digest?: unknown }).digest)
+        : "";
+    if (digest.includes("NEXT_REDIRECT")) throw err;
+    if (isPrismaConnectionError(err)) {
+      return { ok: false, error: "Service temporarily unavailable. Please try again later." };
+    }
+    throw err;
+  }
 }
 
 export async function loginAdmin(formData: FormData): Promise<ActionResult> {
@@ -108,19 +138,21 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
     if (error || !data.user) return { ok: false, error: "Incorrect credentials" };
 
-    // Role check must not depend on Prisma/DATABASE_URL.
-    // PostgREST public."User" (session, then service-role) → optional Prisma → JWT claim.
+    // Require a public."User" / Prisma row — never authorize from JWT claims alone.
+    // PostgREST path covers no-DATABASE_URL; Prisma is fallback when PostgREST misses.
     let authorized = false;
 
     const { user: restUser } = await findUserByAuthIdViaPostgrest(data.user.id, supabase);
     if (restUser) {
-      authorized = restUser.role === "SUPER_ADMIN" && !restUser.deletedAt;
-    } else if (isSuperAdminAuthClaim(data.user)) {
-      authorized = true;
+      authorized =
+        restUser.role === "SUPER_ADMIN" && isUsableAppUser(restUser);
     } else {
       try {
         const prismaUser = await prisma.user.findUnique({ where: { authId: data.user.id } });
-        authorized = !!prismaUser && prismaUser.role === "SUPER_ADMIN" && !prismaUser.deletedAt;
+        authorized =
+          !!prismaUser &&
+          prismaUser.role === "SUPER_ADMIN" &&
+          isUsableAppUser(prismaUser);
       } catch (dbErr) {
         if (!isPrismaConnectionError(dbErr)) throw dbErr;
         authorized = false;
@@ -145,7 +177,6 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     if (message.includes("SUPABASE") || message.includes("Missing NEXT_PUBLIC")) {
       return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
     }
-    // Do not surface Prisma/DATABASE_URL failures as the login error — role check has PostgREST/JWT paths.
     if (isPrismaConnectionError(err)) {
       return { ok: false, error: "Login failed. Please try again." };
     }
@@ -161,8 +192,8 @@ export async function logoutAction(): Promise<void> {
 
 /**
  * Teacher invite acceptance: looks up TeacherInvite by tokenHash, creates a
- * Supabase auth user with the chosen password, creates the User row, marks
- * the invite consumed, and signs the user in.
+ * Supabase auth user with synthetic email (same as createTeacherDirect / loginTeacher),
+ * creates the User row, marks the invite consumed, and signs the user in.
  */
 export async function acceptTeacherInvite(formData: FormData): Promise<ActionResult> {
   const missing = requireSupabaseConfigured();
@@ -170,6 +201,7 @@ export async function acceptTeacherInvite(formData: FormData): Promise<ActionRes
 
   const parsed = teacherSetupSchema.safeParse({
     token: formData.get("token"),
+    username: formData.get("username"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -177,52 +209,91 @@ export async function acceptTeacherInvite(formData: FormData): Promise<ActionRes
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const tokenHash = hashToken(parsed.data.token);
-  const invite = await prisma.teacherInvite.findUnique({
-    where: { tokenHash },
-    include: { school: true },
-  });
+  let invite;
+  try {
+    const tokenHash = hashToken(parsed.data.token);
+    invite = await prisma.teacherInvite.findUnique({
+      where: { tokenHash },
+      include: { school: true, gradeLevel: true },
+    });
+  } catch (err) {
+    if (isPrismaConnectionError(err)) {
+      return { ok: false, error: "Service temporarily unavailable. Please try again later." };
+    }
+    throw err;
+  }
+
   if (!invite || invite.consumedAt || invite.expiresAt < new Date()) {
     return { ok: false, error: "This invite link is invalid or expired" };
+  }
+  if (!invite.school.isActive || invite.school.deletedAt) {
+    return { ok: false, error: "This school is no longer active" };
+  }
+
+  const username = parsed.data.username.trim().toLowerCase();
+  const syntheticEmail = teacherSyntheticEmail(username);
+
+  const existing = await prisma.user.findUnique({ where: { email: syntheticEmail } });
+  if (existing) {
+    return { ok: false, error: "That username is already taken. Choose another." };
   }
 
   const admin = createSupabaseAdminClient();
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email: invite.email,
+    email: syntheticEmail,
     password: parsed.data.password,
     email_confirm: true,
-    user_metadata: { role: "TEACHER", schoolId: invite.schoolId },
+    app_metadata: { role: "TEACHER", schoolId: invite.schoolId },
+    user_metadata: { username, inviteEmail: invite.email },
   });
   if (createErr || !created.user) {
-    return { ok: false, error: createErr?.message ?? "Failed to create account" };
+    console.error("[acceptTeacherInvite] auth createUser failed:", createErr);
+    return { ok: false, error: "Failed to create account. Please try again." };
   }
 
+  const authUserId = created.user.id;
   const fullName = [invite.firstName, invite.middleName, invite.lastName].filter(Boolean).join(" ");
-  await prisma.$transaction([
-    prisma.user.create({
-      data: {
-        authId: created.user.id,
-        email: invite.email,
-        role: "TEACHER",
-        schoolId: invite.schoolId,
-        firstName: invite.firstName,
-        middleName: invite.middleName,
-        lastName: invite.lastName,
-        fullName,
-        isActive: true,
-        profileCompleted: false,
-      },
-    }),
-    prisma.teacherInvite.update({
-      where: { id: invite.id },
-      data: { consumedAt: new Date() },
-    }),
-  ]);
 
-  // Sign the user in immediately
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.create({
+        data: {
+          authId: authUserId,
+          email: syntheticEmail,
+          role: "TEACHER",
+          schoolId: invite.schoolId,
+          firstName: invite.firstName,
+          middleName: invite.middleName,
+          lastName: invite.lastName,
+          fullName,
+          isActive: true,
+          profileCompleted: false,
+          ...(invite.gradeLevelId
+            ? { taughtGrades: { connect: { id: invite.gradeLevelId } } }
+            : {}),
+        },
+      });
+      await tx.teacherInvite.update({
+        where: { id: invite.id },
+        data: { consumedAt: new Date() },
+      });
+    });
+  } catch (err) {
+    console.error("[acceptTeacherInvite] prisma failed; deleting auth user:", err);
+    try {
+      await admin.auth.admin.deleteUser(authUserId);
+    } catch (cleanupErr) {
+      console.error("[acceptTeacherInvite] auth cleanup failed:", cleanupErr);
+    }
+    if (isPrismaConnectionError(err)) {
+      return { ok: false, error: "Service temporarily unavailable. Please try again later." };
+    }
+    return { ok: false, error: "Failed to create account. Please try again." };
+  }
+
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signInWithPassword({
-    email: invite.email,
+    email: syntheticEmail,
     password: parsed.data.password,
   });
 

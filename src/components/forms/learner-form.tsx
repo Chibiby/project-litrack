@@ -32,9 +32,9 @@ export function LearnerForm({ gradeLevelId }: { gradeLevelId: string }) {
         });
       }}
       id="learner-form"
-      className="space-y-4 max-h-[700px] overflow-y-auto pr-2"
+      className="max-h-[700px] space-y-4 overflow-y-auto pr-2"
     >
-      <div className="grid gap-3 grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="firstName">First name *</Label>
           <Input id="firstName" name="firstName" required />
@@ -48,47 +48,60 @@ export function LearnerForm({ gradeLevelId }: { gradeLevelId: string }) {
           <Input id="lastName" name="lastName" required />
         </div>
       </div>
-      <div className="grid gap-3 grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label htmlFor="age">Age *</Label>
           <Input id="age" name="age" type="number" min={3} max={25} required />
         </div>
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Gender *</p>
-          <FieldRadioGroup name="gender" options={[{ value: "MALE", label: "Male" }, { value: "FEMALE", label: "Female" }]} />
-        </div>
+        <fieldset className="space-y-1">
+          <legend id="learner-gender-legend" className="text-sm font-medium">Gender *</legend>
+          <FieldRadioGroup
+            aria-labelledby="learner-gender-legend"
+            name="gender"
+            options={[
+              { value: "MALE", label: "Male" },
+              { value: "FEMALE", label: "Female" },
+            ]}
+          />
+        </fieldset>
       </div>
 
       <Separator />
-      <div>
-        <p className="text-sm font-medium mb-2">Reading Level (English) *</p>
-        <FieldRadioGroup name="englishReadingProfile" options={toOptions(READING_PROFILE_LABELS)} />
-        <p className="text-xs text-muted-foreground mt-2 mb-1">If frustration:</p>
-        <FieldCheckboxList name="englishFrustrationSubtypes" options={toOptions(FRUSTRATION_SUBTYPE_LABELS)} />
-      </div>
+      <fieldset>
+        <legend id="learner-english-reading-legend" className="mb-2 text-sm font-medium">Reading Level (English) *</legend>
+        <FieldRadioGroup aria-labelledby="learner-english-reading-legend" name="englishReadingProfile" options={toOptions(READING_PROFILE_LABELS)} />
+        <p className="mb-1 mt-2 text-xs text-muted-foreground">If frustration:</p>
+        <FieldCheckboxList
+          name="englishFrustrationSubtypes"
+          options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
+        />
+      </fieldset>
 
       <Separator />
-      <div>
-        <p className="text-sm font-medium mb-2">Reading Level (Filipino) *</p>
-        <FieldRadioGroup name="filipinoReadingProfile" options={toOptions(READING_PROFILE_LABELS)} />
-        <p className="text-xs text-muted-foreground mt-2 mb-1">If frustration:</p>
-        <FieldCheckboxList name="filipinoFrustrationSubtypes" options={toOptions(FRUSTRATION_SUBTYPE_LABELS)} />
-      </div>
+      <fieldset>
+        <legend id="learner-filipino-reading-legend" className="mb-2 text-sm font-medium">Reading Level (Filipino) *</legend>
+        <FieldRadioGroup aria-labelledby="learner-filipino-reading-legend" name="filipinoReadingProfile" options={toOptions(READING_PROFILE_LABELS)} />
+        <p className="mb-1 mt-2 text-xs text-muted-foreground">If frustration:</p>
+        <FieldCheckboxList
+          name="filipinoFrustrationSubtypes"
+          options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
+        />
+      </fieldset>
 
       <Separator />
-      <div>
-        <p className="text-sm font-medium mb-2">Government Benefits Received</p>
+      <fieldset>
+        <legend className="mb-2 text-sm font-medium">Government Benefits Received</legend>
         <FieldCheckboxList name="governmentBenefits" options={toOptions(GOV_BENEFIT_LABELS)} />
-      </div>
+      </fieldset>
 
       <Separator />
-      <div>
-        <p className="text-sm font-medium mb-2">Parents&apos; Educational Background *</p>
-        <FieldRadioGroup name="parentEducation" options={toOptions(PARENT_EDUCATION_LABELS)} />
-      </div>
+      <fieldset>
+        <legend id="learner-parent-education-legend" className="mb-2 text-sm font-medium">Parents&apos; Educational Background *</legend>
+        <FieldRadioGroup aria-labelledby="learner-parent-education-legend" name="parentEducation" options={toOptions(PARENT_EDUCATION_LABELS)} />
+      </fieldset>
 
       <Separator />
-      <label className="flex items-center gap-2 cursor-pointer">
+      <label className="flex cursor-pointer items-center gap-2">
         <input type="checkbox" name="isAralLearner" className="h-4 w-4 accent-primary" />
         <span className="text-sm">Identify as ARAL learner now</span>
       </label>

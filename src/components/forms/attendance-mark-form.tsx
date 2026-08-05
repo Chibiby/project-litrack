@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FieldRadioGroup } from "./profile-shared";
 import { ATTENDANCE_STATUS_LABELS, toOptions } from "@/lib/constants/enum-labels";
 import { markAttendance } from "@/lib/actions/attendance";
+import { formatLocalDateYmd } from "@/lib/date-local";
 
 export function AttendanceMarkForm({ learnerId }: { learnerId: string }) {
   const [pending, startTransition] = useTransition();
@@ -27,12 +28,13 @@ export function AttendanceMarkForm({ learnerId }: { learnerId: string }) {
     >
       <div className="space-y-1">
         <Label htmlFor="date">Date *</Label>
-        <Input id="date" name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+        {/* Local YYYY-MM-DD — avoid toISOString() which shifts the day in UTC+8 */}
+        <Input id="date" name="date" type="date" required defaultValue={formatLocalDateYmd()} />
       </div>
-      <div>
-        <p className="text-sm font-medium mb-2">Status *</p>
-        <FieldRadioGroup name="status" options={toOptions(ATTENDANCE_STATUS_LABELS)} />
-      </div>
+      <fieldset>
+        <legend id="attendance-status-legend" className="mb-2 text-sm font-medium">Status *</legend>
+        <FieldRadioGroup aria-labelledby="attendance-status-legend" name="status" options={toOptions(ATTENDANCE_STATUS_LABELS)} />
+      </fieldset>
       <div className="space-y-1">
         <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" name="notes" rows={2} />

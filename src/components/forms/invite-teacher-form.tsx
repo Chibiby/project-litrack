@@ -10,7 +10,14 @@ import { createTeacherDirect } from "@/lib/actions/school-head";
 import { Card, CardContent } from "@/components/ui/card";
 import { Copy, CheckCircle2 } from "lucide-react";
 
-export function InviteTeacherForm({ grades }: { grades: { id: string; label: string }[] }) {
+export function InviteTeacherForm({
+  grades,
+  schoolId,
+}: {
+  grades: { id: string; label: string }[];
+  /** Required when Super Admin is acting in a school context. */
+  schoolId?: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -29,22 +36,29 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
         action={(fd) =>
           startTransition(async () => {
             try {
+              if (schoolId) fd.set("schoolId", schoolId);
               const result = await createTeacherDirect(fd);
+              if (!result.ok) {
+                toast.error(result.error);
+                return;
+              }
               setCredentials({ username: result.username, password: result.tempPassword });
               toast.success("Teacher account created");
               (document.getElementById("invite-form") as HTMLFormElement)?.reset();
-            } catch (e: any) {
-              toast.error(e?.message || "Failed to create teacher");
+            } catch (e) {
+              const message = e instanceof Error ? e.message : "Failed to create teacher";
+              toast.error(message);
             }
           })
         }
         id="invite-form"
         className="space-y-4"
       >
+        {schoolId ? <input type="hidden" name="schoolId" value={schoolId} /> : null}
         <div className="space-y-2">
-          <Label>Grade level *</Label>
+          <Label htmlFor="gradeLevelId">Grade level *</Label>
           <Select name="gradeLevelId" required>
-            <SelectTrigger>
+            <SelectTrigger id="gradeLevelId">
               <SelectValue placeholder="Choose grade" />
             </SelectTrigger>
             <SelectContent>
@@ -52,7 +66,7 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
             </SelectContent>
           </Select>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="firstName">First name *</Label>
             <Input id="firstName" name="firstName" required />
@@ -73,10 +87,10 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
       </form>
 
       {credentials && (
-        <Card className="mt-4 border-green-200 bg-green-50">
-          <CardContent className="pt-4 space-y-3">
-            <div className="flex items-center gap-2 text-green-800 font-semibold">
-              <CheckCircle2 className="h-5 w-5" />
+        <Card className="mt-4 border-border bg-amber-muted">
+          <CardContent className="space-y-3 pt-4">
+            <div className="flex items-center gap-2 font-semibold text-amber-foreground">
+              <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
               Teacher account created successfully!
             </div>
             <div className="space-y-2 text-sm">
@@ -88,7 +102,7 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Share these credentials with the teacher. They will be prompted to change their password on first login.
+              Share these credentials with the teacher. Ask them to change the password after first login.
             </p>
             <Button size="sm" variant="outline" onClick={handleCopy} className="w-full">
               {copied ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}

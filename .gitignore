@@ -5,7 +5,7 @@ build/
 dist/
 .env
 .env.local
-.env.*.local
+.env*.local
 *.log
 .DS_Store
 .vscode/
@@ -17,4 +17,3 @@ playwright/.cache/
 prisma/migrations/dev.db*
 
 .vercel
-.env*

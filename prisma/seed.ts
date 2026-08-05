@@ -76,7 +76,6 @@ async function ensureAuthSuperAdmin(
     password,
     email_confirm: true,
     app_metadata: { role: "SUPER_ADMIN" },
-    user_metadata: { role: "SUPER_ADMIN" },
   });
 
   let authId: string | undefined = created?.user?.id;
@@ -101,7 +100,6 @@ async function ensureAuthSuperAdmin(
     email_confirm: true,
     ban_duration: "none",
     app_metadata: { role: "SUPER_ADMIN" },
-    user_metadata: { role: "SUPER_ADMIN" },
   });
   if (updateErr) throw updateErr;
 

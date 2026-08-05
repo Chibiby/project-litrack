@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/error-state";
 
 export default function AdminError({
   error,
@@ -16,26 +15,13 @@ export default function AdminError({
   }, [error]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md space-y-4 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">Admin page error</h1>
-        <p className="text-sm text-muted-foreground">
-          Something went wrong loading this page. If this keeps happening, check that{" "}
-          <code className="text-xs">DATABASE_URL</code> on Vercel uses a valid Supabase
-          connection string (not a placeholder password).
-        </p>
-        {error.digest ? (
-          <p className="text-xs text-muted-foreground">Digest: {error.digest}</p>
-        ) : null}
-        <div className="flex justify-center gap-2">
-          <Button type="button" onClick={reset}>
-            Try again
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin">Back to dashboard</Link>
-          </Button>
-        </div>
-      </div>
-    </main>
+    <ErrorState
+      title="Admin page error"
+      description="Something went wrong loading this page. If this keeps happening, check that DATABASE_URL on Vercel uses a valid Supabase connection string (not a placeholder password)."
+      digest={error.digest}
+      onReset={reset}
+      primaryHref="/admin"
+      primaryLabel="Back to dashboard"
+    />
   );
 }

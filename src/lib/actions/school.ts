@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
@@ -12,8 +11,8 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
 
 /**
  * Super-admin only: creates a School + bootstraps the School Head Supabase auth
- * user (synthetic email, password = schoolIdCode). The actual School Head User
- * row is created lazily on first profile completion.
+ * user (synthetic email, password = schoolIdCode). The School Head User row is
+ * created in the same transaction as the school.
  */
 export async function createSchool(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const admin = await requireUser("SUPER_ADMIN");
@@ -41,44 +40,59 @@ export async function createSchool(formData: FormData): Promise<ActionResult<{ i
   const supabaseAdmin = createSupabaseAdminClient();
   const syntheticEmail = schoolHeadSyntheticEmail(parsed.data.schoolIdCode);
 
-  // Create the SH Supabase auth user; password = schoolIdCode
   const { data: created, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email: syntheticEmail,
     password: parsed.data.schoolIdCode,
     email_confirm: true,
-    user_metadata: { role: "SCHOOL_HEAD" },
+    app_metadata: { role: "SCHOOL_HEAD" },
   });
-  if (authErr || !created.user) return { ok: false, error: authErr?.message ?? "Auth bootstrap failed" };
+  if (authErr || !created.user) {
+    console.error("[createSchool] auth createUser failed:", authErr);
+    return { ok: false, error: "Failed to create school. Please try again." };
+  }
 
-  const school = await prisma.school.create({
-    data: {
-      name: parsed.data.name,
-      schoolIdCode: parsed.data.schoolIdCode,
-      address: parsed.data.address,
-      region: parsed.data.region,
-      division: parsed.data.division,
-      district: parsed.data.district,
-      createdById: admin.id,
-    },
-  });
+  const authUserId = created.user.id;
 
-  // Pre-create the SH User row (fullName placeholder; profile completes it)
-  await prisma.user.create({
-    data: {
-      authId: created.user.id,
-      email: syntheticEmail,
-      role: "SCHOOL_HEAD",
-      schoolId: school.id,
-      firstName: "School",
-      lastName: "Head",
-      fullName: `${school.name} Head`,
-      isActive: true,
-      profileCompleted: false,
-    },
-  });
+  try {
+    const school = await prisma.$transaction(async (tx) => {
+      const s = await tx.school.create({
+        data: {
+          name: parsed.data.name,
+          schoolIdCode: parsed.data.schoolIdCode,
+          address: parsed.data.address,
+          region: parsed.data.region,
+          division: parsed.data.division,
+          district: parsed.data.district,
+          createdById: admin.id,
+        },
+      });
+      await tx.user.create({
+        data: {
+          authId: authUserId,
+          email: syntheticEmail,
+          role: "SCHOOL_HEAD",
+          schoolId: s.id,
+          firstName: "School",
+          lastName: "Head",
+          fullName: `${s.name} Head`,
+          isActive: true,
+          profileCompleted: false,
+        },
+      });
+      return s;
+    });
 
-  revalidatePath("/admin/schools");
-  return { ok: true, data: { id: school.id } };
+    revalidatePath("/admin/schools");
+    return { ok: true, data: { id: school.id } };
+  } catch (err) {
+    console.error("[createSchool] prisma failed; deleting auth user:", err);
+    try {
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    } catch (cleanupErr) {
+      console.error("[createSchool] auth cleanup failed:", cleanupErr);
+    }
+    return { ok: false, error: "Failed to create school. Please try again." };
+  }
 }
 
 export async function listSchoolsPublic() {

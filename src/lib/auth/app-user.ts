@@ -49,6 +49,11 @@ export function isPrismaConnectionError(err: unknown): boolean {
   );
 }
 
+/** Active, non-deleted app users only. */
+export function isUsableAppUser(user: User): boolean {
+  return user.isActive === true && user.deletedAt == null;
+}
+
 function mapPostgrestUser(row: PostgrestUserRow): User {
   return {
     id: row.id,
@@ -68,17 +73,20 @@ function mapPostgrestUser(row: PostgrestUserRow): User {
   };
 }
 
+/**
+ * Privilege role from Auth JWT. Only `app_metadata.role` is trusted
+ * (service-role-set). Never read `user_metadata` for authorization.
+ */
 function roleFromAuthClaims(authUser: AuthUser): UserRole | null {
   const appRole = authUser.app_metadata?.role;
-  const userRole = authUser.user_metadata?.role;
-  const role = typeof appRole === "string" ? appRole : typeof userRole === "string" ? userRole : null;
+  const role = typeof appRole === "string" ? appRole : null;
   if (role === "SUPER_ADMIN" || role === "SCHOOL_HEAD" || role === "TEACHER") {
     return role;
   }
   return null;
 }
 
-/** Minimal SUPER_ADMIN User when DB/PostgREST are unavailable but JWT claims role. */
+/** Minimal SUPER_ADMIN User when DB/PostgREST are unavailable but app_metadata claims role. */
 function superAdminFromAuthClaims(authUser: AuthUser): User | null {
   if (roleFromAuthClaims(authUser) !== "SUPER_ADMIN") return null;
   const email = authUser.email ?? "";
@@ -149,18 +157,23 @@ export async function findUserByAuthIdViaPostgrest(
 /**
  * Resolve app User by authId. Prefers PostgREST (public."User") so session
  * works when Prisma DATABASE_URL is broken; falls back to Prisma, then
- * SUPER_ADMIN JWT claims (app_metadata / user_metadata).
+ * SUPER_ADMIN via app_metadata.role only (never user_metadata).
+ * Returns null for inactive or soft-deleted users.
  */
 export async function findAppUserByAuthId(
   authId: string,
   options?: { authUser?: AuthUser; supabase?: SupabaseClient }
 ): Promise<User | null> {
   const { user: viaRest } = await findUserByAuthIdViaPostgrest(authId, options?.supabase);
-  if (viaRest) return viaRest;
+  if (viaRest) {
+    return isUsableAppUser(viaRest) ? viaRest : null;
+  }
 
   try {
     const user = await prisma.user.findUnique({ where: { authId } });
-    if (user) return user;
+    if (user) {
+      return isUsableAppUser(user) ? user : null;
+    }
   } catch (err) {
     if (!isPrismaConnectionError(err)) throw err;
   }
@@ -169,8 +182,4 @@ export async function findAppUserByAuthId(
     return superAdminFromAuthClaims(options.authUser);
   }
   return null;
-}
-
-export function isSuperAdminAuthClaim(authUser: AuthUser): boolean {
-  return roleFromAuthClaims(authUser) === "SUPER_ADMIN";
 }
