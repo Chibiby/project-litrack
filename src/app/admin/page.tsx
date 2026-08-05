@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { loadAdminDashboardStats } from "@/lib/admin/dashboard-data";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,26 +11,29 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
   const user = await requireUser("SUPER_ADMIN");
-
-  const [schoolCount, userCount, aralCount, recentSchools] = await Promise.all([
-    prisma.school.count({ where: { deletedAt: null } }),
-    prisma.user.count({ where: { deletedAt: null } }),
-    prisma.learner.count({ where: { isAralLearner: true, deletedAt: null } }),
-    prisma.school.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: { id: true, name: true, schoolIdCode: true },
-    }),
-  ]);
+  const {
+    schoolCount,
+    userCount,
+    aralCount,
+    recentSchools,
+    dbAvailable,
+  } = await loadAdminDashboardStats();
 
   return (
-    <AppShell 
-      title="Admin Dashboard" 
+    <AppShell
+      title="Admin Dashboard"
       subtitle="System-wide overview"
       role={user.role}
       userName={user.fullName || user.email}
     >
+      {!dbAvailable ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Database is unavailable. Stats and school lists may be empty. Set a valid{" "}
+          <code className="text-xs">DATABASE_URL</code> / <code className="text-xs">DIRECT_URL</code>{" "}
+          on Vercel (Supabase → Settings → Database), then redeploy.
+        </div>
+      ) : null}
+
       {/* Stats Row */}
       <div className="grid gap-4 md:grid-cols-4 mb-6">
         <Card>
@@ -83,27 +86,31 @@ export default async function AdminDashboard() {
             Access School Data
           </CardTitle>
           <CardDescription>
-            As Super Admin, you can view and manage any school's data directly
+            As Super Admin, you can view and manage any school&apos;s data directly
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Recent schools:</p>
             <div className="flex flex-wrap gap-2">
-              {recentSchools.map((school) => (
-                <Button
-                  key={school.id}
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="bg-white"
-                >
-                  <Link href={`/school-head?schoolId=${school.id}`}>
-                    {school.name}
-                    <ExternalLink className="ml-1 h-3 w-3" />
-                  </Link>
-                </Button>
-              ))}
+              {recentSchools.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No schools to show yet.</p>
+              ) : (
+                recentSchools.map((school) => (
+                  <Button
+                    key={school.id}
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="bg-white"
+                  >
+                    <Link href={`/school-head?schoolId=${school.id}`}>
+                      {school.name}
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
+                  </Button>
+                ))
+              )}
             </div>
             <div className="flex gap-2 mt-4">
               <Badge variant="outline" className="text-xs">
@@ -129,7 +136,9 @@ export default async function AdminDashboard() {
           <CardContent className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Database</span>
-              <span className="text-green-600 font-medium">Connected</span>
+              <span className={dbAvailable ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                {dbAvailable ? "Connected" : "Unavailable"}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Authentication</span>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { loadAdminSchoolsList } from "@/lib/admin/dashboard-data";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,27 +34,15 @@ const REGIONS = [
 
 export default async function SchoolsListPage() {
   const user = await requireUser("SUPER_ADMIN");
-  const schools = await prisma.school.findMany({
-    where: { deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true, name: true, schoolIdCode: true, region: true, division: true, isActive: true,
-      _count: { select: { users: true, learners: true } },
-    },
-  });
+  const { schools, dbAvailable } = await loadAdminSchoolsList();
 
-  // Prepare data for DataTable
-  const tableData = schools.map((s) => ({
-    ...s,
-    users: s._count.users,
-    learners: s._count.learners,
-  }));
+  const tableData = schools;
 
   const columns = [
     {
       key: "name",
       header: "School Name",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <div className="flex items-center gap-2">
           <span className="font-medium">{school.name}</span>
           <Link href={`/school-head?schoolId=${school.id}`}>
@@ -66,35 +54,35 @@ export default async function SchoolsListPage() {
     {
       key: "schoolIdCode",
       header: "School ID",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <code className="text-xs bg-muted px-1 py-0.5 rounded">{school.schoolIdCode}</code>
       ),
     },
     {
       key: "region",
       header: "Region",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <span className="text-sm text-muted-foreground">{school.region || "—"}</span>
       ),
     },
     {
       key: "division",
       header: "Division",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <span className="text-sm text-muted-foreground">{school.division || "—"}</span>
       ),
     },
     {
       key: "users",
       header: "Users",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <Badge variant="secondary">{school.users}</Badge>
       ),
     },
     {
       key: "learners",
       header: "Learners",
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <Badge variant="outline">{school.learners}</Badge>
       ),
     },
@@ -102,7 +90,7 @@ export default async function SchoolsListPage() {
       key: "actions",
       header: "",
       searchable: false,
-      render: (school: typeof tableData[0]) => (
+      render: (school: (typeof tableData)[0]) => (
         <form action={deleteSchool} className="flex justify-end">
           <input type="hidden" name="id" value={school.id} />
           <Button variant="ghost" size="sm" type="submit" className="text-destructive hover:text-destructive">
@@ -114,18 +102,25 @@ export default async function SchoolsListPage() {
   ];
 
   return (
-    <AppShell 
-      title="Schools" 
+    <AppShell
+      title="Schools"
       subtitle="All registered schools"
       role={user.role}
       userName={user.fullName || user.email}
     >
+      {!dbAvailable ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Database is unavailable. School list cannot load until{" "}
+          <code className="text-xs">DATABASE_URL</code> is fixed on Vercel.
+        </div>
+      ) : null}
+
       <div className="mb-4 flex justify-end">
         <Button asChild>
           <Link href="/admin/schools/new"><Plus className="h-4 w-4 mr-2" /> New School</Link>
         </Button>
       </div>
-      
+
       <Card>
         <CardContent className="p-6">
           <DataTable
