@@ -1,11 +1,13 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
+import { findAppUserByAuthId } from "@/lib/auth/app-user";
 import type { User, UserRole } from "@prisma/client";
 
 /**
  * Returns the authenticated app User, or null.
+ * Prefers PostgREST public."User" (works without Prisma DATABASE_URL), then Prisma,
+ * then SUPER_ADMIN JWT claims as last resort.
  */
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createSupabaseServerClient();
@@ -14,10 +16,7 @@ export async function getCurrentUser(): Promise<User | null> {
   } = await supabase.auth.getUser();
   if (!authUser) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { authId: authUser.id },
-  });
-  return user;
+  return findAppUserByAuthId(authUser.id, { authUser, supabase });
 }
 
 /**

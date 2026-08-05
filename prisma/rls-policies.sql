@@ -23,12 +23,14 @@ ALTER TABLE "AuditLog"             ENABLE ROW LEVEL SECURITY;
 -- Deny-all default for anon. (No policies = no rows visible to anon.)
 -- Service role automatically bypasses RLS.
 
--- Optional: allow authenticated users to read their own User row
--- (only used if you add direct PostgREST calls from the client; otherwise leave commented).
--- CREATE POLICY "users_select_self"
---   ON "User" FOR SELECT
---   TO authenticated
---   USING (auth.uid()::text = "authId");
+-- Allow authenticated users to read their own User row via PostgREST
+-- (admin login / getCurrentUser when Prisma DATABASE_URL is unavailable).
+GRANT SELECT ON TABLE "User" TO authenticated, service_role;
+DROP POLICY IF EXISTS "users_select_self" ON "User";
+CREATE POLICY "users_select_self"
+  ON "User" FOR SELECT
+  TO authenticated
+  USING (auth.uid()::text = "authId");
 
 -- Public read of (id, name) for the school dropdown on the login page.
 -- This is intentionally narrow: anon can list active schools by id+name only.

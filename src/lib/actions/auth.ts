@@ -11,6 +11,11 @@ import {
   isSupabaseConfigured,
   SUPABASE_NOT_CONFIGURED_MESSAGE,
 } from "@/lib/supabase/env";
+import {
+  findUserByAuthIdViaPostgrest,
+  isPrismaConnectionError,
+  isSuperAdminAuthClaim,
+} from "@/lib/auth/app-user";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -103,8 +108,26 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
     if (error || !data.user) return { ok: false, error: "Incorrect credentials" };
 
-    const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
-    if (!user || user.role !== "SUPER_ADMIN") {
+    // Role check must not depend on Prisma/DATABASE_URL.
+    // PostgREST public."User" (session, then service-role) → optional Prisma → JWT claim.
+    let authorized = false;
+
+    const { user: restUser } = await findUserByAuthIdViaPostgrest(data.user.id, supabase);
+    if (restUser) {
+      authorized = restUser.role === "SUPER_ADMIN" && !restUser.deletedAt;
+    } else if (isSuperAdminAuthClaim(data.user)) {
+      authorized = true;
+    } else {
+      try {
+        const prismaUser = await prisma.user.findUnique({ where: { authId: data.user.id } });
+        authorized = !!prismaUser && prismaUser.role === "SUPER_ADMIN" && !prismaUser.deletedAt;
+      } catch (dbErr) {
+        if (!isPrismaConnectionError(dbErr)) throw dbErr;
+        authorized = false;
+      }
+    }
+
+    if (!authorized) {
       await supabase.auth.signOut();
       return { ok: false, error: "Not authorized" };
     }
@@ -122,27 +145,9 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     if (message.includes("SUPABASE") || message.includes("Missing NEXT_PUBLIC")) {
       return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
     }
-    const isDbFailure =
-      message.includes("DATABASE") ||
-      message.includes("Prisma") ||
-      message.includes("Environment variable not found") ||
-      message.includes("ENOTFOUND") ||
-      message.includes("ECONNREFUSED") ||
-      message.includes("ETIMEDOUT") ||
-      message.includes("P1001") ||
-      message.includes("P1000") ||
-      message.includes("P1017") ||
-      message.includes("Can't reach database") ||
-      message.includes("can't reach database") ||
-      message.includes("tenant/user") ||
-      message.includes("Connection refused") ||
-      message.includes("connection timed out");
-    if (isDbFailure) {
-      return {
-        ok: false,
-        error:
-          "Database connection failed. Check DATABASE_URL / DIRECT_URL, that the database is reachable, and that migrations/seed have been run.",
-      };
+    // Do not surface Prisma/DATABASE_URL failures as the login error — role check has PostgREST/JWT paths.
+    if (isPrismaConnectionError(err)) {
+      return { ok: false, error: "Login failed. Please try again." };
     }
     throw err;
   }

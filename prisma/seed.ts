@@ -75,6 +75,7 @@ async function ensureAuthSuperAdmin(
     email,
     password,
     email_confirm: true,
+    app_metadata: { role: "SUPER_ADMIN" },
     user_metadata: { role: "SUPER_ADMIN" },
   });
 
@@ -99,6 +100,7 @@ async function ensureAuthSuperAdmin(
     password,
     email_confirm: true,
     ban_duration: "none",
+    app_metadata: { role: "SUPER_ADMIN" },
     user_metadata: { role: "SUPER_ADMIN" },
   });
   if (updateErr) throw updateErr;
