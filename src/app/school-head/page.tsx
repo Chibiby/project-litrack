@@ -26,20 +26,36 @@ export default async function SchoolHeadDashboard({ searchParams }: SchoolHeadDa
   if (!user.profileCompleted && !isSuperAdmin) redirect("/school-head/profiling");
   if (!targetSchoolId) redirect("/login");
 
-  const [grades, teachers, school] = await Promise.all([
-    prisma.gradeLevel.findMany({
-      where: { schoolId: targetSchoolId, deletedAt: null },
-      include: { _count: { select: { teachers: true, learners: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.user.count({
-      where: { schoolId: targetSchoolId, role: "TEACHER", deletedAt: null },
-    }),
-    prisma.school.findUnique({
-      where: { id: targetSchoolId },
-      select: { name: true },
-    }),
-  ]);
+  type GradeRow = {
+    id: string;
+    type: keyof typeof GRADE_LEVEL_LABELS;
+    _count: { teachers: number; learners: number };
+  };
+
+  let grades: GradeRow[] = [];
+  let teachers = 0;
+  let school: { name: string } | null = null;
+
+  try {
+    [grades, teachers, school] = await Promise.all([
+      prisma.gradeLevel.findMany({
+        where: { schoolId: targetSchoolId, deletedAt: null },
+        include: { _count: { select: { teachers: true, learners: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.user.count({
+        where: { schoolId: targetSchoolId, role: "TEACHER", deletedAt: null },
+      }),
+      prisma.school.findUnique({
+        where: { id: targetSchoolId },
+        select: { name: true },
+      }),
+    ]);
+  } catch (err) {
+    // DATABASE_URL missing or Prisma unavailable — degrade to an empty
+    // dashboard instead of a 500. requireUser already verified the session.
+    console.error("[SchoolHeadDashboard] failed to load data:", err);
+  }
 
   return (
     <AppShell 

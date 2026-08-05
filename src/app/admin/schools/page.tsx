@@ -4,114 +4,37 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/data-table";
-import { Plus, ExternalLink, Trash2 } from "lucide-react";
-import { deleteSchool } from "@/lib/actions/school";
+import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
+import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-// Define unique regions for filter
-const REGIONS = [
-  { value: "NCR", label: "NCR - National Capital Region" },
-  { value: "CAR", label: "CAR - Cordillera Administrative Region" },
-  { value: "Region I", label: "Region I - Ilocos" },
-  { value: "Region II", label: "Region II - Cagayan Valley" },
-  { value: "Region III", label: "Region III - Central Luzon" },
-  { value: "Region IV-A", label: "Region IV-A - Calabarzon" },
-  { value: "Region IV-B", label: "Region IV-B - Mimaropa" },
-  { value: "Region V", label: "Region V - Bicol" },
-  { value: "Region VI", label: "Region VI - Western Visayas" },
-  { value: "Region VII", label: "Region VII - Central Visayas" },
-  { value: "Region VIII", label: "Region VIII - Eastern Visayas" },
-  { value: "Region IX", label: "Region IX - Zamboanga Peninsula" },
-  { value: "Region X", label: "Region X - Northern Mindanao" },
-  { value: "Region XI", label: "Region XI - Davao" },
-  { value: "Region XII", label: "Region XII - Soccsksargen" },
-  { value: "Region XIII", label: "Region XIII - Caraga" },
-  { value: "BARMM", label: "BARMM - Bangsamoro" },
-];
-
 export default async function SchoolsListPage() {
   const user = await requireUser("SUPER_ADMIN");
-  const schools = await prisma.school.findMany({
-    where: { deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true, name: true, schoolIdCode: true, region: true, division: true, isActive: true,
-      _count: { select: { users: true, learners: true } },
-    },
-  });
 
-  // Prepare data for DataTable
-  const tableData = schools.map((s) => ({
-    ...s,
-    users: s._count.users,
-    learners: s._count.learners,
-  }));
+  let tableData: SchoolRow[] = [];
+  let dbAvailable = true;
 
-  const columns = [
-    {
-      key: "name",
-      header: "School Name",
-      render: (school: typeof tableData[0]) => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{school.name}</span>
-          <Link href={`/school-head?schoolId=${school.id}`}>
-            <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary" />
-          </Link>
-        </div>
-      ),
-    },
-    {
-      key: "schoolIdCode",
-      header: "School ID",
-      render: (school: typeof tableData[0]) => (
-        <code className="text-xs bg-muted px-1 py-0.5 rounded">{school.schoolIdCode}</code>
-      ),
-    },
-    {
-      key: "region",
-      header: "Region",
-      render: (school: typeof tableData[0]) => (
-        <span className="text-sm text-muted-foreground">{school.region || "—"}</span>
-      ),
-    },
-    {
-      key: "division",
-      header: "Division",
-      render: (school: typeof tableData[0]) => (
-        <span className="text-sm text-muted-foreground">{school.division || "—"}</span>
-      ),
-    },
-    {
-      key: "users",
-      header: "Users",
-      render: (school: typeof tableData[0]) => (
-        <Badge variant="secondary">{school.users}</Badge>
-      ),
-    },
-    {
-      key: "learners",
-      header: "Learners",
-      render: (school: typeof tableData[0]) => (
-        <Badge variant="outline">{school.learners}</Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      searchable: false,
-      render: (school: typeof tableData[0]) => (
-        <form action={deleteSchool} className="flex justify-end">
-          <input type="hidden" name="id" value={school.id} />
-          <Button variant="ghost" size="sm" type="submit" className="text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </form>
-      ),
-    },
-  ];
+  try {
+    const schools = await prisma.school.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, name: true, schoolIdCode: true, region: true, division: true, isActive: true,
+        _count: { select: { users: true, learners: true } },
+      },
+    });
+    tableData = schools.map((s) => ({
+      ...s,
+      users: s._count.users,
+      learners: s._count.learners,
+    }));
+  } catch (err) {
+    // DATABASE_URL missing or Prisma unavailable — degrade to an empty table
+    // instead of a 500. requireUser already verified the session.
+    console.error("[SchoolsListPage] failed to load schools:", err);
+    dbAvailable = false;
+  }
 
   return (
     <AppShell 
@@ -125,17 +48,16 @@ export default async function SchoolsListPage() {
           <Link href="/admin/schools/new"><Plus className="h-4 w-4 mr-2" /> New School</Link>
         </Button>
       </div>
-      
+
+      {!dbAvailable ? (
+        <p className="mb-4 text-sm text-destructive">
+          Could not load schools right now. The database may be unavailable.
+        </p>
+      ) : null}
+
       <Card>
         <CardContent className="p-6">
-          <DataTable
-            data={tableData}
-            columns={columns}
-            filterColumn="region"
-            filterOptions={REGIONS}
-            itemsPerPage={10}
-            emptyMessage="No schools found. Create your first school to get started."
-          />
+          <SchoolsTable schools={tableData} />
         </CardContent>
       </Card>
     </AppShell>

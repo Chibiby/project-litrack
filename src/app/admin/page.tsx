@@ -12,17 +12,31 @@ export const dynamic = "force-dynamic";
 export default async function AdminDashboard() {
   const user = await requireUser("SUPER_ADMIN");
 
-  const [schoolCount, userCount, aralCount, recentSchools] = await Promise.all([
-    prisma.school.count({ where: { deletedAt: null } }),
-    prisma.user.count({ where: { deletedAt: null } }),
-    prisma.learner.count({ where: { isAralLearner: true, deletedAt: null } }),
-    prisma.school.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: { id: true, name: true, schoolIdCode: true },
-    }),
-  ]);
+  type RecentSchool = { id: string; name: string; schoolIdCode: string };
+  let schoolCount = 0;
+  let userCount = 0;
+  let aralCount = 0;
+  let recentSchools: RecentSchool[] = [];
+  let dbAvailable = true;
+
+  try {
+    [schoolCount, userCount, aralCount, recentSchools] = await Promise.all([
+      prisma.school.count({ where: { deletedAt: null } }),
+      prisma.user.count({ where: { deletedAt: null } }),
+      prisma.learner.count({ where: { isAralLearner: true, deletedAt: null } }),
+      prisma.school.findMany({
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, name: true, schoolIdCode: true },
+      }),
+    ]);
+  } catch (err) {
+    // DATABASE_URL missing or Prisma unavailable — degrade to an empty dashboard
+    // instead of a 500. Middleware/requireUser already verified the session.
+    console.error("[AdminDashboard] failed to load stats:", err);
+    dbAvailable = false;
+  }
 
   return (
     <AppShell 
@@ -129,7 +143,9 @@ export default async function AdminDashboard() {
           <CardContent className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Database</span>
-              <span className="text-green-600 font-medium">Connected</span>
+              <span className={dbAvailable ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                {dbAvailable ? "Connected" : "Unavailable"}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Authentication</span>

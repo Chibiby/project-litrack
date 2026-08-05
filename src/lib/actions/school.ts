@@ -82,6 +82,8 @@ export async function createSchool(formData: FormData): Promise<ActionResult<{ i
 }
 
 export async function listSchoolsPublic() {
+  // Deliberately not caught here: callers decide how to degrade. Swallowing the
+  // error would report an unreachable database as "no schools exist".
   return prisma.school.findMany({
     where: { isActive: true, deletedAt: null },
     select: { id: true, name: true },
