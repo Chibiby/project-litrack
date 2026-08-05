@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { isPrismaConnectionError } from "@/lib/auth/app-user";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseServiceEnv } from "@/lib/supabase/env";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -83,6 +85,7 @@ export async function createSchool(formData: FormData): Promise<ActionResult<{ i
     });
 
     revalidatePath("/admin/schools");
+    revalidatePath("/login");
     return { ok: true, data: { id: school.id } };
   } catch (err) {
     console.error("[createSchool] prisma failed; deleting auth user:", err);
@@ -95,35 +98,122 @@ export async function createSchool(formData: FormData): Promise<ActionResult<{ i
   }
 }
 
-export async function listSchoolsPublic() {
-  return prisma.school.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+type PublicSchoolRow = { id: string; name: string };
+type SchoolWithTeacherStatus = PublicSchoolRow & { hasTeachers: boolean };
+
+async function listActiveSchoolsViaPostgrest(): Promise<PublicSchoolRow[] | null> {
+  if (!getSupabaseServiceEnv().ok) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("School")
+      .select("id, name")
+      .eq("isActive", true)
+      .is("deletedAt", null)
+      .order("name", { ascending: true });
+
+    if (error || !data) return null;
+    return data.map((s) => ({
+      id: s.id as string,
+      name: s.name as string,
+    }));
+  } catch {
+    return null;
+  }
 }
 
-export async function listSchoolsWithTeacherStatus() {
-  const schools = await prisma.school.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      _count: {
-        select: {
-          users: {
-            where: { role: "TEACHER", deletedAt: null, isActive: true },
+async function listSchoolsWithTeacherStatusViaPostgrest(): Promise<
+  SchoolWithTeacherStatus[] | null
+> {
+  if (!getSupabaseServiceEnv().ok) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const [{ data: schools, error: schoolsErr }, { data: teachers, error: teachersErr }] =
+      await Promise.all([
+        admin
+          .from("School")
+          .select("id, name")
+          .eq("isActive", true)
+          .is("deletedAt", null)
+          .order("name", { ascending: true }),
+        admin
+          .from("User")
+          .select("schoolId")
+          .eq("role", "TEACHER")
+          .eq("isActive", true)
+          .is("deletedAt", null)
+          .not("schoolId", "is", null),
+      ]);
+
+    // Schools must succeed; teacher status may degrade to false (matches admin count resilience).
+    if (schoolsErr || !schools) return null;
+
+    const schoolsWithTeachers = new Set<string>();
+    if (!teachersErr) {
+      for (const row of teachers ?? []) {
+        schoolsWithTeachers.add(row.schoolId as string);
+      }
+    }
+
+    return schools.map((s) => ({
+      id: s.id as string,
+      name: s.name as string,
+      hasTeachers: schoolsWithTeachers.has(s.id as string),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function listSchoolsPublic(): Promise<PublicSchoolRow[]> {
+  try {
+    return await prisma.school.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  } catch (err) {
+    if (!isPrismaConnectionError(err)) throw err;
+  }
+
+  return (await listActiveSchoolsViaPostgrest()) ?? [];
+}
+
+export async function listSchoolsWithTeacherStatus(): Promise<{
+  schools: SchoolWithTeacherStatus[];
+  dbAvailable: boolean;
+}> {
+  try {
+    const schools = await prisma.school.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            users: {
+              where: { role: "TEACHER", deletedAt: null, isActive: true },
+            },
           },
         },
       },
-    },
-    orderBy: { name: "asc" },
-  });
-  return schools.map((s) => ({
-    id: s.id,
-    name: s.name,
-    hasTeachers: s._count.users > 0,
-  }));
+      orderBy: { name: "asc" },
+    });
+    return {
+      schools: schools.map((s) => ({
+        id: s.id,
+        name: s.name,
+        hasTeachers: s._count.users > 0,
+      })),
+      dbAvailable: true,
+    };
+  } catch (err) {
+    if (!isPrismaConnectionError(err)) throw err;
+  }
+
+  const viaRest = await listSchoolsWithTeacherStatusViaPostgrest();
+  if (viaRest) return { schools: viaRest, dbAvailable: true };
+  return { schools: [], dbAvailable: false };
 }
 
 export async function deleteSchool(formData: FormData): Promise<void> {
@@ -135,4 +225,5 @@ export async function deleteSchool(formData: FormData): Promise<void> {
     data: { deletedAt: new Date(), isActive: false },
   });
   revalidatePath("/admin/schools");
+  revalidatePath("/login");
 }

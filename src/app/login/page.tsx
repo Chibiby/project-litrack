@@ -5,13 +5,15 @@ import { GraduationCap } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  let schools: Awaited<ReturnType<typeof listSchoolsWithTeacherStatus>> = [];
+  let schools: { id: string; name: string; hasTeachers: boolean }[] = [];
   let configUnavailable = false;
 
   try {
-    schools = await listSchoolsWithTeacherStatus();
+    const result = await listSchoolsWithTeacherStatus();
+    schools = result.schools;
+    configUnavailable = !result.dbAvailable;
   } catch {
-    // DATABASE_URL missing or Prisma unavailable — still render login UI.
+    // Unexpected non-connection errors — still render login UI.
     configUnavailable = true;
   }
 
