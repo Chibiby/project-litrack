@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
+import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -47,6 +48,15 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
       data: { profileCompleted: true },
     }),
   ]);
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.TEACHER_PROFILE_SAVE,
+    resource: "TeacherProfile",
+    resourceId: user.id,
+    metadata: { schoolId: user.schoolId, userId: user.id },
+  });
 
   revalidatePath("/teacher");
   return { ok: true };

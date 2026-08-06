@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { getServerEnv } from "@/lib/env";
+import { resolvePooledDatabaseUrl } from "@/lib/db-url";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -14,30 +16,20 @@ const globalForPrisma = globalThis as unknown as {
  * We can't set Vercel env vars ourselves, so patch the URL defensively here:
  * a no-op when DATABASE_URL is absent, already correct, or not pooled on 6543
  * (e.g. a direct connection or the 5432 session pooler used for migrations).
+ *
+ * Prefers validated env via getServerEnv(); falls back to process.env so module
+ * load / build without full env still constructs a client (queries fail later).
+ * Soft Supabase helpers in supabase/env.ts are unchanged for middleware.
  */
-function resolvePooledDatabaseUrl(): string | undefined {
-  const raw = process.env.DATABASE_URL;
-  if (!raw) return raw;
-
-  let url: URL;
+function readDatabaseUrl(): string | undefined {
   try {
-    url = new URL(raw);
+    return getServerEnv().DATABASE_URL;
   } catch {
-    return raw;
+    return process.env.DATABASE_URL;
   }
-
-  if (url.port !== "6543") return raw;
-
-  if (!url.searchParams.has("pgbouncer")) {
-    url.searchParams.set("pgbouncer", "true");
-  }
-  if (!url.searchParams.has("connection_limit")) {
-    url.searchParams.set("connection_limit", "1");
-  }
-  return url.toString();
 }
 
-const datasourceUrl = resolvePooledDatabaseUrl();
+const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 
 export const prisma =
   globalForPrisma.prisma ??

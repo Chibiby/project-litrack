@@ -21,11 +21,10 @@ export default async function UpdateAralDataPage({
   const { gradeId, id } = await params;
   const sp = await searchParams;
   const user = await requireUser("TEACHER");
-  
+
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  // For Super Admin: can access any ARAL learner; for Teacher: only their learners
   const learnerFilter = isSuperAdmin
     ? { id, isAralLearner: true, deletedAt: null }
     : { id, teacherId: user.id, isAralLearner: true, deletedAt: null };
@@ -35,6 +34,7 @@ export default async function UpdateAralDataPage({
     include: { aralProfile: true },
   });
   if (!learner) notFound();
+  if (learner.gradeLevelId !== gradeId) notFound();
 
   return (
     <AppShell
@@ -46,10 +46,15 @@ export default async function UpdateAralDataPage({
     >
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`}><ArrowLeft className="h-4 w-4" /> Back to ARAL Dashboard</Link>
+          <Link href={`/teacher/aral/${gradeId}`}>
+            <ArrowLeft className="h-4 w-4" /> Back to ARAL Dashboard
+          </Link>
         </Button>
       </div>
-      <AralUpdateForm learnerId={learner.id} defaultValues={learner.aralProfile ?? undefined} />
+      <AralUpdateForm
+        learnerId={learner.id}
+        defaultValues={learner.aralProfile ?? undefined}
+      />
     </AppShell>
   );
 }

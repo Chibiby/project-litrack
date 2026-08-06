@@ -1,8 +1,15 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { parseAppMetadataRole, type AppRole } from "@/lib/auth/roles";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
+
+export type SessionUser = {
+  id: string;
+  /** Role from JWT app_metadata; null for legacy accounts without it. */
+  role: AppRole | null;
+};
 
 /**
  * Refreshes the Supabase auth session cookie on every request and
@@ -16,7 +23,7 @@ export async function updateSession(request: NextRequest) {
 
   // Avoid Edge crash when Supabase env is unset (e.g. fresh Vercel project).
   if (!env.ok) {
-    return { supabaseResponse: NextResponse.next({ request }), user: null };
+    return { supabaseResponse: NextResponse.next({ request }), user: null as SessionUser | null };
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -36,7 +43,16 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  if (!authUser) {
+    return { supabaseResponse, user: null as SessionUser | null };
+  }
+
+  const role = parseAppMetadataRole(authUser.app_metadata?.role);
+  const user: SessionUser = { id: authUser.id, role };
 
   return { supabaseResponse, user };
 }

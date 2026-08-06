@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { AppShell } from "@/components/app-shell";
 import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
 
@@ -10,13 +11,19 @@ export default async function TeacherProfilingPage() {
   const profile = await prisma.teacherProfile.findUnique({ where: { userId: user.id } });
 
   return (
-    <AppShell 
-      title="Teacher Profiling" 
+    <AppShell
+      title="Teacher Profiling"
       subtitle="Complete this to start adding learners"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
-      <TeacherProfileForm defaultValues={profile ?? {}} />
+      <TeacherProfileForm
+        defaultValues={{
+          accountEmail: user.email,
+          accountEmailIsSynthetic: isSyntheticEmail(user.email),
+          ...(profile ?? {}),
+        }}
+      />
     </AppShell>
   );
 }

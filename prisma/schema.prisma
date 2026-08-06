@@ -268,6 +268,13 @@ enum FurtherAssessment {
   OTHER
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  TRANSFERRED
+  ARCHIVED
+}
+
 // =====================================================
 // MODELS
 // =====================================================
@@ -286,11 +293,14 @@ model School {
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
 
-  users        User[]
-  gradeLevels  GradeLevel[]
-  learners     Learner[]
-  schoolYears  SchoolYear[]
+  users          User[]
+  gradeLevels    GradeLevel[]
+  learners       Learner[]
+  schoolYears    SchoolYear[]
   teacherInvites TeacherInvite[]
+  sections       Section[]
+  enrollments    Enrollment[]
+  announcements  Announcement[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -305,7 +315,8 @@ model SchoolYear {
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
@@ -322,19 +333,23 @@ model User {
   lastName   String
   fullName   String
   isActive   Boolean  @default(false)
+  mustChangePassword Boolean @default(false)
   // Profile completion flags
   profileCompleted Boolean @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deletedAt  DateTime?
 
-  school            School?            @relation(fields: [schoolId], references: [id])
-  schoolHeadProfile SchoolHeadProfile?
-  teacherProfile    TeacherProfile?
-  taughtGrades      GradeLevel[]       @relation("TeacherGrades")
-  managedLearners   Learner[]          @relation("TeacherLearners")
-  recordedAttendance Attendance[]      @relation("AttendanceRecorder")
+  school                School?              @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile     SchoolHeadProfile?
+  teacherProfile        TeacherProfile?
+  taughtGrades          GradeLevel[]         @relation("TeacherGrades")
+  managedLearners       Learner[]            @relation("TeacherLearners")
+  recordedAttendance    Attendance[]         @relation("AttendanceRecorder")
   recordedReadingLevels ReadingLevelRecord[] @relation("ReadingRecorder")
+  teacherEnrollments    Enrollment[]         @relation("TeacherEnrollments")
+  announcements         Announcement[]
+  teacherInvites        TeacherInvite[]      @relation("TeacherInviteUser")
 
   @@index([schoolId, role, deletedAt])
   @@index([authId])
@@ -346,6 +361,8 @@ model SchoolHeadProfile {
 
   // I. Respondent Information
   contactNumber String?
+  /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
+  contactEmail  String?
   designation   String?
   position      SchoolHeadPosition
 
@@ -374,6 +391,8 @@ model TeacherProfile {
 
   // I. Respondent Information
   contactNumber String?
+  /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
+  contactEmail  String?
   designation   String?
   position      TeacherPosition
 
@@ -401,20 +420,31 @@ model TeacherProfile {
 }
 
 model TeacherInvite {
-  id         String    @id @default(uuid())
-  schoolId   String
-  email      String
-  firstName  String
-  middleName String?
-  lastName   String
-  tokenHash  String    @unique
-  expiresAt  DateTime
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id             String    @id @default(uuid())
+  schoolId       String
+  email          String? // optional — DOCX flow may add teachers by full name only
+  firstName      String
+  middleName     String?
+  lastName       String
+  userId         String? // teacher User created at invite time
+  gradeLevelId   String?
+  sectionId      String?
+  tokenHash      String    @unique
+  credentialHash String? // SHA-256 of one-time activation credential
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
+  createdById    String?
+  lastSentAt     DateTime?
+  createdAt      DateTime  @default(now())
 
-  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user       User?       @relation("TeacherInviteUser", fields: [userId], references: [id], onDelete: SetNull)
+  gradeLevel GradeLevel? @relation(fields: [gradeLevelId], references: [id], onDelete: SetNull)
+  section    Section?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([schoolId, email])
+  @@index([userId])
   @@index([expiresAt])
 }
 
@@ -425,12 +455,61 @@ model GradeLevel {
   createdAt DateTime       @default(now())
   deletedAt DateTime?
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teachers User[]    @relation("TeacherGrades")
-  learners Learner[]
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teachers       User[]          @relation("TeacherGrades")
+  learners       Learner[]
+  sections       Section[]
+  enrollments    Enrollment[]
+  teacherInvites TeacherInvite[]
 
   @@unique([schoolId, type])
   @@index([deletedAt])
+}
+
+model Section {
+  id           String    @id @default(uuid())
+  schoolId     String
+  gradeLevelId String
+  name         String
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeLevel     GradeLevel      @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  learners       Learner[]
+  enrollments    Enrollment[]
+  teacherInvites TeacherInvite[]
+
+  @@unique([gradeLevelId, name])
+  @@index([schoolId, deletedAt])
+}
+
+model Enrollment {
+  id           String           @id @default(uuid())
+  learnerId    String
+  schoolId     String
+  schoolYearId String
+  gradeLevelId String
+  sectionId    String?
+  teacherId    String?
+  status       EnrollmentStatus @default(ACTIVE)
+  enrolledAt   DateTime         @default(now())
+  endedAt      DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  school     School     @relation(fields: [schoolId], references: [id])
+  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id])
+  gradeLevel GradeLevel @relation(fields: [gradeLevelId], references: [id])
+  section    Section?   @relation(fields: [sectionId], references: [id])
+  teacher    User?      @relation("TeacherEnrollments", fields: [teacherId], references: [id])
+
+  @@index([learnerId, status])
+  @@index([schoolId, schoolYearId])
+  @@index([teacherId])
+  @@index([gradeLevelId, sectionId])
 }
 
 model Learner {
@@ -438,6 +517,7 @@ model Learner {
   schoolId     String
   gradeLevelId String
   teacherId    String
+  sectionId    String?
 
   // Section A - Initial Profile
   firstName  String
@@ -459,19 +539,40 @@ model Learner {
   isAralLearner   Boolean   @default(false)
   aralEnrolledAt  DateTime?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  archivedAt DateTime? // archive is distinct from soft-delete deletedAt
 
   school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   gradeLevel    GradeLevel           @relation(fields: [gradeLevelId], references: [id])
   teacher       User                 @relation("TeacherLearners", fields: [teacherId], references: [id])
+  section       Section?             @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  enrollments   Enrollment[]
   aralProfile   AralProfile?
   attendances   Attendance[]
   readingLevels ReadingLevelRecord[]
 
   @@index([schoolId, gradeLevelId, isAralLearner, deletedAt])
   @@index([teacherId])
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  schoolId    String
+  authorId    String
+  title       String
+  body        String
+  publishedAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([schoolId, publishedAt])
+  @@index([deletedAt])
 }
 
 model AralProfile {

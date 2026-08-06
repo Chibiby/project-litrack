@@ -4,48 +4,55 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Workspace: pale blue-gray (#eef3fa) */
+    --background: 214 53% 96%;
+    --foreground: 222 47% 11%;
+    /* Cards: white */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262 83% 58%;
-    --radius: 0.5rem;
+    --popover-foreground: 222 47% 11%;
+    /* Primary: saturated blue (#2563eb family) */
+    --primary: 217 91% 53%;
+    --primary-foreground: 0 0% 100%;
+    /* Secondary: warm amber (#f5a623) — dark text for WCAG AA */
+    --secondary: 38 91% 55%;
+    --secondary-foreground: 24 45% 12%;
+    /* Muted: blue-tinted grays */
+    --muted: 214 32% 93%;
+    --muted-foreground: 215 16% 40%;
+    /* Accent: soft amber wash */
+    --accent: 38 90% 94%;
+    --accent-foreground: 24 60% 20%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 217 91% 53%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    /* Dark slate-blue */
+    --background: 222 47% 7%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222 41% 11%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 41% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 38 80% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 217 33% 16%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 38 40% 18%;
+    --accent-foreground: 38 90% 80%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 262 83% 58%;
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 217 91% 60%;
   }
 }
 
@@ -54,8 +61,32 @@
   body { @apply bg-background text-foreground; }
 }
 
-/* Custom: violet section highlight (ARAL Update Data) */
+/* Custom: violet section highlight (ARAL Update Data) — keep for ARAL profiling */
 .violet-section {
   background: linear-gradient(180deg, hsl(262 100% 99%), hsl(262 96% 97%));
   border-left: 4px solid hsl(262 83% 58%);
+}
+
+/* Printable reports → browser Print / Save as PDF */
+@media print {
+  body {
+    background: white !important;
+  }
+  aside,
+  [data-sidebar],
+  .print\:hidden {
+    display: none !important;
+  }
+  main,
+  .printable-report {
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  .printable-report table {
+    page-break-inside: auto;
+  }
+  .printable-report tr {
+    page-break-inside: avoid;
+  }
 }

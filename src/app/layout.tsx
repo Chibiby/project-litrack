@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "PROJECT LITRACK",
-  description: "School reading-profiling system for DepEd schools",
+  title: "LITRACK — Learner Profiling & Literacy Tracking",
+  description:
+    "School learner profiling and literacy tracking for DepEd reading programs",
 };
 
 export default function RootLayout({
@@ -12,7 +20,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen antialiased">
+      <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
         {children}
         <Toaster richColors position="top-right" />
       </body>

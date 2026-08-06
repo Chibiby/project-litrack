@@ -49,6 +49,16 @@ export default async function SchoolsListPage() {
         </Button>
       </div>
 
+      <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p className="font-medium">After deploying migrations, regenerate School Head credentials</p>
+        <p className="mt-1 text-amber-900/90">
+          Schools created before the auth overhaul may still rely on School-ID-era passwords. Use the
+          key icon on each row to regenerate a one-time activation credential, then have the School
+          Head sign in and set a private password. See{" "}
+          <code className="rounded bg-amber-100 px-1 text-xs">docs/migrate-checklist.md</code>.
+        </p>
+      </div>
+
       {!dbAvailable ? (
         <p className="mb-4 text-sm text-destructive">
           Could not load schools right now. The database may be unavailable.

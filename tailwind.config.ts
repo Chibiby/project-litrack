@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -43,16 +46,25 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        /* Violet scale kept for ARAL-specific UI (default Tailwind amber remains) */
         violet: {
           DEFAULT: "hsl(262 83% 58%)",
           50: "hsl(262 100% 97%)",
           100: "hsl(262 96% 93%)",
+          200: "hsl(262 90% 88%)",
+          500: "hsl(262 83% 58%)",
+          600: "hsl(262 72% 50%)",
+          700: "hsl(262 68% 42%)",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+      },
+      boxShadow: {
+        card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04)",
       },
     },
   },

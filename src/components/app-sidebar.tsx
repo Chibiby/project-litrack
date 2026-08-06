@@ -19,8 +19,16 @@ import {
   Sparkles,
   Menu,
   LogOut,
+  KeyRound,
   ChevronRight,
   Shield,
+  CalendarRange,
+  Layers,
+  Megaphone,
+  ScrollText,
+  ArrowRightLeft,
+  Building2,
+  FileBarChart,
 } from "lucide-react";
 
 interface NavItem {
@@ -45,15 +53,23 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
       return [
         { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
         { label: "Schools", href: "/admin/schools", icon: School },
-        { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
-        { label: "Teachers", href: "/school-head/teachers", icon: Users },
+        { label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
+        { label: "School years", href: "/admin/school-years", icon: CalendarRange },
+        { label: "Audit", href: "/admin/audit", icon: ScrollText },
         { label: "Profile", href: "/admin/profile", icon: UserCircle },
       ];
     case "SCHOOL_HEAD":
       return [
         { label: "Dashboard", href: "/school-head", icon: LayoutDashboard },
+        { label: "School years", href: "/school-head/school-years", icon: CalendarRange },
         { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
+        { label: "Sections", href: "/school-head/sections", icon: Layers },
         { label: "Teachers", href: "/school-head/teachers", icon: Users },
+        { label: "Transfer", href: "/school-head/transfer", icon: ArrowRightLeft },
+        { label: "Announcements", href: "/school-head/announcements", icon: Megaphone },
+        { label: "School info", href: "/school-head/school-info", icon: Building2 },
+        { label: "Reports", href: "/school-head/reports", icon: FileBarChart },
+        { label: "Audit", href: "/school-head/audit", icon: ScrollText },
         { label: "Profile", href: "/school-head/profiling", icon: UserCircle },
       ];
     case "TEACHER":
@@ -76,6 +92,7 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
           });
         }
       });
+      items.push({ label: "Reports", href: "/teacher/reports", icon: FileBarChart });
       items.push({ label: "Profile", href: "/teacher/profiling", icon: UserCircle });
       return items;
     default:
@@ -89,20 +106,26 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >
-      <Icon className="h-4 w-4" />
-      <span className="flex-1">{item.label}</span>
-      {item.badge && (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+      {isActive && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary"
+        />
+      )}
+      <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+      <span className="flex-1 truncate">{item.label}</span>
+      {item.badge ? (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-white">
           {item.badge}
         </span>
-      )}
-      {isActive && <ChevronRight className="h-4 w-4 opacity-50" />}
+      ) : null}
+      {isActive && <ChevronRight className="h-4 w-4 opacity-40" />}
     </Link>
   );
 }
@@ -119,10 +142,10 @@ export function AppSidebar({
   const navItems = getNavItems(role, grades);
 
   const SidebarContent = (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="border-b px-4 py-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+    <div className="flex h-full flex-col bg-white">
+      {/* Brand */}
+      <div className="border-b border-border/80 px-4 py-5">
+        <Link href="/" className="flex items-center gap-3 font-semibold">
           <Image
             src="/logo.png"
             alt="ARAL Program logo"
@@ -130,27 +153,30 @@ export function AppSidebar({
             height={48}
             className="h-10 w-auto shrink-0"
           />
-          <div className="flex flex-col">
-            <span className="text-sm leading-none">LITRACK</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-sm font-bold tracking-tight text-foreground">LITRACK</span>
             {schoolName && (
-              <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+              <span className="max-w-[150px] truncate text-xs text-muted-foreground">
                 {schoolName}
               </span>
             )}
           </div>
         </Link>
-        
+
         {/* Super Admin View Indicator */}
         {isSuperAdminView && viewedSchoolName && (
-          <div className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700 border border-amber-200">
-            <Shield className="h-3 w-3" />
+          <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+            <Shield className="h-3 w-3 shrink-0" />
             <span className="truncate">Viewing: {viewedSchoolName}</span>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
+      <ScrollArea className="flex-1 px-3 py-5">
+        <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+          Menu
+        </p>
         <div className="space-y-1">
           {navItems.map((item) => (
             <NavLink
@@ -163,22 +189,42 @@ export function AppSidebar({
       </ScrollArea>
 
       {/* Footer */}
-      <div className="border-t p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-            <UserCircle className="h-5 w-5 text-muted-foreground" />
+      <div className="border-t border-border/80 p-4">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <UserCircle className="h-5 w-5" />
           </div>
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-medium truncate">{userName}</span>
-            <span className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace("_", " ")}</span>
+          <div className="flex min-w-0 flex-col overflow-hidden">
+            <span className="truncate text-sm font-medium text-foreground">{userName}</span>
+            <span className="text-xs capitalize text-muted-foreground">
+              {role.toLowerCase().replace("_", " ")}
+            </span>
           </div>
         </div>
-        <form action={logoutAction}>
-          <Button variant="ghost" size="sm" className="w-full justify-start" type="submit">
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign out
+        <div className="space-y-1">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+          >
+            <Link href="/account/password">
+              <KeyRound className="mr-2 h-4 w-4" />
+              Change password
+            </Link>
           </Button>
-        </form>
+          <form action={logoutAction}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+              type="submit"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -186,7 +232,7 @@ export function AppSidebar({
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-white border-r">
+      <aside className="fixed inset-y-0 hidden w-64 flex-col border-r border-border/80 bg-white lg:flex">
         {SidebarContent}
       </aside>
 
@@ -196,13 +242,14 @@ export function AppSidebar({
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden absolute left-4 top-4 z-50"
+            className="absolute left-4 top-4 z-50 lg:hidden"
+            aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="w-64 border-r p-0">
           {SidebarContent}
         </SheetContent>
       </Sheet>

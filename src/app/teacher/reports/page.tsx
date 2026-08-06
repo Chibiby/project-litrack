@@ -1,0 +1,65 @@
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+import { AppShell } from "@/components/app-shell";
+import { ExportControls } from "@/components/reports/export-controls";
+import { PrintableLearnersReport } from "@/components/reports/printable-learners-report";
+import { ReportPrintAudit } from "@/components/reports/report-print-audit";
+import { loadLearnersForReport } from "@/lib/actions/export-learners";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+
+export const dynamic = "force-dynamic";
+
+export default async function TeacherReportsPage() {
+  const user = await requireUser("TEACHER");
+  if (!user.schoolId) redirect("/login");
+  if (!user.profileCompleted && user.role !== "SUPER_ADMIN") {
+    redirect("/teacher/profiling");
+  }
+
+  const schoolId = user.schoolId;
+  const isTeacher = user.role === "TEACHER";
+
+  const grades = await prisma.gradeLevel.findMany({
+    where: isTeacher
+      ? { schoolId, deletedAt: null, teachers: { some: { id: user.id } } }
+      : { schoolId, deletedAt: null },
+    select: { id: true, type: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const report = await loadLearnersForReport({
+    schoolId,
+    teacherId: isTeacher ? user.id : undefined,
+  });
+
+  return (
+    <AppShell
+      title="Reports"
+      subtitle="Excel export and printable learner summary"
+      role={user.role}
+      userName={user.fullName || `${user.firstName} ${user.lastName}`}
+    >
+      <ReportPrintAudit scope="TEACHER" schoolId={schoolId} />
+      <div className="mb-4 space-y-4">
+        <ExportControls
+          role="TEACHER"
+          grades={grades.map((g) => ({
+            id: g.id,
+            label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+          }))}
+        />
+      </div>
+      <div className="rounded-xl border border-border bg-card p-6 print:border-0 print:p-0">
+        <PrintableLearnersReport
+          schoolName={report.schoolName}
+          generatedAt={report.generatedAt}
+          learners={report.learners}
+          aralCount={report.aralCount}
+          byGrade={report.byGrade}
+          subtitle="Teacher assigned grades"
+        />
+      </div>
+    </AppShell>
+  );
+}

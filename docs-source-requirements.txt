@@ -1,0 +1,255 @@
+﻿
+Learners’ Profiling Survey 
+
+Instructions:
+
+This form aims to assess learners struggling with reading, particularly those at the letter-to-word recognition level. Kindly check (✔) the appropriate boxes and provide additional information when necessary.
+
+A. Learner Information
+Name: ____________________________________
+Age: ____________
+Gender:
+Male
+Female
+Reading Level Profile in English:
+Non-Decoder/ Low Emergent
+Frustration/ High Emergent
+If frustration, Problem in Decoding
+If frustration, Problem in Comprehension (all levels)
+If frustration, Problem in Comprehension (Critical only)
+Instructional/Developing or Transitioning
+Independent/ Grade level Ready
+Reading Level Profile in Filipino:
+Non-Decoder/ Low Emergent
+Frustration/ High Emergent
+If frustration, Problem in Decoding
+If frustration, Problem in Comprehension (all levels)
+If frustration, Problem in Comprehension (Critical only)
+Instructional/Developing or Transitioning
+Independent/ Grade level Ready
+
+Government Benefits Received
+4Ps
+Ips
+Parents’ Educational Background
+No formal Education
+Elementary Level
+Elementary Graduate
+Secondary Level
+Secondary Graduate
+College Level
+College Graduate
+
+B. Attendance and School Background
+Mode of Transportation
+Walking
+Motorcycle
+Bus/Jeep/Car
+Distance of Home to School:
+Less than 1 km
+1-5 km
+More than 5 km
+Previous School Transfers:
+No transfers
+1 transfer
+Multiple transfers (Specify: ______________)
+
+C. Reading Behavior (Letter-to-Word Recognition Level)
+Frequency of Absenteeism:
+1-3 days per Month
+3-5 days per month
+More than 5 days per month
+Consistently absent every week
+(Specify reason: ___________________)
+
+Letter Recognition:
+Recognizes all letters with ease
+Confuses similar-looking letters (e.g., b/d, p/q, m/n)
+Struggles to recall letter names
+N/A
+Letter-Sound Correspondence:
+Accurately connects letters to sounds
+Inconsistently identifies letter sounds
+Unable to associate letters with sounds
+N/A
+Word Recognition:
+Reads high-frequency words fluently
+Relies on guessing rather than decoding
+Omits, adds, or replaces letters in words
+Struggles to recognize common sight words
+N/A
+
+D. External Factors Affecting Reading Progress
+Home Literacy Environment:
+Has access to books and reading materials
+Limited exposure to books at home
+No reading materials available
+N/A
+Parental Support:
+Parents/guardians regularly assist with reading
+Parents/guardians have limited involvement
+No support available at home
+N/A
+Classroom Learning Environment:
+Small class size (individualized attention possible)
+Large class size (limited teacher attention)
+N/A
+Language Considerations:
+Primary language at home matches the language of instruction
+Learner speaks a different dialect/language at home
+Struggles with language transition in school
+N/A
+
+E. Suggested Interventions and Recommendations
+Suggested Reading Interventions (Check applicable):
+Phonemic awareness activities
+Letter-sound correspondence drills
+Sight word recognition practice
+Structured phonics instruction
+One-on-one reading support
+Home reading program
+Need for Other Intervention due to Manifestation for being LSENs (Specify Observations:__________________________________________________)
+Recommendation for Further Assessment:
+MFAT (Multifactor Assessment Tool)
+Other (Specify: ________________)
+635067310ARAL LEARNER
+ARAL LEARNER
+
+TEACHER AND SCHOOL HEAD PROFILING SURVEY
+(For Word Document Format)
+
+I. RESPONDENT INFORMATION
+Name (Optional): ___________________________________________
+Designation: ☐ Teacher ☐ Master Teacher ☐ School Head ☐ Others: ___________
+Contact Number: ___________________________________________
+Email Address: ___________________________________________
+Position (Teachers):
+☐ Teacher I
+☐ Teacher II
+☐ Teacher III
+☐ Teacher IV
+☐ Teacher V
+☐ Teacher VI
+☐ Teacher VII
+☐ Master Teacher I
+☐ Master Teacher II
+☐ Master Teacher III
+☐ Master Teacher IV
+
+Position (School Head):
+☐ Teacher I (TIC)
+☐ Teacher II (TIC)
+☐ Teacher III (TIC)
+☐ Teacher IV (TIC)
+☐ Teacher V (TIC)
+☐ Head Teacher I
+☐ Head Teacher II
+☐ Head Teacher III
+☐ Head Teacher IV
+☐ Head Teacher V
+☐ Head Teacher VI
+☐ Head Teacher VII
+☐ Principal I
+☐ Principal II
+☐ Principal III
+☐ Principal IV
+☐ TECHVOC Ad
+
+II. PROFESSIONAL BACKGROUND
+Highest Educational Attainment:
+☐ Bachelor’s Degree
+☐ With Master’s Units
+☐ Master’s Degree
+☐ With Doctoral Units
+☐ Doctoral Degree
+Field of Specialization: 
+☐ General Education
+☐ English 
+☐ Math
+☐ Science
+☐ Filipino
+☐ TLE/EPP
+☐ ARALPAN
+☐ MAPEH
+☐ TechVoc
+☐ Values Ed
+
+☐ Others: Specify:_________
+Years in Service:
+☐ 0–3 years
+☐ 4–10 years
+☐ 11–20 years
+☐ 21 years and above
+For Teachers, Current Grade Level / Assignment:
+
+☐ Kinder 
+☐ Grade 1
+☐ Grade 2
+☐ Grade 3
+☐ Grade 4
+☐ Grade 5
+☐ Grade 6
+☐ Grade 7
+☐ Grade 8
+☐ Grade 9
+☐ Grade 10
+☐ Grade 11
+☐ Grade 12
+
+
+
+III. TEACHING ASSIGNMENT
+Most Subject Currently Handled (if Teacher):
+☐ English 
+☐ Math
+☐ Science
+☐ Filipino
+☐ TLE/EPP
+☐ ARALPAN
+☐ MAPEH
+☐ TechVoc
+☐ Values Ed
+☐ ABM
+
+
+IV. TRAINING AND PROFESSIONAL DEVELOPMENT
+Have you attended trainings related to literacy/reading instruction?
+☐ Yes ☐ No
+Recent trainings attended in Reading (last 5 years):
+☐ ARAL
+☐ Teaching Reading
+☐ ELLN
+☐ TEACEP
+☐ None at all
+Have you attended trainings related English Curriculum Instruction?
+☐ Yes ☐ No
+Recent trainings attended in English Curriculum (last 5 years):
+☐ Matatag Training
+☐ Upskilling of English Competence
+☐ None at all
+
+Highest Level of the trainings attended (last 5 years):
+☐ International
+☐ National
+☐ Region
+☐ Division
+☐ District
+☐ School
+☐ N/A
+
+
+Log in by selecting School Name then use School Id as password
+Upon log in, two buttons (Teachers , School Head) : Teacher cannot use the button if wala pa sila na enroll sa school Head, Meaning mauna ang school head ug activate sa account. So deactivated pa ang Teachers’ button pag wala pa na ka create ug grade level and add teachers.
+To activate the account, mag pasok si School Head sa School Head Button. Tapos upon pag sulod niya sa button, mag profiling sa siya, (refer sa profiling sa school head). 
+Pag naka profile na ang School Head, mu activate ang “Create Grade Level”. 
+Sa pag pasok sa create grade level (Kinder, Grades 1-12, Floating), example nag create sya ug kinder- sa pag sulod nya sa Kinder, mag add sya ug teacher. Sa pag add, mag butang lang sya ug full name (First name, Middle name and Last Name). 
+Once na na add na tanan- mu activate ang TEACHERS BUTTON.
+Pag activated na, mupasok c teacher. Then automatic makita na ang Grade levels na gbuhat sa school head.
+Pasok ang teacher sa Grade level kung asa sya gi assign. Now, dli maka add learner once wala sya nag profiling. So, mag profiling sa si teacher bago mag add learner. (Refer to profiling)
+Upon adding learner, I profile ang learner isa isa- (refer to learners’ profiling)
+Naay button nga “ARAL LEARNER” once ang bata identified as ARAL. Pag I click ni teacher ni- automatic mulabay sa Dashboard for ARAL. (meaning per grade level mu create pud sya automatic ug ARAL Dashboard.
+Pag iopen na ang ARAL DASHBOARD- makita didtoa ang mga enrolled learners. Then per learner- nay button nga (UPDATE DATA)- 
+Updating the data-  I profile nila ang additional profiling – (tong nakaviolet na highlight).
+Naa puy default nga dri nga ATTENDANCE per Week ug READING  LEVEL per month.
+PROJECT LITRACK
+

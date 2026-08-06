@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
   const [pending, startTransition] = useTransition();
 
   return (
-    <Card>
+    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
       <CardContent className="pt-6">
         <form
           action={(fd) =>
@@ -47,6 +48,11 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
           <Button type="submit" className="w-full" disabled={disabled || pending}>
             {pending ? "Signing in…" : "Sign in"}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            <Link href="/forgot-password" className="underline hover:text-foreground">
+              Forgot password?
+            </Link>
+          </p>
         </form>
       </CardContent>
     </Card>

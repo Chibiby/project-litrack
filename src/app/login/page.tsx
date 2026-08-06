@@ -16,9 +16,9 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-white p-4">
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
+        <div className="space-y-2 text-center">
           <Image
             src="/logo.png"
             alt="ARAL Program logo"
@@ -27,7 +27,7 @@ export default async function LoginPage() {
             priority
             className="mx-auto h-40 w-auto"
           />
-          <h1 className="text-3xl font-bold tracking-tight">PROJECT LITRACK</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">PROJECT LITRACK</h1>
           <p className="text-sm text-muted-foreground">School reading-profiling system</p>
         </div>
         {configUnavailable ? (
@@ -37,7 +37,10 @@ export default async function LoginPage() {
         ) : null}
         <LoginForm schools={schools} />
         <p className="text-center text-xs text-muted-foreground">
-          Super Admin? <a className="underline" href="/admin/login">Admin login</a>
+          Super Admin?{" "}
+          <a className="underline hover:text-foreground" href="/admin/login">
+            Admin login
+          </a>
         </p>
       </div>
     </main>

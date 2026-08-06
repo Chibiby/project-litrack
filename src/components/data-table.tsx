@@ -36,7 +36,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   filterColumn,
@@ -115,10 +115,10 @@ export function DataTable<T extends Record<string, any>>({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         {searchable && (
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search..."
               value={searchQuery}
@@ -127,8 +127,8 @@ export function DataTable<T extends Record<string, any>>({
             />
           </div>
         )}
-        
-        <div className="flex gap-2 items-center">
+
+        <div className="flex items-center gap-2">
           {filterOptions && filterColumn && (
             <Select value={filterValue} onValueChange={handleFilterChange}>
               <SelectTrigger className="w-[160px]">
@@ -144,10 +144,10 @@ export function DataTable<T extends Record<string, any>>({
               </SelectContent>
             </Select>
           )}
-          
+
           {exportable && (
             <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
           )}
@@ -157,14 +157,15 @@ export function DataTable<T extends Record<string, any>>({
       {/* Results count */}
       <div className="text-sm text-muted-foreground">
         Showing {filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{" "}
-        {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+        {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length}{" "}
+        results
       </div>
 
       {/* Table */}
-      <div className="border rounded-md">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-card">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/40">
               {columns.map((col) => (
                 <TableHead key={String(col.key)}>{col.header}</TableHead>
               ))}
@@ -173,7 +174,10 @@ export function DataTable<T extends Record<string, any>>({
           <TableBody>
             {paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                <TableCell
+                  colSpan={columns.length}
+                  className="py-10 text-center text-muted-foreground"
+                >
                   {emptyMessage}
                 </TableCell>
               </TableRow>
@@ -194,14 +198,15 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <Button
             variant="outline"
             size="sm"
+            className="rounded-lg"
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
+            <ChevronLeft className="mr-1 h-4 w-4" />
             Previous
           </Button>
           <span className="text-sm text-muted-foreground">
@@ -210,11 +215,12 @@ export function DataTable<T extends Record<string, any>>({
           <Button
             variant="outline"
             size="sm"
+            className="rounded-lg"
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
             Next
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
       )}

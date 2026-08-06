@@ -1,87 +1,90 @@
-# Windows quick-start
+# Windows quick-start (PROJECT LITRACK)
 
-You don't have Node.js / Git / Python installed yet. Here's the fastest path:
+Target machine style: Windows 10+, project under a user Desktop path (e.g. `C:\Users\PC5\Desktop\project-litrack`).
 
-## 1. Install Node.js 20 LTS (5 min)
-
-Open PowerShell **as Administrator** and run:
+## 1. Install Node.js 20 LTS
 
 ```powershell
 winget install OpenJS.NodeJS.LTS
 ```
 
-(or download from https://nodejs.org/ if `winget` isn't available)
+Or download from https://nodejs.org/. **Close and reopen** PowerShell so `node` / `npm` are on `PATH`.
 
-**Close and reopen** any PowerShell windows so `node` and `npm` are on `PATH`.
-
-Verify:
 ```powershell
-node --version    # should print v20.x or v22.x
-npm --version     # should print 10.x
+node --version    # expect v20.x (v22 also fine)
+npm --version
 ```
 
-## 2. Install Git (optional but recommended)
+## 2. Install Git (optional)
 
 ```powershell
 winget install Git.Git
 ```
 
-## 3. Install project dependencies
-
-From this folder (`c:\Users\OPERATOR-PC\Desktop\test_projects`):
+## 3. Open the project and install dependencies
 
 ```powershell
+cd C:\Users\PC5\Desktop\project-litrack
 npm install
 ```
 
-This will take 1–2 minutes and resolve all the lint errors you currently see in the IDE (they're caused by missing `node_modules`).
+Adjust the path if your clone lives elsewhere.
 
-## 4. Create a Supabase project (free)
+## 4. Supabase project
 
-1. Go to https://supabase.com/, sign up.
-2. Create a new project. Wait for it to provision (~2 min).
-3. In the project dashboard, copy:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (never expose this)
-4. **Settings → Database**: copy the **Connection string** (Transaction Pooler) → `DATABASE_URL`
-5. Same page: copy the **Direct connection** string → `DIRECT_URL`
+1. Create a project at https://supabase.com/
+2. Copy into `.env.local`:
+   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - anon key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - service_role key → `SUPABASE_SERVICE_ROLE_KEY` (server only)
+   - Transaction pooler connection → `DATABASE_URL` (port **6543**)
+   - Direct/session connection → `DIRECT_URL` (port **5432**)
 
-## 5. Set up your `.env.local`
+## 5. Environment file
 
 ```powershell
 copy .env.example .env.local
 notepad .env.local
 ```
 
-Fill in all the values. Set `RESEND_API_KEY` to anything (e.g. blank) — invite emails will be logged to the console in dev.
+Fill all required names from `.env.example`. Leave Resend blank in local dev if needed (invite URLs log to the console).
 
-## 6. Migrate + seed + run
+## 6. Prisma client, migrations, seed
 
 ```powershell
 npm run prisma:generate
-npm run prisma:migrate -- --name init
+
+# Human-approved only — applies committed SQL to the database pointed at by DIRECT_URL/DATABASE_URL
+npm run prisma:deploy
+
 npm run db:seed
 npm run dev
 ```
 
-Then open http://localhost:3000 and try the smoke test in `README.md`.
+Open http://localhost:3000.
+
+**Do not** run `prisma migrate dev` or `db push` against shared/remote Supabase unless you intentionally own that workflow. See `docs/migrations.md`.
+
+Optional: paste `prisma/rls-policies.sql` into the Supabase SQL Editor after migrate.
+
+## 7. Verify quality gates (optional)
+
+```powershell
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+```
 
 ---
 
 ## Troubleshooting
 
-**"Cannot find module 'next' / 'react' / etc." in IDE**
-→ You haven't run `npm install` yet, or it failed. Run it again and reload VS Code.
-
-**Prisma migrate fails with "P1001 can't reach database"**
-→ Your `DATABASE_URL` / `DIRECT_URL` are wrong, or your Supabase project is paused. Verify in the Supabase dashboard.
-
-**"Module '@prisma/client' has no exported member 'PrismaClient'"**
-→ Run `npm run prisma:generate` after every `prisma/schema.prisma` change.
-
-**Login as School Head says "Login failed"**
-→ The synthetic email + password didn't match. Check that you used the exact `schoolIdCode` you set when creating the school, with the right case.
-
-**Teacher invite email never arrives**
-→ Check the server console — without a real `RESEND_API_KEY`, the invite URL is logged there. Copy/paste it into your browser.
+| Symptom | Fix |
+|---------|-----|
+| IDE cannot find `next` / `react` | Run `npm install`, reload window |
+| Prisma P1001 can't reach DB | Check `DATABASE_URL` / `DIRECT_URL`; unpause Supabase project |
+| Missing PrismaClient exports | `npm run prisma:generate` |
+| School Head login fails | Use the **activation credential** from school creation (not School ID as password) |
+| Teacher invite email missing | Check server console for invite URL when Resend is unset |
+| New schema features missing at runtime | Migrations likely unapplied — approve and run `npm run prisma:deploy` |

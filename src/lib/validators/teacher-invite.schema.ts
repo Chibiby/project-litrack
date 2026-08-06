@@ -1,11 +1,21 @@
 import { z } from "zod";
-import { nonEmpty, email } from "./common";
+import { nonEmpty } from "./common";
+
+const optionalEmail = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().trim().email("Invalid email address").optional()
+);
+
+const optionalMiddleName = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().trim().max(80).optional()
+);
 
 export const teacherInviteSchema = z.object({
   gradeLevelId: nonEmpty("Grade level required"),
-  email,
+  email: optionalEmail,
   firstName: nonEmpty("First name required").max(80),
-  middleName: z.string().trim().max(80).optional().or(z.literal("").transform(() => undefined)),
+  middleName: optionalMiddleName,
   lastName: nonEmpty("Last name required").max(80),
 });
 
@@ -18,3 +28,7 @@ export const createGradeLevelSchema = z.object({
 });
 
 export type CreateGradeLevelInput = z.infer<typeof createGradeLevelSchema>;
+
+export const inviteIdSchema = z.object({
+  inviteId: nonEmpty("Invite id required"),
+});

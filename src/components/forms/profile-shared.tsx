@@ -13,13 +13,19 @@ export function FieldRadioGroup({
   name,
   options,
   defaultValue,
+  value,
+  onValueChange,
   required = true,
 }: {
   name: string;
   options: { value: string; label: string }[];
   defaultValue?: string;
+  /** Controlled value — when set, radios are controlled. */
+  value?: string;
+  onValueChange?: (value: string) => void;
   required?: boolean;
 }) {
+  const controlled = value !== undefined;
   return (
     <div className="space-y-2">
       {options.map((opt) => (
@@ -28,7 +34,12 @@ export function FieldRadioGroup({
             type="radio"
             name={name}
             value={opt.value}
-            defaultChecked={defaultValue === opt.value}
+            {...(controlled
+              ? {
+                  checked: value === opt.value,
+                  onChange: () => onValueChange?.(opt.value),
+                }
+              : { defaultChecked: defaultValue === opt.value })}
             required={required}
             className="mt-0.5 h-4 w-4 accent-primary"
           />
@@ -83,6 +94,25 @@ export function FieldText({
     <div className="space-y-2">
       <Label htmlFor={name}>{label}{required && " *"}</Label>
       <Input id={name} name={name} defaultValue={defaultValue} required={required} type={type} />
+    </div>
+  );
+}
+
+/** Read-only account / login email (P-I4). Does not submit. */
+export function FieldReadOnlyEmail({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input value={value} readOnly disabled className="bg-muted" />
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

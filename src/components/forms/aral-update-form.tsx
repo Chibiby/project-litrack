@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,11 +51,24 @@ type Defaults = Partial<{
 export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: string; defaultValues?: Defaults }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [transfers, setTransfers] = useState(defaultValues.previousTransfers ?? "");
+  const [interventions, setInterventions] = useState<string[]>(
+    defaultValues.suggestedInterventions ?? []
+  );
+  const [further, setFurther] = useState<string[]>(defaultValues.furtherAssessment ?? []);
+
+  const showLsen = interventions.includes("LSEN_OTHER");
+  const showFurtherOther = further.includes("OTHER");
+  const interventionOptions = useMemo(() => toOptions(INTERVENTION_LABELS), []);
+  const furtherOptions = useMemo(() => toOptions(FURTHER_ASSESSMENT_LABELS), []);
 
   return (
     <form
       action={(fd) => {
         fd.set("learnerId", learnerId);
+        if (transfers !== "MULTIPLE") fd.delete("transferDetails");
+        if (!showLsen) fd.delete("lsenObservations");
+        if (!showFurtherOther) fd.delete("furtherAssessmentOther");
         startTransition(async () => {
           const res = await saveAralProfile(fd);
           if (res.ok) {
@@ -79,11 +92,24 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
           </div>
           <div>
             <p className="text-sm font-medium mb-2">Previous School Transfers *</p>
-            <FieldRadioGroup name="previousTransfers" options={toOptions(TRANSFER_LABELS)} defaultValue={defaultValues.previousTransfers} />
-            <div className="mt-3 space-y-1">
-              <Label htmlFor="transferDetails">If Multiple, specify</Label>
-              <Input id="transferDetails" name="transferDetails" defaultValue={defaultValues.transferDetails ?? ""} />
-            </div>
+            <FieldRadioGroup
+              name="previousTransfers"
+              options={toOptions(TRANSFER_LABELS)}
+              value={transfers}
+              onValueChange={setTransfers}
+              defaultValue={defaultValues.previousTransfers}
+            />
+            {transfers === "MULTIPLE" ? (
+              <div className="mt-3 space-y-1">
+                <Label htmlFor="transferDetails">Specify transfers *</Label>
+                <Input
+                  id="transferDetails"
+                  name="transferDetails"
+                  required
+                  defaultValue={defaultValues.transferDetails ?? ""}
+                />
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -95,8 +121,13 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
             <p className="text-sm font-medium mb-2">Frequency of Absenteeism *</p>
             <FieldRadioGroup name="absenteeismFrequency" options={toOptions(ABSENTEEISM_LABELS)} defaultValue={defaultValues.absenteeismFrequency} />
             <div className="mt-3 space-y-1">
-              <Label htmlFor="absenteeismOtherReason">If &apos;Other&apos;, specify reason</Label>
-              <Input id="absenteeismOtherReason" name="absenteeismOtherReason" defaultValue={defaultValues.absenteeismOtherReason ?? ""} />
+              <Label htmlFor="absenteeismOtherReason">Specify reason *</Label>
+              <Input
+                id="absenteeismOtherReason"
+                name="absenteeismOtherReason"
+                required
+                defaultValue={defaultValues.absenteeismOtherReason ?? ""}
+              />
             </div>
           </div>
           <Separator />
@@ -147,20 +178,74 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
         <CardContent className="space-y-6">
           <div>
             <p className="text-sm font-medium mb-2">Suggested Reading Interventions</p>
-            <FieldCheckboxList name="suggestedInterventions" options={toOptions(INTERVENTION_LABELS)} defaultValues={defaultValues.suggestedInterventions ?? []} />
-            <div className="mt-3 space-y-1">
-              <Label htmlFor="lsenObservations">If LSEN intervention chosen, observations</Label>
-              <Textarea id="lsenObservations" name="lsenObservations" defaultValue={defaultValues.lsenObservations ?? ""} />
+            <div className="space-y-2">
+              {interventionOptions.map((opt) => (
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="suggestedInterventions[]"
+                    value={opt.value}
+                    checked={interventions.includes(opt.value)}
+                    onChange={(e) => {
+                      setInterventions((prev) =>
+                        e.target.checked
+                          ? [...prev, opt.value]
+                          : prev.filter((v) => v !== opt.value)
+                      );
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span className="text-sm leading-tight">{opt.label}</span>
+                </label>
+              ))}
             </div>
+            {showLsen ? (
+              <div className="mt-3 space-y-1">
+                <Label htmlFor="lsenObservations">Specify LSEN observations *</Label>
+                <Textarea
+                  id="lsenObservations"
+                  name="lsenObservations"
+                  required
+                  defaultValue={defaultValues.lsenObservations ?? ""}
+                />
+              </div>
+            ) : null}
           </div>
           <Separator />
           <div>
             <p className="text-sm font-medium mb-2">Recommendation for Further Assessment</p>
-            <FieldCheckboxList name="furtherAssessment" options={toOptions(FURTHER_ASSESSMENT_LABELS)} defaultValues={defaultValues.furtherAssessment ?? []} />
-            <div className="mt-3 space-y-1">
-              <Label htmlFor="furtherAssessmentOther">If &apos;Other&apos;, specify</Label>
-              <Input id="furtherAssessmentOther" name="furtherAssessmentOther" defaultValue={defaultValues.furtherAssessmentOther ?? ""} />
+            <div className="space-y-2">
+              {furtherOptions.map((opt) => (
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="furtherAssessment[]"
+                    value={opt.value}
+                    checked={further.includes(opt.value)}
+                    onChange={(e) => {
+                      setFurther((prev) =>
+                        e.target.checked
+                          ? [...prev, opt.value]
+                          : prev.filter((v) => v !== opt.value)
+                      );
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span className="text-sm leading-tight">{opt.label}</span>
+                </label>
+              ))}
             </div>
+            {showFurtherOther ? (
+              <div className="mt-3 space-y-1">
+                <Label htmlFor="furtherAssessmentOther">Specify assessment *</Label>
+                <Input
+                  id="furtherAssessmentOther"
+                  name="furtherAssessmentOther"
+                  required
+                  defaultValue={defaultValues.furtherAssessmentOther ?? ""}
+                />
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>

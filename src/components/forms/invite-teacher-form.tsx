@@ -6,18 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createTeacherDirect } from "@/lib/actions/school-head";
+import { inviteTeacher } from "@/lib/actions/school-head";
 import { Card, CardContent } from "@/components/ui/card";
-import { Copy, CheckCircle2 } from "lucide-react";
+import { Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export function InviteTeacherForm({ grades }: { grades: { id: string; label: string }[] }) {
   const [pending, startTransition] = useTransition();
-  const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(
+    null
+  );
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     if (credentials) {
-      navigator.clipboard.writeText(`Username: ${credentials.username}\nPassword: ${credentials.password}`);
+      void navigator.clipboard.writeText(
+        `Username: ${credentials.username}\nTemp password: ${credentials.password}`
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -28,13 +32,18 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
       <form
         action={(fd) =>
           startTransition(async () => {
-            try {
-              const result = await createTeacherDirect(fd);
-              setCredentials({ username: result.username, password: result.tempPassword });
+            const result = await inviteTeacher(fd);
+            if (!result.ok) {
+              toast.error(result.error);
+              return;
+            }
+            if (result.data) {
+              setCredentials({
+                username: result.data.username,
+                password: result.data.tempPassword,
+              });
               toast.success("Teacher account created");
-              (document.getElementById("invite-form") as HTMLFormElement)?.reset();
-            } catch (e: any) {
-              toast.error(e?.message || "Failed to create teacher");
+              (document.getElementById("invite-form") as HTMLFormElement | null)?.reset();
             }
           })
         }
@@ -48,7 +57,11 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
               <SelectValue placeholder="Choose grade" />
             </SelectTrigger>
             <SelectContent>
-              {grades.map((g) => <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>)}
+              {grades.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -66,32 +79,48 @@ export function InviteTeacherForm({ grades }: { grades: { id: string; label: str
             <Input id="lastName" name="lastName" required />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          A username and temporary password will be generated. Share these credentials with the teacher.
-        </p>
-        <Button type="submit" disabled={pending}>{pending ? "Creating…" : "Create teacher account"}</Button>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email (optional)</Label>
+          <Input id="email" name="email" type="email" placeholder="teacher@example.com" />
+          <p className="text-xs text-muted-foreground">
+            If provided, a setup link is emailed. Username and temporary password are always shown
+            once below.
+          </p>
+        </div>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Creating…" : "Add teacher"}
+        </Button>
       </form>
 
       {credentials && (
-        <Card className="mt-4 border-green-200 bg-green-50">
-          <CardContent className="pt-4 space-y-3">
-            <div className="flex items-center gap-2 text-green-800 font-semibold">
-              <CheckCircle2 className="h-5 w-5" />
-              Teacher account created successfully!
+        <Card className="mt-4 border-amber-200 bg-amber-50">
+          <CardContent className="space-y-3 pt-4">
+            <div className="flex items-center gap-2 font-semibold text-amber-950">
+              <AlertTriangle className="h-5 w-5" />
+              Credentials (shown once)
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center p-2 bg-white rounded border">
-                <span><strong>Username:</strong> {credentials.username}</span>
+              <div className="flex items-center justify-between rounded border bg-white p-2">
+                <span>
+                  <strong>Username:</strong> {credentials.username}
+                </span>
               </div>
-              <div className="flex justify-between items-center p-2 bg-white rounded border">
-                <span><strong>Temp Password:</strong> {credentials.password}</span>
+              <div className="flex items-center justify-between rounded border bg-white p-2">
+                <span>
+                  <strong>Temp password:</strong> {credentials.password}
+                </span>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Share these credentials with the teacher. They will be prompted to change their password on first login.
+              Share securely. The teacher must change this password on first login (or via the email
+              setup link if sent).
             </p>
             <Button size="sm" variant="outline" onClick={handleCopy} className="w-full">
-              {copied ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              ) : (
+                <Copy className="mr-2 h-4 w-4" />
+              )}
               {copied ? "Copied!" : "Copy credentials"}
             </Button>
           </CardContent>

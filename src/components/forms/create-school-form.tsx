@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,23 +8,70 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSchool } from "@/lib/actions/school";
+import { Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export function CreateSchoolForm() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [activationCredential, setActivationCredential] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  if (activationCredential) {
+    return (
+      <Card className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm">
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex items-start gap-2 text-amber-950">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <h2 className="font-semibold">Activation credential (shown once)</h2>
+              <p className="mt-1 text-sm text-amber-900/90">
+                Copy and share this with the School Head securely. It will not be shown again.
+                They must change it on first login.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border bg-white p-3 font-mono text-sm break-all">
+            {activationCredential}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(activationCredential);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copied ? "Copied" : "Copy credential"}
+            </Button>
+            <Button type="button" onClick={() => router.push("/admin/schools")}>
+              Done — back to schools
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card>
+    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
       <CardContent className="pt-6">
         <form
           action={(fd) =>
             startTransition(async () => {
-              try {
-                await createSchool(fd);
-                toast.success("School created. The School Head can now log in.");
+              const res = await createSchool(fd);
+              if (!res.ok) {
+                toast.error(res.error);
+                return;
+              }
+              if (res.data?.activationCredential) {
+                setActivationCredential(res.data.activationCredential);
+                toast.success("School created");
+              } else {
+                toast.success("School created");
                 router.push("/admin/schools");
-              } catch (e: any) {
-                toast.error(e?.message || "Failed to create school");
               }
             })
           }
@@ -35,10 +82,17 @@ export function CreateSchoolForm() {
             <Input id="name" name="name" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="schoolIdCode">School ID (used as School Head password) *</Label>
-            <Input id="schoolIdCode" name="schoolIdCode" required pattern="[A-Za-z0-9_\-]+" minLength={4} />
+            <Label htmlFor="schoolIdCode">School ID *</Label>
+            <Input
+              id="schoolIdCode"
+              name="schoolIdCode"
+              required
+              pattern="[A-Za-z0-9_\-]+"
+              minLength={4}
+            />
             <p className="text-xs text-muted-foreground">
-              Letters, digits, underscore, dash. Min 4 characters.
+              Public identifier for the school (not a password). Letters, digits, underscore, dash.
+              Min 4 characters.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -60,12 +114,15 @@ export function CreateSchoolForm() {
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={pending}>{pending ? "Creating…" : "Create school"}</Button>
-            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Creating…" : "Create school"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              Cancel
+            </Button>
           </div>
         </form>
       </CardContent>
     </Card>
   );
 }
-

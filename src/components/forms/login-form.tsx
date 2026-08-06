@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
 
   if (mode === "select-role") {
     return (
-      <Card>
+      <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label>School Name</Label>
@@ -43,7 +44,9 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
                   </div>
                 ) : (
                   schools.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -54,7 +57,13 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
               variant="outline"
               disabled={!schoolId || !hasTeachers}
               onClick={() => setMode("teacher")}
-              title={!schoolId ? "Select a school first" : !hasTeachers ? "No teachers enrolled yet. School Head must add teachers first." : ""}
+              title={
+                !schoolId
+                  ? "Select a school first"
+                  : !hasTeachers
+                    ? "No teachers enrolled yet. School Head must add teachers first."
+                    : ""
+              }
             >
               Teachers
             </Button>
@@ -66,8 +75,13 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
             {!schoolId
               ? "Select a school to continue."
               : !hasTeachers
-                ? "Teachers button disabled: No teachers enrolled yet. School Head must log in first and add teachers."
+                ? "Teachers button disabled until School Head is profiled, grade levels exist, and teachers are enrolled."
                 : "Teachers can now log in."}
+          </p>
+          <p className="text-center text-xs text-muted-foreground pt-1">
+            <Link href="/forgot-password" className="underline hover:text-foreground">
+              Forgot password?
+            </Link>
           </p>
         </CardContent>
       </Card>
@@ -91,10 +105,10 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
   };
 
   return (
-    <Card>
+    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <button
-          className="text-xs text-muted-foreground underline mb-2"
+          className="mb-2 text-xs text-muted-foreground underline"
           onClick={() => setMode("select-role")}
           type="button"
         >
@@ -105,8 +119,11 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
           <form action={handleSchoolHeadSubmit} className="space-y-4">
             <h2 className="text-lg font-semibold">School Head Login</h2>
             <div className="space-y-2">
-              <Label htmlFor="password">School ID (password)</Label>
+              <Label htmlFor="password">Password</Label>
               <PasswordInput id="password" name="password" required autoFocus />
+              <p className="text-xs text-muted-foreground">
+                First time? Use the activation credential from your administrator.
+              </p>
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? "Signing in…" : "Sign in"}
@@ -117,7 +134,14 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
             <h2 className="text-lg font-semibold">Teacher Login</h2>
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input id="username" name="username" type="text" required autoFocus placeholder="e.g., teacher.smith.a1b2" />
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                required
+                autoFocus
+                placeholder="e.g., teacher.smith.a1b2"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -128,6 +152,11 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
             </Button>
           </form>
         )}
+        <p className="text-center text-xs text-muted-foreground">
+          <Link href="/forgot-password" className="underline hover:text-foreground">
+            Forgot password?
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

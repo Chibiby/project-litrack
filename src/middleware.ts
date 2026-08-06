@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { enforceRolePrefix, roleHomePath } from "@/lib/auth/roles";
 
 function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/admin/login" ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/auth/reset") ||
     pathname.startsWith("/teacher-setup/") ||
     pathname.startsWith("/api/schools/list") ||
     pathname.startsWith("/_next") ||
@@ -30,12 +33,15 @@ export async function middleware(request: NextRequest) {
 
   const { supabaseResponse, user } = await updateSession(request);
 
-  // Allow public paths and the admin login
+  // Already authenticated users with a known JWT role visiting login → role home
+  if (user?.role && (pathname === "/login" || pathname === "/admin/login")) {
+    return NextResponse.redirect(new URL(roleHomePath(user.role), request.url));
+  }
+
   if (isPublicPath(pathname)) {
     return supabaseResponse;
   }
 
-  // All other routes require an authenticated user
   if (!user) {
     const loginUrl = pathname.startsWith("/admin")
       ? new URL("/admin/login", request.url)
@@ -43,8 +49,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Role enforcement is performed in server components via requireUser(role).
-  // Middleware only ensures a session exists.
+  const gate = enforceRolePrefix(pathname, user.role);
+  if (!gate.ok) {
+    return NextResponse.redirect(new URL(gate.redirectTo, request.url));
+  }
+
   return supabaseResponse;
 }
 
