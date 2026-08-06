@@ -13,11 +13,11 @@ export default function AdminLoginPage() {
         <div className="text-center space-y-2">
           <Image
             src="/logo.png"
-            alt="LiTrack logo"
-            width={64}
-            height={64}
+            alt="ARAL Program logo"
+            width={192}
+            height={256}
             priority
-            className="mx-auto h-16 w-16"
+            className="mx-auto h-40 w-auto"
           />
           <h1 className="text-2xl font-bold tracking-tight">Super Admin</h1>
           <p className="text-sm text-muted-foreground">PROJECT LITRACK administration</p>

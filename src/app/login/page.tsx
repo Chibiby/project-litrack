@@ -21,11 +21,11 @@ export default async function LoginPage() {
         <div className="text-center space-y-2">
           <Image
             src="/logo.png"
-            alt="LiTrack logo"
-            width={64}
-            height={64}
+            alt="ARAL Program logo"
+            width={192}
+            height={256}
             priority
-            className="mx-auto h-16 w-16"
+            className="mx-auto h-40 w-auto"
           />
           <h1 className="text-3xl font-bold tracking-tight">PROJECT LITRACK</h1>
           <p className="text-sm text-muted-foreground">School reading-profiling system</p>

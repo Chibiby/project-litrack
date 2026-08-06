@@ -125,10 +125,10 @@ export function AppSidebar({
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Image
             src="/logo.png"
-            alt="LiTrack logo"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0"
+            alt="ARAL Program logo"
+            width={36}
+            height={48}
+            className="h-10 w-auto shrink-0"
           />
           <div className="flex flex-col">
             <span className="text-sm leading-none">LITRACK</span>
