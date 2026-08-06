@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loginSchoolHead, loginTeacher } from "@/lib/actions/auth";
@@ -105,7 +106,7 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
             <h2 className="text-lg font-semibold">School Head Login</h2>
             <div className="space-y-2">
               <Label htmlFor="password">School ID (password)</Label>
-              <Input id="password" name="password" type="password" required autoFocus />
+              <PasswordInput id="password" name="password" required autoFocus />
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? "Signing in…" : "Sign in"}
@@ -120,7 +121,7 @@ export function LoginForm({ schools }: { schools: SchoolWithStatus[] }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
+              <PasswordInput id="password" name="password" required />
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? "Signing in…" : "Sign in"}

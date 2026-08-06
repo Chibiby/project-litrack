@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { acceptTeacherInvite } from "@/lib/actions/auth";
 
@@ -34,11 +34,11 @@ export function TeacherSetupForm({ token, email, name }: { token: string; email:
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Choose a password *</Label>
-            <Input id="password" name="password" type="password" required minLength={8} autoFocus />
+            <PasswordInput id="password" name="password" required minLength={8} autoFocus />
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm password *</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" required minLength={8} />
+            <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={8} />
           </div>
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Setting up…" : "Create account & sign in"}
