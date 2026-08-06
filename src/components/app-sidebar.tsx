@@ -20,7 +20,6 @@ import {
   Menu,
   LogOut,
   KeyRound,
-  ChevronRight,
   Shield,
   CalendarRange,
   Layers,
@@ -100,6 +99,20 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
   }
 }
 
+/** Single active nav href: exact match preferred; otherwise longest prefix (so `/teacher` ≠ nested). */
+function resolveActiveHref(pathname: string, items: NavItem[]): string | undefined {
+  let best: string | undefined;
+  for (const item of items) {
+    const matches =
+      pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (!matches) continue;
+    if (!best || item.href.length > best.length) {
+      best = item.href;
+    }
+  }
+  return best;
+}
+
 function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
   const Icon = item.icon;
   return (
@@ -125,7 +138,6 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
           {item.badge}
         </span>
       ) : null}
-      {isActive && <ChevronRight className="h-4 w-4 opacity-40" />}
     </Link>
   );
 }
@@ -140,6 +152,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const navItems = getNavItems(role, grades);
+  const activeHref = resolveActiveHref(pathname, navItems);
 
   const SidebarContent = (
     <div className="flex h-full flex-col bg-white">
@@ -182,7 +195,7 @@ export function AppSidebar({
             <NavLink
               key={item.href}
               item={item}
-              isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+              isActive={item.href === activeHref}
             />
           ))}
         </div>
