@@ -16,6 +16,8 @@ import { getMonday } from "@/lib/utils";
 
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
+import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+
 
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -157,6 +159,8 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
   );
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
 
   return { ok: true };
 

@@ -13,6 +13,7 @@ import {
 } from "@/lib/learners/import-csv";
 import { isPossibleDuplicate } from "@/lib/learners/normalize";
 import type { LearnerImportRow } from "@/lib/validators/learner-import.schema";
+import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -213,6 +214,7 @@ export async function commitLearnerImport(input: {
 
   revalidatePath(`/teacher/grade/${input.gradeLevelId}`);
   revalidatePath("/teacher");
+  revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
 
   return {
     ok: true,

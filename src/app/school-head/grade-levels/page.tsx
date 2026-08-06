@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -32,21 +33,18 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
     "/school-head/grade-levels"
   );
 
-  const [existing, school] = await Promise.all([
+  const [existing, schoolName] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       select: { type: true, _count: { select: { teachers: true, learners: true } } },
     }),
-    prisma.school.findUnique({
-      where: { id: schoolId },
-      select: { name: true },
-    }),
+    getSchoolName(schoolId),
   ]);
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
   return (
     <AppShell
-      title={isSuperAdminView ? `Grade Levels - ${school?.name || "Unknown"}` : "Grade Levels"}
+      title={isSuperAdminView ? `Grade Levels - ${schoolName || "Unknown"}` : "Grade Levels"}
       subtitle={
         isSuperAdminView
           ? "Super Admin View"
@@ -54,9 +52,9 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
       }
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <div className="mb-4">
         <Button asChild variant="outline" size="sm">

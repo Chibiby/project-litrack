@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { getSchoolName } from "@/lib/cache/school";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,10 +45,7 @@ export default async function SchoolHeadDashboard({
     "/school-head"
   );
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true },
-  });
+  const schoolName = await getSchoolName(schoolId);
 
   const sh = (path: string) =>
     isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
@@ -57,7 +54,7 @@ export default async function SchoolHeadDashboard({
     <AppShell
       title={
         isSuperAdminView
-          ? `School: ${school?.name || "Unknown"}`
+          ? `School: ${schoolName || "Unknown"}`
           : `Welcome, ${user.firstName}`
       }
       subtitle={
@@ -67,9 +64,9 @@ export default async function SchoolHeadDashboard({
       }
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<MetricsGridSkeleton variant="school-head" />}>
         <SchoolHeadMetricsSection

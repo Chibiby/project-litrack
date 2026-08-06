@@ -9,6 +9,7 @@ import {
   announcementIdSchema,
 } from "@/lib/validators/announcement.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -43,6 +44,7 @@ export async function createAnnouncement(formData: FormData): Promise<ActionResu
 
   revalidatePath("/school-head/announcements");
   revalidatePath("/school-head");
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 
@@ -82,6 +84,7 @@ export async function updateAnnouncement(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/school-head/announcements");
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 
@@ -119,5 +122,6 @@ export async function deleteAnnouncement(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/school-head/announcements");
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

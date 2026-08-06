@@ -9,6 +9,11 @@ import {
   transferLearnerCrossSchoolSchema,
 } from "@/lib/validators/enrollment.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import {
+  revalidateSchoolDashboard,
+  revalidateSchoolsList,
+  revalidateTeacherDashboard,
+} from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -143,6 +148,11 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
   revalidatePath(`/teacher/grade/${previousGradeId}`);
   revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
   revalidatePath(`/school-head`);
+  revalidateSchoolDashboard(user.schoolId);
+  if (learner.teacherId) revalidateTeacherDashboard(learner.teacherId);
+  if (targetTeacherId !== learner.teacherId) {
+    revalidateTeacherDashboard(targetTeacherId);
+  }
   return { ok: true };
 }
 
@@ -303,5 +313,10 @@ export async function transferLearnerCrossSchool(
   revalidatePath("/admin/transfers");
   revalidatePath("/admin/schools");
   revalidatePath("/school-head");
+  revalidateSchoolDashboard(fromSchoolId);
+  revalidateSchoolDashboard(targetSchoolId);
+  revalidateSchoolsList();
+  if (learner.teacherId) revalidateTeacherDashboard(learner.teacherId);
+  revalidateTeacherDashboard(targetTeacherId);
   return { ok: true };
 }

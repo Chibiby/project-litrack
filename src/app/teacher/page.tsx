@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
-import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { getSchoolName } from "@/lib/cache/school";
 import { AppShell } from "@/components/app-shell";
 import {
   TeacherMetricsSection,
@@ -14,7 +13,6 @@ import {
   ChartSectionSkeleton,
   ListCardSkeleton,
 } from "@/components/loading";
-import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -35,22 +33,12 @@ export default async function TeacherDashboard({
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
   if (!targetSchoolId) redirect("/login");
 
-  const school = await prisma.school.findUnique({
-    where: { id: targetSchoolId },
-    select: { name: true },
-  });
-
-  const shellGrades = await getTeacherShellGrades({
-    schoolId: targetSchoolId,
-    teacherId: user.id,
-    isSuperAdmin,
-  });
-
-  const sidebarGrades = shellGrades.map((g) => ({
-    id: g.id,
-    label: GRADE_LEVEL_LABELS[g.type],
-    hasAral: g.hasAral,
-  }));
+  // Sidebar grades + school name for real teachers come from teacher/layout
+  // (RoleShell). Only super-admin impersonation needs a page-level school name
+  // for the title; AppShell ignores chrome props when already inside RoleShell.
+  const schoolName = isSuperAdmin
+    ? await getSchoolName(targetSchoolId)
+    : null;
 
   const sectionOpts = {
     schoolId: targetSchoolId,
@@ -62,7 +50,7 @@ export default async function TeacherDashboard({
     <AppShell
       title={
         isSuperAdmin
-          ? `Teacher View - ${school?.name || "Unknown"}`
+          ? `Teacher View - ${schoolName || "Unknown"}`
           : `Hi, ${user.firstName}`
       }
       subtitle={
@@ -72,10 +60,8 @@ export default async function TeacherDashboard({
       }
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
-      grades={sidebarGrades}
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense
         fallback={

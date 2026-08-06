@@ -11,6 +11,7 @@ import {
 } from "@/lib/validators/learner.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
+import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
@@ -157,6 +158,7 @@ export async function createLearner(
   });
 
   revalidatePath(`/teacher/grade/${parsed.data.gradeLevelId}`);
+  revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
   return { ok: true, data: { id: learner.id } };
 }
 
@@ -214,6 +216,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
   return { ok: true };
 }
 
@@ -263,6 +266,7 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
   return { ok: true };
 }
 
@@ -340,6 +344,7 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
   return { ok: true };
 }
 
@@ -384,5 +389,6 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
   return { ok: true };
 }

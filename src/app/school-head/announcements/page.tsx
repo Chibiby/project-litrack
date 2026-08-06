@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -28,24 +29,24 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
     "/school-head/announcements"
   );
 
-  const [announcements, school] = await Promise.all([
+  const [announcements, schoolName] = await Promise.all([
     prisma.announcement.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { publishedAt: "desc" },
       include: { author: { select: { fullName: true } } },
     }),
-    prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } }),
+    getSchoolName(schoolId),
   ]);
 
   return (
     <AppShell
-      title={isSuperAdminView ? `Announcements — ${school?.name ?? ""}` : "Announcements"}
+      title={isSuperAdminView ? `Announcements — ${schoolName ?? ""}` : "Announcements"}
       subtitle="School notices for teachers and staff"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <div className="grid gap-6 lg:grid-cols-2">
         {!isSuperAdminView ? (

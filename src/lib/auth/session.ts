@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
@@ -15,8 +16,9 @@ export type RequireUserOptions = {
 /**
  * Returns the authenticated app User, or null.
  * Soft-deleted or inactive users are signed out (best effort) and treated as unauthenticated.
+ * Wrapped in React cache() so layout + page requireUser/getCurrentUser dedupe in one request.
  */
-export async function getCurrentUser(): Promise<User | null> {
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user: authUser },
@@ -38,7 +40,7 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   return user;
-}
+});
 
 /**
  * Requires an authenticated user. Optionally enforces role(s).

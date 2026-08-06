@@ -14,6 +14,8 @@ import { aralProfileSchema } from "@/lib/validators/aral.schema";
 
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
+import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+
 
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -141,6 +143,8 @@ export async function saveAralProfile(formData: FormData): Promise<ActionResult>
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+
+  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
 
   return { ok: true };
 

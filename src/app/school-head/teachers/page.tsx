@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -63,7 +64,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
     "/school-head/teachers"
   );
 
-  const [grades, teachers, invites, school] = await Promise.all([
+  const [grades, teachers, invites, schoolName] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
@@ -77,10 +78,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
       where: { schoolId },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.school.findUnique({
-      where: { id: schoolId },
-      select: { name: true },
-    }),
+    getSchoolName(schoolId),
   ]);
 
   const rows: TeacherListRow[] = teachers.map((t) => {
@@ -113,13 +111,13 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
 
   return (
     <AppShell
-      title={isSuperAdminView ? `Teachers - ${school?.name || "Unknown"}` : "Teachers"}
+      title={isSuperAdminView ? `Teachers - ${schoolName || "Unknown"}` : "Teachers"}
       subtitle={isSuperAdminView ? "Super Admin View" : "Add and manage teachers"}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       {grades.length === 0 ? (
         <Card>

@@ -21,6 +21,10 @@ import { sendTeacherInviteEmail } from "@/lib/email/resend";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  revalidateSchoolDashboard,
+  revalidateTeacherDashboard,
+} from "@/lib/cache/revalidate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -93,6 +97,7 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/school-head");
+  revalidateSchoolDashboard(user.schoolId);
 }
 
 export async function createGradeLevel(formData: FormData): Promise<void> {
@@ -119,6 +124,7 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/school-head/grade-levels");
+  revalidateSchoolDashboard(user.schoolId);
 }
 
 /**
@@ -191,6 +197,7 @@ export async function inviteTeacher(
 
   let inviteId = "";
   let inviteToken = "";
+  let teacherUserId = "";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -210,6 +217,7 @@ export async function inviteTeacher(
           taughtGrades: { connect: { id: parsed.data.gradeLevelId } },
         },
       });
+      teacherUserId = teacher.id;
 
       const { token, tokenHash, expiresAt } = generateInviteTokenForUser(teacher.id);
       inviteToken = token;
@@ -276,6 +284,8 @@ export async function inviteTeacher(
   });
 
   revalidatePath("/school-head/teachers");
+  revalidateSchoolDashboard(user.schoolId);
+  if (teacherUserId) revalidateTeacherDashboard(teacherUserId);
   return { ok: true, data: { username, tempPassword, inviteId } };
 }
 
@@ -364,6 +374,8 @@ export async function resendTeacherInvite(
   });
 
   revalidatePath("/school-head/teachers");
+  revalidateSchoolDashboard(user.schoolId);
+  revalidateTeacherDashboard(teacher.id);
   return { ok: true, data: { username, tempPassword } };
 }
 
@@ -416,6 +428,8 @@ export async function revokeTeacherInvite(formData: FormData): Promise<ActionRes
   });
 
   revalidatePath("/school-head/teachers");
+  revalidateSchoolDashboard(user.schoolId);
+  if (teacher) revalidateTeacherDashboard(teacher.id);
   return { ok: true };
 }
 
@@ -448,4 +462,6 @@ export async function assignTeacherToGrade(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/school-head/teachers");
+  revalidateSchoolDashboard(user.schoolId);
+  revalidateTeacherDashboard(teacherId);
 }

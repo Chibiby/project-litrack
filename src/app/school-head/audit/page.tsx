@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -82,24 +83,21 @@ export default async function SchoolAuditPage({ searchParams }: PageProps) {
     "/school-head/audit"
   );
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true },
-  });
+  const schoolName = await getSchoolName(schoolId);
 
   return (
     <AppShell
       title={
         isSuperAdminView
-          ? `Audit — ${school?.name ?? ""}`
+          ? `Audit — ${schoolName ?? ""}`
           : "School audit history"
       }
       subtitle="Recent audited actions for this school"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<TableSectionSkeleton rows={10} columns={4} />}>
         <SchoolAuditTable schoolId={schoolId} />

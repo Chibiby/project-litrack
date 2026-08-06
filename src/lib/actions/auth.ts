@@ -26,6 +26,11 @@ import {
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requireUser, roleHomePath } from "@/lib/auth/session";
+import {
+  revalidateAdminDashboard,
+  revalidateSchoolDashboard,
+  revalidateTeacherDashboard,
+} from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -326,6 +331,10 @@ export async function acceptTeacherInvite(formData: FormData): Promise<ActionRes
     resourceId: invite.id,
     metadata: { schoolId: invite.schoolId, userId: teacher.id },
   });
+
+  revalidateSchoolDashboard(invite.schoolId);
+  revalidateAdminDashboard();
+  revalidateTeacherDashboard(teacher.id);
 
   const supabase = await createSupabaseServerClient();
   const { error: signInErr } = await supabase.auth.signInWithPassword({

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -67,10 +68,7 @@ export default async function SchoolHeadReportsPage({ searchParams }: Props) {
     "/school-head/reports"
   );
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true },
-  });
+  const schoolName = await getSchoolName(schoolId);
 
   return (
     <AppShell
@@ -78,9 +76,9 @@ export default async function SchoolHeadReportsPage({ searchParams }: Props) {
       subtitle="Excel export and printable school learner summary"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={isSuperAdminView ? school?.name : undefined}
+      viewedSchoolName={isSuperAdminView ? (schoolName ?? undefined) : undefined}
     >
       <ReportPrintAudit scope="SCHOOL_HEAD" schoolId={schoolId} />
       <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>

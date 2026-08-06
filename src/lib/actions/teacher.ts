@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -59,5 +60,6 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/teacher");
+  revalidateTeacherDashboard(user.id);
   return { ok: true };
 }

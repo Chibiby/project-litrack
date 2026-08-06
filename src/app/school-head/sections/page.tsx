@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -29,7 +30,7 @@ export default async function SectionsPage({ searchParams }: PageProps) {
     "/school-head/sections"
   );
 
-  const [grades, sections, school] = await Promise.all([
+  const [grades, sections, schoolName] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
@@ -39,7 +40,7 @@ export default async function SectionsPage({ searchParams }: PageProps) {
       include: { gradeLevel: { select: { type: true } } },
       orderBy: [{ gradeLevelId: "asc" }, { name: "asc" }],
     }),
-    prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } }),
+    getSchoolName(schoolId),
   ]);
 
   const gradeOptions = grades.map((g) => ({
@@ -49,13 +50,13 @@ export default async function SectionsPage({ searchParams }: PageProps) {
 
   return (
     <AppShell
-      title={isSuperAdminView ? `Sections — ${school?.name ?? ""}` : "Sections"}
+      title={isSuperAdminView ? `Sections — ${schoolName ?? ""}` : "Sections"}
       subtitle="Manage sections under each grade level"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <div className="grid gap-6 lg:grid-cols-2">
         {!isSuperAdminView && grades.length > 0 ? (

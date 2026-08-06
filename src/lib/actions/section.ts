@@ -9,6 +9,7 @@ import {
   sectionIdSchema,
 } from "@/lib/validators/section.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -73,6 +74,7 @@ export async function createSection(formData: FormData): Promise<ActionResult> {
 
     revalidatePath("/school-head/sections");
     revalidatePath("/school-head/grade-levels");
+    revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
     console.error("[createSection]", err);
@@ -120,6 +122,7 @@ export async function updateSection(formData: FormData): Promise<ActionResult> {
     });
 
     revalidatePath("/school-head/sections");
+    revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
@@ -165,5 +168,6 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
   });
 
   revalidatePath("/school-head/sections");
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

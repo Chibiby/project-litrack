@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
@@ -131,24 +132,21 @@ export default async function TransferPage({ searchParams }: PageProps) {
     "/school-head/transfer"
   );
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true },
-  });
+  const schoolName = await getSchoolName(schoolId);
 
   return (
     <AppShell
       title={
         isSuperAdminView
-          ? `Transfer — ${school?.name ?? ""}`
+          ? `Transfer — ${schoolName ?? ""}`
           : "Transfer learner"
       }
       subtitle="Same-school transfer of grade, section, and teacher"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={school?.name}
+      schoolName={schoolName ?? undefined}
       isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={school?.name}
+      viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
         <TransferBody

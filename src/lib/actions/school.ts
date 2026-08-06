@@ -9,6 +9,7 @@ import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { generateActivationCredential } from "@/lib/auth/credentials";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { revalidateSchoolsList } from "@/lib/cache/revalidate";
 import { z } from "zod";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -102,6 +103,7 @@ export async function createSchool(
   });
 
   revalidatePath("/admin/schools");
+  revalidateSchoolsList();
   return { ok: true, data: { id: school.id, activationCredential } };
 }
 
@@ -161,6 +163,7 @@ export async function regenerateSchoolHeadCredential(
   });
 
   revalidatePath("/admin/schools");
+  revalidateSchoolsList();
   return { ok: true, data: { activationCredential } };
 }
 
@@ -223,4 +226,5 @@ export async function deleteSchool(formData: FormData): Promise<void> {
     metadata: { schoolId: id },
   });
   revalidatePath("/admin/schools");
+  revalidateSchoolsList();
 }

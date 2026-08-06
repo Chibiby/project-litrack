@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +14,7 @@ export default async function SchoolHeadLayout({
 
   let schoolName: string | undefined;
   if (user.schoolId) {
-    const school = await prisma.school.findUnique({
-      where: { id: user.schoolId },
-      select: { name: true },
-    });
-    schoolName = school?.name;
+    schoolName = (await getSchoolName(user.schoolId)) ?? undefined;
   }
 
   return (

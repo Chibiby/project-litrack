@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { getSchoolName } from "@/lib/cache/school";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { RoleShell } from "@/components/role-shell";
@@ -20,11 +20,8 @@ export default async function TeacherLayout({
   // Layouts cannot read searchParams; super-admin school impersonation still
   // gets admin nav via role === SUPER_ADMIN. Real teachers get grade links.
   if (user.role === "TEACHER" && user.schoolId) {
-    const [school, shellGrades] = await Promise.all([
-      prisma.school.findUnique({
-        where: { id: user.schoolId },
-        select: { name: true },
-      }),
+    const [name, shellGrades] = await Promise.all([
+      getSchoolName(user.schoolId),
       getTeacherShellGrades({
         schoolId: user.schoolId,
         teacherId: user.id,
@@ -32,7 +29,7 @@ export default async function TeacherLayout({
       }),
     ]);
 
-    schoolName = school?.name;
+    schoolName = name ?? undefined;
     grades = shellGrades.map((g) => ({
       id: g.id,
       label: GRADE_LEVEL_LABELS[g.type],
