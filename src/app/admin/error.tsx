@@ -20,9 +20,9 @@ export default function AdminError({
       <div className="w-full max-w-md space-y-4 text-center">
         <h1 className="text-xl font-semibold tracking-tight">Admin page error</h1>
         <p className="text-sm text-muted-foreground">
-          Something went wrong loading this page. If this keeps happening, check that{" "}
-          <code className="text-xs">DATABASE_URL</code> on Vercel uses a valid Supabase
-          connection string (not a placeholder password).
+          Something went wrong loading this page. Check Vercel runtime logs for the Prisma
+          error behind this digest — common causes include schema drift (missing migrations)
+          or a bad database connection string.
         </p>
         {error.digest ? (
           <p className="text-xs text-muted-foreground">Digest: {error.digest}</p>

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
@@ -26,6 +27,7 @@ import { LearnerArchiveButton } from "@/components/learners/learner-archive-butt
 import { LearnerListToolbar } from "@/components/learners/learner-list-toolbar";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmptyState } from "@/components/dashboard";
+import { TableSectionSkeleton } from "@/components/loading";
 import {
   parseLearnerListParams,
   totalPages as calcTotalPages,
@@ -43,6 +45,182 @@ interface TeacherGradePageProps {
     filter?: string;
     sort?: string;
   }>;
+}
+
+async function GradeLearnersBody({
+  gradeId,
+  teacherId,
+  isSuperAdmin,
+  schoolIdParam,
+  list,
+}: {
+  gradeId: string;
+  teacherId: string;
+  isSuperAdmin: boolean;
+  schoolIdParam?: string;
+  list: ReturnType<typeof parseLearnerListParams>;
+}) {
+  const where: Prisma.LearnerWhereInput = {
+    gradeLevelId: gradeId,
+    deletedAt: null,
+    ...(isSuperAdmin ? {} : { teacherId }),
+  };
+
+  if (list.filter === "archived") {
+    where.archivedAt = { not: null };
+  } else {
+    where.archivedAt = null;
+    if (list.filter === "aral") {
+      where.isAralLearner = true;
+    }
+  }
+
+  if (list.q) {
+    where.fullName = { contains: list.q, mode: "insensitive" };
+  }
+
+  const orderBy: Prisma.LearnerOrderByWithRelationInput =
+    list.sort === "age" ? { age: "asc" } : { fullName: "asc" };
+
+  const [learners, totalCount] = await Promise.all([
+    prisma.learner.findMany({
+      where,
+      include: { section: { select: { id: true, name: true } } },
+      orderBy,
+      skip: list.skip,
+      take: list.take,
+    }),
+    prisma.learner.count({ where }),
+  ]);
+
+  const pages = calcTotalPages(totalCount, list.pageSize);
+  const showSection = learners.some((l) => l.section);
+
+  return (
+    <Card>
+      <LearnerListToolbar
+        gradeId={gradeId}
+        q={list.q}
+        filter={list.filter}
+        sort={list.sort}
+        schoolId={schoolIdParam}
+      />
+      <CardContent className="p-0">
+        {learners.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              title={
+                list.filter === "archived"
+                  ? "No archived learners"
+                  : list.q
+                    ? "No matching learners"
+                    : "No learners yet"
+              }
+              description={
+                list.filter === "archived"
+                  ? "Archived learners will appear here."
+                  : "Add a learner using the form on the right."
+              }
+            />
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Gender</TableHead>
+                {showSection && <TableHead>Section</TableHead>}
+                <TableHead>English</TableHead>
+                <TableHead>Filipino</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {learners.map((l) => (
+                <TableRow
+                  key={l.id}
+                  className={l.archivedAt ? "opacity-70" : undefined}
+                >
+                  <TableCell className="font-medium">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {l.fullName}
+                      {l.isAralLearner && (
+                        <Badge variant="violet">ARAL</Badge>
+                      )}
+                      {l.archivedAt && (
+                        <Badge variant="outline">Archived</Badge>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell>{l.age}</TableCell>
+                  <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
+                  {showSection && (
+                    <TableCell className="text-sm text-muted-foreground">
+                      {l.section?.name ?? "—"}
+                    </TableCell>
+                  )}
+                  <TableCell className="text-xs">
+                    {READING_PROFILE_LABELS[l.englishReadingProfile]}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {READING_PROFILE_LABELS[l.filipinoReadingProfile]}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
+                      <Button asChild size="sm" variant="ghost">
+                        <Link
+                          href={`/teacher/grade/${gradeId}/learners/${l.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Link>
+                      </Button>
+                      {!l.archivedAt && (
+                        <>
+                          <Button asChild size="sm" variant="ghost">
+                            <Link
+                              href={`/teacher/grade/${gradeId}/learners/${l.id}/edit`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </Link>
+                          </Button>
+                          {!isSuperAdmin && (
+                            <AralToggleButton
+                              learnerId={l.id}
+                              isAral={l.isAralLearner}
+                            />
+                          )}
+                        </>
+                      )}
+                      {!isSuperAdmin && (
+                        <LearnerArchiveButton
+                          learnerId={l.id}
+                          archived={Boolean(l.archivedAt)}
+                        />
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <LearnerPagination
+          basePath={`/teacher/grade/${gradeId}`}
+          page={list.page}
+          totalPages={pages}
+          searchParams={{
+            q: list.q || undefined,
+            filter: list.filter !== "all" ? list.filter : undefined,
+            sort: list.sort !== "name" ? list.sort : undefined,
+            schoolId: schoolIdParam,
+          }}
+        />
+      </CardContent>
+    </Card>
+  );
 }
 
 export default async function TeacherGradePage({
@@ -67,37 +245,19 @@ export default async function TeacherGradePage({
   });
   if (!grade) notFound();
 
-  const where: Prisma.LearnerWhereInput = {
-    gradeLevelId: grade.id,
-    deletedAt: null,
-    ...(isSuperAdmin ? {} : { teacherId: user.id }),
-  };
-
-  if (list.filter === "archived") {
-    where.archivedAt = { not: null };
-  } else {
-    where.archivedAt = null;
-    if (list.filter === "aral") {
-      where.isAralLearner = true;
-    }
-  }
-
-  if (list.q) {
-    where.fullName = { contains: list.q, mode: "insensitive" };
-  }
-
-  const orderBy: Prisma.LearnerOrderByWithRelationInput =
-    list.sort === "age" ? { age: "asc" } : { fullName: "asc" };
-
-  const [learners, totalCount, aralCount] = await Promise.all([
-    prisma.learner.findMany({
-      where,
-      include: { section: { select: { id: true, name: true } } },
-      orderBy,
-      skip: list.skip,
-      take: list.take,
+  const [totalCount, aralCount] = await Promise.all([
+    prisma.learner.count({
+      where: {
+        gradeLevelId: grade.id,
+        deletedAt: null,
+        archivedAt: list.filter === "archived" ? { not: null } : null,
+        ...(list.filter === "aral" ? { isAralLearner: true } : {}),
+        ...(list.q
+          ? { fullName: { contains: list.q, mode: "insensitive" } }
+          : {}),
+        ...(isSuperAdmin ? {} : { teacherId: user.id }),
+      },
     }),
-    prisma.learner.count({ where }),
     prisma.learner.count({
       where: {
         gradeLevelId: grade.id,
@@ -108,9 +268,6 @@ export default async function TeacherGradePage({
       },
     }),
   ]);
-
-  const pages = calcTotalPages(totalCount, list.pageSize);
-  const showSection = learners.some((l) => l.section);
 
   return (
     <AppShell
@@ -134,129 +291,15 @@ export default async function TeacherGradePage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-        <Card>
-          <LearnerListToolbar
+        <Suspense fallback={<TableSectionSkeleton rows={8} columns={6} />}>
+          <GradeLearnersBody
             gradeId={grade.id}
-            q={list.q}
-            filter={list.filter}
-            sort={list.sort}
-            schoolId={sp.schoolId}
+            teacherId={user.id}
+            isSuperAdmin={isSuperAdmin}
+            schoolIdParam={sp.schoolId}
+            list={list}
           />
-          <CardContent className="p-0">
-            {learners.length === 0 ? (
-              <div className="p-4">
-                <EmptyState
-                  title={
-                    list.filter === "archived"
-                      ? "No archived learners"
-                      : list.q
-                        ? "No matching learners"
-                        : "No learners yet"
-                  }
-                  description={
-                    list.filter === "archived"
-                      ? "Archived learners will appear here."
-                      : "Add a learner using the form on the right."
-                  }
-                />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Age</TableHead>
-                    <TableHead>Gender</TableHead>
-                    {showSection && <TableHead>Section</TableHead>}
-                    <TableHead>English</TableHead>
-                    <TableHead>Filipino</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {learners.map((l) => (
-                    <TableRow
-                      key={l.id}
-                      className={l.archivedAt ? "opacity-70" : undefined}
-                    >
-                      <TableCell className="font-medium">
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {l.fullName}
-                          {l.isAralLearner && (
-                            <Badge variant="violet">ARAL</Badge>
-                          )}
-                          {l.archivedAt && (
-                            <Badge variant="outline">Archived</Badge>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell>{l.age}</TableCell>
-                      <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
-                      {showSection && (
-                        <TableCell className="text-sm text-muted-foreground">
-                          {l.section?.name ?? "—"}
-                        </TableCell>
-                      )}
-                      <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[l.englishReadingProfile]}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[l.filipinoReadingProfile]}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          <Button asChild size="sm" variant="ghost">
-                            <Link
-                              href={`/teacher/grade/${grade.id}/learners/${l.id}`}
-                            >
-                              <Eye className="h-4 w-4" />
-                              View
-                            </Link>
-                          </Button>
-                          {!l.archivedAt && (
-                            <>
-                              <Button asChild size="sm" variant="ghost">
-                                <Link
-                                  href={`/teacher/grade/${grade.id}/learners/${l.id}/edit`}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  Edit
-                                </Link>
-                              </Button>
-                              {!isSuperAdmin && (
-                                <AralToggleButton
-                                  learnerId={l.id}
-                                  isAral={l.isAralLearner}
-                                />
-                              )}
-                            </>
-                          )}
-                          {!isSuperAdmin && (
-                            <LearnerArchiveButton
-                              learnerId={l.id}
-                              archived={Boolean(l.archivedAt)}
-                            />
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            <LearnerPagination
-              basePath={`/teacher/grade/${grade.id}`}
-              page={list.page}
-              totalPages={pages}
-              searchParams={{
-                q: list.q || undefined,
-                filter: list.filter !== "all" ? list.filter : undefined,
-                sort: list.sort !== "name" ? list.sort : undefined,
-                schoolId: sp.schoolId,
-              }}
-            />
-          </CardContent>
-        </Card>
+        </Suspense>
 
         {!isSuperAdmin && (
           <Card>

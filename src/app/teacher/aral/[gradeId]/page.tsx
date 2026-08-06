@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
+import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ArrowLeft, Edit3, Sparkles } from "lucide-react";
 
@@ -23,6 +25,97 @@ export const dynamic = "force-dynamic";
 interface AralDashboardProps {
   params: Promise<{ gradeId: string }>;
   searchParams: Promise<{ schoolId?: string }>;
+}
+
+async function AralLearnersTable({
+  gradeId,
+  teacherId,
+  isSuperAdmin,
+}: {
+  gradeId: string;
+  teacherId: string;
+  isSuperAdmin: boolean;
+}) {
+  const learners = await prisma.learner.findMany({
+    where: {
+      gradeLevelId: gradeId,
+      isAralLearner: true,
+      deletedAt: null,
+      archivedAt: null,
+      ...(isSuperAdmin ? {} : { teacherId }),
+    },
+    include: { aralProfile: { select: { id: true, updatedAt: true } } },
+    orderBy: { fullName: "asc" },
+  });
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        {learners.length === 0 ? (
+          <div className="p-4">
+            <EmptyState title="No ARAL learners." />
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Learner</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Profile complete?</TableHead>
+                <TableHead>Last update</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {learners.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell className="font-medium">
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
+                    </span>
+                  </TableCell>
+                  <TableCell>{l.age}</TableCell>
+                  <TableCell>
+                    {l.aralProfile ? (
+                      <Badge variant="violet">Complete</Badge>
+                    ) : (
+                      <Badge variant="outline">Pending</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {l.aralProfile?.updatedAt.toLocaleDateString() ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right space-x-2">
+                    <Button asChild size="sm">
+                      <Link
+                        href={`/teacher/aral/${gradeId}/learners/${l.id}/update`}
+                      >
+                        <Edit3 className="h-4 w-4" /> Update Data
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        href={`/teacher/aral/${gradeId}/learners/${l.id}/attendance`}
+                      >
+                        Attendance
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        href={`/teacher/aral/${gradeId}/learners/${l.id}/reading-level`}
+                      >
+                        Reading Level
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default async function AralDashboard({
@@ -45,7 +138,7 @@ export default async function AralDashboard({
   });
   if (!grade) notFound();
 
-  const learners = await prisma.learner.findMany({
+  const aralCount = await prisma.learner.count({
     where: {
       gradeLevelId: grade.id,
       isAralLearner: true,
@@ -53,14 +146,12 @@ export default async function AralDashboard({
       archivedAt: null,
       ...(isSuperAdmin ? {} : { teacherId: user.id }),
     },
-    include: { aralProfile: { select: { id: true, updatedAt: true } } },
-    orderBy: { fullName: "asc" },
   });
 
   return (
     <AppShell
       title={`ARAL Dashboard — ${GRADE_LEVEL_LABELS[grade.type]}`}
-      subtitle={`${learners.length} ARAL learner${learners.length === 1 ? "" : "s"}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      subtitle={`${aralCount} ARAL learner${aralCount === 1 ? "" : "s"}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
@@ -73,72 +164,13 @@ export default async function AralDashboard({
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {learners.length === 0 ? (
-            <div className="p-4">
-              <EmptyState title="No ARAL learners." />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Learner</TableHead>
-                  <TableHead>Age</TableHead>
-                  <TableHead>Profile complete?</TableHead>
-                  <TableHead>Last update</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {learners.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">
-                      <span className="flex items-center gap-2">
-                        <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
-                      </span>
-                    </TableCell>
-                    <TableCell>{l.age}</TableCell>
-                    <TableCell>
-                      {l.aralProfile ? (
-                        <Badge variant="violet">Complete</Badge>
-                      ) : (
-                        <Badge variant="outline">Pending</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {l.aralProfile?.updatedAt.toLocaleDateString() ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button asChild size="sm">
-                        <Link
-                          href={`/teacher/aral/${grade.id}/learners/${l.id}/update`}
-                        >
-                          <Edit3 className="h-4 w-4" /> Update Data
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          href={`/teacher/aral/${grade.id}/learners/${l.id}/attendance`}
-                        >
-                          Attendance
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          href={`/teacher/aral/${grade.id}/learners/${l.id}/reading-level`}
-                        >
-                          Reading Level
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
+        <AralLearnersTable
+          gradeId={grade.id}
+          teacherId={user.id}
+          isSuperAdmin={isSuperAdmin}
+        />
+      </Suspense>
     </AppShell>
   );
 }
