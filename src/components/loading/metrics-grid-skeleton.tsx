@@ -22,7 +22,7 @@ const counts: Record<MetricsGridVariant, number> = {
   "teacher-secondary": 2,
 };
 
-/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
+/** Server-safe shimmer skeleton — CSS-only, no client JS. */
 export function MetricsGridSkeleton({
   variant = "admin",
   className,

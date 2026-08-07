@@ -6,6 +6,8 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LearnerForm } from "@/components/forms/learner-form";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
+import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,9 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
   if (!learner) notFound();
   if (learner.gradeLevelId !== gradeId) notFound();
 
+  const nestedWarmHrefs = getLearnerDetailWarmHrefs(gradeId, learner);
+  const nestedWarmKey = `teacher:learner:${learner.id}:edit`;
+
   return (
     <AppShell
       title={`Edit — ${learner.fullName}`}
@@ -42,9 +47,13 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/grade/${gradeId}/learners/${learner.id}`}>
+          <Link
+            href={`/teacher/grade/${gradeId}/learners/${learner.id}`}
+            prefetch={true}
+          >
             <ArrowLeft className="h-4 w-4" /> Back to learner
           </Link>
         </Button>

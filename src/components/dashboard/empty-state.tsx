@@ -37,7 +37,9 @@ export function EmptyState({
       ) : null}
       {actionHref && actionLabel ? (
         <Button asChild className="mt-5" size="sm">
-          <Link href={actionHref}>{actionLabel}</Link>
+          <Link href={actionHref} prefetch={true}>
+            {actionLabel}
+          </Link>
         </Button>
       ) : null}
     </div>

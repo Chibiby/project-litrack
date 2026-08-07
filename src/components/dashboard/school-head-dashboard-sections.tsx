@@ -53,6 +53,7 @@ export async function SchoolHeadMetricsSection({
           you set one.{" "}
           <Link
             href={sh("/school-head/school-years")}
+            prefetch={true}
             className="font-medium underline"
           >
             Manage school years
@@ -121,6 +122,7 @@ export async function SchoolHeadMetricsSection({
                       ? `${t.href}?schoolId=${schoolId}`
                       : t.href
                   }
+                  prefetch={true}
                 >
                   {t.label}
                 </Link>

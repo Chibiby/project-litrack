@@ -61,6 +61,40 @@
   body { @apply bg-background text-foreground; }
 }
 
+/* Native skeleton shimmer (replaces react-loading-skeleton) */
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background-color: hsl(var(--muted));
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0,
+    hsl(var(--card)) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
+
 /* Custom: violet section highlight (ARAL Update Data) — keep for ARAL profiling */
 .violet-section {
   background: linear-gradient(180deg, hsl(262 100% 99%), hsl(262 96% 97%));

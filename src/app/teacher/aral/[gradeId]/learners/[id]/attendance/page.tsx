@@ -16,6 +16,8 @@ import {
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
 import { AttendanceMarkForm } from "@/components/forms/attendance-mark-form";
 import { EmptyState } from "@/components/dashboard";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
+import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft } from "lucide-react";
 import { getMonday } from "@/lib/utils";
 
@@ -55,6 +57,8 @@ export default async function AttendancePage({
   });
 
   const canMark = learner.isAralLearner && !isSuperAdmin;
+  const nestedWarmHrefs = getAralActionWarmHrefs(gradeId, learner.id);
+  const nestedWarmKey = `teacher:aral-action:${learner.id}:nested`;
 
   return (
     <AppShell
@@ -64,9 +68,10 @@ export default async function AttendancePage({
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`}>
+          <Link href={`/teacher/aral/${gradeId}`} prefetch={true}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>

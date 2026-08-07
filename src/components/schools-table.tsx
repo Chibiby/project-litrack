@@ -98,7 +98,7 @@ export function SchoolsTable({ schools }: { schools: SchoolRow[] }) {
       render: (school: SchoolRow) => (
         <div className="flex items-center gap-2">
           <span className="font-medium">{school.name}</span>
-          <Link href={`/school-head?schoolId=${school.id}`}>
+          <Link href={`/school-head?schoolId=${school.id}`} prefetch={true}>
             <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary" />
           </Link>
         </div>

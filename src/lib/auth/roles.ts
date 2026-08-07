@@ -15,6 +15,18 @@ export function roleHomePath(role: AppRole): string {
   }
 }
 
+/** Change-password route under the role segment so RoleShell stays mounted. */
+export function rolePasswordPath(role: AppRole): string {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return "/admin/password";
+    case "SCHOOL_HEAD":
+      return "/school-head/password";
+    case "TEACHER":
+      return "/teacher/password";
+  }
+}
+
 export function parseAppMetadataRole(value: unknown): AppRole | null {
   if (value === "SUPER_ADMIN" || value === "SCHOOL_HEAD" || value === "TEACHER") {
     return value;

@@ -6,14 +6,14 @@ const nextConfig = {
     },
     /**
      * Client Router Cache for force-dynamic role apps:
-     * - `static` applies when Link/router.prefetch({true}) warmed a route
-     *   (NavPrefetcher + sidebar prefetch={true}). Longer window = layout
-     *   chrome stays put and pages swap without re-running loading UI.
+     * - `static` applies when Link/router.prefetch kind `full` (or
+     *   prefetch={true}) warmed a route. Longer window = previously visited
+     *   pages swap without re-fetch / loading.tsx flash.
      * - `dynamic` covers non-prefetched soft navigations.
      */
     staleTimes: {
-      dynamic: 60,
-      static: 300,
+      dynamic: 180,
+      static: 600,
     },
   },
   // CSP deferred: Next.js App Router relies on inline scripts/styles that make a

@@ -1,28 +1,14 @@
-import { requireUser, roleHomePath } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
-import { PasswordForm } from "@/components/forms/password-form";
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { rolePasswordPath } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Legacy URL: keep bookmarks working, but land inside the role segment so
+ * RoleShell (sidebar + header) is not torn down / remounted.
+ */
 export default async function ChangePasswordPage() {
   const user = await requireUser();
-
-  return (
-    <AppShell
-      title="Change password"
-      subtitle="Update your account password"
-      role={user.role}
-      userName={user.fullName || user.email}
-    >
-      <div className="mx-auto max-w-md space-y-4">
-        <PasswordForm mode="change" />
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href={roleHomePath(user.role)} className="underline hover:text-foreground">
-            Back to dashboard
-          </Link>
-        </p>
-      </div>
-    </AppShell>
-  );
+  redirect(rolePasswordPath(user.role));
 }

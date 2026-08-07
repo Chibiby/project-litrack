@@ -79,7 +79,9 @@ export function AdminProfileForm({
           Change your password from the account page.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-3">
-          <Link href="/account/password">Change password</Link>
+          <Link href="/admin/password" prefetch={true}>
+            Change password
+          </Link>
         </Button>
       </div>
     </div>

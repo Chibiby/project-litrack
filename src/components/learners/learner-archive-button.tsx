@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { archiveLearner, restoreLearner } from "@/lib/actions/learner";
+import { invalidateNavWarm } from "@/components/nav-prefetcher";
 
 export function LearnerArchiveButton({
   learnerId,
@@ -29,6 +30,7 @@ export function LearnerArchiveButton({
             : await archiveLearner(fd);
           if (res.ok) {
             toast.success(archived ? "Learner restored" : "Learner archived");
+            invalidateNavWarm();
           } else {
             toast.error(res.error);
           }
@@ -38,12 +40,12 @@ export function LearnerArchiveButton({
       {archived ? (
         <>
           <ArchiveRestore className="h-4 w-4" />
-          Restore
+          {pending ? "Restoring…" : "Restore"}
         </>
       ) : (
         <>
           <Archive className="h-4 w-4" />
-          Archive
+          {pending ? "Archiving…" : "Archive"}
         </>
       )}
     </Button>

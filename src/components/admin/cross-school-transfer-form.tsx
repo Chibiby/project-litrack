@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { transferLearnerCrossSchool } from "@/lib/actions/enrollment";
+import { invalidateNavWarm } from "@/components/nav-prefetcher";
 
 type SchoolOption = { id: string; name: string };
 type LearnerOption = {
@@ -102,6 +103,7 @@ export function CrossSchoolTransferForm({
           setTeacherId("");
           setLearnerQuery("");
           router.refresh();
+          invalidateNavWarm();
         });
       }}
     >

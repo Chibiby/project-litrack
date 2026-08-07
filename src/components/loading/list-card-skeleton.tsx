@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
+/** Server-safe shimmer skeleton — CSS-only, no client JS. */
 export function ListCardSkeleton({
   items = 5,
   className,

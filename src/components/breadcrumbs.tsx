@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { roleHomePath } from "@/lib/auth/roles";
 
 interface BreadcrumbsProps {
   className?: string;
@@ -18,13 +19,24 @@ const pathLabels: Record<string, string> = {
   "admin/school-years": "School years",
   "admin/audit": "Audit",
   "admin/profile": "Profile",
+  "admin/password": "Change password",
   "school-head": "Dashboard",
   "school-head/grade-levels": "Grade Levels",
   "school-head/teachers": "Teachers",
   "school-head/profiling": "Profile",
+  "school-head/password": "Change password",
   teacher: "Dashboard",
   "teacher/profiling": "Profile",
+  "teacher/password": "Change password",
 };
+
+function roleHomeFromPath(pathname: string): string {
+  const root = pathname.split("/").filter(Boolean)[0];
+  if (root === "admin") return roleHomePath("SUPER_ADMIN");
+  if (root === "school-head") return roleHomePath("SCHOOL_HEAD");
+  if (root === "teacher") return roleHomePath("TEACHER");
+  return "/";
+}
 
 export function Breadcrumbs({ className }: BreadcrumbsProps) {
   const pathname = usePathname();
@@ -33,6 +45,8 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
   if (pathname === "/" || pathname === "/login" || pathname === "/admin/login") {
     return null;
   }
+
+  const homeHref = roleHomeFromPath(pathname);
 
   // Build breadcrumb segments
   const segments = pathname.split("/").filter(Boolean);
@@ -90,7 +104,8 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
       className={cn("flex items-center gap-1.5 text-xs text-muted-foreground", className)}
     >
       <Link
-        href="/"
+        href={homeHref}
+        prefetch={true}
         className="flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Home className="h-3.5 w-3.5" />
@@ -107,6 +122,7 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
           ) : (
             <Link
               href={crumb.href}
+              prefetch={true}
               className="rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {crumb.label}

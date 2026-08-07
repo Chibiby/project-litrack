@@ -1,9 +1,8 @@
 /**
- * Minimal page-slot busy state for role `loading.tsx` files.
+ * Minimal page-slot busy state for settings/password/simple form routes.
  *
- * RoleShell (sidebar + header) stays mounted across navigations. A full
- * dashboard skeleton here looked like the layout was being re-measured /
- * rechecked on every page change — keep the slot indicator tiny instead.
+ * Use under nested `loading.tsx` so soft-nav to light pages does not flash
+ * a fuller role dashboard skeleton. RoleShell stays mounted.
  */
 export function ContentRouteLoading() {
   return (

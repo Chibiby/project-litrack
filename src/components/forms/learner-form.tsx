@@ -16,6 +16,7 @@ import {
   toOptions,
 } from "@/lib/constants/enum-labels";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
+import { invalidateNavWarm } from "@/components/nav-prefetcher";
 
 export type LearnerFormDefaults = {
   id?: string;
@@ -87,6 +88,7 @@ export function LearnerForm({
             `/teacher/grade/${gradeLevelId}/learners/${defaultValues?.id}`;
           router.push(dest);
           router.refresh();
+          invalidateNavWarm();
         } else {
           toast.error(res.error);
         }
@@ -101,6 +103,7 @@ export function LearnerForm({
         setEnglishProfile("");
         setFilipinoProfile("");
         router.refresh();
+        invalidateNavWarm();
       } else if (res.error === "possible_duplicate") {
         setDuplicatePending(true);
         toast.warning(

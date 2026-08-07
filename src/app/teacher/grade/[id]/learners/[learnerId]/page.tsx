@@ -28,6 +28,8 @@ import {
 } from "@/lib/constants/enum-labels";
 import { LearnerArchiveButton } from "@/components/learners/learner-archive-button";
 import { AralToggleButton } from "@/components/aral-toggle-button";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
+import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +99,8 @@ export default async function LearnerDetailPage({
 
   const interventions = learner.aralProfile?.suggestedInterventions ?? [];
   const further = learner.aralProfile?.furtherAssessment ?? [];
+  const nestedWarmHrefs = getLearnerDetailWarmHrefs(gradeId, learner);
+  const nestedWarmKey = `teacher:learner:${learner.id}:nested:${nestedWarmHrefs.join("|")}`;
 
   return (
     <AppShell
@@ -106,6 +110,7 @@ export default async function LearnerDetailPage({
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/teacher/grade/${gradeId}`}>

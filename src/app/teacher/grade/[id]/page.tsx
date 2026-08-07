@@ -28,10 +28,12 @@ import { LearnerListToolbar } from "@/components/learners/learner-list-toolbar";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
 import {
   parseLearnerListParams,
   totalPages as calcTotalPages,
 } from "@/lib/learners/pagination";
+import { getGradeLearnerWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Eye, Pencil } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -95,131 +97,136 @@ async function GradeLearnersBody({
 
   const pages = calcTotalPages(totalCount, list.pageSize);
   const showSection = learners.some((l) => l.section);
+  const nestedWarmHrefs = getGradeLearnerWarmHrefs(gradeId, learners);
+  const nestedWarmKey = `teacher:grade:${gradeId}:nested:${nestedWarmHrefs.join("|")}`;
 
   return (
-    <Card>
-      <LearnerListToolbar
-        gradeId={gradeId}
-        q={list.q}
-        filter={list.filter}
-        sort={list.sort}
-        schoolId={schoolIdParam}
-      />
-      <CardContent className="p-0">
-        {learners.length === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              title={
-                list.filter === "archived"
-                  ? "No archived learners"
-                  : list.q
-                    ? "No matching learners"
-                    : "No learners yet"
-              }
-              description={
-                list.filter === "archived"
-                  ? "Archived learners will appear here."
-                  : "Add a learner using the form on the right."
-              }
-            />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Gender</TableHead>
-                {showSection && <TableHead>Section</TableHead>}
-                <TableHead>English</TableHead>
-                <TableHead>Filipino</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {learners.map((l) => (
-                <TableRow
-                  key={l.id}
-                  className={l.archivedAt ? "opacity-70" : undefined}
-                >
-                  <TableCell className="font-medium">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {l.fullName}
-                      {l.isAralLearner && (
-                        <Badge variant="violet">ARAL</Badge>
-                      )}
-                      {l.archivedAt && (
-                        <Badge variant="outline">Archived</Badge>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell>{l.age}</TableCell>
-                  <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
-                  {showSection && (
-                    <TableCell className="text-sm text-muted-foreground">
-                      {l.section?.name ?? "—"}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-xs">
-                    {READING_PROFILE_LABELS[l.englishReadingProfile]}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {READING_PROFILE_LABELS[l.filipinoReadingProfile]}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-wrap items-center justify-end gap-1">
-                      <Button asChild size="sm" variant="ghost">
-                        <Link
-                          href={`/teacher/grade/${gradeId}/learners/${l.id}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                          View
-                        </Link>
-                      </Button>
-                      {!l.archivedAt && (
-                        <>
-                          <Button asChild size="sm" variant="ghost">
-                            <Link
-                              href={`/teacher/grade/${gradeId}/learners/${l.id}/edit`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </Link>
-                          </Button>
-                          {!isSuperAdmin && (
-                            <AralToggleButton
-                              learnerId={l.id}
-                              isAral={l.isAralLearner}
-                            />
-                          )}
-                        </>
-                      )}
-                      {!isSuperAdmin && (
-                        <LearnerArchiveButton
-                          learnerId={l.id}
-                          archived={Boolean(l.archivedAt)}
-                        />
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        <LearnerPagination
-          basePath={`/teacher/grade/${gradeId}`}
-          page={list.page}
-          totalPages={pages}
-          searchParams={{
-            q: list.q || undefined,
-            filter: list.filter !== "all" ? list.filter : undefined,
-            sort: list.sort !== "name" ? list.sort : undefined,
-            schoolId: schoolIdParam,
-          }}
+    <>
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
+      <Card>
+        <LearnerListToolbar
+          gradeId={gradeId}
+          q={list.q}
+          filter={list.filter}
+          sort={list.sort}
+          schoolId={schoolIdParam}
         />
-      </CardContent>
-    </Card>
+        <CardContent className="p-0">
+          {learners.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                title={
+                  list.filter === "archived"
+                    ? "No archived learners"
+                    : list.q
+                      ? "No matching learners"
+                      : "No learners yet"
+                }
+                description={
+                  list.filter === "archived"
+                    ? "Archived learners will appear here."
+                    : "Add a learner using the form on the right."
+                }
+              />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Gender</TableHead>
+                  {showSection && <TableHead>Section</TableHead>}
+                  <TableHead>English</TableHead>
+                  <TableHead>Filipino</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {learners.map((l) => (
+                  <TableRow
+                    key={l.id}
+                    className={l.archivedAt ? "opacity-70" : undefined}
+                  >
+                    <TableCell className="font-medium">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {l.fullName}
+                        {l.isAralLearner && (
+                          <Badge variant="violet">ARAL</Badge>
+                        )}
+                        {l.archivedAt && (
+                          <Badge variant="outline">Archived</Badge>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell>{l.age}</TableCell>
+                    <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
+                    {showSection && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {l.section?.name ?? "—"}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-xs">
+                      {READING_PROFILE_LABELS[l.englishReadingProfile]}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {READING_PROFILE_LABELS[l.filipinoReadingProfile]}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        <Button asChild size="sm" variant="ghost">
+                          <Link
+                            href={`/teacher/grade/${gradeId}/learners/${l.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                            View
+                          </Link>
+                        </Button>
+                        {!l.archivedAt && (
+                          <>
+                            <Button asChild size="sm" variant="ghost">
+                              <Link
+                                href={`/teacher/grade/${gradeId}/learners/${l.id}/edit`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </Link>
+                            </Button>
+                            {!isSuperAdmin && (
+                              <AralToggleButton
+                                learnerId={l.id}
+                                isAral={l.isAralLearner}
+                              />
+                            )}
+                          </>
+                        )}
+                        {!isSuperAdmin && (
+                          <LearnerArchiveButton
+                            learnerId={l.id}
+                            archived={Boolean(l.archivedAt)}
+                          />
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <LearnerPagination
+            basePath={`/teacher/grade/${gradeId}`}
+            page={list.page}
+            totalPages={pages}
+            searchParams={{
+              q: list.q || undefined,
+              filter: list.filter !== "all" ? list.filter : undefined,
+              sort: list.sort !== "name" ? list.sort : undefined,
+              schoolId: schoolIdParam,
+            }}
+          />
+        </CardContent>
+      </Card>
+    </>
   );
 }
 

@@ -16,6 +16,8 @@ import {
 import { READING_PROFILE_LABELS } from "@/lib/constants/enum-labels";
 import { ReadingLevelForm } from "@/components/forms/reading-level-form";
 import { EmptyState } from "@/components/dashboard";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
+import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +52,8 @@ export default async function ReadingLevelPage({
   if (learner.gradeLevelId !== gradeId) notFound();
 
   const canRecord = learner.isAralLearner && !isSuperAdmin;
+  const nestedWarmHrefs = getAralActionWarmHrefs(gradeId, learner.id);
+  const nestedWarmKey = `teacher:aral-action:${learner.id}:nested`;
 
   return (
     <AppShell
@@ -59,9 +63,10 @@ export default async function ReadingLevelPage({
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`}>
+          <Link href={`/teacher/aral/${gradeId}`} prefetch={true}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>

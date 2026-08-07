@@ -3,7 +3,10 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { roleHomePath } from "@/lib/auth/roles";
 import type { User, UserRole } from "@prisma/client";
+
+export { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
 
 /** App user guaranteed to belong to a school (non-null schoolId). */
 export type SchoolUser = User & { schoolId: string };
@@ -99,17 +102,6 @@ export async function requireSchoolUser(
  */
 export function isSuperAdmin(user: User): boolean {
   return user.role === "SUPER_ADMIN";
-}
-
-export function roleHomePath(role: UserRole): string {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return "/admin";
-    case "SCHOOL_HEAD":
-      return "/school-head";
-    case "TEACHER":
-      return "/teacher";
-  }
 }
 
 export async function signOut() {

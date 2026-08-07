@@ -29,7 +29,7 @@ export function ChartCardSkeleton({
   );
 }
 
-/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
+/** Server-safe shimmer skeleton — CSS-only, no client JS. */
 export function ChartSectionSkeleton({
   columns = 2,
   className,

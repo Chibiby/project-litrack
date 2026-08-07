@@ -1,17 +1,19 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolsList } from "@/lib/cache/schools-list";
 import { AppShell } from "@/components/app-shell";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
+import { TableSectionSkeleton } from "@/components/loading";
+import { getAdminSchoolImpersonationWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function SchoolsListPage() {
-  const user = await requireUser("SUPER_ADMIN");
-
+async function SchoolsTableBody() {
   let tableData: SchoolRow[] = [];
   let dbAvailable = true;
 
@@ -24,16 +26,42 @@ export default async function SchoolsListPage() {
     dbAvailable = false;
   }
 
+  const impersonationHrefs = getAdminSchoolImpersonationWarmHrefs(tableData);
+  const impersonationKey = `admin:schools:impersonation:${tableData.map((s) => s.id).join(",")}`;
+
   return (
-    <AppShell 
-      title="Schools" 
+    <>
+      <NavPrefetcher cacheKey={impersonationKey} hrefs={impersonationHrefs} />
+      {!dbAvailable ? (
+        <p className="mb-4 text-sm text-destructive">
+          Could not load schools right now. The database may be unavailable.
+        </p>
+      ) : null}
+
+      <Card>
+        <CardContent className="p-6">
+          <SchoolsTable schools={tableData} />
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+export default async function SchoolsListPage() {
+  const user = await requireUser("SUPER_ADMIN");
+
+  return (
+    <AppShell
+      title="Schools"
       subtitle="All registered schools"
       role={user.role}
       userName={user.fullName || user.email}
     >
       <div className="mb-4 flex justify-end">
         <Button asChild>
-          <Link href="/admin/schools/new"><Plus className="h-4 w-4 mr-2" /> New School</Link>
+          <Link href="/admin/schools/new" prefetch={true}>
+            <Plus className="h-4 w-4 mr-2" /> New School
+          </Link>
         </Button>
       </div>
 
@@ -47,17 +75,9 @@ export default async function SchoolsListPage() {
         </p>
       </div>
 
-      {!dbAvailable ? (
-        <p className="mb-4 text-sm text-destructive">
-          Could not load schools right now. The database may be unavailable.
-        </p>
-      ) : null}
-
-      <Card>
-        <CardContent className="p-6">
-          <SchoolsTable schools={tableData} />
-        </CardContent>
-      </Card>
+      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
+        <SchoolsTableBody />
+      </Suspense>
     </AppShell>
   );
 }

@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { getAralLearnerWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Edit3, Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -48,73 +50,82 @@ async function AralLearnersTable({
     orderBy: { fullName: "asc" },
   });
 
+  const nestedWarmHrefs = getAralLearnerWarmHrefs(
+    gradeId,
+    learners.map((l) => l.id)
+  );
+  const nestedWarmKey = `teacher:aral:${gradeId}:nested:${nestedWarmHrefs.join("|")}`;
+
   return (
-    <Card>
-      <CardContent className="p-0">
-        {learners.length === 0 ? (
-          <div className="p-4">
-            <EmptyState title="No ARAL learners." />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Learner</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Profile complete?</TableHead>
-                <TableHead>Last update</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {learners.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
-                    </span>
-                  </TableCell>
-                  <TableCell>{l.age}</TableCell>
-                  <TableCell>
-                    {l.aralProfile ? (
-                      <Badge variant="violet">Complete</Badge>
-                    ) : (
-                      <Badge variant="outline">Pending</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
-                    {l.aralProfile?.updatedAt.toLocaleDateString() ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button asChild size="sm">
-                      <Link
-                        href={`/teacher/aral/${gradeId}/learners/${l.id}/update`}
-                      >
-                        <Edit3 className="h-4 w-4" /> Update Data
-                      </Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/teacher/aral/${gradeId}/learners/${l.id}/attendance`}
-                      >
-                        Attendance
-                      </Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/teacher/aral/${gradeId}/learners/${l.id}/reading-level`}
-                      >
-                        Reading Level
-                      </Link>
-                    </Button>
-                  </TableCell>
+    <>
+      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
+      <Card>
+        <CardContent className="p-0">
+          {learners.length === 0 ? (
+            <div className="p-4">
+              <EmptyState title="No ARAL learners." />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Profile complete?</TableHead>
+                  <TableHead>Last update</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {learners.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
+                      </span>
+                    </TableCell>
+                    <TableCell>{l.age}</TableCell>
+                    <TableCell>
+                      {l.aralProfile ? (
+                        <Badge variant="violet">Complete</Badge>
+                      ) : (
+                        <Badge variant="outline">Pending</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {l.aralProfile?.updatedAt.toLocaleDateString() ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button asChild size="sm">
+                        <Link
+                          href={`/teacher/aral/${gradeId}/learners/${l.id}/update`}
+                        >
+                          <Edit3 className="h-4 w-4" /> Update Data
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={`/teacher/aral/${gradeId}/learners/${l.id}/attendance`}
+                        >
+                          Attendance
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={`/teacher/aral/${gradeId}/learners/${l.id}/reading-level`}
+                        >
+                          Reading Level
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }
 

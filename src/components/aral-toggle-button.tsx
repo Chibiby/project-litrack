@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { toggleAralLearner } from "@/lib/actions/learner";
+import { invalidateNavWarm } from "@/components/nav-prefetcher";
 
 export function AralToggleButton({ learnerId, isAral }: { learnerId: string; isAral: boolean }) {
   const [pending, startTransition] = useTransition();
@@ -22,12 +23,13 @@ export function AralToggleButton({ learnerId, isAral }: { learnerId: string; isA
           const res = await toggleAralLearner(fd);
           if (res.ok) {
             toast.success(isAral ? "Removed from ARAL" : "Marked as ARAL learner");
+            invalidateNavWarm();
           } else toast.error(res.error);
         });
       }}
     >
       <Sparkles className="h-4 w-4" />
-      {isAral ? "ARAL ✓" : "Mark ARAL"}
+      {pending ? (isAral ? "Updating…" : "Marking…") : isAral ? "ARAL ✓" : "Mark ARAL"}
     </Button>
   );
 }

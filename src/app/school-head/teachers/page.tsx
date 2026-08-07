@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
@@ -11,6 +12,7 @@ import {
   TeachersInviteTable,
   type TeacherListRow,
 } from "@/components/teachers-invite-table";
+import { DualListCardSkeleton } from "@/components/loading";
 import { inviteTokenStatus } from "@/lib/auth/invites";
 import { usernameFromTeacherEmail } from "@/lib/auth/synthetic-email";
 
@@ -53,18 +55,14 @@ function pickInviteForTeacher(
   );
 }
 
-export default async function TeachersPage({ searchParams }: TeachersPageProps) {
-  const params = await searchParams;
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.profileCompleted && user.role !== "SUPER_ADMIN") redirect("/school-head/profiling");
-
-  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
-    user,
-    params.schoolId,
-    "/school-head/teachers"
-  );
-
-  const [grades, teachers, invites, schoolName] = await Promise.all([
+async function TeachersBody({
+  schoolId,
+  isSuperAdminView,
+}: {
+  schoolId: string;
+  isSuperAdminView: boolean;
+}) {
+  const [grades, teachers, invites] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
@@ -78,7 +76,6 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
       where: { schoolId },
       orderBy: { createdAt: "desc" },
     }),
-    getSchoolName(schoolId),
   ]);
 
   const rows: TeacherListRow[] = teachers.map((t) => {
@@ -109,6 +106,47 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
     };
   });
 
+  if (grades.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-muted-foreground">
+          Create at least one grade level first.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className={`grid gap-6 ${isSuperAdminView ? "" : "md:grid-cols-2"}`}>
+      {!isSuperAdminView ? (
+        <Card>
+          <CardContent className="pt-6">
+            <h2 className="mb-4 font-semibold">Add a teacher</h2>
+            <InviteTeacherForm
+              grades={grades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] }))}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <TeachersInviteTable rows={rows} />
+    </div>
+  );
+}
+
+export default async function TeachersPage({ searchParams }: TeachersPageProps) {
+  const params = await searchParams;
+  const user = await requireUser("SCHOOL_HEAD");
+  if (!user.profileCompleted && user.role !== "SUPER_ADMIN") redirect("/school-head/profiling");
+
+  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
+    user,
+    params.schoolId,
+    "/school-head/teachers"
+  );
+
+  const schoolName = await getSchoolName(schoolId);
+
   return (
     <AppShell
       title={isSuperAdminView ? `Teachers - ${schoolName || "Unknown"}` : "Teachers"}
@@ -119,28 +157,9 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
       isSuperAdminView={isSuperAdminView}
       viewedSchoolName={schoolName ?? undefined}
     >
-      {grades.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Create at least one grade level first.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className={`grid gap-6 ${isSuperAdminView ? "" : "md:grid-cols-2"}`}>
-          {!isSuperAdminView ? (
-            <Card>
-              <CardContent className="pt-6">
-                <h2 className="mb-4 font-semibold">Add a teacher</h2>
-                <InviteTeacherForm
-                  grades={grades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] }))}
-                />
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <TeachersInviteTable rows={rows} />
-        </div>
-      )}
+      <Suspense fallback={<DualListCardSkeleton />}>
+        <TeachersBody schoolId={schoolId} isSuperAdminView={isSuperAdminView} />
+      </Suspense>
     </AppShell>
   );
 }

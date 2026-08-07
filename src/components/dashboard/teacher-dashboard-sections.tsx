@@ -140,7 +140,7 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
                 variant="outline"
                 className="bg-white"
               >
-                <Link href={`/teacher/aral/${g.id}`}>
+                <Link href={`/teacher/aral/${g.id}`} prefetch={true}>
                   Complete ARAL profiling — {GRADE_LEVEL_LABELS[g.type]}
                 </Link>
               </Button>
@@ -173,11 +173,15 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
                 </p>
                 <div className="flex gap-2">
                   <Button asChild size="sm">
-                    <Link href={`/teacher/grade/${g.id}`}>Open</Link>
+                    <Link href={`/teacher/grade/${g.id}`} prefetch={true}>
+                      Open
+                    </Link>
                   </Button>
                   {g.aralCount > 0 ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link href={`/teacher/aral/${g.id}`}>ARAL Dashboard</Link>
+                      <Link href={`/teacher/aral/${g.id}`} prefetch={true}>
+                        ARAL Dashboard
+                      </Link>
                     </Button>
                   ) : null}
                 </div>

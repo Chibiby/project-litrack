@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
+import { SignOutButton } from "@/components/sign-out-button";
+import { getShellNestedWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { logoutAction } from "@/lib/actions/auth";
+import { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
 import type { UserRole } from "@prisma/client";
 import {
   LayoutDashboard,
@@ -20,7 +23,6 @@ import {
   BookOpen,
   Sparkles,
   Menu,
-  LogOut,
   KeyRound,
   Shield,
   CalendarRange,
@@ -159,21 +161,27 @@ export function AppSidebar({
   const navItems = getNavItems(role, grades);
   const activeHref = resolveActiveHref(pathname, navItems);
 
-  // Background-warm every sidebar route once per shell (not on each page nav).
+  // Background-warm sidebar + shell-discoverable nested routes once per shell
+  // (not on each page nav). Grade/ARAL learner nests warm from parent pages.
   const gradesKey =
     grades?.map((g) => `${g.id}:${g.hasAral ? 1 : 0}`).join(",") ?? "";
-  const prefetchHrefs = useMemo(
-    () => getNavItems(role, grades).map((item) => item.href),
+  const prefetchHrefs = useMemo(() => {
+    const sidebarHrefs = getNavItems(role, grades).map((item) => item.href);
+    const nestedHrefs = getShellNestedWarmHrefs(role, grades);
+    return [...sidebarHrefs, ...nestedHrefs];
     // eslint-disable-next-line react-hooks/exhaustive-deps -- gradesKey fingerprints grades
-    [role, gradesKey]
-  );
+  }, [role, gradesKey]);
   const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
   const SidebarContent = (
     <div className="flex h-full flex-col bg-white">
       {/* Brand */}
       <div className="border-b border-border/80 px-4 py-5">
-        <Link href="/" className="flex items-center gap-3 font-semibold">
+        <Link
+          href={roleHomePath(role)}
+          prefetch={true}
+          className="flex items-center gap-3 font-semibold"
+        >
           <Image
             src="/logo.png"
             alt="ARAL Program logo"
@@ -236,21 +244,13 @@ export function AppSidebar({
             size="sm"
             className="w-full justify-start text-muted-foreground hover:text-foreground"
           >
-            <Link href="/account/password">
+            <Link href={rolePasswordPath(role)} prefetch={true}>
               <KeyRound className="mr-2 h-4 w-4" />
               Change password
             </Link>
           </Button>
           <form action={logoutAction}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-muted-foreground hover:text-foreground"
-              type="submit"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+            <SignOutButton />
           </form>
         </div>
       </div>
