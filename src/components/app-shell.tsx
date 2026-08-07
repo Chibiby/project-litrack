@@ -4,7 +4,6 @@ import { AppSidebar } from "./app-sidebar";
 import { Breadcrumbs } from "./breadcrumbs";
 import { useRoleShell } from "./role-shell";
 import type { UserRole } from "@prisma/client";
-import { Search } from "lucide-react";
 
 interface AppShellProps {
   title: string;
@@ -80,16 +79,6 @@ export function AppShell({
                   {subtitle}
                 </p>
               ) : null}
-            </div>
-
-            <div className="ml-auto hidden shrink-0 items-center gap-3 sm:flex">
-              <div
-                className="flex h-10 w-48 items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 text-sm text-muted-foreground xl:w-64"
-                aria-hidden
-              >
-                <Search className="h-4 w-4 shrink-0 opacity-60" />
-                <span className="truncate">Search…</span>
-              </div>
             </div>
           </div>
         </header>
