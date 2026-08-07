@@ -7,10 +7,12 @@ import type { LearnerListFilter, LearnerListSort } from "@/lib/learners/paginati
 
 type Props = {
   gradeId: string;
-  q: string;
   filter: LearnerListFilter;
   sort: LearnerListSort;
   schoolId?: string;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onSearchSubmit: () => void;
 };
 
 const FILTERS: { value: LearnerListFilter; label: string }[] = [
@@ -22,13 +24,11 @@ const FILTERS: { value: LearnerListFilter; label: string }[] = [
 function filterHref(
   gradeId: string,
   filter: LearnerListFilter,
-  q: string,
   sort: LearnerListSort,
   schoolId?: string
 ): string {
   const params = new URLSearchParams();
   if (filter !== "all") params.set("filter", filter);
-  if (q) params.set("q", q);
   if (sort !== "name") params.set("sort", sort);
   if (schoolId) params.set("schoolId", schoolId);
   const qs = params.toString();
@@ -37,28 +37,33 @@ function filterHref(
 
 export function LearnerListToolbar({
   gradeId,
-  q,
   filter,
   sort,
   schoolId,
+  searchValue,
+  onSearchChange,
+  onSearchSubmit,
 }: Props) {
   return (
     <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-      <form method="get" action={`/teacher/grade/${gradeId}`} className="flex flex-1 gap-2">
-        {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
-        {sort !== "name" && <input type="hidden" name="sort" value={sort} />}
-        {schoolId && <input type="hidden" name="schoolId" value={schoolId} />}
+      <div className="flex flex-1 gap-2">
         <Input
-          name="q"
-          defaultValue={q}
+          value={searchValue}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSearchSubmit();
+            }
+          }}
           placeholder="Search by name…"
           className="max-w-xs"
           aria-label="Search learners by name"
         />
-        <Button type="submit" variant="secondary" size="sm">
+        <Button type="button" variant="secondary" size="sm" onClick={onSearchSubmit}>
           Search
         </Button>
-      </form>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
@@ -70,15 +75,18 @@ export function LearnerListToolbar({
               variant={filter === f.value ? "default" : "ghost"}
               className="h-8"
             >
-              <Link href={filterHref(gradeId, f.value, q, sort, schoolId)}>
+              <Link href={filterHref(gradeId, f.value, sort, schoolId)}>
                 {f.label}
               </Link>
             </Button>
           ))}
         </div>
 
-        <form method="get" action={`/teacher/grade/${gradeId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          {q && <input type="hidden" name="q" value={q} />}
+        <form
+          method="get"
+          action={`/teacher/grade/${gradeId}`}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground"
+        >
           {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
           {schoolId && <input type="hidden" name="schoolId" value={schoolId} />}
           <label className="flex items-center gap-1.5">
