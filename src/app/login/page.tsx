@@ -45,13 +45,13 @@ export default async function LoginPage() {
           </p>
         </div>
       </div>
-      <div className="flex justify-center pt-6">
+      <div className="flex justify-center pt-6 pb-2">
         <Image
           src="/partner-logos.png"
           alt="Partner organizations: DepEd MATATAG, Bagong Pilipinas, and Division of Sarangani"
           width={1024}
           height={314}
-          className="h-auto w-full max-w-md"
+          className="h-auto w-[200px] object-contain sm:w-[240px]"
         />
       </div>
     </main>
