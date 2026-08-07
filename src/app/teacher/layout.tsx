@@ -19,22 +19,28 @@ export default async function TeacherLayout({
 
   // Layouts cannot read searchParams; super-admin school impersonation still
   // gets admin nav via role === SUPER_ADMIN. Real teachers get grade links.
+  // Shell chrome must not throw on transient pool errors — that tears down
+  // RoleShell for the whole /teacher tree. Degrade to a minimal sidebar.
   if (user.role === "TEACHER" && user.schoolId) {
-    const [name, shellGrades] = await Promise.all([
-      getSchoolName(user.schoolId),
-      getTeacherShellGrades({
-        schoolId: user.schoolId,
-        teacherId: user.id,
-        isSuperAdmin: false,
-      }),
-    ]);
+    try {
+      const [name, shellGrades] = await Promise.all([
+        getSchoolName(user.schoolId),
+        getTeacherShellGrades({
+          schoolId: user.schoolId,
+          teacherId: user.id,
+          isSuperAdmin: false,
+        }),
+      ]);
 
-    schoolName = name ?? undefined;
-    grades = shellGrades.map((g) => ({
-      id: g.id,
-      label: GRADE_LEVEL_LABELS[g.type],
-      hasAral: g.hasAral,
-    }));
+      schoolName = name ?? undefined;
+      grades = shellGrades.map((g) => ({
+        id: g.id,
+        label: GRADE_LEVEL_LABELS[g.type],
+        hasAral: g.hasAral,
+      }));
+    } catch (err) {
+      console.error("[teacher/layout] shell grades/school name failed:", err);
+    }
   }
 
   return (

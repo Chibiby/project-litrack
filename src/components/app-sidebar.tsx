@@ -162,7 +162,8 @@ export function AppSidebar({
   const activeHref = resolveActiveHref(pathname, navItems);
 
   // Background-warm sidebar + shell-discoverable nested routes once per shell
-  // (not on each page nav). Grade/ARAL learner nests warm from parent pages.
+  // (not on each page nav). Learner nests warm from detail pages only — roster
+  // pages must not full-prefetch every learner (pool stampede → P2024).
   const gradesKey =
     grades?.map((g) => `${g.id}:${g.hasAral ? 1 : 0}`).join(",") ?? "";
   const prefetchHrefs = useMemo(() => {

@@ -17,9 +17,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
-import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { getAralLearnerWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Edit3, Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -50,15 +48,8 @@ async function AralLearnersTable({
     orderBy: { fullName: "asc" },
   });
 
-  const nestedWarmHrefs = getAralLearnerWarmHrefs(
-    gradeId,
-    learners.map((l) => l.id)
-  );
-  const nestedWarmKey = `teacher:aral:${gradeId}:nested:${nestedWarmHrefs.join("|")}`;
-
   return (
     <>
-      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <Card>
         <CardContent className="p-0">
           {learners.length === 0 ? (

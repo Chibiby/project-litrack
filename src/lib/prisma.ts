@@ -11,7 +11,7 @@ const globalForPrisma = globalThis as unknown as {
  * prepared statements. Prisma uses them by default, which surfaces in prod as
  * PostgresError 42P05 "prepared statement \"sN\" already exists" once more than
  * one request reuses a pooled connection. Prisma's documented fix is appending
- * `pgbouncer=true` (plus a low `connection_limit`) to DATABASE_URL.
+ * `pgbouncer=true` (plus a low `connection_limit`, default 3) to DATABASE_URL.
  *
  * We can't set Vercel env vars ourselves, so patch the URL defensively here:
  * a no-op when DATABASE_URL is absent, already correct, or not pooled on 6543

@@ -28,9 +28,25 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   } = await supabase.auth.getUser();
   if (!authUser) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { authId: authUser.id },
-  });
+  // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
+  // can briefly queue past the serverless pool wait; a short backoff clears most
+  // transient failures before they hit teacher/error.tsx.
+  let user: User | null = null;
+  try {
+    user = await prisma.user.findUnique({
+      where: { authId: authUser.id },
+    });
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: unknown }).code)
+        : "";
+    if (code !== "P2024") throw err;
+    await new Promise((r) => setTimeout(r, 75));
+    user = await prisma.user.findUnique({
+      where: { authId: authUser.id },
+    });
+  }
   if (!user) return null;
 
   if (user.deletedAt || !user.isActive) {

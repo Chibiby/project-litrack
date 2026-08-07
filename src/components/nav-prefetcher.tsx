@@ -19,6 +19,16 @@ const warmedAt = new Map<string, number>();
  */
 const WARM_TTL_MS = 480_000;
 
+/**
+ * Cap parallel full RSC prefetches. Each full warm re-runs middleware auth +
+ * force-dynamic layout/page Prisma work; unbounded fan-out exhausts the
+ * serverless pool (`connection_limit`) and surfaces as teacher/error.tsx.
+ */
+const PREFETCH_CONCURRENCY = 2;
+
+/** Stagger between starting each prefetch so pool waiters can drain. */
+const PREFETCH_GAP_MS = 120;
+
 const INVALIDATE_EVENT = "litrack:nav-warm-invalidate";
 
 /** Next App Router PrefetchKind.FULL — full Flight data for dynamic routes. */
@@ -37,6 +47,10 @@ function isWarmFresh(cacheKey: string): boolean {
   const at = warmedAt.get(cacheKey);
   if (at === undefined) return false;
   return Date.now() - at < WARM_TTL_MS;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -63,7 +77,8 @@ export function invalidateNavWarm(cacheKey?: string): void {
  * visible after expiry, or `invalidateNavWarm` runs after a cache-busting write.
  *
  * Uses PrefetchKind `full` so force-dynamic + loading.tsx routes warm the full
- * RSC payload (not only the loading skeleton).
+ * RSC payload (not only the loading skeleton). Prefetches are concurrency-
+ * limited and staggered so rapid side-menu use does not stampede Prisma.
  */
 export function NavPrefetcher({ cacheKey, hrefs }: NavPrefetcherProps) {
   const router = useRouter();
@@ -81,9 +96,27 @@ export function NavPrefetcher({ cacheKey, hrefs }: NavPrefetcherProps) {
     const prefetchAll = () => {
       if (cancelled || isWarmFresh(cacheKey)) return;
       warmedAt.set(cacheKey, Date.now());
-      for (const href of routes) {
-        router.prefetch(href, PREFETCH_FULL);
-      }
+
+      void (async () => {
+        let cursor = 0;
+
+        const worker = async () => {
+          while (!cancelled && cursor < routes.length) {
+            const href = routes[cursor++];
+            try {
+              router.prefetch(href, PREFETCH_FULL);
+            } catch {
+              // Prefetch is best-effort; never surface into the UI.
+            }
+            if (cursor < routes.length) {
+              await sleep(PREFETCH_GAP_MS);
+            }
+          }
+        };
+
+        const workers = Math.min(PREFETCH_CONCURRENCY, routes.length);
+        await Promise.all(Array.from({ length: workers }, () => worker()));
+      })();
     };
 
     const scheduleWarm = () => {

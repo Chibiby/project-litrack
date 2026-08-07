@@ -5,11 +5,11 @@ import { resolvePooledDatabaseUrl } from "@/lib/db-url";
 const PW = "p%40ss-w0rd%21";
 
 describe("resolvePooledDatabaseUrl", () => {
-  it("adds pgbouncer=true and connection_limit=1 on bare 6543 pooler URLs", () => {
+  it("adds pgbouncer=true and connection_limit=3 on bare 6543 pooler URLs", () => {
     const input = `postgresql://postgres.okmqgbnxdgdqhqjrkuqn:${PW}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres`;
     const out = resolvePooledDatabaseUrl(input);
     expect(out).toContain("pgbouncer=true");
-    expect(out).toContain("connection_limit=1");
+    expect(out).toContain("connection_limit=3");
     expect(out).toContain(PW);
     expect(out!.split("pgbouncer=true").length - 1).toBe(1);
   });
@@ -19,23 +19,30 @@ describe("resolvePooledDatabaseUrl", () => {
     const out = resolvePooledDatabaseUrl(input)!;
     expect(out).toContain("sslmode=require");
     expect(out).toContain("pgbouncer=true");
-    expect(out).toContain("connection_limit=1");
+    expect(out).toContain("connection_limit=3");
     expect(out).toContain(PW);
   });
 
-  it("leaves already-correct 6543 URLs unchanged in flags", () => {
+  it("raises legacy connection_limit=1 to 3 while keeping pgbouncer", () => {
     const input = `postgresql://postgres.ref:${PW}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`;
     const out = resolvePooledDatabaseUrl(input)!;
     expect(out).toContain("pgbouncer=true");
-    expect(out).toContain("connection_limit=1");
+    expect(out).toContain("connection_limit=3");
+    expect(out).not.toContain("connection_limit=1");
     expect(out.split("pgbouncer=true").length - 1).toBe(1);
+  });
+
+  it("preserves an explicit connection_limit above 1", () => {
+    const input = `postgresql://postgres.ref:${PW}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5`;
+    const out = resolvePooledDatabaseUrl(input)!;
+    expect(out).toContain("connection_limit=5");
   });
 
   it("adds only missing connection_limit when pgbouncer already set", () => {
     const input = `postgresql://postgres.ref:${PW}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true`;
     const out = resolvePooledDatabaseUrl(input)!;
     expect(out).toContain("pgbouncer=true");
-    expect(out).toContain("connection_limit=1");
+    expect(out).toContain("connection_limit=3");
     expect(out.split("pgbouncer=true").length - 1).toBe(1);
   });
 

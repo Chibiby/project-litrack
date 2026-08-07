@@ -28,12 +28,10 @@ import { LearnerListToolbar } from "@/components/learners/learner-list-toolbar";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
-import { NavPrefetcher } from "@/components/nav-prefetcher";
 import {
   parseLearnerListParams,
   totalPages as calcTotalPages,
 } from "@/lib/learners/pagination";
-import { getGradeLearnerWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Eye, Pencil } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -97,12 +95,9 @@ async function GradeLearnersBody({
 
   const pages = calcTotalPages(totalCount, list.pageSize);
   const showSection = learners.some((l) => l.section);
-  const nestedWarmHrefs = getGradeLearnerWarmHrefs(gradeId, learners);
-  const nestedWarmKey = `teacher:grade:${gradeId}:nested:${nestedWarmHrefs.join("|")}`;
 
   return (
     <>
-      <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <Card>
         <LearnerListToolbar
           gradeId={gradeId}

@@ -13,8 +13,17 @@ export default function TeacherError({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Cancelled soft navigations should not leave the user on a fatal modal.
+    if (error.name === "AbortError") {
+      reset();
+      return;
+    }
     console.error("Teacher route error:", error);
-  }, [error]);
+  }, [error, reset]);
+
+  if (error.name === "AbortError") {
+    return null;
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">

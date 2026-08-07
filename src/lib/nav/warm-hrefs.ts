@@ -26,13 +26,19 @@ export function getShellNestedWarmHrefs(
   }
 }
 
+/**
+ * Cap mass learner warm lists. Full-prefetching every roster row re-runs
+ * force-dynamic teacher layout/auth and saturates the Prisma pool.
+ */
+const MAX_NESTED_LEARNER_WARMS = 4;
+
 /** Learner view/edit (+ import) hrefs for the visible grade roster page. */
 export function getGradeLearnerWarmHrefs(
   gradeId: string,
   learners: readonly { id: string; archivedAt?: Date | string | null }[]
 ): string[] {
   const hrefs: string[] = [`/teacher/grade/${gradeId}/import`];
-  for (const learner of learners) {
+  for (const learner of learners.slice(0, MAX_NESTED_LEARNER_WARMS)) {
     const base = `/teacher/grade/${gradeId}/learners/${learner.id}`;
     hrefs.push(base);
     if (!learner.archivedAt) {
@@ -47,7 +53,7 @@ export function getAralLearnerWarmHrefs(
   gradeId: string,
   learnerIds: readonly string[]
 ): string[] {
-  return learnerIds.flatMap((id) => [
+  return learnerIds.slice(0, MAX_NESTED_LEARNER_WARMS).flatMap((id) => [
     `/teacher/aral/${gradeId}/learners/${id}/update`,
     `/teacher/aral/${gradeId}/learners/${id}/attendance`,
     `/teacher/aral/${gradeId}/learners/${id}/reading-level`,
