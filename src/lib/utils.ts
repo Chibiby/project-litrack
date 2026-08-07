@@ -10,6 +10,12 @@ export function formatDate(date: Date | string): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** YYYY-MM-DD; accepts Date or ISO string (e.g. after `unstable_cache` JSON restore). */
+export function toDateKey(date: Date | string): string {
+  const iso = typeof date === "string" ? date : date.toISOString();
+  return iso.slice(0, 10);
+}
+
 export function getMonday(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay(); // 0 Sun..6 Sat

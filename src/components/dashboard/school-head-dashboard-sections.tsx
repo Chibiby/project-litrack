@@ -23,6 +23,7 @@ import {
   Layers,
   ClipboardList,
 } from "lucide-react";
+import { toDateKey } from "@/lib/utils";
 
 function schoolPath(path: string, schoolId: string, isSuperAdminView: boolean) {
   return isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
@@ -243,7 +244,7 @@ export async function SchoolHeadRecentActivitySection({
 
   const sh = (path: string) => schoolPath(path, schoolId, isSuperAdminView);
 
-return (
+  return (
     <div className="mb-6 grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
@@ -268,7 +269,7 @@ return (
                 >
                   <span className="font-medium">{a.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {a.createdAt.toISOString().slice(0, 10)}
+                    {toDateKey(a.createdAt)}
                   </span>
                 </li>
               ))}
@@ -301,7 +302,7 @@ return (
                     <span className="text-muted-foreground">{a.resource}</span>
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {a.timestamp.toISOString().slice(0, 10)}
+                    {toDateKey(a.timestamp)}
                   </span>
                 </li>
               ))}

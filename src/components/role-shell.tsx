@@ -55,23 +55,22 @@ export function RoleShell({
         />
         <div className="lg:pl-64">
           <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 backdrop-blur-md">
-            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 lg:px-8">
-              <div className="flex items-center gap-4">
-                {/* Spacer for mobile menu button */}
-                <div className="w-8 shrink-0 lg:hidden" />
+            {/* No mx-auto/max-w — keep breadcrumbs flush-left beside the sidebar. */}
+            <div className="flex w-full items-center gap-4 px-4 py-4 lg:px-8">
+              {/* Spacer for mobile menu button */}
+              <div className="w-8 shrink-0 lg:hidden" />
 
-                <div className="min-w-0 flex-1">
-                  <Breadcrumbs className="hidden md:flex" />
-                </div>
+              <div className="min-w-0 flex-1">
+                <Breadcrumbs className="hidden justify-start md:flex" />
+              </div>
 
-                <div className="ml-auto hidden items-center gap-3 sm:flex">
-                  <div
-                    className="flex h-10 w-48 items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 text-sm text-muted-foreground xl:w-64"
-                    aria-hidden
-                  >
-                    <Search className="h-4 w-4 shrink-0 opacity-60" />
-                    <span className="truncate">Search…</span>
-                  </div>
+              <div className="ml-auto hidden shrink-0 items-center gap-3 sm:flex">
+                <div
+                  className="flex h-10 w-48 items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 text-sm text-muted-foreground xl:w-64"
+                  aria-hidden
+                >
+                  <Search className="h-4 w-4 shrink-0 opacity-60" />
+                  <span className="truncate">Search…</span>
                 </div>
               </div>
             </div>
