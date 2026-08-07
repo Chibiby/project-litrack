@@ -11,7 +11,7 @@ import {
  */
 export default function TeacherLoading() {
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">
+    <div className="w-full space-y-6 p-4 lg:p-8">
       <MetricsGridSkeleton variant="teacher" />
       <ChartSectionSkeleton columns={1} />
       <ListCardSkeleton grid items={3} />

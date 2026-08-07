@@ -10,7 +10,7 @@ import {
  */
 export default function SchoolHeadLoading() {
   return (
-    <div className="w-full max-w-7xl space-y-6 p-4 lg:p-8">
+    <div className="w-full space-y-6 p-4 lg:p-8">
       <MetricsGridSkeleton variant="school-head" />
       <ChartSectionSkeleton columns={2} />
     </div>

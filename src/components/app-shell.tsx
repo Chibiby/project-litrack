@@ -36,7 +36,8 @@ export function AppShell({
   if (inRoleShell) {
     return (
       <>
-        <div className="w-full max-w-7xl px-4 pt-4 lg:px-8 lg:pt-6">
+        {/* Match RoleShell header: full column width, shared px-4 / lg:px-8. */}
+        <div className="w-full px-4 pt-4 lg:px-8 lg:pt-6">
           <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {title}
           </h1>
@@ -47,7 +48,7 @@ export function AppShell({
           ) : null}
         </div>
 
-        <main className="w-full max-w-7xl p-4 lg:p-8">{children}</main>
+        <main className="w-full p-4 lg:p-8">{children}</main>
       </>
     );
   }
@@ -93,7 +94,8 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="w-full max-w-7xl p-4 lg:p-8">{children}</main>
+        {/* Match header padding; no max-w so content fills the main column. */}
+        <main className="w-full p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

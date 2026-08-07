@@ -7,7 +7,7 @@
 export function ContentRouteLoading() {
   return (
     <div
-      className="mx-auto max-w-7xl px-4 py-6 lg:px-8"
+      className="w-full px-4 py-6 lg:px-8"
       aria-busy="true"
       aria-live="polite"
     >
