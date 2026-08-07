@@ -27,26 +27,31 @@ export async function resolveSchoolContext(
       redirect("/admin/schools");
     }
 
-    const since = new Date(Date.now() - ADMIN_VIEW_AUDIT_WINDOW_MS);
-    const alreadyLogged = await prisma.auditLog.findFirst({
-      where: {
-        userId: user.id,
-        schoolId: schoolIdParam,
-        action: AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
-        timestamp: { gte: since },
-      },
-      select: { id: true },
-    });
-
-    if (!alreadyLogged) {
-      await writeAudit({
-        userId: user.id,
-        schoolId: schoolIdParam,
-        action: AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
-        resource: "School",
-        resourceId: schoolIdParam,
-        metadata: { schoolId: schoolIdParam, path },
+    // Audit is best-effort — pool timeouts must not block the dashboard.
+    try {
+      const since = new Date(Date.now() - ADMIN_VIEW_AUDIT_WINDOW_MS);
+      const alreadyLogged = await prisma.auditLog.findFirst({
+        where: {
+          userId: user.id,
+          schoolId: schoolIdParam,
+          action: AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
+          timestamp: { gte: since },
+        },
+        select: { id: true },
       });
+
+      if (!alreadyLogged) {
+        await writeAudit({
+          userId: user.id,
+          schoolId: schoolIdParam,
+          action: AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
+          resource: "School",
+          resourceId: schoolIdParam,
+          metadata: { schoolId: schoolIdParam, path },
+        });
+      }
+    } catch (err) {
+      console.error("[resolveSchoolContext] ADMIN_SCHOOL_VIEW audit failed:", err);
     }
 
     return { schoolId: schoolIdParam, isSuperAdminView: true };

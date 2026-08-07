@@ -39,14 +39,21 @@ export default async function SchoolHeadDashboard({
   if (!user.profileCompleted && user.role !== "SUPER_ADMIN")
     redirect("/school-head/profiling");
 
-  // Resolve school + cached name in parallel (name key known before audit write).
-  const schoolIdHint =
-    user.role === "SUPER_ADMIN" ? params.schoolId : user.schoolId;
+  // Redirects for missing school stay outside try/catch (NEXT_REDIRECT).
+  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
+    user,
+    params.schoolId,
+    "/school-head"
+  );
 
-  const [{ schoolId, isSuperAdminView }, schoolName] = await Promise.all([
-    resolveSchoolContext(user, params.schoolId, "/school-head"),
-    schoolIdHint ? getSchoolName(schoolIdHint) : Promise.resolve(null),
-  ]);
+  // Fail-soft: name lookup must not 500 the whole dashboard when the pooler
+  // is briefly exhausted (same class of issue as teacher soft-nav P2024).
+  let schoolName: string | null = null;
+  try {
+    schoolName = await getSchoolName(schoolId);
+  } catch (err) {
+    console.error("[SchoolHeadDashboard] school name failed:", err);
+  }
 
   const sh = (path: string) =>
     isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;

@@ -12,8 +12,17 @@ export default function SchoolHeadError({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Cancelled soft navigations should not leave the user on a fatal modal.
+    if (error.name === "AbortError") {
+      reset();
+      return;
+    }
     console.error("School-head route error:", error);
-  }, [error]);
+  }, [error, reset]);
+
+  if (error.name === "AbortError") {
+    return null;
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">

@@ -4,7 +4,7 @@ import { AppSidebar } from "./app-sidebar";
 import { Breadcrumbs } from "./breadcrumbs";
 import { useRoleShell } from "./role-shell";
 import type { UserRole } from "@prisma/client";
-import { Search, UserCircle } from "lucide-react";
+import { Search } from "lucide-react";
 
 interface AppShellProps {
   title: string;
@@ -30,7 +30,6 @@ export function AppShell({
   viewedSchoolName,
 }: AppShellProps) {
   const inRoleShell = useRoleShell();
-  const roleLabel = role.toLowerCase().replace("_", " ");
 
   // Role layouts already mount sidebar + breadcrumb chrome; page only supplies
   // the title block and main content (so loading.tsx never replaces breadcrumbs).
@@ -89,20 +88,6 @@ export function AppShell({
                 >
                   <Search className="h-4 w-4 shrink-0 opacity-60" />
                   <span className="truncate">Search…</span>
-                </div>
-
-                <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-white px-2.5 py-1.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                    <UserCircle className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div className="hidden min-w-0 flex-col lg:flex">
-                    <span className="max-w-[140px] truncate text-sm font-medium leading-tight">
-                      {userName}
-                    </span>
-                    <span className="text-[11px] capitalize leading-tight text-muted-foreground">
-                      {roleLabel}
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>

@@ -13,8 +13,14 @@ export default async function SchoolHeadLayout({
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
 
   let schoolName: string | undefined;
+  // Shell chrome must not throw on transient pool errors — that tears down
+  // RoleShell for the whole /school-head tree. Degrade to a nameless sidebar.
   if (user.schoolId) {
-    schoolName = (await getSchoolName(user.schoolId)) ?? undefined;
+    try {
+      schoolName = (await getSchoolName(user.schoolId)) ?? undefined;
+    } catch (err) {
+      console.error("[school-head/layout] school name failed:", err);
+    }
   }
 
   return (
