@@ -69,15 +69,15 @@ export async function AdminMetricsSection() {
         />
         <MetricCard
           title="Alerts"
-          value={metrics?.expiredPendingInvites ?? 0}
-          hint="Expired pending invites"
+          value={metrics?.pendingTeacherApprovals ?? 0}
+          hint="Teachers awaiting approval"
           icon={AlertTriangle}
           href="/admin/audit"
         />
       </div>
 
       {(metrics?.schoolsInactive ?? 0) > 0 ||
-      (metrics?.expiredPendingInvites ?? 0) > 0 ? (
+      (metrics?.pendingTeacherApprovals ?? 0) > 0 ? (
         <Card className="mb-6 border-amber-200/80 bg-amber-50/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -89,10 +89,10 @@ export async function AdminMetricsSection() {
             {(metrics?.schoolsInactive ?? 0) > 0 ? (
               <p>{metrics!.schoolsInactive} inactive school(s).</p>
             ) : null}
-            {(metrics?.expiredPendingInvites ?? 0) > 0 ? (
+            {(metrics?.pendingTeacherApprovals ?? 0) > 0 ? (
               <p>
-                {metrics!.expiredPendingInvites} pending teacher invite(s)
-                expired.
+                {metrics!.pendingTeacherApprovals} teacher registration(s)
+                awaiting School Head approval.
               </p>
             ) : null}
           </CardContent>

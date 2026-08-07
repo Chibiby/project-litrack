@@ -37,7 +37,6 @@ function labelProfile(key: string): string {
 export async function getAdminMetricCounts() {
   return cachedQuery(
     async () => {
-      const now = new Date();
       const [
         schoolsTotal,
         schoolsActive,
@@ -46,20 +45,20 @@ export async function getAdminMetricCounts() {
         teacherCount,
         learnerCount,
         aralCount,
-        expiredPendingInvites,
+        pendingTeacherApprovals,
       ] = await Promise.all([
         prisma.school.count({ where: { deletedAt: null } }),
         prisma.school.count({ where: { deletedAt: null, isActive: true } }),
         prisma.school.count({ where: { deletedAt: null, isActive: false } }),
         prisma.user.count({ where: { role: "SCHOOL_HEAD", deletedAt: null } }),
-        prisma.user.count({ where: { role: "TEACHER", deletedAt: null } }),
+        prisma.user.count({ where: { role: "TEACHER", deletedAt: null, isActive: true } }),
         prisma.learner.count({ where: { deletedAt: null } }),
         prisma.learner.count({ where: { deletedAt: null, isAralLearner: true } }),
-        prisma.teacherInvite.count({
+        prisma.user.count({
           where: {
-            consumedAt: null,
-            revokedAt: null,
-            expiresAt: { lt: now },
+            role: "TEACHER",
+            approvalStatus: "PENDING",
+            deletedAt: null,
           },
         }),
       ]);
@@ -72,7 +71,7 @@ export async function getAdminMetricCounts() {
         teacherCount,
         learnerCount,
         aralCount,
-        expiredPendingInvites,
+        pendingTeacherApprovals,
       };
     },
     {
@@ -170,7 +169,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
           where: { schoolId, deletedAt: null, archivedAt: null },
         }),
         prisma.user.count({
-          where: { schoolId, role: "TEACHER", deletedAt: null },
+          where: { schoolId, role: "TEACHER", deletedAt: null, isActive: true },
         }),
         prisma.gradeLevel.count({ where: { schoolId, deletedAt: null } }),
         prisma.section.count({ where: { schoolId, deletedAt: null } }),

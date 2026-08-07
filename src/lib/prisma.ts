@@ -34,7 +34,14 @@ const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    // Skip "query" in normal `next dev` — it floods the terminal on every
+    // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
+    log:
+      process.env.NODE_ENV === "development"
+        ? process.env.PRISMA_LOG_QUERIES === "1"
+          ? ["query", "error", "warn"]
+          : ["error", "warn"]
+        : ["error"],
     ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
   });
 

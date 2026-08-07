@@ -1,6 +1,5 @@
 "use server";
 
-import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -25,6 +24,60 @@ function labelProfile(key: string): string {
   return READING_PROFILE_LABELS[key as keyof typeof READING_PROFILE_LABELS] ?? key;
 }
 
+/** Fields rendered by PrintableLearnersReport (+ relations). */
+const learnerReportSelect = {
+  id: true,
+  fullName: true,
+  age: true,
+  gender: true,
+  englishReadingProfile: true,
+  filipinoReadingProfile: true,
+  isAralLearner: true,
+  gradeLevel: { select: { type: true } },
+  section: { select: { name: true } },
+} as const;
+
+/** Fields used by Excel export sheets (Learners + ARAL summary). */
+const learnerExportSelect = {
+  fullName: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  age: true,
+  gender: true,
+  englishReadingProfile: true,
+  filipinoReadingProfile: true,
+  governmentBenefits: true,
+  parentEducation: true,
+  isAralLearner: true,
+  gradeLevel: { select: { type: true } },
+  section: { select: { name: true } },
+  aralProfile: {
+    select: {
+      modeOfTransportation: true,
+      distanceHomeToSchool: true,
+      previousTransfers: true,
+      absenteeismFrequency: true,
+    },
+  },
+} as const;
+
+function learnerWhere(opts: {
+  schoolId: string;
+  teacherId?: string;
+  gradeLevelId?: string;
+  aralOnly?: boolean;
+}) {
+  return {
+    schoolId: opts.schoolId,
+    deletedAt: null,
+    archivedAt: null,
+    ...(opts.teacherId ? { teacherId: opts.teacherId } : {}),
+    ...(opts.gradeLevelId ? { gradeLevelId: opts.gradeLevelId } : {}),
+    ...(opts.aralOnly ? { isAralLearner: true } : {}),
+  };
+}
+
 async function fetchLearnersForExport(opts: {
   schoolId: string;
   teacherId?: string;
@@ -32,26 +85,21 @@ async function fetchLearnersForExport(opts: {
   aralOnly?: boolean;
 }) {
   return prisma.learner.findMany({
-    where: {
-      schoolId: opts.schoolId,
-      deletedAt: null,
-      archivedAt: null,
-      ...(opts.teacherId ? { teacherId: opts.teacherId } : {}),
-      ...(opts.gradeLevelId ? { gradeLevelId: opts.gradeLevelId } : {}),
-      ...(opts.aralOnly ? { isAralLearner: true } : {}),
-    },
-    include: {
-      gradeLevel: { select: { type: true } },
-      section: { select: { name: true } },
-      aralProfile: {
-        select: {
-          modeOfTransportation: true,
-          distanceHomeToSchool: true,
-          previousTransfers: true,
-          absenteeismFrequency: true,
-        },
-      },
-    },
+    where: learnerWhere(opts),
+    select: learnerExportSelect,
+    orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],
+  });
+}
+
+async function fetchLearnersForReport(opts: {
+  schoolId: string;
+  teacherId?: string;
+  gradeLevelId?: string;
+  aralOnly?: boolean;
+}) {
+  return prisma.learner.findMany({
+    where: learnerWhere(opts),
+    select: learnerReportSelect,
     orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],
   });
 }
@@ -60,6 +108,8 @@ async function buildLearnersWorkbook(
   learners: Awaited<ReturnType<typeof fetchLearnersForExport>>,
   schoolName: string
 ): Promise<Buffer> {
+  // Dynamic import keeps exceljs off the reports (`loadLearnersForReport`) cold path.
+  const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   wb.creator = "LITRACK";
   wb.created = new Date();
@@ -290,7 +340,7 @@ export async function loadLearnersForReport(opts: {
     select: { name: true, schoolIdCode: true },
   });
 
-  const learners = await fetchLearnersForExport(opts);
+  const learners = await fetchLearnersForReport(opts);
 
   const byGrade = new Map<string, typeof learners>();
   for (const l of learners) {

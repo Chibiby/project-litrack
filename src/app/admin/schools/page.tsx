@@ -3,12 +3,10 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolsList } from "@/lib/cache/schools-list";
 import { AppShell } from "@/components/app-shell";
-import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
 import { TableSectionSkeleton } from "@/components/loading";
-import { getAdminSchoolImpersonationWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +24,8 @@ async function SchoolsTableBody() {
     dbAvailable = false;
   }
 
-  const impersonationHrefs = getAdminSchoolImpersonationWarmHrefs(tableData);
-  const impersonationKey = `admin:schools:impersonation:${tableData.map((s) => s.id).join(",")}`;
-
   return (
     <>
-      <NavPrefetcher cacheKey={impersonationKey} hrefs={impersonationHrefs} />
       {!dbAvailable ? (
         <p className="mb-4 text-sm text-destructive">
           Could not load schools right now. The database may be unavailable.

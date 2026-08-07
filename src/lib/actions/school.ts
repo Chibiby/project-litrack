@@ -9,7 +9,12 @@ import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { generateActivationCredential } from "@/lib/auth/credentials";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { revalidateSchoolsList } from "@/lib/cache/revalidate";
+import { cachedQuery } from "@/lib/cache/unstable";
+import { schoolsList } from "@/lib/cache/tags";
+import {
+  revalidateSchoolDashboard,
+  revalidateSchoolsList,
+} from "@/lib/cache/revalidate";
 import { z } from "zod";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -167,46 +172,66 @@ export async function regenerateSchoolHeadCredential(
   return { ok: true, data: { activationCredential } };
 }
 
+/** Active schools (id + name). Cached ~60s under `schools-list`. */
 export async function listSchoolsPublic() {
-  return prisma.school.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  return cachedQuery(
+    () =>
+      prisma.school.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+    {
+      keyParts: ["schools-public"],
+      tags: [schoolsList],
+      revalidate: 60,
+    }
+  );
 }
 
 /**
- * W-2: Teacher login button unlocks only when School Head is profiled,
- * at least one grade level exists, and at least one teacher is enrolled.
+ * Teachers unlock when an active, profiled School Head exists and
+ * the school has at least one grade level (teachers self-register).
+ * Cached ~60s under `schools-list`; bust via `revalidateSchoolsList()`.
  */
 export async function listSchoolsWithTeacherStatus() {
-  const schools = await prisma.school.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      _count: {
+  return cachedQuery(
+    async () => {
+      const schools = await prisma.school.findMany({
+        where: { isActive: true, deletedAt: null },
         select: {
-          users: {
-            where: { role: "TEACHER", deletedAt: null, isActive: true },
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              gradeLevels: { where: { deletedAt: null } },
+            },
           },
-          gradeLevels: { where: { deletedAt: null } },
+          users: {
+            where: {
+              role: "SCHOOL_HEAD",
+              deletedAt: null,
+              isActive: true,
+              profileCompleted: true,
+            },
+            select: { id: true },
+            take: 1,
+          },
         },
-      },
-      users: {
-        where: { role: "SCHOOL_HEAD", deletedAt: null, isActive: true, profileCompleted: true },
-        select: { id: true },
-        take: 1,
-      },
+        orderBy: { name: "asc" },
+      });
+      return schools.map((s) => ({
+        id: s.id,
+        name: s.name,
+        teachersOpen: s.users.length > 0 && s._count.gradeLevels > 0,
+      }));
     },
-    orderBy: { name: "asc" },
-  });
-  return schools.map((s) => ({
-    id: s.id,
-    name: s.name,
-    hasTeachers:
-      s.users.length > 0 && s._count.gradeLevels > 0 && s._count.users > 0,
-  }));
+    {
+      keyParts: ["schools-with-teacher-status"],
+      tags: [schoolsList],
+      revalidate: 60,
+    }
+  );
 }
 
 export async function deleteSchool(formData: FormData): Promise<void> {
@@ -227,4 +252,5 @@ export async function deleteSchool(formData: FormData): Promise<void> {
   });
   revalidatePath("/admin/schools");
   revalidateSchoolsList();
+  revalidateSchoolDashboard(id);
 }

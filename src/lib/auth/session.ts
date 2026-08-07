@@ -11,31 +11,37 @@ export { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
 /** App user guaranteed to belong to a school (non-null schoolId). */
 export type SchoolUser = User & { schoolId: string };
 
+export type GetCurrentUserOptions = {
+  /** When true, return pending/rejected teachers without redirecting (pending-approval page). */
+  allowPending?: boolean;
+};
+
 export type RequireUserOptions = {
   /** When true, allow access even if mustChangePassword is set (set-password flow). */
   allowMustChangePassword?: boolean;
+  /** When true, allow TEACHER users who are pending approval (or inactive pending-like). */
+  allowPending?: boolean;
 };
 
-/**
- * Returns the authenticated app User, or null.
- * Soft-deleted or inactive users are signed out (best effort) and treated as unauthenticated.
- * Wrapped in React cache() so layout + page requireUser/getCurrentUser dedupe in one request.
- */
-export const getCurrentUser = cache(async (): Promise<User | null> => {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) return null;
+function isTeacherRejected(user: User): boolean {
+  return user.role === "TEACHER" && user.approvalStatus === "REJECTED";
+}
 
+/** Pending approval, or inactive teacher who is not explicitly rejected. */
+function isTeacherPendingGate(user: User): boolean {
+  return (
+    user.role === "TEACHER" &&
+    (user.approvalStatus === "PENDING" ||
+      (!user.isActive && user.approvalStatus !== "REJECTED"))
+  );
+}
+
+async function loadUserByAuthId(authId: string): Promise<User | null> {
   // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
   // can briefly queue past the serverless pool wait; a short backoff clears most
   // transient failures before they hit teacher/error.tsx.
-  let user: User | null = null;
   try {
-    user = await prisma.user.findUnique({
-      where: { authId: authUser.id },
-    });
+    return await prisma.user.findUnique({ where: { authId } });
   } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
@@ -43,23 +49,72 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
         : "";
     if (code !== "P2024") throw err;
     await new Promise((r) => setTimeout(r, 75));
-    user = await prisma.user.findUnique({
-      where: { authId: authUser.id },
-    });
+    return prisma.user.findUnique({ where: { authId } });
   }
+}
+
+/**
+ * Cached by allowPending boolean so React cache() dedupes correctly across callers.
+ */
+const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User | null> => {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) return null;
+
+  const user = await loadUserByAuthId(authUser.id);
   if (!user) return null;
 
-  if (user.deletedAt || !user.isActive) {
+  if (user.deletedAt) {
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.error("[session] signOut for inactive/deleted user failed:", err);
+      console.error("[session] signOut for deleted user failed:", err);
+    }
+    return null;
+  }
+
+  if (isTeacherRejected(user)) {
+    if (allowPending) {
+      return user;
+    }
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("[session] signOut for rejected teacher failed:", err);
+    }
+    redirect("/login");
+  }
+
+  if (isTeacherPendingGate(user)) {
+    if (allowPending) {
+      return user;
+    }
+    redirect("/pending-approval");
+  }
+
+  // Soft-deleted already handled. Inactive non-pending users (SH/admin/legacy): sign out.
+  if (!user.isActive) {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("[session] signOut for inactive user failed:", err);
     }
     return null;
   }
 
   return user;
 });
+
+/**
+ * Returns the authenticated app User, or null.
+ * Soft-deleted or inactive users are signed out (best effort) and treated as unauthenticated,
+ * except pending teachers (see allowPending / pending-approval redirect).
+ */
+export async function getCurrentUser(options?: GetCurrentUserOptions): Promise<User | null> {
+  return getCurrentUserCached(Boolean(options?.allowPending));
+}
 
 /**
  * Requires an authenticated user. Optionally enforces role(s).
@@ -69,6 +124,8 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
  * When the user must change their password, redirects to `/account/set-password`
  * unless `options.allowMustChangePassword` is true.
  *
+ * Pending teachers redirect to `/pending-approval` unless `options.allowPending` is true.
+ *
  * Signature stays backward-compatible: `requireUser(roles?, allowSuperAdmin?)`.
  */
 export async function requireUser(
@@ -76,7 +133,7 @@ export async function requireUser(
   allowSuperAdmin = true,
   options?: RequireUserOptions
 ): Promise<User> {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPending: options?.allowPending });
   if (!user) {
     const isAdminRoute =
       roles === "SUPER_ADMIN" || (Array.isArray(roles) && roles.includes("SUPER_ADMIN"));

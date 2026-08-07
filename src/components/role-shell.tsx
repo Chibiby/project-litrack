@@ -26,11 +26,11 @@ interface RoleShellProps {
  * Persistent dashboard chrome for role route segments.
  * Keeps sidebar + breadcrumb header mounted while `loading.tsx` / page
  * content swaps in `children`. Layout chrome is set up once when this shell
- * mounts; AppSidebar's NavPrefetcher then full-prefetches sidebar + nested
- * shell routes (concurrency-limited) so later navigations reuse Flight data
- * instead of flashing loading.tsx. Deeper nests warm from learner detail
- * pages, not mass roster lists. Keep account/settings under the role prefix
- * so this shell is not unmounted (see rolePasswordPath).
+ * mounts; AppSidebar's NavPrefetcher then full-prefetches cheap shell routes
+ * (dashboard / profile / password) so those navigations reuse Flight data.
+ * Heavy sidebar destinations keep default Link prefetch only. Deeper nests
+ * warm from learner detail pages, not mass roster lists. Keep account/settings
+ * under the role prefix so this shell is not unmounted (see rolePasswordPath).
  */
 export function RoleShell({
   role,

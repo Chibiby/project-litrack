@@ -1,26 +1,21 @@
 import type { UserRole } from "@prisma/client";
-import { rolePasswordPath } from "@/lib/auth/roles";
+import { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
 
 /**
- * Nested destinations discoverable from shell nav data (no learner IDs).
- * Grade roster pages themselves come from sidebar `getNavItems`; this adds
- * high-traffic children that are not listed in the sidebar.
+ * Cheap shell destinations for NavPrefetcher FULL warm.
+ * Dashboard / profile / password only — reports, grade rosters, and other
+ * heavy sidebar routes stay on default Link prefetch (loading.tsx skeleton).
  */
-export function getShellNestedWarmHrefs(
-  role: UserRole,
-  grades: readonly { id: string }[] = []
-): string[] {
+export function getShellWarmHrefs(role: UserRole): string[] {
+  const home = roleHomePath(role);
   const password = rolePasswordPath(role);
   switch (role) {
     case "TEACHER":
-      return [
-        ...grades.map((g) => `/teacher/grade/${g.id}/import`),
-        password,
-      ];
+      return [home, "/teacher/profile", password];
     case "SUPER_ADMIN":
-      return ["/admin/schools/new", password];
+      return [home, "/admin/profile", password];
     case "SCHOOL_HEAD":
-      return [password];
+      return [home, "/school-head/profile", password];
     default:
       return [password];
   }
@@ -85,14 +80,4 @@ export function getAralActionWarmHrefs(gradeId: string, learnerId: string): stri
     `/teacher/grade/${gradeId}/learners/${learnerId}`,
     ...getAralLearnerWarmHrefs(gradeId, [learnerId]),
   ];
-}
-
-/** Admin schools list → school-head impersonation destinations. */
-export function getAdminSchoolImpersonationWarmHrefs(
-  schools: readonly { id: string }[]
-): string[] {
-  return schools.flatMap((s) => [
-    `/school-head?schoolId=${s.id}`,
-    `/school-head/school-years?schoolId=${s.id}`,
-  ]);
 }

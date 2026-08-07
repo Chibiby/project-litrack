@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { SignOutButton } from "@/components/sign-out-button";
-import { getShellNestedWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { logoutAction } from "@/lib/actions/auth";
 import { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
 import type { UserRole } from "@prisma/client";
@@ -73,7 +73,7 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         { label: "School info", href: "/school-head/school-info", icon: Building2 },
         { label: "Reports", href: "/school-head/reports", icon: FileBarChart },
         { label: "Audit", href: "/school-head/audit", icon: ScrollText },
-        { label: "Profile", href: "/school-head/profiling", icon: UserCircle },
+        { label: "Profile", href: "/school-head/profile", icon: UserCircle },
       ];
     case "TEACHER":
       const items: NavItem[] = [
@@ -96,7 +96,7 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         }
       });
       items.push({ label: "Reports", href: "/teacher/reports", icon: FileBarChart });
-      items.push({ label: "Profile", href: "/teacher/profiling", icon: UserCircle });
+      items.push({ label: "Profile", href: "/teacher/profile", icon: UserCircle });
       return items;
     default:
       return [];
@@ -161,17 +161,10 @@ export function AppSidebar({
   const navItems = getNavItems(role, grades);
   const activeHref = resolveActiveHref(pathname, navItems);
 
-  // Background-warm sidebar + shell-discoverable nested routes once per shell
-  // (not on each page nav). Learner nests warm from detail pages only — roster
-  // pages must not full-prefetch every learner (pool stampede → P2024).
-  const gradesKey =
-    grades?.map((g) => `${g.id}:${g.hasAral ? 1 : 0}`).join(",") ?? "";
-  const prefetchHrefs = useMemo(() => {
-    const sidebarHrefs = getNavItems(role, grades).map((item) => item.href);
-    const nestedHrefs = getShellNestedWarmHrefs(role, grades);
-    return [...sidebarHrefs, ...nestedHrefs];
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- gradesKey fingerprints grades
-  }, [role, gradesKey]);
+  // FULL-warm only cheap shell routes (dashboard / profile / password).
+  // Reports, grade rosters, and other sidebar items keep default Link prefetch
+  // (loading.tsx only) so background RSC does not stampede the Prisma pool.
+  const prefetchHrefs = useMemo(() => getShellWarmHrefs(role), [role]);
   const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
   const SidebarContent = (

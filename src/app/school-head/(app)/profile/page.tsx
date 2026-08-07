@@ -2,23 +2,26 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { AppShell } from "@/components/app-shell";
-import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
+import { SchoolHeadProfileForm } from "@/components/forms/sh-profile-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherProfilingPage() {
-  const user = await requireUser("TEACHER");
-  const profile = await prisma.teacherProfile.findUnique({ where: { userId: user.id } });
+export default async function SchoolHeadProfilePage() {
+  const user = await requireUser("SCHOOL_HEAD");
+  const profile = await prisma.schoolHeadProfile.findUnique({ where: { userId: user.id } });
 
   return (
     <AppShell
-      title="Teacher Profiling"
-      subtitle="Complete this to start adding learners"
+      title="Profile"
+      subtitle="Update your school head profile"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
-      <TeacherProfileForm
+      <SchoolHeadProfileForm
         defaultValues={{
+          firstName: user.firstName,
+          middleName: user.middleName ?? "",
+          lastName: user.lastName,
           accountEmail: user.email,
           accountEmailIsSynthetic: isSyntheticEmail(user.email),
           ...(profile ?? {}),

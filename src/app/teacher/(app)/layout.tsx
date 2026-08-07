@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
@@ -6,12 +7,18 @@ import { RoleShell } from "@/components/role-shell";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherLayout({
+export default async function TeacherAppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const user = await requireUser("TEACHER");
+
+  // Only gate real teachers — SUPER_ADMIN may view teacher pages without profiling.
+  if (user.role === "TEACHER" && !user.profileCompleted) {
+    redirect("/teacher/profiling");
+  }
+
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
 
   let schoolName: string | undefined;

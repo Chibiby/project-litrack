@@ -1,34 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { randomBytes } from "crypto";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireUser, requireSchoolUser } from "@/lib/auth/session";
 import { schoolHeadProfileSchema } from "@/lib/validators/profile.schema";
-import {
-  createGradeLevelSchema,
-  teacherInviteSchema,
-  inviteIdSchema,
-} from "@/lib/validators/teacher-invite.schema";
-import {
-  generateInviteTokenForUser,
-  hashToken,
-  findTeacherForInvite,
-  generateActivationCredential,
-} from "@/lib/auth/invites";
-import { teacherUsername, teacherSyntheticEmail } from "@/lib/auth/synthetic-email";
-import { sendTeacherInviteEmail } from "@/lib/email/resend";
+import { createGradeLevelSchema } from "@/lib/validators/grade-level.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { checkRateLimit } from "@/lib/rate-limit";
 import {
   revalidateSchoolDashboard,
+  revalidateSchoolsList,
   revalidateTeacherDashboard,
 } from "@/lib/cache/revalidate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-const INVITE_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
+const teacherUserIdSchema = z.object({
+  userId: z.string().uuid("Invalid teacher"),
+});
+
+const approveTeacherSchema = z.object({
+  userId: z.string().uuid("Invalid teacher"),
+  gradeLevelId: z.string().uuid("Grade level required"),
+});
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -47,10 +42,6 @@ function formToObj(formData: FormData): Record<string, unknown> {
     }
   }
   return obj;
-}
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
 export async function saveSchoolHeadProfile(formData: FormData): Promise<void> {
@@ -98,6 +89,8 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<void> {
 
   revalidatePath("/school-head");
   revalidateSchoolDashboard(user.schoolId);
+  // Login "teachers open" depends on a profiled School Head.
+  revalidateSchoolsList();
 }
 
 export async function createGradeLevel(formData: FormData): Promise<void> {
@@ -125,311 +118,185 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
 
   revalidatePath("/school-head/grade-levels");
   revalidateSchoolDashboard(user.schoolId);
+  // Login "teachers open" depends on at least one grade level.
+  revalidateSchoolsList();
 }
 
 /**
- * Unified teacher onboarding (single flow).
- * Creates Supabase user + Prisma User + TeacherInvite immediately.
- * Returns username + temp password once. Optional email gets a setup link.
+ * Approve a pending teacher self-registration and assign a grade level.
  */
-export async function inviteTeacher(
-  formData: FormData
-): Promise<ActionResult<{ username: string; tempPassword: string; inviteId: string }>> {
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.schoolId || !user.profileCompleted) {
-    return { ok: false, error: "Complete your profile first" };
-  }
+export async function approveTeacher(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
 
-  const rate = checkRateLimit(`invite:create:${user.schoolId}`, INVITE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const parsed = teacherInviteSchema.safeParse({
+  const parsed = approveTeacherSchema.safeParse({
+    userId: formData.get("userId"),
     gradeLevelId: formData.get("gradeLevelId"),
-    email: formData.get("email") || undefined,
-    firstName: formData.get("firstName"),
-    middleName: formData.get("middleName") || undefined,
-    lastName: formData.get("lastName"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const grade = await prisma.gradeLevel.findFirst({
-    where: { id: parsed.data.gradeLevelId, schoolId: user.schoolId, deletedAt: null },
-  });
-  if (!grade) return { ok: false, error: "Invalid grade level" };
-
-  if (parsed.data.email) {
-    const emailTaken = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-    if (emailTaken) return { ok: false, error: "Email is already in use" };
-    const inviteEmailTaken = await prisma.teacherInvite.findFirst({
+  const [teacher, grade] = await Promise.all([
+    prisma.user.findFirst({
       where: {
+        id: parsed.data.userId,
         schoolId: user.schoolId,
-        email: parsed.data.email,
-        consumedAt: null,
-        revokedAt: null,
+        role: "TEACHER",
+        approvalStatus: "PENDING",
+        deletedAt: null,
       },
-    });
-    if (inviteEmailTaken) return { ok: false, error: "A pending invite already uses this email" };
-  }
-
-  const hex4 = randomBytes(2).toString("hex");
-  const username = teacherUsername(parsed.data.lastName, hex4);
-  const syntheticEmail = teacherSyntheticEmail(username);
-  const tempPassword = generateActivationCredential();
-  const credentialHash = hashToken(tempPassword);
-
-  const adminClient = createSupabaseAdminClient();
-  const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
-    email: syntheticEmail,
-    password: tempPassword,
-    email_confirm: true,
-    app_metadata: { role: "TEACHER", schoolId: user.schoolId },
-    user_metadata: { role: "TEACHER", schoolId: user.schoolId, username },
-  });
-  if (createErr || !created.user) {
-    return { ok: false, error: createErr?.message ?? "Failed to create teacher account" };
-  }
-
-  const fullName = [parsed.data.firstName, parsed.data.middleName, parsed.data.lastName]
-    .filter(Boolean)
-    .join(" ");
-
-  let inviteId = "";
-  let inviteToken = "";
-  let teacherUserId = "";
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const teacher = await tx.user.create({
-        data: {
-          authId: created.user!.id,
-          email: syntheticEmail,
-          role: "TEACHER",
-          schoolId: user.schoolId!,
-          firstName: parsed.data.firstName,
-          middleName: parsed.data.middleName ?? null,
-          lastName: parsed.data.lastName,
-          fullName,
-          isActive: true,
-          mustChangePassword: true,
-          profileCompleted: false,
-          taughtGrades: { connect: { id: parsed.data.gradeLevelId } },
-        },
-      });
-      teacherUserId = teacher.id;
-
-      const { token, tokenHash, expiresAt } = generateInviteTokenForUser(teacher.id);
-      inviteToken = token;
-
-      const invite = await tx.teacherInvite.create({
-        data: {
-          schoolId: user.schoolId!,
-          email: parsed.data.email ?? null,
-          firstName: parsed.data.firstName,
-          middleName: parsed.data.middleName ?? null,
-          lastName: parsed.data.lastName,
-          userId: teacher.id,
-          gradeLevelId: parsed.data.gradeLevelId,
-          tokenHash,
-          credentialHash,
-          expiresAt,
-          createdById: user.id,
-          lastSentAt: parsed.data.email ? new Date() : null,
-        },
-      });
-      inviteId = invite.id;
-    });
-  } catch (err) {
-    // Roll back auth user if DB write failed
-    try {
-      await adminClient.auth.admin.deleteUser(created.user.id);
-    } catch (cleanupErr) {
-      console.error("[inviteTeacher] auth cleanup failed:", cleanupErr);
-    }
-    console.error("[inviteTeacher] transaction failed:", err);
-    return { ok: false, error: "Failed to create teacher account" };
-  }
-
-  if (parsed.data.email && inviteToken) {
-    const school = await prisma.school.findUnique({
-      where: { id: user.schoolId },
-      select: { name: true },
-    });
-    try {
-      await sendTeacherInviteEmail({
-        to: parsed.data.email,
-        teacherName: [parsed.data.firstName, parsed.data.lastName].join(" "),
-        schoolName: school?.name ?? "your school",
-        inviteUrl: `${appUrl()}/teacher-setup/${inviteToken}`,
-        username,
-      });
-    } catch (e) {
-      console.error("[invite email] failed:", e);
-    }
-  }
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_INVITE,
-    resource: "TeacherInvite",
-    resourceId: inviteId,
-    metadata: {
-      schoolId: user.schoolId,
-      inviteId,
-      gradeLevelId: parsed.data.gradeLevelId,
-      hasEmail: Boolean(parsed.data.email),
-    },
-  });
-
-  revalidatePath("/school-head/teachers");
-  revalidateSchoolDashboard(user.schoolId);
-  if (teacherUserId) revalidateTeacherDashboard(teacherUserId);
-  return { ok: true, data: { username, tempPassword, inviteId } };
-}
-
-/**
- * Regenerate temp password + invite token. Returns new credential once.
- * Invite token expiry is refreshed; teacher mustChangePassword set true again.
- */
-export async function resendTeacherInvite(
-  formData: FormData
-): Promise<ActionResult<{ username: string; tempPassword: string }>> {
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.schoolId) return { ok: false, error: "No school" };
-
-  const parsed = inviteIdSchema.safeParse({ inviteId: formData.get("inviteId") });
-  if (!parsed.success) return { ok: false, error: "Invalid invite" };
-
-  const rate = checkRateLimit(`invite:resend:${parsed.data.inviteId}`, INVITE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const invite = await prisma.teacherInvite.findUnique({ where: { id: parsed.data.inviteId } });
-  if (!invite) return { ok: false, error: "Invite not found" };
-  if (invite.schoolId !== user.schoolId) return { ok: false, error: "Invite not found" };
-
-  if (invite.consumedAt) return { ok: false, error: "Invite already activated" };
-  if (invite.revokedAt) return { ok: false, error: "Invite was revoked" };
-
-  const teacher = await findTeacherForInvite(invite);
-  if (!teacher) return { ok: false, error: "Teacher account not found" };
-
-  const tempPassword = generateActivationCredential();
-  const credentialHash = hashToken(tempPassword);
-  const { token, tokenHash, expiresAt } = generateInviteTokenForUser(teacher.id);
-
-  const adminClient = createSupabaseAdminClient();
-  const { error } = await adminClient.auth.admin.updateUserById(teacher.authId, {
-    password: tempPassword,
-    app_metadata: { role: "TEACHER", schoolId: invite.schoolId },
-  });
-  if (error) return { ok: false, error: "Failed to regenerate credentials" };
-
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: teacher.id },
-      data: { mustChangePassword: true, isActive: true },
     }),
-    prisma.teacherInvite.update({
-      where: { id: invite.id },
-      data: {
-        userId: teacher.id,
-        tokenHash,
-        credentialHash,
-        expiresAt,
-        lastSentAt: new Date(),
+    prisma.gradeLevel.findFirst({
+      where: {
+        id: parsed.data.gradeLevelId,
+        schoolId: user.schoolId,
+        deletedAt: null,
       },
     }),
   ]);
 
-  const username =
-    teacher.email.split("@")[0] ?? teacher.email;
+  if (!teacher) return { ok: false, error: "Pending teacher not found" };
+  if (!grade) return { ok: false, error: "Invalid grade level" };
 
-  if (invite.email) {
-    const school = await prisma.school.findUnique({
-      where: { id: invite.schoolId },
-      select: { name: true },
-    });
-    try {
-      await sendTeacherInviteEmail({
-        to: invite.email,
-        teacherName: [invite.firstName, invite.lastName].join(" "),
-        schoolName: school?.name ?? "your school",
-        inviteUrl: `${appUrl()}/teacher-setup/${token}`,
-        username,
-      });
-    } catch (e) {
-      console.error("[invite resend email] failed:", e);
-    }
+  const adminClient = createSupabaseAdminClient();
+  const { error: metaErr } = await adminClient.auth.admin.updateUserById(teacher.authId, {
+    app_metadata: { role: "TEACHER", schoolId: user.schoolId },
+  });
+  if (metaErr) {
+    console.error("[approveTeacher] app_metadata update failed:", metaErr);
+    return { ok: false, error: metaErr.message || "Failed to update auth metadata" };
   }
+
+  const now = new Date();
+  await prisma.user.update({
+    where: { id: teacher.id },
+    data: {
+      isActive: true,
+      approvalStatus: "APPROVED",
+      approvedAt: now,
+      approvedById: user.id,
+      taughtGrades: { connect: { id: grade.id } },
+    },
+  });
 
   await writeAudit({
     userId: user.id,
     schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_INVITE_RESEND,
-    resource: "TeacherInvite",
-    resourceId: invite.id,
-    metadata: { schoolId: user.schoolId, inviteId: invite.id, teacherId: teacher.id },
+    action: AUDIT_ACTIONS.TEACHER_APPROVE,
+    resource: "User",
+    resourceId: teacher.id,
+    metadata: {
+      schoolId: user.schoolId,
+      teacherId: teacher.id,
+      gradeLevelId: grade.id,
+    },
   });
 
   revalidatePath("/school-head/teachers");
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherDashboard(teacher.id);
-  return { ok: true, data: { username, tempPassword } };
+  return { ok: true };
 }
 
 /**
- * Revoke invite. If the teacher has never activated (invite not consumed), deactivate the user.
+ * Reject a pending teacher self-registration.
  */
-export async function revokeTeacherInvite(formData: FormData): Promise<ActionResult> {
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.schoolId) return { ok: false, error: "No school" };
+export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
 
-  const parsed = inviteIdSchema.safeParse({ inviteId: formData.get("inviteId") });
-  if (!parsed.success) return { ok: false, error: "Invalid invite" };
+  const parsed = teacherUserIdSchema.safeParse({ userId: formData.get("userId") });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
 
-  const rate = checkRateLimit(`invite:revoke:${parsed.data.inviteId}`, INVITE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+  const teacher = await prisma.user.findFirst({
+    where: {
+      id: parsed.data.userId,
+      schoolId: user.schoolId,
+      role: "TEACHER",
+      approvalStatus: "PENDING",
+      deletedAt: null,
+    },
+  });
+  if (!teacher) return { ok: false, error: "Pending teacher not found" };
 
-  const invite = await prisma.teacherInvite.findUnique({ where: { id: parsed.data.inviteId } });
-  if (!invite) return { ok: false, error: "Invite not found" };
-  if (invite.schoolId !== user.schoolId) return { ok: false, error: "Invite not found" };
-
-  if (invite.revokedAt) return { ok: false, error: "Already revoked" };
-  if (invite.consumedAt) return { ok: false, error: "Invite already activated — deactivate the user separately" };
-
-  const teacher = await findTeacherForInvite(invite);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.teacherInvite.update({
-      where: { id: invite.id },
-      data: { revokedAt: new Date() },
-    });
-    if (teacher && !invite.consumedAt) {
-      await tx.user.update({
-        where: { id: teacher.id },
-        data: { isActive: false },
-      });
-    }
+  await prisma.user.update({
+    where: { id: teacher.id },
+    data: {
+      approvalStatus: "REJECTED",
+      isActive: false,
+      rejectedAt: new Date(),
+    },
   });
 
   await writeAudit({
     userId: user.id,
     schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_INVITE_REVOKE,
-    resource: "TeacherInvite",
-    resourceId: invite.id,
-    metadata: {
-      schoolId: user.schoolId,
-      inviteId: invite.id,
-      teacherId: teacher?.id,
-    },
+    action: AUDIT_ACTIONS.TEACHER_REJECT,
+    resource: "User",
+    resourceId: teacher.id,
+    metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
   revalidatePath("/school-head/teachers");
   revalidateSchoolDashboard(user.schoolId);
-  if (teacher) revalidateTeacherDashboard(teacher.id);
+  revalidateTeacherDashboard(teacher.id);
+  return { ok: true };
+}
+
+/**
+ * Hard-delete a rejected (never-profiled) teacher so they can register again.
+ * Deletes Supabase auth first to avoid an orphaned login that would block the email.
+ */
+export async function clearRejectedTeacher(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const parsed = teacherUserIdSchema.safeParse({ userId: formData.get("userId") });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const teacher = await prisma.user.findFirst({
+    where: {
+      id: parsed.data.userId,
+      schoolId: user.schoolId,
+      role: "TEACHER",
+      approvalStatus: "REJECTED",
+      profileCompleted: false,
+      deletedAt: null,
+    },
+  });
+  if (!teacher) return { ok: false, error: "Rejected teacher not found" };
+
+  const adminClient = createSupabaseAdminClient();
+  const { error: authErr } = await adminClient.auth.admin.deleteUser(teacher.authId);
+  if (authErr) {
+    console.error("[clearRejectedTeacher] auth delete failed:", authErr);
+    return { ok: false, error: authErr.message || "Failed to delete auth user" };
+  }
+
+  try {
+    await prisma.user.delete({ where: { id: teacher.id } });
+  } catch (err) {
+    console.error("[clearRejectedTeacher] prisma delete failed after auth delete:", err);
+    return {
+      ok: false,
+      error:
+        "Auth account was removed but the teacher record could not be deleted. Contact support before asking them to re-register.",
+    };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.TEACHER_REJECTION_CLEARED,
+    resource: "User",
+    resourceId: teacher.id,
+    metadata: { schoolId: user.schoolId, teacherId: teacher.id },
+  });
+
+  revalidatePath("/school-head/teachers");
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 

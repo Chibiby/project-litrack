@@ -27,7 +27,9 @@ export async function resolveSchoolContext(
       redirect("/admin/schools");
     }
 
-    // Audit is best-effort — pool timeouts must not block the dashboard.
+    // Audit on real admin drill-down only. Impersonation mass FULL-warm was
+    // removed from /admin/schools so background prefetch cannot spam these rows.
+    // Best-effort — pool timeouts must not block the dashboard.
     try {
       const since = new Date(Date.now() - ADMIN_VIEW_AUDIT_WINDOW_MS);
       const alreadyLogged = await prisma.auditLog.findFirst({

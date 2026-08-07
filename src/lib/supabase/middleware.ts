@@ -12,8 +12,18 @@ export type SessionUser = {
 };
 
 /**
- * Refreshes the Supabase auth session cookie on every request and
- * returns the user (if any). Use from middleware.ts.
+ * Refreshes the Supabase auth session cookie when needed and returns the
+ * user identity from verified JWT claims. Use from middleware.ts.
+ *
+ * Uses auth.getClaims() (supabase-js 2.106+) which:
+ * - Refreshes the session via getSession() when the access token is expired
+ * - Verifies the JWT locally against JWKS when the project uses asymmetric
+ *   signing keys (ES256/RS256) — no Auth-server round trip per request
+ * - Falls back to getUser() only for legacy HS* symmetric JWTs
+ *
+ * Authoritative user lookups (ban/delete/pending gates) stay in RSC via
+ * session.ts getUser() + Prisma — middleware only needs id + role for
+ * redirect-if-authed and role-prefix gates.
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
  * (set these in Vercel for auth to work in production).
@@ -43,16 +53,15 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
 
-  if (!authUser) {
+  if (error || !data?.claims?.sub) {
     return { supabaseResponse, user: null as SessionUser | null };
   }
 
-  const role = parseAppMetadataRole(authUser.app_metadata?.role);
-  const user: SessionUser = { id: authUser.id, role };
+  const claims = data.claims;
+  const role = parseAppMetadataRole(claims.app_metadata?.role);
+  const user: SessionUser = { id: claims.sub, role };
 
   return { supabaseResponse, user };
 }

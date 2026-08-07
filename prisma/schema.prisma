@@ -21,6 +21,12 @@ enum UserRole {
   TEACHER
 }
 
+enum TeacherApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum GradeLevelType {
   KINDER
   G1
@@ -336,6 +342,11 @@ model User {
   mustChangePassword Boolean @default(false)
   // Profile completion flags
   profileCompleted Boolean @default(false)
+  // Teacher self-registration approval (null for non-teacher roles)
+  approvalStatus TeacherApprovalStatus?
+  approvedAt     DateTime?
+  approvedById   String?
+  rejectedAt     DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deletedAt  DateTime?
@@ -352,6 +363,7 @@ model User {
   teacherInvites        TeacherInvite[]      @relation("TeacherInviteUser")
 
   @@index([schoolId, role, deletedAt])
+  @@index([schoolId, approvalStatus])
   @@index([authId])
 }
 

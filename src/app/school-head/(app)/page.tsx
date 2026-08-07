@@ -86,7 +86,7 @@ export default async function SchoolHeadDashboard({
       {!isSuperAdminView ? (
         <div className="mb-6 flex flex-wrap gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link href="/school-head/profiling">
+            <Link href="/school-head/profile">
               <CheckCircle2 className="mr-1 h-4 w-4" /> Profile
             </Link>
           </Button>

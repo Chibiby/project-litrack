@@ -9,12 +9,18 @@ function isPublicPath(pathname: string) {
     pathname === "/login" ||
     pathname === "/admin/login" ||
     pathname === "/forgot-password" ||
+    pathname === "/auth/callback" ||
     pathname.startsWith("/auth/reset") ||
-    pathname.startsWith("/teacher-setup/") ||
-    pathname.startsWith("/api/schools/list") ||
+    pathname.startsWith("/api/") ||
+    pathname === "/api" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
   );
+}
+
+/** Paths that must not pay for session refresh / JWT verify. */
+function skipsSessionUpdate(pathname: string) {
+  return pathname.startsWith("/api/") || pathname === "/api" || pathname === "/auth/callback";
 }
 
 export async function middleware(request: NextRequest) {
@@ -29,6 +35,12 @@ export async function middleware(request: NextRequest) {
       ? new URL("/admin/login", request.url)
       : new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Anonymous public API + OAuth code exchange: skip updateSession entirely.
+  // Keep updateSession for /login and /admin/login (redirect-if-authed needs user).
+  if (skipsSessionUpdate(pathname)) {
+    return NextResponse.next();
   }
 
   const { supabaseResponse, user } = await updateSession(request);

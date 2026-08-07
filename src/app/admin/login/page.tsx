@@ -42,8 +42,9 @@ export default function AdminLoginPage() {
         <Image
           src="/partner-logos.png"
           alt="Partner organizations: DepEd MATATAG, Bagong Pilipinas, and Division of Sarangani"
-          width={1024}
-          height={314}
+          width={240}
+          height={74}
+          sizes="(max-width: 640px) 200px, 240px"
           className="h-auto w-[200px] object-contain sm:w-[240px]"
         />
       </div>

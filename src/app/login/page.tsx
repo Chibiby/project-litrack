@@ -4,7 +4,17 @@ import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ error?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const oauthError =
+    typeof params.error === "string" && params.error.trim()
+      ? params.error.trim()
+      : undefined;
+
   let schools: Awaited<ReturnType<typeof listSchoolsWithTeacherStatus>> = [];
   let configUnavailable = false;
 
@@ -36,7 +46,7 @@ export default async function LoginPage() {
               App is not fully configured. No schools available.
             </p>
           ) : null}
-          <LoginForm schools={schools} />
+          <LoginForm schools={schools} oauthError={oauthError} />
           <p className="text-center text-xs text-muted-foreground">
             Super Admin?{" "}
             <a className="underline hover:text-foreground" href="/admin/login">
@@ -49,8 +59,9 @@ export default async function LoginPage() {
         <Image
           src="/partner-logos.png"
           alt="Partner organizations: DepEd MATATAG, Bagong Pilipinas, and Division of Sarangani"
-          width={1024}
-          height={314}
+          width={240}
+          height={74}
+          sizes="(max-width: 640px) 200px, 240px"
           className="h-auto w-[200px] object-contain sm:w-[240px]"
         />
       </div>

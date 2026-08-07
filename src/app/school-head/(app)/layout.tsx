@@ -1,15 +1,22 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 
 export const dynamic = "force-dynamic";
 
-export default async function SchoolHeadLayout({
+export default async function SchoolHeadAppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const user = await requireUser("SCHOOL_HEAD");
+
+  // Only gate real school heads — SUPER_ADMIN may view without profiling.
+  if (user.role === "SCHOOL_HEAD" && !user.profileCompleted) {
+    redirect("/school-head/profiling");
+  }
+
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
 
   let schoolName: string | undefined;

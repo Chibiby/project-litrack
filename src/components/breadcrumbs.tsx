@@ -24,9 +24,11 @@ const pathLabels: Record<string, string> = {
   "school-head/grade-levels": "Grade Levels",
   "school-head/teachers": "Teachers",
   "school-head/profiling": "Profile",
+  "school-head/profile": "Profile",
   "school-head/password": "Change password",
   teacher: "Dashboard",
   "teacher/profiling": "Profile",
+  "teacher/profile": "Profile",
   "teacher/password": "Change password",
 };
 

@@ -1,9 +1,7 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   generateActivationCredential,
   hashToken,
-  generateInviteTokenForUser,
-  parseInviteTokenUserId,
   isStrongPasswordShape,
 } from "@/lib/auth/credentials";
 import {
@@ -32,18 +30,13 @@ describe("generateActivationCredential", () => {
   });
 });
 
-describe("invite token embedding", () => {
-  it("embeds and parses user id", () => {
-    const userId = "11111111-2222-3333-4444-555555555555";
-    const { token, tokenHash, expiresAt } = generateInviteTokenForUser(userId);
-    expect(parseInviteTokenUserId(token)).toBe(userId);
-    expect(hashToken(token)).toBe(tokenHash);
-    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
-  });
-
-  it("returns null for malformed tokens", () => {
-    expect(parseInviteTokenUserId("nodot")).toBeNull();
-    expect(parseInviteTokenUserId(".onlysuffix")).toBeNull();
+describe("hashToken", () => {
+  it("returns stable sha256 hex", () => {
+    const a = hashToken("secret");
+    const b = hashToken("secret");
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[a-f0-9]{64}$/);
+    expect(hashToken("other")).not.toBe(a);
   });
 });
 

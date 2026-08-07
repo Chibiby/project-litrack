@@ -49,3 +49,8 @@ If the teacher already activated, use password reset (real email) or Super Admin
 ## Migrations
 
 Never apply remote migrations without approval. Command: `npx prisma migrate deploy` with direct URL. Details: `docs/migrations.md`.
+
+## Local `next dev` console notes
+
+- **Prisma SQL flood:** Query logging is off by default. Set `PRISMA_LOG_QUERIES=1` only when debugging SQL (`src/lib/prisma.ts`).
+- **Webpack PackFileCacheStrategy “Serializing big strings …”:** Harmless Next 14.2 / webpack filesystem-cache noise when packing large compiled modules (often CSS or dependency graphs). This repo has no large JSON/base64/env strings inlined into client modules. Do **not** switch webpack `cache` to `memory` just to silence it — that slows rebuilds. Safe to ignore unless cold compiles regress badly.

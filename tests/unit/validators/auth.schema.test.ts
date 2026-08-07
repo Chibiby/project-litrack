@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   schoolLoginSchema,
-  teacherSetupSchema,
-  teacherLoginSchema,
   setPasswordSchema,
   changePasswordSchema,
   strongPassword,
+  requestTeacherOtpSchema,
+  verifyTeacherOtpSchema,
 } from "@/lib/validators/auth.schema";
-import { teacherInviteSchema } from "@/lib/validators/teacher-invite.schema";
 
 describe("strongPassword", () => {
   it("requires letter and number and min length 8", () => {
@@ -15,44 +14,6 @@ describe("strongPassword", () => {
     expect(strongPassword.safeParse("longenough").success).toBe(false);
     expect(strongPassword.safeParse("12345678").success).toBe(false);
     expect(strongPassword.safeParse("password1").success).toBe(true);
-  });
-});
-
-describe("teacherSetupSchema", () => {
-  it("requires password min length 8, letter+number, and matching confirmPassword", () => {
-    expect(
-      teacherSetupSchema.safeParse({
-        token: "tok",
-        password: "short",
-        confirmPassword: "short",
-      }).success
-    ).toBe(false);
-
-    expect(
-      teacherSetupSchema.safeParse({
-        token: "tok",
-        password: "longenough",
-        confirmPassword: "longenough",
-      }).success
-    ).toBe(false);
-
-    const mismatch = teacherSetupSchema.safeParse({
-      token: "tok",
-      password: "password1",
-      confirmPassword: "password2",
-    });
-    expect(mismatch.success).toBe(false);
-    if (!mismatch.success) {
-      expect(mismatch.error.issues.some((i) => i.path.includes("confirmPassword"))).toBe(true);
-    }
-
-    expect(
-      teacherSetupSchema.safeParse({
-        token: "tok",
-        password: "password1",
-        confirmPassword: "password1",
-      }).success
-    ).toBe(true);
   });
 });
 
@@ -114,56 +75,44 @@ describe("schoolLoginSchema", () => {
   });
 });
 
-describe("teacherLoginSchema", () => {
-  it("requires school, username, password", () => {
+describe("requestTeacherOtpSchema / verifyTeacherOtpSchema", () => {
+  it("requires names on register", () => {
     expect(
-      teacherLoginSchema.safeParse({
+      requestTeacherOtpSchema.safeParse({
         schoolId: "s1",
-        username: "teacher.smith.a1b2",
-        password: "x",
-      }).success
-    ).toBe(true);
-    expect(teacherLoginSchema.safeParse({ schoolId: "s1", username: "", password: "x" }).success).toBe(
-      false
-    );
-  });
-});
-
-describe("teacherInviteSchema", () => {
-  it("requires names and grade; email optional", () => {
-    expect(
-      teacherInviteSchema.safeParse({
-        gradeLevelId: "g1",
-        firstName: "Ada",
-        lastName: "Lovelace",
-      }).success
-    ).toBe(true);
-
-    expect(
-      teacherInviteSchema.safeParse({
-        gradeLevelId: "g1",
-        firstName: "Ada",
-        lastName: "Lovelace",
-        email: "",
-      }).success
-    ).toBe(true);
-
-    expect(
-      teacherInviteSchema.safeParse({
-        gradeLevelId: "g1",
-        firstName: "Ada",
-        lastName: "Lovelace",
-        email: "ada@example.com",
-      }).success
-    ).toBe(true);
-
-    expect(
-      teacherInviteSchema.safeParse({
-        gradeLevelId: "g1",
-        firstName: "Ada",
-        lastName: "Lovelace",
-        email: "not-an-email",
+        email: "a@example.com",
+        intent: "register",
       }).success
     ).toBe(false);
+
+    expect(
+      requestTeacherOtpSchema.safeParse({
+        schoolId: "s1",
+        email: "a@example.com",
+        intent: "register",
+        firstName: "Ada",
+        lastName: "Lovelace",
+      }).success
+    ).toBe(true);
+  });
+
+  it("requires a 6-digit code on verify", () => {
+    expect(
+      verifyTeacherOtpSchema.safeParse({
+        schoolId: "s1",
+        email: "a@example.com",
+        intent: "login",
+        code: "12345",
+      }).success
+    ).toBe(false);
+
+    expect(
+      verifyTeacherOtpSchema.safeParse({
+        schoolId: "s1",
+        email: "a@example.com",
+        intent: "login",
+        code: "123456",
+      }).success
+    ).toBe(true);
   });
 });

@@ -1,24 +1,20 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import {
   schoolLoginSchema,
-  teacherLoginSchema,
   adminLoginSchema,
-  teacherSetupSchema,
+  requestTeacherOtpSchema,
+  verifyTeacherOtpSchema,
+  startTeacherGoogleOAuthSchema,
   setPasswordSchema,
   changePasswordSchema,
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
-import {
-  schoolHeadSyntheticEmail,
-  teacherSyntheticEmail,
-  isSyntheticEmail,
-} from "@/lib/auth/synthetic-email";
-import { hashToken, findTeacherForInvite, inviteTokenStatus } from "@/lib/auth/invites";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { schoolHeadSyntheticEmail, isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import {
   isSupabaseConfigured,
   SUPABASE_NOT_CONFIGURED_MESSAGE,
@@ -27,19 +23,21 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requireUser, roleHomePath } from "@/lib/auth/session";
 import {
-  revalidateAdminDashboard,
-  revalidateSchoolDashboard,
-  revalidateTeacherDashboard,
-} from "@/lib/cache/revalidate";
+  completeTeacherAuthAfterVerify,
+  registerConflictError,
+  DECLINED_REGISTRATION_MESSAGE,
+  TEACHER_OAUTH_CTX_COOKIE,
+  type TeacherOAuthCtx,
+} from "@/lib/auth/teacher-registration";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
-const INVITE_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
+const OTP_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 
-function requireSupabaseConfigured(): ActionResult | null {
+function requireSupabaseConfigured(): { ok: false; error: string } | null {
   if (!isSupabaseConfigured()) {
     return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
   }
@@ -48,6 +46,32 @@ function requireSupabaseConfigured(): ActionResult | null {
 
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+}
+
+function mapSupabaseAuthError(message: string | undefined, fallback: string): string {
+  const msg = (message ?? "").toLowerCase();
+  if (
+    msg.includes("rate") ||
+    msg.includes("too many") ||
+    msg.includes("security purposes") ||
+    msg.includes("after")
+  ) {
+    return "Too many attempts. Please try again later.";
+  }
+  return fallback;
+}
+
+async function assertActiveSchool(
+  schoolId: string
+): Promise<{ id: string } | { ok: false; error: string }> {
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true, isActive: true, deletedAt: true },
+  });
+  if (!school || !school.isActive || school.deletedAt) {
+    return { ok: false, error: "School not found or inactive" };
+  }
+  return { id: school.id };
 }
 
 /**
@@ -116,62 +140,195 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
 }
 
 /**
- * Teacher login: school + username + password.
- * Username maps to synthetic email via teacherSyntheticEmail().
- * mustChangePassword users are gated by requireUser → /account/set-password.
+ * Request a 6-digit email OTP for teacher login or self-registration.
+ * Never redirects — always returns a result for the login form.
  */
-export async function loginTeacher(formData: FormData): Promise<ActionResult> {
+export async function requestTeacherOtp(
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const missing = requireSupabaseConfigured();
   if (missing) return missing;
 
-  const parsed = teacherLoginSchema.safeParse({
+  const parsed = requestTeacherOtpSchema.safeParse({
     schoolId: formData.get("schoolId"),
-    username: formData.get("username"),
-    password: formData.get("password"),
+    email: formData.get("email"),
+    intent: formData.get("intent"),
+    firstName: formData.get("firstName") || undefined,
+    middleName: formData.get("middleName") || undefined,
+    lastName: formData.get("lastName") || undefined,
   });
-  if (!parsed.success) return { ok: false, error: "Invalid input" };
-
-  const username = parsed.data.username.trim().toLowerCase();
-  const schoolId = parsed.data.schoolId;
-
-  const rate = checkRateLimit(`login:teacher:${schoolId}:${username}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const syntheticEmail = teacherSyntheticEmail(username);
-
-  const user = await prisma.user.findFirst({
-    where: { email: syntheticEmail, role: "TEACHER", schoolId, deletedAt: null, isActive: true },
-    select: { id: true },
-  });
-  if (!user) return { ok: false, error: "Incorrect username or password" };
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: syntheticEmail,
-    password: parsed.data.password,
-  });
-  if (error) {
-    await writeAudit({
-      userId: user.id,
-      schoolId,
-      action: AUDIT_ACTIONS.LOGIN_DENIED,
-      resource: "User",
-      resourceId: user.id,
-      metadata: { role: "TEACHER", schoolId, reason: "incorrect_credentials" },
-    });
-    return { ok: false, error: "Incorrect username or password" };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  await writeAudit({
-    userId: user.id,
+  const email = parsed.data.email.toLowerCase().trim();
+  const { schoolId, intent } = parsed.data;
+
+  const rate = checkRateLimit(`otp:teacher:${schoolId}:${email}`, OTP_RATE);
+  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+
+  const school = await assertActiveSchool(schoolId);
+  if ("ok" in school && school.ok === false) return school;
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+
+  if (intent === "register") {
+    if (existing && !existing.deletedAt) {
+      return { ok: false, error: registerConflictError(existing, schoolId) };
+    }
+  } else {
+    if (
+      !existing ||
+      existing.deletedAt ||
+      existing.role !== "TEACHER" ||
+      existing.schoolId !== schoolId
+    ) {
+      return {
+        ok: false,
+        error: "No teacher account found for this school. Create an account first.",
+      };
+    }
+    if (existing.approvalStatus === "REJECTED") {
+      return { ok: false, error: DECLINED_REGISTRATION_MESSAGE };
+    }
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: intent === "register" },
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: mapSupabaseAuthError(error.message, "Failed to send code. Please try again."),
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Verify teacher email OTP. On success redirects (never returns); on failure returns an error.
+ */
+export async function verifyTeacherOtp(
+  formData: FormData
+): Promise<{ ok: false; error: string } | never> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
+  const parsed = verifyTeacherOtpSchema.safeParse({
+    schoolId: formData.get("schoolId"),
+    email: formData.get("email"),
+    code: formData.get("code"),
+    intent: formData.get("intent"),
+    firstName: formData.get("firstName") || undefined,
+    middleName: formData.get("middleName") || undefined,
+    lastName: formData.get("lastName") || undefined,
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const email = parsed.data.email.toLowerCase().trim();
+  const { schoolId, intent, code } = parsed.data;
+
+  const rate = checkRateLimit(`otp:verify:${schoolId}:${email}`, OTP_RATE);
+  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+
+  const school = await assertActiveSchool(schoolId);
+  if ("ok" in school && school.ok === false) return school;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: "email",
+  });
+  if (error || !data.user) {
+    return { ok: false, error: "Invalid or expired code." };
+  }
+
+  const result = await completeTeacherAuthAfterVerify({
+    authId: data.user.id,
+    email,
     schoolId,
-    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { role: "TEACHER", schoolId },
+    intent,
+    names:
+      intent === "register"
+        ? {
+            firstName: parsed.data.firstName!.trim(),
+            middleName: parsed.data.middleName?.trim() || undefined,
+            lastName: parsed.data.lastName!.trim(),
+          }
+        : undefined,
   });
 
-  redirect("/teacher");
+  if (!result.ok) {
+    if (result.signOut) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error("[verifyTeacherOtp] signOut failed:", err);
+      }
+    }
+    return { ok: false, error: result.error };
+  }
+
+  redirect(result.outcome === "approved" ? "/teacher" : "/pending-approval");
+}
+
+/**
+ * Start Google OAuth for teacher login/register. Stores school context in a cookie, then redirects.
+ */
+export async function startTeacherGoogleOAuth(
+  formData: FormData
+): Promise<{ ok: false; error: string } | never> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
+  const parsed = startTeacherGoogleOAuthSchema.safeParse({
+    schoolId: formData.get("schoolId"),
+    intent: formData.get("intent"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const { schoolId, intent } = parsed.data;
+
+  const school = await assertActiveSchool(schoolId);
+  if ("ok" in school && school.ok === false) return school;
+
+  const rate = checkRateLimit(`oauth:teacher:${schoolId}`, OTP_RATE);
+  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+
+  const ctx: TeacherOAuthCtx = { schoolId, intent };
+  const cookieStore = await cookies();
+  cookieStore.set(TEACHER_OAUTH_CTX_COOKIE, JSON.stringify(ctx), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 10 * 60,
+  });
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${appUrl()}/auth/callback`,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error || !data.url) {
+    return {
+      ok: false,
+      error: mapSupabaseAuthError(error?.message, "Google sign-in failed. Please try again."),
+    };
+  }
+
+  redirect(data.url);
 }
 
 export async function loginAdmin(formData: FormData): Promise<ActionResult> {
@@ -265,87 +422,6 @@ export async function logoutAction(): Promise<void> {
     resourceId: appUserId,
   });
   redirect("/login");
-}
-
-/**
- * Teacher invite acceptance: sets password on the EXISTING user (created at invite time),
- * clears mustChangePassword, marks invite consumed, signs in.
- *
- * Token expiry only blocks this link path — credential login may still work; see inviteTokenStatus.
- */
-export async function acceptTeacherInvite(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
-
-  const parsed = teacherSetupSchema.safeParse({
-    token: formData.get("token"),
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const rate = checkRateLimit(`invite:accept:${hashToken(parsed.data.token)}`, INVITE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const tokenHash = hashToken(parsed.data.token);
-  const invite = await prisma.teacherInvite.findUnique({
-    where: { tokenHash },
-  });
-
-  if (!invite || inviteTokenStatus(invite) !== "pending") {
-    return { ok: false, error: "This invite link is invalid or expired" };
-  }
-
-  const teacher = await findTeacherForInvite(invite, parsed.data.token);
-  if (!teacher || !teacher.isActive) {
-    return { ok: false, error: "This invite link is invalid or expired" };
-  }
-
-  const admin = createSupabaseAdminClient();
-  const { error: updateErr } = await admin.auth.admin.updateUserById(teacher.authId, {
-    password: parsed.data.password,
-    app_metadata: { role: "TEACHER", schoolId: invite.schoolId },
-  });
-  if (updateErr) {
-    return { ok: false, error: "Failed to set password. Please try again." };
-  }
-
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: teacher.id },
-      data: { mustChangePassword: false },
-    }),
-    prisma.teacherInvite.update({
-      where: { id: invite.id },
-      data: { consumedAt: new Date() },
-    }),
-  ]);
-
-  await writeAudit({
-    userId: teacher.id,
-    schoolId: invite.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_INVITE_ACCEPT,
-    resource: "TeacherInvite",
-    resourceId: invite.id,
-    metadata: { schoolId: invite.schoolId, userId: teacher.id },
-  });
-
-  revalidateSchoolDashboard(invite.schoolId);
-  revalidateAdminDashboard();
-  revalidateTeacherDashboard(teacher.id);
-
-  const supabase = await createSupabaseServerClient();
-  const { error: signInErr } = await supabase.auth.signInWithPassword({
-    email: teacher.email,
-    password: parsed.data.password,
-  });
-  if (signInErr) {
-    return { ok: false, error: "Password set, but sign-in failed. Please log in with your username." };
-  }
-
-  redirect("/teacher");
 }
 
 /**
