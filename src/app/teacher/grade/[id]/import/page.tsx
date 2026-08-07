@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { LearnerImportWizard } from "@/components/learners/learner-import-wizard";
+import { LearnerImportWizard } from "@/components/learners/lazy-learner-import-wizard";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 export const dynamic = "force-dynamic";

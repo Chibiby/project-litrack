@@ -2,4 +2,4 @@ export { MetricCard, type MetricCardProps, type MetricCardTone } from "./metric-
 export { ChartCard, type ChartCardProps } from "./chart-card";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { PageHeader, type PageHeaderProps } from "./page-header";
-export { DashboardBarChart, DashboardLineChart } from "./simple-charts";
+export { DashboardBarChart, DashboardLineChart } from "./lazy-charts";

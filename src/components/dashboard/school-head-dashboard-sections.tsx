@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   DashboardBarChart,
   DashboardLineChart,
-} from "@/components/dashboard/simple-charts";
+} from "@/components/dashboard/lazy-charts";
 import {
   GraduationCap,
   UserPlus,

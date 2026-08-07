@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { ExportControls } from "@/components/reports/export-controls";
+import { ExportControls } from "@/components/reports/lazy-export-controls";
 import { PrintableLearnersReport } from "@/components/reports/printable-learners-report";
 import { ReportPrintAudit } from "@/components/reports/report-print-audit";
 import { loadLearnersForReport } from "@/lib/actions/export-learners";

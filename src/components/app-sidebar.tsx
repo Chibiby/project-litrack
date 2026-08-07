@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -7,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { logoutAction } from "@/lib/actions/auth";
 import type { UserRole } from "@prisma/client";
 import {
@@ -118,6 +120,9 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
   return (
     <Link
       href={item.href}
+      // force-dynamic + loading.tsx: default prefetch only warms the skeleton.
+      // Full prefetch loads the RSC payload (auth + cachedQuery) before click.
+      prefetch={true}
       className={cn(
         "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         isActive
@@ -153,6 +158,16 @@ export function AppSidebar({
   const pathname = usePathname();
   const navItems = getNavItems(role, grades);
   const activeHref = resolveActiveHref(pathname, navItems);
+
+  // Background-warm every sidebar route once per shell (not on each page nav).
+  const gradesKey =
+    grades?.map((g) => `${g.id}:${g.hasAral ? 1 : 0}`).join(",") ?? "";
+  const prefetchHrefs = useMemo(
+    () => getNavItems(role, grades).map((item) => item.href),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gradesKey fingerprints grades
+    [role, gradesKey]
+  );
+  const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
   const SidebarContent = (
     <div className="flex h-full flex-col bg-white">
@@ -244,6 +259,8 @@ export function AppSidebar({
 
   return (
     <>
+      <NavPrefetcher cacheKey={prefetchKey} hrefs={prefetchHrefs} />
+
       {/* Desktop Sidebar */}
       <aside className="fixed inset-y-0 hidden w-64 flex-col border-r border-border/80 bg-white lg:flex">
         {SidebarContent}

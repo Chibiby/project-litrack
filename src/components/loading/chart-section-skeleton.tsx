@@ -1,6 +1,4 @@
-"use client";
-
-import { ThemedSkeleton, SkeletonThemeProvider } from "./themed-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export function ChartCardSkeleton({
@@ -20,17 +18,18 @@ export function ChartCardSkeleton({
     >
       <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div className="min-w-0 space-y-1.5">
-          <ThemedSkeleton width={160} height={18} />
-          <ThemedSkeleton width={220} height={14} />
+          <Skeleton className="h-[18px] w-40" />
+          <Skeleton className="h-3.5 w-56" />
         </div>
       </div>
       <div className="p-5">
-        <ThemedSkeleton height={chartHeight} className="w-full" />
+        <Skeleton className="w-full" style={{ height: chartHeight }} />
       </div>
     </section>
   );
 }
 
+/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
 export function ChartSectionSkeleton({
   columns = 2,
   className,
@@ -41,18 +40,16 @@ export function ChartSectionSkeleton({
   chartHeight?: number;
 }) {
   return (
-    <SkeletonThemeProvider>
-      <div
-        className={cn(
-          "mb-6 grid gap-4",
-          columns === 2 ? "lg:grid-cols-2" : undefined,
-          className
-        )}
-      >
-        {Array.from({ length: columns }).map((_, i) => (
-          <ChartCardSkeleton key={i} chartHeight={chartHeight} />
-        ))}
-      </div>
-    </SkeletonThemeProvider>
+    <div
+      className={cn(
+        "mb-6 grid gap-4",
+        columns === 2 ? "lg:grid-cols-2" : undefined,
+        className
+      )}
+    >
+      {Array.from({ length: columns }).map((_, i) => (
+        <ChartCardSkeleton key={i} chartHeight={chartHeight} />
+      ))}
+    </div>
   );
 }

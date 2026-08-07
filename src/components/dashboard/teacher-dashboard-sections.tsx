@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { DashboardBarChart } from "@/components/dashboard/simple-charts";
+import { DashboardBarChart } from "@/components/dashboard/lazy-charts";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import {
   BookOpen,

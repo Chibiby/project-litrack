@@ -1,13 +1,16 @@
-"use client";
-
-import { ThemedSkeleton, SkeletonThemeProvider } from "./themed-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-export type MetricsGridVariant = "admin" | "school-head" | "teacher" | "teacher-secondary";
+export type MetricsGridVariant =
+  | "admin"
+  | "school-head"
+  | "teacher"
+  | "teacher-secondary";
 
 const gridClass: Record<MetricsGridVariant, string> = {
   admin: "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
-  "school-head": "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+  "school-head":
+    "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
   teacher: "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4",
   "teacher-secondary": "mb-6 grid gap-4 sm:grid-cols-2",
 };
@@ -19,6 +22,7 @@ const counts: Record<MetricsGridVariant, number> = {
   "teacher-secondary": 2,
 };
 
+/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
 export function MetricsGridSkeleton({
   variant = "admin",
   className,
@@ -30,22 +34,20 @@ export function MetricsGridSkeleton({
 }) {
   const n = count ?? counts[variant];
   return (
-    <SkeletonThemeProvider>
-      <div className={cn(gridClass[variant], className)} aria-hidden>
-        {Array.from({ length: n }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-border/80 bg-card p-5 shadow-card"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <ThemedSkeleton width={96} height={16} />
-              <ThemedSkeleton circle width={32} height={32} />
-            </div>
-            <ThemedSkeleton className="mt-3" width={80} height={32} />
-            <ThemedSkeleton className="mt-1.5" width={112} height={12} />
+    <div className={cn(gridClass[variant], className)} aria-hidden>
+      {Array.from({ length: n }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-border/80 bg-card p-5 shadow-card"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-8 rounded-full" />
           </div>
-        ))}
-      </div>
-    </SkeletonThemeProvider>
+          <Skeleton className="mt-3 h-8 w-20" />
+          <Skeleton className="mt-1.5 h-3 w-28" />
+        </div>
+      ))}
+    </div>
   );
 }

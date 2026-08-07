@@ -26,7 +26,9 @@ interface RoleShellProps {
 /**
  * Persistent dashboard chrome for role route segments.
  * Keeps sidebar + breadcrumb header mounted while `loading.tsx` / page
- * content swaps in `children`.
+ * content swaps in `children`. Layout chrome is set up once when this shell
+ * mounts; AppSidebar's NavPrefetcher then background-warms nav routes once
+ * so later navigations do not re-run a full skeleton/layout pass.
  */
 export function RoleShell({
   role,

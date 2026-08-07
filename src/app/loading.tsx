@@ -1,25 +1,13 @@
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-  SkeletonThemeProvider,
-  ThemedSkeleton,
-} from "@/components/loading";
+import { ContentRouteLoading } from "@/components/loading/content-route-loading";
 
+/**
+ * Root fallback for first paint only. Role layouts replace this with RoleShell;
+ * avoid a full-screen dashboard skeleton that feels like a second layout pass.
+ */
 export default function Loading() {
   return (
-    <SkeletonThemeProvider>
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">
-          <div className="space-y-2">
-            <ThemedSkeleton width={160} height={14} />
-            <ThemedSkeleton width={256} height={28} />
-            <ThemedSkeleton width={320} height={14} className="max-w-full" />
-          </div>
-
-          <MetricsGridSkeleton variant="teacher" />
-          <ChartSectionSkeleton columns={2} />
-        </div>
-      </div>
-    </SkeletonThemeProvider>
+    <div className="min-h-screen bg-background">
+      <ContentRouteLoading />
+    </div>
   );
 }

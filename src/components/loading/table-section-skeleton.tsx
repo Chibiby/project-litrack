@@ -1,8 +1,7 @@
-"use client";
-
-import { ThemedSkeleton, SkeletonThemeProvider } from "./themed-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+/** Server-safe pulse skeleton — no client JS / react-loading-skeleton. */
 export function TableSectionSkeleton({
   rows = 8,
   columns = 5,
@@ -15,45 +14,39 @@ export function TableSectionSkeleton({
   className?: string;
 }) {
   return (
-    <SkeletonThemeProvider>
-      <div
-        className={cn(
-          "rounded-xl border border-border/80 bg-card shadow-card",
-          className
-        )}
-        aria-hidden
-      >
-        {showToolbar ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
-            <ThemedSkeleton width={180} height={20} />
-            <div className="flex gap-2">
-              <ThemedSkeleton width={100} height={32} />
-              <ThemedSkeleton width={100} height={32} />
-            </div>
+    <div
+      className={cn(
+        "rounded-xl border border-border/80 bg-card shadow-card",
+        className
+      )}
+      aria-hidden
+    >
+      {showToolbar ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
+          <Skeleton className="h-5 w-[180px]" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-[100px]" />
+            <Skeleton className="h-8 w-[100px]" />
           </div>
-        ) : null}
-        <div className="overflow-x-auto p-2">
-          <div className="mb-2 flex gap-3 border-b border-border/60 px-3 py-3">
-            {Array.from({ length: columns }).map((_, i) => (
-              <ThemedSkeleton key={i} height={14} className="min-w-[80px] flex-1" />
-            ))}
-          </div>
-          {Array.from({ length: rows }).map((_, row) => (
-            <div
-              key={row}
-              className="flex gap-3 border-b border-border/40 px-3 py-3 last:border-0"
-            >
-              {Array.from({ length: columns }).map((_, col) => (
-                <ThemedSkeleton
-                  key={col}
-                  height={16}
-                  className="min-w-[80px] flex-1"
-                />
-              ))}
-            </div>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto p-2">
+        <div className="mb-2 flex gap-3 border-b border-border/60 px-3 py-3">
+          {Array.from({ length: columns }).map((_, i) => (
+            <Skeleton key={i} className="h-3.5 min-w-[80px] flex-1" />
           ))}
         </div>
+        {Array.from({ length: rows }).map((_, row) => (
+          <div
+            key={row}
+            className="flex gap-3 border-b border-border/40 px-3 py-3 last:border-0"
+          >
+            {Array.from({ length: columns }).map((_, col) => (
+              <Skeleton key={col} className="h-4 min-w-[80px] flex-1" />
+            ))}
+          </div>
+        ))}
       </div>
-    </SkeletonThemeProvider>
+    </div>
   );
 }

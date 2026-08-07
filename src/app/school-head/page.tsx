@@ -39,13 +39,14 @@ export default async function SchoolHeadDashboard({
   if (!user.profileCompleted && user.role !== "SUPER_ADMIN")
     redirect("/school-head/profiling");
 
-  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
-    user,
-    params.schoolId,
-    "/school-head"
-  );
+  // Resolve school + cached name in parallel (name key known before audit write).
+  const schoolIdHint =
+    user.role === "SUPER_ADMIN" ? params.schoolId : user.schoolId;
 
-  const schoolName = await getSchoolName(schoolId);
+  const [{ schoolId, isSuperAdminView }, schoolName] = await Promise.all([
+    resolveSchoolContext(user, params.schoolId, "/school-head"),
+    schoolIdHint ? getSchoolName(schoolIdHint) : Promise.resolve(null),
+  ]);
 
   const sh = (path: string) =>
     isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
