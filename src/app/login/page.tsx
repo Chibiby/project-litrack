@@ -10,7 +10,7 @@ type LoginPageProps = {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
-  const oauthError =
+  const loginError =
     typeof params.error === "string" && params.error.trim()
       ? params.error.trim()
       : undefined;
@@ -26,7 +26,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-background p-4">
+    <main id="main-content" className="flex min-h-screen flex-col bg-background p-4">
       <div className="flex flex-1 flex-col items-center justify-center">
         <div className="w-full max-w-md space-y-6">
           <div className="space-y-2 text-center">
@@ -46,7 +46,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               App is not fully configured. No schools available.
             </p>
           ) : null}
-          <LoginForm schools={schools} oauthError={oauthError} />
+          <LoginForm schools={schools} loginError={loginError} />
           <p className="text-center text-xs text-muted-foreground">
             Super Admin?{" "}
             <a className="underline hover:text-foreground" href="/admin/login">

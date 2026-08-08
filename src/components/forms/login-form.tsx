@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,14 +10,13 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { GoogleMark } from "@/components/forms/google-mark";
 import {
   loginSchoolHead,
-  requestTeacherOtp,
-  startTeacherGoogleOAuth,
-  verifyTeacherOtp,
+  loginTeacher,
+  requestTeacherRegisterOtp,
+  verifyTeacherRegisterOtp,
 } from "@/lib/actions/auth";
+import { strongPassword } from "@/lib/validators/auth.schema";
 
 type Screen = "select-role" | "school-head" | "teacher";
 type TeacherIntent = "login" | "register";
@@ -27,12 +27,14 @@ type SchoolWithStatus = { id: string; name: string; teachersOpen: boolean };
 const TEACHERS_UNLOCK_HELP =
   "Teachers unlock once the School Head completes profiling and adds grade levels.";
 
+const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
+
 export function LoginForm({
   schools,
-  oauthError,
+  loginError,
 }: {
   schools: SchoolWithStatus[];
-  oauthError?: string;
+  loginError?: string;
 }) {
   const [screen, setScreen] = useState<Screen>("select-role");
   const [schoolId, setSchoolId] = useState("");
@@ -42,15 +44,19 @@ export function LoginForm({
   const [teacherIntent, setTeacherIntent] = useState<TeacherIntent>("login");
   const [teacherStep, setTeacherStep] = useState<TeacherStep>("credentials");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [code, setCode] = useState("");
   const [resendSeconds, setResendSeconds] = useState(0);
+  /** Sync lock so double Enter/click cannot start two OTP verifies before `pending` re-renders. */
+  const verifyRegisterLock = useRef(false);
 
   useEffect(() => {
-    if (oauthError) toast.error(oauthError);
-  }, [oauthError]);
+    if (loginError) toast.error(loginError);
+  }, [loginError]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -68,6 +74,8 @@ export function LoginForm({
     setTeacherIntent("login");
     setTeacherStep("credentials");
     setEmail("");
+    setPassword("");
+    setConfirmPassword("");
     setFirstName("");
     setMiddleName("");
     setLastName("");
@@ -83,26 +91,51 @@ export function LoginForm({
   const switchTeacherIntent = (intent: TeacherIntent) => {
     setTeacherIntent(intent);
     setTeacherStep("credentials");
+    setPassword("");
+    setConfirmPassword("");
     setCode("");
     setResendSeconds(0);
   };
 
-  const appendRegisterNames = (formData: FormData) => {
-    if (teacherIntent !== "register") return;
-    formData.set("firstName", firstName);
-    formData.set("middleName", middleName);
-    formData.set("lastName", lastName);
-  };
-
-  const handleSendCode = () => {
+  const buildRegisterFormData = (includeCode = false) => {
     const formData = new FormData();
     formData.set("schoolId", schoolId);
     formData.set("email", email.trim());
-    formData.set("intent", teacherIntent);
-    appendRegisterNames(formData);
+    formData.set("firstName", firstName.trim());
+    formData.set("middleName", middleName.trim());
+    formData.set("lastName", lastName.trim());
+    formData.set("password", password);
+    formData.set("confirmPassword", confirmPassword);
+    if (includeCode) formData.set("code", code.trim());
+    return formData;
+  };
+
+  const handleTeacherLogin = () => {
+    const formData = new FormData();
+    formData.set("schoolId", schoolId);
+    formData.set("email", email.trim());
+    formData.set("password", password);
 
     startTransition(async () => {
-      const res = await requestTeacherOtp(formData);
+      const res = await loginTeacher(formData);
+      if (res && !res.ok) toast.error(res.error);
+    });
+  };
+
+  const handleRequestRegisterOtp = () => {
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    const strength = strongPassword.safeParse(password);
+    if (!strength.success) {
+      toast.error(strength.error.errors[0]?.message ?? PASSWORD_HINT);
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await requestTeacherRegisterOtp(buildRegisterFormData());
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -113,45 +146,35 @@ export function LoginForm({
     });
   };
 
-  const handleVerifyCode = () => {
-    const formData = new FormData();
-    formData.set("schoolId", schoolId);
-    formData.set("email", email.trim());
-    formData.set("code", code.trim());
-    formData.set("intent", teacherIntent);
-    appendRegisterNames(formData);
-
+  const handleVerifyRegisterOtp = () => {
+    if (pending || verifyRegisterLock.current) return;
+    verifyRegisterLock.current = true;
     startTransition(async () => {
-      const res = await verifyTeacherOtp(formData);
-      if (res && !res.ok) toast.error(res.error);
+      try {
+        const res = await verifyTeacherRegisterOtp(buildRegisterFormData(true));
+        if (res && !res.ok) {
+          toast.error(res.error);
+          verifyRegisterLock.current = false;
+        }
+        // Success redirects away; keep the lock held.
+      } catch (err) {
+        if (isRedirectError(err)) throw err;
+        verifyRegisterLock.current = false;
+      }
     });
   };
 
   const handleResendCode = () => {
     if (resendSeconds > 0) return;
-    const formData = new FormData();
-    formData.set("schoolId", schoolId);
-    formData.set("email", email.trim());
-    formData.set("intent", teacherIntent);
-    appendRegisterNames(formData);
 
     startTransition(async () => {
-      const res = await requestTeacherOtp(formData);
+      const res = await requestTeacherRegisterOtp(buildRegisterFormData());
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       setResendSeconds(60);
       toast.success("Code resent");
-    });
-  };
-
-  const handleGoogleOAuth = (formData: FormData) => {
-    formData.set("schoolId", schoolId);
-    formData.set("intent", teacherIntent);
-    startTransition(async () => {
-      const res = await startTeacherGoogleOAuth(formData);
-      if (res && !res.ok) toast.error(res.error);
     });
   };
 
@@ -168,9 +191,9 @@ export function LoginForm({
       <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
-            <Label>School Name</Label>
+            <Label htmlFor="login-school">School Name</Label>
             <Select value={schoolId} onValueChange={handleSchoolChange}>
-              <SelectTrigger>
+              <SelectTrigger id="login-school">
                 <SelectValue placeholder="Select your school" />
               </SelectTrigger>
               <SelectContent>
@@ -241,12 +264,19 @@ export function LoginForm({
         {screen === "school-head" ? (
           <>
             <form action={handleSchoolHeadSubmit} className="space-y-4">
-              <h2 className="text-lg font-semibold">School Head Login</h2>
+              <h2 className="text-lg font-semibold">School Head sign in</h2>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <PasswordInput id="password" name="password" required autoFocus />
+                <PasswordInput
+                  id="password"
+                  name="password"
+                  required
+                  autoFocus
+                  autoComplete="current-password"
+                />
                 <p className="text-xs text-muted-foreground">
-                  First time? Use the activation credential from your administrator.
+                  First time? Use the activation credential from your administrator. Teachers create
+                  their own password when registering — School Heads use the school credential.
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={pending}>
@@ -262,8 +292,14 @@ export function LoginForm({
         ) : (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">
-              {teacherIntent === "login" ? "Teacher Login" : "Create Teacher Account"}
+              {teacherIntent === "login" ? "Teacher sign in" : "Create teacher account"}
             </h2>
+            {teacherIntent === "register" ? (
+              <p className="text-xs text-muted-foreground">
+                New teachers set a password and verify email with a one-time code. After creation,
+                sign in with email and password only — no code needed for ongoing login.
+              </p>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
               <Button
@@ -274,7 +310,7 @@ export function LoginForm({
                 disabled={pending}
                 onClick={() => switchTeacherIntent("login")}
               >
-                Login
+                Sign in
               </Button>
               <Button
                 type="button"
@@ -288,52 +324,14 @@ export function LoginForm({
               </Button>
             </div>
 
-            {teacherStep === "credentials" ? (
+            {teacherIntent === "login" ? (
               <form
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleSendCode();
+                  handleTeacherLogin();
                 }}
               >
-                {teacherIntent === "register" ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">First name</Label>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        required
-                        autoFocus
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        disabled={pending}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="middleName">Middle name (optional)</Label>
-                      <Input
-                        id="middleName"
-                        name="middleName"
-                        value={middleName}
-                        onChange={(e) => setMiddleName(e.target.value)}
-                        disabled={pending}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Last name</Label>
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        required
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        disabled={pending}
-                      />
-                    </div>
-                  </>
-                ) : null}
-
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -341,7 +339,7 @@ export function LoginForm({
                     name="email"
                     type="email"
                     required
-                    autoFocus={teacherIntent === "login"}
+                    autoFocus
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -349,9 +347,114 @@ export function LoginForm({
                     placeholder="you@school.edu"
                   />
                 </div>
-
+                <div className="space-y-2">
+                  <Label htmlFor="teacherPassword">Password</Label>
+                  <PasswordInput
+                    id="teacherPassword"
+                    name="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={pending}
+                  />
+                </div>
                 <Button type="submit" className="w-full" disabled={pending}>
-                  {pending ? "Sending…" : "Send code"}
+                  {pending ? "Signing in…" : "Sign in"}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  <Link href="/forgot-password" className="underline hover:text-foreground">
+                    Forgot password?
+                  </Link>
+                </p>
+              </form>
+            ) : teacherStep === "credentials" ? (
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleRequestRegisterOtp();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First name</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    required
+                    autoFocus
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    disabled={pending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="middleName">Middle name (optional)</Label>
+                  <Input
+                    id="middleName"
+                    name="middleName"
+                    autoComplete="additional-name"
+                    value={middleName}
+                    onChange={(e) => setMiddleName(e.target.value)}
+                    disabled={pending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last name</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    required
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    disabled={pending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="registerEmail">Email</Label>
+                  <Input
+                    id="registerEmail"
+                    name="email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={pending}
+                    placeholder="you@school.edu"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="registerPassword">Password</Label>
+                  <PasswordInput
+                    id="registerPassword"
+                    name="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={pending}
+                  />
+                  <p className="text-xs text-muted-foreground">{PASSWORD_HINT}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <PasswordInput
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={pending}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={pending}>
+                  {pending ? "Sending…" : "Send verification code"}
                 </Button>
               </form>
             ) : (
@@ -359,12 +462,13 @@ export function LoginForm({
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleVerifyCode();
+                  handleVerifyRegisterOtp();
                 }}
               >
                 <p className="text-sm text-muted-foreground">
                   Enter the 6-digit code sent to{" "}
-                  <span className="font-medium text-foreground">{email}</span>.
+                  <span className="font-medium text-foreground">{email}</span>. This
+                  code is for account creation and email verification only.
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="code">Verification code</Label>
@@ -389,7 +493,7 @@ export function LoginForm({
                   className="w-full"
                   disabled={pending || code.length !== 6}
                 >
-                  {pending ? "Verifying…" : "Verify code"}
+                  {pending ? "Creating account…" : "Create account"}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
                   <button
@@ -412,29 +516,11 @@ export function LoginForm({
                       setCode("");
                     }}
                   >
-                    Use a different email
+                    Edit details
                   </button>
                 </p>
               </form>
             )}
-
-            <div className="relative flex items-center gap-3 py-1">
-              <Separator className="flex-1" />
-              <span className="text-xs uppercase text-muted-foreground">or</span>
-              <Separator className="flex-1" />
-            </div>
-
-            <form action={handleGoogleOAuth}>
-              <Button
-                type="submit"
-                variant="outline"
-                className="w-full gap-2"
-                disabled={pending}
-              >
-                <GoogleMark />
-                Continue with Google
-              </Button>
-            </form>
           </div>
         )}
       </CardContent>

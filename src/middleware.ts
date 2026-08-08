@@ -9,7 +9,6 @@ function isPublicPath(pathname: string) {
     pathname === "/login" ||
     pathname === "/admin/login" ||
     pathname === "/forgot-password" ||
-    pathname === "/auth/callback" ||
     pathname.startsWith("/auth/reset") ||
     pathname.startsWith("/api/") ||
     pathname === "/api" ||
@@ -20,7 +19,7 @@ function isPublicPath(pathname: string) {
 
 /** Paths that must not pay for session refresh / JWT verify. */
 function skipsSessionUpdate(pathname: string) {
-  return pathname.startsWith("/api/") || pathname === "/api" || pathname === "/auth/callback";
+  return pathname.startsWith("/api/") || pathname === "/api";
 }
 
 export async function middleware(request: NextRequest) {
@@ -37,7 +36,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Anonymous public API + OAuth code exchange: skip updateSession entirely.
+  // Anonymous public API: skip updateSession entirely.
   // Keep updateSession for /login and /admin/login (redirect-if-authed needs user).
   if (skipsSessionUpdate(pathname)) {
     return NextResponse.next();

@@ -13,6 +13,11 @@ import {
   TEACHER_EMAIL_DOMAIN,
 } from "@/lib/auth/synthetic-email";
 import { parseAppMetadataRole, roleHomePath, enforceRolePrefix } from "@/lib/auth/roles";
+import {
+  DECLINED_REGISTRATION_MESSAGE,
+  isPendingTeacherAtSchool,
+  registerConflictError,
+} from "@/lib/auth/teacher-registration-helpers";
 
 describe("generateActivationCredential", () => {
   it("returns ~14 char base64url without padding", () => {
@@ -84,5 +89,53 @@ describe("roles + middleware gate", () => {
     expect(enforceRolePrefix("/school-head", "TEACHER").ok).toBe(false);
     expect(enforceRolePrefix("/teacher", "SUPER_ADMIN").ok).toBe(true);
     expect(enforceRolePrefix("/account/password", "TEACHER").ok).toBe(true);
+    // Pending teacher self-register success page must not be role-blocked.
+    expect(enforceRolePrefix("/account/created", "TEACHER").ok).toBe(true);
+    expect(enforceRolePrefix("/account/created", null).ok).toBe(true);
+  });
+});
+
+describe("teacher registration helpers", () => {
+  const base = {
+    role: "TEACHER" as const,
+    schoolId: "school-1",
+    approvalStatus: "PENDING" as const,
+    deletedAt: null,
+    isActive: false,
+  };
+
+  it("detects PENDING teacher at school for idempotent success", () => {
+    const pending = {
+      role: base.role,
+      schoolId: base.schoolId,
+      approvalStatus: base.approvalStatus,
+      deletedAt: base.deletedAt,
+    };
+    expect(isPendingTeacherAtSchool(pending, "school-1")).toBe(true);
+    expect(isPendingTeacherAtSchool(pending, "school-2")).toBe(false);
+    expect(
+      isPendingTeacherAtSchool({ ...pending, approvalStatus: "APPROVED" }, "school-1")
+    ).toBe(false);
+    expect(
+      isPendingTeacherAtSchool({ ...pending, deletedAt: new Date() }, "school-1")
+    ).toBe(false);
+  });
+
+  it("maps register conflict messages", () => {
+    expect(registerConflictError(base, "school-1")).toBe(
+      "Your request is pending School Head approval."
+    );
+    expect(
+      registerConflictError({ ...base, approvalStatus: "REJECTED" }, "school-1")
+    ).toBe(DECLINED_REGISTRATION_MESSAGE);
+    expect(
+      registerConflictError(
+        { ...base, approvalStatus: "APPROVED", isActive: true },
+        "school-1"
+      )
+    ).toBe("Account already exists. Use Login instead.");
+    expect(registerConflictError(base, "other-school")).toBe(
+      "This email is already in use."
+    );
   });
 });

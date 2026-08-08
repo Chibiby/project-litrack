@@ -10,9 +10,8 @@ export const strongPassword = z
 
 export const schoolLoginSchema = z.object({
   schoolId: nonEmpty("Please select a school"),
-  role: z.enum(["SCHOOL_HEAD", "TEACHER"]),
+  role: z.literal("SCHOOL_HEAD"),
   password: nonEmpty("Password required"),
-  teacherEmail: z.string().email().optional(),
 });
 
 export const adminLoginSchema = z.object({
@@ -20,69 +19,55 @@ export const adminLoginSchema = z.object({
   password: nonEmpty("Password required"),
 });
 
-export const teacherAuthIntentSchema = z.enum(["login", "register"]);
-
-const teacherOtpBase = {
+/** Teacher credential login (no OTP / codes). */
+export const teacherLoginSchema = z.object({
   schoolId: nonEmpty("Please select a school"),
   email,
-  intent: teacherAuthIntentSchema,
-  firstName: z.string().optional(),
+  password: nonEmpty("Password required"),
+});
+
+const teacherRegisterNames = {
+  firstName: nonEmpty("First name is required"),
   middleName: optionalString,
-  lastName: z.string().optional(),
+  lastName: nonEmpty("Last name is required"),
 };
 
-export const requestTeacherOtpSchema = z
-  .object(teacherOtpBase)
-  .superRefine((data, ctx) => {
-    if (data.intent === "register") {
-      if (!data.firstName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "First name is required",
-          path: ["firstName"],
-        });
-      }
-      if (!data.lastName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Last name is required",
-          path: ["lastName"],
-        });
-      }
-    }
+/**
+ * Request email OTP for teacher account creation only.
+ * Password is validated up front so the UI can fail before sending a code.
+ */
+export const requestTeacherRegisterOtpSchema = z
+  .object({
+    schoolId: nonEmpty("Please select a school"),
+    email,
+    ...teacherRegisterNames,
+    password: strongPassword,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
 
-export const verifyTeacherOtpSchema = z
+/**
+ * Verify teacher registration OTP and set the account password.
+ */
+export const verifyTeacherRegisterOtpSchema = z
   .object({
-    ...teacherOtpBase,
+    schoolId: nonEmpty("Please select a school"),
+    email,
+    ...teacherRegisterNames,
     code: z
       .string()
       .trim()
       .regex(/^\d{6}$/, "Enter the 6-digit code"),
+    password: strongPassword,
+    confirmPassword: z.string(),
   })
-  .superRefine((data, ctx) => {
-    if (data.intent === "register") {
-      if (!data.firstName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "First name is required",
-          path: ["firstName"],
-        });
-      }
-      if (!data.lastName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Last name is required",
-          path: ["lastName"],
-        });
-      }
-    }
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
-
-export const startTeacherGoogleOAuthSchema = z.object({
-  schoolId: nonEmpty("Please select a school"),
-  intent: teacherAuthIntentSchema,
-});
 
 export const setPasswordSchema = z
   .object({
@@ -115,9 +100,9 @@ export const forgotPasswordSchema = z.object({
 
 export type SchoolLoginInput = z.infer<typeof schoolLoginSchema>;
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
-export type RequestTeacherOtpInput = z.infer<typeof requestTeacherOtpSchema>;
-export type VerifyTeacherOtpInput = z.infer<typeof verifyTeacherOtpSchema>;
-export type StartTeacherGoogleOAuthInput = z.infer<typeof startTeacherGoogleOAuthSchema>;
+export type TeacherLoginInput = z.infer<typeof teacherLoginSchema>;
+export type RequestTeacherRegisterOtpInput = z.infer<typeof requestTeacherRegisterOtpSchema>;
+export type VerifyTeacherRegisterOtpInput = z.infer<typeof verifyTeacherRegisterOtpSchema>;
 export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

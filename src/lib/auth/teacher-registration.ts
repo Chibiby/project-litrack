@@ -7,18 +7,19 @@ import {
   revalidateSchoolDashboard,
 } from "@/lib/cache/revalidate";
 import type { TeacherApprovalStatus, User } from "@prisma/client";
+import {
+  DECLINED_REGISTRATION_MESSAGE,
+  isPendingTeacherAtSchool,
+  registerConflictError,
+} from "@/lib/auth/teacher-registration-helpers";
 
 export type TeacherAuthIntent = "login" | "register";
 
-export const DECLINED_REGISTRATION_MESSAGE =
-  "Your registration was declined. Contact your School Head.";
-
-export const TEACHER_OAUTH_CTX_COOKIE = "teacher_oauth_ctx";
-
-export type TeacherOAuthCtx = {
-  schoolId: string;
-  intent: TeacherAuthIntent;
-};
+export {
+  DECLINED_REGISTRATION_MESSAGE,
+  isPendingTeacherAtSchool,
+  registerConflictError,
+} from "@/lib/auth/teacher-registration-helpers";
 
 export type TeacherNameParts = {
   firstName: string;
@@ -43,60 +44,18 @@ function buildFullName(firstName: string, middleName: string | undefined, lastNa
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
 
-export function parseNamesFromUserMetadata(
-  metadata: Record<string, unknown> | undefined,
-  email: string
-): TeacherNameParts {
-  const given =
-    typeof metadata?.given_name === "string" ? metadata.given_name.trim() : "";
-  const family =
-    typeof metadata?.family_name === "string" ? metadata.family_name.trim() : "";
-  if (given || family) {
-    return {
-      firstName: given || family,
-      lastName: family || given,
-    };
-  }
-
-  const full =
-    (typeof metadata?.full_name === "string" && metadata.full_name.trim()) ||
-    (typeof metadata?.name === "string" && metadata.name.trim()) ||
-    "";
-  if (full) {
-    const parts = full.split(/\s+/).filter(Boolean);
-    if (parts.length === 1) {
-      return { firstName: parts[0], lastName: parts[0] };
-    }
-    return {
-      firstName: parts[0],
-      lastName: parts.slice(1).join(" "),
-    };
-  }
-
-  const local = email.split("@")[0]?.trim() || "Teacher";
-  return { firstName: local, lastName: local };
-}
-
-export function registerConflictError(user: User, schoolId: string): string {
-  if (user.role === "TEACHER" && user.schoolId === schoolId) {
-    if (user.approvalStatus === "PENDING") {
-      return "Your request is pending School Head approval.";
-    }
-    if (user.approvalStatus === "REJECTED") {
-      return DECLINED_REGISTRATION_MESSAGE;
-    }
-    if (user.approvalStatus === "APPROVED" || user.isActive) {
-      return "Account already exists. Use Login instead.";
-    }
-  }
-  return "This email is already in use.";
-}
-
 function isPendingLike(user: User): boolean {
   return (
     user.approvalStatus === "PENDING" ||
     (!user.isActive && user.approvalStatus !== "REJECTED")
   );
+}
+
+function prismaErrorCode(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    return String((err as { code: unknown }).code);
+  }
+  return "";
 }
 
 function redirectOutcome(user: User): CompleteTeacherAuthResult {
@@ -131,7 +90,7 @@ async function linkAuthIdIfNeeded(user: User, authId: string): Promise<User> {
 }
 
 /**
- * After OTP verify or OAuth callback: create/link the Prisma TEACHER user and
+ * After email OTP verify: create/link the Prisma TEACHER user and
  * decide pending vs approved vs rejected. Callers handle redirects / sign-out.
  */
 export async function completeTeacherAuthAfterVerify(
@@ -153,8 +112,9 @@ export async function completeTeacherAuthAfterVerify(
     const lastName = names.lastName.trim();
     const fullName = buildFullName(firstName, middleName, lastName);
 
+    let created: User | null = null;
     try {
-      const created = await prisma.user.create({
+      created = await prisma.user.create({
         data: {
           authId,
           email,
@@ -170,7 +130,21 @@ export async function completeTeacherAuthAfterVerify(
           profileCompleted: false,
         },
       });
+    } catch (err) {
+      // Race / retry: peer may have created the same email (P2002) or create
+      // failed after a peer succeeded. Always re-read before failing closed.
+      const code = prismaErrorCode(err);
+      if (code !== "P2002") {
+        console.error("[teacher-registration] create failed:", err);
+      }
+      existing = await prisma.user.findUnique({ where: { email } });
+      if (!existing) {
+        return { ok: false, error: "Registration failed. Please try again.", signOut: true };
+      }
+      // Fall through to register rules with `existing` (PENDING → success).
+    }
 
+    if (created) {
       await setTeacherAppMetadata(authId, schoolId);
 
       await writeAudit({
@@ -182,22 +156,16 @@ export async function completeTeacherAuthAfterVerify(
         metadata: { schoolId, email, method: "self_register" },
       });
 
-      // Pending-approval counts on school + admin dashboards.
-      revalidateSchoolDashboard(schoolId);
-      revalidateAdminDashboard();
+      // Pending-approval counts on school + admin dashboards. Never let cache
+      // revalidation turn a successful create into a client-facing failure.
+      try {
+        revalidateSchoolDashboard(schoolId);
+        revalidateAdminDashboard();
+      } catch (err) {
+        console.error("[teacher-registration] revalidate after create failed:", err);
+      }
 
       return { ok: true, outcome: "pending" };
-    } catch (err) {
-      // Race: another request created the same email — fall through to login rules.
-      const code =
-        err && typeof err === "object" && "code" in err
-          ? String((err as { code: unknown }).code)
-          : "";
-      if (code !== "P2002") {
-        console.error("[teacher-registration] create failed:", err);
-        return { ok: false, error: "Registration failed. Please try again.", signOut: true };
-      }
-      existing = await prisma.user.findUnique({ where: { email } });
     }
   }
 
@@ -218,14 +186,10 @@ export async function completeTeacherAuthAfterVerify(
   }
 
   if (intent === "register") {
-    // Race after create (P2002) or OAuth/register with an existing email.
+    // Race after create or register with an existing email.
     // PENDING at this school → fall through to login rules (idempotent).
-    // Otherwise same conflict messages as requestTeacherOtp.
-    const pendingHere =
-      existing.role === "TEACHER" &&
-      existing.schoolId === schoolId &&
-      existing.approvalStatus === "PENDING";
-    if (!pendingHere) {
+    // Otherwise same conflict messages as requestTeacherRegisterOtp.
+    if (!isPendingTeacherAtSchool(existing, schoolId)) {
       return {
         ok: false,
         error: registerConflictError(existing, schoolId),

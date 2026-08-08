@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   schoolLoginSchema,
+  teacherLoginSchema,
+  requestTeacherRegisterOtpSchema,
+  verifyTeacherRegisterOtpSchema,
   setPasswordSchema,
   changePasswordSchema,
   strongPassword,
-  requestTeacherOtpSchema,
-  verifyTeacherOtpSchema,
 } from "@/lib/validators/auth.schema";
 
 describe("strongPassword", () => {
@@ -47,7 +48,7 @@ describe("setPasswordSchema / changePasswordSchema", () => {
 });
 
 describe("schoolLoginSchema", () => {
-  it("accepts SCHOOL_HEAD and TEACHER roles and rejects others", () => {
+  it("accepts SCHOOL_HEAD only and rejects TEACHER / others", () => {
     expect(
       schoolLoginSchema.safeParse({
         schoolId: "school-1",
@@ -61,9 +62,8 @@ describe("schoolLoginSchema", () => {
         schoolId: "school-1",
         role: "TEACHER",
         password: "secret",
-        teacherEmail: "t@example.com",
       }).success
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       schoolLoginSchema.safeParse({
@@ -75,44 +75,117 @@ describe("schoolLoginSchema", () => {
   });
 });
 
-describe("requestTeacherOtpSchema / verifyTeacherOtpSchema", () => {
-  it("requires names on register", () => {
+describe("teacherLoginSchema", () => {
+  it("requires schoolId, email, and password", () => {
     expect(
-      requestTeacherOtpSchema.safeParse({
-        schoolId: "s1",
-        email: "a@example.com",
-        intent: "register",
+      teacherLoginSchema.safeParse({
+        schoolId: "school-1",
+        email: "t@example.com",
+        password: "secret",
+      }).success
+    ).toBe(true);
+
+    expect(
+      teacherLoginSchema.safeParse({
+        schoolId: "",
+        email: "t@example.com",
+        password: "secret",
       }).success
     ).toBe(false);
 
     expect(
-      requestTeacherOtpSchema.safeParse({
-        schoolId: "s1",
-        email: "a@example.com",
-        intent: "register",
-        firstName: "Ada",
-        lastName: "Lovelace",
+      teacherLoginSchema.safeParse({
+        schoolId: "school-1",
+        email: "not-an-email",
+        password: "secret",
+      }).success
+    ).toBe(false);
+
+    expect(
+      teacherLoginSchema.safeParse({
+        schoolId: "school-1",
+        email: "t@example.com",
+        password: "",
+      }).success
+    ).toBe(false);
+  });
+});
+
+const validRegisterBase = {
+  schoolId: "s1",
+  email: "a@example.com",
+  firstName: "Ada",
+  lastName: "Lovelace",
+  password: "password1",
+  confirmPassword: "password1",
+};
+
+describe("requestTeacherRegisterOtpSchema", () => {
+  it("requires names, strong password, and matching confirm", () => {
+    expect(requestTeacherRegisterOtpSchema.safeParse(validRegisterBase).success).toBe(true);
+
+    expect(
+      requestTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        firstName: "",
+        lastName: "",
+      }).success
+    ).toBe(false);
+
+    expect(
+      requestTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        confirmPassword: "password2",
+      }).success
+    ).toBe(false);
+
+    expect(
+      requestTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        password: "short",
+        confirmPassword: "short",
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("verifyTeacherRegisterOtpSchema", () => {
+  it("requires names, matching passwords, and a 6-digit code", () => {
+    expect(
+      verifyTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        code: "123456",
       }).success
     ).toBe(true);
-  });
 
-  it("requires a 6-digit code on verify", () => {
     expect(
-      verifyTeacherOtpSchema.safeParse({
-        schoolId: "s1",
-        email: "a@example.com",
-        intent: "login",
+      verifyTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
         code: "12345",
       }).success
     ).toBe(false);
 
     expect(
-      verifyTeacherOtpSchema.safeParse({
-        schoolId: "s1",
-        email: "a@example.com",
-        intent: "login",
+      verifyTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        code: "abcdef",
+      }).success
+    ).toBe(false);
+
+    expect(
+      verifyTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        firstName: "",
         code: "123456",
       }).success
-    ).toBe(true);
+    ).toBe(false);
+
+    expect(
+      verifyTeacherRegisterOtpSchema.safeParse({
+        ...validRegisterBase,
+        confirmPassword: "password2",
+        code: "123456",
+      }).success
+    ).toBe(false);
   });
 });
