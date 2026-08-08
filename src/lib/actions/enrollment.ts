@@ -7,6 +7,7 @@ import { assertSameSchool } from "@/lib/auth/tenant";
 import {
   transferLearnerSchema,
   transferLearnerCrossSchoolSchema,
+  SECTION_CLEAR,
 } from "@/lib/validators/enrollment.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
@@ -18,15 +19,80 @@ import {
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 /**
+ * Resolve transfer section:
+ * - `__none__` → clear (null)
+ * - uuid → validate against target grade + school
+ * - omitted: same-grade → preserve previous; cross-grade → null
+ */
+async function resolveTransferSection(params: {
+  targetSectionId: string | undefined;
+  targetGradeLevelId: string;
+  schoolId: string;
+  previousSectionId: string | null;
+  previousGradeLevelId: string;
+  /** When false (cross-school), omit always clears. */
+  preserveOnSameGradeOmit?: boolean;
+}): Promise<{ ok: true; sectionId: string | null } | { ok: false; error: string }> {
+  const {
+    targetSectionId,
+    targetGradeLevelId,
+    schoolId,
+    previousSectionId,
+    previousGradeLevelId,
+    preserveOnSameGradeOmit = true,
+  } = params;
+
+  if (targetSectionId === SECTION_CLEAR) {
+    return { ok: true, sectionId: null };
+  }
+
+  if (targetSectionId) {
+    const section = await prisma.section.findFirst({
+      where: {
+        id: targetSectionId,
+        schoolId,
+        gradeLevelId: targetGradeLevelId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!section) return { ok: false, error: "Section not found in target grade" };
+    return { ok: true, sectionId: section.id };
+  }
+
+  // Omitted: preserve only when same grade (previous section still valid for target).
+  if (
+    preserveOnSameGradeOmit &&
+    previousGradeLevelId === targetGradeLevelId &&
+    previousSectionId
+  ) {
+    const stillValid = await prisma.section.findFirst({
+      where: {
+        id: previousSectionId,
+        schoolId,
+        gradeLevelId: targetGradeLevelId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    return { ok: true, sectionId: stillValid?.id ?? null };
+  }
+
+  return { ok: true, sectionId: null };
+}
+
+/**
  * Same-school transfer: grade and/or section and/or teacher.
  */
 export async function transferLearner(formData: FormData): Promise<ActionResult> {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
+  const rawSection = formData.get("targetSectionId");
   const parsed = transferLearnerSchema.safeParse({
     learnerId: formData.get("learnerId"),
     targetGradeLevelId: formData.get("targetGradeLevelId"),
-    targetSectionId: formData.get("targetSectionId") || undefined,
+    // Preserve distinction: missing key → undefined; "__none__" → clear
+    targetSectionId: rawSection === null ? undefined : rawSection,
     targetTeacherId: formData.get("targetTeacherId"),
   });
   if (!parsed.success) {
@@ -68,19 +134,16 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
     return { ok: false, error: "Teacher not found or not assigned to target grade" };
   }
 
-  let resolvedSectionId: string | null = null;
-  if (targetSectionId) {
-    const section = await prisma.section.findFirst({
-      where: {
-        id: targetSectionId,
-        schoolId: user.schoolId,
-        gradeLevelId: targetGradeLevelId,
-        deletedAt: null,
-      },
-    });
-    if (!section) return { ok: false, error: "Section not found in target grade" };
-    resolvedSectionId = section.id;
-  }
+  const sectionResult = await resolveTransferSection({
+    targetSectionId,
+    targetGradeLevelId,
+    schoolId: user.schoolId,
+    previousSectionId: learner.sectionId,
+    previousGradeLevelId: learner.gradeLevelId,
+    preserveOnSameGradeOmit: true,
+  });
+  if (!sectionResult.ok) return sectionResult;
+  const resolvedSectionId = sectionResult.sectionId;
 
   const previousGradeId = learner.gradeLevelId;
 
@@ -166,11 +229,12 @@ export async function transferLearnerCrossSchool(
 ): Promise<ActionResult> {
   const user = await requireUser("SUPER_ADMIN");
 
+  const rawSection = formData.get("targetSectionId");
   const parsed = transferLearnerCrossSchoolSchema.safeParse({
     learnerId: formData.get("learnerId"),
     targetSchoolId: formData.get("targetSchoolId"),
     targetGradeLevelId: formData.get("targetGradeLevelId"),
-    targetSectionId: formData.get("targetSectionId") || undefined,
+    targetSectionId: rawSection === null ? undefined : rawSection,
     targetTeacherId: formData.get("targetTeacherId"),
   });
   if (!parsed.success) {
@@ -231,21 +295,25 @@ export async function transferLearnerCrossSchool(
     };
   }
 
-  let resolvedSectionId: string | null = null;
-  if (targetSectionId) {
-    const section = await prisma.section.findFirst({
-      where: {
-        id: targetSectionId,
-        schoolId: targetSchoolId,
-        gradeLevelId: targetGradeLevelId,
-        deletedAt: null,
-      },
-    });
-    if (!section) {
-      return { ok: false, error: "Section not found in destination grade" };
-    }
-    resolvedSectionId = section.id;
+  const sectionResult = await resolveTransferSection({
+    targetSectionId,
+    targetGradeLevelId,
+    schoolId: targetSchoolId,
+    previousSectionId: learner.sectionId,
+    previousGradeLevelId: learner.gradeLevelId,
+    // Cross-school: previous section is never valid at destination
+    preserveOnSameGradeOmit: false,
+  });
+  if (!sectionResult.ok) {
+    return {
+      ok: false,
+      error:
+        sectionResult.error === "Section not found in target grade"
+          ? "Section not found in destination grade"
+          : sectionResult.error,
+    };
   }
+  const resolvedSectionId = sectionResult.sectionId;
 
   const previousGradeId = learner.gradeLevelId;
 

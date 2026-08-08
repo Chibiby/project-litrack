@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmAction } from "@/components/confirm-action";
 import {
   createAnnouncement,
   updateAnnouncement,
@@ -75,25 +76,34 @@ export function AnnouncementActions({
           <Button type="submit" size="sm" variant="outline" disabled={pending}>
             Save
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="text-destructive"
+          <ConfirmAction
+            title="Delete this announcement?"
+            description="It will be removed from the school feed."
+            confirmLabel="Delete"
+            variant="destructive"
             disabled={pending}
-            onClick={() => {
-              if (!window.confirm("Delete this announcement?")) return;
+            trigger={
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                disabled={pending}
+              >
+                Delete
+              </Button>
+            }
+            onConfirm={async () => {
               const fd = new FormData();
               fd.set("announcementId", announcementId);
-              startTransition(async () => {
-                const res = await deleteAnnouncement(fd);
-                if (!res.ok) toast.error(res.error);
-                else toast.success("Announcement deleted");
-              });
+              const res = await deleteAnnouncement(fd);
+              if (!res.ok) {
+                toast.error(res.error);
+                throw new Error(res.error);
+              }
+              toast.success("Announcement deleted");
             }}
-          >
-            Delete
-          </Button>
+          />
         </div>
       </form>
     </div>

@@ -47,7 +47,9 @@ export function AppShell({
           ) : null}
         </div>
 
-        <main className="w-full p-4 lg:p-8">{children}</main>
+        <main id="main-content" className="w-full p-4 lg:p-8">
+          {children}
+        </main>
       </>
     );
   }
@@ -70,7 +72,7 @@ export function AppShell({
             <div className="w-8 shrink-0 lg:hidden" />
 
             <div className="min-w-0 flex-1">
-              <Breadcrumbs className="mb-1 hidden justify-start md:flex" />
+              <Breadcrumbs className="mb-1 min-w-0 justify-start" />
               <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
                 {title}
               </h1>
@@ -84,7 +86,9 @@ export function AppShell({
         </header>
 
         {/* Match header padding; no max-w so content fills the main column. */}
-        <main className="w-full p-4 lg:p-8">{children}</main>
+        <main id="main-content" className="w-full p-4 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

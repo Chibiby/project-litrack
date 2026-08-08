@@ -6,15 +6,31 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { AppForm, useAppForm } from "@/components/forms/app-form";
+import { forgotPasswordSchema } from "@/lib/validators/auth.schema";
 import { requestPasswordReset } from "@/lib/actions/auth";
+import { toFormData } from "@/lib/forms/to-form-data";
+import { z } from "zod";
 
 const SUCCESS_MESSAGE =
   "If an account exists for that email, a reset link has been sent.";
 
+type ForgotValues = z.infer<typeof forgotPasswordSchema>;
+
 export function ForgotPasswordForm() {
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
+  const form = useAppForm<ForgotValues>({
+    schema: forgotPasswordSchema,
+    defaultValues: { email: "" },
+  });
 
   if (done) {
     return (
@@ -23,7 +39,7 @@ export function ForgotPasswordForm() {
           <h2 className="text-lg font-semibold">Check your email</h2>
           <p className="text-sm text-muted-foreground">{SUCCESS_MESSAGE}</p>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/login">Back to login</Link>
+            <Link href="/login">Back to sign in</Link>
           </Button>
         </CardContent>
       </Card>
@@ -35,33 +51,50 @@ export function ForgotPasswordForm() {
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Reset password</h2>
         <p className="text-sm text-muted-foreground">
-          Enter the email on your account. School Head and teacher accounts without email: contact
-          your administrator to regenerate credentials.
+          Enter the email on your account. School Head accounts without a recovery email: contact
+          your administrator to regenerate credentials. Teachers sign in with the password they
+          set when creating their account.
         </p>
-        <form
-          action={(fd) =>
+        <AppForm
+          form={form}
+          className="space-y-4"
+          onSubmit={(values) => {
             startTransition(async () => {
-              const res = await requestPasswordReset(fd);
+              const res = await requestPasswordReset(toFormData(values));
               if (!res.ok) {
                 toast.error(res.error);
                 return;
               }
               setDone(true);
-            })
-          }
-          className="space-y-4"
+            });
+          }}
         >
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoFocus />
-          </div>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel required>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    disabled={pending}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Sending…" : "Send reset link"}
           </Button>
-        </form>
+        </AppForm>
         <p className="text-center text-xs text-muted-foreground">
           <Link href="/login" className="underline hover:text-foreground">
-            Back to login
+            Back to sign in
           </Link>
         </p>
       </CardContent>

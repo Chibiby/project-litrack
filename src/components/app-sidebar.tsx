@@ -1,18 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { SignOutButton } from "@/components/sign-out-button";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { logoutAction } from "@/lib/actions/auth";
-import { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
+import { roleHomePath, roleSettingsPath } from "@/lib/auth/roles";
 import type { UserRole } from "@prisma/client";
 import {
   LayoutDashboard,
@@ -23,10 +28,9 @@ import {
   BookOpen,
   Sparkles,
   Menu,
-  KeyRound,
+  Settings,
   Shield,
   CalendarRange,
-  Layers,
   Megaphone,
   ScrollText,
   ArrowRightLeft,
@@ -59,21 +63,18 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         { label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
         { label: "School years", href: "/admin/school-years", icon: CalendarRange },
         { label: "Audit", href: "/admin/audit", icon: ScrollText },
-        { label: "Profile", href: "/admin/profile", icon: UserCircle },
       ];
     case "SCHOOL_HEAD":
       return [
         { label: "Dashboard", href: "/school-head", icon: LayoutDashboard },
         { label: "School years", href: "/school-head/school-years", icon: CalendarRange },
         { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
-        { label: "Sections", href: "/school-head/sections", icon: Layers },
         { label: "Teachers", href: "/school-head/teachers", icon: Users },
         { label: "Transfer", href: "/school-head/transfer", icon: ArrowRightLeft },
         { label: "Announcements", href: "/school-head/announcements", icon: Megaphone },
         { label: "School info", href: "/school-head/school-info", icon: Building2 },
         { label: "Reports", href: "/school-head/reports", icon: FileBarChart },
         { label: "Audit", href: "/school-head/audit", icon: ScrollText },
-        { label: "Profile", href: "/school-head/profile", icon: UserCircle },
       ];
     case "TEACHER":
       const items: NavItem[] = [
@@ -96,7 +97,6 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         }
       });
       items.push({ label: "Reports", href: "/teacher/reports", icon: FileBarChart });
-      items.push({ label: "Profile", href: "/teacher/profile", icon: UserCircle });
       return items;
     default:
       return [];
@@ -117,7 +117,15 @@ function resolveActiveHref(pathname: string, items: NavItem[]): string | undefin
   return best;
 }
 
-function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
+function NavLink({
+  item,
+  isActive,
+  onNavigate,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  onNavigate?: () => void;
+}) {
   const Icon = item.icon;
   return (
     <Link
@@ -125,6 +133,7 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
       // force-dynamic + loading.tsx: default prefetch only warms the skeleton.
       // Full prefetch loads the RSC payload (auth + cachedQuery) before click.
       prefetch={true}
+      onClick={onNavigate}
       className={cn(
         "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         isActive
@@ -158,22 +167,28 @@ export function AppSidebar({
   viewedSchoolName,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = getNavItems(role, grades);
   const activeHref = resolveActiveHref(pathname, navItems);
 
-  // FULL-warm only cheap shell routes (dashboard / profile / password).
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // FULL-warm only cheap shell routes (dashboard / settings profile + security).
   // Reports, grade rosters, and other sidebar items keep default Link prefetch
   // (loading.tsx only) so background RSC does not stampede the Prisma pool.
   const prefetchHrefs = useMemo(() => getShellWarmHrefs(role), [role]);
   const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
-  const SidebarContent = (
+  const renderSidebarContent = (onNavigate?: () => void) => (
     <div className="flex h-full flex-col bg-white">
-      {/* Brand */}
-      <div className="border-b border-border/80 px-4 py-5">
+      {/* Brand — height matches RoleShell sticky header via --app-chrome-header-height */}
+      <div className="flex min-h-[var(--app-chrome-header-height)] shrink-0 flex-col justify-center border-b border-border/80 px-4">
         <Link
           href={roleHomePath(role)}
           prefetch={true}
+          onClick={onNavigate}
           className="flex items-center gap-3 font-semibold"
         >
           <Image
@@ -207,15 +222,16 @@ export function AppSidebar({
         <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
           Menu
         </p>
-        <div className="space-y-1">
+        <nav aria-label="Primary" className="space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.href}
               item={item}
               isActive={item.href === activeHref}
+              onNavigate={onNavigate}
             />
           ))}
-        </div>
+        </nav>
       </ScrollArea>
 
       {/* Footer */}
@@ -238,9 +254,9 @@ export function AppSidebar({
             size="sm"
             className="w-full justify-start text-muted-foreground hover:text-foreground"
           >
-            <Link href={rolePasswordPath(role)} prefetch={true}>
-              <KeyRound className="mr-2 h-4 w-4" />
-              Change password
+            <Link href={roleSettingsPath(role)} prefetch={true} onClick={onNavigate}>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
             </Link>
           </Button>
           <form action={logoutAction}>
@@ -257,16 +273,16 @@ export function AppSidebar({
 
       {/* Desktop Sidebar */}
       <aside className="fixed inset-y-0 hidden w-64 flex-col border-r border-border/80 bg-white lg:flex">
-        {SidebarContent}
+        {renderSidebarContent()}
       </aside>
 
       {/* Mobile Sidebar */}
-      <Sheet>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
-            className="absolute left-4 top-4 z-50 lg:hidden"
+            className="fixed left-4 top-[calc(var(--app-chrome-header-height)/2)] z-50 -translate-y-1/2 lg:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
@@ -274,7 +290,8 @@ export function AppSidebar({
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 border-r p-0">
-          {SidebarContent}
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          {renderSidebarContent(() => setMobileOpen(false))}
         </SheetContent>
       </Sheet>
     </>

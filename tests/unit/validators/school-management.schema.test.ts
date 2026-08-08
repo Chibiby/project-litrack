@@ -67,6 +67,28 @@ describe("section schemas", () => {
     ).toBe(true);
     expect(sectionIdSchema.safeParse({ sectionId: "s1" }).success).toBe(true);
   });
+
+  it("rejects create without gradeLevelId or overlong name", () => {
+    expect(
+      createSectionSchema.safeParse({ gradeLevelId: "", name: "A" }).success
+    ).toBe(false);
+    expect(
+      createSectionSchema.safeParse({
+        gradeLevelId: "g1",
+        name: "x".repeat(101),
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects update without sectionId or name", () => {
+    expect(
+      updateSectionSchema.safeParse({ sectionId: "", name: "Rizal" }).success
+    ).toBe(false);
+    expect(
+      updateSectionSchema.safeParse({ sectionId: "s1", name: "" }).success
+    ).toBe(false);
+    expect(sectionIdSchema.safeParse({ sectionId: "" }).success).toBe(false);
+  });
 });
 
 describe("announcement schemas", () => {

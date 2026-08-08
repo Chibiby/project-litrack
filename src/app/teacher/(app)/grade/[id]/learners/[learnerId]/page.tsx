@@ -259,7 +259,14 @@ export default async function LearnerDetailPage({
           </CardHeader>
           <CardContent className="space-y-4">
             {attendanceByWeek.size === 0 ? (
-              <EmptyState title="No attendance records yet" />
+              <EmptyState
+                title="No attendance records yet"
+                description={
+                  learner.isAralLearner
+                    ? "Mark attendance from the ARAL attendance page for this learner."
+                    : "Attendance history appears after ARAL attendance is recorded."
+                }
+              />
             ) : (
               Array.from(attendanceByWeek.entries()).map(([week, rows]) => (
                 <div key={week}>
@@ -301,7 +308,14 @@ export default async function LearnerDetailPage({
           <CardContent className="p-0">
             {learner.readingLevels.length === 0 ? (
               <div className="p-4">
-                <EmptyState title="No reading-level records yet" />
+                <EmptyState
+                  title="No reading-level records yet"
+                  description={
+                    learner.isAralLearner
+                      ? "Record reading level from the ARAL reading-level page for this learner."
+                      : "Reading-level history appears after ARAL updates are recorded."
+                  }
+                />
               </div>
             ) : (
               <Table>

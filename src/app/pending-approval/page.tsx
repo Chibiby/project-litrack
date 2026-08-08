@@ -2,10 +2,13 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser, signOut } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { logoutAction } from "@/lib/actions/auth";
-import { SignOutButton } from "@/components/sign-out-button";
+import { PendingApprovalActions } from "@/components/pending-approval-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DECLINED_REGISTRATION_MESSAGE } from "@/lib/auth/teacher-registration";
+import {
+  DECLINED_REGISTRATION_MESSAGE,
+  DEACTIVATED_TEACHER_MESSAGE,
+  isDeactivatedTeacher,
+} from "@/lib/auth/teacher-registration";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,12 @@ export default async function PendingApprovalPage() {
     redirect(`/login?error=${encodeURIComponent(DECLINED_REGISTRATION_MESSAGE)}`);
   }
 
-  if (user.approvalStatus === "APPROVED") {
+  if (isDeactivatedTeacher(user)) {
+    await signOut();
+    redirect(`/login?error=${encodeURIComponent(DEACTIVATED_TEACHER_MESSAGE)}`);
+  }
+
+  if (user.approvalStatus === "APPROVED" && user.isActive) {
     redirect("/teacher");
   }
 
@@ -36,7 +44,7 @@ export default async function PendingApprovalPage() {
     : null;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+    <main id="main-content" className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image
@@ -54,8 +62,9 @@ export default async function PendingApprovalPage() {
           <CardHeader>
             <CardTitle>Awaiting approval</CardTitle>
             <CardDescription>
-              Your registration is waiting for School Head approval. You will be able to continue
-              once your account is approved.
+              Your registration is waiting for School Head approval at{" "}
+              {school?.name ?? "your school"}. Contact your School Head if this takes longer than
+              expected. After approval, continue with email and password sign-in (no code needed).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -69,9 +78,7 @@ export default async function PendingApprovalPage() {
                 <dd className="font-medium text-foreground">{user.email}</dd>
               </div>
             </dl>
-            <form action={logoutAction}>
-              <SignOutButton />
-            </form>
+            <PendingApprovalActions />
           </CardContent>
         </Card>
       </div>

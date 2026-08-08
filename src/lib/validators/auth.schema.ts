@@ -98,6 +98,17 @@ export const forgotPasswordSchema = z.object({
   email,
 });
 
+export const changeEmailSchema = z
+  .object({
+    newEmail: email,
+    confirmEmail: email,
+    currentPassword: nonEmpty("Current password required"),
+  })
+  .refine((d) => d.newEmail.toLowerCase() === d.confirmEmail.toLowerCase(), {
+    message: "Emails do not match",
+    path: ["confirmEmail"],
+  });
+
 export type SchoolLoginInput = z.infer<typeof schoolLoginSchema>;
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 export type TeacherLoginInput = z.infer<typeof teacherLoginSchema>;
@@ -106,3 +117,4 @@ export type VerifyTeacherRegisterOtpInput = z.infer<typeof verifyTeacherRegister
 export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;

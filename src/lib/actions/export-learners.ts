@@ -17,6 +17,8 @@ type ActionResult<T = unknown> =
 
 export type ExportLearnersFilter = {
   gradeLevelId?: string;
+  /** Filter to one section; `"none"` = learners with no section. */
+  sectionId?: string;
   aralOnly?: boolean;
 };
 
@@ -62,10 +64,17 @@ const learnerExportSelect = {
   },
 } as const;
 
+function sectionFilterClause(sectionId?: string) {
+  if (!sectionId) return {};
+  if (sectionId === "none") return { sectionId: null };
+  return { sectionId };
+}
+
 function learnerWhere(opts: {
   schoolId: string;
   teacherId?: string;
   gradeLevelId?: string;
+  sectionId?: string;
   aralOnly?: boolean;
 }) {
   return {
@@ -74,6 +83,7 @@ function learnerWhere(opts: {
     archivedAt: null,
     ...(opts.teacherId ? { teacherId: opts.teacherId } : {}),
     ...(opts.gradeLevelId ? { gradeLevelId: opts.gradeLevelId } : {}),
+    ...sectionFilterClause(opts.sectionId),
     ...(opts.aralOnly ? { isAralLearner: true } : {}),
   };
 }
@@ -82,6 +92,7 @@ async function fetchLearnersForExport(opts: {
   schoolId: string;
   teacherId?: string;
   gradeLevelId?: string;
+  sectionId?: string;
   aralOnly?: boolean;
 }) {
   return prisma.learner.findMany({
@@ -95,6 +106,7 @@ async function fetchLearnersForReport(opts: {
   schoolId: string;
   teacherId?: string;
   gradeLevelId?: string;
+  sectionId?: string;
   aralOnly?: boolean;
 }) {
   return prisma.learner.findMany({
@@ -158,6 +170,7 @@ async function buildLearnersWorkbook(
   aralSheet.columns = [
     { header: "Full name", key: "fullName", width: 28 },
     { header: "Grade", key: "grade", width: 12 },
+    { header: "Section", key: "section", width: 12 },
     { header: "Transportation", key: "transport", width: 18 },
     { header: "Distance", key: "distance", width: 16 },
     { header: "Transfers", key: "transfers", width: 16 },
@@ -170,6 +183,7 @@ async function buildLearnersWorkbook(
     aralSheet.addRow({
       fullName: l.fullName,
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+      section: l.section?.name ?? "",
       transport: l.aralProfile?.modeOfTransportation ?? "",
       distance: l.aralProfile?.distanceHomeToSchool ?? "",
       transfers: l.aralProfile?.previousTransfers ?? "",
@@ -209,6 +223,18 @@ export async function exportTeacherLearnersExcel(
     if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
   }
 
+  if (filter.sectionId && filter.sectionId !== "none") {
+    const section = await prisma.section.findFirst({
+      where: {
+        id: filter.sectionId,
+        schoolId: user.schoolId,
+        deletedAt: null,
+        ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
+      },
+    });
+    if (!section) return { ok: false, error: "Section not found" };
+  }
+
   const school = await prisma.school.findUnique({
     where: { id: user.schoolId },
     select: { name: true },
@@ -218,6 +244,7 @@ export async function exportTeacherLearnersExcel(
     schoolId: user.schoolId,
     teacherId: user.id,
     gradeLevelId: filter.gradeLevelId,
+    sectionId: filter.sectionId,
     aralOnly: filter.aralOnly,
   });
 
@@ -232,6 +259,7 @@ export async function exportTeacherLearnersExcel(
     metadata: {
       count: learners.length,
       gradeLevelId: filter.gradeLevelId ?? null,
+      sectionId: filter.sectionId ?? null,
       aralOnly: Boolean(filter.aralOnly),
       role: "TEACHER",
     },
@@ -270,6 +298,18 @@ export async function exportSchoolHeadLearnersExcel(
     if (!grade) return { ok: false, error: "Grade level not found" };
   }
 
+  if (filter.sectionId && filter.sectionId !== "none") {
+    const section = await prisma.section.findFirst({
+      where: {
+        id: filter.sectionId,
+        schoolId,
+        deletedAt: null,
+        ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
+      },
+    });
+    if (!section) return { ok: false, error: "Section not found" };
+  }
+
   const school = await prisma.school.findUnique({
     where: { id: schoolId },
     select: { name: true },
@@ -278,6 +318,7 @@ export async function exportSchoolHeadLearnersExcel(
   const learners = await fetchLearnersForExport({
     schoolId,
     gradeLevelId: filter.gradeLevelId,
+    sectionId: filter.sectionId,
     aralOnly: filter.aralOnly,
   });
 
@@ -292,6 +333,7 @@ export async function exportSchoolHeadLearnersExcel(
     metadata: {
       count: learners.length,
       gradeLevelId: filter.gradeLevelId ?? null,
+      sectionId: filter.sectionId ?? null,
       aralOnly: Boolean(filter.aralOnly),
       role: user.role,
     },
@@ -333,6 +375,7 @@ export async function loadLearnersForReport(opts: {
   schoolId: string;
   teacherId?: string;
   gradeLevelId?: string;
+  sectionId?: string;
   aralOnly?: boolean;
 }) {
   const school = await prisma.school.findUnique({
@@ -350,11 +393,36 @@ export async function loadLearnersForReport(opts: {
     byGrade.set(key, list);
   }
 
+  /** Grade type → section name → counts (only when sections are present). */
+  const byGradeSection = new Map<
+    string,
+    { section: string; count: number; aral: number }[]
+  >();
+  for (const [gradeType, list] of byGrade) {
+    const hasAnySection = list.some((l) => l.section);
+    if (!hasAnySection) continue;
+    const buckets = new Map<string, { count: number; aral: number }>();
+    for (const l of list) {
+      const name = l.section?.name ?? "No section";
+      const cur = buckets.get(name) ?? { count: 0, aral: 0 };
+      cur.count += 1;
+      if (l.isAralLearner) cur.aral += 1;
+      buckets.set(name, cur);
+    }
+    byGradeSection.set(
+      gradeType,
+      [...buckets.entries()]
+        .map(([section, v]) => ({ section, count: v.count, aral: v.aral }))
+        .sort((a, b) => a.section.localeCompare(b.section))
+    );
+  }
+
   return {
     schoolName: school?.name ?? "School",
     schoolIdCode: school?.schoolIdCode ?? "",
     learners,
     byGrade,
+    byGradeSection,
     aralCount: learners.filter((l) => l.isAralLearner).length,
     generatedAt: new Date(),
   };

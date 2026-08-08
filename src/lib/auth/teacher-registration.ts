@@ -9,6 +9,8 @@ import {
 import type { TeacherApprovalStatus, User } from "@prisma/client";
 import {
   DECLINED_REGISTRATION_MESSAGE,
+  DEACTIVATED_TEACHER_MESSAGE,
+  isDeactivatedTeacher,
   isPendingTeacherAtSchool,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
@@ -17,6 +19,8 @@ export type TeacherAuthIntent = "login" | "register";
 
 export {
   DECLINED_REGISTRATION_MESSAGE,
+  DEACTIVATED_TEACHER_MESSAGE,
+  isDeactivatedTeacher,
   isPendingTeacherAtSchool,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
@@ -44,13 +48,6 @@ function buildFullName(firstName: string, middleName: string | undefined, lastNa
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
 
-function isPendingLike(user: User): boolean {
-  return (
-    user.approvalStatus === "PENDING" ||
-    (!user.isActive && user.approvalStatus !== "REJECTED")
-  );
-}
-
 function prismaErrorCode(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
     return String((err as { code: unknown }).code);
@@ -62,7 +59,10 @@ function redirectOutcome(user: User): CompleteTeacherAuthResult {
   if (user.approvalStatus === "REJECTED") {
     return { ok: false, error: DECLINED_REGISTRATION_MESSAGE, signOut: true };
   }
-  if (isPendingLike(user)) {
+  if (isDeactivatedTeacher(user)) {
+    return { ok: false, error: DEACTIVATED_TEACHER_MESSAGE, signOut: true };
+  }
+  if (user.approvalStatus === "PENDING") {
     return { ok: true, outcome: "pending" };
   }
   if (user.approvalStatus === "APPROVED" || user.isActive) {

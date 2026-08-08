@@ -1,23 +1,26 @@
 import type { UserRole } from "@prisma/client";
-import { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
+import {
+  roleHomePath,
+  roleSettingsProfilePath,
+  roleSecurityPath,
+} from "@/lib/auth/roles";
 
 /**
  * Cheap shell destinations for NavPrefetcher FULL warm.
- * Dashboard / profile / password only — reports, grade rosters, and other
- * heavy sidebar routes stay on default Link prefetch (loading.tsx skeleton).
+ * Dashboard / settings profile + security only — reports, grade rosters, and
+ * other heavy sidebar routes stay on default Link prefetch (loading.tsx skeleton).
  */
 export function getShellWarmHrefs(role: UserRole): string[] {
   const home = roleHomePath(role);
-  const password = rolePasswordPath(role);
+  const profile = roleSettingsProfilePath(role);
+  const security = roleSecurityPath(role);
   switch (role) {
     case "TEACHER":
-      return [home, "/teacher/profile", password];
     case "SUPER_ADMIN":
-      return [home, "/admin/profile", password];
     case "SCHOOL_HEAD":
-      return [home, "/school-head/profile", password];
+      return [home, profile, security];
     default:
-      return [password];
+      return [security];
   }
 }
 

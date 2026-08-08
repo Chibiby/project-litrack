@@ -86,7 +86,7 @@ export async function SchoolHeadMetricsSection({
           title="Sections"
           value={metrics?.sectionCount ?? 0}
           icon={Layers}
-          href={sh("/school-head/sections")}
+          href={sh("/school-head/grade-levels")}
         />
         <MetricCard
           title="ARAL"

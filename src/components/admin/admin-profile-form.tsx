@@ -74,13 +74,13 @@ export function AdminProfileForm({
       </form>
 
       <div className="rounded-lg border border-border/80 bg-muted/30 px-4 py-3 text-sm">
-        <p className="font-medium">Password</p>
+        <p className="font-medium">Security</p>
         <p className="mt-1 text-muted-foreground">
-          Change your password from the account page.
+          Change your password or email from Settings → Security.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-3">
-          <Link href="/admin/password" prefetch={true}>
-            Change password
+          <Link href="/admin/settings/security" prefetch={true}>
+            Open Security
           </Link>
         </Button>
       </div>

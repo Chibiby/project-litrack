@@ -27,10 +27,11 @@ interface RoleShellProps {
  * Keeps sidebar + breadcrumb header mounted while `loading.tsx` / page
  * content swaps in `children`. Layout chrome is set up once when this shell
  * mounts; AppSidebar's NavPrefetcher then full-prefetches cheap shell routes
- * (dashboard / profile / password) so those navigations reuse Flight data.
+ * (dashboard / settings profile + security) so those navigations reuse Flight data.
  * Heavy sidebar destinations keep default Link prefetch only. Deeper nests
  * warm from learner detail pages, not mass roster lists. Keep account/settings
- * under the role prefix so this shell is not unmounted (see rolePasswordPath).
+ * under the role prefix so this shell is not unmounted (see roleSettingsPath /
+ * rolePasswordPath → settings/security).
  */
 export function RoleShell({
   role,
@@ -53,14 +54,14 @@ export function RoleShell({
           viewedSchoolName={viewedSchoolName}
         />
         <div className="lg:pl-64">
-          <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 backdrop-blur-md">
+          <header className="sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b border-border/80 bg-white/90 backdrop-blur-md">
             {/* No mx-auto/max-w — keep breadcrumbs flush-left beside the sidebar. */}
-            <div className="flex w-full items-center gap-4 px-4 py-4 lg:px-8">
+            <div className="flex h-full w-full items-center gap-4 px-4 lg:px-8">
               {/* Spacer for mobile menu button */}
               <div className="w-8 shrink-0 lg:hidden" />
 
               <div className="min-w-0 flex-1">
-                <Breadcrumbs className="hidden justify-start md:flex" />
+                <Breadcrumbs className="min-w-0 justify-start" />
               </div>
             </div>
           </header>

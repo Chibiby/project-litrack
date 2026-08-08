@@ -37,6 +37,16 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
   if (!learner) notFound();
   if (learner.gradeLevelId !== gradeId) notFound();
 
+  const gradeSections = await prisma.section.findMany({
+    where: {
+      gradeLevelId: gradeId,
+      schoolId: learner.schoolId,
+      deletedAt: null,
+    },
+    select: { id: true, name: true, gradeLevelId: true },
+    orderBy: { name: "asc" },
+  });
+
   const nestedWarmHrefs = getLearnerDetailWarmHrefs(gradeId, learner);
   const nestedWarmKey = `teacher:learner:${learner.id}:edit`;
 
@@ -65,6 +75,7 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
             gradeLevelId={gradeId}
             mode="edit"
             submitLabel="Save changes"
+            sections={gradeSections}
             defaultValues={{
               id: learner.id,
               firstName: learner.firstName,
@@ -78,6 +89,7 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
               filipinoFrustrationSubtypes: learner.filipinoFrustrationSubtypes,
               governmentBenefits: learner.governmentBenefits,
               parentEducation: learner.parentEducation,
+              sectionId: learner.sectionId,
             }}
           />
         </CardContent>

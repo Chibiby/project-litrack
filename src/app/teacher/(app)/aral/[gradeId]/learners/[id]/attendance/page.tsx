@@ -82,7 +82,10 @@ export default async function AttendancePage({
           <CardContent className="p-0">
             {attendances.length === 0 ? (
               <div className="p-4">
-                <EmptyState title="No attendance recorded this week" />
+                <EmptyState
+                  title="No attendance recorded this week"
+                  description="Use the form on this page to mark today’s attendance."
+                />
               </div>
             ) : (
               <Table>

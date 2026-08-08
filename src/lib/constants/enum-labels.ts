@@ -54,13 +54,6 @@ export const EDUCATIONAL_ATTAINMENT_LABELS = {
   DOCTORAL: "Doctoral Degree",
 } as const;
 
-export const YEARS_IN_SERVICE_LABELS = {
-  Y0_3: "0–3 years",
-  Y4_10: "4–10 years",
-  Y11_20: "11–20 years",
-  Y21_PLUS: "21 years and above",
-} as const;
-
 export const TRAINING_LEVEL_LABELS = {
   INTERNATIONAL: "International",
   NATIONAL: "National",

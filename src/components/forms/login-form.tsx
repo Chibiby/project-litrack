@@ -301,28 +301,30 @@ export function LoginForm({
               </p>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={teacherIntent === "login" ? "default" : "ghost"}
-                className="w-full"
-                disabled={pending}
-                onClick={() => switchTeacherIntent("login")}
-              >
-                Sign in
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={teacherIntent === "register" ? "default" : "ghost"}
-                className="w-full"
-                disabled={pending}
-                onClick={() => switchTeacherIntent("register")}
-              >
-                Create account
-              </Button>
-            </div>
+            {teacherStep !== "otp" ? (
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={teacherIntent === "login" ? "default" : "ghost"}
+                  className="w-full"
+                  disabled={pending}
+                  onClick={() => switchTeacherIntent("login")}
+                >
+                  Sign in
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={teacherIntent === "register" ? "default" : "ghost"}
+                  className="w-full"
+                  disabled={pending}
+                  onClick={() => switchTeacherIntent("register")}
+                >
+                  Create account
+                </Button>
+              </div>
+            ) : null}
 
             {teacherIntent === "login" ? (
               <form

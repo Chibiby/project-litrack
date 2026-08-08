@@ -21,6 +21,9 @@ export default async function TeacherProfilingPage() {
       </div>
       <TeacherProfileForm
         defaultValues={{
+          firstName: user.firstName,
+          middleName: user.middleName ?? "",
+          lastName: user.lastName,
           accountEmail: user.email,
           accountEmailIsSynthetic: isSyntheticEmail(user.email),
           ...(profile ?? {}),

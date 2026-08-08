@@ -143,7 +143,7 @@ export async function updateAdminProfile(formData: FormData): Promise<ActionResu
     metadata: { userId: admin.id },
   });
 
-  revalidatePath("/admin/profile");
+  revalidatePath("/admin/settings/profile");
   revalidatePath("/admin");
   revalidateAdminDashboard();
   return { ok: true };

@@ -21,13 +21,24 @@ async function TeacherReportBody({
   teacherId: string;
   isTeacher: boolean;
 }) {
-  const [grades, report] = await Promise.all([
+  const gradeWhere = isTeacher
+    ? { schoolId, deletedAt: null, teachers: { some: { id: teacherId } } }
+    : { schoolId, deletedAt: null };
+
+  const [grades, sections, report] = await Promise.all([
     prisma.gradeLevel.findMany({
-      where: isTeacher
-        ? { schoolId, deletedAt: null, teachers: { some: { id: teacherId } } }
-        : { schoolId, deletedAt: null },
+      where: gradeWhere,
       select: { id: true, type: true },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.section.findMany({
+      where: {
+        schoolId,
+        deletedAt: null,
+        gradeLevel: gradeWhere,
+      },
+      select: { id: true, name: true, gradeLevelId: true },
+      orderBy: { name: "asc" },
     }),
     loadLearnersForReport({
       schoolId,
@@ -44,6 +55,7 @@ async function TeacherReportBody({
             id: g.id,
             label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
           }))}
+          sections={sections}
         />
       </div>
       <div className="rounded-xl border border-border bg-card p-6 print:border-0 print:p-0">
@@ -53,6 +65,7 @@ async function TeacherReportBody({
           learners={report.learners}
           aralCount={report.aralCount}
           byGrade={report.byGrade}
+          byGradeSection={report.byGradeSection}
           subtitle="Teacher assigned grades"
         />
       </div>

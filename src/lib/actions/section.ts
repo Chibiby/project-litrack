@@ -10,6 +10,7 @@ import {
 } from "@/lib/validators/section.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
+import { nextUnusedLetter } from "@/lib/section-letters";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -122,6 +123,7 @@ export async function updateSection(formData: FormData): Promise<ActionResult> {
     });
 
     revalidatePath("/school-head/sections");
+    revalidatePath("/school-head/grade-levels");
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
@@ -153,21 +155,98 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
   });
   if (!section) return { ok: false, error: "Section not found" };
 
-  await prisma.section.update({
-    where: { id: section.id },
-    data: { deletedAt: new Date() },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.section.update({
+        where: { id: section.id },
+        data: { deletedAt: new Date() },
+      });
+
+      await tx.learner.updateMany({
+        where: { sectionId: section.id },
+        data: { sectionId: null },
+      });
+
+      await tx.enrollment.updateMany({
+        where: { sectionId: section.id },
+        data: { sectionId: null },
+      });
+
+      // Drop teacher↔section links, then disconnect taughtGrades when a teacher
+      // has no remaining active sections in this grade.
+      const assigned = await tx.teacherSection.findMany({
+        where: { sectionId: section.id },
+        select: { teacherId: true },
+      });
+      await tx.teacherSection.deleteMany({ where: { sectionId: section.id } });
+
+      const teacherIds = [...new Set(assigned.map((a) => a.teacherId))];
+      for (const teacherId of teacherIds) {
+        const remainingInGrade = await tx.teacherSection.count({
+          where: {
+            teacherId,
+            section: {
+              gradeLevelId: section.gradeLevelId,
+              deletedAt: null,
+            },
+          },
+        });
+        if (remainingInGrade === 0) {
+          await tx.user.update({
+            where: { id: teacherId },
+            data: {
+              taughtGrades: { disconnect: { id: section.gradeLevelId } },
+            },
+          });
+        }
+      }
+    });
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.SECTION_DELETE,
+      resource: "Section",
+      resourceId: section.id,
+      metadata: { schoolId: user.schoolId, sectionId: section.id, name: section.name },
+    });
+
+    revalidatePath("/school-head/sections");
+    revalidatePath("/school-head/grade-levels");
+    revalidatePath("/school-head/teachers");
+    revalidateSchoolDashboard(user.schoolId);
+    return { ok: true };
+  } catch (err) {
+    console.error("[deleteSection]", err);
+    return { ok: false, error: "Failed to delete section" };
+  }
+}
+
+export async function createNextLetterSection(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const gradeLevelId = String(formData.get("gradeLevelId") ?? "").trim();
+  if (!gradeLevelId) return { ok: false, error: "Grade level required" };
+
+  const grade = await prisma.gradeLevel.findFirst({
+    where: {
+      id: gradeLevelId,
+      schoolId: user.schoolId,
+      deletedAt: null,
+    },
+  });
+  if (!grade) return { ok: false, error: "Grade level not found" };
+
+  const active = await prisma.section.findMany({
+    where: { gradeLevelId, schoolId: user.schoolId, deletedAt: null },
+    select: { name: true },
   });
 
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.SECTION_DELETE,
-    resource: "Section",
-    resourceId: section.id,
-    metadata: { schoolId: user.schoolId, sectionId: section.id, name: section.name },
-  });
+  const letter = nextUnusedLetter(active.map((s) => s.name));
+  if (!letter) return { ok: false, error: "All letters A–Z are already used" };
 
-  revalidatePath("/school-head/sections");
-  revalidateSchoolDashboard(user.schoolId);
-  return { ok: true };
+  const fd = new FormData();
+  fd.set("gradeLevelId", gradeLevelId);
+  fd.set("name", letter);
+  return createSection(fd);
 }

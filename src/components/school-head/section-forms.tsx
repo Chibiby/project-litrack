@@ -5,7 +5,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createSection, updateSection, deleteSection } from "@/lib/actions/section";
+import { ConfirmAction } from "@/components/confirm-action";
+import {
+  createSection,
+  createNextLetterSection,
+  updateSection,
+  deleteSection,
+} from "@/lib/actions/section";
 
 export function CreateSectionForm({
   grades,
@@ -86,25 +92,142 @@ export function SectionRowActions({
           Save
         </Button>
       </form>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="text-destructive"
+      <ConfirmAction
+        title="Remove this section?"
+        description={`"${name}" will be hidden from teachers. You can recreate it later if needed.`}
+        confirmLabel="Remove"
+        variant="destructive"
         disabled={pending}
-        onClick={() => {
-          if (!window.confirm(`Soft-delete section "${name}"?`)) return;
+        trigger={
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            disabled={pending}
+          >
+            Delete
+          </Button>
+        }
+        onConfirm={async () => {
           const fd = new FormData();
           fd.set("sectionId", sectionId);
-          startTransition(async () => {
-            const res = await deleteSection(fd);
-            if (!res.ok) toast.error(res.error);
-            else toast.success("Section removed");
-          });
+          const res = await deleteSection(fd);
+          if (!res.ok) {
+            toast.error(res.error);
+            throw new Error(res.error);
+          }
+          toast.success("Section removed");
         }}
-      >
-        Delete
-      </Button>
+      />
+    </div>
+  );
+}
+
+function nextLetterPreview(names: string[]): string | null {
+  const used = new Set(
+    names
+      .map((n) => n.trim().toUpperCase())
+      .filter((n) => /^[A-Z]$/.test(n))
+  );
+  for (let i = 0; i < 26; i++) {
+    const letter = String.fromCharCode(65 + i);
+    if (!used.has(letter)) return letter;
+  }
+  return null;
+}
+
+export function GradeSectionsPanel({
+  gradeLevelId,
+  sections,
+  readOnly = false,
+}: {
+  gradeLevelId: string;
+  sections: { id: string; name: string }[];
+  readOnly?: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const nextLetter = nextLetterPreview(sections.map((s) => s.name));
+
+  return (
+    <div className="space-y-3 border-t border-border/60 pt-3">
+      <p className="text-xs font-medium text-muted-foreground">Sections</p>
+
+      {sections.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No sections yet</p>
+      ) : (
+        <ul className="space-y-2">
+          {sections.map((s) => (
+            <li
+              key={s.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 px-3 py-2"
+            >
+              {readOnly ? (
+                <span className="text-sm font-medium">{s.name}</span>
+              ) : (
+                <SectionRowActions sectionId={s.id} name={s.name} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!readOnly ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <form
+            className="flex flex-1 flex-wrap items-end gap-2"
+            action={(fd) =>
+              startTransition(async () => {
+                const res = await createSection(fd);
+                if (!res.ok) toast.error(res.error);
+                else toast.success("Section created");
+              })
+            }
+          >
+            <input type="hidden" name="gradeLevelId" value={gradeLevelId} />
+            <div className="min-w-[8rem] flex-1 space-y-1">
+              <Label htmlFor={`section-name-${gradeLevelId}`} className="text-xs">
+                Custom name
+              </Label>
+              <Input
+                id={`section-name-${gradeLevelId}`}
+                name="name"
+                placeholder="e.g. Mabini"
+                required
+                disabled={pending}
+                className="h-8"
+              />
+            </div>
+            <Button type="submit" size="sm" variant="outline" disabled={pending}>
+              {pending ? "Saving…" : "Add"}
+            </Button>
+          </form>
+
+          <form
+            action={(fd) =>
+              startTransition(async () => {
+                const res = await createNextLetterSection(fd);
+                if (!res.ok) toast.error(res.error);
+                else toast.success(`Section ${nextLetter} created`);
+              })
+            }
+          >
+            <input type="hidden" name="gradeLevelId" value={gradeLevelId} />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={pending || !nextLetter}
+              title={
+                nextLetter
+                  ? `Quick-add section ${nextLetter}`
+                  : "All letters A–Z are already used"
+              }
+            >
+              {nextLetter ? `Quick-add ${nextLetter}` : "Letters full"}
+            </Button>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

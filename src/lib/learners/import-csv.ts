@@ -20,13 +20,14 @@ import {
   normalizePersonName,
 } from "@/lib/learners/normalize";
 
-/** Canonical CSV headers (Section A + isAralLearner). */
+/** Canonical CSV headers (Section A + optional section + isAralLearner). */
 export const LEARNER_CSV_HEADERS = [
   "firstName",
   "middleName",
   "lastName",
   "age",
   "gender",
+  "section",
   "englishReadingProfile",
   "englishFrustrationSubtypes",
   "filipinoReadingProfile",
@@ -38,6 +39,13 @@ export const LEARNER_CSV_HEADERS = [
 
 export type LearnerCsvHeader = (typeof LEARNER_CSV_HEADERS)[number];
 
+/** Normalize CSV header aliases (e.g. "Section" → "section"). */
+export function normalizeLearnerCsvHeader(header: string): string {
+  const trimmed = header.trim();
+  if (trimmed.toLowerCase() === "section") return "section";
+  return trimmed;
+}
+
 export function learnerCsvTemplate(): string {
   const header = LEARNER_CSV_HEADERS.join(",");
   const example = [
@@ -46,6 +54,7 @@ export function learnerCsvTemplate(): string {
     "Santos",
     "10",
     "FEMALE",
+    "",
     "INSTRUCTIONAL_DEVELOPING",
     "",
     "INDEPENDENT_GRADE_READY",
@@ -146,11 +155,19 @@ export function mapCsvRowToImportCandidate(
       resolveEnumValue(row.parentEducation, PARENT_ED_LOOKUP) ??
       String(row.parentEducation ?? "").trim(),
     isAralLearner: parseBooleanLoose(row.isAralLearner),
+    sectionName: String(row.section ?? row.Section ?? row.sectionName ?? "").trim() || undefined,
   };
 }
 
 export type ImportRowResult =
-  | { rowNumber: number; ok: true; data: LearnerImportRow; duplicateWarning?: boolean }
+  | {
+      rowNumber: number;
+      ok: true;
+      data: LearnerImportRow;
+      duplicateWarning?: boolean;
+      /** Section name present but not found in grade — imported unassigned. */
+      sectionWarning?: string;
+    }
   | { rowNumber: number; ok: false; errors: string[]; rawPreview: string };
 
 export type ValidateImportRowsOptions = {
@@ -158,6 +175,11 @@ export type ValidateImportRowsOptions = {
   existing?: { firstName: string; lastName: string; age: number }[];
   /** When true, mark duplicates as warnings but still ok (commit will skip unless allowDuplicates). */
   flagDuplicates?: boolean;
+  /**
+   * Active section names in the import grade (for soft-warn on unknown names).
+   * Matching is case-insensitive.
+   */
+  sectionNames?: string[];
 };
 
 /**
@@ -170,6 +192,9 @@ export function validateImportRows(
   const results: ImportRowResult[] = [];
   const seenInFile = new Set<string>();
   const existing = options.existing ?? [];
+  const sectionLookup = new Map(
+    (options.sectionNames ?? []).map((n) => [n.trim().toLowerCase(), n])
+  );
 
   rawRows.forEach((raw, index) => {
     const rowNumber = index + 2; // header is row 1
@@ -213,6 +238,13 @@ export function validateImportRows(
       duplicateWarning = true;
     }
 
+    let sectionWarning: string | undefined;
+    if (data.sectionName && options.sectionNames) {
+      if (!sectionLookup.has(data.sectionName.trim().toLowerCase())) {
+        sectionWarning = `Section "${data.sectionName}" not found in this grade — left unassigned`;
+      }
+    }
+
     results.push({
       rowNumber,
       ok: true,
@@ -223,10 +255,28 @@ export function validateImportRows(
         middleName: data.middleName ? titleCaseName(data.middleName) : undefined,
       },
       duplicateWarning: duplicateWarning || undefined,
+      sectionWarning,
     });
   });
 
   return results;
+}
+
+/** Resolve a section name against a list of {id,name} for the import grade. */
+export function resolveSectionIdByName(
+  sectionName: string | undefined,
+  sections: { id: string; name: string }[]
+): { sectionId: string | null; warning?: string } {
+  if (!sectionName?.trim()) return { sectionId: null };
+  const key = sectionName.trim().toLowerCase();
+  const match = sections.find((s) => s.name.trim().toLowerCase() === key);
+  if (!match) {
+    return {
+      sectionId: null,
+      warning: `Section "${sectionName}" not found in this grade — left unassigned`,
+    };
+  }
+  return { sectionId: match.id };
 }
 
 /** Title-case after normalize (simple word capitalise). */

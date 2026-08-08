@@ -40,6 +40,26 @@ function buildFullName(firstName: string, middleName: string | undefined, lastNa
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
 
+/** Validate optional section belongs to grade + school and is not soft-deleted. */
+async function resolveSectionForGrade(
+  sectionId: string | undefined,
+  gradeLevelId: string,
+  schoolId: string
+): Promise<{ ok: true; sectionId: string | null } | { ok: false; error: string }> {
+  if (!sectionId) return { ok: true, sectionId: null };
+  const section = await prisma.section.findFirst({
+    where: {
+      id: sectionId,
+      schoolId,
+      gradeLevelId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!section) return { ok: false, error: "Section not found in this grade" };
+  return { ok: true, sectionId: section.id };
+}
+
 export async function createLearner(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
@@ -64,6 +84,13 @@ export async function createLearner(
     },
   });
   if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
+
+  const sectionResult = await resolveSectionForGrade(
+    parsed.data.sectionId,
+    parsed.data.gradeLevelId,
+    user.schoolId
+  );
+  if (!sectionResult.ok) return sectionResult;
 
   const firstName = parsed.data.firstName.trim();
   const lastName = parsed.data.lastName.trim();
@@ -108,6 +135,7 @@ export async function createLearner(
       data: {
         schoolId: user.schoolId,
         gradeLevelId: parsed.data.gradeLevelId,
+        sectionId: sectionResult.sectionId,
         teacherId: user.id,
         firstName,
         middleName,
@@ -182,27 +210,47 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   }
   if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
 
+  const sectionResult = await resolveSectionForGrade(
+    parsed.data.sectionId,
+    learner.gradeLevelId,
+    user.schoolId
+  );
+  if (!sectionResult.ok) return sectionResult;
+
   const firstName = parsed.data.firstName.trim();
   const lastName = parsed.data.lastName.trim();
   const middleName = parsed.data.middleName?.trim() || undefined;
   const fullName = buildFullName(firstName, middleName, lastName);
 
-  await prisma.learner.update({
-    where: { id: learner.id },
-    data: {
-      firstName,
-      middleName,
-      lastName,
-      fullName,
-      age: parsed.data.age,
-      gender: parsed.data.gender,
-      englishReadingProfile: parsed.data.englishReadingProfile,
-      englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
-      filipinoReadingProfile: parsed.data.filipinoReadingProfile,
-      filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
-      governmentBenefits: parsed.data.governmentBenefits,
-      parentEducation: parsed.data.parentEducation,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.learner.update({
+      where: { id: learner.id },
+      data: {
+        firstName,
+        middleName,
+        lastName,
+        fullName,
+        age: parsed.data.age,
+        gender: parsed.data.gender,
+        englishReadingProfile: parsed.data.englishReadingProfile,
+        englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
+        filipinoReadingProfile: parsed.data.filipinoReadingProfile,
+        filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
+        governmentBenefits: parsed.data.governmentBenefits,
+        parentEducation: parsed.data.parentEducation,
+        sectionId: sectionResult.sectionId,
+      },
+    });
+
+    const active = await tx.enrollment.findFirst({
+      where: { learnerId: learner.id, status: "ACTIVE" },
+    });
+    if (active && active.sectionId !== sectionResult.sectionId) {
+      await tx.enrollment.update({
+        where: { id: active.id },
+        data: { sectionId: sectionResult.sectionId },
+      });
+    }
   });
 
   await writeAudit({
@@ -211,7 +259,11 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
     action: AUDIT_ACTIONS.LEARNER_UPDATE,
     resource: "Learner",
     resourceId: learner.id,
-    metadata: { schoolId: user.schoolId, learnerId: learner.id },
+    metadata: {
+      schoolId: user.schoolId,
+      learnerId: learner.id,
+      sectionId: sectionResult.sectionId,
+    },
   });
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);

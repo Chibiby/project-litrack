@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,12 @@ import {
 import { createLearner, updateLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 
+export type LearnerFormSectionOption = {
+  id: string;
+  name: string;
+  gradeLevelId: string;
+};
+
 export type LearnerFormDefaults = {
   id?: string;
   firstName?: string;
@@ -32,6 +38,7 @@ export type LearnerFormDefaults = {
   governmentBenefits?: string[];
   parentEducation?: string;
   isAralLearner?: boolean;
+  sectionId?: string | null;
 };
 
 type LearnerFormProps = {
@@ -41,6 +48,8 @@ type LearnerFormProps = {
   submitLabel?: string;
   /** After successful edit, navigate here (defaults to learner detail). */
   redirectTo?: string;
+  /** Active sections for the teacher's grades; filtered by gradeLevelId. */
+  sections?: LearnerFormSectionOption[];
 };
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
@@ -51,6 +60,7 @@ export function LearnerForm({
   defaultValues,
   submitLabel,
   redirectTo,
+  sections = [],
 }: LearnerFormProps) {
   const [pending, startTransition] = useTransition();
   const [duplicatePending, setDuplicatePending] = useState(false);
@@ -58,9 +68,21 @@ export function LearnerForm({
   const [filipinoProfile, setFilipinoProfile] = useState(
     defaultValues?.filipinoReadingProfile ?? ""
   );
+  const [sectionId, setSectionId] = useState(defaultValues?.sectionId ?? "");
   const router = useRouter();
   const isEdit = mode === "edit";
   const label = submitLabel ?? (isEdit ? "Save changes" : "Add learner");
+
+  const gradeSections = useMemo(
+    () => sections.filter((s) => s.gradeLevelId === gradeLevelId),
+    [sections, gradeLevelId]
+  );
+
+  useEffect(() => {
+    if (sectionId && !gradeSections.some((s) => s.id === sectionId)) {
+      setSectionId("");
+    }
+  }, [gradeLevelId, gradeSections, sectionId]);
 
   function handleSubmit(fd: FormData) {
     fd.set("gradeLevelId", gradeLevelId);
@@ -102,6 +124,7 @@ export function LearnerForm({
         (document.getElementById("learner-form") as HTMLFormElement | null)?.reset();
         setEnglishProfile("");
         setFilipinoProfile("");
+        setSectionId("");
         router.refresh();
         invalidateNavWarm();
       } else if (res.error === "possible_duplicate") {
@@ -173,6 +196,25 @@ export function LearnerForm({
             defaultValue={defaultValues?.gender}
           />
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="sectionId">Section (optional)</Label>
+        <select
+          id="sectionId"
+          name="sectionId"
+          value={sectionId}
+          onChange={(e) => setSectionId(e.target.value)}
+          disabled={!gradeLevelId}
+          className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:opacity-50"
+        >
+          <option value="">No section (optional)</option>
+          {gradeSections.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <Separator />

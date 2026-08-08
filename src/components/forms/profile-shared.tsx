@@ -1,5 +1,6 @@
 "use client";
 
+import type { HTMLAttributes } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -83,17 +84,29 @@ export function FieldText({
   defaultValue,
   required,
   type = "text",
+  autoComplete,
+  inputMode,
 }: {
   name: string;
   label: string;
   defaultValue?: string;
   required?: boolean;
   type?: string;
+  autoComplete?: string;
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={name}>{label}{required && " *"}</Label>
-      <Input id={name} name={name} defaultValue={defaultValue} required={required} type={type} />
+      <Input
+        id={name}
+        name={name}
+        defaultValue={defaultValue}
+        required={required}
+        type={type}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+      />
     </div>
   );
 }

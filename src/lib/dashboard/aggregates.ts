@@ -164,6 +164,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         aralCount,
         activeYear,
         profiledHead,
+        gradesNeedingSections,
       ] = await Promise.all([
         prisma.learner.count({
           where: { schoolId, deletedAt: null, archivedAt: null },
@@ -189,6 +190,15 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
           where: { schoolId, role: "SCHOOL_HEAD", deletedAt: null },
           select: { profileCompleted: true },
         }),
+        // Non-blocking nudge: grades with learners but zero active sections
+        prisma.gradeLevel.count({
+          where: {
+            schoolId,
+            deletedAt: null,
+            learners: { some: { deletedAt: null } },
+            sections: { none: { deletedAt: null } },
+          },
+        }),
       ]);
 
       const setupTasks: { id: string; label: string; href: string }[] = [];
@@ -210,6 +220,16 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         setupTasks.push({
           id: "grades",
           label: "Create grade levels",
+          href: "/school-head/grade-levels",
+        });
+      }
+      if (gradesNeedingSections > 0) {
+        setupTasks.push({
+          id: "sections",
+          label:
+            gradesNeedingSections === 1
+              ? "Add sections for a grade with learners"
+              : `Add sections for ${gradesNeedingSections} grades with learners`,
           href: "/school-head/grade-levels",
         });
       }

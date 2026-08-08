@@ -9,7 +9,7 @@ export default function AdminLoginPage() {
   const supabaseReady = isSupabaseConfigured();
 
   return (
-    <main className="flex min-h-screen flex-col bg-background p-4">
+    <main id="main-content" className="flex min-h-screen flex-col bg-background p-4">
       <div className="flex flex-1 flex-col items-center justify-center">
         <div className="w-full max-w-md space-y-6">
           <div className="space-y-2 text-center">

@@ -14,7 +14,10 @@ import {
 } from "@/components/learners/learner-list-client";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { parseLearnerListParams } from "@/lib/learners/pagination";
+import {
+  parseLearnerListParams,
+  sectionIdWhere,
+} from "@/lib/learners/pagination";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +30,7 @@ interface TeacherGradePageProps {
     q?: string;
     filter?: string;
     sort?: string;
+    section?: string;
   }>;
 }
 
@@ -36,17 +40,20 @@ async function GradeLearnersBody({
   isSuperAdmin,
   schoolIdParam,
   list,
+  sections,
 }: {
   gradeId: string;
   teacherId: string;
   isSuperAdmin: boolean;
   schoolIdParam?: string;
   list: ReturnType<typeof parseLearnerListParams>;
+  sections: { id: string; name: string }[];
 }) {
   const where: Prisma.LearnerWhereInput = {
     gradeLevelId: gradeId,
     deletedAt: null,
     ...(isSuperAdmin ? {} : { teacherId }),
+    ...sectionIdWhere(list.section),
   };
 
   if (list.filter === "archived") {
@@ -84,6 +91,8 @@ async function GradeLearnersBody({
       gradeId={gradeId}
       filter={list.filter}
       sort={list.sort}
+      section={list.section}
+      sections={sections}
       schoolId={schoolIdParam}
       isSuperAdmin={isSuperAdmin}
       learners={rows}
@@ -113,7 +122,9 @@ export default async function TeacherGradePage({
   });
   if (!grade) notFound();
 
-  const [totalCount, aralCount] = await Promise.all([
+  const sectionClause = sectionIdWhere(list.section);
+
+  const [totalCount, aralCount, gradeSections] = await Promise.all([
     prisma.learner.count({
       where: {
         gradeLevelId: grade.id,
@@ -121,6 +132,7 @@ export default async function TeacherGradePage({
         archivedAt: list.filter === "archived" ? { not: null } : null,
         ...(list.filter === "aral" ? { isAralLearner: true } : {}),
         ...(isSuperAdmin ? {} : { teacherId: user.id }),
+        ...sectionClause,
       },
     }),
     prisma.learner.count({
@@ -132,7 +144,14 @@ export default async function TeacherGradePage({
         ...(isSuperAdmin ? {} : { teacherId: user.id }),
       },
     }),
+    prisma.section.findMany({
+      where: { gradeLevelId: grade.id, schoolId: grade.schoolId, deletedAt: null },
+      select: { id: true, name: true, gradeLevelId: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const sectionOptions = gradeSections.map((s) => ({ id: s.id, name: s.name }));
 
   return (
     <AppShell
@@ -163,6 +182,7 @@ export default async function TeacherGradePage({
             isSuperAdmin={isSuperAdmin}
             schoolIdParam={sp.schoolId}
             list={list}
+            sections={sectionOptions}
           />
         </Suspense>
 
@@ -170,7 +190,7 @@ export default async function TeacherGradePage({
           <Card>
             <CardContent className="pt-6">
               <h2 className="font-semibold mb-3">Add new learner</h2>
-              <LearnerForm gradeLevelId={grade.id} />
+              <LearnerForm gradeLevelId={grade.id} sections={gradeSections} />
             </CardContent>
           </Card>
         )}

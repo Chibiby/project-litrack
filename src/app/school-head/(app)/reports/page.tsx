@@ -19,11 +19,16 @@ interface Props {
 }
 
 async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
-  const [grades, report] = await Promise.all([
+  const [grades, sections, report] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       select: { id: true, type: true },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.section.findMany({
+      where: { schoolId, deletedAt: null },
+      select: { id: true, name: true, gradeLevelId: true },
+      orderBy: { name: "asc" },
     }),
     loadLearnersForReport({ schoolId }),
   ]);
@@ -38,6 +43,7 @@ async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
             id: g.id,
             label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
           }))}
+          sections={sections}
         />
       </div>
       <div className="rounded-xl border border-border bg-card p-6 print:border-0 print:p-0">
@@ -47,6 +53,7 @@ async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
           learners={report.learners}
           aralCount={report.aralCount}
           byGrade={report.byGrade}
+          byGradeSection={report.byGradeSection}
           subtitle="School-wide"
         />
       </div>

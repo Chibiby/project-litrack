@@ -15,6 +15,8 @@ import {
 import { parseAppMetadataRole, roleHomePath, enforceRolePrefix } from "@/lib/auth/roles";
 import {
   DECLINED_REGISTRATION_MESSAGE,
+  DEACTIVATED_TEACHER_MESSAGE,
+  isDeactivatedTeacher,
   isPendingTeacherAtSchool,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
@@ -130,6 +132,12 @@ describe("teacher registration helpers", () => {
     ).toBe(DECLINED_REGISTRATION_MESSAGE);
     expect(
       registerConflictError(
+        { ...base, approvalStatus: "APPROVED", isActive: false },
+        "school-1"
+      )
+    ).toBe(DEACTIVATED_TEACHER_MESSAGE);
+    expect(
+      registerConflictError(
         { ...base, approvalStatus: "APPROVED", isActive: true },
         "school-1"
       )
@@ -137,5 +145,32 @@ describe("teacher registration helpers", () => {
     expect(registerConflictError(base, "other-school")).toBe(
       "This email is already in use."
     );
+  });
+
+  it("detects deactivated approved teachers", () => {
+    expect(
+      isDeactivatedTeacher({
+        role: "TEACHER",
+        approvalStatus: "APPROVED",
+        isActive: false,
+        deletedAt: null,
+      })
+    ).toBe(true);
+    expect(
+      isDeactivatedTeacher({
+        role: "TEACHER",
+        approvalStatus: "APPROVED",
+        isActive: true,
+        deletedAt: null,
+      })
+    ).toBe(false);
+    expect(
+      isDeactivatedTeacher({
+        role: "TEACHER",
+        approvalStatus: "PENDING",
+        isActive: false,
+        deletedAt: null,
+      })
+    ).toBe(false);
   });
 });

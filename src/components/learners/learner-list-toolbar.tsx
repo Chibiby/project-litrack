@@ -3,12 +3,20 @@
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { LearnerListFilter, LearnerListSort } from "@/lib/learners/pagination";
+import type {
+  LearnerListFilter,
+  LearnerListSectionFilter,
+  LearnerListSort,
+} from "@/lib/learners/pagination";
+
+export type SectionOption = { id: string; name: string };
 
 type Props = {
   gradeId: string;
   filter: LearnerListFilter;
   sort: LearnerListSort;
+  section: LearnerListSectionFilter;
+  sections: SectionOption[];
   schoolId?: string;
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -21,29 +29,39 @@ const FILTERS: { value: LearnerListFilter; label: string }[] = [
   { value: "archived", label: "Archived" },
 ];
 
-function filterHref(
+function listHref(
   gradeId: string,
-  filter: LearnerListFilter,
-  sort: LearnerListSort,
-  schoolId?: string
+  opts: {
+    filter: LearnerListFilter;
+    sort: LearnerListSort;
+    section: LearnerListSectionFilter;
+    schoolId?: string;
+  }
 ): string {
   const params = new URLSearchParams();
-  if (filter !== "all") params.set("filter", filter);
-  if (sort !== "name") params.set("sort", sort);
-  if (schoolId) params.set("schoolId", schoolId);
+  if (opts.filter !== "all") params.set("filter", opts.filter);
+  if (opts.sort !== "name") params.set("sort", opts.sort);
+  if (opts.section !== "all") params.set("section", opts.section);
+  if (opts.schoolId) params.set("schoolId", opts.schoolId);
   const qs = params.toString();
-  return qs ? `/teacher/grade/${gradeId}?${qs}` : `/teacher/grade/${gradeId}`;
+  const path = `/teacher/grade/${gradeId}`;
+  return qs ? `${path}?${qs}` : path;
 }
 
 export function LearnerListToolbar({
   gradeId,
   filter,
   sort,
+  section,
+  sections,
   schoolId,
   searchValue,
   onSearchChange,
   onSearchSubmit,
 }: Props) {
+  const path = `/teacher/grade/${gradeId}`;
+  const showSectionFilter = sections.length > 0;
+
   return (
     <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
       <div className="flex flex-1 gap-2">
@@ -75,7 +93,14 @@ export function LearnerListToolbar({
               variant={filter === f.value ? "default" : "ghost"}
               className="h-8"
             >
-              <Link href={filterHref(gradeId, f.value, sort, schoolId)}>
+              <Link
+                href={listHref(gradeId, {
+                  filter: f.value,
+                  sort,
+                  section,
+                  schoolId,
+                })}
+              >
                 {f.label}
               </Link>
             </Button>
@@ -84,11 +109,31 @@ export function LearnerListToolbar({
 
         <form
           method="get"
-          action={`/teacher/grade/${gradeId}`}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground"
+          action={path}
+          className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
         >
           {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
           {schoolId && <input type="hidden" name="schoolId" value={schoolId} />}
+          {showSectionFilter && (
+            <label className="flex items-center gap-1.5">
+              Section
+              <select
+                name="section"
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                defaultValue={section === "all" ? "" : section}
+                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                aria-label="Filter by section"
+              >
+                <option value="">All sections</option>
+                <option value="none">No section</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-1.5">
             Sort
             <select
@@ -105,7 +150,7 @@ export function LearnerListToolbar({
         </form>
 
         <Button asChild size="sm" variant="outline">
-          <Link href={`/teacher/grade/${gradeId}`}>Reset</Link>
+          <Link href={path}>Reset</Link>
         </Button>
 
         {!schoolId && (

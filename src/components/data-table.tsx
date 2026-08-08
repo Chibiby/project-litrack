@@ -124,6 +124,7 @@ export function DataTable<T extends Record<string, unknown>>({
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
+              aria-label="Search table"
             />
           </div>
         )}
@@ -131,7 +132,7 @@ export function DataTable<T extends Record<string, unknown>>({
         <div className="flex items-center gap-2">
           {filterOptions && filterColumn && (
             <Select value={filterValue} onValueChange={handleFilterChange}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[160px]" aria-label="Filter table">
                 <SelectValue placeholder="Filter by..." />
               </SelectTrigger>
               <SelectContent>

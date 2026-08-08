@@ -26,8 +26,10 @@ import {
   LEARNER_PAGE_SIZE,
   totalPages as calcTotalPages,
   type LearnerListFilter,
+  type LearnerListSectionFilter,
   type LearnerListSort,
 } from "@/lib/learners/pagination";
+import type { SectionOption } from "@/components/learners/learner-list-toolbar";
 import { Eye, Pencil } from "lucide-react";
 
 /** Debounce pause before applying typed search (ms). */
@@ -49,6 +51,8 @@ type Props = {
   gradeId: string;
   filter: LearnerListFilter;
   sort: LearnerListSort;
+  section: LearnerListSectionFilter;
+  sections: SectionOption[];
   schoolId?: string;
   isSuperAdmin: boolean;
   learners: LearnerListRow[];
@@ -58,6 +62,8 @@ export function LearnerListClient({
   gradeId,
   filter,
   sort,
+  section,
+  sections,
   schoolId,
   isSuperAdmin,
   learners,
@@ -113,7 +119,8 @@ export function LearnerListClient({
     return filtered.slice(start, start + LEARNER_PAGE_SIZE);
   }, [filtered, page]);
 
-  const showSection = learners.some((l) => l.section);
+  /** Always show Section column when the grade has sections configured. */
+  const showSection = sections.length > 0;
 
   return (
     <Card>
@@ -121,6 +128,8 @@ export function LearnerListClient({
         gradeId={gradeId}
         filter={filter}
         sort={sort}
+        section={section}
+        sections={sections}
         schoolId={schoolId}
         searchValue={inputValue}
         onSearchChange={handleSearchChange}
@@ -131,12 +140,18 @@ export function LearnerListClient({
           <div className="p-4">
             <EmptyState
               title={
-                filter === "archived" ? "No archived learners" : "No learners yet"
+                filter === "archived"
+                  ? "No archived learners"
+                  : section !== "all"
+                    ? "No learners in this section"
+                    : "No learners yet"
               }
               description={
                 filter === "archived"
                   ? "Archived learners will appear here."
-                  : "Add a learner using the form on the right."
+                  : section !== "all"
+                    ? "Try another section filter or reset."
+                    : "Add a learner using the form on the right."
               }
             />
           </div>

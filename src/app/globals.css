@@ -30,6 +30,8 @@
     --input: 214 32% 88%;
     --ring: 217 91% 53%;
     --radius: 0.75rem;
+    /* Shared sticky header + sidebar brand height (logo h-10 + former py-5) */
+    --app-chrome-header-height: 5rem;
   }
 
   .dark {

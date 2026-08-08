@@ -10,20 +10,30 @@ export const ENROLLMENT_STATUS = [
 
 export type EnrollmentStatusValue = (typeof ENROLLMENT_STATUS)[number];
 
-/** Empty / whitespace-only → undefined (form optional section). */
-const optionalSectionId = z
+/** Explicit "No section" clear sentinel from transfer forms. */
+export const SECTION_CLEAR = "__none__";
+
+/**
+ * Transfer section field:
+ * - omitted / empty → undefined (preserve previous when same-grade)
+ * - `__none__` → clear sentinel
+ * - otherwise section id string
+ */
+const optionalTransferSectionId = z
   .union([z.string(), z.undefined(), z.null()])
   .transform((v) => {
     if (v == null) return undefined;
     const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    if (!trimmed) return undefined;
+    if (trimmed === SECTION_CLEAR) return SECTION_CLEAR;
+    return trimmed;
   });
 
 /** SCHOOL_HEAD same-school transfer (grade / section / teacher). */
 export const transferLearnerSchema = z.object({
   learnerId: nonEmpty("Learner required"),
   targetGradeLevelId: nonEmpty("Target grade level required"),
-  targetSectionId: optionalSectionId,
+  targetSectionId: optionalTransferSectionId,
   targetTeacherId: nonEmpty("Target teacher required"),
 });
 
@@ -34,7 +44,7 @@ export const transferLearnerCrossSchoolSchema = z.object({
   learnerId: nonEmpty("Learner required"),
   targetSchoolId: nonEmpty("Target school required"),
   targetGradeLevelId: nonEmpty("Target grade level required"),
-  targetSectionId: optionalSectionId,
+  targetSectionId: optionalTransferSectionId,
   targetTeacherId: nonEmpty("Target teacher required"),
 });
 

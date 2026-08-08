@@ -7,7 +7,10 @@ import {
 import {
   transferLearnerSchema,
   transferLearnerCrossSchoolSchema,
+  SECTION_CLEAR,
 } from "@/lib/validators/enrollment.schema";
+
+const SECTION_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 const validBase = {
   gradeLevelId: "gl-1",
@@ -80,6 +83,43 @@ describe("learnerCreateSchema", () => {
     ).toBe(true);
   });
 
+  it("treats empty/null sectionId as undefined and accepts uuid", () => {
+    const empty = learnerCreateSchema.safeParse({
+      ...validBase,
+      sectionId: "",
+    });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.sectionId).toBeUndefined();
+
+    const whitespace = learnerCreateSchema.safeParse({
+      ...validBase,
+      sectionId: "   ",
+    });
+    expect(whitespace.success).toBe(true);
+    if (whitespace.success) expect(whitespace.data.sectionId).toBeUndefined();
+
+    const nulled = learnerCreateSchema.safeParse({
+      ...validBase,
+      sectionId: null,
+    });
+    expect(nulled.success).toBe(true);
+    if (nulled.success) expect(nulled.data.sectionId).toBeUndefined();
+
+    const withId = learnerCreateSchema.safeParse({
+      ...validBase,
+      sectionId: SECTION_UUID,
+    });
+    expect(withId.success).toBe(true);
+    if (withId.success) expect(withId.data.sectionId).toBe(SECTION_UUID);
+
+    expect(
+      learnerCreateSchema.safeParse({
+        ...validBase,
+        sectionId: "not-a-uuid",
+      }).success
+    ).toBe(false);
+  });
+
   it("accepts frustration subtypes only when Frustration/High Emergent is selected", () => {
     const withSubtypes = learnerCreateSchema.safeParse({
       ...validBase,
@@ -149,6 +189,28 @@ describe("learnerCreateSchema", () => {
     expect(
       learnerCreateSchema.safeParse({ ...validBase, parentEducation: "PHD" })
         .success
+    ).toBe(false);
+  });
+
+  it("accepts optional sectionId uuid or empty→undefined", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const withSection = learnerCreateSchema.safeParse({
+      ...validBase,
+      sectionId: uuid,
+    });
+    expect(withSection.success).toBe(true);
+    if (withSection.success) {
+      expect(withSection.data.sectionId).toBe(uuid);
+    }
+
+    const empty = learnerCreateSchema.safeParse({ ...validBase, sectionId: "" });
+    expect(empty.success).toBe(true);
+    if (empty.success) {
+      expect(empty.data.sectionId).toBeUndefined();
+    }
+
+    expect(
+      learnerCreateSchema.safeParse({ ...validBase, sectionId: "not-a-uuid" }).success
     ).toBe(false);
   });
 });
@@ -236,6 +298,19 @@ describe("transferLearnerSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.targetSectionId).toBeUndefined();
+    }
+  });
+
+  it("preserves explicit No section clear sentinel", () => {
+    const result = transferLearnerSchema.safeParse({
+      learnerId: "l1",
+      targetGradeLevelId: "g2",
+      targetSectionId: SECTION_CLEAR,
+      targetTeacherId: "t2",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.targetSectionId).toBe(SECTION_CLEAR);
     }
   });
 

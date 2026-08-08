@@ -77,13 +77,6 @@ enum EducationalAttainment {
   DOCTORAL
 }
 
-enum YearsInService {
-  Y0_3
-  Y4_10
-  Y11_20
-  Y21_PLUS
-}
-
 enum TrainingLevel {
   INTERNATIONAL
   NATIONAL
@@ -355,6 +348,7 @@ model User {
   schoolHeadProfile     SchoolHeadProfile?
   teacherProfile        TeacherProfile?
   taughtGrades          GradeLevel[]         @relation("TeacherGrades")
+  taughtSections        TeacherSection[]
   managedLearners       Learner[]            @relation("TeacherLearners")
   recordedAttendance    Attendance[]         @relation("AttendanceRecorder")
   recordedReadingLevels ReadingLevelRecord[] @relation("ReadingRecorder")
@@ -382,7 +376,8 @@ model SchoolHeadProfile {
   educationalAttainment EducationalAttainment
   fieldOfSpecialization Specialization
   specializationOther   String?
-  yearsInService        YearsInService
+  /// Years in service (0–70 inclusive).
+  yearsInService        Int
 
   // IV. Training & Professional Development
   hasReadingTraining   Boolean
@@ -406,13 +401,14 @@ model TeacherProfile {
   /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
   contactEmail  String?
   designation   String?
-  position      TeacherPosition
+  position      TeacherPosition?
 
   // II. Professional Background
   educationalAttainment   EducationalAttainment
   fieldOfSpecialization   Specialization
   specializationOther     String?
-  yearsInService          YearsInService
+  /// Years in service (0–70 inclusive).
+  yearsInService          Int
   currentGradeAssignment  GradeLevelType?
 
   // III. Teaching Assignment
@@ -488,12 +484,27 @@ model Section {
 
   school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   gradeLevel     GradeLevel      @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  teachers       TeacherSection[]
   learners       Learner[]
   enrollments    Enrollment[]
   teacherInvites TeacherInvite[]
 
   @@unique([gradeLevelId, name])
   @@index([schoolId, deletedAt])
+}
+
+/// Explicit M2M: which sections a teacher is assigned to teach.
+/// Dual-written with `User.taughtGrades` during the Grade→Section migration.
+model TeacherSection {
+  teacherId  String
+  sectionId  String
+  assignedAt DateTime @default(now())
+
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, sectionId])
+  @@index([sectionId])
 }
 
 model Enrollment {

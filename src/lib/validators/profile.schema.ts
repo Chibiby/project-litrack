@@ -1,9 +1,14 @@
 import { z } from "zod";
-import { email } from "./common";
+import { email, nonEmpty } from "./common";
+import { optionalPhPhone } from "./phone";
 
 const READING_TRAININGS = ["ARAL", "TEACHING_READING", "ELLN", "TEACEP", "NONE"] as const;
 
-/** Optional survey contact email (P-I4). Empty → undefined; never mutates login email. */
+/**
+ * Optional legacy profile contact email (P-I4 / DB column).
+ * No longer collected in profiling UI; still accepted if present so older payloads
+ * do not break. Never mutates login email on User.
+ */
 const optionalContactEmail = z
   .union([z.string(), z.undefined(), z.null()])
   .transform((v) => {
@@ -24,7 +29,26 @@ const EDUCATIONAL_ATTAINMENT = [
   "DOCTORAL",
 ] as const;
 
-const YEARS_IN_SERVICE = ["Y0_3", "Y4_10", "Y11_20", "Y21_PLUS"] as const;
+/** Years in service: integer 0–70 (FormData strings coerced). */
+export const YEARS_IN_SERVICE_MIN = 0;
+export const YEARS_IN_SERVICE_MAX = 70;
+
+const yearsInServiceSchema = z.preprocess((val) => {
+  if (val === "" || val === null || val === undefined) return undefined;
+  if (typeof val === "number") return val;
+  if (typeof val === "string" && val.trim() !== "") {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : val;
+  }
+  return val;
+}, z
+  .number({
+    required_error: "Years in service is required",
+    invalid_type_error: "Enter years in service as a number",
+  })
+  .int("Enter a whole number of years")
+  .min(YEARS_IN_SERVICE_MIN, `Enter a value from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`)
+  .max(YEARS_IN_SERVICE_MAX, `Enter a value from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`));
 
 const SPECIALIZATION = [
   "GENERAL_EDUCATION",
@@ -56,12 +80,34 @@ const TEACHER_POSITION = [
   "MASTER_TEACHER_I", "MASTER_TEACHER_II", "MASTER_TEACHER_III", "MASTER_TEACHER_IV",
 ] as const;
 
+export const TEACHER_RANK_POSITIONS = [
+  "TEACHER_I",
+  "TEACHER_II",
+  "TEACHER_III",
+  "TEACHER_IV",
+  "TEACHER_V",
+  "TEACHER_VI",
+  "TEACHER_VII",
+] as const;
+
+export const MASTER_TEACHER_RANK_POSITIONS = [
+  "MASTER_TEACHER_I",
+  "MASTER_TEACHER_II",
+  "MASTER_TEACHER_III",
+  "MASTER_TEACHER_IV",
+] as const;
+
 const GRADE_LEVEL_TYPES = [
   "KINDER", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "FLOATING",
 ] as const;
 
 const optionalText = (max: number) =>
   z.string().trim().max(max).optional().or(z.literal("").transform(() => undefined));
+
+/** Empty / null form values → undefined for optional teacher position. */
+const optionalTeacherPosition = z
+  .union([z.enum(TEACHER_POSITION), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === "" || v == null ? undefined : v));
 
 type ProfileRefineShape = {
   fieldOfSpecialization: (typeof SPECIALIZATION)[number];
@@ -138,16 +184,87 @@ function refineProfileConditionals(data: ProfileRefineShape, ctx: z.RefinementCt
   }
 }
 
+function isTeacherRankPosition(
+  position: string | undefined,
+): position is (typeof TEACHER_RANK_POSITIONS)[number] {
+  return (
+    position != null &&
+    (TEACHER_RANK_POSITIONS as readonly string[]).includes(position)
+  );
+}
+
+function isMasterTeacherRankPosition(
+  position: string | undefined,
+): position is (typeof MASTER_TEACHER_RANK_POSITIONS)[number] {
+  return (
+    position != null &&
+    (MASTER_TEACHER_RANK_POSITIONS as readonly string[]).includes(position)
+  );
+}
+
+/** Teacher designation ↔ position pairing (Teacher / Master Teacher / Others). */
+function refineTeacherDesignationPosition(
+  data: {
+    designation: string;
+    position?: (typeof TEACHER_POSITION)[number];
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (data.designation === "School Head") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Teachers cannot use the School Head designation",
+      path: ["designation"],
+    });
+    return;
+  }
+
+  if (data.designation === "Teacher") {
+    if (!isTeacherRankPosition(data.position)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a Teacher I–VII position",
+        path: ["position"],
+      });
+    }
+    return;
+  }
+
+  if (data.designation === "Master Teacher") {
+    if (!isMasterTeacherRankPosition(data.position)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a Master Teacher I–IV position",
+        path: ["position"],
+      });
+    }
+    return;
+  }
+
+  // Others (free text): position must be cleared
+  if (data.position != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Position is not used for custom designations",
+      path: ["position"],
+    });
+  }
+}
+
+const profileNames = z.object({
+  firstName: nonEmpty("First name is required"),
+  middleName: optionalText(100),
+  lastName: nonEmpty("Last name is required"),
+});
+
 const baseProfile = z.object({
-  contactNumber: optionalText(40),
-  /** DOCX P-I4 — real contact email on profile; login email stays on User. */
+  contactNumber: optionalPhPhone,
+  /** Legacy DB field — optional; not collected in current profiling UI. */
   contactEmail: optionalContactEmail,
-  /** Free text; UI offers Teacher / Master Teacher / School Head / Others (P-I2). */
-  designation: optionalText(100),
   educationalAttainment: z.enum(EDUCATIONAL_ATTAINMENT),
   fieldOfSpecialization: z.enum(SPECIALIZATION),
   specializationOther: optionalText(100),
-  yearsInService: z.enum(YEARS_IN_SERVICE),
+  yearsInService: yearsInServiceSchema,
   hasReadingTraining: z.boolean(),
   readingTrainings: z.array(z.enum(READING_TRAININGS)).default([]),
   hasEnglishTraining: z.boolean(),
@@ -156,18 +273,27 @@ const baseProfile = z.object({
 });
 
 export const schoolHeadProfileSchema = baseProfile
+  .merge(profileNames)
   .extend({
+    /** Read-only UI always sends School Head. */
+    designation: z.literal("School Head"),
     position: z.enum(SH_POSITION),
   })
   .superRefine(refineProfileConditionals);
 
+/** Names update User on save; other fields persist on TeacherProfile. */
 export const teacherProfileSchema = baseProfile
+  .merge(profileNames)
   .extend({
-    position: z.enum(TEACHER_POSITION),
+    designation: nonEmpty("Designation is required").max(100),
+    position: optionalTeacherPosition,
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     mostSubjectHandled: z.enum(SUBJECT),
   })
-  .superRefine(refineProfileConditionals);
+  .superRefine((data, ctx) => {
+    refineProfileConditionals(data, ctx);
+    refineTeacherDesignationPosition(data, ctx);
+  });
 
 export type SchoolHeadProfileInput = z.infer<typeof schoolHeadProfileSchema>;
 export type TeacherProfileInput = z.infer<typeof teacherProfileSchema>;

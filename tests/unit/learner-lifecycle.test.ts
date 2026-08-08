@@ -6,6 +6,7 @@ import {
 } from "@/lib/learners/normalize";
 import {
   parseLearnerListParams,
+  sectionIdWhere,
   totalPages,
   LEARNER_PAGE_SIZE,
 } from "@/lib/learners/pagination";
@@ -60,6 +61,7 @@ describe("parseLearnerListParams", () => {
       q: "",
       filter: "all",
       sort: "name",
+      section: "all",
     });
   });
 
@@ -76,6 +78,7 @@ describe("parseLearnerListParams", () => {
     expect(p.q).toBe("ana");
     expect(p.filter).toBe("aral");
     expect(p.sort).toBe("age");
+    expect(p.section).toBe("all");
   });
 
   it("falls back on invalid page/filter/sort", () => {
@@ -93,6 +96,24 @@ describe("parseLearnerListParams", () => {
     expect(parseLearnerListParams({ filter: "archived" }).filter).toBe(
       "archived"
     );
+  });
+
+  it("parses section filter (all / none / id)", () => {
+    expect(parseLearnerListParams({}).section).toBe("all");
+    expect(parseLearnerListParams({ section: "" }).section).toBe("all");
+    expect(parseLearnerListParams({ section: "all" }).section).toBe("all");
+    expect(parseLearnerListParams({ section: "none" }).section).toBe("none");
+    expect(parseLearnerListParams({ section: "NONE" }).section).toBe("none");
+    const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    expect(parseLearnerListParams({ section: id }).section).toBe(id);
+  });
+});
+
+describe("sectionIdWhere", () => {
+  it("maps list section filter to Prisma clause", () => {
+    expect(sectionIdWhere("all")).toEqual({});
+    expect(sectionIdWhere("none")).toEqual({ sectionId: null });
+    expect(sectionIdWhere("sec-1")).toEqual({ sectionId: "sec-1" });
   });
 });
 

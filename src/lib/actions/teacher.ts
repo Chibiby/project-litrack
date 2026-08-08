@@ -38,15 +38,35 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  const {
+    firstName,
+    lastName,
+    middleName: middleRaw,
+    contactEmail: _contactEmail,
+    ...profileFields
+  } = parsed.data;
+  const middleName = middleRaw?.trim() ? middleRaw.trim() : null;
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+
+  // Prisma skips `undefined` on update — normalize optionals to null so clears persist
+  // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).
+  const profileData = {
+    ...profileFields,
+    contactNumber: parsed.data.contactNumber ?? null,
+    specializationOther: parsed.data.specializationOther ?? null,
+    currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
+    position: parsed.data.position ?? null,
+  };
+
   await prisma.$transaction([
     prisma.teacherProfile.upsert({
       where: { userId: user.id },
-      create: { userId: user.id, ...parsed.data },
-      update: { ...parsed.data },
+      create: { userId: user.id, ...profileData },
+      update: { ...profileData },
     }),
     prisma.user.update({
       where: { id: user.id },
-      data: { profileCompleted: true },
+      data: { firstName, middleName, lastName, fullName, profileCompleted: true },
     }),
   ]);
 
@@ -60,6 +80,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/teacher");
+  revalidatePath("/teacher/settings/profile");
   revalidateTeacherDashboard(user.id);
   return { ok: true };
 }

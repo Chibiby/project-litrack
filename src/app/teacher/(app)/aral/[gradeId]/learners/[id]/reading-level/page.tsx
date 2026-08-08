@@ -77,7 +77,10 @@ export default async function ReadingLevelPage({
           <CardContent className="p-0">
             {learner.readingLevels.length === 0 ? (
               <div className="p-4">
-                <EmptyState title="No reading-level records yet" />
+                <EmptyState
+                  title="No reading-level records yet"
+                  description="Use the form on this page to record this learner’s current reading level."
+                />
               </div>
             ) : (
               <Table>

@@ -9,6 +9,7 @@ import {
   mapCsvRowToImportCandidate,
   validateImportRows,
   summarizeImportResults,
+  resolveSectionIdByName,
   type ImportRowResult,
 } from "@/lib/learners/import-csv";
 import { isPossibleDuplicate } from "@/lib/learners/normalize";
@@ -71,12 +72,26 @@ export async function previewLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const existing = await prisma.learner.findMany({
-    where: { schoolId: user.schoolId, deletedAt: null },
-    select: { firstName: true, lastName: true, age: true },
-  });
+  const [existing, gradeSections] = await Promise.all([
+    prisma.learner.findMany({
+      where: { schoolId: user.schoolId, deletedAt: null },
+      select: { firstName: true, lastName: true, age: true },
+    }),
+    prisma.section.findMany({
+      where: {
+        schoolId: user.schoolId,
+        gradeLevelId: input.gradeLevelId,
+        deletedAt: null,
+      },
+      select: { name: true },
+    }),
+  ]);
 
-  const results = validateImportRows(input.rows, { existing, flagDuplicates: true });
+  const results = validateImportRows(input.rows, {
+    existing,
+    flagDuplicates: true,
+    sectionNames: gradeSections.map((s) => s.name),
+  });
   return {
     ok: true,
     data: { results, summary: summarizeImportResults(results) },
@@ -113,12 +128,26 @@ export async function commitLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const existing = await prisma.learner.findMany({
-    where: { schoolId: user.schoolId, deletedAt: null },
-    select: { firstName: true, lastName: true, age: true },
-  });
+  const [existing, gradeSections] = await Promise.all([
+    prisma.learner.findMany({
+      where: { schoolId: user.schoolId, deletedAt: null },
+      select: { firstName: true, lastName: true, age: true },
+    }),
+    prisma.section.findMany({
+      where: {
+        schoolId: user.schoolId,
+        gradeLevelId: input.gradeLevelId,
+        deletedAt: null,
+      },
+      select: { id: true, name: true },
+    }),
+  ]);
 
-  const results = validateImportRows(input.rows, { existing, flagDuplicates: true });
+  const results = validateImportRows(input.rows, {
+    existing,
+    flagDuplicates: true,
+    sectionNames: gradeSections.map((s) => s.name),
+  });
   const toInsert: LearnerImportRow[] = [];
   let skippedDuplicate = 0;
 
@@ -153,11 +182,14 @@ export async function commitLearnerImport(input: {
     await prisma.$transaction(async (tx) => {
       for (const data of toInsert) {
         const fullName = buildFullName(data.firstName, data.middleName, data.lastName);
+        // Unknown / blank section names → null; row still imports.
+        const { sectionId } = resolveSectionIdByName(data.sectionName, gradeSections);
         const created = await tx.learner.create({
           data: {
             schoolId: user.schoolId,
             gradeLevelId: input.gradeLevelId,
             teacherId: user.id,
+            sectionId,
             firstName: data.firstName,
             middleName: data.middleName,
             lastName: data.lastName,

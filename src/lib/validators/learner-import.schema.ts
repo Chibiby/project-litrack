@@ -77,6 +77,15 @@ export const learnerImportRowSchema = z
     governmentBenefits: z.array(z.enum(GOV_BENEFIT)).default([]),
     parentEducation: z.enum(PARENT_EDUCATION),
     isAralLearner: z.boolean().default(false),
+    /** Optional section name from CSV; resolved to id at commit. */
+    sectionName: z
+      .union([z.string(), z.undefined(), z.null()])
+      .transform((v) => {
+        if (v == null) return undefined;
+        const trimmed = String(v).trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+      })
+      .pipe(z.union([z.string().max(80), z.undefined()])),
   })
   .superRefine(refineFrustrationSubtypes);
 

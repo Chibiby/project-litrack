@@ -15,16 +15,29 @@ export function roleHomePath(role: AppRole): string {
   }
 }
 
-/** Change-password route under the role segment so RoleShell stays mounted. */
+function roleBasePath(role: AppRole): string {
+  return roleHomePath(role);
+}
+
+/** Settings index under the role segment (`/{role}/settings` → profile). */
+export function roleSettingsPath(role: AppRole): string {
+  return `${roleBasePath(role)}/settings`;
+}
+
+export function roleSettingsProfilePath(role: AppRole): string {
+  return `${roleSettingsPath(role)}/profile`;
+}
+
+export function roleSecurityPath(role: AppRole): string {
+  return `${roleSettingsPath(role)}/security`;
+}
+
+/**
+ * Change-password / Security route under the role segment so RoleShell stays mounted.
+ * Name kept for callers; destination is Settings → Security.
+ */
 export function rolePasswordPath(role: AppRole): string {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return "/admin/password";
-    case "SCHOOL_HEAD":
-      return "/school-head/password";
-    case "TEACHER":
-      return "/teacher/password";
-  }
+  return roleSecurityPath(role);
 }
 
 export function parseAppMetadataRole(value: unknown): AppRole | null {

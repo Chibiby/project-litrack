@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,11 +11,18 @@ import {
 } from "@/lib/actions/export-learners";
 import { Download, Loader2, Printer } from "lucide-react";
 
+export type ReportSectionOption = {
+  id: string;
+  name: string;
+  gradeLevelId: string;
+};
+
 type Props = {
   role: "TEACHER" | "SCHOOL_HEAD";
   gradeLevelId?: string;
   schoolId?: string;
   grades?: { id: string; label: string }[];
+  sections?: ReportSectionOption[];
 };
 
 function downloadBase64Xlsx(base64: string, filename: string) {
@@ -33,15 +40,33 @@ function downloadBase64Xlsx(base64: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportControls({ role, gradeLevelId, schoolId, grades }: Props) {
+export function ExportControls({
+  role,
+  gradeLevelId,
+  schoolId,
+  grades,
+  sections = [],
+}: Props) {
   const [aralOnly, setAralOnly] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState(gradeLevelId ?? "");
+  const [selectedSection, setSelectedSection] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const sectionOptions = useMemo(() => {
+    if (!selectedGrade) return sections;
+    return sections.filter((s) => s.gradeLevelId === selectedGrade);
+  }, [sections, selectedGrade]);
+
+  function handleGradeChange(value: string) {
+    setSelectedGrade(value);
+    setSelectedSection("");
+  }
 
   function handleExcel() {
     startTransition(async () => {
       const filter = {
         gradeLevelId: selectedGrade || undefined,
+        sectionId: selectedSection || undefined,
         aralOnly,
         schoolId,
       };
@@ -66,13 +91,33 @@ export function ExportControls({ role, gradeLevelId, schoolId, grades }: Props) 
           <select
             className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
             value={selectedGrade}
-            onChange={(e) => setSelectedGrade(e.target.value)}
+            onChange={(e) => handleGradeChange(e.target.value)}
             aria-label="Filter by grade"
           >
             <option value="">All grades</option>
             {grades.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {sections.length > 0 && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">Section filter</span>
+          <select
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            value={selectedSection}
+            onChange={(e) => setSelectedSection(e.target.value)}
+            aria-label="Filter by section"
+          >
+            <option value="">All sections</option>
+            <option value="none">No section</option>
+            {sectionOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </select>

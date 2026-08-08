@@ -10,6 +10,7 @@ import { DataTable } from "@/components/data-table";
 import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
+import { ConfirmAction } from "@/components/confirm-action";
 
 export type SchoolRow = {
   id: string;
@@ -60,6 +61,7 @@ function RegenButton({
       size="sm"
       disabled={pending}
       title="Regenerate School Head activation credential"
+      aria-label={`Regenerate activation credential for ${schoolName}`}
       onClick={() => {
         if (
           !window.confirm(
@@ -82,7 +84,7 @@ function RegenButton({
         });
       }}
     >
-      <KeyRound className="h-4 w-4" />
+      <KeyRound className="h-4 w-4" aria-hidden />
     </Button>
   );
 }
@@ -98,8 +100,13 @@ export function SchoolsTable({ schools }: { schools: SchoolRow[] }) {
       render: (school: SchoolRow) => (
         <div className="flex items-center gap-2">
           <span className="font-medium">{school.name}</span>
-          <Link href={`/school-head?schoolId=${school.id}`} prefetch={true}>
-            <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary" />
+          <Link
+            href={`/school-head?schoolId=${school.id}`}
+            prefetch={true}
+            aria-label={`Open ${school.name} as School Head`}
+            className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
       ),
@@ -162,22 +169,36 @@ export function SchoolsTable({ schools }: { schools: SchoolRow[] }) {
             schoolName={school.name}
             onCredential={setCredential}
           />
-          <form action={deleteSchool}>
-            <input type="hidden" name="id" value={school.id} />
-            <Button
-              variant="ghost"
-              size="sm"
-              type="submit"
-              className="text-destructive hover:text-destructive"
-              onClick={(e) => {
-                if (!window.confirm(`Archive (soft-delete) ${school.name}?`)) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </form>
+          <ConfirmAction
+            title="Remove this school?"
+            description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+            confirmLabel="Remove"
+            variant="destructive"
+            trigger={
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                className="text-destructive hover:text-destructive"
+                aria-label={`Remove ${school.name}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </Button>
+            }
+            onConfirm={async () => {
+              const fd = new FormData();
+              fd.set("id", school.id);
+              try {
+                await deleteSchool(fd);
+                toast.success("School removed");
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Could not remove school"
+                );
+                throw err;
+              }
+            }}
+          />
         </div>
       ),
     },

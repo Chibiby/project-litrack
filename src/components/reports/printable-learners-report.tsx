@@ -16,12 +16,15 @@ type LearnerRow = {
   section: { name: string } | null;
 };
 
+type SectionSummaryRow = { section: string; count: number; aral: number };
+
 type Props = {
   schoolName: string;
   generatedAt: Date;
   learners: LearnerRow[];
   aralCount: number;
   byGrade: Map<string, LearnerRow[]>;
+  byGradeSection?: Map<string, SectionSummaryRow[]>;
   subtitle?: string;
 };
 
@@ -35,8 +38,16 @@ export function PrintableLearnersReport({
   learners,
   aralCount,
   byGrade,
+  byGradeSection,
   subtitle,
 }: Props) {
+  const sectionRows =
+    byGradeSection && byGradeSection.size > 0
+      ? [...byGradeSection.entries()].flatMap(([type, rows]) =>
+          rows.map((r) => ({ gradeType: type, ...r }))
+        )
+      : [];
+
   return (
     <div className="printable-report space-y-6 text-foreground">
       <header className="border-b border-border pb-4">
@@ -75,6 +86,37 @@ export function PrintableLearnersReport({
           </tbody>
         </table>
       </section>
+
+      {sectionRows.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold">Summary by section</h2>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="py-1.5 pr-2 font-medium">Grade</th>
+                <th className="py-1.5 pr-2 font-medium">Section</th>
+                <th className="py-1.5 pr-2 font-medium">Learners</th>
+                <th className="py-1.5 font-medium">ARAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sectionRows.map((r) => (
+                <tr
+                  key={`${r.gradeType}-${r.section}`}
+                  className="border-b border-border/60"
+                >
+                  <td className="py-1.5 pr-2">
+                    {GRADE_LEVEL_LABELS[r.gradeType] ?? r.gradeType}
+                  </td>
+                  <td className="py-1.5 pr-2">{r.section}</td>
+                  <td className="py-1.5 pr-2">{r.count}</td>
+                  <td className="py-1.5">{r.aral}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Learners</h2>

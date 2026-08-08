@@ -40,7 +40,7 @@ export default function SchoolHeadError({
             Try again
           </Button>
           <Button asChild variant="outline">
-            <Link href="/login">Back to login</Link>
+            <Link href="/school-head">Back to dashboard</Link>
           </Button>
         </div>
       </div>

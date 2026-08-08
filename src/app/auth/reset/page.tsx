@@ -38,7 +38,7 @@ export default async function AuthResetPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+    <main id="main-content" className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image

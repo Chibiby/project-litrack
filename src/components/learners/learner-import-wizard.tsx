@@ -24,6 +24,7 @@ import {
 } from "@/lib/actions/import-learners";
 import {
   LEARNER_CSV_HEADERS,
+  normalizeLearnerCsvHeader,
   type ImportRowResult,
 } from "@/lib/learners/import-csv";
 import { Download, FileUp, Loader2, ArrowLeft } from "lucide-react";
@@ -84,7 +85,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     Papa.parse<Record<string, unknown>>(file, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h) => h.trim(),
+      transformHeader: (h) => normalizeLearnerCsvHeader(h),
       complete: (parsed) => {
         if (parsed.errors.length > 0 && !parsed.data.length) {
           toast.error(parsed.errors[0]?.message ?? "Failed to parse CSV");
@@ -225,6 +226,8 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                         {r.ok ? (
                           r.duplicateWarning ? (
                             <Badge variant="secondary">Duplicate?</Badge>
+                          ) : r.sectionWarning ? (
+                            <Badge variant="secondary">Section?</Badge>
                           ) : (
                             <Badge>Valid</Badge>
                           )
@@ -236,6 +239,12 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                         {r.ok ? (
                           <span>
                             {r.data.firstName} {r.data.lastName}, age {r.data.age}
+                            {r.data.sectionName ? ` · ${r.data.sectionName}` : ""}
+                            {r.sectionWarning ? (
+                              <span className="mt-0.5 block text-xs text-amber-800">
+                                {r.sectionWarning}
+                              </span>
+                            ) : null}
                           </span>
                         ) : (
                           <span className="text-destructive">

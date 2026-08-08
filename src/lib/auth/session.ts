@@ -6,7 +6,13 @@ import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
 import type { User, UserRole } from "@prisma/client";
 
-export { roleHomePath, rolePasswordPath } from "@/lib/auth/roles";
+export {
+  roleHomePath,
+  rolePasswordPath,
+  roleSettingsPath,
+  roleSettingsProfilePath,
+  roleSecurityPath,
+} from "@/lib/auth/roles";
 
 /** App user guaranteed to belong to a school (non-null schoolId). */
 export type SchoolUser = User & { schoolId: string };
@@ -19,7 +25,7 @@ export type GetCurrentUserOptions = {
 export type RequireUserOptions = {
   /** When true, allow access even if mustChangePassword is set (set-password flow). */
   allowMustChangePassword?: boolean;
-  /** When true, allow TEACHER users who are pending approval (or inactive pending-like). */
+  /** When true, allow TEACHER users who are pending approval. */
   allowPending?: boolean;
 };
 
@@ -27,13 +33,9 @@ function isTeacherRejected(user: User): boolean {
   return user.role === "TEACHER" && user.approvalStatus === "REJECTED";
 }
 
-/** Pending approval, or inactive teacher who is not explicitly rejected. */
+/** Pending School Head approval only (deactivated approved teachers use isActive below). */
 function isTeacherPendingGate(user: User): boolean {
-  return (
-    user.role === "TEACHER" &&
-    (user.approvalStatus === "PENDING" ||
-      (!user.isActive && user.approvalStatus !== "REJECTED"))
-  );
+  return user.role === "TEACHER" && user.approvalStatus === "PENDING";
 }
 
 async function loadUserByAuthId(authId: string): Promise<User | null> {

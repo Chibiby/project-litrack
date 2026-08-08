@@ -1,8 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
 import {
   schoolLoginSchema,
@@ -12,9 +14,10 @@ import {
   verifyTeacherRegisterOtpSchema,
   setPasswordSchema,
   changePasswordSchema,
+  changeEmailSchema,
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
-import { schoolHeadSyntheticEmail, isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import {
   getSupabasePublicEnv,
   isSupabaseConfigured,
@@ -22,10 +25,12 @@ import {
 } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { requireUser, roleHomePath } from "@/lib/auth/session";
+import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
 import {
   DECLINED_REGISTRATION_MESSAGE,
+  DEACTIVATED_TEACHER_MESSAGE,
+  isDeactivatedTeacher,
   isPendingTeacherAtSchool,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
@@ -36,6 +41,7 @@ const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
 const OTP_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 
 function requireSupabaseConfigured(): { ok: false; error: string } | null {
   if (!isSupabaseConfigured()) {
@@ -76,7 +82,7 @@ async function assertActiveSchool(
 
 /**
  * School Head login: school selection + password (activation credential or private password).
- * Does NOT treat School ID as a password — sign-in uses the SH synthetic email + entered password.
+ * Sign-in uses the SH account's stored Prisma email (synthetic by default, or changed later).
  */
 export async function loginSchoolHead(formData: FormData): Promise<ActionResult> {
   const missing = requireSupabaseConfigured();
@@ -96,25 +102,28 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
 
   const school = await prisma.school.findUnique({
     where: { id: parsed.data.schoolId },
-    select: { id: true, schoolIdCode: true, isActive: true, deletedAt: true },
+    select: { id: true, isActive: true, deletedAt: true },
   });
   if (!school || !school.isActive || school.deletedAt) {
     return { ok: false, error: "School not found or inactive" };
   }
 
-  const email = schoolHeadSyntheticEmail(school.schoolIdCode);
-
   const shUser = await prisma.user.findFirst({
-    where: { email, role: "SCHOOL_HEAD", schoolId: school.id, deletedAt: null },
-    select: { id: true, isActive: true },
+    where: {
+      role: "SCHOOL_HEAD",
+      schoolId: school.id,
+      deletedAt: null,
+      isActive: true,
+    },
+    select: { id: true, email: true, isActive: true },
   });
-  if (!shUser || !shUser.isActive) {
+  if (!shUser) {
     return { ok: false, error: "Login failed. Please contact your administrator." };
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email,
+    email: shUser.email,
     password: parsed.data.password,
   });
   if (error) {
@@ -192,6 +201,17 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   if (teacher.approvalStatus === "REJECTED") {
     return { ok: false, error: DECLINED_REGISTRATION_MESSAGE };
   }
+  if (isDeactivatedTeacher(teacher)) {
+    await writeAudit({
+      userId: teacher.id,
+      schoolId,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: teacher.id,
+      metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
+    });
+    return { ok: false, error: DEACTIVATED_TEACHER_MESSAGE };
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -216,10 +236,8 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
     metadata: { role: "TEACHER", schoolId, method: "password" },
   });
 
-  // REJECTED already returned above.
-  const pendingLike =
-    teacher.approvalStatus === "PENDING" || !teacher.isActive;
-  redirect(pendingLike ? "/pending-approval" : "/teacher");
+  // REJECTED / deactivated already returned above.
+  redirect(teacher.approvalStatus === "PENDING" ? "/pending-approval" : "/teacher");
 }
 
 /**
@@ -718,6 +736,104 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
     resourceId: user.id,
     metadata: { reason: "change_password" },
   });
+
+  return { ok: true };
+}
+
+/**
+ * Change account email — re-auth with current password, then dual-write Auth + Prisma.
+ */
+export async function changeEmailAction(formData: FormData): Promise<ActionResult> {
+  const missing = requireSupabaseConfigured();
+  if (missing) return missing;
+
+  const user = await requireUser();
+
+  const rate = checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
+  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+
+  const parsed = changeEmailSchema.safeParse({
+    newEmail: formData.get("newEmail"),
+    confirmEmail: formData.get("confirmEmail"),
+    currentPassword: formData.get("currentPassword"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const newEmail = parsed.data.newEmail.trim().toLowerCase();
+  const currentEmail = user.email.trim().toLowerCase();
+  if (newEmail === currentEmail) {
+    return { ok: false, error: "New email must be different from your current email" };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error: verifyErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: parsed.data.currentPassword,
+  });
+  if (verifyErr) return { ok: false, error: "Current password is incorrect" };
+
+  const taken = await prisma.user.findFirst({
+    where: {
+      email: newEmail,
+      deletedAt: null,
+      NOT: { id: user.id },
+    },
+    select: { id: true },
+  });
+  if (taken) {
+    return { ok: false, error: "That email is already in use." };
+  }
+
+  const previousWasSynthetic = isSyntheticEmail(user.email);
+  const oldEmail = user.email;
+
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, error: "Email change is temporarily unavailable. Please try again later." };
+  }
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(user.authId, {
+    email: newEmail,
+    email_confirm: true,
+  });
+  if (authErr) {
+    return { ok: false, error: "Failed to update email. Please try again." };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email: newEmail },
+    });
+  } catch {
+    const { error: rollbackErr } = await admin.auth.admin.updateUserById(user.authId, {
+      email: oldEmail,
+      email_confirm: true,
+    });
+    if (rollbackErr) {
+      return {
+        ok: false,
+        error:
+          "Email was updated in authentication but failed to save locally. Please contact support.",
+      };
+    }
+    return { ok: false, error: "Failed to update email. Please try again." };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.EMAIL_CHANGE,
+    resource: "User",
+    resourceId: user.id,
+    metadata: { previousWasSynthetic },
+  });
+
+  revalidatePath(roleSecurityPath(user.role));
 
   return { ok: true };
 }

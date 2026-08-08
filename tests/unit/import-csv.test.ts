@@ -3,9 +3,11 @@ import {
   LEARNER_CSV_HEADERS,
   learnerCsvTemplate,
   mapCsvRowToImportCandidate,
+  normalizeLearnerCsvHeader,
   parseBooleanLoose,
   parseDelimitedList,
   resolveEnumValue,
+  resolveSectionIdByName,
   titleCaseName,
   validateImportRows,
   summarizeImportResults,
@@ -21,6 +23,15 @@ describe("learnerCsvTemplate", () => {
     expect(lines[1]).toContain("Ana");
     expect(LEARNER_CSV_HEADERS).toContain("isAralLearner");
     expect(LEARNER_CSV_HEADERS).toContain("parentEducation");
+    expect(LEARNER_CSV_HEADERS).toContain("section");
+  });
+});
+
+describe("normalizeLearnerCsvHeader", () => {
+  it("normalizes Section aliases", () => {
+    expect(normalizeLearnerCsvHeader("Section")).toBe("section");
+    expect(normalizeLearnerCsvHeader("section")).toBe("section");
+    expect(normalizeLearnerCsvHeader(" firstName ")).toBe("firstName");
   });
 });
 
@@ -68,6 +79,7 @@ describe("mapCsvRowToImportCandidate", () => {
       lastName: "Santos",
       age: "10",
       gender: "Female",
+      section: "Rose",
       englishReadingProfile: "Instructional / Developing or Transitioning",
       englishFrustrationSubtypes: "",
       filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
@@ -82,6 +94,54 @@ describe("mapCsvRowToImportCandidate", () => {
     expect(mapped.governmentBenefits).toEqual(["FOUR_PS"]);
     expect(mapped.parentEducation).toBe("SECONDARY_GRADUATE");
     expect(mapped.isAralLearner).toBe(true);
+    expect(mapped.sectionName).toBe("Rose");
+  });
+
+  it("reads Section header alias", () => {
+    const mapped = mapCsvRowToImportCandidate({
+      firstName: "Ana",
+      lastName: "Santos",
+      age: "10",
+      Section: "Lily",
+      gender: "FEMALE",
+      englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
+      filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
+      parentEducation: "SECONDARY_GRADUATE",
+    });
+    expect(mapped.sectionName).toBe("Lily");
+  });
+
+  it("treats blank section as undefined", () => {
+    const mapped = mapCsvRowToImportCandidate({
+      firstName: "Ana",
+      lastName: "Santos",
+      age: "10",
+      gender: "FEMALE",
+      section: "  ",
+      englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
+      filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
+      parentEducation: "SECONDARY_GRADUATE",
+    });
+    expect(mapped.sectionName).toBeUndefined();
+  });
+});
+
+describe("resolveSectionIdByName", () => {
+  const sections = [
+    { id: "s1", name: "Rose" },
+    { id: "s2", name: "Lily" },
+  ];
+
+  it("resolves case-insensitively and leaves blank null", () => {
+    expect(resolveSectionIdByName("rose", sections).sectionId).toBe("s1");
+    expect(resolveSectionIdByName("", sections).sectionId).toBeNull();
+    expect(resolveSectionIdByName(undefined, sections).sectionId).toBeNull();
+  });
+
+  it("warns and returns null for unknown names", () => {
+    const r = resolveSectionIdByName("Unknown", sections);
+    expect(r.sectionId).toBeNull();
+    expect(r.warning).toMatch(/not found/i);
   });
 });
 
@@ -99,6 +159,22 @@ describe("learnerImportRowSchema", () => {
   it("accepts valid Section A rows", () => {
     const r = learnerImportRowSchema.safeParse(valid);
     expect(r.success).toBe(true);
+  });
+
+  it("accepts optional sectionName and coerces empty to undefined", () => {
+    const withName = learnerImportRowSchema.safeParse({
+      ...valid,
+      sectionName: "Rizal",
+    });
+    expect(withName.success).toBe(true);
+    if (withName.success) expect(withName.data.sectionName).toBe("Rizal");
+
+    const empty = learnerImportRowSchema.safeParse({
+      ...valid,
+      sectionName: "",
+    });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.sectionName).toBeUndefined();
   });
 
   it("rejects frustration subtypes without Frustration profile", () => {

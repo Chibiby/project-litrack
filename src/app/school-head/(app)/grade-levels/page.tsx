@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
@@ -7,12 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListCardSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { createGradeLevel } from "@/lib/actions/school-head";
-import { Plus } from "lucide-react";
+import { CreateGradeLevelButton } from "@/components/school-head/create-grade-level-button";
+import { GradeSectionsPanel } from "@/components/school-head/section-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -33,39 +31,81 @@ async function GradeLevelsGrid({
 }) {
   const existing = await prisma.gradeLevel.findMany({
     where: { schoolId, deletedAt: null },
-    select: { type: true, _count: { select: { teachers: true, learners: true } } },
+    select: {
+      id: true,
+      type: true,
+      _count: { select: { teachers: true, learners: true } },
+      sections: {
+        where: { deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      },
+    },
   });
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
+  const activeTypes = ALL_TYPES.filter((type) => existingMap.has(type));
+  const inactiveTypes = ALL_TYPES.filter((type) => !existingMap.has(type));
+
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
-      {ALL_TYPES.map((type) => {
-        const has = existingMap.get(type);
-        return (
-          <Card key={type} className={has ? "border-primary/50" : ""}>
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">{GRADE_LEVEL_LABELS[type]}</span>
-                {has && <Badge variant="secondary">Active</Badge>}
-              </div>
-              {has ? (
-                <p className="text-xs text-muted-foreground">
-                  {has._count.teachers} teachers · {has._count.learners} learners
-                </p>
-              ) : isSuperAdminView ? (
-                <p className="text-xs text-muted-foreground">Not created</p>
-              ) : (
-                <form action={createGradeLevel}>
-                  <input type="hidden" name="type" value={type} />
-                  <Button type="submit" size="sm" variant="outline" className="w-full">
-                    <Plus className="h-4 w-4" /> Create
-                  </Button>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="space-y-8">
+      {activeTypes.length > 0 ? (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">Active grades</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {activeTypes.map((type) => {
+              const grade = existingMap.get(type)!;
+              const sectionCount = grade.sections.length;
+              return (
+                <Card key={type} className="border-primary/50">
+                  <CardContent className="space-y-3 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{GRADE_LEVEL_LABELS[type]}</span>
+                      <Badge variant="secondary">Active</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {grade._count.teachers} teachers · {grade._count.learners} learners ·{" "}
+                      {sectionCount} {sectionCount === 1 ? "section" : "sections"}
+                    </p>
+                    <GradeSectionsPanel
+                      gradeLevelId={grade.id}
+                      sections={grade.sections}
+                      readOnly={isSuperAdminView}
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {inactiveTypes.length > 0 ? (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">
+            {isSuperAdminView ? "Not created" : "Create a grade"}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
+            {inactiveTypes.map((type) => (
+              <Card key={type}>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{GRADE_LEVEL_LABELS[type]}</span>
+                  </div>
+                  {isSuperAdminView ? (
+                    <p className="text-xs text-muted-foreground">Not created</p>
+                  ) : (
+                    <CreateGradeLevelButton
+                      type={type}
+                      label={GRADE_LEVEL_LABELS[type]}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -89,7 +129,7 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
       subtitle={
         isSuperAdminView
           ? "Super Admin View"
-          : "Click any tile to create that grade for your school"
+          : "Activate grades and manage their sections here"
       }
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
@@ -97,19 +137,6 @@ export default async function GradeLevelsPage({ searchParams }: GradeLevelsPageP
       isSuperAdminView={isSuperAdminView}
       viewedSchoolName={schoolName ?? undefined}
     >
-      <div className="mb-4">
-        <Button asChild variant="outline" size="sm">
-          <Link
-            href={
-              isSuperAdminView
-                ? `/school-head/sections?schoolId=${schoolId}`
-                : "/school-head/sections"
-            }
-          >
-            Manage sections
-          </Link>
-        </Button>
-      </div>
       <Suspense fallback={<ListCardSkeleton grid items={10} />}>
         <GradeLevelsGrid schoolId={schoolId} isSuperAdminView={isSuperAdminView} />
       </Suspense>

@@ -24,6 +24,16 @@ const optionalMiddleName = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+/** Empty / whitespace → undefined; otherwise require uuid. */
+const optionalSectionId = z
+  .union([z.string(), z.undefined(), z.null()])
+  .transform((v) => {
+    if (v == null) return undefined;
+    const trimmed = String(v).trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  })
+  .pipe(z.union([z.string().uuid("Invalid section"), z.undefined()]));
+
 /** Frustration subtypes only when Frustration/High Emergent is selected (L-A4/L-A5). */
 function refineFrustrationSubtypes<
   T extends {
@@ -74,6 +84,7 @@ const sectionAFields = {
 export const learnerCreateSchema = z
   .object({
     gradeLevelId: nonEmpty("Grade level required"),
+    sectionId: optionalSectionId,
     ...sectionAFields,
     isAralLearner: z.boolean().default(false),
     /** Client must re-submit with true after possible_duplicate warning. */
@@ -86,10 +97,11 @@ export const learnerCreateSchema = z
 
 export type LearnerCreateInput = z.infer<typeof learnerCreateSchema>;
 
-/** Edit Section A only (grade/section/teacher via transfer). */
+/** Edit Section A (+ optional section); grade/teacher via transfer. */
 export const learnerUpdateSchema = z
   .object({
     id: nonEmpty(),
+    sectionId: optionalSectionId,
     ...sectionAFields,
   })
   .superRefine(refineFrustrationSubtypes);

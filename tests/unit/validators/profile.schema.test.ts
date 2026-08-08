@@ -7,7 +7,7 @@ import {
 const baseFields = {
   educationalAttainment: "BACHELORS" as const,
   fieldOfSpecialization: "ENGLISH" as const,
-  yearsInService: "Y4_10" as const,
+  yearsInService: 4,
   hasReadingTraining: true,
   readingTrainings: ["ARAL", "ELLN"] as const,
   hasEnglishTraining: true,
@@ -15,39 +15,93 @@ const baseFields = {
   highestTrainingLevel: "DIVISION" as const,
 };
 
+/** School Head profiling now requires respondent names on the same payload. */
+const shBase = {
+  ...baseFields,
+  firstName: "Maria",
+  lastName: "Santos",
+  designation: "School Head" as const,
+};
+
+/** Teacher profiling requires respondent names (persisted on User). */
+const teacherBase = {
+  ...baseFields,
+  firstName: "Juan",
+  lastName: "Dela Cruz",
+  designation: "Teacher" as const,
+  position: "TEACHER_III" as const,
+  mostSubjectHandled: "ENGLISH" as const,
+};
+
 describe("schoolHeadProfileSchema", () => {
-  it("accepts school-head positions and rejects teacher-only positions", () => {
+  it("requires designation School Head and accepts SH positions", () => {
     const ok = schoolHeadProfileSchema.safeParse({
-      ...baseFields,
+      ...shBase,
       position: "PRINCIPAL_I",
     });
     expect(ok.success).toBe(true);
 
     expect(
       schoolHeadProfileSchema.safeParse({
+        ...shBase,
+        designation: undefined,
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      schoolHeadProfileSchema.safeParse({
         ...baseFields,
+        firstName: "Maria",
+        lastName: "Santos",
+        designation: "Teacher",
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      schoolHeadProfileSchema.safeParse({
+        ...shBase,
         position: "TEACHER_I",
       }).success,
     ).toBe(false);
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "MASTER_TEACHER_I",
       }).success,
     ).toBe(false);
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "HEAD_TEACHER_III",
       }).success,
     ).toBe(true);
   });
 
+  it("requires first and last name", () => {
+    expect(
+      schoolHeadProfileSchema.safeParse({
+        ...baseFields,
+        designation: "School Head",
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      schoolHeadProfileSchema.safeParse({
+        ...shBase,
+        firstName: "",
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts training arrays and requires specializationOther when Others", () => {
     const result = schoolHeadProfileSchema.safeParse({
-      ...baseFields,
+      ...shBase,
       position: "PRINCIPAL_II",
       fieldOfSpecialization: "OTHERS",
       specializationOther: "Guidance",
@@ -62,7 +116,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         fieldOfSpecialization: "OTHERS",
         specializationOther: undefined,
@@ -71,7 +125,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         readingTrainings: ["NOT_A_TRAINING"],
       }).success,
@@ -81,7 +135,7 @@ describe("schoolHeadProfileSchema", () => {
   it("enforces training Yes/No conditionals and None-at-all exclusivity", () => {
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         hasReadingTraining: true,
         readingTrainings: [],
@@ -90,7 +144,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         hasReadingTraining: false,
         readingTrainings: ["ARAL"],
@@ -99,7 +153,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         hasReadingTraining: false,
         readingTrainings: [],
@@ -110,7 +164,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         readingTrainings: ["ARAL", "NONE"],
       }).success,
@@ -118,7 +172,7 @@ describe("schoolHeadProfileSchema", () => {
 
     expect(
       schoolHeadProfileSchema.safeParse({
-        ...baseFields,
+        ...shBase,
         position: "PRINCIPAL_I",
         readingTrainings: ["NONE"],
         englishTrainings: ["NONE"],
@@ -128,18 +182,165 @@ describe("schoolHeadProfileSchema", () => {
 });
 
 describe("teacherProfileSchema", () => {
+  it("requires designation and rejects School Head", () => {
+    expect(
+      teacherProfileSchema.safeParse({
+        ...baseFields,
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        position: "TEACHER_III",
+        mostSubjectHandled: "ENGLISH",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...baseFields,
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        designation: "",
+        position: "TEACHER_III",
+        mostSubjectHandled: "ENGLISH",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...baseFields,
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        designation: "School Head",
+        position: "TEACHER_III",
+        mostSubjectHandled: "ENGLISH",
+      }).success,
+    ).toBe(false);
+
+    expect(teacherProfileSchema.safeParse(teacherBase).success).toBe(true);
+  });
+
+  it("requires first and last name", () => {
+    expect(
+      teacherProfileSchema.safeParse({
+        ...baseFields,
+        designation: "Teacher",
+        position: "TEACHER_III",
+        mostSubjectHandled: "ENGLISH",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        firstName: "",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        middleName: "Reyes",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires Teacher I–VII when designation is Teacher", () => {
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Teacher",
+        position: "TEACHER_III",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Teacher",
+        position: undefined,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Teacher",
+        position: "MASTER_TEACHER_I",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Teacher",
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires Master Teacher I–IV when designation is Master Teacher", () => {
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Master Teacher",
+        position: "MASTER_TEACHER_II",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Master Teacher",
+        position: undefined,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Master Teacher",
+        position: "TEACHER_I",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts custom Others designation without position and rejects when position set", () => {
+    const ok = teacherProfileSchema.safeParse({
+      ...teacherBase,
+      designation: "Guidance Counselor",
+      position: undefined,
+    });
+    expect(ok.success).toBe(true);
+    if (ok.success) {
+      expect(ok.data.position).toBeUndefined();
+    }
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Guidance Counselor",
+        position: null,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        designation: "Guidance Counselor",
+        position: "TEACHER_I",
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts teacher positions and rejects school-head positions", () => {
     const ok = teacherProfileSchema.safeParse({
-      ...baseFields,
-      position: "TEACHER_III",
-      mostSubjectHandled: "ENGLISH",
+      ...teacherBase,
       currentGradeAssignment: "G3",
     });
     expect(ok.success).toBe(true);
 
     expect(
       teacherProfileSchema.safeParse({
-        ...baseFields,
+        ...teacherBase,
         position: "PRINCIPAL_I",
         mostSubjectHandled: "MATH",
       }).success,
@@ -147,7 +348,7 @@ describe("teacherProfileSchema", () => {
 
     expect(
       teacherProfileSchema.safeParse({
-        ...baseFields,
+        ...teacherBase,
         position: "HEAD_TEACHER_I",
         mostSubjectHandled: "MATH",
       }).success,
@@ -158,12 +359,16 @@ describe("teacherProfileSchema", () => {
     expect(
       teacherProfileSchema.safeParse({
         ...baseFields,
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        designation: "Master Teacher",
         position: "MASTER_TEACHER_II",
       }).success,
     ).toBe(false);
 
     const withOther = teacherProfileSchema.safeParse({
-      ...baseFields,
+      ...teacherBase,
+      designation: "Teacher",
       position: "TEACHER_I",
       mostSubjectHandled: "FILIPINO",
       fieldOfSpecialization: "OTHERS",
@@ -175,11 +380,9 @@ describe("teacherProfileSchema", () => {
     }
   });
 
-  it("accepts optional contactEmail (P-I4) and rejects invalid email", () => {
+  it("still accepts optional legacy contactEmail and rejects invalid email", () => {
     const ok = teacherProfileSchema.safeParse({
-      ...baseFields,
-      position: "TEACHER_I",
-      mostSubjectHandled: "ENGLISH",
+      ...teacherBase,
       contactEmail: "teacher.contact@example.com",
     });
     expect(ok.success).toBe(true);
@@ -188,9 +391,7 @@ describe("teacherProfileSchema", () => {
     }
 
     const empty = teacherProfileSchema.safeParse({
-      ...baseFields,
-      position: "TEACHER_I",
-      mostSubjectHandled: "ENGLISH",
+      ...teacherBase,
       contactEmail: "  ",
     });
     expect(empty.success).toBe(true);
@@ -200,15 +401,16 @@ describe("teacherProfileSchema", () => {
 
     expect(
       teacherProfileSchema.safeParse({
-        ...baseFields,
-        position: "TEACHER_I",
-        mostSubjectHandled: "ENGLISH",
+        ...teacherBase,
         contactEmail: "not-an-email",
       }).success,
     ).toBe(false);
 
+    // Omitted contactEmail is valid (UI no longer collects it)
+    expect(teacherProfileSchema.safeParse(teacherBase).success).toBe(true);
+
     const sh = schoolHeadProfileSchema.safeParse({
-      ...baseFields,
+      ...shBase,
       position: "PRINCIPAL_I",
       contactEmail: "sh.contact@deped.gov.ph",
     });
@@ -216,5 +418,41 @@ describe("teacherProfileSchema", () => {
     if (sh.success) {
       expect(sh.data.contactEmail).toBe("sh.contact@deped.gov.ph");
     }
+  });
+
+  it("accepts yearsInService 0–70 (coerces FormData strings) and rejects out of range", () => {
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 0 }).success,
+    ).toBe(true);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 70 }).success,
+    ).toBe(true);
+    const coerced = teacherProfileSchema.safeParse({
+      ...teacherBase,
+      yearsInService: "12",
+    });
+    expect(coerced.success).toBe(true);
+    if (coerced.success) expect(coerced.data.yearsInService).toBe(12);
+
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: -1 }).success,
+    ).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 71 }).success,
+    ).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: "" }).success,
+    ).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 3.5 }).success,
+    ).toBe(false);
+
+    expect(
+      schoolHeadProfileSchema.safeParse({
+        ...shBase,
+        position: "PRINCIPAL_I",
+        yearsInService: "0",
+      }).success,
+    ).toBe(true);
   });
 });
