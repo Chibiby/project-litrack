@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, signOut } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { PendingApprovalActions } from "@/components/pending-approval-actions";
+import { PostLoginSplash } from "@/components/post-login-splash";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DECLINED_REGISTRATION_MESSAGE,
@@ -45,6 +46,7 @@ export default async function PendingApprovalPage() {
 
   return (
     <main id="main-content" className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <PostLoginSplash />
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image

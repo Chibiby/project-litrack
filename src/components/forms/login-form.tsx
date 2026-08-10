@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { isRedirectError } from "next/dist/client/components/redirect";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,9 @@ import {
   requestTeacherRegisterOtp,
   verifyTeacherRegisterOtp,
 } from "@/lib/actions/auth";
+import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
+import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
 
 type Screen = "select-role" | "school-head" | "teacher";
 type TeacherIntent = "login" | "register";
@@ -28,6 +30,15 @@ const TEACHERS_UNLOCK_HELP =
   "Teachers unlock once the School Head completes profiling and adds grade levels.";
 
 const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
+
+/** Mark next app shell paint to show the post-login splash (survives redirect). */
+function markPostLoginSplash() {
+  try {
+    sessionStorage.setItem(POST_LOGIN_FLAG, "1");
+  } catch {
+    // sessionStorage unavailable — splash simply won't show
+  }
+}
 
 export function LoginForm({
   schools,
@@ -117,8 +128,22 @@ export function LoginForm({
     formData.set("password", password);
 
     startTransition(async () => {
-      const res = await loginTeacher(formData);
-      if (res && !res.ok) toast.error(res.error);
+      try {
+        const res = await loginTeacher(formData);
+        if (res && !res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        markPostLoginSplash();
+        resetSidebarExpandedPreference();
+      } catch (err) {
+        if (isRedirectError(err)) {
+          markPostLoginSplash();
+          resetSidebarExpandedPreference();
+          throw err;
+        }
+        throw err;
+      }
     });
   };
 
@@ -155,10 +180,17 @@ export function LoginForm({
         if (res && !res.ok) {
           toast.error(res.error);
           verifyRegisterLock.current = false;
+          return;
         }
         // Success redirects away; keep the lock held.
+        markPostLoginSplash();
+        resetSidebarExpandedPreference();
       } catch (err) {
-        if (isRedirectError(err)) throw err;
+        if (isRedirectError(err)) {
+          markPostLoginSplash();
+          resetSidebarExpandedPreference();
+          throw err;
+        }
         verifyRegisterLock.current = false;
       }
     });
@@ -181,8 +213,22 @@ export function LoginForm({
   const handleSchoolHeadSubmit = (formData: FormData) => {
     formData.set("schoolId", schoolId);
     startTransition(async () => {
-      const res = await loginSchoolHead(formData);
-      if (res && !res.ok) toast.error(res.error);
+      try {
+        const res = await loginSchoolHead(formData);
+        if (res && !res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        markPostLoginSplash();
+        resetSidebarExpandedPreference();
+      } catch (err) {
+        if (isRedirectError(err)) {
+          markPostLoginSplash();
+          resetSidebarExpandedPreference();
+          throw err;
+        }
+        throw err;
+      }
     });
   };
 

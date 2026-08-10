@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
+import { PostLoginSplash } from "@/components/post-login-splash";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,15 @@ export default async function SchoolHeadAppLayout({
   }
 
   return (
-    <RoleShell
-      role={user.role}
-      userName={userName}
-      schoolName={schoolName}
-    >
-      {children}
-    </RoleShell>
+    <>
+      <PostLoginSplash role="school-head" />
+      <RoleShell
+        role={user.role}
+        userName={userName}
+        schoolName={schoolName}
+      >
+        {children}
+      </RoleShell>
+    </>
   );
 }

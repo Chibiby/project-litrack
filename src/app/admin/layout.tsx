@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { RoleShell } from "@/components/role-shell";
+import { PostLoginSplash } from "@/components/post-login-splash";
 
 // Force dynamic so Next doesn't try to statically prerender these auth-gated
 // pages at build time, when Supabase/DATABASE_URL env may not be reachable.
@@ -18,11 +19,14 @@ export default async function AdminLayout({
   }
 
   return (
-    <RoleShell
-      role={user.role}
-      userName={user.fullName || user.email}
-    >
-      {children}
-    </RoleShell>
+    <>
+      <PostLoginSplash role="admin" />
+      <RoleShell
+        role={user.role}
+        userName={user.fullName || user.email}
+      >
+        {children}
+      </RoleShell>
+    </>
   );
 }

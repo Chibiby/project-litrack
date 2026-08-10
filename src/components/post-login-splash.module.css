@@ -1,0 +1,288 @@
+.overlay {
+  --pls-cream: #fdfbf5;
+  --pls-gray: #d9d4c6;
+  --pls-red: #d31c2b;
+  --pls-navy: #1b4c82;
+  --pls-navy-dark: #123255;
+  --pls-gold: #f6b527;
+
+  /* Portaled to document.body — must cover sidebar (z-40) and all chrome. */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--pls-cream);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+  pointer-events: auto;
+}
+
+.overlayFading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 5px solid var(--pls-navy);
+  opacity: 0.08;
+}
+
+.cornerTl {
+  top: 28px;
+  left: 28px;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 10px 0 0 0;
+}
+
+.cornerBr {
+  bottom: 28px;
+  right: 28px;
+  border-left: none;
+  border-top: none;
+  border-radius: 0 0 10px 0;
+}
+
+.stage {
+  position: relative;
+  width: min(48vw, 300px);
+  height: min(48vw, 300px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.programLogo {
+  position: absolute;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transform: scale(0.75) translateY(14px);
+  animation:
+    pls-pop-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards,
+    pls-breathe 2.6s ease-in-out 0.6s infinite;
+}
+
+.aralLogo {
+  position: absolute;
+  width: min(70vw, 460px);
+  max-width: none;
+  height: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+}
+
+.stageDone .programLogo {
+  animation: none;
+  opacity: 0;
+  transform: scale(0.8) translateY(-10px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.stageDone .aralLogo {
+  animation: pls-reveal-pop 0.65s cubic-bezier(0.2, 1.4, 0.4, 1) 0.2s forwards;
+}
+
+.shelfWrap {
+  opacity: 0;
+  margin-top: 64px;
+  animation: pls-fade-up 0.5s ease-out 0.55s forwards;
+}
+
+.shelf {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.book {
+  position: relative;
+  width: 22px;
+  height: 30px;
+  border-radius: 2px;
+  background: var(--pls-gray);
+  box-shadow: 0 2px 4px rgba(18, 50, 85, 0.14);
+  transition:
+    background 0.4s ease,
+    transform 0.35s cubic-bezier(0.34, 1.4, 0.4, 1);
+}
+
+.book::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px 0 0 2px;
+}
+
+.book::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 4px;
+  top: 10px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 0 rgba(255, 255, 255, 0.45);
+  opacity: 0.7;
+  transition: opacity 0.4s ease;
+}
+
+.bookFilled {
+  transform: translateY(-3px) scale(1.04);
+}
+
+.bookFilled::after {
+  opacity: 1;
+}
+
+.book:nth-child(1).bookFilled {
+  background: var(--pls-red);
+}
+
+.book:nth-child(2).bookFilled {
+  background: var(--pls-gold);
+}
+
+.book:nth-child(3).bookFilled {
+  background: var(--pls-navy);
+}
+
+.book:nth-child(4).bookFilled {
+  background: var(--pls-gold);
+}
+
+.book:nth-child(5).bookFilled {
+  background: var(--pls-red);
+}
+
+.shelfDone .book {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.statusLabel {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--pls-navy-dark);
+  opacity: 0;
+  margin-top: 10px;
+  animation: pls-fade-up 0.5s ease-out 0.5s forwards;
+  min-height: 18px;
+  transition: opacity 0.25s ease;
+  text-align: center;
+}
+
+.statusLabelDone {
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+@keyframes pls-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.75) translateY(14px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.05) translateY(-3px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pls-breathe {
+  0%,
+  100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.02) translateY(-2px);
+  }
+}
+
+@keyframes pls-reveal-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes pls-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .programLogo,
+  .shelfWrap,
+  .statusLabel,
+  .book,
+  .aralLogo {
+    transition: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .aralLogo {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  .overlay {
+    transition: none !important;
+  }
+
+  .stageDone .programLogo {
+    opacity: 0 !important;
+  }
+
+  .stageDone .aralLogo {
+    opacity: 1 !important;
+  }
+
+  .shelfDone .book {
+    opacity: 0 !important;
+  }
+
+  .statusLabelDone {
+    opacity: 0 !important;
+  }
+}

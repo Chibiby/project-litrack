@@ -4,6 +4,7 @@ import { getSchoolName } from "@/lib/cache/school";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { RoleShell } from "@/components/role-shell";
+import { PostLoginSplash } from "@/components/post-login-splash";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +52,17 @@ export default async function TeacherAppLayout({
   }
 
   return (
-    <RoleShell
-      role={user.role}
-      userName={userName}
-      schoolName={schoolName}
-      grades={grades}
-    >
-      {children}
-    </RoleShell>
+    <>
+      {/* Sibling of RoleShell (also portaled to body) so chrome cannot contain it. */}
+      <PostLoginSplash role="teacher" />
+      <RoleShell
+        role={user.role}
+        userName={userName}
+        schoolName={schoolName}
+        grades={grades}
+      >
+        {children}
+      </RoleShell>
+    </>
   );
 }
