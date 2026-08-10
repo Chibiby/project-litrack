@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
