@@ -48,7 +48,7 @@ const ROLE_PREFETCH: Record<PostLoginSplashRole, readonly string[]> = {
   admin: ["/admin/schools", "/admin/transfers", "/admin/settings"],
 };
 
-const WARM_IMAGES = ["/logo.png", "/ARAL NA Logo.png", "/partner-logos.png"] as const;
+const WARM_IMAGES = ["/logo.png", "/aral-na-logo.png", "/partner-logos.png"] as const;
 
 const PHRASES = [
   "Sharpening pencils",
@@ -339,15 +339,17 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
           src="/logo.png"
           alt="ARAL Program logo"
           width={300}
-          height={300}
+          height={400}
+          sizes="min(48vw, 300px)"
           priority
         />
         <Image
           className={styles.aralLogo}
-          src="/ARAL NA Logo.png"
+          src="/aral-na-logo.png"
           alt="ARAL na! logo"
-          width={460}
-          height={200}
+          width={704}
+          height={216}
+          sizes="(max-width: 640px) 78vw, 460px"
           priority
         />
       </div>
