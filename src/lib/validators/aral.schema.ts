@@ -4,14 +4,10 @@ import { nonEmpty } from "./common";
 const optionalText = (max: number) =>
   z.string().trim().max(max).optional().or(z.literal("").transform(() => undefined));
 
+/** ARAL Update Data — Sections C, D, E only (Section B lives on Learner). */
 export const aralProfileSchema = z
   .object({
     learnerId: nonEmpty(),
-    // B
-    modeOfTransportation: z.enum(["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"]),
-    distanceHomeToSchool: z.enum(["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"]),
-    previousTransfers: z.enum(["NONE", "ONE", "MULTIPLE"]),
-    transferDetails: optionalText(500),
     // C
     absenteeismFrequency: z.enum([
       "ONE_TO_THREE_PER_MONTH",
@@ -45,22 +41,6 @@ export const aralProfileSchema = z
     furtherAssessmentOther: optionalText(500),
   })
   .superRefine((data, ctx) => {
-    // L-B3: Specify required when Multiple transfers
-    if (data.previousTransfers === "MULTIPLE" && !data.transferDetails?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Specify transfer details when Multiple transfers is selected",
-        path: ["transferDetails"],
-      });
-    }
-    if (data.previousTransfers !== "MULTIPLE" && data.transferDetails?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Transfer details are only allowed when Multiple transfers is selected",
-        path: ["transferDetails"],
-      });
-    }
-
     // L-C1: Specify reason accompanies absenteeism selection (DOCX)
     if (!data.absenteeismOtherReason?.trim()) {
       ctx.addIssue({

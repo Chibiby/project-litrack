@@ -1,9 +1,14 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
+import {
+  parseTeachersListParams,
+  teachersTotalPages,
+} from "@/lib/teachers/pagination";
 import { AppShell } from "@/components/app-shell";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import {
@@ -25,20 +30,98 @@ import { GraduationCap } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 interface TeachersPageProps {
-  searchParams: Promise<{ schoolId?: string }>;
+  searchParams: Promise<{ schoolId?: string; page?: string; q?: string }>;
+}
+
+const managedTeacherSelect = {
+  id: true,
+  fullName: true,
+  email: true,
+  profileCompleted: true,
+  approvedAt: true,
+  taughtGrades: { select: { type: true } },
+  taughtSections: {
+    where: { section: { deletedAt: null } },
+    select: {
+      section: {
+        select: {
+          id: true,
+          name: true,
+          gradeLevel: { select: { type: true } },
+        },
+      },
+    },
+  },
+  _count: {
+    select: {
+      managedLearners: { where: { deletedAt: null } },
+    },
+  },
+} satisfies Prisma.UserSelect;
+
+type ManagedTeacher = Prisma.UserGetPayload<{
+  select: typeof managedTeacherSelect;
+}>;
+
+function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
+  const activeSections = t.taughtSections.map((ts) => ts.section);
+  return {
+    id: t.id,
+    fullName: t.fullName,
+    email: t.email,
+    grades: t.taughtGrades.map((g) => GRADE_LEVEL_LABELS[g.type]),
+    sections: activeSections.map(
+      (s) => `${GRADE_LEVEL_LABELS[s.gradeLevel.type]}-${s.name}`
+    ),
+    sectionIds: activeSections.map((s) => s.id),
+    profileCompleted: t.profileCompleted,
+    approvedAt: t.approvedAt?.toISOString() ?? null,
+    learnerCount: t._count.managedLearners,
+  };
 }
 
 async function TeachersBody({
   schoolId,
   isSuperAdminView,
+  list,
 }: {
   schoolId: string;
   isSuperAdminView: boolean;
+  list: ReturnType<typeof parseTeachersListParams>;
 }) {
-  const [grades, sectionRows, teachers] = await Promise.all([
+  const teacherBase: Prisma.UserWhereInput = {
+    schoolId,
+    role: "TEACHER",
+    deletedAt: null,
+  };
+
+  const activeWhere: Prisma.UserWhereInput = {
+    ...teacherBase,
+    approvalStatus: "APPROVED",
+    isActive: true,
+    ...(list.q
+      ? {
+          OR: [
+            { fullName: { contains: list.q, mode: "insensitive" } },
+            { email: { contains: list.q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [
+    grades,
+    sectionRows,
+    pendingTeachers,
+    activeTeachers,
+    activeCount,
+    inactiveTeachers,
+    declinedTeachers,
+  ] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
+      select: { id: true },
     }),
     prisma.section.findMany({
       where: { schoolId, deletedAt: null },
@@ -51,28 +134,41 @@ async function TeachersBody({
       orderBy: [{ gradeLevelId: "asc" }, { name: "asc" }],
     }),
     prisma.user.findMany({
-      where: { schoolId, role: "TEACHER", deletedAt: null },
-      include: {
-        taughtGrades: { select: { type: true } },
-        taughtSections: {
-          include: {
-            section: {
-              select: {
-                id: true,
-                name: true,
-                deletedAt: true,
-                gradeLevel: { select: { type: true } },
-              },
-            },
-          },
-        },
-        _count: {
-          select: {
-            managedLearners: { where: { deletedAt: null } },
-          },
-        },
+      where: { ...teacherBase, approvalStatus: "PENDING" },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        createdAt: true,
       },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: activeWhere,
+      select: managedTeacherSelect,
+      orderBy: { createdAt: "desc" },
+      skip: list.skip,
+      take: list.take,
+    }),
+    prisma.user.count({ where: activeWhere }),
+    prisma.user.findMany({
+      where: {
+        ...teacherBase,
+        approvalStatus: "APPROVED",
+        isActive: false,
+      },
+      select: managedTeacherSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: { ...teacherBase, approvalStatus: "REJECTED" },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        rejectedAt: true,
+      },
+      orderBy: { rejectedAt: "desc" },
     }),
   ]);
 
@@ -83,50 +179,28 @@ async function TeachersBody({
     gradeLabel: GRADE_LEVEL_LABELS[s.gradeLevel.type],
   }));
 
-  const toManagedRow = (t: (typeof teachers)[number]): ActiveTeacherRow => {
-    const activeSections = t.taughtSections
-      .map((ts) => ts.section)
-      .filter((s) => s.deletedAt == null);
-    return {
-      id: t.id,
-      fullName: t.fullName,
-      email: t.email,
-      grades: t.taughtGrades.map((g) => GRADE_LEVEL_LABELS[g.type]),
-      sections: activeSections.map(
-        (s) => `${GRADE_LEVEL_LABELS[s.gradeLevel.type]}-${s.name}`
-      ),
-      sectionIds: activeSections.map((s) => s.id),
-      profileCompleted: t.profileCompleted,
-      approvedAt: t.approvedAt?.toISOString() ?? null,
-      learnerCount: t._count.managedLearners,
-    };
+  const pendingRows: PendingTeacherRow[] = pendingTeachers.map((t) => ({
+    id: t.id,
+    fullName: t.fullName,
+    email: t.email,
+    requestedAt: t.createdAt.toISOString(),
+  }));
+
+  const activeRows: ActiveTeacherRow[] = activeTeachers.map(toManagedRow);
+  const inactiveRows: ActiveTeacherRow[] = inactiveTeachers.map(toManagedRow);
+
+  const declinedRows: DeclinedTeacherRow[] = declinedTeachers.map((t) => ({
+    id: t.id,
+    fullName: t.fullName,
+    email: t.email,
+    rejectedAt: t.rejectedAt?.toISOString() ?? null,
+  }));
+
+  const basePath = "/school-head/teachers";
+  const listSearchParams: Record<string, string | undefined> = {
+    schoolId: isSuperAdminView ? schoolId : undefined,
+    q: list.q || undefined,
   };
-
-  const pendingRows: PendingTeacherRow[] = teachers
-    .filter((t) => t.approvalStatus === "PENDING")
-    .map((t) => ({
-      id: t.id,
-      fullName: t.fullName,
-      email: t.email,
-      requestedAt: t.createdAt.toISOString(),
-    }));
-
-  const activeRows: ActiveTeacherRow[] = teachers
-    .filter((t) => t.approvalStatus === "APPROVED" && t.isActive)
-    .map(toManagedRow);
-
-  const inactiveRows: ActiveTeacherRow[] = teachers
-    .filter((t) => t.approvalStatus === "APPROVED" && !t.isActive)
-    .map(toManagedRow);
-
-  const declinedRows: DeclinedTeacherRow[] = teachers
-    .filter((t) => t.approvalStatus === "REJECTED")
-    .map((t) => ({
-      id: t.id,
-      fullName: t.fullName,
-      email: t.email,
-      rejectedAt: t.rejectedAt?.toISOString() ?? null,
-    }));
 
   if (grades.length === 0) {
     return (
@@ -175,6 +249,14 @@ async function TeachersBody({
         rows={activeRows}
         sections={sectionOptions}
         readOnly={isSuperAdminView}
+        list={{
+          page: list.page,
+          totalPages: teachersTotalPages(activeCount, list.pageSize),
+          totalCount: activeCount,
+          q: list.q,
+          basePath,
+          searchParams: listSearchParams,
+        }}
       />
 
       <TeachersInactiveTable
@@ -199,6 +281,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
     "/school-head/teachers"
   );
 
+  const list = parseTeachersListParams(params);
   const schoolName = await getSchoolName(schoolId);
 
   return (
@@ -216,7 +299,11 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
       viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<DualListCardSkeleton />}>
-        <TeachersBody schoolId={schoolId} isSuperAdminView={isSuperAdminView} />
+        <TeachersBody
+          schoolId={schoolId}
+          isSuperAdminView={isSuperAdminView}
+          list={list}
+        />
       </Suspense>
     </AppShell>
   );

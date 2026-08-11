@@ -28,56 +28,42 @@ async function AdminTransferBody({
     orderBy: { name: "asc" },
   });
 
-  const [learners, grades, sections, teachers, targetActiveYear] =
-    await Promise.all([
-      fromSchoolId
-        ? prisma.learner.findMany({
-            where: {
-              schoolId: fromSchoolId,
-              deletedAt: null,
-              archivedAt: null,
-            },
-            select: {
-              id: true,
-              fullName: true,
-              gradeLevel: { select: { type: true } },
-            },
-            orderBy: { fullName: "asc" },
-          })
-        : Promise.resolve([]),
-      toSchoolId
-        ? prisma.gradeLevel.findMany({
-            where: { schoolId: toSchoolId, deletedAt: null },
-            orderBy: { createdAt: "asc" },
-          })
-        : Promise.resolve([]),
-      toSchoolId
-        ? prisma.section.findMany({
-            where: { schoolId: toSchoolId, deletedAt: null },
-            select: { id: true, name: true, gradeLevelId: true },
-          })
-        : Promise.resolve([]),
-      toSchoolId
-        ? prisma.user.findMany({
-            where: {
-              schoolId: toSchoolId,
-              role: "TEACHER",
-              deletedAt: null,
-              isActive: true,
-            },
-            select: {
-              id: true,
-              fullName: true,
-              taughtGrades: { select: { id: true } },
-            },
-          })
-        : Promise.resolve([]),
-      toSchoolId
-        ? prisma.schoolYear.findFirst({
-            where: { schoolId: toSchoolId, isActive: true },
-          })
-        : Promise.resolve(null),
-    ]);
+  const [grades, sections, teachers, targetActiveYear] = await Promise.all([
+    toSchoolId
+      ? prisma.gradeLevel.findMany({
+          where: { schoolId: toSchoolId, deletedAt: null },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, type: true },
+        })
+      : Promise.resolve([]),
+    toSchoolId
+      ? prisma.section.findMany({
+          where: { schoolId: toSchoolId, deletedAt: null },
+          select: { id: true, name: true, gradeLevelId: true },
+        })
+      : Promise.resolve([]),
+    toSchoolId
+      ? prisma.user.findMany({
+          where: {
+            schoolId: toSchoolId,
+            role: "TEACHER",
+            deletedAt: null,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            fullName: true,
+            taughtGrades: { select: { id: true } },
+          },
+        })
+      : Promise.resolve([]),
+    toSchoolId
+      ? prisma.schoolYear.findFirst({
+          where: { schoolId: toSchoolId, isActive: true },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <>
@@ -105,11 +91,6 @@ async function AdminTransferBody({
               schools={schools}
               fromSchoolId={fromSchoolId}
               toSchoolId={toSchoolId}
-              learners={learners.map((l) => ({
-                id: l.id,
-                fullName: l.fullName,
-                gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type],
-              }))}
               grades={grades.map((g) => ({
                 id: g.id,
                 label: GRADE_LEVEL_LABELS[g.type],

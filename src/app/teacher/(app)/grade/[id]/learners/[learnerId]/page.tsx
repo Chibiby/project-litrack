@@ -17,17 +17,28 @@ import {
 import { EmptyState } from "@/components/dashboard";
 import {
   GRADE_LEVEL_LABELS,
-  READING_PROFILE_LABELS,
   GENDER_LABELS,
   PARENT_EDUCATION_LABELS,
-  GOV_BENEFIT_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
+  TRANSPORTATION_LABELS,
+  DISTANCE_LABELS,
+  TRANSFER_LABELS,
   ATTENDANCE_STATUS_LABELS,
+  ABSENTEEISM_LABELS,
+  LETTER_RECOGNITION_LABELS,
+  LETTER_SOUND_LABELS,
+  WORD_RECOGNITION_LABELS,
+  WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
+  WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
+  HOME_LITERACY_LABELS,
+  PARENTAL_SUPPORT_LABELS,
+  CLASSROOM_ENV_LABELS,
+  LANGUAGE_CONSIDERATION_LABELS,
   INTERVENTION_LABELS,
   FURTHER_ASSESSMENT_LABELS,
+  readingProfileLabelsForGradeType,
 } from "@/lib/constants/enum-labels";
 import { LearnerArchiveButton } from "@/components/learners/learner-archive-button";
-import { AralToggleButton } from "@/components/aral-toggle-button";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -44,6 +55,14 @@ const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
 interface LearnerDetailPageProps {
   params: Promise<{ id: string; learnerId: string }>;
   searchParams: Promise<{ schoolId?: string }>;
+}
+
+function formatWeekStart(date: Date) {
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default async function LearnerDetailPage({
@@ -63,27 +82,81 @@ export default async function LearnerDetailPage({
 
   const learner = await prisma.learner.findFirst({
     where: learnerFilter,
-    include: {
+    select: {
+      id: true,
+      fullName: true,
+      age: true,
+      gender: true,
+      gradeLevelId: true,
+      isAralLearner: true,
+      archivedAt: true,
+      englishReadingProfile: true,
+      englishFrustrationSubtypes: true,
+      filipinoReadingProfile: true,
+      filipinoFrustrationSubtypes: true,
+      governmentBenefits: true,
+      parentEducation: true,
+      modeOfTransportation: true,
+      distanceHomeToSchool: true,
+      previousTransfers: true,
+      transferDetails: true,
       section: { select: { name: true } },
       gradeLevel: { select: { id: true, type: true } },
       enrollments: {
-        include: {
+        select: {
+          id: true,
+          status: true,
+          enrolledAt: true,
+          endedAt: true,
           schoolYear: { select: { label: true } },
           gradeLevel: { select: { type: true } },
           section: { select: { name: true } },
           teacher: { select: { fullName: true } },
         },
         orderBy: { enrolledAt: "desc" },
+        take: 12,
       },
       attendances: {
+        select: {
+          id: true,
+          date: true,
+          weekStart: true,
+          status: true,
+          notes: true,
+        },
         orderBy: { date: "desc" },
-        take: 60,
+        take: 20,
       },
       readingLevels: {
-        orderBy: { monthYear: "desc" },
-        take: 24,
+        select: {
+          id: true,
+          weekStart: true,
+          englishProfile: true,
+          filipinoProfile: true,
+          wordRecognitionLevel: true,
+          readingComprehensionLevel: true,
+          notes: true,
+        },
+        orderBy: { weekStart: "desc" },
+        take: 12,
       },
-      aralProfile: true,
+      aralProfile: {
+        select: {
+          absenteeismFrequency: true,
+          absenteeismOtherReason: true,
+          letterRecognition: true,
+          letterSoundCorrespondence: true,
+          wordRecognition: true,
+          homeLiteracyEnvironment: true,
+          parentalSupport: true,
+          classroomEnvironment: true,
+          languageConsiderations: true,
+          suggestedInterventions: true,
+          furtherAssessment: true,
+          lsenObservations: true,
+          furtherAssessmentOther: true,
+        },
+      },
     },
   });
   if (!learner) notFound();
@@ -97,10 +170,20 @@ export default async function LearnerDetailPage({
     attendanceByWeek.set(key, list);
   }
 
-  const interventions = learner.aralProfile?.suggestedInterventions ?? [];
-  const further = learner.aralProfile?.furtherAssessment ?? [];
+  const profile = learner.aralProfile;
+  const interventions = profile?.suggestedInterventions ?? [];
+  const further = profile?.furtherAssessment ?? [];
+  const languages = profile?.languageConsiderations ?? [];
+  const readingLabels = readingProfileLabelsForGradeType(
+    learner.gradeLevel.type
+  );
   const nestedWarmHrefs = getLearnerDetailWarmHrefs(gradeId, learner);
   const nestedWarmKey = `teacher:learner:${learner.id}:nested:${nestedWarmHrefs.join("|")}`;
+
+  const hasSectionB =
+    learner.modeOfTransportation != null ||
+    learner.distanceHomeToSchool != null ||
+    learner.previousTransfers != null;
 
   return (
     <AppShell
@@ -113,24 +196,18 @@ export default async function LearnerDetailPage({
       <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/grade/${gradeId}`}>
-            <ArrowLeft className="h-4 w-4" /> Back to grade
+          <Link href={`/teacher/learners?grade=${gradeId}`}>
+            <ArrowLeft className="h-4 w-4" /> Back to learners
           </Link>
         </Button>
         {!isSuperAdmin && (
           <div className="flex flex-wrap gap-2">
             {!learner.archivedAt && (
-              <>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/teacher/grade/${gradeId}/learners/${learner.id}/edit`}>
-                    <Pencil className="h-4 w-4" /> Edit
-                  </Link>
-                </Button>
-                <AralToggleButton
-                  learnerId={learner.id}
-                  isAral={learner.isAralLearner}
-                />
-              </>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/teacher/grade/${gradeId}/learners/${learner.id}/edit`}>
+                  <Pencil className="h-4 w-4" /> Edit
+                </Link>
+              </Button>
             )}
             <LearnerArchiveButton
               learnerId={learner.id}
@@ -163,7 +240,7 @@ export default async function LearnerDetailPage({
             <div>
               <p className="text-muted-foreground">English reading</p>
               <p className="font-medium">
-                {READING_PROFILE_LABELS[learner.englishReadingProfile]}
+                {readingLabels[learner.englishReadingProfile]}
               </p>
               {learner.englishFrustrationSubtypes.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -176,7 +253,7 @@ export default async function LearnerDetailPage({
             <div>
               <p className="text-muted-foreground">Filipino reading</p>
               <p className="font-medium">
-                {READING_PROFILE_LABELS[learner.filipinoReadingProfile]}
+                {readingLabels[learner.filipinoReadingProfile]}
               </p>
               {learner.filipinoFrustrationSubtypes.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -187,13 +264,9 @@ export default async function LearnerDetailPage({
               )}
             </div>
             <div>
-              <p className="text-muted-foreground">Government benefits</p>
+              <p className="text-muted-foreground">4Ps beneficiary</p>
               <p className="font-medium">
-                {learner.governmentBenefits.length
-                  ? learner.governmentBenefits
-                      .map((b) => GOV_BENEFIT_LABELS[b])
-                      .join(", ")
-                  : "None"}
+                {learner.governmentBenefits.includes("FOUR_PS") ? "Yes" : "No"}
               </p>
             </div>
             <div>
@@ -202,6 +275,56 @@ export default async function LearnerDetailPage({
                 {PARENT_EDUCATION_LABELS[learner.parentEducation]}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Section B — Attendance &amp; School Background
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
+            {!hasSectionB ? (
+              <div className="sm:col-span-2">
+                <EmptyState
+                  title="No Section B data yet"
+                  description="Add transportation, distance, and transfer details when editing this learner."
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-muted-foreground">Mode of transportation</p>
+                  <p className="font-medium">
+                    {learner.modeOfTransportation
+                      ? TRANSPORTATION_LABELS[learner.modeOfTransportation]
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Distance home to school</p>
+                  <p className="font-medium">
+                    {learner.distanceHomeToSchool
+                      ? DISTANCE_LABELS[learner.distanceHomeToSchool]
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Previous school transfers</p>
+                  <p className="font-medium">
+                    {learner.previousTransfers
+                      ? TRANSFER_LABELS[learner.previousTransfers]
+                      : "—"}
+                  </p>
+                  {learner.transferDetails && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {learner.transferDetails}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -253,6 +376,141 @@ export default async function LearnerDetailPage({
           </CardContent>
         </Card>
 
+        {learner.isAralLearner || profile ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                ARAL profile — Sections C, D, E
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5 text-sm">
+              {!profile ? (
+                <EmptyState
+                  title="ARAL profile not completed"
+                  description="Sections C–E appear here after Update Data is saved on the ARAL dashboard."
+                />
+              ) : (
+                <>
+                  <div>
+                    <p className="font-medium mb-2">C. Reading Behavior</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-muted-foreground">Absenteeism</p>
+                        <p className="font-medium">
+                          {ABSENTEEISM_LABELS[profile.absenteeismFrequency]}
+                        </p>
+                        {profile.absenteeismOtherReason && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {profile.absenteeismOtherReason}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Letter recognition</p>
+                        <p className="font-medium">
+                          {LETTER_RECOGNITION_LABELS[profile.letterRecognition]}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">
+                          Letter-sound correspondence
+                        </p>
+                        <p className="font-medium">
+                          {LETTER_SOUND_LABELS[profile.letterSoundCorrespondence]}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Word recognition</p>
+                        <p className="font-medium">
+                          {WORD_RECOGNITION_LABELS[profile.wordRecognition]}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="font-medium mb-2">D. External Factors</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-muted-foreground">Home literacy</p>
+                        <p className="font-medium">
+                          {HOME_LITERACY_LABELS[profile.homeLiteracyEnvironment]}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Parental support</p>
+                        <p className="font-medium">
+                          {PARENTAL_SUPPORT_LABELS[profile.parentalSupport]}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Classroom environment</p>
+                        <p className="font-medium">
+                          {CLASSROOM_ENV_LABELS[profile.classroomEnvironment]}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Language considerations</p>
+                        <p className="font-medium">
+                          {languages.length
+                            ? languages
+                                .map((l) => LANGUAGE_CONSIDERATION_LABELS[l])
+                                .join("; ")
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="font-medium mb-2">
+                      E. Interventions &amp; Recommendations
+                    </p>
+                    {interventions.length === 0 && further.length === 0 ? (
+                      <p className="text-muted-foreground">None recorded</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {interventions.length > 0 && (
+                          <div>
+                            <p className="text-muted-foreground mb-1">Suggested</p>
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {interventions.map((i) => (
+                                <li key={i}>{INTERVENTION_LABELS[i]}</li>
+                              ))}
+                            </ul>
+                            {profile.lsenObservations && (
+                              <p className="mt-2 text-muted-foreground">
+                                LSEN notes: {profile.lsenObservations}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {further.length > 0 && (
+                          <div>
+                            <p className="text-muted-foreground mb-1">
+                              Further assessment
+                            </p>
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {further.map((f) => (
+                                <li key={f}>{FURTHER_ASSESSMENT_LABELS[f]}</li>
+                              ))}
+                            </ul>
+                            {profile.furtherAssessmentOther && (
+                              <p className="mt-2 text-muted-foreground">
+                                Other: {profile.furtherAssessmentOther}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Attendance history</CardTitle>
@@ -271,7 +529,7 @@ export default async function LearnerDetailPage({
               Array.from(attendanceByWeek.entries()).map(([week, rows]) => (
                 <div key={week}>
                   <p className="mb-2 text-sm font-medium text-muted-foreground">
-                    Week of {new Date(week).toLocaleDateString()}
+                    Week of {formatWeekStart(new Date(week))}
                   </p>
                   <Table>
                     <TableHeader>
@@ -321,21 +579,37 @@ export default async function LearnerDetailPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Month</TableHead>
+                    <TableHead>Week of</TableHead>
                     <TableHead>English</TableHead>
                     <TableHead>Filipino</TableHead>
+                    <TableHead>Word recognition</TableHead>
+                    <TableHead>Reading comprehension</TableHead>
                     <TableHead>Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {learner.readingLevels.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-mono">{r.monthYear}</TableCell>
+                      <TableCell>{formatWeekStart(r.weekStart)}</TableCell>
                       <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[r.englishProfile]}
+                        {readingLabels[r.englishProfile]}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[r.filipinoProfile]}
+                        {readingLabels[r.filipinoProfile]}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {r.wordRecognitionLevel
+                          ? WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[
+                              r.wordRecognitionLevel
+                            ]
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {r.readingComprehensionLevel
+                          ? WEEKLY_READING_COMPREHENSION_LEVEL_LABELS[
+                              r.readingComprehensionLevel
+                            ]
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {r.notes ?? ""}
@@ -344,56 +618,6 @@ export default async function LearnerDetailPage({
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Interventions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!learner.aralProfile ||
-            (interventions.length === 0 && further.length === 0) ? (
-              <EmptyState
-                title="No interventions recorded"
-                description="ARAL Section E appears here after UPDATE DATA is completed."
-              />
-            ) : (
-              <div className="space-y-3 text-sm">
-                {interventions.length > 0 && (
-                  <div>
-                    <p className="text-muted-foreground mb-1">Suggested</p>
-                    <ul className="list-disc pl-5 space-y-0.5">
-                      {interventions.map((i) => (
-                        <li key={i}>{INTERVENTION_LABELS[i]}</li>
-                      ))}
-                    </ul>
-                    {learner.aralProfile.lsenObservations && (
-                      <p className="mt-2 text-muted-foreground">
-                        LSEN notes: {learner.aralProfile.lsenObservations}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {further.length > 0 && (
-                  <div>
-                    <p className="text-muted-foreground mb-1">
-                      Further assessment
-                    </p>
-                    <ul className="list-disc pl-5 space-y-0.5">
-                      {further.map((f) => (
-                        <li key={f}>{FURTHER_ASSESSMENT_LABELS[f]}</li>
-                      ))}
-                    </ul>
-                    {learner.aralProfile.furtherAssessmentOther && (
-                      <p className="mt-2 text-muted-foreground">
-                        Other: {learner.aralProfile.furtherAssessmentOther}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
             )}
           </CardContent>
         </Card>

@@ -10,7 +10,6 @@ import {
 } from "@/lib/validators/school.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
-  revalidateAdminDashboard,
   revalidateSchoolDashboard,
   revalidateSchoolsList,
 } from "@/lib/cache/revalidate";
@@ -62,7 +61,6 @@ export async function updateSchoolInfo(formData: FormData): Promise<ActionResult
   });
 
   revalidatePath("/school-head/school-info");
-  revalidatePath("/school-head");
   revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   return { ok: true };
@@ -100,7 +98,6 @@ export async function setSchoolActive(formData: FormData): Promise<ActionResult>
   });
 
   revalidatePath("/admin/schools");
-  revalidatePath("/admin");
   revalidateSchoolsList();
   revalidateSchoolDashboard(school.id);
   return { ok: true };
@@ -144,7 +141,5 @@ export async function updateAdminProfile(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/admin/settings/profile");
-  revalidatePath("/admin");
-  revalidateAdminDashboard();
   return { ok: true };
 }

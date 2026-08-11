@@ -9,10 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
-  READING_PROFILE_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
-  GOV_BENEFIT_LABELS,
+  GRADE_LEVEL_LABELS,
   PARENT_EDUCATION_LABELS,
+  TRANSPORTATION_LABELS,
+  DISTANCE_LABELS,
+  TRANSFER_LABELS,
+  isEarlyGradeReadingBand,
+  readingProfileLabelsForGradeType,
   toOptions,
 } from "@/lib/constants/enum-labels";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
@@ -22,6 +26,12 @@ export type LearnerFormSectionOption = {
   id: string;
   name: string;
   gradeLevelId: string;
+};
+
+export type LearnerFormGradeOption = {
+  id: string;
+  type: string;
+  label: string;
 };
 
 export type LearnerFormDefaults = {
@@ -37,55 +47,94 @@ export type LearnerFormDefaults = {
   filipinoFrustrationSubtypes?: string[];
   governmentBenefits?: string[];
   parentEducation?: string;
-  isAralLearner?: boolean;
+  modeOfTransportation?: string | null;
+  distanceHomeToSchool?: string | null;
+  previousTransfers?: string | null;
+  transferDetails?: string | null;
   sectionId?: string | null;
 };
 
 type LearnerFormProps = {
   gradeLevelId: string;
+  /** Teacher-assigned grades for create-mode grade select. */
+  grades?: LearnerFormGradeOption[];
+  /** Grade type for edit/read-only band labels when grades[] is not provided. */
+  gradeType?: string;
   mode?: "create" | "edit";
   defaultValues?: LearnerFormDefaults;
   submitLabel?: string;
   /** After successful edit, navigate here (defaults to learner detail). */
   redirectTo?: string;
-  /** Active sections for the teacher's grades; filtered by gradeLevelId. */
+  /** Active sections for the teacher's grades; filtered by selected grade. */
   sections?: LearnerFormSectionOption[];
+  /** Fired on successful create (e.g. close Add Learner sheet before refresh). */
+  onCreated?: () => void;
 };
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
 
 export function LearnerForm({
   gradeLevelId,
+  grades = [],
+  gradeType,
   mode = "create",
   defaultValues,
   submitLabel,
   redirectTo,
   sections = [],
+  onCreated,
 }: LearnerFormProps) {
   const [pending, startTransition] = useTransition();
   const [duplicatePending, setDuplicatePending] = useState(false);
+  const [selectedGradeLevelId, setSelectedGradeLevelId] = useState(gradeLevelId);
   const [englishProfile, setEnglishProfile] = useState(defaultValues?.englishReadingProfile ?? "");
   const [filipinoProfile, setFilipinoProfile] = useState(
     defaultValues?.filipinoReadingProfile ?? ""
+  );
+  const [previousTransfers, setPreviousTransfers] = useState(
+    defaultValues?.previousTransfers ?? ""
   );
   const [sectionId, setSectionId] = useState(defaultValues?.sectionId ?? "");
   const router = useRouter();
   const isEdit = mode === "edit";
   const label = submitLabel ?? (isEdit ? "Save changes" : "Add learner");
 
+  const selectedGradeType = useMemo(() => {
+    const fromGrades = grades.find((g) => g.id === selectedGradeLevelId)?.type;
+    return fromGrades ?? gradeType;
+  }, [grades, selectedGradeLevelId, gradeType]);
+
+  const readingProfileOptions = useMemo(
+    () => toOptions(readingProfileLabelsForGradeType(selectedGradeType)),
+    [selectedGradeType]
+  );
+
+  const frustrationHint = selectedGradeType && isEarlyGradeReadingBand(selectedGradeType)
+    ? "If high emergent:"
+    : "If frustration:";
+
+  const selectedGradeLabel = useMemo(() => {
+    const fromGrades = grades.find((g) => g.id === selectedGradeLevelId)?.label;
+    if (fromGrades) return fromGrades;
+    if (selectedGradeType) {
+      return GRADE_LEVEL_LABELS[selectedGradeType] ?? selectedGradeType;
+    }
+    return "—";
+  }, [grades, selectedGradeLevelId, selectedGradeType]);
+
   const gradeSections = useMemo(
-    () => sections.filter((s) => s.gradeLevelId === gradeLevelId),
-    [sections, gradeLevelId]
+    () => sections.filter((s) => s.gradeLevelId === selectedGradeLevelId),
+    [sections, selectedGradeLevelId]
   );
 
   useEffect(() => {
     if (sectionId && !gradeSections.some((s) => s.id === sectionId)) {
       setSectionId("");
     }
-  }, [gradeLevelId, gradeSections, sectionId]);
+  }, [selectedGradeLevelId, gradeSections, sectionId]);
 
   function handleSubmit(fd: FormData) {
-    fd.set("gradeLevelId", gradeLevelId);
+    fd.set("gradeLevelId", selectedGradeLevelId);
     if (isEdit && defaultValues?.id) {
       fd.set("id", defaultValues.id);
     }
@@ -98,6 +147,9 @@ export function LearnerForm({
     }
     if (filipinoProfile !== FRUSTRATION) {
       fd.delete("filipinoFrustrationSubtypes[]");
+    }
+    if (previousTransfers !== "MULTIPLE") {
+      fd.delete("transferDetails");
     }
 
     startTransition(async () => {
@@ -117,23 +169,29 @@ export function LearnerForm({
         return;
       }
 
+      const toastId = toast.loading("Adding learner…");
       const res = await createLearner(fd);
       if (res.ok) {
-        toast.success("Learner added");
+        // Close sheet / clear form immediately; list refreshes in background.
+        onCreated?.();
+        toast.success("Learner added", { id: toastId });
         setDuplicatePending(false);
         (document.getElementById("learner-form") as HTMLFormElement | null)?.reset();
+        setSelectedGradeLevelId(gradeLevelId);
         setEnglishProfile("");
         setFilipinoProfile("");
+        setPreviousTransfers("");
         setSectionId("");
         router.refresh();
         invalidateNavWarm();
       } else if (res.error === "possible_duplicate") {
         setDuplicatePending(true);
         toast.warning(
-          "A learner with the same name and age already exists in this school"
+          "A learner with the same name and age already exists in this school",
+          { id: toastId }
         );
       } else {
-        toast.error(res.error);
+        toast.error(res.error, { id: toastId });
       }
     });
   }
@@ -144,6 +202,41 @@ export function LearnerForm({
       id="learner-form"
       className="space-y-4 max-h-[700px] overflow-y-auto pr-2"
     >
+      <div className="space-y-1">
+        <Label htmlFor="gradeLevelId">Grade *</Label>
+        {isEdit ? (
+          <>
+            <input type="hidden" name="gradeLevelId" value={selectedGradeLevelId} />
+            <select
+              id="gradeLevelId"
+              disabled
+              value={selectedGradeLevelId}
+              className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:opacity-50"
+            >
+              <option value={selectedGradeLevelId}>{selectedGradeLabel}</option>
+            </select>
+          </>
+        ) : (
+          <select
+            id="gradeLevelId"
+            name="gradeLevelId"
+            required
+            value={selectedGradeLevelId}
+            onChange={(e) => setSelectedGradeLevelId(e.target.value)}
+            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+          >
+            {grades.length === 0 ? (
+              <option value={gradeLevelId}>Select grade</option>
+            ) : null}
+            {grades.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       <div className="grid gap-3 grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="firstName">First name *</Label>
@@ -205,7 +298,7 @@ export function LearnerForm({
           name="sectionId"
           value={sectionId}
           onChange={(e) => setSectionId(e.target.value)}
-          disabled={!gradeLevelId}
+          disabled={!selectedGradeLevelId}
           className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:opacity-50"
         >
           <option value="">No section (optional)</option>
@@ -222,14 +315,14 @@ export function LearnerForm({
         <p className="text-sm font-medium mb-2">Reading Level (English) *</p>
         <FieldRadioGroup
           name="englishReadingProfile"
-          options={toOptions(READING_PROFILE_LABELS)}
+          options={readingProfileOptions}
           value={englishProfile}
           onValueChange={setEnglishProfile}
           defaultValue={defaultValues?.englishReadingProfile}
         />
         {englishProfile === FRUSTRATION ? (
           <div className="mt-2">
-            <p className="text-xs text-muted-foreground mb-1">If frustration:</p>
+            <p className="text-xs text-muted-foreground mb-1">{frustrationHint}</p>
             <FieldCheckboxList
               name="englishFrustrationSubtypes"
               options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
@@ -244,14 +337,14 @@ export function LearnerForm({
         <p className="text-sm font-medium mb-2">Reading Level (Filipino) *</p>
         <FieldRadioGroup
           name="filipinoReadingProfile"
-          options={toOptions(READING_PROFILE_LABELS)}
+          options={readingProfileOptions}
           value={filipinoProfile}
           onValueChange={setFilipinoProfile}
           defaultValue={defaultValues?.filipinoReadingProfile}
         />
         {filipinoProfile === FRUSTRATION ? (
           <div className="mt-2">
-            <p className="text-xs text-muted-foreground mb-1">If frustration:</p>
+            <p className="text-xs text-muted-foreground mb-1">{frustrationHint}</p>
             <FieldCheckboxList
               name="filipinoFrustrationSubtypes"
               options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
@@ -263,12 +356,17 @@ export function LearnerForm({
 
       <Separator />
       <div>
-        <p className="text-sm font-medium mb-2">Government Benefits Received</p>
-        <FieldCheckboxList
-          name="governmentBenefits"
-          options={toOptions(GOV_BENEFIT_LABELS)}
-          defaultValues={defaultValues?.governmentBenefits ?? []}
-        />
+        <p className="text-sm font-medium mb-2">Is the student a 4Ps beneficiary?</p>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="governmentBenefits[]"
+            value="FOUR_PS"
+            defaultChecked={defaultValues?.governmentBenefits?.includes("FOUR_PS")}
+            className="mt-0.5 h-4 w-4 accent-primary"
+          />
+          <span className="text-sm leading-tight">Yes</span>
+        </label>
       </div>
 
       <Separator />
@@ -281,20 +379,50 @@ export function LearnerForm({
         />
       </div>
 
-      {!isEdit && (
-        <>
-          <Separator />
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              name="isAralLearner"
-              className="h-4 w-4 accent-primary"
-              defaultChecked={defaultValues?.isAralLearner}
-            />
-            <span className="text-sm">Identify as ARAL learner now</span>
-          </label>
-        </>
-      )}
+      <Separator />
+      <div className="space-y-4">
+        <p className="text-sm font-medium">B. Attendance &amp; School Background</p>
+        <div>
+          <p className="text-sm font-medium mb-2">Mode of Transportation</p>
+          <FieldRadioGroup
+            name="modeOfTransportation"
+            options={toOptions(TRANSPORTATION_LABELS)}
+            defaultValue={defaultValues?.modeOfTransportation ?? undefined}
+            required={false}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium mb-2">Distance from Home to School</p>
+          <FieldRadioGroup
+            name="distanceHomeToSchool"
+            options={toOptions(DISTANCE_LABELS)}
+            defaultValue={defaultValues?.distanceHomeToSchool ?? undefined}
+            required={false}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium mb-2">Previous School Transfers</p>
+          <FieldRadioGroup
+            name="previousTransfers"
+            options={toOptions(TRANSFER_LABELS)}
+            value={previousTransfers}
+            onValueChange={setPreviousTransfers}
+            defaultValue={defaultValues?.previousTransfers ?? undefined}
+            required={false}
+          />
+          {previousTransfers === "MULTIPLE" ? (
+            <div className="mt-3 space-y-1">
+              <Label htmlFor="transferDetails">Specify transfers *</Label>
+              <Input
+                id="transferDetails"
+                name="transferDetails"
+                required
+                defaultValue={defaultValues?.transferDetails ?? ""}
+              />
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       {duplicatePending && !isEdit && (
         <div

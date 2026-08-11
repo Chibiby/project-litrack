@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,13 @@ import {
   updateSection,
   deleteSection,
 } from "@/lib/actions/section";
+import {
+  listOptimisticReducer,
+  runOptimistic,
+  settleActionResult,
+  tempOptimisticId,
+  type ListOptimisticOp,
+} from "@/lib/ui/optimistic";
 
 export function CreateSectionForm({
   grades,
@@ -59,36 +66,64 @@ export function CreateSectionForm({
   );
 }
 
+type SectionItem = { id: string; name: string };
+
 export function SectionRowActions({
   sectionId,
   name,
+  pending,
+  onDelete,
+  onRename,
 }: {
   sectionId: string;
   name: string;
+  pending?: boolean;
+  onDelete?: () => void | Promise<void>;
+  onRename?: (name: string) => void | Promise<void>;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [localPending, startTransition] = useTransition();
+  const isPending = Boolean(pending) || localPending;
+
+  const runStandaloneUpdate = (fd: FormData) =>
+    runOptimistic(startTransition, async () => {
+      const res = await updateSection(fd);
+      await settleActionResult(res, "Section updated");
+    });
+
+  const runStandaloneDelete = () =>
+    runOptimistic(startTransition, async () => {
+      const fd = new FormData();
+      fd.set("sectionId", sectionId);
+      const res = await deleteSection(fd);
+      await settleActionResult(res, "Section removed");
+    });
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <form
         className="flex items-center gap-2"
-        action={(fd) =>
-          startTransition(async () => {
-            const res = await updateSection(fd);
-            if (!res.ok) toast.error(res.error);
-            else toast.success("Section updated");
-          })
-        }
+        action={(fd) => {
+          const nextName = String(fd.get("name") ?? "").trim();
+          if (onRename) {
+            void Promise.resolve(onRename(nextName)).catch(() => {
+              /* toast already shown */
+            });
+            return;
+          }
+          void runStandaloneUpdate(fd).catch(() => {
+            /* toast already shown */
+          });
+        }}
       >
         <input type="hidden" name="sectionId" value={sectionId} />
         <Input
           name="name"
           defaultValue={name}
           className="h-8 w-36"
-          disabled={pending}
+          disabled={isPending}
           aria-label="Section name"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        <Button type="submit" size="sm" variant="outline" disabled={isPending}>
           Save
         </Button>
       </form>
@@ -97,28 +132,19 @@ export function SectionRowActions({
         description={`"${name}" will be hidden from teachers. You can recreate it later if needed.`}
         confirmLabel="Remove"
         variant="destructive"
-        disabled={pending}
+        disabled={isPending}
         trigger={
           <Button
             type="button"
             size="sm"
             variant="ghost"
             className="text-destructive"
-            disabled={pending}
+            disabled={isPending}
           >
             Delete
           </Button>
         }
-        onConfirm={async () => {
-          const fd = new FormData();
-          fd.set("sectionId", sectionId);
-          const res = await deleteSection(fd);
-          if (!res.ok) {
-            toast.error(res.error);
-            throw new Error(res.error);
-          }
-          toast.success("Section removed");
-        }}
+        onConfirm={onDelete ?? runStandaloneDelete}
       />
     </div>
   );
@@ -143,21 +169,71 @@ export function GradeSectionsPanel({
   readOnly = false,
 }: {
   gradeLevelId: string;
-  sections: { id: string; name: string }[];
+  sections: SectionItem[];
   readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const nextLetter = nextLetterPreview(sections.map((s) => s.name));
+  const [optimisticSections, dispatchOptimistic] = useOptimistic(
+    sections,
+    (state: SectionItem[], op: ListOptimisticOp<SectionItem>) =>
+      listOptimisticReducer(state, op)
+  );
+  const nextLetter = nextLetterPreview(optimisticSections.map((s) => s.name));
+
+  const deleteRow = (sectionId: string) =>
+    runOptimistic(startTransition, async () => {
+      dispatchOptimistic({ type: "remove", id: sectionId });
+      const fd = new FormData();
+      fd.set("sectionId", sectionId);
+      const res = await deleteSection(fd);
+      await settleActionResult(res, "Section removed");
+    });
+
+  const renameRow = (sectionId: string, name: string) =>
+    runOptimistic(startTransition, async () => {
+      if (!name) {
+        toast.error("Section name is required");
+        throw new Error("Section name is required");
+      }
+      dispatchOptimistic({ type: "patch", id: sectionId, patch: { name } });
+      const fd = new FormData();
+      fd.set("sectionId", sectionId);
+      fd.set("name", name);
+      const res = await updateSection(fd);
+      await settleActionResult(res, "Section updated");
+    });
+
+  const appendSection = (
+    name: string,
+    action: (fd: FormData) => Promise<{ ok: true } | { ok: false; error: string }>,
+    successMessage: string
+  ) =>
+    runOptimistic(startTransition, async () => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        toast.error("Section name is required");
+        throw new Error("Section name is required");
+      }
+      dispatchOptimistic({
+        type: "append",
+        item: { id: tempOptimisticId("section"), name: trimmed },
+      });
+      const fd = new FormData();
+      fd.set("gradeLevelId", gradeLevelId);
+      fd.set("name", trimmed);
+      const res = await action(fd);
+      await settleActionResult(res, successMessage);
+    });
 
   return (
     <div className="space-y-3 border-t border-border/60 pt-3">
       <p className="text-xs font-medium text-muted-foreground">Sections</p>
 
-      {sections.length === 0 ? (
+      {optimisticSections.length === 0 ? (
         <p className="text-xs text-muted-foreground">No sections yet</p>
       ) : (
         <ul className="space-y-2">
-          {sections.map((s) => (
+          {optimisticSections.map((s) => (
             <li
               key={s.id}
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 px-3 py-2"
@@ -165,7 +241,13 @@ export function GradeSectionsPanel({
               {readOnly ? (
                 <span className="text-sm font-medium">{s.name}</span>
               ) : (
-                <SectionRowActions sectionId={s.id} name={s.name} />
+                <SectionRowActions
+                  sectionId={s.id}
+                  name={s.name}
+                  pending={pending}
+                  onDelete={() => deleteRow(s.id)}
+                  onRename={(name) => renameRow(s.id, name)}
+                />
               )}
             </li>
           ))}
@@ -176,13 +258,12 @@ export function GradeSectionsPanel({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <form
             className="flex flex-1 flex-wrap items-end gap-2"
-            action={(fd) =>
-              startTransition(async () => {
-                const res = await createSection(fd);
-                if (!res.ok) toast.error(res.error);
-                else toast.success("Section created");
-              })
-            }
+            action={(fd) => {
+              const name = String(fd.get("name") ?? "");
+              void appendSection(name, createSection, "Section created").catch(() => {
+                /* toast already shown */
+              });
+            }}
           >
             <input type="hidden" name="gradeLevelId" value={gradeLevelId} />
             <div className="min-w-[8rem] flex-1 space-y-1">
@@ -204,13 +285,16 @@ export function GradeSectionsPanel({
           </form>
 
           <form
-            action={(fd) =>
-              startTransition(async () => {
-                const res = await createNextLetterSection(fd);
-                if (!res.ok) toast.error(res.error);
-                else toast.success(`Section ${nextLetter} created`);
-              })
-            }
+            action={() => {
+              if (!nextLetter) return;
+              void appendSection(
+                nextLetter,
+                createNextLetterSection,
+                `Section ${nextLetter} created`
+              ).catch(() => {
+                /* toast already shown */
+              });
+            }}
           >
             <input type="hidden" name="gradeLevelId" value={gradeLevelId} />
             <Button

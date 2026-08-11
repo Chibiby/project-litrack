@@ -1,39 +1,64 @@
 "use client";
 
-import { useTransition } from "react";
-import { toast } from "sonner";
+import { useOptimistic, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { archiveLearner, restoreLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
+import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
+
+type Props = {
+  learnerId: string;
+  archived: boolean;
+  /**
+   * When provided (list parent), parent owns mutation + list optimism.
+   */
+  onArchiveChange?: () => void | Promise<void>;
+  pending?: boolean;
+};
 
 export function LearnerArchiveButton({
   learnerId,
   archived,
-}: {
-  learnerId: string;
-  archived: boolean;
-}) {
-  const [pending, startTransition] = useTransition();
+  onArchiveChange,
+  pending: pendingProp,
+}: Props) {
+  const [optimisticArchived, setOptimisticArchived] = useOptimistic(archived);
+  const [localPending, startTransition] = useTransition();
+  const pending = pendingProp ?? localPending;
+  const shownArchived = onArchiveChange ? archived : optimisticArchived;
 
-  if (archived) {
+  const runStandaloneRestore = () =>
+    runOptimistic(startTransition, async () => {
+      setOptimisticArchived(false);
+      const fd = new FormData();
+      fd.set("id", learnerId);
+      const res = await restoreLearner(fd);
+      await settleActionResult(res, "Learner restored");
+      invalidateNavWarm();
+    });
+
+  const runStandaloneArchive = () =>
+    runOptimistic(startTransition, async () => {
+      setOptimisticArchived(true);
+      const fd = new FormData();
+      fd.set("id", learnerId);
+      const res = await archiveLearner(fd);
+      await settleActionResult(res, "Learner archived");
+      invalidateNavWarm();
+    });
+
+  if (shownArchived) {
+    const handle = onArchiveChange ?? runStandaloneRestore;
     return (
       <Button
         size="sm"
         variant="outline"
         disabled={pending}
         onClick={() => {
-          const fd = new FormData();
-          fd.set("id", learnerId);
-          startTransition(async () => {
-            const res = await restoreLearner(fd);
-            if (res.ok) {
-              toast.success("Learner restored");
-              invalidateNavWarm();
-            } else {
-              toast.error(res.error);
-            }
+          void Promise.resolve(handle()).catch(() => {
+            /* toast already shown */
           });
         }}
       >
@@ -43,6 +68,7 @@ export function LearnerArchiveButton({
     );
   }
 
+  const handle = onArchiveChange ?? runStandaloneArchive;
   return (
     <ConfirmAction
       title="Archive learner?"
@@ -56,18 +82,7 @@ export function LearnerArchiveButton({
           {pending ? "Archiving…" : "Archive"}
         </Button>
       }
-      onConfirm={async () => {
-        const fd = new FormData();
-        fd.set("id", learnerId);
-        const res = await archiveLearner(fd);
-        if (res.ok) {
-          toast.success("Learner archived");
-          invalidateNavWarm();
-        } else {
-          toast.error(res.error);
-          throw new Error(res.error);
-        }
-      }}
+      onConfirm={handle}
     />
   );
 }

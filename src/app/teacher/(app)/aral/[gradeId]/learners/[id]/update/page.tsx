@@ -52,7 +52,7 @@ export default async function UpdateAralDataPage({
       <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`} prefetch={true}>
+          <Link href={`/teacher/aral?grade=${gradeId}`} prefetch={true}>
             <ArrowLeft className="h-4 w-4" /> Back to ARAL Dashboard
           </Link>
         </Button>

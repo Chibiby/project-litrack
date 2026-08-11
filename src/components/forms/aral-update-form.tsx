@@ -11,9 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
-  TRANSPORTATION_LABELS,
-  DISTANCE_LABELS,
-  TRANSFER_LABELS,
   ABSENTEEISM_LABELS,
   LETTER_RECOGNITION_LABELS,
   LETTER_SOUND_LABELS,
@@ -29,10 +26,6 @@ import {
 import { saveAralProfile } from "@/lib/actions/aral";
 
 type Defaults = Partial<{
-  modeOfTransportation: string;
-  distanceHomeToSchool: string;
-  previousTransfers: string;
-  transferDetails: string | null;
   absenteeismFrequency: string;
   absenteeismOtherReason: string | null;
   letterRecognition: string;
@@ -51,7 +44,6 @@ type Defaults = Partial<{
 export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: string; defaultValues?: Defaults }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [transfers, setTransfers] = useState(defaultValues.previousTransfers ?? "");
   const [interventions, setInterventions] = useState<string[]>(
     defaultValues.suggestedInterventions ?? []
   );
@@ -66,54 +58,21 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
     <form
       action={(fd) => {
         fd.set("learnerId", learnerId);
-        if (transfers !== "MULTIPLE") fd.delete("transferDetails");
         if (!showLsen) fd.delete("lsenObservations");
         if (!showFurtherOther) fd.delete("furtherAssessmentOther");
         startTransition(async () => {
+          const toastId = toast.loading("Saving ARAL profile…");
           const res = await saveAralProfile(fd);
           if (res.ok) {
-            toast.success("ARAL profile saved");
+            toast.success("ARAL profile saved", { id: toastId });
             router.back();
-          } else toast.error(res.error);
+          } else {
+            toast.error(res.error, { id: toastId });
+          }
         });
       }}
       className="space-y-6"
     >
-      <Card className="violet-section">
-        <CardHeader><CardTitle className="text-base">B. Attendance & School Background</CardTitle></CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <p className="text-sm font-medium mb-2">Mode of Transportation *</p>
-            <FieldRadioGroup name="modeOfTransportation" options={toOptions(TRANSPORTATION_LABELS)} defaultValue={defaultValues.modeOfTransportation} />
-          </div>
-          <div>
-            <p className="text-sm font-medium mb-2">Distance from Home to School *</p>
-            <FieldRadioGroup name="distanceHomeToSchool" options={toOptions(DISTANCE_LABELS)} defaultValue={defaultValues.distanceHomeToSchool} />
-          </div>
-          <div>
-            <p className="text-sm font-medium mb-2">Previous School Transfers *</p>
-            <FieldRadioGroup
-              name="previousTransfers"
-              options={toOptions(TRANSFER_LABELS)}
-              value={transfers}
-              onValueChange={setTransfers}
-              defaultValue={defaultValues.previousTransfers}
-            />
-            {transfers === "MULTIPLE" ? (
-              <div className="mt-3 space-y-1">
-                <Label htmlFor="transferDetails">Specify transfers *</Label>
-                <Input
-                  id="transferDetails"
-                  name="transferDetails"
-                  required
-                  defaultValue={defaultValues.transferDetails ?? ""}
-                />
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
       <Card className="violet-section">
         <CardHeader><CardTitle className="text-base">C. Reading Behavior (Letter-to-Word Level)</CardTitle></CardHeader>
         <CardContent className="space-y-6">

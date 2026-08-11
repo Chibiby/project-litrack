@@ -28,14 +28,17 @@ export function getShellWarmHrefs(role: UserRole): string[] {
  * Cap mass learner warm lists. Full-prefetching every roster row re-runs
  * force-dynamic teacher layout/auth and saturates the Prisma pool.
  */
-const MAX_NESTED_LEARNER_WARMS = 4;
+const MAX_NESTED_LEARNER_WARMS = 2;
 
 /** Learner view/edit (+ import) hrefs for the visible grade roster page. */
 export function getGradeLearnerWarmHrefs(
   gradeId: string,
   learners: readonly { id: string; archivedAt?: Date | string | null }[]
 ): string[] {
-  const hrefs: string[] = [`/teacher/grade/${gradeId}/import`];
+  const hrefs: string[] = [
+    `/teacher/learners?grade=${gradeId}`,
+    `/teacher/grade/${gradeId}/import`,
+  ];
   for (const learner of learners.slice(0, MAX_NESTED_LEARNER_WARMS)) {
     const base = `/teacher/grade/${gradeId}/learners/${learner.id}`;
     hrefs.push(base);
@@ -46,41 +49,46 @@ export function getGradeLearnerWarmHrefs(
   return hrefs;
 }
 
-/** ARAL action hrefs for learners listed on the ARAL dashboard. */
+/** ARAL action hrefs for learners listed on the ARAL dashboard (capped). */
 export function getAralLearnerWarmHrefs(
   gradeId: string,
   learnerIds: readonly string[]
 ): string[] {
-  return learnerIds.slice(0, MAX_NESTED_LEARNER_WARMS).flatMap((id) => [
-    `/teacher/aral/${gradeId}/learners/${id}/update`,
-    `/teacher/aral/${gradeId}/learners/${id}/attendance`,
-    `/teacher/aral/${gradeId}/learners/${id}/reading-level`,
-  ]);
+  // Warm only the primary Update Data action per learner — attendance /
+  // reading-level stay on demand to avoid nested force-dynamic storms.
+  return [
+    `/teacher/aral?grade=${gradeId}`,
+    ...learnerIds
+      .slice(0, MAX_NESTED_LEARNER_WARMS)
+      .map((id) => `/teacher/aral/${gradeId}/learners/${id}/update`),
+  ];
 }
 
-/** Sibling destinations from a learner detail page. */
+/**
+ * Sibling destinations from a learner detail/edit page.
+ * Keep this narrow: roster back + edit only (ARAL actions are one click away).
+ */
 export function getLearnerDetailWarmHrefs(
   gradeId: string,
   learner: { id: string; isAralLearner?: boolean; archivedAt?: Date | string | null }
 ): string[] {
-  const hrefs: string[] = [`/teacher/grade/${gradeId}`];
+  const hrefs: string[] = [`/teacher/learners?grade=${gradeId}`];
   if (!learner.archivedAt) {
     hrefs.push(`/teacher/grade/${gradeId}/learners/${learner.id}/edit`);
   }
   if (learner.isAralLearner) {
-    hrefs.push(
-      `/teacher/aral/${gradeId}`,
-      ...getAralLearnerWarmHrefs(gradeId, [learner.id])
-    );
+    hrefs.push(`/teacher/aral?grade=${gradeId}`);
   }
   return hrefs;
 }
 
-/** Back + sibling ARAL actions from an ARAL learner subpage. */
+/**
+ * Back destinations from an ARAL learner subpage.
+ * Do not warm every sibling ARAL action — each is force-dynamic.
+ */
 export function getAralActionWarmHrefs(gradeId: string, learnerId: string): string[] {
   return [
-    `/teacher/aral/${gradeId}`,
+    `/teacher/aral?grade=${gradeId}`,
     `/teacher/grade/${gradeId}/learners/${learnerId}`,
-    ...getAralLearnerWarmHrefs(gradeId, [learnerId]),
   ];
 }

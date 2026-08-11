@@ -3,10 +3,6 @@ import { aralProfileSchema } from "@/lib/validators/aral.schema";
 
 const validFull = {
   learnerId: "learner-1",
-  modeOfTransportation: "WALKING" as const,
-  distanceHomeToSchool: "LESS_THAN_1KM" as const,
-  previousTransfers: "NONE" as const,
-  transferDetails: undefined,
   absenteeismFrequency: "ONE_TO_THREE_PER_MONTH" as const,
   absenteeismOtherReason: "Illness",
   letterRecognition: "ALL_EASY" as const,
@@ -23,16 +19,13 @@ const validFull = {
 };
 
 describe("aralProfileSchema", () => {
-  it("accepts a valid full payload", () => {
+  it("accepts a valid full payload (C/D/E only)", () => {
     const result = aralProfileSchema.safeParse(validFull);
     expect(result.success).toBe(true);
   });
 
   it("rejects invalid values for each required enum", () => {
     const cases: Array<{ field: string; value: string }> = [
-      { field: "modeOfTransportation", value: "BIKE" },
-      { field: "distanceHomeToSchool", value: "TEN_KM" },
-      { field: "previousTransfers", value: "MANY" },
       { field: "absenteeismFrequency", value: "DAILY" },
       { field: "letterRecognition", value: "UNKNOWN" },
       { field: "letterSoundCorrespondence", value: "SOMETIMES" },
@@ -74,13 +67,6 @@ describe("aralProfileSchema", () => {
     const over1000 = "y".repeat(1001);
 
     expect(
-      aralProfileSchema.safeParse({
-        ...validFull,
-        previousTransfers: "MULTIPLE",
-        transferDetails: over500,
-      }).success,
-    ).toBe(false);
-    expect(
       aralProfileSchema.safeParse({ ...validFull, absenteeismOtherReason: over500 }).success,
     ).toBe(false);
     expect(
@@ -101,36 +87,13 @@ describe("aralProfileSchema", () => {
     expect(
       aralProfileSchema.safeParse({
         ...validFull,
-        previousTransfers: "MULTIPLE",
-        transferDetails: "x".repeat(500),
-      }).success,
-    ).toBe(true);
-    expect(
-      aralProfileSchema.safeParse({
-        ...validFull,
         suggestedInterventions: ["LSEN_OTHER"],
         lsenObservations: "y".repeat(1000),
       }).success,
     ).toBe(true);
   });
 
-  it("requires Specify texts for Multiple transfers, LSEN, and Further Assessment Other", () => {
-    expect(
-      aralProfileSchema.safeParse({
-        ...validFull,
-        previousTransfers: "MULTIPLE",
-        transferDetails: undefined,
-      }).success,
-    ).toBe(false);
-
-    expect(
-      aralProfileSchema.safeParse({
-        ...validFull,
-        previousTransfers: "MULTIPLE",
-        transferDetails: "Three schools in two years",
-      }).success,
-    ).toBe(true);
-
+  it("requires Specify texts for LSEN and Further Assessment Other", () => {
     expect(
       aralProfileSchema.safeParse({
         ...validFull,
@@ -138,6 +101,14 @@ describe("aralProfileSchema", () => {
         lsenObservations: undefined,
       }).success,
     ).toBe(false);
+
+    expect(
+      aralProfileSchema.safeParse({
+        ...validFull,
+        suggestedInterventions: ["LSEN_OTHER"],
+        lsenObservations: "Needs further screening",
+      }).success,
+    ).toBe(true);
 
     expect(
       aralProfileSchema.safeParse({
@@ -150,8 +121,21 @@ describe("aralProfileSchema", () => {
     expect(
       aralProfileSchema.safeParse({
         ...validFull,
-        absenteeismOtherReason: undefined,
+        furtherAssessment: ["OTHER"],
+        furtherAssessmentOther: "Speech therapy referral",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("strips unknown Section B fields (moved to Learner)", () => {
+    const result = aralProfileSchema.safeParse({
+      ...validFull,
+      modeOfTransportation: "WALKING",
+      distanceHomeToSchool: "LESS_THAN_1KM",
+      previousTransfers: "NONE",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect("modeOfTransportation" in result.data).toBe(false);
   });
 });

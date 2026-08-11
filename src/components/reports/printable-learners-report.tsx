@@ -1,35 +1,52 @@
 import {
   GRADE_LEVEL_LABELS,
-  READING_PROFILE_LABELS,
   GENDER_LABELS,
+  labelReadingProfile,
 } from "@/lib/constants/enum-labels";
+import type {
+  PrintableReportData,
+  PrintableReportLearner,
+  PrintableReportSectionRow,
+} from "@/lib/actions/export-learners";
 
-type LearnerRow = {
-  id: string;
-  fullName: string;
-  age: number;
-  gender: string;
-  englishReadingProfile: string;
-  filipinoReadingProfile: string;
-  isAralLearner: boolean;
-  gradeLevel: { type: string };
-  section: { name: string } | null;
-};
-
-type SectionSummaryRow = { section: string; count: number; aral: number };
+type LearnerRow = PrintableReportLearner;
+type SectionSummaryRow = PrintableReportSectionRow;
 
 type Props = {
   schoolName: string;
-  generatedAt: Date;
+  generatedAt: Date | string;
   learners: LearnerRow[];
   aralCount: number;
-  byGrade: Map<string, LearnerRow[]>;
-  byGradeSection?: Map<string, SectionSummaryRow[]>;
+  /** Prefer serializable `{ type, learners }[]`; Map still accepted for legacy callers. */
+  byGrade:
+    | Map<string, LearnerRow[]>
+    | PrintableReportData["byGrade"];
+  byGradeSection?:
+    | Map<string, SectionSummaryRow[]>
+    | PrintableReportData["byGradeSection"];
   subtitle?: string;
 };
 
-function labelProfile(key: string): string {
-  return READING_PROFILE_LABELS[key as keyof typeof READING_PROFILE_LABELS] ?? key;
+function gradeEntries(
+  byGrade: Props["byGrade"]
+): { type: string; learners: LearnerRow[] }[] {
+  if (byGrade instanceof Map) {
+    return [...byGrade.entries()].map(([type, learners]) => ({ type, learners }));
+  }
+  return byGrade;
+}
+
+function sectionEntries(
+  byGradeSection: NonNullable<Props["byGradeSection"]>
+): { gradeType: string; section: string; count: number; aral: number }[] {
+  if (byGradeSection instanceof Map) {
+    return [...byGradeSection.entries()].flatMap(([type, rows]) =>
+      rows.map((r) => ({ gradeType: type, ...r }))
+    );
+  }
+  return byGradeSection.flatMap((g) =>
+    g.rows.map((r) => ({ gradeType: g.type, ...r }))
+  );
 }
 
 export function PrintableLearnersReport({
@@ -41,12 +58,13 @@ export function PrintableLearnersReport({
   byGradeSection,
   subtitle,
 }: Props) {
+  const grades = gradeEntries(byGrade);
   const sectionRows =
-    byGradeSection && byGradeSection.size > 0
-      ? [...byGradeSection.entries()].flatMap(([type, rows]) =>
-          rows.map((r) => ({ gradeType: type, ...r }))
-        )
+    byGradeSection && (byGradeSection instanceof Map ? byGradeSection.size > 0 : byGradeSection.length > 0)
+      ? sectionEntries(byGradeSection)
       : [];
+  const generated =
+    generatedAt instanceof Date ? generatedAt : new Date(generatedAt);
 
   return (
     <div className="printable-report space-y-6 text-foreground">
@@ -60,7 +78,7 @@ export function PrintableLearnersReport({
           {subtitle ? ` · ${subtitle}` : ""}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Generated {generatedAt.toLocaleString()} · {learners.length} learner
+          Generated {generated.toLocaleString()} · {learners.length} learner
           {learners.length === 1 ? "" : "s"} · {aralCount} ARAL
         </p>
       </header>
@@ -76,7 +94,7 @@ export function PrintableLearnersReport({
             </tr>
           </thead>
           <tbody>
-            {[...byGrade.entries()].map(([type, list]) => (
+            {grades.map(({ type, learners: list }) => (
               <tr key={type} className="border-b border-border/60">
                 <td className="py-1.5 pr-2">{GRADE_LEVEL_LABELS[type] ?? type}</td>
                 <td className="py-1.5 pr-2">{list.length}</td>
@@ -144,8 +162,18 @@ export function PrintableLearnersReport({
                   {GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type}
                   {l.section ? ` · ${l.section.name}` : ""}
                 </td>
-                <td className="py-1.5 pr-2">{labelProfile(l.englishReadingProfile)}</td>
-                <td className="py-1.5 pr-2">{labelProfile(l.filipinoReadingProfile)}</td>
+                <td className="py-1.5 pr-2">
+                  {labelReadingProfile(
+                    l.englishReadingProfile,
+                    l.gradeLevel.type
+                  )}
+                </td>
+                <td className="py-1.5 pr-2">
+                  {labelReadingProfile(
+                    l.filipinoReadingProfile,
+                    l.gradeLevel.type
+                  )}
+                </td>
                 <td className="py-1.5">{l.isAralLearner ? "Yes" : "No"}</td>
               </tr>
             ))}

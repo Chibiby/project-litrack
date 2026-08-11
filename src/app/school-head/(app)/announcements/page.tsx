@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   CreateAnnouncementForm,
-  AnnouncementActions,
+  AnnouncementsList,
 } from "@/components/school-head/announcement-forms";
 import { Megaphone } from "lucide-react";
 
@@ -72,26 +72,16 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
                 icon={Megaphone}
               />
             ) : (
-              <ul className="space-y-4">
-                {announcements.map((a) => (
-                  <li key={a.id} className="rounded-lg border border-border/80 p-4">
-                    <h3 className="font-semibold">{a.title}</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {a.body}
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {a.author.fullName} · {a.publishedAt.toISOString().slice(0, 10)}
-                    </p>
-                    {!isSuperAdminView ? (
-                      <AnnouncementActions
-                        announcementId={a.id}
-                        title={a.title}
-                        body={a.body}
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <AnnouncementsList
+                readOnly={isSuperAdminView}
+                announcements={announcements.map((a) => ({
+                  id: a.id,
+                  title: a.title,
+                  body: a.body,
+                  authorName: a.author.fullName,
+                  publishedAt: a.publishedAt.toISOString().slice(0, 10),
+                }))}
+              />
             )}
           </CardContent>
         </Card>

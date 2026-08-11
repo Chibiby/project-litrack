@@ -7,13 +7,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldRadioGroup } from "./profile-shared";
-import { READING_PROFILE_LABELS, toOptions } from "@/lib/constants/enum-labels";
+import {
+  READING_PROFILE_LABELS,
+  readingProfileLabelsForGradeType,
+  toOptions,
+} from "@/lib/constants/enum-labels";
 import { recordReadingLevel } from "@/lib/actions/reading-level";
-import { monthYearKey } from "@/lib/utils";
+import { formatLocalDateKey } from "@/lib/date-keys";
+import { getMonday } from "@/lib/utils";
 
-export function ReadingLevelForm({ learnerId }: { learnerId: string }) {
+export function ReadingLevelForm({
+  learnerId,
+  gradeType,
+}: {
+  learnerId: string;
+  gradeType?: string | null;
+}) {
   const [pending, startTransition] = useTransition();
-  const currentMonth = monthYearKey(new Date());
+  const currentWeek = formatLocalDateKey(getMonday(new Date()));
+  const profileOptions = toOptions(
+    gradeType
+      ? readingProfileLabelsForGradeType(gradeType)
+      : READING_PROFILE_LABELS
+  );
 
   return (
     <form
@@ -28,16 +44,22 @@ export function ReadingLevelForm({ learnerId }: { learnerId: string }) {
       className="space-y-4"
     >
       <div className="space-y-1">
-        <Label htmlFor="monthYear">Month *</Label>
-        <Input id="monthYear" name="monthYear" placeholder="YYYY-MM" defaultValue={currentMonth} pattern="\d{4}-\d{2}" required />
+        <Label htmlFor="weekStart">Week of (Monday) *</Label>
+        <Input
+          id="weekStart"
+          name="weekStart"
+          type="date"
+          defaultValue={currentWeek}
+          required
+        />
       </div>
       <div>
         <p className="text-sm font-medium mb-2">English *</p>
-        <FieldRadioGroup name="englishProfile" options={toOptions(READING_PROFILE_LABELS)} />
+        <FieldRadioGroup name="englishProfile" options={profileOptions} />
       </div>
       <div>
         <p className="text-sm font-medium mb-2">Filipino *</p>
-        <FieldRadioGroup name="filipinoProfile" options={toOptions(READING_PROFILE_LABELS)} />
+        <FieldRadioGroup name="filipinoProfile" options={profileOptions} />
       </div>
       <div className="space-y-1">
         <Label htmlFor="notes">Notes</Label>

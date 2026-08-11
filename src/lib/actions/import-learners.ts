@@ -12,8 +12,14 @@ import {
   resolveSectionIdByName,
   type ImportRowResult,
 } from "@/lib/learners/import-csv";
-import { isPossibleDuplicate } from "@/lib/learners/normalize";
-import type { LearnerImportRow } from "@/lib/validators/learner-import.schema";
+import {
+  isPossibleDuplicate,
+  learnerDuplicateKey,
+} from "@/lib/learners/normalize";
+import {
+  learnerImportRowSchema,
+  type LearnerImportRow,
+} from "@/lib/validators/learner-import.schema";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
 type ActionResult<T = unknown> =
@@ -39,11 +45,80 @@ async function assertTeacherGradeAccess(userId: string, schoolId: string, gradeL
   });
 }
 
+/**
+ * Parse import rows and load only matching school learners for dup-check
+ * (keyed by name+age) instead of a full-school findMany.
+ */
+async function loadExistingDuplicateKeys(
+  schoolId: string,
+  rows: Record<string, unknown>[]
+): Promise<Set<string>> {
+  const candidates: { firstName: string; lastName: string; age: number }[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of rows) {
+    const mapped = mapCsvRowToImportCandidate(raw);
+    if (!mapped.firstName && !mapped.lastName && (mapped.age === "" || mapped.age == null)) {
+      continue;
+    }
+    const parsed = learnerImportRowSchema.safeParse(mapped);
+    if (!parsed.success) continue;
+    const key = learnerDuplicateKey(
+      parsed.data.firstName,
+      parsed.data.lastName,
+      parsed.data.age
+    );
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      age: parsed.data.age,
+    });
+  }
+
+  if (candidates.length === 0) return new Set();
+
+  const ages = [...new Set(candidates.map((c) => c.age))];
+  // Narrow by age first, then OR only the candidate name triples.
+  const matches = await prisma.learner.findMany({
+    where: {
+      schoolId,
+      deletedAt: null,
+      age: { in: ages },
+      OR: candidates.map((c) => ({
+        firstName: { equals: c.firstName, mode: "insensitive" as const },
+        lastName: { equals: c.lastName, mode: "insensitive" as const },
+        age: c.age,
+      })),
+    },
+    select: { firstName: true, lastName: true, age: true },
+  });
+
+  return new Set(
+    matches.map((m) => learnerDuplicateKey(m.firstName, m.lastName, m.age))
+  );
+}
+
 /** Downloadable CSV template string (headers + example row). */
-export async function getLearnerImportTemplate(): Promise<ActionResult<{ csv: string }>> {
+export async function getLearnerImportTemplate(input?: {
+  gradeLevelId?: string;
+}): Promise<ActionResult<{ csv: string }>> {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
-  return { ok: true, data: { csv: learnerCsvTemplate() } };
+
+  let gradeType: string | null = null;
+  if (input?.gradeLevelId) {
+    const grade = await assertTeacherGradeAccess(
+      user.id,
+      user.schoolId,
+      input.gradeLevelId
+    );
+    if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
+    gradeType = grade.type;
+  }
+
+  return { ok: true, data: { csv: learnerCsvTemplate(gradeType) } };
 }
 
 /**
@@ -72,11 +147,8 @@ export async function previewLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const [existing, gradeSections] = await Promise.all([
-    prisma.learner.findMany({
-      where: { schoolId: user.schoolId, deletedAt: null },
-      select: { firstName: true, lastName: true, age: true },
-    }),
+  const [existingKeys, gradeSections] = await Promise.all([
+    loadExistingDuplicateKeys(user.schoolId, input.rows),
     prisma.section.findMany({
       where: {
         schoolId: user.schoolId,
@@ -88,7 +160,7 @@ export async function previewLearnerImport(input: {
   ]);
 
   const results = validateImportRows(input.rows, {
-    existing,
+    existingKeys,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
   });
@@ -128,11 +200,8 @@ export async function commitLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const [existing, gradeSections] = await Promise.all([
-    prisma.learner.findMany({
-      where: { schoolId: user.schoolId, deletedAt: null },
-      select: { firstName: true, lastName: true, age: true },
-    }),
+  const [existingKeys, gradeSections] = await Promise.all([
+    loadExistingDuplicateKeys(user.schoolId, input.rows),
     prisma.section.findMany({
       where: {
         schoolId: user.schoolId,
@@ -144,7 +213,7 @@ export async function commitLearnerImport(input: {
   ]);
 
   const results = validateImportRows(input.rows, {
-    existing,
+    existingKeys,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
   });
@@ -178,6 +247,7 @@ export async function commitLearnerImport(input: {
   });
 
   let imported = 0;
+  let importedAral = 0;
   if (toInsert.length > 0) {
     await prisma.$transaction(async (tx) => {
       for (const data of toInsert) {
@@ -202,6 +272,13 @@ export async function commitLearnerImport(input: {
             filipinoFrustrationSubtypes: data.filipinoFrustrationSubtypes,
             governmentBenefits: data.governmentBenefits,
             parentEducation: data.parentEducation,
+            modeOfTransportation: data.modeOfTransportation ?? null,
+            distanceHomeToSchool: data.distanceHomeToSchool ?? null,
+            previousTransfers: data.previousTransfers ?? null,
+            transferDetails:
+              data.previousTransfers === "MULTIPLE"
+                ? (data.transferDetails?.trim() || null)
+                : null,
             isAralLearner: data.isAralLearner ?? false,
             aralEnrolledAt: data.isAralLearner ? new Date() : null,
           },
@@ -221,6 +298,7 @@ export async function commitLearnerImport(input: {
           });
         }
         imported++;
+        if (created.isAralLearner) importedAral++;
       }
     });
   }
@@ -245,8 +323,17 @@ export async function commitLearnerImport(input: {
   });
 
   revalidatePath(`/teacher/grade/${input.gradeLevelId}`);
-  revalidatePath("/teacher");
-  revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
+  revalidatePath("/teacher/learners");
+  if (importedAral > 0) {
+    revalidatePath(`/teacher/aral/${input.gradeLevelId}`);
+    revalidatePath("/teacher/aral");
+  }
+  revalidateLearnerScoped({
+    schoolId: user.schoolId,
+    teacherId: user.id,
+    adminDashboard: imported > 0,
+    teacherShell: importedAral > 0,
+  });
 
   return {
     ok: true,

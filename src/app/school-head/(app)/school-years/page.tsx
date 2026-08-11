@@ -5,11 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   CreateSchoolYearForm,
-  SetActiveYearButton,
+  SchoolYearsList,
 } from "@/components/school-head/school-year-forms";
 import { CalendarRange } from "lucide-react";
 
@@ -81,28 +80,16 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
                 icon={CalendarRange}
               />
             ) : (
-              <ul className="space-y-3">
-                {years.map((y) => (
-                  <li
-                    key={y.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/80 px-4 py-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{y.label}</span>
-                        {y.isActive ? <Badge>Active</Badge> : null}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {y.startDate.toISOString().slice(0, 10)} →{" "}
-                        {y.endDate.toISOString().slice(0, 10)}
-                      </p>
-                    </div>
-                    {!isSuperAdminView && !y.isActive ? (
-                      <SetActiveYearButton schoolYearId={y.id} />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <SchoolYearsList
+                readOnly={isSuperAdminView}
+                years={years.map((y) => ({
+                  id: y.id,
+                  label: y.label,
+                  startDate: y.startDate.toISOString().slice(0, 10),
+                  endDate: y.endDate.toISOString().slice(0, 10),
+                  isActive: y.isActive,
+                }))}
+              />
             )}
           </CardContent>
         </Card>

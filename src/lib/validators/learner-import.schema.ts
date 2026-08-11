@@ -22,10 +22,28 @@ const PARENT_EDUCATION = [
   "COLLEGE_GRADUATE",
 ] as const;
 
+const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
+const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
+const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
+
 const optionalMiddleName = z
   .string()
   .trim()
   .max(80)
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
+function optionalEnum<T extends readonly [string, ...string[]]>(values: T) {
+  return z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(values).optional()
+  );
+}
+
+const optionalTransferDetails = z
+  .string()
+  .trim()
+  .max(500)
   .optional()
   .or(z.literal("").transform(() => undefined));
 
@@ -62,7 +80,34 @@ function refineFrustrationSubtypes(
   }
 }
 
-/** Section A row for CSV import (gradeLevelId supplied by the route, not the file). */
+function refineSectionBTransfers(
+  data: {
+    previousTransfers?: (typeof TRANSFERS)[number];
+    transferDetails?: string;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (data.previousTransfers === "MULTIPLE" && !data.transferDetails?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Specify transfer details when Multiple transfers is selected",
+      path: ["transferDetails"],
+    });
+  }
+  if (
+    data.previousTransfers != null &&
+    data.previousTransfers !== "MULTIPLE" &&
+    data.transferDetails?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Transfer details are only allowed when Multiple transfers is selected",
+      path: ["transferDetails"],
+    });
+  }
+}
+
+/** Section A + optional B row for CSV import (gradeLevelId supplied by the route, not the file). */
 export const learnerImportRowSchema = z
   .object({
     firstName: nonEmpty("First name required").max(80),
@@ -76,6 +121,10 @@ export const learnerImportRowSchema = z
     filipinoFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),
     governmentBenefits: z.array(z.enum(GOV_BENEFIT)).default([]),
     parentEducation: z.enum(PARENT_EDUCATION),
+    modeOfTransportation: optionalEnum(TRANSPORTATION),
+    distanceHomeToSchool: optionalEnum(DISTANCE),
+    previousTransfers: optionalEnum(TRANSFERS),
+    transferDetails: optionalTransferDetails,
     isAralLearner: z.boolean().default(false),
     /** Optional section name from CSV; resolved to id at commit. */
     sectionName: z
@@ -87,6 +136,9 @@ export const learnerImportRowSchema = z
       })
       .pipe(z.union([z.string().max(80), z.undefined()])),
   })
-  .superRefine(refineFrustrationSubtypes);
+  .superRefine((data, ctx) => {
+    refineFrustrationSubtypes(data, ctx);
+    refineSectionBTransfers(data, ctx);
+  });
 
 export type LearnerImportRow = z.infer<typeof learnerImportRowSchema>;

@@ -5,18 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { ConfirmAction } from "@/components/confirm-action";
+import { LearnerSearchSelect } from "@/components/learners/learner-search-select";
 import { transferLearnerCrossSchool } from "@/lib/actions/enrollment";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
+import type { LearnerSearchHit } from "@/lib/learners/search";
 import { SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
 
 type SchoolOption = { id: string; name: string };
-type LearnerOption = {
-  id: string;
-  fullName: string;
-  gradeLabel: string;
-};
 type GradeOption = { id: string; label: string };
 type SectionOption = { id: string; name: string; gradeLevelId: string };
 type TeacherOption = { id: string; fullName: string; gradeIds: string[] };
@@ -25,7 +21,6 @@ export function CrossSchoolTransferForm({
   schools,
   fromSchoolId,
   toSchoolId,
-  learners,
   grades,
   sections,
   teachers,
@@ -33,7 +28,6 @@ export function CrossSchoolTransferForm({
   schools: SchoolOption[];
   fromSchoolId: string;
   toSchoolId: string;
-  learners: LearnerOption[];
   grades: GradeOption[];
   sections: SectionOption[];
   teachers: TeacherOption[];
@@ -41,21 +35,10 @@ export function CrossSchoolTransferForm({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [learnerQuery, setLearnerQuery] = useState("");
-  const [learnerId, setLearnerId] = useState("");
+  const [learner, setLearner] = useState<LearnerSearchHit | null>(null);
   const [gradeId, setGradeId] = useState("");
   const [sectionId, setSectionId] = useState(SECTION_CLEAR);
   const [teacherId, setTeacherId] = useState("");
-
-  const filteredLearners = useMemo(() => {
-    const q = learnerQuery.trim().toLowerCase();
-    if (!q) return learners;
-    return learners.filter(
-      (l) =>
-        l.fullName.toLowerCase().includes(q) ||
-        l.gradeLabel.toLowerCase().includes(q)
-    );
-  }, [learners, learnerQuery]);
 
   const filteredSections = useMemo(
     () => sections.filter((s) => s.gradeLevelId === gradeId),
@@ -68,7 +51,6 @@ export function CrossSchoolTransferForm({
 
   const fromSchool = schools.find((s) => s.id === fromSchoolId);
   const toSchool = schools.find((s) => s.id === toSchoolId);
-  const selectedLearner = learners.find((l) => l.id === learnerId);
   const selectedGrade = grades.find((g) => g.id === gradeId);
   const selectedSection =
     sectionId && sectionId !== SECTION_CLEAR
@@ -77,8 +59,8 @@ export function CrossSchoolTransferForm({
   const selectedTeacher = teachers.find((t) => t.id === teacherId);
 
   const summary =
-    selectedLearner && toSchool && selectedGrade && selectedTeacher
-      ? `Transfer ${selectedLearner.fullName} (${selectedLearner.gradeLabel}${
+    learner && toSchool && selectedGrade && selectedTeacher
+      ? `Transfer ${learner.fullName} (${learner.gradeLabel}${
           fromSchool ? ` at ${fromSchool.name}` : ""
         }) to ${toSchool.name} — ${selectedGrade.label}${
           selectedSection
@@ -109,7 +91,7 @@ export function CrossSchoolTransferForm({
             toast.error("Source and target schools must differ");
             return;
           }
-          if (!learnerId || !gradeId || !teacherId) {
+          if (!learner || !gradeId || !teacherId) {
             toast.error("Select learner, grade, and teacher");
             return;
           }
@@ -123,8 +105,7 @@ export function CrossSchoolTransferForm({
               id="fromSchool"
               value={fromSchoolId}
               onChange={(e) => {
-                setLearnerId("");
-                setLearnerQuery("");
+                setLearner(null);
                 updateSchools(e.target.value, toSchoolId);
               }}
               required
@@ -166,41 +147,14 @@ export function CrossSchoolTransferForm({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="learnerSearch">Search learner (source school)</Label>
-          <Input
-            id="learnerSearch"
-            value={learnerQuery}
-            onChange={(e) => setLearnerQuery(e.target.value)}
-            placeholder="Filter by name or grade"
-            disabled={pending || !fromSchoolId}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="learnerId">Learner</Label>
-          <select
-            id="learnerId"
-            value={learnerId}
-            onChange={(e) => setLearnerId(e.target.value)}
-            required
-            disabled={pending || !fromSchoolId}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-          >
-            <option value="">
-              {!fromSchoolId
-                ? "Select source school first"
-                : filteredLearners.length === 0
-                  ? "No learners found"
-                  : "Select learner"}
-            </option>
-            {filteredLearners.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.fullName} ({l.gradeLabel})
-              </option>
-            ))}
-          </select>
-        </div>
+        <LearnerSearchSelect
+          schoolId={fromSchoolId}
+          value={learner}
+          onChange={setLearner}
+          disabled={pending}
+          label="Learner (source school)"
+          placeholder="Search by name…"
+        />
 
         <div className="space-y-2">
           <Label htmlFor="targetGrade">Target grade</Label>
@@ -278,10 +232,11 @@ export function CrossSchoolTransferForm({
         variant="default"
         disabled={pending}
         onConfirm={async () => {
+          if (!learner) return;
           setPending(true);
           try {
             const fd = new FormData();
-            fd.set("learnerId", learnerId);
+            fd.set("learnerId", learner.id);
             fd.set("targetSchoolId", toSchoolId);
             fd.set("targetGradeLevelId", gradeId);
             fd.set("targetSectionId", sectionId || SECTION_CLEAR);
@@ -292,11 +247,10 @@ export function CrossSchoolTransferForm({
               throw new Error(res.error);
             }
             toast.success("Learner transferred to target school");
-            setLearnerId("");
+            setLearner(null);
             setGradeId("");
             setSectionId(SECTION_CLEAR);
             setTeacherId("");
-            setLearnerQuery("");
             router.refresh();
             invalidateNavWarm();
           } finally {

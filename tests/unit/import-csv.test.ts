@@ -13,7 +13,11 @@ import {
   summarizeImportResults,
 } from "@/lib/learners/import-csv";
 import { learnerImportRowSchema } from "@/lib/validators/learner-import.schema";
-import { READING_PROFILE_LABELS } from "@/lib/constants/enum-labels";
+import {
+  READING_PROFILE_LABELS,
+  READING_PROFILE_LABELS_K3,
+  READING_PROFILE_LABELS_G4_PLUS,
+} from "@/lib/constants/enum-labels";
 
 describe("learnerCsvTemplate", () => {
   it("includes all Section A headers and an example row", () => {
@@ -24,6 +28,20 @@ describe("learnerCsvTemplate", () => {
     expect(LEARNER_CSV_HEADERS).toContain("isAralLearner");
     expect(LEARNER_CSV_HEADERS).toContain("parentEducation");
     expect(LEARNER_CSV_HEADERS).toContain("section");
+    expect(LEARNER_CSV_HEADERS).toContain("modeOfTransportation");
+    expect(LEARNER_CSV_HEADERS).toContain("distanceHomeToSchool");
+    expect(LEARNER_CSV_HEADERS).toContain("previousTransfers");
+    expect(LEARNER_CSV_HEADERS).toContain("transferDetails");
+  });
+
+  it("emits band labels in the example row when grade type is known", () => {
+    const k3 = learnerCsvTemplate("G2");
+    expect(k3).toContain(READING_PROFILE_LABELS_K3.INSTRUCTIONAL_DEVELOPING);
+    expect(k3).toContain(READING_PROFILE_LABELS_K3.INDEPENDENT_GRADE_READY);
+
+    const g4 = learnerCsvTemplate("G7");
+    expect(g4).toContain(READING_PROFILE_LABELS_G4_PLUS.INSTRUCTIONAL_DEVELOPING);
+    expect(g4).toContain(READING_PROFILE_LABELS_G4_PLUS.INDEPENDENT_GRADE_READY);
   });
 });
 
@@ -86,6 +104,10 @@ describe("mapCsvRowToImportCandidate", () => {
       filipinoFrustrationSubtypes: "",
       governmentBenefits: "4Ps",
       parentEducation: "Secondary Graduate",
+      modeOfTransportation: "Walking",
+      distanceHomeToSchool: "Less than 1 km",
+      previousTransfers: "No transfers",
+      transferDetails: "",
       isAralLearner: "yes",
     });
     expect(mapped.firstName).toBe("Ana");
@@ -93,8 +115,37 @@ describe("mapCsvRowToImportCandidate", () => {
     expect(mapped.englishReadingProfile).toBe("INSTRUCTIONAL_DEVELOPING");
     expect(mapped.governmentBenefits).toEqual(["FOUR_PS"]);
     expect(mapped.parentEducation).toBe("SECONDARY_GRADUATE");
+    expect(mapped.modeOfTransportation).toBe("WALKING");
+    expect(mapped.distanceHomeToSchool).toBe("LESS_THAN_1KM");
+    expect(mapped.previousTransfers).toBe("NONE");
     expect(mapped.isAralLearner).toBe(true);
     expect(mapped.sectionName).toBe("Rose");
+  });
+
+  it("accepts K3 and G4+ band reading profile labels", () => {
+    const k3 = mapCsvRowToImportCandidate({
+      firstName: "Ana",
+      lastName: "Santos",
+      age: "8",
+      gender: "FEMALE",
+      englishReadingProfile: READING_PROFILE_LABELS_K3.FRUSTRATION_HIGH_EMERGENT,
+      filipinoReadingProfile: READING_PROFILE_LABELS_K3.NON_DECODER_LOW_EMERGENT,
+      parentEducation: "SECONDARY_GRADUATE",
+    });
+    expect(k3.englishReadingProfile).toBe("FRUSTRATION_HIGH_EMERGENT");
+    expect(k3.filipinoReadingProfile).toBe("NON_DECODER_LOW_EMERGENT");
+
+    const g4 = mapCsvRowToImportCandidate({
+      firstName: "Ben",
+      lastName: "Cruz",
+      age: "12",
+      gender: "MALE",
+      englishReadingProfile: READING_PROFILE_LABELS_G4_PLUS.INSTRUCTIONAL_DEVELOPING,
+      filipinoReadingProfile: READING_PROFILE_LABELS_G4_PLUS.INDEPENDENT_GRADE_READY,
+      parentEducation: "SECONDARY_GRADUATE",
+    });
+    expect(g4.englishReadingProfile).toBe("INSTRUCTIONAL_DEVELOPING");
+    expect(g4.filipinoReadingProfile).toBe("INDEPENDENT_GRADE_READY");
   });
 
   it("reads Section header alias", () => {
@@ -222,6 +273,16 @@ describe("validateImportRows", () => {
   it("flags duplicates against existing school learners", () => {
     const results = validateImportRows([goodRow], {
       existing: [{ firstName: "Ana", lastName: "Santos", age: 10 }],
+    });
+    expect(results[0]?.ok).toBe(true);
+    if (results[0]?.ok) {
+      expect(results[0].duplicateWarning).toBe(true);
+    }
+  });
+
+  it("flags duplicates via existingKeys set", () => {
+    const results = validateImportRows([goodRow], {
+      existingKeys: new Set(["ana|santos|10"]),
     });
     expect(results[0]?.ok).toBe(true);
     if (results[0]?.ok) {

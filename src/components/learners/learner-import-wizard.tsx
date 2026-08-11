@@ -70,7 +70,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
 
   function handleTemplate() {
     startTransition(async () => {
-      const res = await getLearnerImportTemplate();
+      const res = await getLearnerImportTemplate({ gradeLevelId });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -140,7 +140,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/grade/${gradeLevelId}`}>
+          <Link href={`/teacher/learners?grade=${gradeLevelId}`}>
             <ArrowLeft className="h-4 w-4" /> Back to {gradeLabel}
           </Link>
         </Button>
@@ -160,7 +160,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
           <CardHeader>
             <CardTitle>Import learners</CardTitle>
             <CardDescription>
-              Upload a CSV matching Section A fields for {gradeLabel}. Valid rows are
+              Upload a CSV matching Section A + B fields for {gradeLabel}. Valid rows are
               imported; invalid rows are reported and skipped (not all-or-nothing).
             </CardDescription>
           </CardHeader>
@@ -300,7 +300,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button asChild>
-              <Link href={`/teacher/grade/${gradeLevelId}`}>View learners</Link>
+              <Link href={`/teacher/learners?grade=${gradeLevelId}`}>View learners</Link>
             </Button>
             <Button
               type="button"

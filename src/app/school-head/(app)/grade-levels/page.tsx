@@ -5,12 +5,8 @@ import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { ListCardSkeleton } from "@/components/loading";
-import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { CreateGradeLevelButton } from "@/components/school-head/create-grade-level-button";
-import { GradeSectionsPanel } from "@/components/school-head/section-forms";
+import { GradeLevelsClient } from "@/components/school-head/grade-levels-client";
 
 export const dynamic = "force-dynamic";
 
@@ -47,66 +43,23 @@ async function GradeLevelsGrid({
   const activeTypes = ALL_TYPES.filter((type) => existingMap.has(type));
   const inactiveTypes = ALL_TYPES.filter((type) => !existingMap.has(type));
 
-  return (
-    <div className="space-y-8">
-      {activeTypes.length > 0 ? (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Active grades</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {activeTypes.map((type) => {
-              const grade = existingMap.get(type)!;
-              const sectionCount = grade.sections.length;
-              return (
-                <Card key={type} className="border-primary/50">
-                  <CardContent className="space-y-3 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold">{GRADE_LEVEL_LABELS[type]}</span>
-                      <Badge variant="secondary">Active</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {grade._count.teachers} teachers · {grade._count.learners} learners ·{" "}
-                      {sectionCount} {sectionCount === 1 ? "section" : "sections"}
-                    </p>
-                    <GradeSectionsPanel
-                      gradeLevelId={grade.id}
-                      sections={grade.sections}
-                      readOnly={isSuperAdminView}
-                    />
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+  const active = activeTypes.map((type) => {
+    const grade = existingMap.get(type)!;
+    return {
+      id: grade.id,
+      type,
+      teacherCount: grade._count.teachers,
+      learnerCount: grade._count.learners,
+      sections: grade.sections,
+    };
+  });
 
-      {inactiveTypes.length > 0 ? (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            {isSuperAdminView ? "Not created" : "Create a grade"}
-          </h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
-            {inactiveTypes.map((type) => (
-              <Card key={type}>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{GRADE_LEVEL_LABELS[type]}</span>
-                  </div>
-                  {isSuperAdminView ? (
-                    <p className="text-xs text-muted-foreground">Not created</p>
-                  ) : (
-                    <CreateGradeLevelButton
-                      type={type}
-                      label={GRADE_LEVEL_LABELS[type]}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
+  return (
+    <GradeLevelsClient
+      active={active}
+      inactiveTypes={[...inactiveTypes]}
+      readOnly={isSuperAdminView}
+    />
   );
 }
 

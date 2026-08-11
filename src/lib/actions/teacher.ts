@@ -79,7 +79,6 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     metadata: { schoolId: user.schoolId, userId: user.id },
   });
 
-  revalidatePath("/teacher");
   revalidatePath("/teacher/settings/profile");
   revalidateTeacherDashboard(user.id);
   return { ok: true };

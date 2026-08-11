@@ -13,7 +13,7 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
   revalidateSchoolDashboard,
   revalidateSchoolsList,
-  revalidateTeacherDashboard,
+  revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -210,11 +210,16 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
 
   revalidatePath(`/teacher/grade/${previousGradeId}`);
   revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
-  revalidatePath(`/school-head`);
+  revalidatePath(`/teacher/aral/${previousGradeId}`);
+  revalidatePath(`/teacher/aral/${targetGradeLevelId}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  revalidatePath("/school-head/transfer");
+  revalidatePath("/school-head/teachers");
   revalidateSchoolDashboard(user.schoolId);
-  if (learner.teacherId) revalidateTeacherDashboard(learner.teacherId);
+  if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
   if (targetTeacherId !== learner.teacherId) {
-    revalidateTeacherDashboard(targetTeacherId);
+    revalidateTeacherCaches(targetTeacherId);
   }
   return { ok: true };
 }
@@ -378,13 +383,17 @@ export async function transferLearnerCrossSchool(
 
   revalidatePath(`/teacher/grade/${previousGradeId}`);
   revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
+  revalidatePath(`/teacher/aral/${previousGradeId}`);
+  revalidatePath(`/teacher/aral/${targetGradeLevelId}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
   revalidatePath("/admin/transfers");
   revalidatePath("/admin/schools");
-  revalidatePath("/school-head");
+  revalidatePath("/school-head/transfer");
   revalidateSchoolDashboard(fromSchoolId);
   revalidateSchoolDashboard(targetSchoolId);
   revalidateSchoolsList();
-  if (learner.teacherId) revalidateTeacherDashboard(learner.teacherId);
-  revalidateTeacherDashboard(targetTeacherId);
+  if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
+  revalidateTeacherCaches(targetTeacherId);
   return { ok: true };
 }

@@ -8,6 +8,7 @@ import {
   learnerCreateSchema,
   learnerUpdateSchema,
   learnerIdSchema,
+  enrollLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
@@ -16,6 +17,22 @@ import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
   | { ok: false; error: string; data?: T };
+
+/** Normalize optional Section B for Prisma (clear transferDetails unless MULTIPLE). */
+function sectionBData(data: {
+  modeOfTransportation?: "WALKING" | "MOTORCYCLE" | "BUS_JEEP_CAR";
+  distanceHomeToSchool?: "LESS_THAN_1KM" | "ONE_TO_FIVE_KM" | "MORE_THAN_5KM";
+  previousTransfers?: "NONE" | "ONE" | "MULTIPLE";
+  transferDetails?: string;
+}) {
+  return {
+    modeOfTransportation: data.modeOfTransportation ?? null,
+    distanceHomeToSchool: data.distanceHomeToSchool ?? null,
+    previousTransfers: data.previousTransfers ?? null,
+    transferDetails:
+      data.previousTransfers === "MULTIPLE" ? (data.transferDetails?.trim() || null) : null,
+  };
+}
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -67,8 +84,6 @@ export async function createLearner(
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const raw = formToObj(formData);
-  raw.isAralLearner =
-    raw.isAralLearner === "on" || raw.isAralLearner === "true" || raw.isAralLearner === true;
 
   const parsed = learnerCreateSchema.safeParse(raw);
   if (!parsed.success) {
@@ -149,8 +164,9 @@ export async function createLearner(
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
         governmentBenefits: parsed.data.governmentBenefits,
         parentEducation: parsed.data.parentEducation,
-        isAralLearner: parsed.data.isAralLearner ?? false,
-        aralEnrolledAt: parsed.data.isAralLearner ? new Date() : null,
+        ...sectionBData(parsed.data),
+        isAralLearner: false,
+        aralEnrolledAt: null,
       },
     });
 
@@ -186,7 +202,12 @@ export async function createLearner(
   });
 
   revalidatePath(`/teacher/grade/${parsed.data.gradeLevelId}`);
-  revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
+  revalidatePath("/teacher/learners");
+  revalidateLearnerScoped({
+    schoolId: user.schoolId,
+    teacherId: user.id,
+    adminDashboard: true,
+  });
   return { ok: true, data: { id: learner.id } };
 }
 
@@ -222,6 +243,14 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   const middleName = parsed.data.middleName?.trim() || undefined;
   const fullName = buildFullName(firstName, middleName, lastName);
 
+  // Form only manages 4Ps; preserve any existing IPS flag (no longer offered in UI).
+  const governmentBenefits = [
+    ...(parsed.data.governmentBenefits.includes("FOUR_PS")
+      ? (["FOUR_PS"] as const)
+      : []),
+    ...(learner.governmentBenefits.includes("IPS") ? (["IPS"] as const) : []),
+  ];
+
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
@@ -236,8 +265,9 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
         filipinoReadingProfile: parsed.data.filipinoReadingProfile,
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
-        governmentBenefits: parsed.data.governmentBenefits,
+        governmentBenefits,
         parentEducation: parsed.data.parentEducation,
+        ...sectionBData(parsed.data),
         sectionId: sectionResult.sectionId,
       },
     });
@@ -268,7 +298,11 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidatePath("/teacher/learners");
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+  });
   return { ok: true };
 }
 
@@ -318,7 +352,15 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    adminDashboard: true,
+    teacherShell: learner.isAralLearner,
+  });
   return { ok: true };
 }
 
@@ -396,7 +438,15 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    adminDashboard: true,
+    teacherShell: learner.isAralLearner,
+  });
   return { ok: true };
 }
 
@@ -441,6 +491,98 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  // ARAL flag changes sidebar hasAral; do not bust adminDashboard for toggles.
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    teacherShell: true,
+  });
   return { ok: true };
+}
+
+/**
+ * Enroll already-rostered learners into ARAL for a grade.
+ * Sets `isAralLearner` + `aralEnrolledAt` (idempotent for already-enrolled).
+ */
+export async function enrollLearnersToAral(
+  input: unknown
+): Promise<ActionResult<{ enrolled: number }>> {
+  const user = await requireSchoolUser("TEACHER");
+  if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
+
+  const parsed = enrollLearnersToAralSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const grade = await prisma.gradeLevel.findFirst({
+    where: {
+      id: parsed.data.gradeId,
+      schoolId: user.schoolId,
+      deletedAt: null,
+      teachers: { some: { id: user.id } },
+    },
+    select: { id: true },
+  });
+  if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
+
+  const uniqueIds = [...new Set(parsed.data.learnerIds)];
+  const learners = await prisma.learner.findMany({
+    where: {
+      id: { in: uniqueIds },
+      schoolId: user.schoolId,
+      gradeLevelId: grade.id,
+      teacherId: user.id,
+      deletedAt: null,
+      archivedAt: null,
+    },
+    select: { id: true, isAralLearner: true },
+  });
+
+  if (learners.length !== uniqueIds.length) {
+    return { ok: false, error: "One or more learners were not found in this grade" };
+  }
+
+  const toEnroll = learners.filter((l) => !l.isAralLearner).map((l) => l.id);
+  const enrolledAt = new Date();
+
+  if (toEnroll.length > 0) {
+    await prisma.learner.updateMany({
+      where: { id: { in: toEnroll } },
+      data: {
+        isAralLearner: true,
+        aralEnrolledAt: enrolledAt,
+      },
+    });
+  }
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.LEARNER_ENROLL_ARAL,
+    resource: "Learner",
+    resourceId: grade.id,
+    metadata: {
+      schoolId: user.schoolId,
+      gradeLevelId: grade.id,
+      learnerIds: toEnroll,
+      enrolled: toEnroll.length,
+      requested: uniqueIds.length,
+    },
+  });
+
+  revalidatePath(`/teacher/grade/${grade.id}`);
+  revalidatePath(`/teacher/aral/${grade.id}`);
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  revalidateLearnerScoped({
+    schoolId: user.schoolId,
+    teacherId: user.id,
+    teacherShell: true,
+  });
+
+  return { ok: true, data: { enrolled: toEnroll.length } };
 }

@@ -63,6 +63,26 @@ enum ReadingProfile {
   INDEPENDENT_GRADE_READY
 }
 
+// Weekly ARAL word-recognition level (not AralProfile.wordRecognition).
+enum WeeklyWordRecognitionLevel {
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_4
+  LEVEL_5
+  LEVEL_0
+  NA
+}
+
+// Weekly ARAL reading-comprehension level (1 literally / 2 inferentially / 3 critically).
+enum WeeklyReadingComprehensionLevel {
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_0
+  NA
+}
+
 enum FrustrationSubtype {
   DECODING
   COMPREHENSION_ALL
@@ -352,6 +372,7 @@ model User {
   managedLearners       Learner[]            @relation("TeacherLearners")
   recordedAttendance    Attendance[]         @relation("AttendanceRecorder")
   recordedReadingLevels ReadingLevelRecord[] @relation("ReadingRecorder")
+  recordedAttendanceDays AttendanceDayMeta[] @relation("AttendanceDayRecorder")
   teacherEnrollments    Enrollment[]         @relation("TeacherEnrollments")
   announcements         Announcement[]
   teacherInvites        TeacherInvite[]      @relation("TeacherInviteUser")
@@ -463,12 +484,13 @@ model GradeLevel {
   createdAt DateTime       @default(now())
   deletedAt DateTime?
 
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teachers       User[]          @relation("TeacherGrades")
+  school         School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teachers       User[]              @relation("TeacherGrades")
   learners       Learner[]
   sections       Section[]
   enrollments    Enrollment[]
   teacherInvites TeacherInvite[]
+  attendanceDays AttendanceDayMeta[]
 
   @@unique([schoolId, type])
   @@index([deletedAt])
@@ -558,6 +580,12 @@ model Learner {
   governmentBenefits GovernmentBenefit[]
   parentEducation    ParentEducation
 
+  // Section B - Attendance & School Background
+  modeOfTransportation ModeOfTransportation?
+  distanceHomeToSchool DistanceToSchool?
+  previousTransfers    SchoolTransfers?
+  transferDetails      String?
+
   // ARAL flag
   isAralLearner   Boolean   @default(false)
   aralEnrolledAt  DateTime?
@@ -601,12 +629,6 @@ model Announcement {
 model AralProfile {
   id        String @id @default(uuid())
   learnerId String @unique
-
-  // B. Attendance & School Background
-  modeOfTransportation ModeOfTransportation
-  distanceHomeToSchool DistanceToSchool
-  previousTransfers    SchoolTransfers
-  transferDetails      String?
 
   // C. Reading Behavior
   absenteeismFrequency      AbsenteeismFrequency
@@ -652,22 +674,41 @@ model Attendance {
   @@index([date])
 }
 
+/// Grade-level day metadata (e.g. holiday) for ARAL attendance grids.
+model AttendanceDayMeta {
+  id           String   @id @default(uuid())
+  gradeLevelId String
+  date         DateTime @db.Date
+  isHoliday    Boolean  @default(false)
+  recordedById String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gradeLevel GradeLevel @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  recordedBy User       @relation("AttendanceDayRecorder", fields: [recordedById], references: [id])
+
+  @@unique([gradeLevelId, date])
+  @@index([date])
+}
+
 model ReadingLevelRecord {
-  id              String         @id @default(uuid())
-  learnerId       String
-  monthYear       String         // "2026-05"
-  englishProfile  ReadingProfile
-  filipinoProfile ReadingProfile
-  notes           String?
-  recordedById    String
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                        String                            @id @default(uuid())
+  learnerId                 String
+  weekStart                 DateTime                          @db.Date // Monday of the recorded week
+  englishProfile            ReadingProfile
+  filipinoProfile           ReadingProfile
+  wordRecognitionLevel      WeeklyWordRecognitionLevel?
+  readingComprehensionLevel WeeklyReadingComprehensionLevel?
+  notes                     String?
+  recordedById              String
+  createdAt                 DateTime                          @default(now())
+  updatedAt                 DateTime                          @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
   recordedBy User    @relation("ReadingRecorder", fields: [recordedById], references: [id])
 
-  @@unique([learnerId, monthYear])
-  @@index([monthYear])
+  @@unique([learnerId, weekStart])
+  @@index([weekStart])
 }
 
 model AuditLog {

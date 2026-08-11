@@ -17,6 +17,10 @@ const PARENT_EDUCATION = [
   "SECONDARY_LEVEL", "SECONDARY_GRADUATE", "COLLEGE_LEVEL", "COLLEGE_GRADUATE",
 ] as const;
 
+const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
+const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
+const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
+
 const optionalMiddleName = z
   .string()
   .trim()
@@ -33,6 +37,21 @@ const optionalSectionId = z
     return trimmed.length > 0 ? trimmed : undefined;
   })
   .pipe(z.union([z.string().uuid("Invalid section"), z.undefined()]));
+
+/** Empty string / null → undefined for optional enums. */
+function optionalEnum<T extends readonly [string, ...string[]]>(values: T) {
+  return z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(values).optional()
+  );
+}
+
+const optionalTransferDetails = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .or(z.literal("").transform(() => undefined));
 
 /** Frustration subtypes only when Frustration/High Emergent is selected (L-A4/L-A5). */
 function refineFrustrationSubtypes<
@@ -67,6 +86,33 @@ function refineFrustrationSubtypes<
   }
 }
 
+/** Section B transfer details rules when previousTransfers is provided. */
+function refineSectionBTransfers<
+  T extends {
+    previousTransfers?: (typeof TRANSFERS)[number];
+    transferDetails?: string;
+  },
+>(data: T, ctx: z.RefinementCtx) {
+  if (data.previousTransfers === "MULTIPLE" && !data.transferDetails?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Specify transfer details when Multiple transfers is selected",
+      path: ["transferDetails"],
+    });
+  }
+  if (
+    data.previousTransfers != null &&
+    data.previousTransfers !== "MULTIPLE" &&
+    data.transferDetails?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Transfer details are only allowed when Multiple transfers is selected",
+      path: ["transferDetails"],
+    });
+  }
+}
+
 const sectionAFields = {
   firstName: nonEmpty("First name required").max(80),
   middleName: optionalMiddleName,
@@ -81,30 +127,45 @@ const sectionAFields = {
   parentEducation: z.enum(PARENT_EDUCATION),
 };
 
+/** Optional Section B (nullable on Learner). */
+const sectionBFields = {
+  modeOfTransportation: optionalEnum(TRANSPORTATION),
+  distanceHomeToSchool: optionalEnum(DISTANCE),
+  previousTransfers: optionalEnum(TRANSFERS),
+  transferDetails: optionalTransferDetails,
+};
+
 export const learnerCreateSchema = z
   .object({
     gradeLevelId: nonEmpty("Grade level required"),
     sectionId: optionalSectionId,
     ...sectionAFields,
-    isAralLearner: z.boolean().default(false),
+    ...sectionBFields,
     /** Client must re-submit with true after possible_duplicate warning. */
     confirmDuplicate: z
       .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on"), z.literal("")])
       .optional()
       .transform((v) => v === true || v === "true" || v === "on"),
   })
-  .superRefine(refineFrustrationSubtypes);
+  .superRefine((data, ctx) => {
+    refineFrustrationSubtypes(data, ctx);
+    refineSectionBTransfers(data, ctx);
+  });
 
 export type LearnerCreateInput = z.infer<typeof learnerCreateSchema>;
 
-/** Edit Section A (+ optional section); grade/teacher via transfer. */
+/** Edit Section A + B (+ optional section); grade/teacher via transfer. */
 export const learnerUpdateSchema = z
   .object({
     id: nonEmpty(),
     sectionId: optionalSectionId,
     ...sectionAFields,
+    ...sectionBFields,
   })
-  .superRefine(refineFrustrationSubtypes);
+  .superRefine((data, ctx) => {
+    refineFrustrationSubtypes(data, ctx);
+    refineSectionBTransfers(data, ctx);
+  });
 
 export type LearnerUpdateInput = z.infer<typeof learnerUpdateSchema>;
 
@@ -113,3 +174,11 @@ export const learnerIdSchema = z.object({
 });
 
 export type LearnerIdInput = z.infer<typeof learnerIdSchema>;
+
+/** Bulk enroll existing grade learners into ARAL. */
+export const enrollLearnersToAralSchema = z.object({
+  gradeId: nonEmpty("Grade required"),
+  learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
+});
+
+export type EnrollLearnersToAralInput = z.infer<typeof enrollLearnersToAralSchema>;

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LearnerForm } from "@/components/forms/learner-form";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,9 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
       deletedAt: null,
       archivedAt: null,
     },
+    include: {
+      gradeLevel: { select: { id: true, type: true } },
+    },
   });
   if (!learner) notFound();
   if (learner.gradeLevelId !== gradeId) notFound();
@@ -47,13 +51,22 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
     orderBy: { name: "asc" },
   });
 
+  const gradeType = learner.gradeLevel.type;
+  const grades = [
+    {
+      id: learner.gradeLevel.id,
+      type: gradeType,
+      label: GRADE_LEVEL_LABELS[gradeType] ?? gradeType,
+    },
+  ];
+
   const nestedWarmHrefs = getLearnerDetailWarmHrefs(gradeId, learner);
   const nestedWarmKey = `teacher:learner:${learner.id}:edit`;
 
   return (
     <AppShell
       title={`Edit — ${learner.fullName}`}
-      subtitle="Update Section A profile"
+      subtitle="Update Section A + B profile"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
@@ -73,6 +86,8 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
         <CardContent className="pt-6">
           <LearnerForm
             gradeLevelId={gradeId}
+            gradeType={gradeType}
+            grades={grades}
             mode="edit"
             submitLabel="Save changes"
             sections={gradeSections}
@@ -89,6 +104,10 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
               filipinoFrustrationSubtypes: learner.filipinoFrustrationSubtypes,
               governmentBenefits: learner.governmentBenefits,
               parentEducation: learner.parentEducation,
+              modeOfTransportation: learner.modeOfTransportation,
+              distanceHomeToSchool: learner.distanceHomeToSchool,
+              previousTransfers: learner.previousTransfers,
+              transferDetails: learner.transferDetails,
               sectionId: learner.sectionId,
             }}
           />

@@ -31,9 +31,8 @@ function readDatabaseUrl(): string | undefined {
 
 const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createPrismaClient() {
+  return new PrismaClient({
     // Skip "query" in normal `next dev` — it floods the terminal on every
     // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
     log:
@@ -44,7 +43,30 @@ export const prisma =
         : ["error"],
     ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
   });
+}
 
-// Cache in production too. Vercel reuses a warm lambda across invocations, so
-// re-instantiating would open a new pool of pooler connections per request.
-globalForPrisma.prisma = prisma;
+/**
+ * After `prisma generate` adds models, a process-global client created before
+ * generate still runs but new delegates are `undefined` until recreate/restart.
+ * Detect that in dev and rebuild so ARAL holiday / new models don't 500.
+ */
+function getPrismaClient(): PrismaClient {
+  const existing = globalForPrisma.prisma;
+  if (
+    existing &&
+    process.env.NODE_ENV === "development" &&
+    typeof (existing as { attendanceDayMeta?: unknown }).attendanceDayMeta ===
+      "undefined"
+  ) {
+    void existing.$disconnect().catch(() => {});
+    globalForPrisma.prisma = undefined;
+  }
+
+  const client = globalForPrisma.prisma ?? createPrismaClient();
+  // Cache in production too. Vercel reuses a warm lambda across invocations, so
+  // re-instantiating would open a new pool of pooler connections per request.
+  globalForPrisma.prisma = client;
+  return client;
+}
+
+export const prisma = getPrismaClient();

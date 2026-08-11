@@ -1,20 +1,41 @@
 "use client";
 
-import { useTransition } from "react";
-import { toast } from "sonner";
+import { useOptimistic, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { setSchoolActive } from "@/lib/actions/school-management";
+import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
 
 export function SchoolActiveToggle({
   schoolId,
   isActive,
   schoolName,
+  onToggle,
+  pending: pendingProp,
 }: {
   schoolId: string;
   isActive: boolean;
   schoolName: string;
+  /** Parent-owned optimistic mutation (table). */
+  onToggle?: (nextActive: boolean) => void | Promise<void>;
+  pending?: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [optimisticActive, setOptimisticActive] = useOptimistic(isActive);
+  const [localPending, startTransition] = useTransition();
+  const pending = pendingProp ?? localPending;
+  const shownActive = onToggle ? isActive : optimisticActive;
+
+  const runStandalone = (next: boolean) =>
+    runOptimistic(startTransition, async () => {
+      setOptimisticActive(next);
+      const fd = new FormData();
+      fd.set("schoolId", schoolId);
+      fd.set("isActive", next ? "true" : "false");
+      const res = await setSchoolActive(fd);
+      await settleActionResult(
+        res,
+        next ? "School activated" : "School deactivated"
+      );
+    });
 
   return (
     <Button
@@ -22,9 +43,9 @@ export function SchoolActiveToggle({
       variant="ghost"
       size="sm"
       disabled={pending}
-      title={isActive ? "Deactivate school" : "Activate school"}
+      title={shownActive ? "Deactivate school" : "Activate school"}
       onClick={() => {
-        const next = !isActive;
+        const next = !shownActive;
         if (
           !window.confirm(
             next
@@ -34,17 +55,15 @@ export function SchoolActiveToggle({
         ) {
           return;
         }
-        const fd = new FormData();
-        fd.set("schoolId", schoolId);
-        fd.set("isActive", next ? "true" : "false");
-        startTransition(async () => {
-          const res = await setSchoolActive(fd);
-          if (!res.ok) toast.error(res.error);
-          else toast.success(next ? "School activated" : "School deactivated");
+        const handle = onToggle
+          ? () => Promise.resolve(onToggle(next))
+          : () => runStandalone(next);
+        void handle().catch(() => {
+          /* toast already shown */
         });
       }}
     >
-      {isActive ? "Deactivate" : "Activate"}
+      {shownActive ? "Deactivate" : "Activate"}
     </Button>
   );
 }

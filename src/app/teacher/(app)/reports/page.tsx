@@ -3,10 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { ExportControls } from "@/components/reports/lazy-export-controls";
-import { PrintableLearnersReport } from "@/components/reports/printable-learners-report";
-import { ReportPrintAudit } from "@/components/reports/report-print-audit";
-import { loadLearnersForReport } from "@/lib/actions/export-learners";
+import { OnDemandReportPanel } from "@/components/reports/on-demand-report-panel";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { TableSectionSkeleton } from "@/components/loading";
 
@@ -25,7 +22,8 @@ async function TeacherReportBody({
     ? { schoolId, deletedAt: null, teachers: { some: { id: teacherId } } }
     : { schoolId, deletedAt: null };
 
-  const [grades, sections, report] = await Promise.all([
+  // Filters only — full learner dump loads on demand via OnDemandReportPanel.
+  const [grades, sections] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: gradeWhere,
       select: { id: true, type: true },
@@ -40,36 +38,19 @@ async function TeacherReportBody({
       select: { id: true, name: true, gradeLevelId: true },
       orderBy: { name: "asc" },
     }),
-    loadLearnersForReport({
-      schoolId,
-      teacherId: isTeacher ? teacherId : undefined,
-    }),
   ]);
 
   return (
-    <>
-      <div className="mb-4 space-y-4">
-        <ExportControls
-          role="TEACHER"
-          grades={grades.map((g) => ({
-            id: g.id,
-            label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
-          }))}
-          sections={sections}
-        />
-      </div>
-      <div className="rounded-xl border border-border bg-card p-6 print:border-0 print:p-0">
-        <PrintableLearnersReport
-          schoolName={report.schoolName}
-          generatedAt={report.generatedAt}
-          learners={report.learners}
-          aralCount={report.aralCount}
-          byGrade={report.byGrade}
-          byGradeSection={report.byGradeSection}
-          subtitle="Teacher assigned grades"
-        />
-      </div>
-    </>
+    <OnDemandReportPanel
+      role="TEACHER"
+      schoolId={schoolId}
+      grades={grades.map((g) => ({
+        id: g.id,
+        label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+      }))}
+      sections={sections}
+      subtitle="Teacher assigned grades"
+    />
   );
 }
 
@@ -90,7 +71,6 @@ export default async function TeacherReportsPage() {
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >
-      <ReportPrintAudit scope="TEACHER" schoolId={schoolId} />
       <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
         <TeacherReportBody
           schoolId={schoolId}

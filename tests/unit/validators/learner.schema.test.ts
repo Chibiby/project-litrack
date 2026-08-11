@@ -31,8 +31,33 @@ describe("learnerCreateSchema", () => {
     expect(result.data.englishFrustrationSubtypes).toEqual([]);
     expect(result.data.filipinoFrustrationSubtypes).toEqual([]);
     expect(result.data.governmentBenefits).toEqual([]);
-    expect(result.data.isAralLearner).toBe(false);
+    expect(result.data.modeOfTransportation).toBeUndefined();
     expect(result.data.confirmDuplicate).toBe(false);
+    expect("isAralLearner" in result.data).toBe(false);
+  });
+
+  it("accepts optional Section B fields and requires transferDetails for MULTIPLE", () => {
+    const withB = learnerCreateSchema.safeParse({
+      ...validBase,
+      modeOfTransportation: "WALKING",
+      distanceHomeToSchool: "LESS_THAN_1KM",
+      previousTransfers: "NONE",
+    });
+    expect(withB.success).toBe(true);
+
+    expect(
+      learnerCreateSchema.safeParse({
+        ...validBase,
+        previousTransfers: "MULTIPLE",
+      }).success
+    ).toBe(false);
+
+    const multi = learnerCreateSchema.safeParse({
+      ...validBase,
+      previousTransfers: "MULTIPLE",
+      transferDetails: "Three schools",
+    });
+    expect(multi.success).toBe(true);
   });
 
   it("parses confirmDuplicate from form string values", () => {

@@ -62,7 +62,6 @@ export async function createSchoolYear(formData: FormData): Promise<ActionResult
     });
 
     revalidatePath("/school-head/school-years");
-    revalidatePath("/school-head");
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
@@ -111,7 +110,6 @@ export async function setActiveSchoolYear(formData: FormData): Promise<ActionRes
   });
 
   revalidatePath("/school-head/school-years");
-  revalidatePath("/school-head");
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

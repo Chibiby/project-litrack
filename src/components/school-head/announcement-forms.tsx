@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,12 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
 } from "@/lib/actions/announcement";
+import {
+  listOptimisticReducer,
+  runOptimistic,
+  settleActionResult,
+  type ListOptimisticOp,
+} from "@/lib/ui/optimistic";
 
 export function CreateAnnouncementForm() {
   const [pending, startTransition] = useTransition();
@@ -46,16 +52,37 @@ export function CreateAnnouncementForm() {
   );
 }
 
+export type AnnouncementListItem = {
+  id: string;
+  title: string;
+  body: string;
+  authorName: string;
+  publishedAt: string;
+};
+
 export function AnnouncementActions({
   announcementId,
   title,
   body,
+  pending,
+  onDelete,
 }: {
   announcementId: string;
   title: string;
   body: string;
+  pending?: boolean;
+  onDelete?: () => void | Promise<void>;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [localPending, startTransition] = useTransition();
+  const isPending = Boolean(pending) || localPending;
+
+  const runStandaloneDelete = () =>
+    runOptimistic(startTransition, async () => {
+      const fd = new FormData();
+      fd.set("announcementId", announcementId);
+      const res = await deleteAnnouncement(fd);
+      await settleActionResult(res, "Announcement deleted");
+    });
 
   return (
     <div className="space-y-3 border-t border-border/60 pt-3">
@@ -70,10 +97,10 @@ export function AnnouncementActions({
         }
       >
         <input type="hidden" name="announcementId" value={announcementId} />
-        <Input name="title" defaultValue={title} disabled={pending} />
-        <Textarea name="body" defaultValue={body} rows={3} disabled={pending} />
+        <Input name="title" defaultValue={title} disabled={isPending} />
+        <Textarea name="body" defaultValue={body} rows={3} disabled={isPending} />
         <div className="flex gap-2">
-          <Button type="submit" size="sm" variant="outline" disabled={pending}>
+          <Button type="submit" size="sm" variant="outline" disabled={isPending}>
             Save
           </Button>
           <ConfirmAction
@@ -81,31 +108,72 @@ export function AnnouncementActions({
             description="It will be removed from the school feed."
             confirmLabel="Delete"
             variant="destructive"
-            disabled={pending}
+            disabled={isPending}
             trigger={
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 className="text-destructive"
-                disabled={pending}
+                disabled={isPending}
               >
                 Delete
               </Button>
             }
-            onConfirm={async () => {
-              const fd = new FormData();
-              fd.set("announcementId", announcementId);
-              const res = await deleteAnnouncement(fd);
-              if (!res.ok) {
-                toast.error(res.error);
-                throw new Error(res.error);
-              }
-              toast.success("Announcement deleted");
-            }}
+            onConfirm={onDelete ?? runStandaloneDelete}
           />
         </div>
       </form>
     </div>
+  );
+}
+
+/** Client list so delete can remove the row before the server returns. */
+export function AnnouncementsList({
+  announcements,
+  readOnly = false,
+}: {
+  announcements: AnnouncementListItem[];
+  readOnly?: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [optimisticItems, dispatchOptimistic] = useOptimistic(
+    announcements,
+    (state: AnnouncementListItem[], op: ListOptimisticOp<AnnouncementListItem>) =>
+      listOptimisticReducer(state, op)
+  );
+
+  const remove = (id: string) =>
+    runOptimistic(startTransition, async () => {
+      dispatchOptimistic({ type: "remove", id });
+      const fd = new FormData();
+      fd.set("announcementId", id);
+      const res = await deleteAnnouncement(fd);
+      await settleActionResult(res, "Announcement deleted");
+    });
+
+  return (
+    <ul className="space-y-4">
+      {optimisticItems.map((a) => (
+        <li key={a.id} className="rounded-lg border border-border/80 p-4">
+          <h3 className="font-semibold">{a.title}</h3>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+            {a.body}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {a.authorName} · {a.publishedAt}
+          </p>
+          {!readOnly ? (
+            <AnnouncementActions
+              announcementId={a.id}
+              title={a.title}
+              body={a.body}
+              pending={pending}
+              onDelete={() => remove(a.id)}
+            />
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }

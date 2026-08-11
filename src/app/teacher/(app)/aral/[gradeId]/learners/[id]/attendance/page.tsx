@@ -14,12 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
-import { AttendanceMarkForm } from "@/components/forms/attendance-mark-form";
 import { EmptyState } from "@/components/dashboard";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { ArrowLeft } from "lucide-react";
-import { getMonday } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -49,84 +47,73 @@ export default async function AttendancePage({
   if (!learner) notFound();
   if (learner.gradeLevelId !== gradeId) notFound();
 
-  const weekStart = getMonday(new Date());
-
   const attendances = await prisma.attendance.findMany({
-    where: { learnerId: learner.id, weekStart },
-    orderBy: { date: "asc" },
+    where: { learnerId: learner.id },
+    orderBy: { date: "desc" },
+    take: 60,
   });
 
-  const canMark = learner.isAralLearner && !isSuperAdmin;
   const nestedWarmHrefs = getAralActionWarmHrefs(gradeId, learner.id);
   const nestedWarmKey = `teacher:aral-action:${learner.id}:nested`;
+  const gradeGridHref = sp.schoolId
+    ? `/teacher/aral/${gradeId}/attendance?schoolId=${sp.schoolId}`
+    : `/teacher/aral/${gradeId}/attendance`;
 
   return (
     <AppShell
       title={`Attendance — ${learner.fullName}`}
-      subtitle={`Week of ${weekStart.toLocaleDateString()}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      subtitle={`Recent attendance history${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
       <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`} prefetch={true}>
+          <Link href={`/teacher/aral?grade=${gradeId}`} prefetch={true}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href={gradeGridHref}>Grade-wide attendance</Link>
+        </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[1fr_360px]">
-        <Card>
-          <CardContent className="p-0">
-            {attendances.length === 0 ? (
-              <div className="p-4">
-                <EmptyState
-                  title="No attendance recorded this week"
-                  description="Use the form on this page to mark today’s attendance."
-                />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Notes</TableHead>
+      <Card>
+        <CardContent className="p-0">
+          {attendances.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                title="No attendance recorded yet"
+                description="Mark daily attendance from the grade-wide attendance page."
+                actionHref={gradeGridHref}
+                actionLabel="Open grade grid"
+              />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attendances.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell>{a.date.toLocaleDateString()}</TableCell>
+                    <TableCell>{ATTENDANCE_STATUS_LABELS[a.status]}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {a.notes ?? ""}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attendances.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>{a.date.toLocaleDateString()}</TableCell>
-                      <TableCell>{ATTENDANCE_STATUS_LABELS[a.status]}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {a.notes ?? ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="font-semibold mb-3">Mark attendance</h2>
-            {canMark ? (
-              <AttendanceMarkForm learnerId={learner.id} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isSuperAdmin
-                  ? "Admin view is read-only."
-                  : "Attendance marking is available for ARAL learners only. History remains readable if ARAL status changes later."}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }

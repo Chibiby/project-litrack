@@ -79,6 +79,10 @@ export function invalidateNavWarm(cacheKey?: string): void {
  * Uses PrefetchKind `full` so force-dynamic + loading.tsx routes warm the full
  * RSC payload (not only the loading skeleton). Prefetches are concurrency-
  * limited and staggered so rapid side-menu use does not stampede Prisma.
+ *
+ * Callers must pass cheap shell hrefs only (home / settings profile + security
+ * via `getShellWarmHrefs`). Heavy sidebar routes rely on default Link prefetch
+ * (loading.tsx skeleton) — do not FULL-warm reports, rosters, or transfer here.
  */
 export function NavPrefetcher({ cacheKey, hrefs }: NavPrefetcherProps) {
   const router = useRouter();

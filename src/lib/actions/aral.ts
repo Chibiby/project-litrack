@@ -141,6 +141,8 @@ export async function saveAralProfile(formData: FormData): Promise<ActionResult>
 
 
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
+  revalidatePath("/teacher/aral");
+  revalidatePath("/teacher/learners");
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
 

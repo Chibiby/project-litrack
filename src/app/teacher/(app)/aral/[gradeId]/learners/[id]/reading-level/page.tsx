@@ -13,11 +13,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { READING_PROFILE_LABELS } from "@/lib/constants/enum-labels";
-import { ReadingLevelForm } from "@/components/forms/reading-level-form";
+import {
+  WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
+  WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
+  readingProfileLabelsForGradeType,
+} from "@/lib/constants/enum-labels";
 import { EmptyState } from "@/components/dashboard";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { toDateKey } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -45,89 +49,99 @@ export default async function ReadingLevelPage({
   const learner = await prisma.learner.findFirst({
     where: learnerFilter,
     include: {
-      readingLevels: { orderBy: { monthYear: "desc" }, take: 12 },
+      gradeLevel: { select: { type: true } },
+      readingLevels: { orderBy: { weekStart: "desc" }, take: 12 },
     },
   });
   if (!learner) notFound();
   if (learner.gradeLevelId !== gradeId) notFound();
 
-  const canRecord = learner.isAralLearner && !isSuperAdmin;
+  const readingLabels = readingProfileLabelsForGradeType(learner.gradeLevel.type);
   const nestedWarmHrefs = getAralActionWarmHrefs(gradeId, learner.id);
   const nestedWarmKey = `teacher:aral-action:${learner.id}:nested`;
+  const gradeGridHref = sp.schoolId
+    ? `/teacher/aral/${gradeId}/reading-level?schoolId=${sp.schoolId}`
+    : `/teacher/aral/${gradeId}/reading-level`;
 
   return (
     <AppShell
       title={`Reading Level — ${learner.fullName}`}
-      subtitle={`Monthly reading level records${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      subtitle={`Weekly reading level history${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
       <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral/${gradeId}`} prefetch={true}>
+          <Link href={`/teacher/aral?grade=${gradeId}`} prefetch={true}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href={gradeGridHref}>Grade-wide reading level</Link>
+        </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[1fr_360px]">
-        <Card>
-          <CardContent className="p-0">
-            {learner.readingLevels.length === 0 ? (
-              <div className="p-4">
-                <EmptyState
-                  title="No reading-level records yet"
-                  description="Use the form on this page to record this learner’s current reading level."
-                />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Month</TableHead>
-                    <TableHead>English</TableHead>
-                    <TableHead>Filipino</TableHead>
-                    <TableHead>Notes</TableHead>
+      <Card>
+        <CardContent className="p-0">
+          {learner.readingLevels.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                title="No reading-level records yet"
+                description="Record weekly levels from the grade-wide reading level page."
+                actionHref={gradeGridHref}
+                actionLabel="Open grade grid"
+              />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Week of</TableHead>
+                  <TableHead>English</TableHead>
+                  <TableHead>Filipino</TableHead>
+                  <TableHead>Word recognition</TableHead>
+                  <TableHead>Reading comprehension</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {learner.readingLevels.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-mono">
+                      {toDateKey(r.weekStart)}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {readingLabels[r.englishProfile]}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {readingLabels[r.filipinoProfile]}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.wordRecognitionLevel
+                        ? WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[
+                            r.wordRecognitionLevel
+                          ]
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.readingComprehensionLevel
+                        ? WEEKLY_READING_COMPREHENSION_LEVEL_LABELS[
+                            r.readingComprehensionLevel
+                          ]
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {r.notes ?? ""}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {learner.readingLevels.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono">{r.monthYear}</TableCell>
-                      <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[r.englishProfile]}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {READING_PROFILE_LABELS[r.filipinoProfile]}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {r.notes ?? ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="font-semibold mb-3">Record reading level</h2>
-            {canRecord ? (
-              <ReadingLevelForm learnerId={learner.id} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isSuperAdmin
-                  ? "Admin view is read-only."
-                  : "Reading-level recording is available for ARAL learners only. History remains readable if ARAL status changes later."}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }

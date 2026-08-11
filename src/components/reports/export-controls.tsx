@@ -17,12 +17,21 @@ export type ReportSectionOption = {
   gradeLevelId: string;
 };
 
+export type ReportExportFilters = {
+  gradeLevelId?: string;
+  sectionId?: string;
+  aralOnly?: boolean;
+  schoolId?: string;
+};
+
 type Props = {
   role: "TEACHER" | "SCHOOL_HEAD";
   gradeLevelId?: string;
   schoolId?: string;
   grades?: { id: string; label: string }[];
   sections?: ReportSectionOption[];
+  /** When set, Print loads/refreshes printable data with current filters first. */
+  onPrint?: (filters: ReportExportFilters) => void | Promise<void>;
 };
 
 function downloadBase64Xlsx(base64: string, filename: string) {
@@ -46,6 +55,7 @@ export function ExportControls({
   schoolId,
   grades,
   sections = [],
+  onPrint,
 }: Props) {
   const [aralOnly, setAralOnly] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState(gradeLevelId ?? "");
@@ -57,6 +67,15 @@ export function ExportControls({
     return sections.filter((s) => s.gradeLevelId === selectedGrade);
   }, [sections, selectedGrade]);
 
+  function currentFilters(): ReportExportFilters {
+    return {
+      gradeLevelId: selectedGrade || undefined,
+      sectionId: selectedSection || undefined,
+      aralOnly,
+      schoolId,
+    };
+  }
+
   function handleGradeChange(value: string) {
     setSelectedGrade(value);
     setSelectedSection("");
@@ -64,12 +83,7 @@ export function ExportControls({
 
   function handleExcel() {
     startTransition(async () => {
-      const filter = {
-        gradeLevelId: selectedGrade || undefined,
-        sectionId: selectedSection || undefined,
-        aralOnly,
-        schoolId,
-      };
+      const filter = currentFilters();
       const res =
         role === "TEACHER"
           ? await exportTeacherLearnersExcel(filter)
@@ -80,6 +94,16 @@ export function ExportControls({
       }
       downloadBase64Xlsx(res.data.base64, res.data.filename);
       toast.success("Excel downloaded");
+    });
+  }
+
+  function handlePrint() {
+    if (!onPrint) {
+      window.print();
+      return;
+    }
+    startTransition(async () => {
+      await onPrint(currentFilters());
     });
   }
 
@@ -144,8 +168,13 @@ export function ExportControls({
           )}
           Download Excel
         </Button>
-        <Button type="button" variant="outline" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" /> Print / Save PDF
+        <Button type="button" variant="outline" onClick={handlePrint} disabled={pending}>
+          {pending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Printer className="h-4 w-4" />
+          )}{" "}
+          Print / Save PDF
         </Button>
       </div>
     </div>

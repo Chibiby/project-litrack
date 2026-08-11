@@ -5,34 +5,29 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ConfirmAction } from "@/components/confirm-action";
+import { LearnerSearchSelect } from "@/components/learners/learner-search-select";
 import { transferLearner } from "@/lib/actions/enrollment";
+import type { LearnerSearchHit } from "@/lib/learners/search";
 import { SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
-
-type LearnerOption = {
-  id: string;
-  fullName: string;
-  gradeLevelId: string;
-  gradeLabel: string;
-};
 
 type GradeOption = { id: string; label: string };
 type SectionOption = { id: string; name: string; gradeLevelId: string };
 type TeacherOption = { id: string; fullName: string; gradeIds: string[] };
 
 export function TransferLearnerForm({
-  learners,
+  schoolId,
   grades,
   sections,
   teachers,
 }: {
-  learners: LearnerOption[];
+  schoolId: string;
   grades: GradeOption[];
   sections: SectionOption[];
   teachers: TeacherOption[];
 }) {
   const [pending, setPending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [learnerId, setLearnerId] = useState("");
+  const [learner, setLearner] = useState<LearnerSearchHit | null>(null);
   const [gradeId, setGradeId] = useState("");
   const [sectionId, setSectionId] = useState(SECTION_CLEAR);
   const [teacherId, setTeacherId] = useState("");
@@ -46,7 +41,6 @@ export function TransferLearnerForm({
     [teachers, gradeId]
   );
 
-  const selectedLearner = learners.find((l) => l.id === learnerId);
   const selectedGrade = grades.find((g) => g.id === gradeId);
   const selectedSection =
     sectionId && sectionId !== SECTION_CLEAR
@@ -55,8 +49,8 @@ export function TransferLearnerForm({
   const selectedTeacher = teachers.find((t) => t.id === teacherId);
 
   const summary =
-    selectedLearner && selectedGrade && selectedTeacher
-      ? `Transfer ${selectedLearner.fullName} (${selectedLearner.gradeLabel}) to ${selectedGrade.label}${
+    learner && selectedGrade && selectedTeacher
+      ? `Transfer ${learner.fullName} (${learner.gradeLabel}) to ${selectedGrade.label}${
           selectedSection
             ? `, section ${selectedSection.name}`
             : ", no section"
@@ -69,31 +63,20 @@ export function TransferLearnerForm({
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!learnerId || !gradeId || !teacherId) {
+          if (!learner || !gradeId || !teacherId) {
             toast.error("Select learner, grade, and teacher");
             return;
           }
           setConfirmOpen(true);
         }}
       >
-        <div className="space-y-2">
-          <Label htmlFor="learnerId">Learner</Label>
-          <select
-            id="learnerId"
-            value={learnerId}
-            onChange={(e) => setLearnerId(e.target.value)}
-            required
-            disabled={pending}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-          >
-            <option value="">Select learner</option>
-            {learners.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.fullName} ({l.gradeLabel})
-              </option>
-            ))}
-          </select>
-        </div>
+        <LearnerSearchSelect
+          schoolId={schoolId}
+          value={learner}
+          onChange={setLearner}
+          disabled={pending}
+          label="Learner"
+        />
         <div className="space-y-2">
           <Label htmlFor="targetGrade">Target grade</Label>
           <select
@@ -165,10 +148,11 @@ export function TransferLearnerForm({
         variant="default"
         disabled={pending}
         onConfirm={async () => {
+          if (!learner) return;
           setPending(true);
           try {
             const fd = new FormData();
-            fd.set("learnerId", learnerId);
+            fd.set("learnerId", learner.id);
             fd.set("targetGradeLevelId", gradeId);
             fd.set("targetSectionId", sectionId || SECTION_CLEAR);
             fd.set("targetTeacherId", teacherId);
@@ -178,7 +162,7 @@ export function TransferLearnerForm({
               throw new Error(res.error);
             }
             toast.success("Learner transferred");
-            setLearnerId("");
+            setLearner(null);
             setGradeId("");
             setSectionId(SECTION_CLEAR);
             setTeacherId("");

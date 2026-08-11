@@ -5,15 +5,37 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createGradeLevel } from "@/lib/actions/school-head";
 import { Plus } from "lucide-react";
+import { runOptimistic } from "@/lib/ui/optimistic";
 
 export function CreateGradeLevelButton({
   type,
   label,
+  onCreate,
+  pending: pendingProp,
 }: {
   type: string;
   label: string;
+  /** Parent-owned optimistic create (moves card into active set). */
+  onCreate?: () => void | Promise<void>;
+  pending?: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [localPending, startTransition] = useTransition();
+  const pending = pendingProp ?? localPending;
+
+  const runStandalone = () =>
+    runOptimistic(startTransition, async () => {
+      const fd = new FormData();
+      fd.set("type", type);
+      try {
+        await createGradeLevel(fd);
+        toast.success(`${label} created`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Could not create grade level"
+        );
+        throw err instanceof Error ? err : new Error("Could not create grade level");
+      }
+    });
 
   return (
     <Button
@@ -23,17 +45,9 @@ export function CreateGradeLevelButton({
       className="w-full"
       disabled={pending}
       onClick={() => {
-        const fd = new FormData();
-        fd.set("type", type);
-        startTransition(async () => {
-          try {
-            await createGradeLevel(fd);
-            toast.success(`${label} created`);
-          } catch (err) {
-            toast.error(
-              err instanceof Error ? err.message : "Could not create grade level"
-            );
-          }
+        const handle = onCreate ?? runStandalone;
+        void Promise.resolve(handle()).catch(() => {
+          /* toast already shown */
         });
       }}
     >

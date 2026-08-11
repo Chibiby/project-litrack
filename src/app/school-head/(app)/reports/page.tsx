@@ -5,10 +5,7 @@ import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
-import { ExportControls } from "@/components/reports/lazy-export-controls";
-import { PrintableLearnersReport } from "@/components/reports/printable-learners-report";
-import { ReportPrintAudit } from "@/components/reports/report-print-audit";
-import { loadLearnersForReport } from "@/lib/actions/export-learners";
+import { OnDemandReportPanel } from "@/components/reports/on-demand-report-panel";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { TableSectionSkeleton } from "@/components/loading";
 
@@ -19,7 +16,8 @@ interface Props {
 }
 
 async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
-  const [grades, sections, report] = await Promise.all([
+  // Filters only — full school learner dump loads on demand.
+  const [grades, sections] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       select: { id: true, type: true },
@@ -30,34 +28,19 @@ async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
       select: { id: true, name: true, gradeLevelId: true },
       orderBy: { name: "asc" },
     }),
-    loadLearnersForReport({ schoolId }),
   ]);
 
   return (
-    <>
-      <div className="mb-4 space-y-4">
-        <ExportControls
-          role="SCHOOL_HEAD"
-          schoolId={schoolId}
-          grades={grades.map((g) => ({
-            id: g.id,
-            label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
-          }))}
-          sections={sections}
-        />
-      </div>
-      <div className="rounded-xl border border-border bg-card p-6 print:border-0 print:p-0">
-        <PrintableLearnersReport
-          schoolName={report.schoolName}
-          generatedAt={report.generatedAt}
-          learners={report.learners}
-          aralCount={report.aralCount}
-          byGrade={report.byGrade}
-          byGradeSection={report.byGradeSection}
-          subtitle="School-wide"
-        />
-      </div>
-    </>
+    <OnDemandReportPanel
+      role="SCHOOL_HEAD"
+      schoolId={schoolId}
+      grades={grades.map((g) => ({
+        id: g.id,
+        label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+      }))}
+      sections={sections}
+      subtitle="School-wide"
+    />
   );
 }
 
@@ -87,7 +70,6 @@ export default async function SchoolHeadReportsPage({ searchParams }: Props) {
       isSuperAdminView={isSuperAdminView}
       viewedSchoolName={isSuperAdminView ? (schoolName ?? undefined) : undefined}
     >
-      <ReportPrintAudit scope="SCHOOL_HEAD" schoolId={schoolId} />
       <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
         <SchoolHeadReportBody schoolId={schoolId} />
       </Suspense>

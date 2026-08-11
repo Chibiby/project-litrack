@@ -7,20 +7,25 @@ import {
   GOV_BENEFIT_LABELS,
   PARENT_EDUCATION_LABELS,
   READING_PROFILE_LABELS,
+  READING_PROFILE_LABELS_K3,
+  READING_PROFILE_LABELS_G4_PLUS,
   FRUSTRATION_SUBTYPE_LABELS,
   GENDER_LABELS,
+  TRANSPORTATION_LABELS,
+  DISTANCE_LABELS,
+  TRANSFER_LABELS,
+  readingProfileLabelsForGradeType,
 } from "@/lib/constants/enum-labels";
 import {
   learnerImportRowSchema,
   type LearnerImportRow,
 } from "@/lib/validators/learner-import.schema";
 import {
-  isPossibleDuplicate,
   learnerDuplicateKey,
   normalizePersonName,
 } from "@/lib/learners/normalize";
 
-/** Canonical CSV headers (Section A + optional section + isAralLearner). */
+/** Canonical CSV headers (Section A + B + optional section + isAralLearner). */
 export const LEARNER_CSV_HEADERS = [
   "firstName",
   "middleName",
@@ -34,6 +39,10 @@ export const LEARNER_CSV_HEADERS = [
   "filipinoFrustrationSubtypes",
   "governmentBenefits",
   "parentEducation",
+  "modeOfTransportation",
+  "distanceHomeToSchool",
+  "previousTransfers",
+  "transferDetails",
   "isAralLearner",
 ] as const;
 
@@ -46,7 +55,14 @@ export function normalizeLearnerCsvHeader(header: string): string {
   return trimmed;
 }
 
-export function learnerCsvTemplate(): string {
+/**
+ * CSV template. When `gradeType` is known, example profile cells use that band’s
+ * human labels; otherwise enum codes (always accepted on import).
+ */
+export function learnerCsvTemplate(gradeType?: string | null): string {
+  const profileLabels = gradeType
+    ? readingProfileLabelsForGradeType(gradeType)
+    : null;
   const header = LEARNER_CSV_HEADERS.join(",");
   const example = [
     "Ana",
@@ -55,12 +71,16 @@ export function learnerCsvTemplate(): string {
     "10",
     "FEMALE",
     "",
-    "INSTRUCTIONAL_DEVELOPING",
+    profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
     "",
-    "INDEPENDENT_GRADE_READY",
+    profileLabels?.INDEPENDENT_GRADE_READY ?? "INDEPENDENT_GRADE_READY",
     "",
     "FOUR_PS",
     "SECONDARY_GRADUATE",
+    "WALKING",
+    "LESS_THAN_1KM",
+    "NONE",
+    "",
     "false",
   ].join(",");
   return `${header}\n${example}\n`;
@@ -80,12 +100,28 @@ function normalizeKey(s: string): string {
 }
 
 const GENDER_LOOKUP = buildLookup(GENDER_LABELS as Record<string, string>);
-const PROFILE_LOOKUP = buildLookup(READING_PROFILE_LABELS as Record<string, string>);
+/** Accept combined + K3 + G4+ band labels (and enum codes). */
+const PROFILE_LOOKUP = (() => {
+  const map = buildLookup(READING_PROFILE_LABELS as Record<string, string>);
+  for (const labels of [
+    READING_PROFILE_LABELS_K3,
+    READING_PROFILE_LABELS_G4_PLUS,
+  ] as const) {
+    for (const [code, label] of Object.entries(labels)) {
+      map.set(normalizeKey(code), code);
+      map.set(normalizeKey(label), code);
+    }
+  }
+  return map;
+})();
 const FRUSTRATION_LOOKUP = buildLookup(
   FRUSTRATION_SUBTYPE_LABELS as Record<string, string>
 );
 const BENEFIT_LOOKUP = buildLookup(GOV_BENEFIT_LABELS as Record<string, string>);
 const PARENT_ED_LOOKUP = buildLookup(PARENT_EDUCATION_LABELS as Record<string, string>);
+const TRANSPORT_LOOKUP = buildLookup(TRANSPORTATION_LABELS as Record<string, string>);
+const DISTANCE_LOOKUP = buildLookup(DISTANCE_LABELS as Record<string, string>);
+const TRANSFER_LOOKUP = buildLookup(TRANSFER_LABELS as Record<string, string>);
 
 export function parseDelimitedList(raw: unknown): string[] {
   if (raw == null) return [];
@@ -136,6 +172,8 @@ export function mapCsvRowToImportCandidate(
     .map((v) => resolveEnumValue(v, BENEFIT_LOOKUP) ?? v)
     .filter(Boolean);
 
+  const transferDetailsRaw = String(row.transferDetails ?? "").trim();
+
   return {
     firstName,
     middleName: middleRaw || undefined,
@@ -154,6 +192,16 @@ export function mapCsvRowToImportCandidate(
     parentEducation:
       resolveEnumValue(row.parentEducation, PARENT_ED_LOOKUP) ??
       String(row.parentEducation ?? "").trim(),
+    modeOfTransportation:
+      resolveEnumValue(row.modeOfTransportation, TRANSPORT_LOOKUP) ??
+      (String(row.modeOfTransportation ?? "").trim() || undefined),
+    distanceHomeToSchool:
+      resolveEnumValue(row.distanceHomeToSchool, DISTANCE_LOOKUP) ??
+      (String(row.distanceHomeToSchool ?? "").trim() || undefined),
+    previousTransfers:
+      resolveEnumValue(row.previousTransfers, TRANSFER_LOOKUP) ??
+      (String(row.previousTransfers ?? "").trim() || undefined),
+    transferDetails: transferDetailsRaw || undefined,
     isAralLearner: parseBooleanLoose(row.isAralLearner),
     sectionName: String(row.section ?? row.Section ?? row.sectionName ?? "").trim() || undefined,
   };
@@ -171,8 +219,13 @@ export type ImportRowResult =
   | { rowNumber: number; ok: false; errors: string[]; rawPreview: string };
 
 export type ValidateImportRowsOptions = {
-  /** Existing school learners for duplicate detection (name+age). */
+  /**
+   * Existing school learners for duplicate detection (name+age).
+   * Prefer `existingKeys` for O(1) lookups when the set is already keyed.
+   */
   existing?: { firstName: string; lastName: string; age: number }[];
+  /** Precomputed `learnerDuplicateKey` set (preferred over scanning `existing`). */
+  existingKeys?: Set<string> | ReadonlySet<string>;
   /** When true, mark duplicates as warnings but still ok (commit will skip unless allowDuplicates). */
   flagDuplicates?: boolean;
   /**
@@ -191,7 +244,13 @@ export function validateImportRows(
 ): ImportRowResult[] {
   const results: ImportRowResult[] = [];
   const seenInFile = new Set<string>();
-  const existing = options.existing ?? [];
+  const existingKeys =
+    options.existingKeys ??
+    new Set(
+      (options.existing ?? []).map((e) =>
+        learnerDuplicateKey(e.firstName, e.lastName, e.age)
+      )
+    );
   const sectionLookup = new Map(
     (options.sectionNames ?? []).map((n) => [n.trim().toLowerCase(), n])
   );
@@ -226,15 +285,7 @@ export function validateImportRows(
       seenInFile.add(key);
     }
 
-    if (
-      options.flagDuplicates !== false &&
-      existing.some((e) =>
-        isPossibleDuplicate(
-          { firstName: data.firstName, lastName: data.lastName, age: data.age },
-          e
-        )
-      )
-    ) {
+    if (options.flagDuplicates !== false && existingKeys.has(key)) {
       duplicateWarning = true;
     }
 

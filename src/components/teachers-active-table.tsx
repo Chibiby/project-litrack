@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Sheet,
@@ -23,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/confirm-action";
+import { LearnerPagination } from "@/components/learners/learner-pagination";
 import {
   assignTeachersToSections,
   clearRejectedTeacher,
@@ -35,6 +38,21 @@ import {
   type SectionOption,
 } from "@/components/teachers-pending-table";
 import { formatDate } from "@/lib/utils";
+import {
+  listOptimisticReducer,
+  runOptimistic,
+  settleActionResult,
+  type ListOptimisticOp,
+} from "@/lib/ui/optimistic";
+
+export type TeachersListPagination = {
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  q: string;
+  basePath: string;
+  searchParams: Record<string, string | undefined>;
+};
 
 export type ActiveTeacherRow = {
   id: string;
@@ -164,10 +182,16 @@ function TeacherManageActions({
   row,
   mode,
   sections,
+  pending,
+  onSetActive,
+  onRemove,
 }: {
   row: ActiveTeacherRow;
   mode: "active" | "inactive";
   sections: SectionOption[];
+  pending: boolean;
+  onSetActive: (row: ActiveTeacherRow, isActive: boolean) => Promise<void>;
+  onRemove: (row: ActiveTeacherRow) => Promise<void>;
 }) {
   return (
     <TableCell className="space-x-1 text-right">
@@ -178,22 +202,13 @@ function TeacherManageActions({
           description={`${row.fullName} will not be able to sign in until reactivated. Learners stay assigned.`}
           confirmLabel="Deactivate"
           variant="destructive"
+          disabled={pending}
           trigger={
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" disabled={pending}>
               Deactivate
             </Button>
           }
-          onConfirm={async () => {
-            const fd = new FormData();
-            fd.set("userId", row.id);
-            fd.set("isActive", "false");
-            const res = await setTeacherActive(fd);
-            if (!res.ok) {
-              toast.error(res.error);
-              throw new Error(res.error);
-            }
-            toast.success("Teacher deactivated");
-          }}
+          onConfirm={() => onSetActive(row, false)}
         />
       ) : (
         <ConfirmAction
@@ -201,22 +216,13 @@ function TeacherManageActions({
           description={`${row.fullName} will be able to sign in again.`}
           confirmLabel="Reactivate"
           variant="default"
+          disabled={pending}
           trigger={
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" disabled={pending}>
               Reactivate
             </Button>
           }
-          onConfirm={async () => {
-            const fd = new FormData();
-            fd.set("userId", row.id);
-            fd.set("isActive", "true");
-            const res = await setTeacherActive(fd);
-            if (!res.ok) {
-              toast.error(res.error);
-              throw new Error(res.error);
-            }
-            toast.success("Teacher reactivated");
-          }}
+          onConfirm={() => onSetActive(row, true)}
         />
       )}
       <ConfirmAction
@@ -228,13 +234,13 @@ function TeacherManageActions({
         }
         confirmLabel="Remove"
         variant="destructive"
-        disabled={row.learnerCount > 0}
+        disabled={row.learnerCount > 0 || pending}
         trigger={
           <Button
             size="sm"
             variant="ghost"
             className="text-destructive"
-            disabled={row.learnerCount > 0}
+            disabled={row.learnerCount > 0 || pending}
             title={
               row.learnerCount > 0
                 ? "Reassign learners before removing"
@@ -244,16 +250,7 @@ function TeacherManageActions({
             Remove
           </Button>
         }
-        onConfirm={async () => {
-          const fd = new FormData();
-          fd.set("userId", row.id);
-          const res = await removeTeacher(fd);
-          if (!res.ok) {
-            toast.error(res.error);
-            throw new Error(res.error);
-          }
-          toast.success("Teacher removed");
-        }}
+        onConfirm={() => onRemove(row)}
       />
     </TableCell>
   );
@@ -266,6 +263,7 @@ function TeachersManagedTable({
   mode,
   sections,
   readOnly = false,
+  list,
 }: {
   title: string;
   emptyLabel: string;
@@ -273,18 +271,75 @@ function TeachersManagedTable({
   mode: "active" | "inactive";
   sections: SectionOption[];
   readOnly?: boolean;
+  list?: TeachersListPagination;
 }) {
+  const router = useRouter();
   const bulkEnabled = mode === "active" && !readOnly;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSections, setBulkSections] = useState<string[]>([]);
   const [bulkPending, startBulkTransition] = useTransition();
+  const [rowPending, startRowTransition] = useTransition();
+  const [searchValue, setSearchValue] = useState(list?.q ?? "");
+  const [optimisticRows, dispatchOptimistic] = useOptimistic(
+    rows,
+    (state: ActiveTeacherRow[], op: ListOptimisticOp<ActiveTeacherRow>) =>
+      listOptimisticReducer(state, op)
+  );
 
-  const selectedVisible = selectedIds.filter((id) => rows.some((r) => r.id === id));
+  useEffect(() => {
+    setSearchValue(list?.q ?? "");
+  }, [list?.q]);
+
+  const displayCount = list?.totalCount ?? optimisticRows.length;
+
+  const pushListQuery = (next: { page?: number; q?: string }) => {
+    if (!list) return;
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(list.searchParams)) {
+      if (v !== undefined && v !== "" && k !== "page" && k !== "q") {
+        params.set(k, v);
+      }
+    }
+    const q = next.q !== undefined ? next.q : list.q;
+    const page = next.page !== undefined ? next.page : list.page;
+    if (q) params.set("q", q);
+    if (page > 1) params.set("page", String(page));
+    const qs = params.toString();
+    router.push(qs ? `${list.basePath}?${qs}` : list.basePath);
+  };
+
+  const selectedVisible = selectedIds.filter((id) =>
+    optimisticRows.some((r) => r.id === id)
+  );
   const allVisibleSelected =
-    rows.length > 0 && rows.every((r) => selectedVisible.includes(r.id));
+    optimisticRows.length > 0 &&
+    optimisticRows.every((r) => selectedVisible.includes(r.id));
   const someVisibleSelected =
-    rows.some((r) => selectedVisible.includes(r.id)) && !allVisibleSelected;
+    optimisticRows.some((r) => selectedVisible.includes(r.id)) &&
+    !allVisibleSelected;
+
+  const onSetActive = (row: ActiveTeacherRow, isActive: boolean) =>
+    runOptimistic(startRowTransition, async () => {
+      dispatchOptimistic({ type: "remove", id: row.id });
+      const fd = new FormData();
+      fd.set("userId", row.id);
+      fd.set("isActive", isActive ? "true" : "false");
+      const res = await setTeacherActive(fd);
+      await settleActionResult(
+        res,
+        isActive ? "Teacher reactivated" : "Teacher deactivated"
+      );
+    });
+
+  const onRemove = (row: ActiveTeacherRow) =>
+    runOptimistic(startRowTransition, async () => {
+      dispatchOptimistic({ type: "remove", id: row.id });
+      const fd = new FormData();
+      fd.set("userId", row.id);
+      const res = await removeTeacher(fd);
+      await settleActionResult(res, "Teacher removed");
+    });
 
   const colSpan = (readOnly ? 5 : 6) + (bulkEnabled ? 1 : 0);
 
@@ -296,9 +351,11 @@ function TeachersManagedTable({
 
   const toggleAllVisible = (checked: boolean) => {
     if (checked) {
-      setSelectedIds((prev) => [...new Set([...prev, ...rows.map((r) => r.id)])]);
+      setSelectedIds((prev) => [
+        ...new Set([...prev, ...optimisticRows.map((r) => r.id)]),
+      ]);
     } else {
-      const visible = new Set(rows.map((r) => r.id));
+      const visible = new Set(optimisticRows.map((r) => r.id));
       setSelectedIds((prev) => prev.filter((id) => !visible.has(id)));
     }
   };
@@ -340,7 +397,7 @@ function TeachersManagedTable({
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
           <div className="text-sm font-medium">
-            {title} ({rows.length})
+            {title} ({displayCount})
           </div>
           {bulkEnabled && selectedVisible.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -354,6 +411,49 @@ function TeachersManagedTable({
             </div>
           ) : null}
         </div>
+        {list ? (
+          <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
+            <div className="min-w-[12rem] flex-1 space-y-1">
+              <Label htmlFor="teachers-search" className="text-xs text-muted-foreground">
+                Search active teachers
+              </Label>
+              <Input
+                id="teachers-search"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    pushListQuery({ page: 1, q: searchValue.trim() });
+                  }
+                }}
+                placeholder="Name or email…"
+                className="max-w-sm"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => pushListQuery({ page: 1, q: searchValue.trim() })}
+            >
+              Search
+            </Button>
+            {list.q ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSearchValue("");
+                  pushListQuery({ page: 1, q: "" });
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         <Table>
           <TableHeader>
             <TableRow>
@@ -368,7 +468,7 @@ function TeachersManagedTable({
                           ? "indeterminate"
                           : false
                     }
-                    disabled={rows.length === 0}
+                    disabled={optimisticRows.length === 0}
                     onCheckedChange={(v) => toggleAllVisible(v === true)}
                   />
                 </TableHead>
@@ -382,14 +482,14 @@ function TeachersManagedTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 ? (
+            {optimisticRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={colSpan} className="py-6 text-center text-muted-foreground">
                   {emptyLabel}
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => {
+              optimisticRows.map((row) => {
                 const checked = selectedVisible.includes(row.id);
                 return (
                   <TableRow key={row.id} data-state={checked ? "selected" : undefined}>
@@ -428,7 +528,14 @@ function TeachersManagedTable({
                       {row.approvedAt ? formatDate(row.approvedAt) : "—"}
                     </TableCell>
                     {!readOnly ? (
-                      <TeacherManageActions row={row} mode={mode} sections={sections} />
+                      <TeacherManageActions
+                        row={row}
+                        mode={mode}
+                        sections={sections}
+                        pending={rowPending}
+                        onSetActive={onSetActive}
+                        onRemove={onRemove}
+                      />
                     ) : null}
                   </TableRow>
                 );
@@ -480,6 +587,14 @@ function TeachersManagedTable({
             </SheetContent>
           </Sheet>
         ) : null}
+        {list ? (
+          <LearnerPagination
+            basePath={list.basePath}
+            page={list.page}
+            totalPages={list.totalPages}
+            searchParams={{ ...list.searchParams, q: list.q || undefined }}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -489,19 +604,26 @@ export function TeachersActiveTable({
   rows,
   sections,
   readOnly = false,
+  list,
 }: {
   rows: ActiveTeacherRow[];
   sections: SectionOption[];
   readOnly?: boolean;
+  list?: TeachersListPagination;
 }) {
   return (
     <TeachersManagedTable
       title="Active teachers"
-      emptyLabel="No active teachers yet."
+      emptyLabel={
+        list?.q
+          ? "No active teachers match your search."
+          : "No active teachers yet."
+      }
       rows={rows}
       mode="active"
       sections={sections}
       readOnly={readOnly}
+      list={list}
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,12 @@ import {
 import { ConfirmAction } from "@/components/confirm-action";
 import { approveTeacher, rejectTeacher } from "@/lib/actions/school-head";
 import { formatDate } from "@/lib/utils";
+import {
+  listOptimisticReducer,
+  runOptimistic,
+  settleActionResult,
+  type ListOptimisticOp,
+} from "@/lib/ui/optimistic";
 
 export type PendingTeacherRow = {
   id: string;
@@ -102,6 +108,11 @@ export function TeachersPendingTable({
 }) {
   const [pending, startTransition] = useTransition();
   const [sectionsByUser, setSectionsByUser] = useState<Record<string, string[]>>({});
+  const [optimisticRows, dispatchOptimistic] = useOptimistic(
+    rows,
+    (state: PendingTeacherRow[], op: ListOptimisticOp<PendingTeacherRow>) =>
+      listOptimisticReducer(state, op)
+  );
 
   const toggleSection = (userId: string, sectionId: string, checked: boolean) => {
     setSectionsByUser((prev) => {
@@ -124,21 +135,29 @@ export function TeachersPendingTable({
     for (const id of sectionIds) {
       fd.append("sectionIds", id);
     }
-    startTransition(async () => {
+    void runOptimistic(startTransition, async () => {
+      dispatchOptimistic({ type: "remove", id: userId });
       const res = await approveTeacher(fd);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Teacher approved");
+      await settleActionResult(res, "Teacher approved");
+    }).catch(() => {
+      /* toast already shown */
     });
   };
+
+  const runReject = (userId: string) =>
+    runOptimistic(startTransition, async () => {
+      dispatchOptimistic({ type: "remove", id: userId });
+      const fd = new FormData();
+      fd.set("userId", userId);
+      const res = await rejectTeacher(fd);
+      await settleActionResult(res, "Registration declined");
+    });
 
   return (
     <Card>
       <CardContent className="p-0">
         <div className="border-b px-4 py-3 text-sm font-medium">
-          Pending requests ({rows.length})
+          Pending requests ({optimisticRows.length})
         </div>
         <Table>
           <TableHeader>
@@ -151,7 +170,7 @@ export function TeachersPendingTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 ? (
+            {optimisticRows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={readOnly ? 3 : 5}
@@ -161,7 +180,7 @@ export function TeachersPendingTable({
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => {
+              optimisticRows.map((row) => {
                 const selected = sectionsByUser[row.id] ?? [];
                 return (
                   <TableRow key={row.id}>
@@ -208,16 +227,7 @@ export function TeachersPendingTable({
                               Decline
                             </Button>
                           }
-                          onConfirm={async () => {
-                            const fd = new FormData();
-                            fd.set("userId", row.id);
-                            const res = await rejectTeacher(fd);
-                            if (!res.ok) {
-                              toast.error(res.error);
-                              throw new Error(res.error);
-                            }
-                            toast.success("Registration declined");
-                          }}
+                          onConfirm={() => runReject(row.id)}
                         />
                       </TableCell>
                     ) : null}

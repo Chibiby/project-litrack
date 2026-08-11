@@ -1,7 +1,10 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
-import { READING_PROFILE_LABELS } from "@/lib/constants/enum-labels";
+import {
+  READING_PROFILE_LABELS,
+  labelReadingProfile,
+} from "@/lib/constants/enum-labels";
 import { cachedQuery } from "@/lib/cache/unstable";
 import {
   adminDashboard,
@@ -26,10 +29,9 @@ function daysAgo(n: number): Date {
   return d;
 }
 
+/** School-wide charts mix K3 + G4+; use combined slash labels. */
 function labelProfile(key: string): string {
-  return (
-    READING_PROFILE_LABELS[key as keyof typeof READING_PROFILE_LABELS] ?? key
-  );
+  return labelReadingProfile(key);
 }
 
 // ─── Admin section fetchers ─────────────────────────────────────────────────
@@ -86,23 +88,34 @@ export async function getAdminActivitySeries() {
   return cachedQuery(
     async () => {
       const since7 = daysAgo(6);
-      const [auditRows, schoolsActive, schoolsInactive] = await Promise.all([
-        prisma.auditLog.findMany({
-          where: { timestamp: { gte: since7 } },
-          select: { timestamp: true },
-        }),
+      const [auditByDay, schoolsActive, schoolsInactive] = await Promise.all([
+        prisma.$queryRaw<Array<{ day: Date; value: number }>>`
+          SELECT (("timestamp" AT TIME ZONE 'UTC')::date) AS day,
+                 COUNT(*)::int AS value
+          FROM "AuditLog"
+          WHERE "timestamp" >= ${since7}
+          GROUP BY 1
+          ORDER BY 1 ASC
+        `,
         prisma.school.count({ where: { deletedAt: null, isActive: true } }),
         prisma.school.count({ where: { deletedAt: null, isActive: false } }),
       ]);
+
+      const countByKey = new Map(
+        auditByDay.map((r) => {
+          const key =
+            r.day instanceof Date
+              ? r.day.toISOString().slice(0, 10)
+              : String(r.day).slice(0, 10);
+          return [key, Number(r.value)] as const;
+        })
+      );
 
       const activityByDay: DayCount[] = [];
       for (let i = 6; i >= 0; i--) {
         const day = daysAgo(i);
         const key = day.toISOString().slice(0, 10);
-        const value = auditRows.filter(
-          (r) => r.timestamp.toISOString().slice(0, 10) === key
-        ).length;
-        activityByDay.push({ date: key.slice(5), value });
+        activityByDay.push({ date: key.slice(5), value: countByKey.get(key) ?? 0 });
       }
 
       const schoolStatus: NamedCount[] = [
@@ -117,7 +130,7 @@ export async function getAdminActivitySeries() {
       };
     },
     {
-      keyParts: ["admin-activity-series"],
+      keyParts: ["admin-activity-series-v2"],
       tags: [adminDashboard],
       revalidate: 60,
     }
@@ -257,14 +270,16 @@ export async function getSchoolHeadCharts(schoolId: string) {
     async () => {
       const since7 = daysAgo(6);
 
-      const [attendanceRows, learnersWithProfiles, readingProgress] =
+      const [attendanceGrouped, learnersWithProfiles, readingProgress] =
         await Promise.all([
-          prisma.attendance.findMany({
+          prisma.attendance.groupBy({
+            by: ["date"],
             where: {
               date: { gte: since7 },
+              status: { in: ["PRESENT", "LATE"] },
               learner: { schoolId, deletedAt: null },
             },
-            select: { date: true, status: true },
+            _count: { _all: true },
           }),
           prisma.learner.groupBy({
             by: ["englishReadingProfile", "filipinoReadingProfile"],
@@ -272,23 +287,28 @@ export async function getSchoolHeadCharts(schoolId: string) {
             _count: { _all: true },
           }),
           prisma.readingLevelRecord.groupBy({
-            by: ["monthYear"],
+            by: ["weekStart"],
             where: { learner: { schoolId, deletedAt: null } },
             _count: { _all: true },
-            orderBy: { monthYear: "asc" },
+            orderBy: { weekStart: "asc" },
           }),
         ]);
+
+      const presentByDay = new Map(
+        attendanceGrouped.map((r) => [
+          r.date.toISOString().slice(0, 10),
+          r._count._all,
+        ])
+      );
 
       const attendanceTrend: DayCount[] = [];
       for (let i = 6; i >= 0; i--) {
         const day = daysAgo(i);
         const key = day.toISOString().slice(0, 10);
-        const present = attendanceRows.filter(
-          (r) =>
-            r.date.toISOString().slice(0, 10) === key &&
-            (r.status === "PRESENT" || r.status === "LATE")
-        ).length;
-        attendanceTrend.push({ date: key.slice(5), value: present });
+        attendanceTrend.push({
+          date: key.slice(5),
+          value: presentByDay.get(key) ?? 0,
+        });
       }
 
       const enMap = new Map<string, number>();
@@ -312,7 +332,7 @@ export async function getSchoolHeadCharts(schoolId: string) {
       ).map((k) => ({ name: labelProfile(k), value: filMap.get(k) ?? 0 }));
 
       const readingTrend: NamedCount[] = readingProgress.slice(-6).map((r) => ({
-        name: r.monthYear,
+        name: r.weekStart.toISOString().slice(0, 10),
         value: r._count._all,
       }));
 
@@ -324,7 +344,7 @@ export async function getSchoolHeadCharts(schoolId: string) {
       };
     },
     {
-      keyParts: ["school-head-charts", schoolId],
+      keyParts: ["school-head-charts-v2", schoolId],
       tags: [schoolDashboard(schoolId)],
       revalidate: 60,
     }
@@ -406,19 +426,22 @@ const getTeacherShellGradesCached = cache(
     return cachedQuery(
       async () => {
         const opts: TeacherOpts = { schoolId, teacherId, isSuperAdmin };
+        // `_count` avoids nesting learner rows; shell only needs hasAral boolean.
         const grades = await prisma.gradeLevel.findMany({
           where: teacherGradeFilter(opts),
           select: {
             id: true,
             type: true,
-            learners: {
-              where: {
-                deletedAt: null,
-                archivedAt: null,
-                isAralLearner: true,
+            _count: {
+              select: {
+                learners: {
+                  where: {
+                    deletedAt: null,
+                    archivedAt: null,
+                    isAralLearner: true,
+                  },
+                },
               },
-              select: { id: true },
-              take: 1,
             },
           },
           orderBy: { createdAt: "asc" },
@@ -427,18 +450,21 @@ const getTeacherShellGradesCached = cache(
         return grades.map((g) => ({
           id: g.id,
           type: g.type,
-          hasAral: g.learners.length > 0,
+          hasAral: g._count.learners > 0,
         }));
       },
       {
         keyParts: [
-          "teacher-shell-grades",
+          "teacher-shell-grades-v2",
           schoolId,
           teacherId,
           String(isSuperAdmin),
         ],
         tags: [teacherShell(teacherId)],
-        revalidate: 60,
+        // Shell chrome is structural (grade links + hasAral). Longer TTL reduces
+        // layout DB work on soft nav; mutations still bust via teacherShell tag
+        // when ARAL presence / assignments change.
+        revalidate: 300,
       }
     );
   }
@@ -586,32 +612,63 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
               learners: { where: { deletedAt: null, archivedAt: null } },
             },
           },
-          learners: {
-            where: {
-              deletedAt: null,
-              archivedAt: null,
-              isAralLearner: true,
-            },
-            select: {
-              id: true,
-              aralProfile: { select: { id: true } },
-            },
-          },
         },
         orderBy: { createdAt: "asc" },
       });
+
+      const gradeIds = grades.map((g) => g.id);
+      if (gradeIds.length === 0) {
+        return grades.map((g) => ({
+          id: g.id,
+          type: g.type,
+          learnerCount: g._count.learners,
+          aralCount: 0,
+          needsAralProfiling: false,
+        }));
+      }
+
+      const [aralGroups, pendingGroups] = await Promise.all([
+        prisma.learner.groupBy({
+          by: ["gradeLevelId"],
+          where: {
+            gradeLevelId: { in: gradeIds },
+            deletedAt: null,
+            archivedAt: null,
+            isAralLearner: true,
+          },
+          _count: { _all: true },
+        }),
+        prisma.learner.groupBy({
+          by: ["gradeLevelId"],
+          where: {
+            gradeLevelId: { in: gradeIds },
+            deletedAt: null,
+            archivedAt: null,
+            isAralLearner: true,
+            aralProfile: null,
+          },
+          _count: { _all: true },
+        }),
+      ]);
+
+      const aralByGrade = new Map(
+        aralGroups.map((g) => [g.gradeLevelId, g._count._all])
+      );
+      const pendingByGrade = new Map(
+        pendingGroups.map((g) => [g.gradeLevelId, g._count._all])
+      );
 
       return grades.map((g) => ({
         id: g.id,
         type: g.type,
         learnerCount: g._count.learners,
-        aralCount: g.learners.length,
-        needsAralProfiling: g.learners.some((l) => !l.aralProfile),
+        aralCount: aralByGrade.get(g.id) ?? 0,
+        needsAralProfiling: (pendingByGrade.get(g.id) ?? 0) > 0,
       }));
     },
     {
       keyParts: [
-        "teacher-grade-cards",
+        "teacher-grade-cards-v2",
         schoolId,
         teacherId,
         String(isSuperAdmin),

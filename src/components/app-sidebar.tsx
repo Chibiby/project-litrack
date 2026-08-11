@@ -13,22 +13,29 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
-import { SignOutButton } from "@/components/sign-out-button";
+import { UserAccountMenu } from "@/components/user-account-menu";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
-import { logoutAction } from "@/lib/actions/auth";
-import { roleHomePath, roleSettingsPath } from "@/lib/auth/roles";
+import {
+  roleHomePath,
+  type AppRole,
+} from "@/lib/auth/roles";
+import { SIDEBAR_WIDTH_CLASS } from "@/lib/sidebar-layout";
 import type { UserRole } from "@prisma/client";
 import {
   LayoutDashboard,
   School,
   GraduationCap,
   Users,
-  UserCircle,
   BookOpen,
   Sparkles,
   Menu,
-  Settings,
   Shield,
   CalendarRange,
   Megaphone,
@@ -52,6 +59,10 @@ interface AppSidebarProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
+  /** Desktop only — mobile Sheet always shows the full expanded chrome. */
+  expanded?: boolean;
+  /** Skip width transition until localStorage sync (avoids hydrate flash). */
+  transitionsEnabled?: boolean;
 }
 
 function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): NavItem[] {
@@ -76,28 +87,20 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         { label: "Reports", href: "/school-head/reports", icon: FileBarChart },
         { label: "Audit", href: "/school-head/audit", icon: ScrollText },
       ];
-    case "TEACHER":
-      const items: NavItem[] = [
+    case "TEACHER": {
+      const hasAral = grades?.some((g) => g.hasAral) ?? false;
+      return [
         { label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
+        { label: "Learners", href: "/teacher/learners", icon: BookOpen },
+        {
+          label: "Aral",
+          href: "/teacher/aral",
+          icon: Sparkles,
+          badge: hasAral ? 1 : undefined,
+        },
+        { label: "Reports", href: "/teacher/reports", icon: FileBarChart },
       ];
-      // Add assigned grades as menu items
-      grades?.forEach((grade) => {
-        items.push({
-          label: grade.label,
-          href: `/teacher/grade/${grade.id}`,
-          icon: BookOpen,
-          badge: grade.hasAral ? 1 : undefined,
-        });
-        if (grade.hasAral) {
-          items.push({
-            label: `${grade.label} ARAL`,
-            href: `/teacher/aral/${grade.id}`,
-            icon: Sparkles,
-          });
-        }
-      });
-      items.push({ label: "Reports", href: "/teacher/reports", icon: FileBarChart });
-      return items;
+    }
     default:
       return [];
   }
@@ -121,40 +124,60 @@ function NavLink({
   item,
   isActive,
   onNavigate,
+  fullPrefetch = false,
+  collapsed = false,
 }: {
   item: NavItem;
   isActive: boolean;
   onNavigate?: () => void;
+  fullPrefetch?: boolean;
+  collapsed?: boolean;
 }) {
   const Icon = item.icon;
-  return (
+  const link = (
     <Link
       href={item.href}
-      // force-dynamic + loading.tsx: default prefetch only warms the skeleton.
-      // Full prefetch loads the RSC payload (auth + cachedQuery) before click.
-      prefetch={true}
+      {...(fullPrefetch ? { prefetch: true as const } : {})}
       onClick={onNavigate}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
-        "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "relative flex items-center rounded-xl text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
         isActive
           ? "bg-primary/10 text-primary"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >
-      {isActive && (
+      {isActive && !collapsed && (
         <span
           aria-hidden
           className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary"
         />
       )}
       <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-      <span className="flex-1 truncate">{item.label}</span>
+      {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {item.badge ? (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-white">
-          {item.badge}
-        </span>
+        collapsed ? (
+          <span
+            aria-hidden
+            className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-violet"
+          />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-white">
+            {item.badge}
+          </span>
+        )
       ) : null}
     </Link>
+  );
+
+  if (!collapsed) return link;
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -165,118 +188,139 @@ export function AppSidebar({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  expanded = true,
+  transitionsEnabled = true,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = getNavItems(role, grades);
   const activeHref = resolveActiveHref(pathname, navItems);
+  const roleLabel = role.toLowerCase().replaceAll("_", " ");
+  const collapsed = !expanded;
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  // FULL-warm only cheap shell routes (dashboard / settings profile + security).
-  // Reports, grade rosters, and other sidebar items keep default Link prefetch
-  // (loading.tsx only) so background RSC does not stampede the Prisma pool.
+  const homeHref = roleHomePath(role);
+  const accountRole = role as AppRole;
   const prefetchHrefs = useMemo(() => getShellWarmHrefs(role), [role]);
   const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
-  const renderSidebarContent = (onNavigate?: () => void) => (
-    <div className="flex h-full flex-col bg-white">
-      {/* Brand — height matches RoleShell sticky header via --app-chrome-header-height */}
-      <div className="flex min-h-[var(--app-chrome-header-height)] shrink-0 flex-col justify-center border-b border-border/80 px-4">
-        <Link
-          href={roleHomePath(role)}
-          prefetch={true}
-          onClick={onNavigate}
-          className="flex items-center gap-3 font-semibold"
+  const renderSidebarContent = (onNavigate?: () => void, opts?: { collapsed?: boolean }) => {
+    const isCollapsed = opts?.collapsed ?? false;
+
+    return (
+      <div className="flex h-full flex-col bg-white">
+        <div
+          className={cn(
+            "flex min-h-[calc(var(--app-chrome-header-height)+1rem)] shrink-0 flex-col justify-center pt-4",
+            isCollapsed ? "px-2" : "px-4"
+          )}
         >
-          <Image
-            src="/logo.png"
-            alt="ARAL Program logo"
-            width={36}
-            height={48}
-            className="h-10 w-auto shrink-0"
-          />
-          <div className="flex min-w-0 flex-col">
-            <span className="text-sm font-bold tracking-tight text-foreground">LITRACK</span>
-            {schoolName && (
-              <span className="max-w-[150px] truncate text-xs text-muted-foreground">
-                {schoolName}
-              </span>
+          <Link
+            href={homeHref}
+            prefetch={true}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center font-semibold",
+              isCollapsed ? "justify-center" : "gap-3"
             )}
-          </div>
-        </Link>
-
-        {/* Super Admin View Indicator */}
-        {isSuperAdminView && viewedSchoolName && (
-          <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
-            <Shield className="h-3 w-3 shrink-0" />
-            <span className="truncate">Viewing: {viewedSchoolName}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-5">
-        <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-          Menu
-        </p>
-        <nav aria-label="Primary" className="space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              isActive={item.href === activeHref}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </nav>
-      </ScrollArea>
-
-      {/* Footer */}
-      <div className="border-t border-border/80 p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-            <UserCircle className="h-5 w-5" />
-          </div>
-          <div className="flex min-w-0 flex-col overflow-hidden">
-            <span className="truncate text-sm font-medium text-foreground">{userName}</span>
-            <span className="text-xs capitalize text-muted-foreground">
-              {role.toLowerCase().replace("_", " ")}
-            </span>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            aria-label="LITRACK home"
           >
-            <Link href={roleSettingsPath(role)} prefetch={true} onClick={onNavigate}>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </Link>
-          </Button>
-          <form action={logoutAction}>
-            <SignOutButton />
-          </form>
+            <Image
+              src="/logo.png"
+              alt="ARAL Program logo"
+              width={36}
+              height={48}
+              className="h-10 w-auto shrink-0"
+            />
+            {!isCollapsed && (
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm font-bold tracking-tight text-foreground">LITRACK</span>
+                {schoolName && (
+                  <span className="max-w-[150px] truncate text-xs text-muted-foreground">
+                    {schoolName}
+                  </span>
+                )}
+              </div>
+            )}
+          </Link>
+
+          {isSuperAdminView && viewedSchoolName && (
+            isCollapsed ? (
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="mt-3 flex w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-700"
+                    aria-label={`Viewing: ${viewedSchoolName}`}
+                  >
+                    <Shield className="h-3.5 w-3.5 shrink-0" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Viewing: {viewedSchoolName}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                <Shield className="h-3 w-3 shrink-0" />
+                <span className="truncate">Viewing: {viewedSchoolName}</span>
+              </div>
+            )
+          )}
+        </div>
+
+        <ScrollArea className={cn("flex-1 pb-5 pt-2", isCollapsed ? "px-1.5" : "px-3")}>
+          {!isCollapsed && (
+            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+              Menu
+            </p>
+          )}
+          <nav aria-label="Primary" className="space-y-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                isActive={item.href === activeHref}
+                onNavigate={onNavigate}
+                fullPrefetch={item.href === homeHref}
+                collapsed={isCollapsed}
+              />
+            ))}
+          </nav>
+        </ScrollArea>
+
+        <div className={cn("shrink-0 py-3", isCollapsed ? "px-1.5" : "px-3")}>
+          <UserAccountMenu
+            role={accountRole}
+            userName={userName}
+            roleLabel={roleLabel}
+            side="top"
+            align="start"
+            collapsed={isCollapsed}
+            className={isCollapsed ? "w-full justify-center" : "w-full justify-start"}
+          />
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       <NavPrefetcher cacheKey={prefetchKey} hrefs={prefetchHrefs} />
 
-      {/* Desktop Sidebar */}
-      <aside className="fixed inset-y-0 hidden w-64 flex-col border-r border-border/80 bg-white lg:flex">
-        {renderSidebarContent()}
+      {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-white lg:flex",
+          transitionsEnabled && "transition-[width] duration-200",
+          collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
+        )}
+      >
+        {renderSidebarContent(undefined, { collapsed })}
       </aside>
 
-      {/* Mobile Sidebar */}
+      {/* Mobile Sheet — always full labels; collapse is desktop-only */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
           <Button
@@ -291,9 +335,9 @@ export function AppSidebar({
         </SheetTrigger>
         <SheetContent side="left" className="w-64 border-r p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          {renderSidebarContent(() => setMobileOpen(false))}
+          {renderSidebarContent(() => setMobileOpen(false), { collapsed: false })}
         </SheetContent>
       </Sheet>
-    </>
+    </TooltipProvider>
   );
 }

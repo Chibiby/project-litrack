@@ -25,40 +25,38 @@ async function TransferBody({
   schoolId: string;
   isSuperAdminView: boolean;
 }) {
-  const [learners, grades, sections, teachers, activeYear] = await Promise.all([
-    prisma.learner.findMany({
-      where: { schoolId, deletedAt: null, archivedAt: null },
-      select: {
-        id: true,
-        fullName: true,
-        gradeLevelId: true,
-        gradeLevel: { select: { type: true } },
-      },
-      orderBy: { fullName: "asc" },
-    }),
-    prisma.gradeLevel.findMany({
-      where: { schoolId, deletedAt: null },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.section.findMany({
-      where: { schoolId, deletedAt: null },
-      select: { id: true, name: true, gradeLevelId: true },
-    }),
-    prisma.user.findMany({
-      where: {
-        schoolId,
-        role: "TEACHER",
-        deletedAt: null,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        taughtGrades: { select: { id: true } },
-      },
-    }),
-    prisma.schoolYear.findFirst({ where: { schoolId, isActive: true } }),
-  ]);
+  const [learnerCount, grades, sections, teachers, activeYear] =
+    await Promise.all([
+      prisma.learner.count({
+        where: { schoolId, deletedAt: null, archivedAt: null },
+      }),
+      prisma.gradeLevel.findMany({
+        where: { schoolId, deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, type: true },
+      }),
+      prisma.section.findMany({
+        where: { schoolId, deletedAt: null },
+        select: { id: true, name: true, gradeLevelId: true },
+      }),
+      prisma.user.findMany({
+        where: {
+          schoolId,
+          role: "TEACHER",
+          deletedAt: null,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          fullName: true,
+          taughtGrades: { select: { id: true } },
+        },
+      }),
+      prisma.schoolYear.findFirst({
+        where: { schoolId, isActive: true },
+        select: { id: true },
+      }),
+    ]);
 
   return (
     <>
@@ -88,7 +86,7 @@ async function TransferBody({
             <p className="text-sm text-muted-foreground">
               Transfers must be performed by the School Head for this school.
             </p>
-          ) : learners.length === 0 ? (
+          ) : learnerCount === 0 ? (
             <EmptyState
               title="No learners to transfer"
               description="Add learners from the teacher grade views first."
@@ -96,12 +94,7 @@ async function TransferBody({
             />
           ) : (
             <TransferLearnerForm
-              learners={learners.map((l) => ({
-                id: l.id,
-                fullName: l.fullName,
-                gradeLevelId: l.gradeLevelId,
-                gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type],
-              }))}
+              schoolId={schoolId}
               grades={grades.map((g) => ({
                 id: g.id,
                 label: GRADE_LEVEL_LABELS[g.type],

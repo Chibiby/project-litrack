@@ -40,6 +40,71 @@ export const READING_PROFILE_LABELS = {
   INDEPENDENT_GRADE_READY: "Independent / Grade-level Ready",
 } as const;
 
+/** Weekly ARAL word recognition levels (ReadingLevelRecord). */
+export const WEEKLY_WORD_RECOGNITION_LEVEL_LABELS = {
+  LEVEL_1: "Level 1: Can sound and name all letters only",
+  LEVEL_2: "Level 2: Can read words only",
+  LEVEL_3: "Level 3: Can read phrases",
+  LEVEL_4: "Level 4: Can read sentences",
+  LEVEL_5: "Level 5: Can read paragraphs",
+  LEVEL_0: "Level 0: No mastery at all (even sounding and naming of letters)",
+  NA: "N/A",
+} as const;
+
+/** Weekly ARAL reading comprehension levels (ReadingLevelRecord). */
+export const WEEKLY_READING_COMPREHENSION_LEVEL_LABELS = {
+  LEVEL_1: "Level 1: Can comprehend literally",
+  LEVEL_2: "Level 2: Can comprehend inferentially",
+  LEVEL_3: "Level 3: Can comprehend critically",
+  LEVEL_0: "Level 0: No comprehension at all",
+  NA: "N/A",
+} as const;
+
+/** Kinder–G3 CRLA-style reading band labels. */
+export const READING_PROFILE_LABELS_K3 = {
+  NON_DECODER_LOW_EMERGENT: "Low Emergent",
+  FRUSTRATION_HIGH_EMERGENT: "High Emergent",
+  INSTRUCTIONAL_DEVELOPING: "Developing or Transitioning",
+  INDEPENDENT_GRADE_READY: "Grade-level Ready",
+} as const;
+
+/** G4–G12 / FLOATING PHIL-IRI-style reading band labels. */
+export const READING_PROFILE_LABELS_G4_PLUS = {
+  NON_DECODER_LOW_EMERGENT: "Non-decoder",
+  FRUSTRATION_HIGH_EMERGENT: "Frustration",
+  INSTRUCTIONAL_DEVELOPING: "Instructional",
+  INDEPENDENT_GRADE_READY: "Independent",
+} as const;
+
+const EARLY_GRADE_TYPES = new Set(["KINDER", "G1", "G2", "G3"]);
+
+export function isEarlyGradeReadingBand(type: string): boolean {
+  return EARLY_GRADE_TYPES.has(type);
+}
+
+export function readingProfileLabelsForGradeType(
+  type: string | null | undefined
+): typeof READING_PROFILE_LABELS_K3 | typeof READING_PROFILE_LABELS_G4_PLUS {
+  if (type && isEarlyGradeReadingBand(type)) {
+    return READING_PROFILE_LABELS_K3;
+  }
+  return READING_PROFILE_LABELS_G4_PLUS;
+}
+
+/** Band label when grade type is known; combined slash labels when not. */
+export function labelReadingProfile(
+  key: string,
+  gradeType?: string | null
+): string {
+  if (gradeType) {
+    const labels = readingProfileLabelsForGradeType(gradeType);
+    return labels[key as keyof typeof labels] ?? key;
+  }
+  return (
+    READING_PROFILE_LABELS[key as keyof typeof READING_PROFILE_LABELS] ?? key
+  );
+}
+
 export const FRUSTRATION_SUBTYPE_LABELS = {
   DECODING: "Problem in Decoding",
   COMPREHENSION_ALL: "Problem in Comprehension (all levels)",

@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
-import { getSchoolsList } from "@/lib/cache/schools-list";
+import {
+  getSchoolsListPage,
+  parseSchoolsListParams,
+  schoolsTotalPages,
+} from "@/lib/cache/schools-list";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,12 +15,24 @@ import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-async function SchoolsTableBody() {
+interface PageProps {
+  searchParams: Promise<{ page?: string; q?: string; region?: string }>;
+}
+
+async function SchoolsTableBody({
+  searchParams,
+}: {
+  searchParams: { page?: string; q?: string; region?: string };
+}) {
+  const list = parseSchoolsListParams(searchParams);
   let tableData: SchoolRow[] = [];
+  let totalCount = 0;
   let dbAvailable = true;
 
   try {
-    tableData = await getSchoolsList();
+    const page = await getSchoolsListPage(list);
+    tableData = page.rows;
+    totalCount = page.totalCount;
   } catch (err) {
     // DATABASE_URL missing or Prisma unavailable — degrade to an empty table
     // instead of a 500. requireUser already verified the session.
@@ -34,15 +50,26 @@ async function SchoolsTableBody() {
 
       <Card>
         <CardContent className="p-6">
-          <SchoolsTable schools={tableData} />
+          <SchoolsTable
+            schools={tableData}
+            list={{
+              page: list.page,
+              totalPages: schoolsTotalPages(totalCount, list.pageSize),
+              totalCount,
+              pageSize: list.pageSize,
+              q: list.q,
+              region: list.region,
+            }}
+          />
         </CardContent>
       </Card>
     </>
   );
 }
 
-export default async function SchoolsListPage() {
+export default async function SchoolsListPage({ searchParams }: PageProps) {
   const user = await requireUser("SUPER_ADMIN");
+  const params = await searchParams;
 
   return (
     <AppShell
@@ -70,7 +97,7 @@ export default async function SchoolsListPage() {
       </div>
 
       <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
-        <SchoolsTableBody />
+        <SchoolsTableBody searchParams={params} />
       </Suspense>
     </AppShell>
   );

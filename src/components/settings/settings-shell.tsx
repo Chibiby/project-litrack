@@ -79,8 +79,9 @@ export function SettingsShell({
   const subtitle = isSecurity ? securitySubtitle : profileSubtitle;
 
   return (
-    <>
-      <div className="w-full px-4 pt-4 lg:px-8 lg:pt-6">
+    // Single padding layer inside RoleShell's inset panel (avoids double gutters).
+    <div className="w-full p-4 lg:p-8">
+      <div className="mb-4 lg:mb-6">
         <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
           {title}
         </h1>
@@ -89,12 +90,12 @@ export function SettingsShell({
         ) : null}
       </div>
 
-      <main id="main-content" className="w-full p-4 lg:p-8">
+      <main id="main-content">
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-10">
           <SettingsSidebar roleBase={roleBase} />
           <div className="min-w-0 flex-1">{children}</div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

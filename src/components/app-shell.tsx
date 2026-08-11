@@ -1,8 +1,13 @@
 "use client";
 
+import { Menu } from "lucide-react";
 import { AppSidebar } from "./app-sidebar";
 import { Breadcrumbs } from "./breadcrumbs";
 import { useRoleShell } from "./role-shell";
+import { Button } from "@/components/ui/button";
+import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
+import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
+import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 
 interface AppShellProps {
@@ -34,9 +39,8 @@ export function AppShell({
   // the title block and main content (so loading.tsx never replaces breadcrumbs).
   if (inRoleShell) {
     return (
-      <>
-        {/* Match RoleShell header: full column width, shared px-4 / lg:px-8. */}
-        <div className="w-full px-4 pt-4 lg:px-8 lg:pt-6">
+      <div className="w-full p-4 lg:p-8">
+        <div className="mb-4 lg:mb-6">
           <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {title}
           </h1>
@@ -47,12 +51,40 @@ export function AppShell({
           ) : null}
         </div>
 
-        <main id="main-content" className="w-full p-4 lg:p-8">
-          {children}
-        </main>
-      </>
+        <main id="main-content">{children}</main>
+      </div>
     );
   }
+
+  return (
+    <AppShellFallback
+      title={title}
+      subtitle={subtitle}
+      role={role}
+      userName={userName}
+      schoolName={schoolName}
+      grades={grades}
+      isSuperAdminView={isSuperAdminView}
+      viewedSchoolName={viewedSchoolName}
+    >
+      {children}
+    </AppShellFallback>
+  );
+}
+
+/** Non–RoleShell path: owns sidebar expand state + matching content offset. */
+function AppShellFallback({
+  title,
+  subtitle,
+  children,
+  role,
+  userName,
+  schoolName,
+  grades,
+  isSuperAdminView,
+  viewedSchoolName,
+}: AppShellProps) {
+  const { expanded, toggle, hydrated } = useSidebarExpanded();
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,13 +95,32 @@ export function AppShell({
         grades={grades}
         isSuperAdminView={isSuperAdminView}
         viewedSchoolName={viewedSchoolName}
+        expanded={expanded}
+        transitionsEnabled={hydrated}
       />
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 backdrop-blur-md">
-          {/* Match RoleShell: full-bleed in content column, no mx-auto centering. */}
-          <div className="flex w-full items-center gap-4 px-4 py-4 lg:px-8">
+      <div
+        className={cn(
+          hydrated && "transition-[margin] duration-200",
+          expanded
+            ? CONTENT_OFFSET_CLASS.expanded
+            : CONTENT_OFFSET_CLASS.collapsed
+        )}
+      >
+        <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 shadow-sm backdrop-blur-md">
+          <div className="flex w-full items-center gap-3 px-4 py-4 lg:gap-4 lg:px-8">
             <div className="w-8 shrink-0 lg:hidden" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden shrink-0 lg:inline-flex"
+              onClick={toggle}
+              aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+              aria-expanded={expanded}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
 
             <div className="min-w-0 flex-1">
               <Breadcrumbs className="mb-1 min-w-0 justify-start" />
@@ -85,7 +136,6 @@ export function AppShell({
           </div>
         </header>
 
-        {/* Match header padding; no max-w so content fills the main column. */}
         <main id="main-content" className="w-full p-4 lg:p-8">
           {children}
         </main>

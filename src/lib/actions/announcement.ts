@@ -43,7 +43,6 @@ export async function createAnnouncement(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/school-head/announcements");
-  revalidatePath("/school-head");
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

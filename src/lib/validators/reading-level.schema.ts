@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nonEmpty } from "./common";
+import { getMonday } from "@/lib/utils";
 
 const READING_PROFILE = [
   "NON_DECODER_LOW_EMERGENT",
@@ -8,12 +9,60 @@ const READING_PROFILE = [
   "INDEPENDENT_GRADE_READY",
 ] as const;
 
+const WEEKLY_WORD_RECOGNITION_LEVEL = [
+  "LEVEL_1",
+  "LEVEL_2",
+  "LEVEL_3",
+  "LEVEL_4",
+  "LEVEL_5",
+  "LEVEL_0",
+  "NA",
+] as const;
+
+const WEEKLY_READING_COMPREHENSION_LEVEL = [
+  "LEVEL_1",
+  "LEVEL_2",
+  "LEVEL_3",
+  "LEVEL_0",
+  "NA",
+] as const;
+
+/** Coerce to Date, normalize to Monday 00:00 local. */
+const weekStartField = z.coerce.date().transform((d) => getMonday(d));
+
+const notesField = z
+  .string()
+  .trim()
+  .max(1000)
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
 export const readingLevelSchema = z.object({
   learnerId: nonEmpty(),
-  monthYear: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-MM"),
+  weekStart: weekStartField,
   englishProfile: z.enum(READING_PROFILE),
   filipinoProfile: z.enum(READING_PROFILE),
-  notes: z.string().trim().max(1000).optional().or(z.literal("").transform(() => undefined)),
+  wordRecognitionLevel: z.enum(WEEKLY_WORD_RECOGNITION_LEVEL),
+  readingComprehensionLevel: z.enum(WEEKLY_READING_COMPREHENSION_LEVEL),
+  notes: notesField,
 });
 
 export type ReadingLevelInput = z.infer<typeof readingLevelSchema>;
+
+export const readingLevelBulkSchema = z.object({
+  weekStart: weekStartField,
+  entries: z
+    .array(
+      z.object({
+        learnerId: nonEmpty(),
+        englishProfile: z.enum(READING_PROFILE),
+        filipinoProfile: z.enum(READING_PROFILE),
+        wordRecognitionLevel: z.enum(WEEKLY_WORD_RECOGNITION_LEVEL),
+        readingComprehensionLevel: z.enum(WEEKLY_READING_COMPREHENSION_LEVEL),
+        notes: notesField,
+      })
+    )
+    .min(1),
+});
+
+export type ReadingLevelBulkInput = z.infer<typeof readingLevelBulkSchema>;
