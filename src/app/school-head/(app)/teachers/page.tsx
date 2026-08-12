@@ -10,11 +10,9 @@ import {
   teachersTotalPages,
 } from "@/lib/teachers/pagination";
 import { AppShell } from "@/components/app-shell";
-import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import {
   TeachersPendingTable,
   type PendingTeacherRow,
-  type SectionOption,
 } from "@/components/teachers-pending-table";
 import {
   TeachersActiveTable,
@@ -24,8 +22,6 @@ import {
   type DeclinedTeacherRow,
 } from "@/components/teachers-active-table";
 import { DualListCardSkeleton } from "@/components/loading";
-import { EmptyState } from "@/components/dashboard/empty-state";
-import { GraduationCap } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -39,22 +35,10 @@ const managedTeacherSelect = {
   email: true,
   profileCompleted: true,
   approvedAt: true,
-  taughtGrades: { select: { type: true } },
-  taughtSections: {
-    where: { section: { deletedAt: null } },
-    select: {
-      section: {
-        select: {
-          id: true,
-          name: true,
-          gradeLevel: { select: { type: true } },
-        },
-      },
-    },
-  },
   _count: {
     select: {
       managedLearners: { where: { deletedAt: null } },
+      aralLearners: { where: { deletedAt: null } },
     },
   },
 } satisfies Prisma.UserSelect;
@@ -64,19 +48,14 @@ type ManagedTeacher = Prisma.UserGetPayload<{
 }>;
 
 function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
-  const activeSections = t.taughtSections.map((ts) => ts.section);
   return {
     id: t.id,
     fullName: t.fullName,
     email: t.email,
-    grades: t.taughtGrades.map((g) => GRADE_LEVEL_LABELS[g.type]),
-    sections: activeSections.map(
-      (s) => `${GRADE_LEVEL_LABELS[s.gradeLevel.type]}-${s.name}`
-    ),
-    sectionIds: activeSections.map((s) => s.id),
     profileCompleted: t.profileCompleted,
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,
+    aralLearnerCount: t._count.aralLearners,
   };
 }
 
@@ -110,29 +89,12 @@ async function TeachersBody({
   };
 
   const [
-    grades,
-    sectionRows,
     pendingTeachers,
     activeTeachers,
     activeCount,
     inactiveTeachers,
     declinedTeachers,
   ] = await Promise.all([
-    prisma.gradeLevel.findMany({
-      where: { schoolId, deletedAt: null },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    }),
-    prisma.section.findMany({
-      where: { schoolId, deletedAt: null },
-      select: {
-        id: true,
-        name: true,
-        gradeLevelId: true,
-        gradeLevel: { select: { type: true } },
-      },
-      orderBy: [{ gradeLevelId: "asc" }, { name: "asc" }],
-    }),
     prisma.user.findMany({
       where: { ...teacherBase, approvalStatus: "PENDING" },
       select: {
@@ -172,13 +134,6 @@ async function TeachersBody({
     }),
   ]);
 
-  const sectionOptions: SectionOption[] = sectionRows.map((s) => ({
-    id: s.id,
-    name: s.name,
-    gradeLevelId: s.gradeLevelId,
-    gradeLabel: GRADE_LEVEL_LABELS[s.gradeLevel.type],
-  }));
-
   const pendingRows: PendingTeacherRow[] = pendingTeachers.map((t) => ({
     id: t.id,
     fullName: t.fullName,
@@ -202,52 +157,18 @@ async function TeachersBody({
     q: list.q || undefined,
   };
 
-  if (grades.length === 0) {
-    return (
-      <EmptyState
-        title="No grade levels yet"
-        description="Create at least one grade level before approving teachers."
-        actionHref={
-          isSuperAdminView
-            ? `/school-head/grade-levels?schoolId=${schoolId}`
-            : "/school-head/grade-levels"
-        }
-        actionLabel="Go to grade levels"
-        icon={GraduationCap}
-      />
-    );
-  }
-
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
         Teachers self-register from the login page (email verification code once, then password).
-        After you approve them with one or more sections, they sign in with email and password only.
+        After you approve them, they sign in with email and password only. Grade and
+        section assignment happens when the teacher completes their own profile.
       </p>
 
-      {sectionOptions.length === 0 ? (
-        <EmptyState
-          title="No sections yet"
-          description="Add sections under each grade before assigning teachers."
-          actionHref={
-            isSuperAdminView
-              ? `/school-head/grade-levels?schoolId=${schoolId}`
-              : "/school-head/grade-levels"
-          }
-          actionLabel="Go to grade levels"
-          icon={GraduationCap}
-        />
-      ) : null}
-
-      <TeachersPendingTable
-        rows={pendingRows}
-        sections={sectionOptions}
-        readOnly={isSuperAdminView}
-      />
+      <TeachersPendingTable rows={pendingRows} readOnly={isSuperAdminView} />
 
       <TeachersActiveTable
         rows={activeRows}
-        sections={sectionOptions}
         readOnly={isSuperAdminView}
         list={{
           page: list.page,
@@ -259,11 +180,7 @@ async function TeachersBody({
         }}
       />
 
-      <TeachersInactiveTable
-        rows={inactiveRows}
-        sections={sectionOptions}
-        readOnly={isSuperAdminView}
-      />
+      <TeachersInactiveTable rows={inactiveRows} readOnly={isSuperAdminView} />
 
       <TeachersDeclinedTable rows={declinedRows} readOnly={isSuperAdminView} />
     </div>

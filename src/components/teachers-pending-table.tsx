@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useOptimistic, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -31,110 +28,25 @@ export type PendingTeacherRow = {
   requestedAt: string;
 };
 
-export type SectionOption = {
-  id: string;
-  name: string;
-  gradeLevelId: string;
-  gradeLabel: string;
-};
-
-export function SectionCheckboxGroup({
-  sections,
-  selected,
-  onToggle,
-  disabled,
-  idPrefix,
-  emptyLabel = "Create sections under Grade Levels before approving teachers.",
-  className = "max-h-40 space-y-2 overflow-y-auto rounded-md border p-2",
-}: {
-  sections: SectionOption[];
-  selected: string[];
-  onToggle: (sectionId: string, checked: boolean) => void;
-  disabled?: boolean;
-  idPrefix: string;
-  emptyLabel?: string;
-  className?: string;
-}) {
-  const byGrade = useMemo(() => {
-    const map = new Map<string, { label: string; items: SectionOption[] }>();
-    for (const s of sections) {
-      const entry = map.get(s.gradeLevelId) ?? { label: s.gradeLabel, items: [] };
-      entry.items.push(s);
-      map.set(s.gradeLevelId, entry);
-    }
-    return [...map.values()];
-  }, [sections]);
-
-  if (sections.length === 0) {
-    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
-  }
-
-  return (
-    <div className={className}>
-      {byGrade.map((group) => (
-        <div key={group.label} className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
-          {group.items.map((s) => {
-            const checked = selected.includes(s.id);
-            const inputId = `${idPrefix}-${s.id}`;
-            return (
-              <div key={s.id} className="flex items-center gap-2">
-                <Checkbox
-                  id={inputId}
-                  checked={checked}
-                  disabled={disabled}
-                  onCheckedChange={(v) => onToggle(s.id, v === true)}
-                />
-                <Label htmlFor={inputId} className="text-sm font-normal">
-                  {s.name}
-                </Label>
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function TeachersPendingTable({
   rows,
-  sections,
   readOnly = false,
 }: {
   rows: PendingTeacherRow[];
-  sections: SectionOption[];
   readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [sectionsByUser, setSectionsByUser] = useState<Record<string, string[]>>({});
   const [optimisticRows, dispatchOptimistic] = useOptimistic(
     rows,
     (state: PendingTeacherRow[], op: ListOptimisticOp<PendingTeacherRow>) =>
       listOptimisticReducer(state, op)
   );
 
-  const toggleSection = (userId: string, sectionId: string, checked: boolean) => {
-    setSectionsByUser((prev) => {
-      const current = prev[userId] ?? [];
-      const next = checked
-        ? [...new Set([...current, sectionId])]
-        : current.filter((id) => id !== sectionId);
-      return { ...prev, [userId]: next };
-    });
-  };
-
   const runApprove = (userId: string) => {
-    const sectionIds = sectionsByUser[userId] ?? [];
-    if (sectionIds.length === 0) {
-      toast.error("Choose at least one section first");
-      return;
-    }
     const fd = new FormData();
     fd.set("userId", userId);
-    for (const id of sectionIds) {
-      fd.append("sectionIds", id);
-    }
+    // Grade/section assignment now happens when the teacher completes their own
+    // profile, so approval no longer takes a section.
     void runOptimistic(startTransition, async () => {
       dispatchOptimistic({ type: "remove", id: userId });
       const res = await approveTeacher(fd);
@@ -165,7 +77,6 @@ export function TeachersPendingTable({
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Requested</TableHead>
-              {!readOnly ? <TableHead>Sections</TableHead> : null}
               {!readOnly ? <TableHead className="text-right">Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
@@ -173,7 +84,7 @@ export function TeachersPendingTable({
             {optimisticRows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={readOnly ? 3 : 5}
+                  colSpan={readOnly ? 3 : 4}
                   className="py-6 text-center text-muted-foreground"
                 >
                   No pending registration requests.
@@ -181,7 +92,6 @@ export function TeachersPendingTable({
               </TableRow>
             ) : (
               optimisticRows.map((row) => {
-                const selected = sectionsByUser[row.id] ?? [];
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.fullName}</TableCell>
@@ -190,23 +100,10 @@ export function TeachersPendingTable({
                       {formatDate(row.requestedAt)}
                     </TableCell>
                     {!readOnly ? (
-                      <TableCell className="min-w-[14rem]">
-                        <SectionCheckboxGroup
-                          sections={sections}
-                          selected={selected}
-                          disabled={pending}
-                          idPrefix={`pending-${row.id}`}
-                          onToggle={(sectionId, checked) =>
-                            toggleSection(row.id, sectionId, checked)
-                          }
-                        />
-                      </TableCell>
-                    ) : null}
-                    {!readOnly ? (
                       <TableCell className="space-x-1 text-right align-top">
                         <Button
                           size="sm"
-                          disabled={pending || selected.length === 0 || sections.length === 0}
+                          disabled={pending}
                           onClick={() => runApprove(row.id)}
                         >
                           Approve
