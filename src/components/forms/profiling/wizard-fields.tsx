@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/form";
 import type { Control, FieldPath, FieldValues } from "react-hook-form";
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: string; disabled?: boolean };
 
 /** Segmented / pill single-select (login-form pattern). */
 export function FormOptionPills<T extends FieldValues>({
@@ -353,7 +353,7 @@ export function FormSelectField<T extends FieldValues>({
                 <SelectItem value="__empty__">{emptyLabel}</SelectItem>
               ) : null}
               {options.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
                   {opt.label}
                 </SelectItem>
               ))}

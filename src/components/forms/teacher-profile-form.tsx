@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -23,7 +23,6 @@ import {
   TRAINING_LEVEL_LABELS,
   READING_TRAINING_LABELS,
   ENGLISH_TRAINING_LABELS,
-  SUBJECT_LABELS,
   GRADE_LEVEL_LABELS,
   toOptions,
 } from "@/lib/constants/enum-labels";
@@ -33,6 +32,7 @@ import {
   MASTER_TEACHER_RANK_POSITIONS,
   YEARS_IN_SERVICE_MIN,
   YEARS_IN_SERVICE_MAX,
+  ARAL_VOLUNTEER_DESIGNATION,
   type TeacherProfileInput,
 } from "@/lib/validators/profile.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
@@ -45,15 +45,22 @@ const teacherWizardFormSchema = z.object({
   middleName: z.string(),
   lastName: z.string(),
   contactNumber: z.string(),
-  designationKind: z.enum(["Teacher", "Master Teacher", "__OTHER__", ""]),
+  designationKind: z.enum([
+    "Teacher",
+    "Master Teacher",
+    ARAL_VOLUNTEER_DESIGNATION,
+    "__OTHER__",
+    "",
+  ]),
   designationOther: z.string(),
   position: z.string().optional(),
   educationalAttainment: z.string(),
   fieldOfSpecialization: z.string(),
   specializationOther: z.string(),
   yearsInService: z.string(),
+  yearsInServiceApplicable: z.boolean(),
   currentGradeAssignment: z.string().optional(),
-  mostSubjectHandled: z.string(),
+  sectionId: z.string().optional(),
   hasReadingTraining: z.boolean().optional(),
   readingTrainings: z.array(z.string()),
   hasEnglishTraining: z.boolean().optional(),
@@ -72,6 +79,7 @@ const TEACHER_STEPS: WizardStepDef[] = [
 const DESIGNATION_KIND_OPTIONS = [
   { value: "Teacher", label: "Teacher" },
   { value: "Master Teacher", label: "Master Teacher" },
+  { value: ARAL_VOLUNTEER_DESIGNATION, label: "Non-DepEd ARAL Volunteer" },
   { value: "__OTHER__", label: "Others" },
 ];
 
@@ -88,8 +96,16 @@ type Defaults = Partial<{
   fieldOfSpecialization: string;
   specializationOther: string | null;
   yearsInService: number | string | null;
+  /**
+   * Client-only override, not sourced from the server today (no caller passes
+   * it yet) — kept on `Defaults` for shape parity with `TeacherFormValues`.
+   * The actual initial derivation instead inspects `yearsInService`'s presence,
+   * see `resolveYearsInServiceApplicable`.
+   */
+  yearsInServiceApplicable: boolean;
   currentGradeAssignment: string | null;
-  mostSubjectHandled: string;
+  /** Teacher's current advisory section (`User.advisorySectionId`), not a TeacherProfile column. */
+  sectionId: string | null;
   hasReadingTraining: boolean;
   readingTrainings: string[];
   hasEnglishTraining: boolean;
@@ -103,15 +119,21 @@ type TeacherFormValues = {
   middleName: string;
   lastName: string;
   contactNumber: string;
-  designationKind: "Teacher" | "Master Teacher" | "__OTHER__" | "";
+  designationKind:
+    | "Teacher"
+    | "Master Teacher"
+    | typeof ARAL_VOLUNTEER_DESIGNATION
+    | "__OTHER__"
+    | "";
   designationOther: string;
   position: string | undefined;
   educationalAttainment: string;
   fieldOfSpecialization: string;
   specializationOther: string;
   yearsInService: string;
+  yearsInServiceApplicable: boolean;
   currentGradeAssignment: string | undefined;
-  mostSubjectHandled: string;
+  sectionId: string | undefined;
   hasReadingTraining: boolean | undefined;
   readingTrainings: string[];
   hasEnglishTraining: boolean | undefined;
@@ -126,7 +148,21 @@ function resolveDesignationKind(raw?: string | null): {
   if (!raw) return { kind: "", other: "" };
   if (raw === "Teacher" || raw === "Master Teacher") return { kind: raw, other: "" };
   if (raw === "School Head") return { kind: "", other: "" };
+  if (raw === ARAL_VOLUNTEER_DESIGNATION) return { kind: ARAL_VOLUNTEER_DESIGNATION, other: "" };
   return { kind: "__OTHER__", other: raw };
+}
+
+/**
+ * Client-only initial value for `yearsInServiceApplicable`. Distinguishes a
+ * brand-new profile (no `TeacherProfile` row yet, so `yearsInService` is
+ * absent from `defaultValues` entirely — assume applicable, most new
+ * teachers do have a number to enter) from an existing profile that was
+ * previously saved with years-in-service explicitly cleared to N/A (the key
+ * is present but `null` — stay N/A).
+ */
+function resolveYearsInServiceApplicable(defaults: Defaults): boolean {
+  if (!("yearsInService" in defaults)) return true;
+  return defaults.yearsInService !== null && defaults.yearsInService !== undefined;
 }
 
 function labelOf(map: Record<string, string>, value?: string | null) {
@@ -148,11 +184,11 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
     designation,
     educationalAttainment: values.educationalAttainment || undefined,
     fieldOfSpecialization: values.fieldOfSpecialization || undefined,
-    yearsInService:
-      values.yearsInService === "" || values.yearsInService === undefined
-        ? undefined
-        : values.yearsInService,
-    mostSubjectHandled: values.mostSubjectHandled || undefined,
+    yearsInService: values.yearsInServiceApplicable
+      ? values.yearsInService || undefined
+      : undefined,
+    currentGradeAssignment: values.currentGradeAssignment,
+    sectionId: values.sectionId || undefined,
     hasReadingTraining: values.hasReadingTraining,
     readingTrainings:
       values.hasReadingTraining === true ? values.readingTrainings : [],
@@ -164,10 +200,6 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
 
   if (values.fieldOfSpecialization === "OTHERS") {
     payload.specializationOther = values.specializationOther.trim() || undefined;
-  }
-
-  if (values.currentGradeAssignment) {
-    payload.currentGradeAssignment = values.currentGradeAssignment;
   }
 
   if (values.designationKind === "Teacher" || values.designationKind === "Master Teacher") {
@@ -192,8 +224,9 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
     "fieldOfSpecialization",
     "specializationOther",
     "yearsInService",
+    "yearsInServiceApplicable",
   ],
-  ["currentGradeAssignment", "mostSubjectHandled"],
+  ["currentGradeAssignment", "sectionId"],
   [
     "hasReadingTraining",
     "readingTrainings",
@@ -207,16 +240,27 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
 export function TeacherProfileForm({
   defaultValues,
   presentation = "wizard",
+  gradeLevels,
 }: {
   defaultValues: Defaults;
   /** `wizard` = onboarding steps; `edit` = flat settings profile (no Review). */
   presentation?: "wizard" | "edit";
+  /** Active grades + their sections, for the grade→section cascade in Step 3. */
+  gradeLevels: {
+    id: string;
+    type: string;
+    sections: { id: string; name: string; takenByOther: boolean }[];
+  }[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(0);
   const isEdit = presentation === "edit";
   const initialDesig = resolveDesignationKind(defaultValues.designation);
+  // Tracks whether the user has explicitly toggled the years-in-service
+  // Yes/No pills in this session, so switching designation to the ARAL
+  // Volunteer kind only pre-selects N/A when they haven't made a choice yet.
+  const yearsInServiceTouchedRef = useRef(false);
 
   const form = useAppForm<TeacherFormValues>({
     // UI schema for RHF; server teacherProfileSchema validates on Save.
@@ -238,8 +282,9 @@ export function TeacherProfileForm({
         defaultValues.yearsInService === undefined
           ? ""
           : String(defaultValues.yearsInService),
+      yearsInServiceApplicable: resolveYearsInServiceApplicable(defaultValues),
       currentGradeAssignment: defaultValues.currentGradeAssignment ?? undefined,
-      mostSubjectHandled: defaultValues.mostSubjectHandled ?? "",
+      sectionId: defaultValues.sectionId ?? undefined,
       hasReadingTraining: defaultValues.hasReadingTraining,
       readingTrainings: defaultValues.readingTrainings ?? [],
       hasEnglishTraining: defaultValues.hasEnglishTraining,
@@ -250,9 +295,42 @@ export function TeacherProfileForm({
 
   const designationKind = form.watch("designationKind");
   const specialization = form.watch("fieldOfSpecialization");
+  const yearsInServiceApplicable = form.watch("yearsInServiceApplicable");
   const hasReading = form.watch("hasReadingTraining");
   const hasEnglish = form.watch("hasEnglishTraining");
   const values = form.watch();
+
+  // A designation only needs an advisory section when it corresponds to an
+  // actual classroom teaching role; the ARAL Volunteer designation does not.
+  const sectionRequired = designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+
+  const gradeOptions = useMemo(
+    () =>
+      gradeLevels.map((g) => ({
+        value: g.type,
+        label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+        // A fully-booked grade (no open section) is only disabled for
+        // designations that actually need a section; never disable the
+        // grade the field is currently set to, so editing an existing
+        // profile never strands the teacher on an unselectable value.
+        disabled:
+          sectionRequired &&
+          !g.sections.some((s) => !s.takenByOther) &&
+          g.type !== values.currentGradeAssignment,
+      })),
+    [gradeLevels, sectionRequired, values.currentGradeAssignment]
+  );
+
+  const sectionOptions = useMemo(() => {
+    const grade = gradeLevels.find((g) => g.type === values.currentGradeAssignment);
+    return (grade?.sections ?? []).map((s) => ({
+      value: s.id,
+      label: s.name,
+      // Self-exclusion: a teacher editing their own profile never sees
+      // their own current section disabled.
+      disabled: s.takenByOther && s.id !== values.sectionId,
+    }));
+  }, [gradeLevels, values.currentGradeAssignment, values.sectionId]);
 
   const teacherPositionOptions = useMemo(
     () =>
@@ -325,24 +403,30 @@ export function TeacherProfileForm({
         });
         ok = false;
       }
-      const yearsRaw = String(v.yearsInService ?? "").trim();
-      if (!yearsRaw) {
-        form.setError("yearsInService", { message: "Years in service is required" });
-        ok = false;
-      } else {
-        const n = Number(yearsRaw);
-        if (!Number.isInteger(n) || n < YEARS_IN_SERVICE_MIN || n > YEARS_IN_SERVICE_MAX) {
-          form.setError("yearsInService", {
-            message: `Enter a whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`,
-          });
+      if (v.yearsInServiceApplicable !== false) {
+        const yearsRaw = String(v.yearsInService ?? "").trim();
+        if (!yearsRaw) {
+          form.setError("yearsInService", { message: "Years in service is required" });
           ok = false;
+        } else {
+          const n = Number(yearsRaw);
+          if (!Number.isInteger(n) || n < YEARS_IN_SERVICE_MIN || n > YEARS_IN_SERVICE_MAX) {
+            form.setError("yearsInService", {
+              message: `Enter a whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`,
+            });
+            ok = false;
+          }
         }
       }
     }
 
     if (index === 2) {
-      if (!v.mostSubjectHandled) {
-        form.setError("mostSubjectHandled", { message: "Required" });
+      if (!v.currentGradeAssignment) {
+        form.setError("currentGradeAssignment", { message: "Required" });
+        ok = false;
+      }
+      if (v.designationKind !== ARAL_VOLUNTEER_DESIGNATION && !v.sectionId) {
+        form.setError("sectionId", { message: "Select a section" });
         ok = false;
       }
     }
@@ -498,6 +582,16 @@ export function TeacherProfileForm({
                   }
                 } else {
                   form.setValue("position", undefined);
+                  if (kind === ARAL_VOLUNTEER_DESIGNATION) {
+                    // Pre-select N/A defaults for the ARAL Volunteer designation,
+                    // but never clobber a value the user already chose.
+                    if (!form.getValues("fieldOfSpecialization")) {
+                      form.setValue("fieldOfSpecialization", "NA");
+                    }
+                    if (!yearsInServiceTouchedRef.current) {
+                      form.setValue("yearsInServiceApplicable", false);
+                    }
+                  }
                 }
               }}
             />
@@ -566,19 +660,29 @@ export function TeacherProfileForm({
                 required
               />
             ) : null}
-            <FormTextField
+            <FormYesNoPills
               control={form.control}
-              name="yearsInService"
-              label="Years in Service"
-              required
-              type="number"
-              inputMode="numeric"
-              min={YEARS_IN_SERVICE_MIN}
-              max={YEARS_IN_SERVICE_MAX}
-              step={1}
-              description={`Whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}.`}
-              placeholder="e.g. 5"
+              name="yearsInServiceApplicable"
+              label="Do you have a specific number of years in service?"
+              onValueChange={() => {
+                yearsInServiceTouchedRef.current = true;
+              }}
             />
+            {yearsInServiceApplicable !== false ? (
+              <FormTextField
+                control={form.control}
+                name="yearsInService"
+                label="Years in Service"
+                required
+                type="number"
+                inputMode="numeric"
+                min={YEARS_IN_SERVICE_MIN}
+                max={YEARS_IN_SERVICE_MAX}
+                step={1}
+                description={`Whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}.`}
+                placeholder="e.g. 5"
+              />
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -595,17 +699,35 @@ export function TeacherProfileForm({
               control={form.control}
               name="currentGradeAssignment"
               label="Current Grade Level / Assignment"
-              description="Optional"
-              allowEmpty
-              emptyLabel="Not specified"
-              options={toOptions(GRADE_LEVEL_LABELS)}
+              description="The grade you're assigned to. Fully-booked grades are disabled unless you don't need a classroom section."
+              required
+              options={gradeOptions}
+              placeholder="Select grade"
+              onValueChange={(newGradeType) => {
+                const grade = gradeLevels.find((g) => g.type === newGradeType);
+                const currentSectionId = form.getValues("sectionId");
+                const stillValid = currentSectionId
+                  ? (grade?.sections ?? []).some((s) => s.id === currentSectionId)
+                  : false;
+                if (!stillValid) {
+                  form.setValue("sectionId", undefined);
+                }
+              }}
             />
             <FormSelectField
               control={form.control}
-              name="mostSubjectHandled"
-              label="Most Subject Currently Handled"
-              required
-              options={toOptions(SUBJECT_LABELS)}
+              name="sectionId"
+              label="Section"
+              description={
+                sectionRequired
+                  ? "The classroom section you'll advise. Sections already taken by another teacher are disabled."
+                  : "Optional for the ARAL Volunteer designation — you don't advise a classroom section."
+              }
+              required={sectionRequired}
+              allowEmpty={!sectionRequired}
+              emptyLabel="N/A — no classroom section"
+              options={sectionOptions}
+              placeholder={values.currentGradeAssignment ? "Select section" : "Select a grade first"}
             />
           </CardContent>
         </Card>
@@ -717,9 +839,11 @@ export function TeacherProfileForm({
                 ],
                 [
                   "Years in service",
-                  values.yearsInService === "" || values.yearsInService === undefined
-                    ? "—"
-                    : `${values.yearsInService} years`,
+                  values.yearsInServiceApplicable === false
+                    ? "N/A"
+                    : values.yearsInService === "" || values.yearsInService === undefined
+                      ? "—"
+                      : `${values.yearsInService} years`,
                 ],
               ]}
             />
@@ -732,8 +856,8 @@ export function TeacherProfileForm({
                   labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment),
                 ],
                 [
-                  "Most subject handled",
-                  labelOf(SUBJECT_LABELS, values.mostSubjectHandled),
+                  "Section",
+                  sectionOptions.find((s) => s.value === values.sectionId)?.label ?? "N/A",
                 ],
               ]}
             />

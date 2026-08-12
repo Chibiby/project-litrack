@@ -175,6 +175,7 @@ export const SPECIALIZATION_LABELS = {
   TECHVOC: "TechVoc",
   VALUES_ED: "Values Ed",
   OTHERS: "Others",
+  NA: "N/A",
 } as const;
 
 export const SUBJECT_LABELS = {
