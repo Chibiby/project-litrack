@@ -34,98 +34,86 @@ async function loadValidSections(
   return sections;
 }
 
-/**
- * Additive assign: upsert TeacherSection rows and connect taughtGrades for
- * each distinct gradeLevelId of those sections. Does not remove existing
- * assignments.
- */
-export async function assignTeacherToSections(
-  tx: Tx,
-  params: { teacherId: string; sectionIds: string[]; schoolId: string }
-): Promise<void> {
-  const { teacherId, schoolId } = params;
-  const sectionIds = uniqueIds(params.sectionIds);
-  if (sectionIds.length === 0) return;
-
-  const sections = await loadValidSections(tx, sectionIds, schoolId);
-
-  await tx.teacherSection.createMany({
-    data: sections.map((s) => ({
-      teacherId,
-      sectionId: s.id,
-    })),
-    skipDuplicates: true,
-  });
-
-  const gradeIds = uniqueIds(sections.map((s) => s.gradeLevelId));
-  if (gradeIds.length === 0) return;
-
-  await tx.user.update({
-    where: { id: teacherId },
-    data: {
-      taughtGrades: {
-        connect: gradeIds.map((id) => ({ id })),
-      },
-    },
-  });
+/** Prisma unique-constraint violation (here: two advisers for one section). */
+export function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
 }
 
 /**
- * Replace assign: set TeacherSection exactly to `sectionIds`, then sync
- * taughtGrades so only grades backed by at least one assigned section remain
- * connected (and newly covered grades are connected).
+ * Shared user-facing message for {@link isUniqueViolation} on
+ * `User.advisorySectionId` — every caller of {@link setTeacherAdvisory} maps
+ * P2002 to this exact text so it never drifts between call sites.
  */
-export async function setTeacherSections(
+export const SECTION_TAKEN_ERROR = "That section already has an adviser.";
+
+/**
+ * Set a teacher's advisory section — the authoritative assignment axis.
+ *
+ * `User.advisorySectionId` is the source of truth (unique, so one adviser per
+ * section) and the teacher's grade is DERIVED from that section. The legacy
+ * `TeacherSection` m2m and `User.taughtGrades` mirror are still dual-written
+ * because reads have not all migrated yet; dropping them is a later wave.
+ *
+ * Throws Prisma P2002 when another teacher already advises `sectionId` — the
+ * calling action maps that to a user-facing message rather than swallowing it,
+ * so an adviser is never silently stolen from a section.
+ */
+export async function setTeacherAdvisory(
   tx: Tx,
-  params: { teacherId: string; sectionIds: string[]; schoolId: string }
-): Promise<void> {
-  const { teacherId, schoolId } = params;
-  const sectionIds = uniqueIds(params.sectionIds);
+  params: { teacherId: string; sectionId: string | null; schoolId: string }
+): Promise<{ sectionId: string | null; gradeLevelId: string | null }> {
+  const { teacherId, sectionId, schoolId } = params;
 
-  const sections = await loadValidSections(tx, sectionIds, schoolId);
-  const validIds = sections.map((s) => s.id);
+  const sections = sectionId
+    ? await loadValidSections(tx, [sectionId], schoolId)
+    : [];
+  const section = sections[0] ?? null;
+  const targetGradeIds = section ? [section.gradeLevelId] : [];
 
-  if (validIds.length === 0) {
-    await tx.teacherSection.deleteMany({ where: { teacherId } });
-  } else {
-    await tx.teacherSection.deleteMany({
-      where: {
-        teacherId,
-        sectionId: { notIn: validIds },
-      },
-    });
-
+  // Legacy mirror: drop every TeacherSection row that is not the advisory one.
+  await tx.teacherSection.deleteMany({
+    where: {
+      teacherId,
+      ...(section ? { sectionId: { not: section.id } } : {}),
+    },
+  });
+  if (section) {
     await tx.teacherSection.createMany({
-      data: validIds.map((sectionId) => ({
-        teacherId,
-        sectionId,
-      })),
+      data: [{ teacherId, sectionId: section.id }],
       skipDuplicates: true,
     });
   }
 
-  const targetGradeIds = uniqueIds(sections.map((s) => s.gradeLevelId));
-
   const teacher = await tx.user.findUniqueOrThrow({
     where: { id: teacherId },
-    select: { taughtGrades: { select: { id: true } } },
+    select: { advisorySectionId: true, taughtGrades: { select: { id: true } } },
   });
   const currentGradeIds = teacher.taughtGrades.map((g) => g.id);
-
   const toConnect = targetGradeIds.filter((id) => !currentGradeIds.includes(id));
   const toDisconnect = currentGradeIds.filter((id) => !targetGradeIds.includes(id));
 
-  if (toConnect.length === 0 && toDisconnect.length === 0) return;
+  const nextAdvisoryId = section?.id ?? null;
+  const advisoryChanged = teacher.advisorySectionId !== nextAdvisoryId;
 
-  await tx.user.update({
-    where: { id: teacherId },
-    data: {
-      taughtGrades: {
-        ...(toConnect.length > 0 ? { connect: toConnect.map((id) => ({ id })) } : {}),
-        ...(toDisconnect.length > 0
-          ? { disconnect: toDisconnect.map((id) => ({ id })) }
-          : {}),
+  if (advisoryChanged || toConnect.length > 0 || toDisconnect.length > 0) {
+    await tx.user.update({
+      where: { id: teacherId },
+      data: {
+        ...(advisoryChanged ? { advisorySectionId: nextAdvisoryId } : {}),
+        taughtGrades: {
+          ...(toConnect.length > 0 ? { connect: toConnect.map((id) => ({ id })) } : {}),
+          ...(toDisconnect.length > 0
+            ? { disconnect: toDisconnect.map((id) => ({ id })) }
+            : {}),
+        },
       },
-    },
-  });
+    });
+  }
+
+  return { sectionId: nextAdvisoryId, gradeLevelId: section?.gradeLevelId ?? null };
 }

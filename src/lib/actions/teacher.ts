@@ -2,10 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireSchoolUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateTeacherDashboard } from "@/lib/cache/revalidate";
+import {
+  setTeacherAdvisory,
+  isUniqueViolation,
+  SECTION_TAKEN_ERROR,
+} from "@/lib/teachers/section-assignment";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -26,8 +31,14 @@ function formToObj(formData: FormData): Record<string, unknown> {
   return obj;
 }
 
+/**
+ * Save a teacher's profiling wizard submission. This is also the sole writer
+ * of `User.advisorySectionId` going forward: the wizard's `sectionId` field is
+ * the teacher's real grade+section self-assignment (via {@link setTeacherAdvisory}),
+ * replacing the School Head's old manual-assignment actions.
+ */
 export async function saveTeacherProfile(formData: FormData): Promise<ActionResult> {
-  const user = await requireUser("TEACHER");
+  const user = await requireSchoolUser("TEACHER");
 
   const raw = formToObj(formData);
   raw.hasReadingTraining = raw.hasReadingTraining === true || raw.hasReadingTraining === "true" || raw.hasReadingTraining === "on";
@@ -43,6 +54,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     lastName,
     middleName: middleRaw,
     contactEmail: _contactEmail,
+    sectionId,
     ...profileFields
   } = parsed.data;
   const middleName = middleRaw?.trim() ? middleRaw.trim() : null;
@@ -58,17 +70,39 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     position: parsed.data.position ?? null,
   };
 
-  await prisma.$transaction([
-    prisma.teacherProfile.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, ...profileData },
-      update: { ...profileData },
-    }),
-    prisma.user.update({
-      where: { id: user.id },
-      data: { firstName, middleName, lastName, fullName, profileCompleted: true },
-    }),
-  ]);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.teacherProfile.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, ...profileData },
+        update: { ...profileData },
+      });
+      await tx.user.update({
+        where: { id: user.id },
+        data: { firstName, middleName, lastName, fullName, profileCompleted: true },
+      });
+      await setTeacherAdvisory(tx, {
+        teacherId: user.id,
+        sectionId: sectionId ?? null,
+        schoolId: user.schoolId,
+      });
+    });
+  } catch (err) {
+    console.error("[saveTeacherProfile] failed:", err);
+    if (isUniqueViolation(err)) {
+      return { ok: false, error: SECTION_TAKEN_ERROR };
+    }
+    if (
+      err instanceof Error &&
+      err.message === "One or more sections are invalid or do not belong to this school"
+    ) {
+      return { ok: false, error: "Invalid section selected." };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to save profile",
+    };
+  }
 
   await writeAudit({
     userId: user.id,
@@ -76,10 +110,17 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     action: AUDIT_ACTIONS.TEACHER_PROFILE_SAVE,
     resource: "TeacherProfile",
     resourceId: user.id,
-    metadata: { schoolId: user.schoolId, userId: user.id },
+    metadata: {
+      schoolId: user.schoolId,
+      userId: user.id,
+      sectionId: sectionId ?? null,
+      designation: parsed.data.designation,
+    },
   });
 
   revalidatePath("/teacher/settings/profile");
+  revalidatePath("/school-head/teachers");
+  revalidatePath("/school-head/grade-levels");
   revalidateTeacherDashboard(user.id);
   return { ok: true };
 }

@@ -4,6 +4,9 @@ import { optionalPhPhone } from "./phone";
 
 const READING_TRAININGS = ["ARAL", "TEACHING_READING", "ELLN", "TEACEP", "NONE"] as const;
 
+/** Single source of truth for the ARAL-only teacher designation literal. */
+export const ARAL_VOLUNTEER_DESIGNATION = "Non-DepEd ARAL Volunteer" as const;
+
 /**
  * Optional legacy profile contact email (P-I4 / DB column).
  * No longer collected in profiling UI; still accepted if present so older payloads
@@ -62,8 +65,10 @@ const SPECIALIZATION = [
   "TECHVOC",
   "VALUES_ED",
   "OTHERS",
+  "NA",
 ] as const;
 
+/** Unused since `mostSubjectHandled` left the teacher profiling flow; kept harmless. */
 const SUBJECT = [
   "ENGLISH", "MATH", "SCIENCE", "FILIPINO", "TLE_EPP", "ARALPAN", "MAPEH", "TECHVOC", "VALUES_ED", "ABM",
 ] as const;
@@ -108,6 +113,34 @@ const optionalText = (max: number) =>
 const optionalTeacherPosition = z
   .union([z.enum(TEACHER_POSITION), z.literal(""), z.null(), z.undefined()])
   .transform((v) => (v === "" || v == null ? undefined : v));
+
+/** Empty / null form values → undefined for optional advisory section. */
+const optionalSectionId = z
+  .union([z.string().uuid("Invalid section"), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === "" || v == null ? undefined : v));
+
+/**
+ * Teacher-only relaxation of `yearsInServiceSchema`: "" / null / undefined mean
+ * "N/A" (undefined), but a present value is still validated as an integer in
+ * the same 0–70 range. Does not touch `baseProfile.yearsInService`, which stays
+ * required for `schoolHeadProfileSchema`.
+ */
+const teacherYearsInServiceSchema = z.preprocess((val) => {
+  if (val === "" || val === null || val === undefined) return undefined;
+  if (typeof val === "number") return val;
+  if (typeof val === "string" && val.trim() !== "") {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : val;
+  }
+  return val;
+}, z
+  .number({
+    invalid_type_error: "Enter years in service as a number",
+  })
+  .int("Enter a whole number of years")
+  .min(YEARS_IN_SERVICE_MIN, `Enter a value from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`)
+  .max(YEARS_IN_SERVICE_MAX, `Enter a value from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}`)
+  .optional());
 
 type ProfileRefineShape = {
   fieldOfSpecialization: (typeof SPECIALIZATION)[number];
@@ -241,7 +274,10 @@ function refineTeacherDesignationPosition(
     return;
   }
 
-  // Others (free text): position must be cleared
+  // Everything else (Others free text, "Non-DepEd ARAL Volunteer", or any other
+  // custom designation string): none of these are ranked teaching positions, so
+  // `position` must be cleared. This intentionally covers three non-ranked
+  // cases, not just "Others" — not an oversight.
   if (data.position != null) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -287,12 +323,23 @@ export const teacherProfileSchema = baseProfile
   .extend({
     designation: nonEmpty("Designation is required").max(100),
     position: optionalTeacherPosition,
-    currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
-    mostSubjectHandled: z.enum(SUBJECT),
+    currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES),
+    sectionId: optionalSectionId,
+    yearsInService: teacherYearsInServiceSchema,
   })
   .superRefine((data, ctx) => {
     refineProfileConditionals(data, ctx);
     refineTeacherDesignationPosition(data, ctx);
+    // Every designation except the ARAL Volunteer must pick an advisory
+    // section; the volunteer's `sectionId` stays optional (undefined clears
+    // any existing advisory).
+    if (data.designation !== ARAL_VOLUNTEER_DESIGNATION && data.sectionId === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a section",
+        path: ["sectionId"],
+      });
+    }
   });
 
 export type SchoolHeadProfileInput = z.infer<typeof schoolHeadProfileSchema>;

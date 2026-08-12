@@ -15,10 +15,6 @@ import { lettersNeededToReachCount } from "@/lib/section-letters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import {
-  assignTeacherToSections,
-  setTeacherSections,
-} from "@/lib/teachers/section-assignment";
 
 import {
   revalidateSchoolDashboard,
@@ -32,25 +28,8 @@ const teacherUserIdSchema = z.object({
   userId: z.string().uuid("Invalid teacher"),
 });
 
-const sectionIdsSchema = z
-  .array(z.string().uuid("Invalid section"))
-  .min(1, "Select at least one section");
-
 const approveTeacherSchema = z.object({
   userId: z.string().uuid("Invalid teacher"),
-  sectionIds: sectionIdsSchema,
-});
-
-const setTeacherSectionAssignmentsSchema = z.object({
-  userId: z.string().uuid("Invalid teacher"),
-  sectionIds: sectionIdsSchema,
-});
-
-const assignTeachersToSectionsSchema = z.object({
-  userIds: z
-    .array(z.string().uuid("Invalid teacher"))
-    .min(1, "Select at least one teacher"),
-  sectionIds: sectionIdsSchema,
 });
 
 function formToObj(formData: FormData): Record<string, unknown> {
@@ -70,12 +49,6 @@ function formToObj(formData: FormData): Record<string, unknown> {
     }
   }
   return obj;
-}
-
-function parseSectionIds(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
-  if (typeof raw === "string" && raw.length > 0) return [raw];
-  return [];
 }
 
 /**
@@ -384,46 +357,34 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
 }
 
 /**
- * Approve a pending teacher self-registration and assign one or more sections.
+ * Approve a pending teacher self-registration.
+ *
+ * No advisory section is assigned here: a teacher self-assigns their
+ * grade+section (or opts to stay ARAL-only) via the profiling wizard
+ * (`saveTeacherProfile`), which is now the sole writer of
+ * `User.advisorySectionId`.
  */
 export async function approveTeacher(formData: FormData): Promise<ActionResult> {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
-  const raw = formToObj(formData);
-  const parsed = approveTeacherSchema.safeParse({
-    userId: raw.userId,
-    sectionIds: parseSectionIds(raw.sectionIds),
-  });
+  const parsed = approveTeacherSchema.safeParse({ userId: formData.get("userId") });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const { userId, sectionIds } = parsed.data;
+  const { userId } = parsed.data;
 
-  const [teacher, sections] = await Promise.all([
-    prisma.user.findFirst({
-      where: {
-        id: userId,
-        schoolId: user.schoolId,
-        role: "TEACHER",
-        approvalStatus: "PENDING",
-        deletedAt: null,
-      },
-    }),
-    prisma.section.findMany({
-      where: {
-        id: { in: sectionIds },
-        schoolId: user.schoolId,
-        deletedAt: null,
-      },
-      select: { id: true },
-    }),
-  ]);
+  const teacher = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      schoolId: user.schoolId,
+      role: "TEACHER",
+      approvalStatus: "PENDING",
+      deletedAt: null,
+    },
+  });
 
   if (!teacher) return { ok: false, error: "Pending teacher not found" };
-  if (sections.length !== new Set(sectionIds).size) {
-    return { ok: false, error: "One or more sections are invalid" };
-  }
 
   const adminClient = createSupabaseAdminClient();
   const { error: metaErr } = await adminClient.auth.admin.updateUserById(teacher.authId, {
@@ -435,30 +396,15 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
   }
 
   const now = new Date();
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: teacher.id },
-        data: {
-          isActive: true,
-          approvalStatus: "APPROVED",
-          approvedAt: now,
-          approvedById: user.id,
-        },
-      });
-      await assignTeacherToSections(tx, {
-        teacherId: teacher.id,
-        sectionIds,
-        schoolId: user.schoolId,
-      });
-    });
-  } catch (err) {
-    console.error("[approveTeacher] assign sections failed:", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to assign sections",
-    };
-  }
+  await prisma.user.update({
+    where: { id: teacher.id },
+    data: {
+      isActive: true,
+      approvalStatus: "APPROVED",
+      approvedAt: now,
+      approvedById: user.id,
+    },
+  });
 
   await writeAudit({
     userId: user.id,
@@ -469,7 +415,6 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
     metadata: {
       schoolId: user.schoolId,
       teacherId: teacher.id,
-      sectionIds,
     },
   });
 
@@ -669,6 +614,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
       _count: {
         select: {
           managedLearners: { where: { deletedAt: null } },
+          aralLearners: { where: { deletedAt: null } },
         },
       },
     },
@@ -679,6 +625,17 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     return {
       ok: false,
       error: `Reassign or transfer ${teacher._count.managedLearners} learner(s) before removing this teacher.`,
+    };
+  }
+
+  // An ARAL-only teacher has no managed learners, so the guard above lets them
+  // through -- and Learner_aralTeacherId_fkey is ON DELETE SET NULL, which would
+  // silently wipe every designation. Block instead, the same way advisory learners
+  // do, so the School Head reassigns deliberately.
+  if (teacher._count.aralLearners > 0) {
+    return {
+      ok: false,
+      error: `Reassign ${teacher._count.aralLearners} ARAL learner(s) to another teacher before removing this teacher.`,
     };
   }
 
@@ -698,6 +655,10 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
           email: freedEmail,
           isActive: false,
           deletedAt: new Date(),
+          // User.advisorySectionId is @unique, so a soft-deleted teacher that keeps
+          // it set would permanently occupy the section's only adviser slot and no
+          // replacement could ever be assigned. Release it here.
+          advisorySectionId: null,
           taughtGrades:
             teacher.taughtGrades.length > 0
               ? { disconnect: teacher.taughtGrades.map((g) => ({ id: g.id })) }
@@ -727,223 +688,4 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
-
-/**
- * Replace a teacher's section assignments (dual-writes taughtGrades).
- */
-export async function setTeacherSectionAssignments(
-  formData: FormData
-): Promise<ActionResult> {
-  const user = await requireSchoolUser("SCHOOL_HEAD");
-
-  const raw = formToObj(formData);
-  const parsed = setTeacherSectionAssignmentsSchema.safeParse({
-    userId: raw.userId,
-    sectionIds: parseSectionIds(raw.sectionIds),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const { userId, sectionIds } = parsed.data;
-
-  const teacher = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      schoolId: user.schoolId,
-      role: "TEACHER",
-      approvalStatus: "APPROVED",
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-  if (!teacher) return { ok: false, error: "Teacher not found" };
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      await setTeacherSections(tx, {
-        teacherId: teacher.id,
-        sectionIds,
-        schoolId: user.schoolId,
-      });
-    });
-  } catch (err) {
-    console.error("[setTeacherSectionAssignments] failed:", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to update section assignments",
-    };
-  }
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_ASSIGN_SECTIONS,
-    resource: "User",
-    resourceId: teacher.id,
-    metadata: {
-      schoolId: user.schoolId,
-      teacherId: teacher.id,
-      sectionIds,
-    },
-  });
-
-  revalidatePath("/school-head/teachers");
-  revalidateSchoolDashboard(user.schoolId);
-  revalidateTeacherCaches(teacher.id);
-  return { ok: true };
-}
-
-/**
- * Additive section assign (dual-writes taughtGrades). Prefer
- * {@link setTeacherSectionAssignments} when replacing the full set.
- */
-export async function assignTeacherSections(formData: FormData): Promise<ActionResult> {
-  const user = await requireSchoolUser("SCHOOL_HEAD");
-
-  const raw = formToObj(formData);
-  const parsed = setTeacherSectionAssignmentsSchema.safeParse({
-    userId: raw.userId,
-    sectionIds: parseSectionIds(raw.sectionIds),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const { userId, sectionIds } = parsed.data;
-
-  const teacher = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      schoolId: user.schoolId,
-      role: "TEACHER",
-      approvalStatus: "APPROVED",
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-  if (!teacher) return { ok: false, error: "Teacher not found" };
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      await assignTeacherToSections(tx, {
-        teacherId: teacher.id,
-        sectionIds,
-        schoolId: user.schoolId,
-      });
-    });
-  } catch (err) {
-    console.error("[assignTeacherSections] failed:", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to assign sections",
-    };
-  }
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_ASSIGN_SECTIONS,
-    resource: "User",
-    resourceId: teacher.id,
-    metadata: {
-      schoolId: user.schoolId,
-      teacherId: teacher.id,
-      sectionIds,
-      mode: "additive",
-    },
-  });
-
-  revalidatePath("/school-head/teachers");
-  revalidateSchoolDashboard(user.schoolId);
-  revalidateTeacherCaches(teacher.id);
-  return { ok: true };
-}
-
-/**
- * Bulk additive assign: add the same section set to each selected teacher
- * without removing their existing section assignments.
- */
-export async function assignTeachersToSections(
-  formData: FormData
-): Promise<ActionResult> {
-  const user = await requireSchoolUser("SCHOOL_HEAD");
-
-  const raw = formToObj(formData);
-  const parsed = assignTeachersToSectionsSchema.safeParse({
-    userIds: parseSectionIds(raw.userIds),
-    sectionIds: parseSectionIds(raw.sectionIds),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const userIds = [...new Set(parsed.data.userIds)];
-  const sectionIds = [...new Set(parsed.data.sectionIds)];
-
-  const teachers = await prisma.user.findMany({
-    where: {
-      id: { in: userIds },
-      schoolId: user.schoolId,
-      role: "TEACHER",
-      approvalStatus: "APPROVED",
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-  if (teachers.length !== userIds.length) {
-    return { ok: false, error: "One or more teachers are invalid or not approved" };
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      for (const teacher of teachers) {
-        await assignTeacherToSections(tx, {
-          teacherId: teacher.id,
-          sectionIds,
-          schoolId: user.schoolId,
-        });
-      }
-    });
-  } catch (err) {
-    console.error("[assignTeachersToSections] failed:", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to assign sections",
-    };
-  }
-
-  const teacherIds = teachers.map((t) => t.id);
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.TEACHER_ASSIGN_SECTIONS,
-    resource: "User",
-    resourceId: user.schoolId,
-    metadata: {
-      schoolId: user.schoolId,
-      teacherIds,
-      sectionIds,
-      mode: "additive",
-      bulk: true,
-    },
-  });
-
-  revalidatePath("/school-head/teachers");
-  revalidateSchoolDashboard(user.schoolId);
-  for (const teacherId of teacherIds) {
-    revalidateTeacherCaches(teacherId);
-  }
-  return { ok: true };
-}
-
-/**
- * @deprecated Use {@link setTeacherSectionAssignments} (section-based dual-write).
- */
-export async function assignTeacherToGrade(_formData: FormData): Promise<void> {
-  throw new Error(
-    "assignTeacherToGrade is deprecated; use setTeacherSectionAssignments instead"
-  );
 }
