@@ -110,16 +110,23 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...(args as [])),
 }));
 
-const revalidateTeacherDashboard = vi.fn();
+const revalidateTeacherCaches = vi.fn();
+const revalidateSchoolDashboard = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
-  revalidateTeacherDashboard: (...args: unknown[]) =>
-    revalidateTeacherDashboard(...(args as [])),
+  revalidateTeacherCaches: (...args: unknown[]) =>
+    revalidateTeacherCaches(...(args as [])),
+  revalidateSchoolDashboard: (...args: unknown[]) =>
+    revalidateSchoolDashboard(...(args as [])),
 }));
 
 // Imported after the mock factories above are registered.
 const { saveTeacherProfile } = await import("@/lib/actions/teacher");
 
-/** Minimal valid wizard submission; overrides are applied verbatim, "" clears a key. */
+/**
+ * Minimal valid wizard submission. Overrides are merged over the base; an
+ * override of `""` OMITS the key from the FormData entirely (matching a field
+ * the browser never submits), it does not send an empty value.
+ */
 function buildFormData(overrides: Record<string, string | string[]> = {}): FormData {
   const base: Record<string, string | string[]> = {
     firstName: "Juan",
@@ -214,7 +221,10 @@ describe("saveTeacherProfile", () => {
     );
     expect(revalidatePath).toHaveBeenCalledWith("/school-head/teachers");
     expect(revalidatePath).toHaveBeenCalledWith("/school-head/grade-levels");
-    expect(revalidateTeacherDashboard).toHaveBeenCalledWith(TEACHER_ID);
+    // Grade/section self-assignment changes the sidebar shell too, so the
+    // combined helper (dashboard + shell) must be the one called.
+    expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
+    expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
   it("clears the advisory section for an ARAL Volunteer who submits none", async () => {
@@ -258,12 +268,37 @@ describe("saveTeacherProfile", () => {
   });
 
   it("returns the shared section-taken message on a P2002 race instead of throwing", async () => {
-    userUpdateError = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    userUpdateError = Object.assign(new Error("Unique constraint failed"), {
+      code: "P2002",
+      meta: { target: ["advisorySectionId"] },
+    });
 
     await expect(saveTeacherProfile(buildFormData())).resolves.toEqual({
       ok: false,
       error: "That section already has an adviser.",
     });
+  });
+
+  it("does not label an unrelated unique violation as a section conflict", async () => {
+    // A P2002 on some other unique column must not tell the teacher their
+    // section was taken — and must not echo the raw database text either.
+    userUpdateError = Object.assign(new Error("Unique constraint failed on `User_email_key`"), {
+      code: "P2002",
+      meta: { target: ["email"] },
+    });
+
+    const result = await saveTeacherProfile(buildFormData());
+    expect(result).toEqual({ ok: false, error: "Failed to save profile. Please try again." });
+  });
+
+  it("never leaks raw database error text to the client", async () => {
+    userUpdateError = new Error(
+      'prepared statement "s3" already exists at Section.id = deadbeef',
+    );
+
+    const result = await saveTeacherProfile(buildFormData());
+    expect(result).toEqual({ ok: false, error: "Failed to save profile. Please try again." });
+    expect(JSON.stringify(result)).not.toContain("prepared statement");
   });
 
   it("rejects a section from another school without leaking its existence", async () => {

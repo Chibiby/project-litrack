@@ -45,6 +45,28 @@ export function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
+ * Narrower than {@link isUniqueViolation}: true only when the P2002 came from
+ * the `User.advisorySectionId` unique index (i.e. another teacher already
+ * advises the section), so an unrelated unique violation inside the same
+ * transaction is not mislabelled as "section taken".
+ *
+ * Prisma reports `meta.target` as a string[] on Postgres, but older/other
+ * shapes (string, or the raw index name) are tolerated here.
+ */
+export function isAdvisorySectionConflict(err: unknown): boolean {
+  if (!isUniqueViolation(err)) return false;
+  const target = (err as { meta?: { target?: unknown } }).meta?.target;
+  const parts = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === "string"
+      ? [target]
+      : [];
+  // Unknown target → fall back to the broad message rather than leaking raw error text.
+  if (parts.length === 0) return true;
+  return parts.some((p) => p.toLowerCase().includes("advisorysection"));
+}
+
+/**
  * Shared user-facing message for {@link isUniqueViolation} on
  * `User.advisorySectionId` — every caller of {@link setTeacherAdvisory} maps
  * P2002 to this exact text so it never drifts between call sites.

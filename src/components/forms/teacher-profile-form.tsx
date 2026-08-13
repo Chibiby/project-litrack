@@ -332,6 +332,24 @@ export function TeacherProfileForm({
     }));
   }, [gradeLevels, values.currentGradeAssignment, values.sectionId]);
 
+  // Resolve the section name across ALL grades, not just `sectionOptions` —
+  // the Review step must still name the section if the grade field is cleared.
+  const selectedSectionName = useMemo(() => {
+    if (!values.sectionId) return null;
+    for (const g of gradeLevels) {
+      const match = g.sections.find((s) => s.id === values.sectionId);
+      if (match) return match.name;
+    }
+    return null;
+  }, [gradeLevels, values.sectionId]);
+
+  /** No grade has an open section (and none is already ours) — profiling is stuck. */
+  const noAssignableSections =
+    sectionRequired &&
+    gradeLevels.every((g) =>
+      g.sections.every((s) => s.takenByOther && s.id !== values.sectionId)
+    );
+
   const teacherPositionOptions = useMemo(
     () =>
       toOptions(
@@ -708,6 +726,13 @@ export function TeacherProfileForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {noAssignableSections ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {gradeLevels.length === 0
+                  ? "Your school has no grade levels set up yet. Ask your School Head to add grade levels and sections before you can finish profiling."
+                  : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}
+              </div>
+            ) : null}
             <FormSelectField
               control={form.control}
               name="currentGradeAssignment"
@@ -870,7 +895,7 @@ export function TeacherProfileForm({
                 ],
                 [
                   "Section",
-                  sectionOptions.find((s) => s.value === values.sectionId)?.label ?? "N/A",
+                  selectedSectionName ?? "N/A",
                 ],
               ]}
             />

@@ -49,6 +49,12 @@ export type ActiveTeacherRow = {
   learnerCount: number;
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
   aralLearnerCount: number;
+  /**
+   * Read-only mirror of the teacher's advisory section (grade derived from it).
+   * Teachers set this themselves in profiling — the School Head cannot edit it
+   * here; this column exists only so the roster is legible.
+   */
+  assignment: { gradeName: string; sectionName: string } | null;
 };
 
 export type DeclinedTeacherRow = {
@@ -207,8 +213,8 @@ function TeachersManagedTable({
       await settleActionResult(res, "Teacher removed");
     });
 
-  // Name, Email, ARAL, Profile, Approved (+ Actions when editable).
-  const colSpan = readOnly ? 5 : 6;
+  // Name, Email, Grade & section, ARAL, Profile, Approved (+ Actions when editable).
+  const colSpan = readOnly ? 6 : 7;
 
   return (
     <Card>
@@ -266,6 +272,7 @@ function TeachersManagedTable({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Grade &amp; section</TableHead>
               <TableHead>ARAL learners</TableHead>
               <TableHead>Profile</TableHead>
               <TableHead>Approved</TableHead>
@@ -284,6 +291,13 @@ function TeachersManagedTable({
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.fullName}</TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
+                  <TableCell className="text-sm">
+                    {row.assignment ? (
+                      `${row.assignment.gradeName} — ${row.assignment.sectionName}`
+                    ) : (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {row.aralLearnerCount > 0 ? (
                       <Badge

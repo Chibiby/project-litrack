@@ -5,10 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { revalidateTeacherDashboard } from "@/lib/cache/revalidate";
+import {
+  revalidateTeacherCaches,
+  revalidateSchoolDashboard,
+} from "@/lib/cache/revalidate";
 import {
   setTeacherAdvisory,
-  isUniqueViolation,
+  isAdvisorySectionConflict,
   SECTION_TAKEN_ERROR,
 } from "@/lib/teachers/section-assignment";
 
@@ -90,7 +93,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     });
   } catch (err) {
     console.error("[saveTeacherProfile] failed:", err);
-    if (isUniqueViolation(err)) {
+    if (isAdvisorySectionConflict(err)) {
       return { ok: false, error: SECTION_TAKEN_ERROR };
     }
     if (
@@ -99,10 +102,9 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     ) {
       return { ok: false, error: "Invalid section selected." };
     }
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to save profile",
-    };
+    // Never surface raw Prisma/Postgres text to the client — the details are in
+    // the console.error above.
+    return { ok: false, error: "Failed to save profile. Please try again." };
   }
 
   await writeAudit({
@@ -122,6 +124,10 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   revalidatePath("/teacher/settings/profile");
   revalidatePath("/school-head/teachers");
   revalidatePath("/school-head/grade-levels");
-  revalidateTeacherDashboard(user.id);
+  // Grade/section self-assignment changes the teacher's sidebar grade links,
+  // not just their dashboard metrics — and the school-head dashboard counts
+  // sectioned/advised teachers.
+  revalidateTeacherCaches(user.id);
+  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

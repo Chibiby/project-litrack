@@ -22,6 +22,7 @@ import {
   type DeclinedTeacherRow,
 } from "@/components/teachers-active-table";
 import { DualListCardSkeleton } from "@/components/loading";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,9 @@ const managedTeacherSelect = {
   email: true,
   profileCompleted: true,
   approvedAt: true,
+  advisorySection: {
+    select: { name: true, gradeLevel: { select: { type: true } } },
+  },
   _count: {
     select: {
       managedLearners: { where: { deletedAt: null } },
@@ -56,6 +60,15 @@ function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,
     aralLearnerCount: t._count.aralLearners,
+    // Read-only: teachers set this themselves during profiling.
+    assignment: t.advisorySection
+      ? {
+          gradeName:
+            GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ??
+            t.advisorySection.gradeLevel.type,
+          sectionName: t.advisorySection.name,
+        }
+      : null,
   };
 }
 
@@ -94,6 +107,8 @@ async function TeachersBody({
     activeCount,
     inactiveTeachers,
     declinedTeachers,
+    gradeLevelCount,
+    freeSectionCount,
   ] = await Promise.all([
     prisma.user.findMany({
       where: { ...teacherBase, approvalStatus: "PENDING" },
@@ -132,6 +147,12 @@ async function TeachersBody({
       },
       orderBy: { rejectedAt: "desc" },
     }),
+    // Profiling capacity: teachers self-assign, so a school with no grade levels
+    // or no adviser-free section leaves them unable to finish onboarding.
+    prisma.gradeLevel.count({ where: { schoolId, deletedAt: null } }),
+    prisma.section.count({
+      where: { schoolId, deletedAt: null, adviser: null },
+    }),
   ]);
 
   const pendingRows: PendingTeacherRow[] = pendingTeachers.map((t) => ({
@@ -164,6 +185,24 @@ async function TeachersBody({
         After you approve them, they sign in with email and password only. Grade and
         section assignment happens when the teacher completes their own profile.
       </p>
+
+      {gradeLevelCount === 0 || freeSectionCount === 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {gradeLevelCount === 0 ? (
+            <>
+              This school has no grade levels yet, so teachers cannot finish
+              profiling. Add grade levels and sections in{" "}
+              <strong>Grade Levels</strong> first.
+            </>
+          ) : (
+            <>
+              Every section already has an adviser. New teachers will have
+              nothing to choose in profiling until you add more sections in{" "}
+              <strong>Grade Levels</strong>.
+            </>
+          )}
+        </div>
+      ) : null}
 
       <TeachersPendingTable rows={pendingRows} readOnly={isSuperAdminView} />
 
