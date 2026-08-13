@@ -5,6 +5,7 @@ import Image from "next/image";
 import { LogOut, Loader2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { logoutAction } from "@/lib/actions/auth";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import {
@@ -20,7 +21,7 @@ export function OnboardingShell({ children }: { children: React.ReactNode }) {
     <UnsavedChangesProvider>
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-header/90 backdrop-blur-md">
-          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-4 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
               <Image
                 src="/logo.png"
@@ -34,7 +35,10 @@ export function OnboardingShell({ children }: { children: React.ReactNode }) {
                 LITRACK
               </span>
             </div>
+
+            <div className="flex-1" />
             <GuardedSignOut />
+            <ThemeToggle />
           </div>
         </header>
         <main id="main-content" className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">

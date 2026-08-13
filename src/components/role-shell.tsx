@@ -4,6 +4,7 @@ import { createContext, useContext } from "react";
 import { Menu } from "lucide-react";
 import { AppSidebar } from "./app-sidebar";
 import { Breadcrumbs } from "./breadcrumbs";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
@@ -88,6 +89,8 @@ export function RoleShell({
                   <div className="min-w-0 flex-1">
                     <Breadcrumbs className="min-w-0 justify-start" />
                   </div>
+
+                  <ThemeToggle />
                 </div>
               </header>
 
