@@ -68,6 +68,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     specializationOther: parsed.data.specializationOther ?? null,
     currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
     position: parsed.data.position ?? null,
+    yearsInService: parsed.data.yearsInService ?? null,
   };
 
   try {
