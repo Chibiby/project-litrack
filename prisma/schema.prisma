@@ -74,6 +74,18 @@ enum WeeklyWordRecognitionLevel {
   NA
 }
 
+// Weekly ARAL writing level. Deliberately rubric-neutral: UI labels live in
+// src/lib/constants/enum-labels.ts and can change without a migration.
+enum WeeklyWritingLevel {
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_4
+  LEVEL_5
+  LEVEL_0
+  NA
+}
+
 // Weekly ARAL reading-comprehension level (1 literally / 2 inferentially / 3 critically).
 enum WeeklyReadingComprehensionLevel {
   LEVEL_1
@@ -153,6 +165,7 @@ enum Specialization {
   TECHVOC
   VALUES_ED
   OTHERS
+  NA
 }
 
 enum Subject {
@@ -185,6 +198,22 @@ enum EnglishTraining {
 enum GovernmentBenefit {
   FOUR_PS
   IPS
+}
+
+enum Ethnicity {
+  BISAYA
+  ILONGGO
+  BLAAN
+  TAGAKAOLO
+  TBOLI
+  BADJAO
+  MARANAO
+  TAUSOG
+  MAGUINDANAON
+  ILOCANO
+  TAGALOG
+  FOREIGN
+  OTHER
 }
 
 enum ParentEducation {
@@ -299,17 +328,17 @@ enum EnrollmentStatus {
 // =====================================================
 
 model School {
-  id           String   @id @default(uuid())
-  name         String   @unique
-  schoolIdCode String   @unique // password used for login
+  id           String    @id @default(uuid())
+  name         String    @unique
+  schoolIdCode String    @unique // password used for login
   address      String?
   region       String?
   division     String?
   district     String?
-  isActive     Boolean  @default(true)
+  isActive     Boolean   @default(true)
   createdById  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
   users          User[]
@@ -328,7 +357,7 @@ model School {
 model SchoolYear {
   id        String   @id @default(uuid())
   schoolId  String
-  label     String   // e.g. "2025-2026"
+  label     String // e.g. "2025-2026"
   startDate DateTime
   endDate   DateTime
   isActive  Boolean  @default(false)
@@ -342,40 +371,45 @@ model SchoolYear {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  authId     String   @unique // Supabase auth.users.id
-  email      String   @unique
-  role       UserRole
-  schoolId   String?
-  firstName  String
-  middleName String?
-  lastName   String
-  fullName   String
-  isActive   Boolean  @default(false)
-  mustChangePassword Boolean @default(false)
+  id                 String                 @id @default(uuid())
+  authId             String                 @unique // Supabase auth.users.id
+  email              String                 @unique
+  role               UserRole
+  schoolId           String?
+  firstName          String
+  middleName         String?
+  lastName           String
+  fullName           String
+  isActive           Boolean                @default(false)
+  mustChangePassword Boolean                @default(false)
   // Profile completion flags
-  profileCompleted Boolean @default(false)
+  profileCompleted   Boolean                @default(false)
   // Teacher self-registration approval (null for non-teacher roles)
-  approvalStatus TeacherApprovalStatus?
-  approvedAt     DateTime?
-  approvedById   String?
-  rejectedAt     DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  deletedAt  DateTime?
+  approvalStatus     TeacherApprovalStatus?
+  approvedAt         DateTime?
+  approvedById       String?
+  rejectedAt         DateTime?
+  /// Advisory assignment: 0 or 1 section per teacher. Grade is DERIVED from the
+  /// section, never stored here. @unique enforces one adviser per section.
+  advisorySectionId  String?                @unique
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  deletedAt          DateTime?
 
-  school                School?              @relation(fields: [schoolId], references: [id])
-  schoolHeadProfile     SchoolHeadProfile?
-  teacherProfile        TeacherProfile?
-  taughtGrades          GradeLevel[]         @relation("TeacherGrades")
-  taughtSections        TeacherSection[]
-  managedLearners       Learner[]            @relation("TeacherLearners")
-  recordedAttendance    Attendance[]         @relation("AttendanceRecorder")
-  recordedReadingLevels ReadingLevelRecord[] @relation("ReadingRecorder")
-  recordedAttendanceDays AttendanceDayMeta[] @relation("AttendanceDayRecorder")
-  teacherEnrollments    Enrollment[]         @relation("TeacherEnrollments")
-  announcements         Announcement[]
-  teacherInvites        TeacherInvite[]      @relation("TeacherInviteUser")
+  school                 School?              @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile      SchoolHeadProfile?
+  teacherProfile         TeacherProfile?
+  advisorySection        Section?             @relation("SectionAdviser", fields: [advisorySectionId], references: [id], onDelete: SetNull)
+  taughtGrades           GradeLevel[]         @relation("TeacherGrades")
+  taughtSections         TeacherSection[]
+  managedLearners        Learner[]            @relation("TeacherLearners")
+  aralLearners           Learner[]            @relation("AralTeacherLearners")
+  recordedAttendance     Attendance[]         @relation("AttendanceRecorder")
+  recordedReadingLevels  ReadingLevelRecord[] @relation("ReadingRecorder")
+  recordedAttendanceDays AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
+  teacherEnrollments     Enrollment[]         @relation("TeacherEnrollments")
+  announcements          Announcement[]
+  teacherInvites         TeacherInvite[]      @relation("TeacherInviteUser")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -425,15 +459,17 @@ model TeacherProfile {
   position      TeacherPosition?
 
   // II. Professional Background
-  educationalAttainment   EducationalAttainment
-  fieldOfSpecialization   Specialization
-  specializationOther     String?
-  /// Years in service (0–70 inclusive).
-  yearsInService          Int
-  currentGradeAssignment  GradeLevelType?
+  educationalAttainment  EducationalAttainment
+  fieldOfSpecialization  Specialization
+  specializationOther    String?
+  /// Years in service (0–70 inclusive). Null = N/A (teacher declined to specify).
+  yearsInService         Int?
+  currentGradeAssignment GradeLevelType?
 
   // III. Teaching Assignment
-  mostSubjectHandled Subject
+  /// Unused by the app going forward (removed from UI); kept nullable rather than
+  /// dropped per "additive first" — drop in a future wave once explicitly approved.
+  mostSubjectHandled Subject?
 
   // IV. Training & Professional Development
   hasReadingTraining   Boolean
@@ -504,8 +540,9 @@ model Section {
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  gradeLevel     GradeLevel      @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeLevel     GradeLevel       @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  adviser        User?            @relation("SectionAdviser")
   teachers       TeacherSection[]
   learners       Learner[]
   enrollments    Enrollment[]
@@ -558,11 +595,15 @@ model Enrollment {
 }
 
 model Learner {
-  id           String  @id @default(uuid())
-  schoolId     String
-  gradeLevelId String
-  teacherId    String
-  sectionId    String?
+  id            String  @id @default(uuid())
+  schoolId      String
+  gradeLevelId  String
+  /// Adviser. Null for a floating learner (no advisory section yet).
+  teacherId     String?
+  sectionId     String?
+  /// ARAL designation, independent of the advisory axis. May point at a teacher
+  /// with no advisory section.
+  aralTeacherId String?
 
   // Section A - Initial Profile
   firstName  String
@@ -572,10 +613,15 @@ model Learner {
   age        Int
   gender     Gender
 
-  englishReadingProfile        ReadingProfile
-  englishFrustrationSubtypes   FrustrationSubtype[]
-  filipinoReadingProfile       ReadingProfile
-  filipinoFrustrationSubtypes  FrustrationSubtype[]
+  // Nullable: learners rostered before ethnicity was collected have none.
+  ethnicity      Ethnicity?
+  // Free text only when ethnicity = OTHER.
+  ethnicityOther String?
+
+  englishReadingProfile       ReadingProfile
+  englishFrustrationSubtypes  FrustrationSubtype[]
+  filipinoReadingProfile      ReadingProfile
+  filipinoFrustrationSubtypes FrustrationSubtype[]
 
   governmentBenefits GovernmentBenefit[]
   parentEducation    ParentEducation
@@ -587,8 +633,8 @@ model Learner {
   transferDetails      String?
 
   // ARAL flag
-  isAralLearner   Boolean   @default(false)
-  aralEnrolledAt  DateTime?
+  isAralLearner  Boolean   @default(false)
+  aralEnrolledAt DateTime?
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -597,7 +643,8 @@ model Learner {
 
   school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   gradeLevel    GradeLevel           @relation(fields: [gradeLevelId], references: [id])
-  teacher       User                 @relation("TeacherLearners", fields: [teacherId], references: [id])
+  teacher       User?                @relation("TeacherLearners", fields: [teacherId], references: [id], onDelete: Restrict)
+  aralTeacher   User?                @relation("AralTeacherLearners", fields: [aralTeacherId], references: [id], onDelete: SetNull)
   section       Section?             @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   enrollments   Enrollment[]
   aralProfile   AralProfile?
@@ -606,6 +653,8 @@ model Learner {
 
   @@index([schoolId, gradeLevelId, isAralLearner, deletedAt])
   @@index([teacherId])
+  @@index([aralTeacherId])
+  @@index([schoolId, aralTeacherId, isAralLearner, deletedAt])
 }
 
 model Announcement {
@@ -692,17 +741,18 @@ model AttendanceDayMeta {
 }
 
 model ReadingLevelRecord {
-  id                        String                            @id @default(uuid())
+  id                        String                           @id @default(uuid())
   learnerId                 String
-  weekStart                 DateTime                          @db.Date // Monday of the recorded week
+  weekStart                 DateTime                         @db.Date // Monday of the recorded week
   englishProfile            ReadingProfile
   filipinoProfile           ReadingProfile
   wordRecognitionLevel      WeeklyWordRecognitionLevel?
   readingComprehensionLevel WeeklyReadingComprehensionLevel?
+  writingLevel              WeeklyWritingLevel?
   notes                     String?
   recordedById              String
-  createdAt                 DateTime                          @default(now())
-  updatedAt                 DateTime                          @updatedAt
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
   recordedBy User    @relation("ReadingRecorder", fields: [recordedById], references: [id])
