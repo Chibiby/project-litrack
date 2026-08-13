@@ -424,9 +424,22 @@ export function TeacherProfileForm({
       if (!v.currentGradeAssignment) {
         form.setError("currentGradeAssignment", { message: "Required" });
         ok = false;
+      } else if (!gradeOptions.some((o) => o.value === v.currentGradeAssignment)) {
+        // Stale/orphaned value (e.g. a legacy grade type or one the school
+        // deactivated) that isn't among the currently-configured grades —
+        // never silently submit it, force an explicit re-pick.
+        form.setError("currentGradeAssignment", {
+          message: "This grade is no longer available — select your current one",
+        });
+        ok = false;
       }
       if (v.designationKind !== ARAL_VOLUNTEER_DESIGNATION && !v.sectionId) {
         form.setError("sectionId", { message: "Select a section" });
+        ok = false;
+      } else if (v.sectionId && !sectionOptions.some((o) => o.value === v.sectionId)) {
+        form.setError("sectionId", {
+          message: "This section is no longer available — select your current one",
+        });
         ok = false;
       }
     }
@@ -588,7 +601,7 @@ export function TeacherProfileForm({
                     if (!form.getValues("fieldOfSpecialization")) {
                       form.setValue("fieldOfSpecialization", "NA");
                     }
-                    if (!yearsInServiceTouchedRef.current) {
+                    if (!yearsInServiceTouchedRef.current && !form.getValues("yearsInService")) {
                       form.setValue("yearsInServiceApplicable", false);
                     }
                   }
