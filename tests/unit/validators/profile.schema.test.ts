@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARAL_VOLUNTEER_DESIGNATION,
   schoolHeadProfileSchema,
   teacherProfileSchema,
 } from "@/lib/validators/profile.schema";
@@ -15,6 +16,9 @@ const baseFields = {
   highestTrainingLevel: "DIVISION" as const,
 };
 
+/** Any valid section uuid — the schema only checks the shape, not existence. */
+const SECTION_ID = "11111111-1111-4111-8111-111111111111";
+
 /** School Head profiling now requires respondent names on the same payload. */
 const shBase = {
   ...baseFields,
@@ -23,14 +27,27 @@ const shBase = {
   designation: "School Head" as const,
 };
 
-/** Teacher profiling requires respondent names (persisted on User). */
+/**
+ * Teacher profiling requires respondent names (persisted on User), a grade
+ * assignment, and — for every designation except the ARAL Volunteer — a section.
+ */
 const teacherBase = {
   ...baseFields,
   firstName: "Juan",
   lastName: "Dela Cruz",
   designation: "Teacher" as const,
   position: "TEACHER_III" as const,
-  mostSubjectHandled: "ENGLISH" as const,
+  currentGradeAssignment: "G3" as const,
+  sectionId: SECTION_ID,
+};
+
+/** ARAL Volunteers hold no ranked position and no classroom section. */
+const aralVolunteerBase = {
+  ...baseFields,
+  firstName: "Ana",
+  lastName: "Reyes",
+  designation: ARAL_VOLUNTEER_DESIGNATION,
+  currentGradeAssignment: "G3" as const,
 };
 
 describe("schoolHeadProfileSchema", () => {
@@ -179,54 +196,66 @@ describe("schoolHeadProfileSchema", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("still requires a real yearsInService (teacher relaxation must not leak into baseProfile)", () => {
+    // Regression guard: SchoolHeadProfile.yearsInService is Int NOT NULL, so the
+    // teacher-only optional override must never reach the shared baseProfile.
+    for (const yearsInService of [undefined, "", null]) {
+      expect(
+        schoolHeadProfileSchema.safeParse({
+          ...shBase,
+          position: "PRINCIPAL_I",
+          yearsInService,
+        }).success,
+      ).toBe(false);
+    }
+
+    const { yearsInService: _omitted, ...withoutYears } = shBase;
+    expect(
+      schoolHeadProfileSchema.safeParse({
+        ...withoutYears,
+        position: "PRINCIPAL_I",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("does not accept teacher-only fields", () => {
+    const parsed = schoolHeadProfileSchema.safeParse({
+      ...shBase,
+      position: "PRINCIPAL_I",
+      sectionId: SECTION_ID,
+      currentGradeAssignment: "G3",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      // Stripped, not persisted — School Heads have no advisory section.
+      expect(parsed.data).not.toHaveProperty("sectionId");
+      expect(parsed.data).not.toHaveProperty("currentGradeAssignment");
+    }
+  });
 });
 
 describe("teacherProfileSchema", () => {
   it("requires designation and rejects School Head", () => {
     expect(
-      teacherProfileSchema.safeParse({
-        ...baseFields,
-        firstName: "Juan",
-        lastName: "Dela Cruz",
-        position: "TEACHER_III",
-        mostSubjectHandled: "ENGLISH",
-      }).success,
+      teacherProfileSchema.safeParse({ ...teacherBase, designation: undefined }).success,
     ).toBe(false);
 
     expect(
-      teacherProfileSchema.safeParse({
-        ...baseFields,
-        firstName: "Juan",
-        lastName: "Dela Cruz",
-        designation: "",
-        position: "TEACHER_III",
-        mostSubjectHandled: "ENGLISH",
-      }).success,
+      teacherProfileSchema.safeParse({ ...teacherBase, designation: "" }).success,
     ).toBe(false);
 
     expect(
-      teacherProfileSchema.safeParse({
-        ...baseFields,
-        firstName: "Juan",
-        lastName: "Dela Cruz",
-        designation: "School Head",
-        position: "TEACHER_III",
-        mostSubjectHandled: "ENGLISH",
-      }).success,
+      teacherProfileSchema.safeParse({ ...teacherBase, designation: "School Head" })
+        .success,
     ).toBe(false);
 
     expect(teacherProfileSchema.safeParse(teacherBase).success).toBe(true);
   });
 
   it("requires first and last name", () => {
-    expect(
-      teacherProfileSchema.safeParse({
-        ...baseFields,
-        designation: "Teacher",
-        position: "TEACHER_III",
-        mostSubjectHandled: "ENGLISH",
-      }).success,
-    ).toBe(false);
+    const { firstName: _f, lastName: _l, ...withoutNames } = teacherBase;
+    expect(teacherProfileSchema.safeParse(withoutNames).success).toBe(false);
 
     expect(
       teacherProfileSchema.safeParse({
@@ -332,17 +361,12 @@ describe("teacherProfileSchema", () => {
   });
 
   it("accepts teacher positions and rejects school-head positions", () => {
-    const ok = teacherProfileSchema.safeParse({
-      ...teacherBase,
-      currentGradeAssignment: "G3",
-    });
-    expect(ok.success).toBe(true);
+    expect(teacherProfileSchema.safeParse(teacherBase).success).toBe(true);
 
     expect(
       teacherProfileSchema.safeParse({
         ...teacherBase,
         position: "PRINCIPAL_I",
-        mostSubjectHandled: "MATH",
       }).success,
     ).toBe(false);
 
@@ -350,33 +374,31 @@ describe("teacherProfileSchema", () => {
       teacherProfileSchema.safeParse({
         ...teacherBase,
         position: "HEAD_TEACHER_I",
-        mostSubjectHandled: "MATH",
       }).success,
     ).toBe(false);
   });
 
-  it("requires mostSubjectHandled and allows optional specializationOther", () => {
-    expect(
-      teacherProfileSchema.safeParse({
-        ...baseFields,
-        firstName: "Juan",
-        lastName: "Dela Cruz",
-        designation: "Master Teacher",
-        position: "MASTER_TEACHER_II",
-      }).success,
-    ).toBe(false);
-
+  it("allows optional specializationOther and accepts NA specialization", () => {
     const withOther = teacherProfileSchema.safeParse({
       ...teacherBase,
       designation: "Teacher",
       position: "TEACHER_I",
-      mostSubjectHandled: "FILIPINO",
       fieldOfSpecialization: "OTHERS",
       specializationOther: "SPED",
     });
     expect(withOther.success).toBe(true);
     if (withOther.success) {
       expect(withOther.data.specializationOther).toBe("SPED");
+    }
+
+    // "NA" mirrors the Specialization enum value added for ARAL Volunteers.
+    const na = teacherProfileSchema.safeParse({
+      ...teacherBase,
+      fieldOfSpecialization: "NA",
+    });
+    expect(na.success).toBe(true);
+    if (na.success) {
+      expect(na.data.fieldOfSpecialization).toBe("NA");
     }
   });
 
@@ -441,10 +463,10 @@ describe("teacherProfileSchema", () => {
       teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 71 }).success,
     ).toBe(false);
     expect(
-      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: "" }).success,
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 3.5 }).success,
     ).toBe(false);
     expect(
-      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: 3.5 }).success,
+      teacherProfileSchema.safeParse({ ...teacherBase, yearsInService: "abc" }).success,
     ).toBe(false);
 
     expect(
@@ -454,5 +476,136 @@ describe("teacherProfileSchema", () => {
         yearsInService: "0",
       }).success,
     ).toBe(true);
+  });
+
+  it("treats blank/absent yearsInService as N/A for teachers", () => {
+    for (const yearsInService of ["", null, undefined]) {
+      const parsed = teacherProfileSchema.safeParse({ ...teacherBase, yearsInService });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) expect(parsed.data.yearsInService).toBeUndefined();
+    }
+
+    const { yearsInService: _omitted, ...withoutYears } = teacherBase;
+    const absent = teacherProfileSchema.safeParse(withoutYears);
+    expect(absent.success).toBe(true);
+    if (absent.success) expect(absent.data.yearsInService).toBeUndefined();
+  });
+
+  it("requires currentGradeAssignment for every teacher designation", () => {
+    const { currentGradeAssignment: _g, ...teacherNoGrade } = teacherBase;
+    expect(teacherProfileSchema.safeParse(teacherNoGrade).success).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, currentGradeAssignment: undefined })
+        .success,
+    ).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, currentGradeAssignment: "" }).success,
+    ).toBe(false);
+
+    // Others free-text designation
+    const { currentGradeAssignment: _g2, ...othersNoGrade } = teacherBase;
+    expect(
+      teacherProfileSchema.safeParse({
+        ...othersNoGrade,
+        designation: "Guidance Counselor",
+        position: undefined,
+      }).success,
+    ).toBe(false);
+
+    // ARAL Volunteer: section is optional, grade is not
+    const { currentGradeAssignment: _g3, ...volunteerNoGrade } = aralVolunteerBase;
+    expect(teacherProfileSchema.safeParse(volunteerNoGrade).success).toBe(false);
+
+    expect(teacherProfileSchema.safeParse(aralVolunteerBase).success).toBe(true);
+  });
+
+  it("requires sectionId for every designation except the ARAL Volunteer", () => {
+    const { sectionId: _s, ...teacherNoSection } = teacherBase;
+
+    const missing = teacherProfileSchema.safeParse(teacherNoSection);
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      const issue = missing.error.errors.find((e) => e.path[0] === "sectionId");
+      expect(issue?.message).toBe("Select a section");
+    }
+
+    for (const sectionId of ["", null, undefined]) {
+      expect(
+        teacherProfileSchema.safeParse({ ...teacherBase, sectionId }).success,
+      ).toBe(false);
+    }
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherNoSection,
+        designation: "Master Teacher",
+        position: "MASTER_TEACHER_II",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherNoSection,
+        designation: "Guidance Counselor",
+        position: undefined,
+      }).success,
+    ).toBe(false);
+
+    // A non-uuid section id is rejected outright, whatever the designation.
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, sectionId: "not-a-uuid" }).success,
+    ).toBe(false);
+    expect(
+      teacherProfileSchema.safeParse({
+        ...aralVolunteerBase,
+        sectionId: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts the ARAL Volunteer designation with no position and an optional section", () => {
+    const noSection = teacherProfileSchema.safeParse(aralVolunteerBase);
+    expect(noSection.success).toBe(true);
+    if (noSection.success) {
+      expect(noSection.data.designation).toBe(ARAL_VOLUNTEER_DESIGNATION);
+      expect(noSection.data.position).toBeUndefined();
+      expect(noSection.data.sectionId).toBeUndefined();
+    }
+
+    for (const sectionId of ["", null]) {
+      const blank = teacherProfileSchema.safeParse({ ...aralVolunteerBase, sectionId });
+      expect(blank.success).toBe(true);
+      if (blank.success) expect(blank.data.sectionId).toBeUndefined();
+    }
+
+    const withSection = teacherProfileSchema.safeParse({
+      ...aralVolunteerBase,
+      sectionId: SECTION_ID,
+    });
+    expect(withSection.success).toBe(true);
+    if (withSection.success) {
+      expect(withSection.data.sectionId).toBe(SECTION_ID);
+    }
+
+    // Ranked positions stay forbidden for the volunteer designation.
+    expect(
+      teacherProfileSchema.safeParse({
+        ...aralVolunteerBase,
+        position: "TEACHER_I",
+      }).success,
+    ).toBe(false);
+
+    // N/A specialization + N/A years in service is the volunteer's default shape.
+    const naDefaults = teacherProfileSchema.safeParse({
+      ...aralVolunteerBase,
+      fieldOfSpecialization: "NA",
+      yearsInService: "",
+      highestTrainingLevel: "NA",
+    });
+    expect(naDefaults.success).toBe(true);
+    if (naDefaults.success) {
+      expect(naDefaults.data.yearsInService).toBeUndefined();
+      expect(naDefaults.data.fieldOfSpecialization).toBe("NA");
+    }
   });
 });
