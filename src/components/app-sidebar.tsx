@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -136,7 +137,7 @@ function NavLink({
 }) {
   const Icon = item.icon;
   const link = (
-    <Link
+    <PrefetchLink
       href={item.href}
       {...(fullPrefetch ? { prefetch: true as const } : {})}
       onClick={onNavigate}
@@ -169,7 +170,7 @@ function NavLink({
           </span>
         )
       ) : null}
-    </Link>
+    </PrefetchLink>
   );
 
   if (!collapsed) return link;
@@ -252,18 +253,19 @@ export function AppSidebar({
             isCollapsed ? (
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     type="button"
-                    className="mt-3 flex w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-700"
+                    variant="ghost"
+                    className="mt-3 h-auto w-full justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
                     aria-label={`Viewing: ${viewedSchoolName}`}
                   >
                     <Shield className="h-3.5 w-3.5 shrink-0" />
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right">Viewing: {viewedSchoolName}</TooltipContent>
               </Tooltip>
             ) : (
-              <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+              <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
                 <Shield className="h-3 w-3 shrink-0" />
                 <span className="truncate">Viewing: {viewedSchoolName}</span>
               </div>

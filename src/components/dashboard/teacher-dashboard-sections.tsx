@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import {
   getTeacherMetricCounts,
   getTeacherGradeChart,
@@ -140,9 +140,9 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
                 variant="outline"
                 className="bg-card"
               >
-                <Link href={`/teacher/aral?grade=${g.id}`} prefetch={true}>
+                <PrefetchLink href={`/teacher/aral?grade=${g.id}`} prefetch={true}>
                   Complete ARAL profiling — {GRADE_LEVEL_LABELS[g.type]}
-                </Link>
+                </PrefetchLink>
               </Button>
             ))}
           </CardContent>
@@ -173,15 +173,15 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
                 </p>
                 <div className="flex gap-2">
                   <Button asChild size="sm">
-                    <Link href={`/teacher/learners?grade=${g.id}`} prefetch={true}>
+                    <PrefetchLink href={`/teacher/learners?grade=${g.id}`} prefetch={true}>
                       Open
-                    </Link>
+                    </PrefetchLink>
                   </Button>
                   {g.aralCount > 0 ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link href={`/teacher/aral?grade=${g.id}`} prefetch={true}>
+                      <PrefetchLink href={`/teacher/aral?grade=${g.id}`} prefetch={true}>
                         ARAL Dashboard
-                      </Link>
+                      </PrefetchLink>
                     </Button>
                   ) : null}
                 </div>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import {
   getAdminMetricCounts,
   getAdminActivitySeries,
@@ -182,11 +182,11 @@ export async function AdminRecentSchoolsSection() {
               asChild
               className="bg-card"
             >
-              <Link href={`/school-head?schoolId=${school.id}`}>
+              <PrefetchLink href={`/school-head?schoolId=${school.id}`}>
                 {school.name}
                 {!school.isActive ? " (inactive)" : ""}
                 <ExternalLink className="ml-1 h-3 w-3" />
-              </Link>
+              </PrefetchLink>
             </Button>
           ))}
           {recentSchools.length === 0 ? (

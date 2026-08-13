@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { ChevronDown, ChevronUp, Settings, UserCircle } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
@@ -115,25 +115,25 @@ export function UserAccountMenu({
         <DropdownMenuSeparator />
 
         <DropdownMenuItem asChild>
-          <Link
+          <PrefetchLink
             href={roleSettingsProfilePath(role)}
             prefetch={true}
             className="cursor-pointer"
           >
             <UserCircle className="h-4 w-4" />
             Profile
-          </Link>
+          </PrefetchLink>
         </DropdownMenuItem>
 
         <DropdownMenuItem asChild>
-          <Link
+          <PrefetchLink
             href={roleSettingsPath(role)}
             prefetch={true}
             className="cursor-pointer"
           >
             <Settings className="h-4 w-4" />
             Settings
-          </Link>
+          </PrefetchLink>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import {
   getSchoolHeadMetricCounts,
   getSchoolHeadCharts,
@@ -52,13 +52,13 @@ export async function SchoolHeadMetricsSection({
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           No active school year. New learners will not get an Enrollment until
           you set one.{" "}
-          <Link
+          <PrefetchLink
             href={sh("/school-head/school-years")}
             prefetch={true}
             className="font-medium underline"
           >
             Manage school years
-          </Link>
+          </PrefetchLink>
         </div>
       ) : null}
 
@@ -117,7 +117,7 @@ export async function SchoolHeadMetricsSection({
                 variant="outline"
                 className="bg-card"
               >
-                <Link
+                <PrefetchLink
                   href={
                     isSuperAdminView
                       ? `${t.href}?schoolId=${schoolId}`
@@ -126,7 +126,7 @@ export async function SchoolHeadMetricsSection({
                   prefetch={true}
                 >
                   {t.label}
-                </Link>
+                </PrefetchLink>
               </Button>
             ))}
           </CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -150,14 +150,14 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
         className,
       )}
     >
-      <Link
+      <PrefetchLink
         href={homeHref}
         prefetch={true}
         className="flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Home className="h-4 w-4" />
         <span className="sr-only">Home</span>
-      </Link>
+      </PrefetchLink>
 
       {breadcrumbs.map((crumb, index) => (
         <div key={`${crumb.label}-${crumb.href}-${index}`} className="flex items-center gap-1.5">
@@ -167,13 +167,13 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
               {crumb.label}
             </span>
           ) : (
-            <Link
+            <PrefetchLink
               href={crumb.href}
               prefetch={true}
               className="rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {crumb.label}
-            </Link>
+            </PrefetchLink>
           )}
         </div>
       ))}
