@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 
 export function ChartCardSkeleton({
@@ -9,23 +10,17 @@ export function ChartCardSkeleton({
   chartHeight?: number;
 }) {
   return (
-    <section
-      className={cn(
-        "rounded-xl border border-border/80 bg-card text-card-foreground shadow-card",
-        className
-      )}
-      aria-hidden
-    >
-      <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
+    <Surface as="section" className={className} aria-hidden>
+      <SurfaceHeader>
         <div className="min-w-0 space-y-1.5">
           <Skeleton className="h-[18px] w-40" />
           <Skeleton className="h-3.5 w-56" />
         </div>
-      </div>
-      <div className="p-5">
+      </SurfaceHeader>
+      <SurfaceBody>
         <Skeleton className="w-full" style={{ height: chartHeight }} />
-      </div>
-    </section>
+      </SurfaceBody>
+    </Surface>
   );
 }
 

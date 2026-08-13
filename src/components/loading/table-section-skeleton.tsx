@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { Surface } from "@/components/ui/surface";
 
 /** Server-safe shimmer skeleton — CSS-only, no client JS. */
 export function TableSectionSkeleton({
@@ -14,13 +14,7 @@ export function TableSectionSkeleton({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-border/80 bg-card shadow-card",
-        className
-      )}
-      aria-hidden
-    >
+    <Surface className={className} aria-hidden>
       {showToolbar ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
           <Skeleton className="h-5 w-[180px]" />
@@ -47,6 +41,6 @@ export function TableSectionSkeleton({
           </div>
         ))}
       </div>
-    </div>
+    </Surface>
   );
 }

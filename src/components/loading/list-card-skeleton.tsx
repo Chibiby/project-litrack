@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 
 /** Server-safe shimmer skeleton — CSS-only, no client JS. */
@@ -19,10 +20,7 @@ export function ListCardSkeleton({
         aria-hidden
       >
         {Array.from({ length: items }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-border/80 bg-card p-5 shadow-card"
-          >
+          <Surface key={i} className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <Skeleton className="h-[22px] w-[120px]" />
               <Skeleton className="h-[22px] w-16" />
@@ -32,20 +30,14 @@ export function ListCardSkeleton({
               <Skeleton className="h-8 w-[72px]" />
               <Skeleton className="h-8 w-[100px]" />
             </div>
-          </div>
+          </Surface>
         ))}
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-border/80 bg-card shadow-card",
-        className
-      )}
-      aria-hidden
-    >
+    <Surface className={className} aria-hidden>
       <div className="border-b border-border/60 px-5 py-4">
         <Skeleton className="h-[18px] w-[140px]" />
       </div>
@@ -60,7 +52,7 @@ export function ListCardSkeleton({
           </li>
         ))}
       </ul>
-    </div>
+    </Surface>
   );
 }
 
