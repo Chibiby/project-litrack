@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
@@ -13,6 +14,10 @@ import {
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import {
+  teacherAdvisoryGradeScope,
+  teacherCanAccessLearner,
+} from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
@@ -31,6 +36,20 @@ function sectionBData(data: {
     previousTransfers: data.previousTransfers ?? null,
     transferDetails:
       data.previousTransfers === "MULTIPLE" ? (data.transferDetails?.trim() || null) : null,
+  };
+}
+
+/** Normalize ethnicity for Prisma (clear free text unless OTHER). */
+function ethnicityData(data: {
+  ethnicity?:
+    | "BISAYA" | "ILONGGO" | "BLAAN" | "TAGAKAOLO" | "TBOLI" | "BADJAO" | "MARANAO"
+    | "TAUSOG" | "MAGUINDANAON" | "ILOCANO" | "TAGALOG" | "FOREIGN" | "OTHER";
+  ethnicityOther?: string;
+}) {
+  return {
+    ethnicity: data.ethnicity ?? null,
+    ethnicityOther:
+      data.ethnicity === "OTHER" ? (data.ethnicityOther?.trim() || null) : null,
   };
 }
 
@@ -90,12 +109,14 @@ export async function createLearner(
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  // Rostering a new learner is an adviser action: an ARAL teacher tracks
+  // learners they were designated, they do not create them.
   const grade = await prisma.gradeLevel.findFirst({
     where: {
       id: parsed.data.gradeLevelId,
       schoolId: user.schoolId,
       deletedAt: null,
-      teachers: { some: { id: user.id } },
+      ...teacherAdvisoryGradeScope(user.id),
     },
   });
   if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
@@ -158,6 +179,7 @@ export async function createLearner(
         fullName,
         age: parsed.data.age,
         gender: parsed.data.gender,
+        ...ethnicityData(parsed.data),
         englishReadingProfile: parsed.data.englishReadingProfile,
         englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
         filipinoReadingProfile: parsed.data.filipinoReadingProfile,
@@ -229,7 +251,9 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
 
   const sectionResult = await resolveSectionForGrade(
     parsed.data.sectionId,
@@ -267,6 +291,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
         governmentBenefits,
         parentEducation: parsed.data.parentEducation,
+        ...ethnicityData(parsed.data),
         ...sectionBData(parsed.data),
         sectionId: sectionResult.sectionId,
       },
@@ -302,6 +327,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   revalidateLearnerScoped({
     schoolId: learner.schoolId,
     teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
   });
   return { ok: true };
 }
@@ -321,7 +347,9 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
   if (learner.archivedAt) return { ok: false, error: "Learner is already archived" };
 
   await prisma.$transaction(async (tx) => {
@@ -358,6 +386,7 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
   revalidateLearnerScoped({
     schoolId: learner.schoolId,
     teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
     adminDashboard: true,
     teacherShell: learner.isAralLearner,
   });
@@ -379,7 +408,9 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
   if (!learner.archivedAt) return { ok: false, error: "Learner is not archived" };
 
   await prisma.$transaction(async (tx) => {
@@ -444,6 +475,7 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
   revalidateLearnerScoped({
     schoolId: learner.schoolId,
     teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
     adminDashboard: true,
     teacherShell: learner.isAralLearner,
   });
@@ -465,14 +497,23 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
 
   const becoming = !learner.isAralLearner;
+  // Keep the ARAL designation consistent with the flag: enrolling defaults the
+  // designated ARAL teacher to whoever enrolled (matching the Wave 0 backfill,
+  // where the adviser was also the ARAL teacher) without clobbering a
+  // designation the School Head already made; un-enrolling clears it so
+  // `aralTeacherId` never grants access to a non-ARAL learner.
+  const nextAralTeacherId = becoming ? (learner.aralTeacherId ?? user.id) : null;
   await prisma.learner.update({
     where: { id: learner.id },
     data: {
       isAralLearner: becoming,
       aralEnrolledAt: becoming ? new Date() : null,
+      aralTeacherId: nextAralTeacherId,
     },
   });
 
@@ -498,6 +539,7 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
   revalidateLearnerScoped({
     schoolId: learner.schoolId,
     teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId ?? nextAralTeacherId,
     teacherShell: true,
   });
   return { ok: true };
@@ -518,12 +560,14 @@ export async function enrollLearnersToAral(
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  // Adviser-scoped on purpose: ARAL enrollment picks from the adviser's own
+  // roster, so an ARAL-only teacher has nothing to enroll here.
   const grade = await prisma.gradeLevel.findFirst({
     where: {
       id: parsed.data.gradeId,
       schoolId: user.schoolId,
       deletedAt: null,
-      teachers: { some: { id: user.id } },
+      ...teacherAdvisoryGradeScope(user.id),
     },
     select: { id: true },
   });
@@ -555,6 +599,9 @@ export async function enrollLearnersToAral(
       data: {
         isAralLearner: true,
         aralEnrolledAt: enrolledAt,
+        // Default the ARAL designation to the enrolling adviser; the School Head
+        // can reassign it later with setLearnerAralTeacher.
+        aralTeacherId: user.id,
       },
     });
   }
@@ -585,4 +632,106 @@ export async function enrollLearnersToAral(
   });
 
   return { ok: true, data: { enrolled: toEnroll.length } };
+}
+
+const setLearnerAralTeacherSchema = z.object({
+  learnerId: z.string().uuid("Invalid learner"),
+  aralTeacherId: z.union([z.string().uuid("Invalid teacher"), z.literal("")]),
+});
+
+/**
+ * Designate (or clear) the teacher who does weekly ARAL tracking for a learner.
+ *
+ * School Head only — this is the axis that lets a teacher with no advisory
+ * section work on ARAL learners, so a teacher must not be able to grant it to
+ * themselves. `aralTeacherId: ""` clears the designation.
+ */
+export async function setLearnerAralTeacher(
+  formData: FormData
+): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const parsed = setLearnerAralTeacherSchema.safeParse({
+    learnerId: formData.get("learnerId"),
+    aralTeacherId: formData.get("aralTeacherId") ?? "",
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const learner = await prisma.learner.findFirst({
+    where: { id: parsed.data.learnerId, schoolId: user.schoolId, deletedAt: null },
+    select: {
+      id: true,
+      schoolId: true,
+      gradeLevelId: true,
+      teacherId: true,
+      aralTeacherId: true,
+      isAralLearner: true,
+    },
+  });
+  if (!learner) return { ok: false, error: "Not found" };
+
+  const nextAralTeacherId =
+    parsed.data.aralTeacherId === "" ? null : parsed.data.aralTeacherId;
+
+  if (nextAralTeacherId && !learner.isAralLearner) {
+    return {
+      ok: false,
+      error: "Enroll the learner in ARAL before assigning an ARAL teacher",
+    };
+  }
+
+  if (nextAralTeacherId) {
+    const teacher = await prisma.user.findFirst({
+      where: {
+        id: nextAralTeacherId,
+        schoolId: user.schoolId,
+        role: "TEACHER",
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!teacher) return { ok: false, error: "Teacher not found" };
+  }
+
+  if (learner.aralTeacherId === nextAralTeacherId) return { ok: true };
+
+  await prisma.learner.update({
+    where: { id: learner.id },
+    data: { aralTeacherId: nextAralTeacherId },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.LEARNER_SET_ARAL_TEACHER,
+    resource: "Learner",
+    resourceId: learner.id,
+    metadata: {
+      schoolId: user.schoolId,
+      learnerId: learner.id,
+      previousAralTeacherId: learner.aralTeacherId,
+      aralTeacherId: nextAralTeacherId,
+    },
+  });
+
+  revalidatePath("/school-head/teachers");
+  revalidatePath("/school-head/transfer");
+  revalidatePath("/teacher/aral");
+  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
+  // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived
+  // from the learners they track, so both have to be busted.
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
+    teacherShell: true,
+  });
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    aralTeacherId: nextAralTeacherId,
+    teacherShell: true,
+  });
+  return { ok: true };
 }

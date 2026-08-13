@@ -31,7 +31,9 @@ async function TransferBody({
         where: { schoolId, deletedAt: null, archivedAt: null },
       }),
       prisma.gradeLevel.findMany({
-        where: { schoolId, deletedAt: null },
+        // FLOATING is offered by the form as its own sentinel option (the row is
+        // created on demand), so it must not also appear as a normal grade.
+        where: { schoolId, deletedAt: null, type: { not: "FLOATING" } },
         orderBy: { createdAt: "asc" },
         select: { id: true, type: true },
       }),
@@ -49,7 +51,12 @@ async function TransferBody({
         select: {
           id: true,
           fullName: true,
-          taughtGrades: { select: { id: true } },
+          // One advisory section per teacher, so the grade a teacher can receive
+          // learners into is derived from that section. `deletedAt` is selected
+          // because Prisma cannot filter a to-one relation inside `select`.
+          advisorySection: {
+            select: { name: true, gradeLevelId: true, deletedAt: true },
+          },
         },
       }),
       prisma.schoolYear.findFirst({
@@ -100,11 +107,18 @@ async function TransferBody({
                 label: GRADE_LEVEL_LABELS[g.type],
               }))}
               sections={sections}
-              teachers={teachers.map((t) => ({
-                id: t.id,
-                fullName: t.fullName,
-                gradeIds: t.taughtGrades.map((g) => g.id),
-              }))}
+              teachers={teachers.map((t) => {
+                const advisory =
+                  t.advisorySection && t.advisorySection.deletedAt === null
+                    ? t.advisorySection
+                    : null;
+                return {
+                  id: t.id,
+                  fullName: t.fullName,
+                  advisoryGradeId: advisory?.gradeLevelId ?? null,
+                  advisorySectionName: advisory?.name ?? null,
+                };
+              })}
             />
           )}
         </CardContent>
@@ -134,7 +148,7 @@ export default async function TransferPage({ searchParams }: PageProps) {
           ? `Transfer — ${schoolName ?? ""}`
           : "Transfer learner"
       }
-      subtitle="Same-school transfer of grade, section, and teacher"
+      subtitle="Move a learner to another grade, section, and adviser — or to Floating"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       schoolName={schoolName ?? undefined}

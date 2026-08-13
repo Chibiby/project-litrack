@@ -16,7 +16,7 @@ export async function GET() {
     hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     hdrs.get("x-real-ip") ||
     "unknown";
-  const rate = checkRateLimit(`api:schools-list:${ip}`, PUBLIC_LIST_RATE);
+  const rate = await checkRateLimit(`api:schools-list:${ip}`, PUBLIC_LIST_RATE);
   if (!rate.ok) {
     return NextResponse.json(
       { schools: [], error: "Too many requests" },

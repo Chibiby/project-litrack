@@ -11,6 +11,7 @@ import {
   READING_PROFILE_LABELS_G4_PLUS,
   FRUSTRATION_SUBTYPE_LABELS,
   GENDER_LABELS,
+  ETHNICITY_LABELS,
   TRANSPORTATION_LABELS,
   DISTANCE_LABELS,
   TRANSFER_LABELS,
@@ -32,6 +33,8 @@ export const LEARNER_CSV_HEADERS = [
   "lastName",
   "age",
   "gender",
+  "ethnicity",
+  "ethnicityOther",
   "section",
   "englishReadingProfile",
   "englishFrustrationSubtypes",
@@ -70,6 +73,8 @@ export function learnerCsvTemplate(gradeType?: string | null): string {
     "Santos",
     "10",
     "FEMALE",
+    "BISAYA",
+    "",
     "",
     profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
     "",
@@ -100,6 +105,7 @@ function normalizeKey(s: string): string {
 }
 
 const GENDER_LOOKUP = buildLookup(GENDER_LABELS as Record<string, string>);
+const ETHNICITY_LOOKUP = buildLookup(ETHNICITY_LABELS as Record<string, string>);
 /** Accept combined + K3 + G4+ band labels (and enum codes). */
 const PROFILE_LOOKUP = (() => {
   const map = buildLookup(READING_PROFILE_LABELS as Record<string, string>);
@@ -173,6 +179,8 @@ export function mapCsvRowToImportCandidate(
     .filter(Boolean);
 
   const transferDetailsRaw = String(row.transferDetails ?? "").trim();
+  const ethnicityRaw = String(row.ethnicity ?? "").trim();
+  const ethnicityOtherRaw = String(row.ethnicityOther ?? "").trim();
 
   return {
     firstName,
@@ -180,6 +188,12 @@ export function mapCsvRowToImportCandidate(
     lastName,
     age: row.age,
     gender: resolveEnumValue(row.gender, GENDER_LOOKUP) ?? String(row.gender ?? "").trim(),
+    ...(ethnicityRaw
+      ? {
+          ethnicity: resolveEnumValue(row.ethnicity, ETHNICITY_LOOKUP) ?? ethnicityRaw,
+          ...(ethnicityOtherRaw ? { ethnicityOther: ethnicityOtherRaw } : {}),
+        }
+      : {}),
     englishReadingProfile:
       resolveEnumValue(row.englishReadingProfile, PROFILE_LOOKUP) ??
       String(row.englishReadingProfile ?? "").trim(),

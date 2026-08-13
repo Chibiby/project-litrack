@@ -23,6 +23,7 @@ import {
   READING_PROFILE_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
+  WEEKLY_WRITING_LEVEL_LABELS,
   readingProfileLabelsForGradeType,
   toOptions,
 } from "@/lib/constants/enum-labels";
@@ -30,10 +31,12 @@ import { bulkRecordWeeklyReadingLevel } from "@/lib/actions/reading-level";
 
 const WR_OPTIONS = toOptions(WEEKLY_WORD_RECOGNITION_LEVEL_LABELS);
 const RC_OPTIONS = toOptions(WEEKLY_READING_COMPREHENSION_LEVEL_LABELS);
+const WRITING_OPTIONS = toOptions(WEEKLY_WRITING_LEVEL_LABELS);
 
 type Profile = keyof typeof READING_PROFILE_LABELS;
 type WrLevel = keyof typeof WEEKLY_WORD_RECOGNITION_LEVEL_LABELS;
 type RcLevel = keyof typeof WEEKLY_READING_COMPREHENSION_LEVEL_LABELS;
+type WritingLevel = keyof typeof WEEKLY_WRITING_LEVEL_LABELS;
 
 export type ReadingLevelGridLearner = {
   id: string;
@@ -47,6 +50,7 @@ export type ReadingLevelGridExisting = {
   filipinoProfile: string;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
+  writingLevel: string | null;
   notes: string | null;
 };
 
@@ -59,6 +63,7 @@ type RowState = {
   filipinoProfile: Profile | "";
   wordRecognitionLevel: WrLevel | "";
   readingComprehensionLevel: RcLevel | "";
+  writingLevel: WritingLevel | "";
   notes: string;
 };
 
@@ -85,6 +90,10 @@ function isRcLevel(v: string): v is RcLevel {
   return v in WEEKLY_READING_COMPREHENSION_LEVEL_LABELS;
 }
 
+function isWritingLevel(v: string): v is WritingLevel {
+  return v in WEEKLY_WRITING_LEVEL_LABELS;
+}
+
 function toInitial(
   learners: ReadingLevelGridLearner[],
   existing: ReadingLevelGridExisting[]
@@ -107,12 +116,22 @@ function toInitial(
         isRcLevel(row.readingComprehensionLevel)
           ? row.readingComprehensionLevel
           : "",
+      writingLevel:
+        row?.writingLevel && isWritingLevel(row.writingLevel)
+          ? row.writingLevel
+          : "",
       notes: row?.notes ?? "",
     };
   }
   return init;
 }
 
+/**
+ * Writing level is deliberately NOT required: existing weekly rows predate the
+ * column, and a teacher may have reading data before writing is assessed. It
+ * still counts toward `hasAnyValue`, so a row where writing is the only entry
+ * prompts for the four required fields rather than saving silently.
+ */
 function isRowComplete(row: RowState | undefined): boolean {
   return (
     !!row?.englishProfile &&
@@ -128,6 +147,7 @@ function hasAnyValue(row: RowState | undefined): boolean {
     !!row?.filipinoProfile ||
     !!row?.wordRecognitionLevel ||
     !!row?.readingComprehensionLevel ||
+    !!row?.writingLevel ||
     !!row?.notes.trim()
   );
 }
@@ -176,6 +196,8 @@ export const AralReadingLevelGridForm = forwardRef<
           filipinoProfile: row.filipinoProfile as Profile,
           wordRecognitionLevel: row.wordRecognitionLevel as WrLevel,
           readingComprehensionLevel: row.readingComprehensionLevel as RcLevel,
+          // Optional: an empty select clears the stored writing level.
+          writingLevel: row.writingLevel || undefined,
           notes: row.notes.trim() || undefined,
         };
       })
@@ -243,6 +265,7 @@ export const AralReadingLevelGridForm = forwardRef<
     filipinoProfile: "",
     wordRecognitionLevel: "",
     readingComprehensionLevel: "",
+    writingLevel: "",
     notes: "",
   };
 
@@ -259,6 +282,7 @@ export const AralReadingLevelGridForm = forwardRef<
             <TableHead className="min-w-[220px]">
               Reading comprehension
             </TableHead>
+            <TableHead className="min-w-[220px]">Writing</TableHead>
             <TableHead className="min-w-[180px]">Remarks</TableHead>
           </TableRow>
         </TableHeader>
@@ -348,6 +372,26 @@ export const AralReadingLevelGridForm = forwardRef<
                   >
                     <option value="">Select…</option>
                     {RC_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <select
+                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={row.writingLevel}
+                    disabled={readOnly || pending}
+                    onChange={(e) =>
+                      patch(l.id, {
+                        writingLevel: e.target.value as WritingLevel | "",
+                      })
+                    }
+                    aria-label={`${l.fullName} Writing level`}
+                  >
+                    <option value="">Select…</option>
+                    {WRITING_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>

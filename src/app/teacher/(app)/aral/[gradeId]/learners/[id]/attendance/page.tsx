@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
@@ -17,6 +18,7 @@ import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
 import { EmptyState } from "@/components/dashboard";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +39,14 @@ export default async function AttendancePage({
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  const learnerFilter = isSuperAdmin
+  const learnerFilter: Prisma.LearnerWhereInput = isSuperAdmin
     ? { id, deletedAt: null }
-    : { id, teacherId: user.id, deletedAt: null };
+    : {
+        id,
+        schoolId: user.schoolId ?? undefined,
+        deletedAt: null,
+        ...teacherLearnerScope(user.id),
+      };
 
   const learner = await prisma.learner.findFirst({
     where: learnerFilter,

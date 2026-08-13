@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { LearnerImportWizard } from "@/components/learners/lazy-learner-import-wizard";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,13 @@ export default async function TeacherGradeImportPage({ params }: Props) {
   }
   if (!user.profileCompleted) redirect("/teacher/profiling");
 
+  // Roster write surface — adviser-only, matching `commitLearnerImport`.
   const grade = await prisma.gradeLevel.findFirst({
     where: {
       id,
       schoolId: user.schoolId!,
       deletedAt: null,
-      teachers: { some: { id: user.id } },
+      ...teacherAdvisoryGradeScope(user.id),
     },
   });
   if (!grade) notFound();

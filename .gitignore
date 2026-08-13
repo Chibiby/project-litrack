@@ -18,3 +18,6 @@ prisma/migrations/dev.db*
 
 .vercel
 .env*
+
+# Scratch dist dir for verification builds run alongside `next dev`
+.next-verify/

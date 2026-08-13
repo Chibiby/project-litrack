@@ -1,11 +1,13 @@
 import "server-only";
 import { cache } from "react";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   READING_PROFILE_LABELS,
   labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import { cachedQuery } from "@/lib/cache/unstable";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   adminDashboard,
   schoolsList,
@@ -406,14 +408,33 @@ type TeacherOpts = {
   isSuperAdmin: boolean;
 };
 
-function teacherGradeFilter(opts: TeacherOpts) {
+/**
+ * Grades a teacher's dashboard/sidebar covers: the grade they advise in (legacy
+ * `taughtGrades` mirror + the section they actually advise) unioned with every
+ * grade holding a learner they are the designated ARAL teacher of. Without the
+ * ARAL branch an ARAL-only teacher resolves to zero grades and every count
+ * below silently returns 0.
+ */
+function teacherGradeFilter(opts: TeacherOpts): Prisma.GradeLevelWhereInput {
   return opts.isSuperAdmin
-    ? { schoolId: opts.schoolId, deletedAt: null as null }
+    ? { schoolId: opts.schoolId, deletedAt: null }
     : {
         schoolId: opts.schoolId,
-        deletedAt: null as null,
-        teachers: { some: { id: opts.teacherId } },
+        deletedAt: null,
+        ...teacherGradeScope(opts.teacherId),
       };
+}
+
+/**
+ * Learner-level narrowing for a teacher's own numbers.
+ *
+ * The grade filter above is a visibility union, so counting every learner in
+ * those grades would show an ARAL-only teacher the whole grade's roster. Counts
+ * are therefore scoped to learners in their care (adviser OR designated ARAL
+ * teacher), which is also what `/teacher/learners` lists.
+ */
+function teacherLearnerFilter(opts: TeacherOpts): Prisma.LearnerWhereInput {
+  return opts.isSuperAdmin ? {} : teacherLearnerScope(opts.teacherId);
 }
 
 /**
@@ -427,6 +448,9 @@ const getTeacherShellGradesCached = cache(
       async () => {
         const opts: TeacherOpts = { schoolId, teacherId, isSuperAdmin };
         // `_count` avoids nesting learner rows; shell only needs hasAral boolean.
+        // hasAral counts ARAL learners in *this teacher's* care, so the ARAL nav
+        // appears for a designated ARAL teacher and not for a teacher who merely
+        // shares a grade with somebody else's ARAL learners.
         const grades = await prisma.gradeLevel.findMany({
           where: teacherGradeFilter(opts),
           select: {
@@ -439,6 +463,7 @@ const getTeacherShellGradesCached = cache(
                     deletedAt: null,
                     archivedAt: null,
                     isAralLearner: true,
+                    ...teacherLearnerFilter(opts),
                   },
                 },
               },
@@ -455,7 +480,7 @@ const getTeacherShellGradesCached = cache(
       },
       {
         keyParts: [
-          "teacher-shell-grades-v2",
+          "teacher-shell-grades-v3",
           schoolId,
           teacherId,
           String(isSuperAdmin),
@@ -489,10 +514,12 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
       });
       const gradeIds = grades.map((g) => g.id);
       const since7 = daysAgo(6);
+      const careFilter = teacherLearnerFilter(opts);
       const learnerBase = {
         gradeLevelId: { in: gradeIds },
         deletedAt: null,
         archivedAt: null,
+        ...careFilter,
       };
 
       const [
@@ -514,9 +541,7 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
           ? Promise.resolve(0)
           : prisma.learner.count({
               where: {
-                gradeLevelId: { in: gradeIds },
-                deletedAt: null,
-                archivedAt: null,
+                ...learnerBase,
                 isAralLearner: true,
                 aralProfile: null,
               },
@@ -526,14 +551,22 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
           : prisma.attendance.count({
               where: {
                 date: { gte: since7 },
-                learner: { gradeLevelId: { in: gradeIds }, deletedAt: null },
+                learner: {
+                  gradeLevelId: { in: gradeIds },
+                  deletedAt: null,
+                  ...careFilter,
+                },
               },
             }),
         gradeIds.length === 0
           ? Promise.resolve(0)
           : prisma.readingLevelRecord.count({
               where: {
-                learner: { gradeLevelId: { in: gradeIds }, deletedAt: null },
+                learner: {
+                  gradeLevelId: { in: gradeIds },
+                  deletedAt: null,
+                  ...careFilter,
+                },
               },
             }),
       ]);
@@ -549,7 +582,7 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
     },
     {
       keyParts: [
-        "teacher-metric-counts",
+        "teacher-metric-counts-v2",
         schoolId,
         teacherId,
         String(isSuperAdmin),
@@ -573,7 +606,13 @@ export async function getTeacherGradeChart(
           type: true,
           _count: {
             select: {
-              learners: { where: { deletedAt: null, archivedAt: null } },
+              learners: {
+                where: {
+                  deletedAt: null,
+                  archivedAt: null,
+                  ...teacherLearnerFilter(opts),
+                },
+              },
             },
           },
         },
@@ -587,7 +626,7 @@ export async function getTeacherGradeChart(
     },
     {
       keyParts: [
-        "teacher-grade-chart",
+        "teacher-grade-chart-v2",
         schoolId,
         teacherId,
         String(isSuperAdmin),
@@ -602,6 +641,7 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
   const { schoolId, teacherId, isSuperAdmin } = opts;
   return cachedQuery(
     async () => {
+      const careFilter = teacherLearnerFilter(opts);
       const grades = await prisma.gradeLevel.findMany({
         where: teacherGradeFilter(opts),
         select: {
@@ -609,7 +649,9 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
           type: true,
           _count: {
             select: {
-              learners: { where: { deletedAt: null, archivedAt: null } },
+              learners: {
+                where: { deletedAt: null, archivedAt: null, ...careFilter },
+              },
             },
           },
         },
@@ -635,6 +677,7 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
             deletedAt: null,
             archivedAt: null,
             isAralLearner: true,
+            ...careFilter,
           },
           _count: { _all: true },
         }),
@@ -646,6 +689,7 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
             archivedAt: null,
             isAralLearner: true,
             aralProfile: null,
+            ...careFilter,
           },
           _count: { _all: true },
         }),
@@ -668,7 +712,7 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
     },
     {
       keyParts: [
-        "teacher-grade-cards-v2",
+        "teacher-grade-cards-v3",
         schoolId,
         teacherId,
         String(isSuperAdmin),

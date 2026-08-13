@@ -16,6 +16,8 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
+import { teacherCanAccessLearner } from "@/lib/teachers/scope";
+
 
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -102,7 +104,11 @@ export async function saveAralProfile(formData: FormData): Promise<ActionResult>
 
   }
 
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+
+    return { ok: false, error: "Not found" };
+
+  }
 
   if (!learner.isAralLearner) return { ok: false, error: "Learner not found or not ARAL" };
 
@@ -146,7 +152,11 @@ export async function saveAralProfile(formData: FormData): Promise<ActionResult>
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
 
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
+  });
 
   return { ok: true };
 

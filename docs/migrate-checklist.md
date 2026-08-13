@@ -8,6 +8,22 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260806000001_foundation_models`
 - `20260806000002_teacher_invite_user_id`
 - `20260806000003_profile_contact_email`
+- `20260807000001_teacher_approval_status`
+- `20260808000001_teacher_position_optional`
+- `20260808000002_years_in_service_int`
+- `20260808190001_teacher_section`
+- `20260808190002_backfill_null_section_a`
+- `20260809200001_section_b_to_learner_weekly_reading`
+- `20260809220001_attendance_day_meta`
+- `20260810130001_weekly_wr_rc_reading_levels`
+- `20260811000001_learner_ethnicity`
+- `20260811000002_advisory_section_and_aral_teacher`
+- `20260811000003_backfill_advisory_and_aral`
+- `20260811000004_advisory_section_unique`
+
+`migrate deploy` applies whatever is pending in this order; the list is here so you
+can eyeball what a given database is missing. Always confirm with the read-only
+`npx prisma migrate status` first.
 
 ---
 

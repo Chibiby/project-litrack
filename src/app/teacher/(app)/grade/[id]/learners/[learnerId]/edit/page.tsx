@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LearnerForm } from "@/components/forms/learner-form";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ArrowLeft } from "lucide-react";
 
@@ -27,12 +28,14 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
 
   if (!user.profileCompleted) redirect("/teacher/profiling");
 
+  // Matches `updateLearner`'s gate: advisory roster or ARAL designation.
   const learner = await prisma.learner.findFirst({
     where: {
       id: learnerId,
-      teacherId: user.id,
+      schoolId: user.schoolId ?? undefined,
       deletedAt: null,
       archivedAt: null,
+      ...teacherLearnerScope(user.id),
     },
     include: {
       gradeLevel: { select: { id: true, type: true } },
@@ -98,6 +101,8 @@ export default async function EditLearnerPage({ params }: EditLearnerPageProps) 
               lastName: learner.lastName,
               age: learner.age,
               gender: learner.gender,
+              ethnicity: learner.ethnicity,
+              ethnicityOther: learner.ethnicityOther,
               englishReadingProfile: learner.englishReadingProfile,
               englishFrustrationSubtypes: learner.englishFrustrationSubtypes,
               filipinoReadingProfile: learner.filipinoReadingProfile,

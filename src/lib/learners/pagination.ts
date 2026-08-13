@@ -6,8 +6,11 @@ export type LearnerListSort = "name" | "age";
 /** `all` = no filter; `none` = unassigned; otherwise a section id. */
 export type LearnerListSectionFilter = "all" | "none" | (string & {});
 
-/** `all` = every assigned grade; otherwise a grade level id. */
-export type LearnerListGradeFilter = "all" | (string & {});
+/**
+ * `all` = every assigned grade; `floating` = the per-school FLOATING grade
+ * (learners with no real grade/section yet); otherwise a grade level id.
+ */
+export type LearnerListGradeFilter = "all" | "floating" | (string & {});
 
 export type LearnerListParams = {
   page: number;
@@ -29,7 +32,7 @@ const SORTS: readonly LearnerListSort[] = ["name", "age"];
  * Pure — no I/O.
  *
  * `section`: omitted/empty/"all" → all; "none" → unassigned; else section id.
- * `grade`: omitted/empty/"all" → all; else grade level id.
+ * `grade`: omitted/empty/"all" → all; "floating" → the FLOATING grade; else grade level id.
  */
 export function parseLearnerListParams(
   searchParams: {
@@ -62,8 +65,11 @@ export function parseLearnerListParams(
   }
 
   const gradeRaw = (searchParams.grade ?? "").trim();
-  const grade: LearnerListGradeFilter =
-    !gradeRaw || gradeRaw.toLowerCase() === "all" ? "all" : gradeRaw;
+  const gradeLower = gradeRaw.toLowerCase();
+  let grade: LearnerListGradeFilter = "all";
+  if (gradeRaw && gradeLower !== "all") {
+    grade = gradeLower === "floating" ? "floating" : gradeRaw;
+  }
 
   const size = pageSize > 0 ? pageSize : LEARNER_PAGE_SIZE;
   const skip = (page - 1) * size;
@@ -83,11 +89,24 @@ export function sectionIdWhere(
 /**
  * Prisma `gradeLevelId` clause for assigned grades + optional grade filter.
  * Unknown grade ids fall back to all assigned grades.
+ *
+ * `"floating"` selects the FLOATING grade by relation (its id is per-school and
+ * not known here), still intersected with `assignedGradeIds` so the clause can
+ * never widen past what the caller is allowed to see.
  */
 export function gradeLevelIdWhere(
   grade: LearnerListGradeFilter,
   assignedGradeIds: string[]
-): { gradeLevelId: string } | { gradeLevelId: { in: string[] } } {
+):
+  | { gradeLevelId: string }
+  | { gradeLevelId: { in: string[] } }
+  | { gradeLevelId: { in: string[] }; gradeLevel: { type: "FLOATING" } } {
+  if (grade === "floating") {
+    return {
+      gradeLevelId: { in: assignedGradeIds },
+      gradeLevel: { type: "FLOATING" },
+    };
+  }
   if (grade !== "all" && assignedGradeIds.includes(grade)) {
     return { gradeLevelId: grade };
   }

@@ -11,6 +11,7 @@ import { AralReadingLevelPanel } from "@/components/aral/aral-reading-level-pane
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   parseLearnerListParams,
   sectionIdWhere,
@@ -48,9 +49,16 @@ export default async function AralGradeReadingLevelPage({
   const weekStart = getMonday(parseLocalDateKey(sp.week));
   const weekKey = formatLocalDateKey(weekStart);
 
-  const gradeFilter = isSuperAdmin
+  // ARAL page: reachable by the grade's adviser or by a teacher who tracks
+  // ARAL learners in it (no advisory section needed).
+  const gradeFilter: Prisma.GradeLevelWhereInput = isSuperAdmin
     ? { id: gradeId, deletedAt: null }
-    : { id: gradeId, deletedAt: null, teachers: { some: { id: user.id } } };
+    : {
+        id: gradeId,
+        deletedAt: null,
+        schoolId: user.schoolId ?? undefined,
+        ...teacherGradeScope(user.id),
+      };
 
   const grade = await prisma.gradeLevel.findFirst({
     where: gradeFilter,
@@ -63,7 +71,7 @@ export default async function AralGradeReadingLevelPage({
     isAralLearner: true,
     deletedAt: null,
     archivedAt: null,
-    ...(isSuperAdmin ? {} : { teacherId: user.id }),
+    ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
     ...sectionIdWhere(list.section),
   };
 
@@ -100,6 +108,7 @@ export default async function AralGradeReadingLevelPage({
         filipinoProfile: true,
         wordRecognitionLevel: true,
         readingComprehensionLevel: true,
+        writingLevel: true,
         notes: true,
       },
     }),

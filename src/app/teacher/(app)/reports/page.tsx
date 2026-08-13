@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { OnDemandReportPanel } from "@/components/reports/on-demand-report-panel";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { teacherGradeScope } from "@/lib/teachers/scope";
 import { TableSectionSkeleton } from "@/components/loading";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +20,10 @@ async function TeacherReportBody({
   teacherId: string;
   isTeacher: boolean;
 }) {
-  const gradeWhere = isTeacher
-    ? { schoolId, deletedAt: null, teachers: { some: { id: teacherId } } }
+  // Matches the export gate in `exportTeacherLearnersExcel`: grades this
+  // teacher advises in, plus grades where they track ARAL learners.
+  const gradeWhere: Prisma.GradeLevelWhereInput = isTeacher
+    ? { schoolId, deletedAt: null, ...teacherGradeScope(teacherId) }
     : { schoolId, deletedAt: null };
 
   // Filters only — full learner dump loads on demand via OnDemandReportPanel.

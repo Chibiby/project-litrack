@@ -13,13 +13,25 @@ import styles from "./post-login-splash.module.css";
 
 export { POST_LOGIN_FLAG };
 
-const MIN_MS = 2500;
+/**
+ * Floor for the whole splash — buildup + ARAL reveal + fade-out. The ARAL hold
+ * absorbs whatever slack is left, so the finale always owns most of this.
+ */
+const MIN_TOTAL_MS = 3000;
+/** Books/phrases floor before the finish sequence may start. */
+const MIN_BUILDUP_MS = 1000;
+/** ARAL na! reveal floor; stretched further to fill MIN_TOTAL_MS. */
+const REVEAL_HOLD_MS = 1800;
+/** Reduced-motion still honours MIN_TOTAL_MS, just without the motion. */
+const REDUCED_REVEAL_HOLD_MS = 900;
 const HARD_CAP_MS = 8000;
-const BOOK_START_DELAY_MS = 250;
-const BOOK_STEP_MS = 850;
-const FAST_FORWARD_STEP_MS = 90;
-const REVEAL_HOLD_MS = 900;
-const FADE_OUT_MS = 500;
+const BOOK_START_DELAY_MS = 280;
+const BOOK_STEP_MS = 340;
+/** Caption crossfade — kept short so each phrase stays legible in a 340ms step. */
+const PHRASE_SWAP_MS = 90;
+const FAST_FORWARD_STEP_MS = 50;
+const FAST_FORWARD_SWAP_MS = 45;
+const FADE_OUT_MS = 300;
 
 /** Match nav-prefetcher: bound FULL RSC fan-out so Prisma pool stays healthy. */
 const PREFETCH_CONCURRENCY = 2;
@@ -47,8 +59,6 @@ const ROLE_PREFETCH: Record<PostLoginSplashRole, readonly string[]> = {
   ],
   admin: ["/admin/schools", "/admin/transfers", "/admin/settings"],
 };
-
-const WARM_IMAGES = ["/logo.png", "/aral-na-logo.png", "/partner-logos.png"] as const;
 
 const PHRASES = [
   "Sharpening pencils",
@@ -78,17 +88,6 @@ function sleep(ms: number): Promise<void> {
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function warmImages(srcs: readonly string[]): void {
-  for (const src of srcs) {
-    try {
-      const img = new window.Image();
-      img.src = src;
-    } catch {
-      // Best-effort; never surface into the UI.
-    }
-  }
 }
 
 function firePrefetches(
@@ -122,8 +121,17 @@ function firePrefetches(
 /**
  * Full-screen post-login splash. Shows only when `litrack:post-login` is set
  * (read-and-cleared on mount). Portaled to document.body at z-9999 so RoleShell
- * chrome cannot contain/clip it; app hydrates underneath. Dismisses after min
- * 2.5s once ready (hard cap 8s).
+ * chrome cannot contain/clip it; app hydrates underneath.
+ *
+ * Timing: the buildup (logo + shelf + phrases) runs for at least
+ * MIN_BUILDUP_MS, then the ARAL na! reveal holds for REVEAL_HOLD_MS or
+ * whatever is left of MIN_TOTAL_MS — whichever is longer — so the splash never
+ * runs under 3s and the reveal always takes the larger share of it. Hard cap
+ * HARD_CAP_MS bounds the buildup only; the reveal always plays in full.
+ *
+ * NOTE: `ready` currently means "prefetches fired", not "data arrived" —
+ * `firePrefetches` is fire-and-forget. MIN_BUILDUP_MS is therefore the
+ * effective floor. Wiring this to real readiness is tracked as a follow-up.
  */
 export function PostLoginSplash({ role }: PostLoginSplashProps) {
   const router = useRouter();
@@ -153,7 +161,8 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
     setActive(true);
   }, []);
 
-  // Hydrated + prefetches fired → ready. Combined with MIN_MS before dismiss.
+  // Hydrated + prefetches fired → ready. Combined with MIN_BUILDUP_MS before
+  // dismiss.
   useEffect(() => {
     if (!active) return;
 
@@ -168,7 +177,6 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
       if (role) {
         firePrefetches(router, ROLE_PREFETCH[role]);
       }
-      warmImages(WARM_IMAGES);
       readyRef.current = true;
     };
 
@@ -217,7 +225,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
             if (finishingRef.current) return;
             setPhrase(PHRASES[i]);
             setPhraseOpacity(1);
-          }, 150);
+          }, PHRASE_SWAP_MS);
         }, BOOK_START_DELAY_MS + i * BOOK_STEP_MS)
       );
     }
@@ -239,7 +247,8 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
 
       const reduced = prefersReducedMotion();
       const ffStep = reduced ? 0 : FAST_FORWARD_STEP_MS;
-      const revealHold = reduced ? 80 : REVEAL_HOLD_MS;
+      const ffSwap = reduced ? 0 : FAST_FORWARD_SWAP_MS;
+      const holdFloor = reduced ? REDUCED_REVEAL_HOLD_MS : REVEAL_HOLD_MS;
       const fadeMs = reduced ? 0 : FADE_OUT_MS;
 
       try {
@@ -250,7 +259,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
           current += 1;
           setFilledCount(current);
           setPhraseOpacity(0);
-          await sleep(reduced ? 0 : 80);
+          await sleep(ffSwap);
           if (cancelled) return;
           setPhrase(PHRASES[current - 1]);
           setPhraseOpacity(1);
@@ -261,6 +270,14 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
         setLabelDone(true);
         setShelfDone(true);
         setStageDone(true);
+
+        // The reveal absorbs whatever is left of the 3s budget, so it is
+        // always the longest beat of the splash.
+        const elapsedAtReveal = Date.now() - startedAtRef.current;
+        const revealHold = Math.max(
+          holdFloor,
+          MIN_TOTAL_MS - elapsedAtReveal - fadeMs
+        );
 
         await sleep(revealHold);
         if (cancelled) return;
@@ -280,7 +297,10 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
     const maybeFinish = () => {
       if (finishingRef.current || cancelled) return;
       const elapsed = Date.now() - startedAtRef.current;
-      if (elapsed >= HARD_CAP_MS || (readyRef.current && elapsed >= MIN_MS)) {
+      if (
+        elapsed >= HARD_CAP_MS ||
+        (readyRef.current && elapsed >= MIN_BUILDUP_MS)
+      ) {
         void runFinish();
       }
     };
@@ -320,7 +340,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
         background: "#fdfbf5",
         opacity: fadingOut ? 0 : 1,
         pointerEvents: fadingOut ? "none" : "auto",
-        transition: fadingOut ? "opacity 0.5s ease" : undefined,
+        transition: fadingOut ? `opacity ${FADE_OUT_MS}ms ease` : undefined,
       }}
       role="status"
       aria-live="polite"
@@ -377,7 +397,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
         style={
           labelDone || phraseOpacity === null
             ? undefined
-            : { opacity: phraseOpacity, transition: "opacity 0.25s ease" }
+            : { opacity: phraseOpacity, transition: "opacity 0.18s ease" }
         }
       >
         {phrase}

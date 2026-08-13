@@ -172,6 +172,14 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
         data: { sectionId: null },
       });
 
+      // Advisory pointer must not survive its section: the section is only
+      // soft-deleted, so the FK stays valid and the teacher would otherwise keep
+      // an advisory slot on a section nobody can see.
+      await tx.user.updateMany({
+        where: { advisorySectionId: section.id },
+        data: { advisorySectionId: null },
+      });
+
       // Drop teacher↔section links, then disconnect taughtGrades when a teacher
       // has no remaining active sections in this grade.
       const assigned = await tx.teacherSection.findMany({

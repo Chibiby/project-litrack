@@ -11,7 +11,12 @@ import {
 } from "@/lib/validators/attendance.schema";
 import { getMonday } from "@/lib/utils";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
+import {
+  teacherCanAccessLearner,
+  teacherGradeScope,
+  teacherLearnerScope,
+} from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -44,7 +49,9 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
   if (!learner.isAralLearner) {
     return { ok: false, error: "Attendance tracking is only for ARAL learners" };
   }
@@ -90,7 +97,11 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
   );
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}/attendance`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
+  });
   return { ok: true };
 }
 
@@ -116,11 +127,17 @@ export async function bulkMarkAttendance(
     where: {
       id: { in: learnerIds },
       schoolId: user.schoolId,
-      teacherId: user.id,
+      ...teacherLearnerScope(user.id),
       deletedAt: null,
       isAralLearner: true,
     },
-    select: { id: true, gradeLevelId: true, teacherId: true, schoolId: true },
+    select: {
+      id: true,
+      gradeLevelId: true,
+      teacherId: true,
+      aralTeacherId: true,
+      schoolId: true,
+    },
   });
 
   if (learners.length !== learnerIds.length) {
@@ -181,6 +198,13 @@ export async function bulkMarkAttendance(
     revalidatePath(`/teacher/grade/${l.gradeLevelId}/learners/${id}`);
   }
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
+  // The acting teacher may be the ARAL teacher while somebody else advises the
+  // learner (or vice versa) — bust every affected teacher's metrics.
+  for (const l of learners) {
+    for (const id of [l.teacherId, l.aralTeacherId]) {
+      if (id && id !== user.id) revalidateTeacherDashboard(id);
+    }
+  }
 
   return { ok: true, data: { upserted: parsed.data.entries.length } };
 }
@@ -205,12 +229,14 @@ export async function setAttendanceDayHoliday(
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  // ARAL attendance: an ARAL-only teacher (no advisory section) reaches this
+  // grade through the learners designated to them.
   const grade = await prisma.gradeLevel.findFirst({
     where: {
       id: parsed.data.gradeId,
       deletedAt: null,
       schoolId: user.schoolId,
-      teachers: { some: { id: user.id } },
+      ...teacherGradeScope(user.id),
     },
     select: { id: true, schoolId: true },
   });

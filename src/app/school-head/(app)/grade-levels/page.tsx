@@ -41,7 +41,12 @@ async function GradeLevelsGrid({
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
   const activeTypes = ALL_TYPES.filter((type) => existingMap.has(type));
-  const inactiveTypes = ALL_TYPES.filter((type) => !existingMap.has(type));
+  // FLOATING stays in ALL_TYPES so an existing floating grade still renders (with
+  // its learner count), but it is never offered as something to create: it is
+  // system-managed and appears only once a transfer puts a learner into it.
+  const inactiveTypes = ALL_TYPES.filter(
+    (type) => !existingMap.has(type) && type !== "FLOATING"
+  );
 
   const active = activeTypes.map((type) => {
     const grade = existingMap.get(type)!;

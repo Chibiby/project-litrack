@@ -49,6 +49,12 @@ export function revalidateTeacherCaches(userId: string) {
 export function revalidateLearnerScoped(opts: {
   schoolId: string;
   teacherId?: string | null;
+  /**
+   * Designated ARAL teacher, when the learner has one. Their dashboard/sidebar
+   * is derived from the learners they track, so it must be busted alongside the
+   * adviser's — an ARAL-only teacher has no other path into these caches.
+   */
+  aralTeacherId?: string | null;
   /** Bust teacher sidebar when ARAL presence may change. */
   teacherShell?: boolean;
   /** Bust admin system-wide learner metrics. */
@@ -58,10 +64,15 @@ export function revalidateLearnerScoped(opts: {
   if (opts.adminDashboard) {
     revalidateTag(tags.adminDashboard);
   }
-  if (opts.teacherId) {
-    revalidateTeacherDashboard(opts.teacherId);
+  const teacherIds = new Set(
+    [opts.teacherId, opts.aralTeacherId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    )
+  );
+  for (const teacherId of teacherIds) {
+    revalidateTeacherDashboard(teacherId);
     if (opts.teacherShell) {
-      revalidateTeacherShell(opts.teacherId);
+      revalidateTeacherShell(teacherId);
     }
   }
 }

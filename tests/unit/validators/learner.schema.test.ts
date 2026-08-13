@@ -8,6 +8,7 @@ import {
   transferLearnerSchema,
   transferLearnerCrossSchoolSchema,
   SECTION_CLEAR,
+  GRADE_FLOATING,
 } from "@/lib/validators/enrollment.schema";
 
 const SECTION_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
@@ -339,13 +340,37 @@ describe("transferLearnerSchema", () => {
     }
   });
 
-  it("rejects missing required fields", () => {
+  it("rejects missing learner or grade", () => {
     expect(
-      transferLearnerSchema.safeParse({
-        learnerId: "l1",
-        targetGradeLevelId: "g2",
-      }).success
+      transferLearnerSchema.safeParse({ targetGradeLevelId: "g2" }).success
     ).toBe(false);
+    expect(transferLearnerSchema.safeParse({ learnerId: "l1" }).success).toBe(false);
+  });
+
+  it("allows an omitted teacher — Floating placements have no adviser", () => {
+    // `transferLearner` requires a teacher for every non-FLOATING grade; only it
+    // knows the target grade's type, so the schema cannot demand one here.
+    const result = transferLearnerSchema.safeParse({
+      learnerId: "l1",
+      targetGradeLevelId: "g2",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.targetTeacherId).toBeUndefined();
+    }
+  });
+
+  it("treats a blank teacher as omitted", () => {
+    const result = transferLearnerSchema.safeParse({
+      learnerId: "l1",
+      targetGradeLevelId: GRADE_FLOATING,
+      targetTeacherId: "   ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.targetTeacherId).toBeUndefined();
+      expect(result.data.targetGradeLevelId).toBe(GRADE_FLOATING);
+    }
   });
 });
 

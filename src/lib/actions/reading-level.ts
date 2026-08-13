@@ -9,7 +9,11 @@ import {
   readingLevelBulkSchema,
 } from "@/lib/validators/reading-level.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
+import {
+  teacherCanAccessLearner,
+  teacherLearnerScope,
+} from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -23,6 +27,7 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
     filipinoProfile: formData.get("filipinoProfile"),
     wordRecognitionLevel: formData.get("wordRecognitionLevel"),
     readingComprehensionLevel: formData.get("readingComprehensionLevel"),
+    writingLevel: formData.get("writingLevel"),
     notes: formData.get("notes"),
   });
   if (!parsed.success) {
@@ -39,7 +44,9 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (learner.teacherId !== user.id) return { ok: false, error: "Not found" };
+  if (!teacherCanAccessLearner(learner, user.id)) {
+    return { ok: false, error: "Not found" };
+  }
   if (!learner.isAralLearner) {
     return { ok: false, error: "Reading-level tracking is only for ARAL learners" };
   }
@@ -60,6 +67,7 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
       filipinoProfile: parsed.data.filipinoProfile,
       wordRecognitionLevel: parsed.data.wordRecognitionLevel,
       readingComprehensionLevel: parsed.data.readingComprehensionLevel,
+      writingLevel: parsed.data.writingLevel ?? null,
       notes: parsed.data.notes,
       recordedById: user.id,
     },
@@ -68,6 +76,7 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
       filipinoProfile: parsed.data.filipinoProfile,
       wordRecognitionLevel: parsed.data.wordRecognitionLevel,
       readingComprehensionLevel: parsed.data.readingComprehensionLevel,
+      writingLevel: parsed.data.writingLevel ?? null,
       notes: parsed.data.notes,
     },
   });
@@ -92,7 +101,11 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
   );
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}/reading-level`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
-  revalidateLearnerScoped({ schoolId: learner.schoolId, teacherId: learner.teacherId });
+  revalidateLearnerScoped({
+    schoolId: learner.schoolId,
+    teacherId: learner.teacherId,
+    aralTeacherId: learner.aralTeacherId,
+  });
   return { ok: true };
 }
 
@@ -118,11 +131,11 @@ export async function bulkRecordWeeklyReadingLevel(
     where: {
       id: { in: learnerIds },
       schoolId: user.schoolId,
-      teacherId: user.id,
+      ...teacherLearnerScope(user.id),
       deletedAt: null,
       isAralLearner: true,
     },
-    select: { id: true, gradeLevelId: true },
+    select: { id: true, gradeLevelId: true, teacherId: true, aralTeacherId: true },
   });
 
   if (learners.length !== learnerIds.length) {
@@ -150,6 +163,7 @@ export async function bulkRecordWeeklyReadingLevel(
           filipinoProfile: entry.filipinoProfile,
           wordRecognitionLevel: entry.wordRecognitionLevel,
           readingComprehensionLevel: entry.readingComprehensionLevel,
+          writingLevel: entry.writingLevel ?? null,
           notes: entry.notes,
           recordedById: user.id,
         },
@@ -158,6 +172,8 @@ export async function bulkRecordWeeklyReadingLevel(
           filipinoProfile: entry.filipinoProfile,
           wordRecognitionLevel: entry.wordRecognitionLevel,
           readingComprehensionLevel: entry.readingComprehensionLevel,
+          // The grid posts full row state, so an omitted writing level clears it.
+          writingLevel: entry.writingLevel ?? null,
           notes: entry.notes,
           recordedById: user.id,
         },
@@ -193,6 +209,13 @@ export async function bulkRecordWeeklyReadingLevel(
     revalidatePath(`/teacher/grade/${l.gradeLevelId}/learners/${id}`);
   }
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
+  // The acting teacher may be the ARAL teacher while somebody else advises the
+  // learner (or vice versa) — bust every affected teacher's metrics.
+  for (const l of learners) {
+    for (const id of [l.teacherId, l.aralTeacherId]) {
+      if (id && id !== user.id) revalidateTeacherDashboard(id);
+    }
+  }
 
   return { ok: true, data: { upserted: parsed.data.entries.length } };
 }

@@ -71,13 +71,23 @@ function redirectOutcome(user: User): CompleteTeacherAuthResult {
   return { ok: true, outcome: "pending" };
 }
 
+/**
+ * Best-effort JWT role stamp. Never throws: the Prisma user row is already the
+ * authoritative record, and `createSupabaseAdminClient()` throws outright when
+ * SUPABASE_SERVICE_ROLE_KEY is missing or invalid — letting that escape would
+ * fail a registration that already succeeded.
+ */
 async function setTeacherAppMetadata(authId: string, schoolId: string): Promise<void> {
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(authId, {
-    app_metadata: { role: "TEACHER", schoolId },
-  });
-  if (error) {
-    console.error("[teacher-registration] app_metadata update failed:", error.message);
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(authId, {
+      app_metadata: { role: "TEACHER", schoolId },
+    });
+    if (error) {
+      console.error("[teacher-registration] app_metadata update failed:", error.message);
+    }
+  } catch (err) {
+    console.error("[teacher-registration] app_metadata update threw:", err);
   }
 }
 

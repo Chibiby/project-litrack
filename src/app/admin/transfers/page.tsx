@@ -31,7 +31,8 @@ async function AdminTransferBody({
   const [grades, sections, teachers, targetActiveYear] = await Promise.all([
     toSchoolId
       ? prisma.gradeLevel.findMany({
-          where: { schoolId: toSchoolId, deletedAt: null },
+          // FLOATING is a same-school holding state, never a cross-school target.
+          where: { schoolId: toSchoolId, deletedAt: null, type: { not: "FLOATING" } },
           orderBy: { createdAt: "asc" },
           select: { id: true, type: true },
         })
@@ -53,7 +54,10 @@ async function AdminTransferBody({
           select: {
             id: true,
             fullName: true,
-            taughtGrades: { select: { id: true } },
+            // Derived from the one section the teacher advises, matching what
+            // `transferLearnerCrossSchool` validates. `deletedAt` is selected
+            // because Prisma cannot filter a to-one relation inside `select`.
+            advisorySection: { select: { gradeLevelId: true, deletedAt: true } },
           },
         })
       : Promise.resolve([]),
@@ -99,7 +103,10 @@ async function AdminTransferBody({
               teachers={teachers.map((t) => ({
                 id: t.id,
                 fullName: t.fullName,
-                gradeIds: t.taughtGrades.map((g) => g.id),
+                gradeIds:
+                  t.advisorySection && t.advisorySection.deletedAt === null
+                    ? [t.advisorySection.gradeLevelId]
+                    : [],
               }))}
             />
           )}

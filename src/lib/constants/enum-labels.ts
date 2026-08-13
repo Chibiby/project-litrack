@@ -60,6 +60,22 @@ export const WEEKLY_READING_COMPREHENSION_LEVEL_LABELS = {
   NA: "N/A",
 } as const;
 
+/**
+ * Weekly ARAL writing levels (ReadingLevelRecord.writingLevel).
+ * PLACEHOLDER WORDING: unlike the word-recognition and comprehension maps above,
+ * these are not yet the DepEd rubric descriptors -- the project owner supplies
+ * those. Labels can change here without a migration; the enum is rubric-neutral.
+ */
+export const WEEKLY_WRITING_LEVEL_LABELS = {
+  LEVEL_1: "Level 1",
+  LEVEL_2: "Level 2",
+  LEVEL_3: "Level 3",
+  LEVEL_4: "Level 4",
+  LEVEL_5: "Level 5",
+  LEVEL_0: "Level 0",
+  NA: "N/A",
+} as const;
+
 /** Kinder–G3 CRLA-style reading band labels. */
 export const READING_PROFILE_LABELS_K3 = {
   NON_DECODER_LOW_EMERGENT: "Low Emergent",
@@ -209,6 +225,33 @@ export const GOV_BENEFIT_LABELS = {
   FOUR_PS: "4Ps",
   IPS: "IPs",
 } as const;
+
+export const ETHNICITY_LABELS = {
+  BISAYA: "Bisaya",
+  ILONGGO: "Ilonggo",
+  BLAAN: "Blaan",
+  TAGAKAOLO: "Tagakaolo",
+  TBOLI: "T'boli",
+  BADJAO: "Badjao",
+  MARANAO: "Maranao",
+  TAUSOG: "Tausog",
+  MAGUINDANAON: "Maguindanaon",
+  ILOCANO: "Ilocano",
+  TAGALOG: "Tagalog",
+  FOREIGN: "Foreign",
+  OTHER: "Others (please specify)",
+} as const;
+
+/** Display ethnicity, substituting the free text when "Others" was chosen. */
+export function formatEthnicity(
+  ethnicity: string | null | undefined,
+  ethnicityOther: string | null | undefined,
+  fallback = "—"
+): string {
+  if (!ethnicity) return fallback;
+  if (ethnicity === "OTHER") return ethnicityOther?.trim() || "Others";
+  return ETHNICITY_LABELS[ethnicity as keyof typeof ETHNICITY_LABELS] ?? ethnicity;
+}
 
 export const PARENT_EDUCATION_LABELS = {
   NO_FORMAL: "No formal Education",

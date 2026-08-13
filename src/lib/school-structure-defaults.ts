@@ -39,7 +39,9 @@ export async function getSchoolStructureDefaults(
     };
   });
 
-  // Profiling School Structure only offers G1–G12; keep KINDER/FLOATING in DB.
+  // Profiling School Structure offers KINDER + G1–G12. FLOATING is deliberately
+  // excluded: it is created on demand to hold learners with no grade/section, not
+  // something a School Head picks.
   const gradeTypes = existingGradeStats
     .map((g) => g.type)
     .filter((type) => PROFILING_GRADE_SET.has(type));

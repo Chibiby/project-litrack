@@ -81,6 +81,7 @@ function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): Na
         { label: "School years", href: "/school-head/school-years", icon: CalendarRange },
         { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
         { label: "Teachers", href: "/school-head/teachers", icon: Users },
+        { label: "ARAL", href: "/school-head/aral", icon: Sparkles },
         { label: "Transfer", href: "/school-head/transfer", icon: ArrowRightLeft },
         { label: "Announcements", href: "/school-head/announcements", icon: Megaphone },
         { label: "School info", href: "/school-head/school-info", icon: Building2 },

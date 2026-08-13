@@ -21,6 +21,11 @@ const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
 const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
 const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
 
+const ETHNICITY = [
+  "BISAYA", "ILONGGO", "BLAAN", "TAGAKAOLO", "TBOLI", "BADJAO", "MARANAO",
+  "TAUSOG", "MAGUINDANAON", "ILOCANO", "TAGALOG", "FOREIGN", "OTHER",
+] as const;
+
 const optionalMiddleName = z
   .string()
   .trim()
@@ -52,6 +57,36 @@ const optionalTransferDetails = z
   .max(500)
   .optional()
   .or(z.literal("").transform(() => undefined));
+
+const optionalEthnicityOther = z
+  .string()
+  .trim()
+  .max(80)
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
+/** Free-text ethnicity required for (and limited to) "Others, please specify". */
+function refineEthnicityOther<
+  T extends {
+    ethnicity?: (typeof ETHNICITY)[number];
+    ethnicityOther?: string;
+  },
+>(data: T, ctx: z.RefinementCtx) {
+  if (data.ethnicity === "OTHER" && !data.ethnicityOther?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify the ethnicity",
+      path: ["ethnicityOther"],
+    });
+  }
+  if (data.ethnicity !== "OTHER" && data.ethnicityOther?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Ethnicity details are only allowed when Others is selected",
+      path: ["ethnicityOther"],
+    });
+  }
+}
 
 /** Frustration subtypes only when Frustration/High Emergent is selected (L-A4/L-A5). */
 function refineFrustrationSubtypes<
@@ -119,6 +154,8 @@ const sectionAFields = {
   lastName: nonEmpty("Last name required").max(80),
   age: z.coerce.number().int().min(3).max(25),
   gender: z.enum(["MALE", "FEMALE"]),
+  ethnicity: optionalEnum(ETHNICITY),
+  ethnicityOther: optionalEthnicityOther,
   englishReadingProfile: z.enum(READING_PROFILE),
   englishFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),
   filipinoReadingProfile: z.enum(READING_PROFILE),
@@ -150,6 +187,7 @@ export const learnerCreateSchema = z
   .superRefine((data, ctx) => {
     refineFrustrationSubtypes(data, ctx);
     refineSectionBTransfers(data, ctx);
+    refineEthnicityOther(data, ctx);
   });
 
 export type LearnerCreateInput = z.infer<typeof learnerCreateSchema>;
@@ -165,6 +203,7 @@ export const learnerUpdateSchema = z
   .superRefine((data, ctx) => {
     refineFrustrationSubtypes(data, ctx);
     refineSectionBTransfers(data, ctx);
+    refineEthnicityOther(data, ctx);
   });
 
 export type LearnerUpdateInput = z.infer<typeof learnerUpdateSchema>;

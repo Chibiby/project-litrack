@@ -20,7 +20,9 @@
   background: var(--pls-cream);
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
   opacity: 1;
-  transition: opacity 0.5s ease;
+  /* Must equal FADE_OUT_MS in post-login-splash.tsx, or the overlay unmounts
+     mid-transition and disappears in a hard cut. */
+  transition: opacity 0.3s ease;
   pointer-events: auto;
   /* ARAL reveal logo is wider than .stage — must not clip on mobile. */
   overflow: visible;
@@ -105,13 +107,20 @@
 }
 
 .stageDone .aralLogo {
-  animation: pls-reveal-pop 0.65s cubic-bezier(0.2, 1.4, 0.4, 1) 0.2s forwards;
+  /* This is the finale and owns most of the splash (REVEAL_HOLD_MS in
+     post-login-splash.tsx, >= 1800ms): pop in, then a slow swell that peaks
+     as the fade-out starts, so the logo never sits dead-static. */
+  animation:
+    pls-reveal-pop 0.58s cubic-bezier(0.2, 1.4, 0.4, 1) 0.06s forwards,
+    pls-aral-breathe 2.4s ease-in-out 0.64s infinite;
 }
 
 .shelfWrap {
   opacity: 0;
   margin-top: 64px;
-  animation: pls-fade-up 0.5s ease-out 0.55s forwards;
+  /* Entry must land before the first book fills (BOOK_START_DELAY_MS = 280ms),
+     or the fill animation plays while the shelf is still transparent. */
+  animation: pls-fade-up 0.24s ease-out 0.04s forwards;
 }
 
 .shelf {
@@ -197,9 +206,9 @@
   color: var(--pls-navy-dark);
   opacity: 0;
   margin-top: 10px;
-  animation: pls-fade-up 0.5s ease-out 0.5s forwards;
+  animation: pls-fade-up 0.24s ease-out 0.04s forwards;
   min-height: 18px;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.18s ease;
   text-align: center;
 }
 
@@ -230,6 +239,16 @@
   }
   50% {
     transform: translate(-50%, -50%) scale(1.02) translateY(-2px);
+  }
+}
+
+@keyframes pls-aral-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.035);
   }
 }
 

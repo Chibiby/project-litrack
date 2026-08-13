@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
@@ -7,6 +8,7 @@ import { AralUpdateForm } from "@/components/forms/aral-update-form";
 import { Button } from "@/components/ui/button";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +29,15 @@ export default async function UpdateAralDataPage({
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  const learnerFilter = isSuperAdmin
+  const learnerFilter: Prisma.LearnerWhereInput = isSuperAdmin
     ? { id, isAralLearner: true, deletedAt: null }
-    : { id, teacherId: user.id, isAralLearner: true, deletedAt: null };
+    : {
+        id,
+        schoolId: user.schoolId ?? undefined,
+        isAralLearner: true,
+        deletedAt: null,
+        ...teacherLearnerScope(user.id),
+      };
 
   const learner = await prisma.learner.findFirst({
     where: learnerFilter,

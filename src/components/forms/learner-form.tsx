@@ -15,6 +15,7 @@ import {
   TRANSPORTATION_LABELS,
   DISTANCE_LABELS,
   TRANSFER_LABELS,
+  ETHNICITY_LABELS,
   isEarlyGradeReadingBand,
   readingProfileLabelsForGradeType,
   toOptions,
@@ -41,6 +42,8 @@ export type LearnerFormDefaults = {
   lastName?: string;
   age?: number;
   gender?: string;
+  ethnicity?: string | null;
+  ethnicityOther?: string | null;
   englishReadingProfile?: string;
   englishFrustrationSubtypes?: string[];
   filipinoReadingProfile?: string;
@@ -94,6 +97,7 @@ export function LearnerForm({
   const [previousTransfers, setPreviousTransfers] = useState(
     defaultValues?.previousTransfers ?? ""
   );
+  const [ethnicity, setEthnicity] = useState(defaultValues?.ethnicity ?? "");
   const [sectionId, setSectionId] = useState(defaultValues?.sectionId ?? "");
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -151,6 +155,10 @@ export function LearnerForm({
     if (previousTransfers !== "MULTIPLE") {
       fd.delete("transferDetails");
     }
+    // Only send free-text ethnicity when Others is selected (server refine enforces).
+    if (ethnicity !== "OTHER") {
+      fd.delete("ethnicityOther");
+    }
 
     startTransition(async () => {
       if (isEdit) {
@@ -181,6 +189,7 @@ export function LearnerForm({
         setEnglishProfile("");
         setFilipinoProfile("");
         setPreviousTransfers("");
+        setEthnicity("");
         setSectionId("");
         router.refresh();
         invalidateNavWarm();
@@ -202,41 +211,6 @@ export function LearnerForm({
       id="learner-form"
       className="space-y-4 max-h-[700px] overflow-y-auto pr-2"
     >
-      <div className="space-y-1">
-        <Label htmlFor="gradeLevelId">Grade *</Label>
-        {isEdit ? (
-          <>
-            <input type="hidden" name="gradeLevelId" value={selectedGradeLevelId} />
-            <select
-              id="gradeLevelId"
-              disabled
-              value={selectedGradeLevelId}
-              className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:opacity-50"
-            >
-              <option value={selectedGradeLevelId}>{selectedGradeLabel}</option>
-            </select>
-          </>
-        ) : (
-          <select
-            id="gradeLevelId"
-            name="gradeLevelId"
-            required
-            value={selectedGradeLevelId}
-            onChange={(e) => setSelectedGradeLevelId(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-          >
-            {grades.length === 0 ? (
-              <option value={gradeLevelId}>Select grade</option>
-            ) : null}
-            {grades.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
       <div className="grid gap-3 grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="firstName">First name *</Label>
@@ -289,6 +263,71 @@ export function LearnerForm({
             defaultValue={defaultValues?.gender}
           />
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="ethnicity">Ethnicity (optional)</Label>
+        <select
+          id="ethnicity"
+          name="ethnicity"
+          value={ethnicity}
+          onChange={(e) => setEthnicity(e.target.value)}
+          className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+        >
+          <option value="">Not specified</option>
+          {toOptions(ETHNICITY_LABELS).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {ethnicity === "OTHER" ? (
+          <div className="mt-3 space-y-1">
+            <Label htmlFor="ethnicityOther">Please specify *</Label>
+            <Input
+              id="ethnicityOther"
+              name="ethnicityOther"
+              required
+              maxLength={80}
+              defaultValue={defaultValues?.ethnicityOther ?? ""}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="gradeLevelId">Grade *</Label>
+        {isEdit ? (
+          <>
+            <input type="hidden" name="gradeLevelId" value={selectedGradeLevelId} />
+            <select
+              id="gradeLevelId"
+              disabled
+              value={selectedGradeLevelId}
+              className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm disabled:opacity-50"
+            >
+              <option value={selectedGradeLevelId}>{selectedGradeLabel}</option>
+            </select>
+          </>
+        ) : (
+          <select
+            id="gradeLevelId"
+            name="gradeLevelId"
+            required
+            value={selectedGradeLevelId}
+            onChange={(e) => setSelectedGradeLevelId(e.target.value)}
+            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+          >
+            {grades.length === 0 ? (
+              <option value={gradeLevelId}>Select grade</option>
+            ) : null}
+            {grades.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="space-y-1">
@@ -356,7 +395,6 @@ export function LearnerForm({
 
       <Separator />
       <div>
-        <p className="text-sm font-medium mb-2">Is the student a 4Ps beneficiary?</p>
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -365,7 +403,9 @@ export function LearnerForm({
             defaultChecked={defaultValues?.governmentBenefits?.includes("FOUR_PS")}
             className="mt-0.5 h-4 w-4 accent-primary"
           />
-          <span className="text-sm leading-tight">Yes</span>
+          <span className="text-sm font-medium leading-tight">
+            Is the student a 4Ps beneficiary?
+          </span>
         </label>
       </div>
 

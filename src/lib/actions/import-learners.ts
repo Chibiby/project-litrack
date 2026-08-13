@@ -21,6 +21,7 @@ import {
   type LearnerImportRow,
 } from "@/lib/validators/learner-import.schema";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import { teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -34,13 +35,17 @@ function buildFullName(
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
 
+/**
+ * CSV import writes a roster, so this stays adviser-scoped: being some learner's
+ * designated ARAL teacher does not grant the right to add learners to a grade.
+ */
 async function assertTeacherGradeAccess(userId: string, schoolId: string, gradeLevelId: string) {
   return prisma.gradeLevel.findFirst({
     where: {
       id: gradeLevelId,
       schoolId,
       deletedAt: null,
-      teachers: { some: { id: userId } },
+      ...teacherAdvisoryGradeScope(userId),
     },
   });
 }
@@ -266,6 +271,8 @@ export async function commitLearnerImport(input: {
             fullName,
             age: data.age,
             gender: data.gender,
+            ethnicity: data.ethnicity ?? null,
+            ethnicityOther: data.ethnicity === "OTHER" ? (data.ethnicityOther ?? null) : null,
             englishReadingProfile: data.englishReadingProfile,
             englishFrustrationSubtypes: data.englishFrustrationSubtypes,
             filipinoReadingProfile: data.filipinoReadingProfile,

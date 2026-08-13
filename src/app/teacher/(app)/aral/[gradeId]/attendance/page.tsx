@@ -11,6 +11,7 @@ import { AralAttendancePanel } from "@/components/aral/aral-attendance-panel";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   parseLearnerListParams,
   sectionIdWhere,
@@ -47,9 +48,16 @@ export default async function AralGradeAttendancePage({
   const selectedDate = parseLocalDateKey(sp.date);
   const dateKey = formatLocalDateKey(selectedDate);
 
-  const gradeFilter = isSuperAdmin
+  // ARAL page: reachable by the grade's adviser or by a teacher who tracks
+  // ARAL learners in it (no advisory section needed).
+  const gradeFilter: Prisma.GradeLevelWhereInput = isSuperAdmin
     ? { id: gradeId, deletedAt: null }
-    : { id: gradeId, deletedAt: null, teachers: { some: { id: user.id } } };
+    : {
+        id: gradeId,
+        deletedAt: null,
+        schoolId: user.schoolId ?? undefined,
+        ...teacherGradeScope(user.id),
+      };
 
   const grade = await prisma.gradeLevel.findFirst({
     where: gradeFilter,
@@ -62,7 +70,7 @@ export default async function AralGradeAttendancePage({
     isAralLearner: true,
     deletedAt: null,
     archivedAt: null,
-    ...(isSuperAdmin ? {} : { teacherId: user.id }),
+    ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
     ...sectionIdWhere(list.section),
   };
 

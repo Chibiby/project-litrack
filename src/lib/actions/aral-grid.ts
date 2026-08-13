@@ -9,6 +9,7 @@ import {
 } from "@/lib/learners/pagination";
 import { parseLocalDateKey } from "@/lib/date-keys";
 import { getMonday } from "@/lib/utils";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -30,9 +31,17 @@ async function resolveGradeLearnerWhere(input: {
   const user = await requireUser("TEACHER");
   const isSuperAdmin = user.role === "SUPER_ADMIN";
 
-  const gradeFilter = isSuperAdmin
+  // Super Admin passes every role check, so branch explicitly: they read any
+  // school's grade (impersonation view), a teacher is pinned to their own
+  // school and to grades they advise in or track ARAL learners in.
+  const gradeFilter: Prisma.GradeLevelWhereInput = isSuperAdmin
     ? { id: input.gradeId, deletedAt: null }
-    : { id: input.gradeId, deletedAt: null, teachers: { some: { id: user.id } } };
+    : {
+        id: input.gradeId,
+        deletedAt: null,
+        schoolId: user.schoolId ?? undefined,
+        ...teacherGradeScope(user.id),
+      };
 
   const grade = await prisma.gradeLevel.findFirst({
     where: gradeFilter,
@@ -49,7 +58,7 @@ async function resolveGradeLearnerWhere(input: {
       isAralLearner: true,
       deletedAt: null,
       archivedAt: null,
-      ...(isSuperAdmin ? {} : { teacherId: user.id }),
+      ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
       ...sectionIdWhere(list.section),
     },
   };
@@ -106,6 +115,7 @@ export type AralReadingLevelRecord = {
   filipinoProfile: string;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
+  writingLevel: string | null;
   notes: string | null;
 };
 
@@ -134,6 +144,7 @@ export async function fetchAralReadingLevelForWeek(input: {
       filipinoProfile: true,
       wordRecognitionLevel: true,
       readingComprehensionLevel: true,
+      writingLevel: true,
       notes: true,
     },
   });

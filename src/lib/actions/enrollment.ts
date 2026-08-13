@@ -8,8 +8,10 @@ import {
   transferLearnerSchema,
   transferLearnerCrossSchoolSchema,
   SECTION_CLEAR,
+  GRADE_FLOATING,
 } from "@/lib/validators/enrollment.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { ensureFloatingGradeLevel } from "@/lib/grades/floating";
 import {
   revalidateSchoolDashboard,
   revalidateSchoolsList,
@@ -112,38 +114,79 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
     return { ok: false, error: "Not found" };
   }
 
-  const targetGrade = await prisma.gradeLevel.findFirst({
-    where: {
-      id: targetGradeLevelId,
-      schoolId: user.schoolId,
-      deletedAt: null,
-    },
-  });
-  if (!targetGrade) return { ok: false, error: "Target grade level not found" };
+  // Floating means "no grade and no section". The FLOATING `GradeLevel` row that
+  // backs it is created on demand, so the form sends the GRADE_FLOATING sentinel
+  // rather than an id. Accept a real FLOATING id too, in case the row already
+  // exists and something sends it directly — the type, not the shape of the
+  // input, decides whether this is a floating placement.
+  let toFloating = targetGradeLevelId === GRADE_FLOATING;
+  let resolvedGradeLevelId: string;
 
-  const targetTeacher = await prisma.user.findFirst({
-    where: {
-      id: targetTeacherId,
-      schoolId: user.schoolId,
-      role: "TEACHER",
-      deletedAt: null,
-      taughtGrades: { some: { id: targetGradeLevelId } },
-    },
-  });
-  if (!targetTeacher) {
-    return { ok: false, error: "Teacher not found or not assigned to target grade" };
+  if (toFloating) {
+    resolvedGradeLevelId = await ensureFloatingGradeLevel(prisma, user.schoolId);
+  } else {
+    const targetGrade = await prisma.gradeLevel.findFirst({
+      where: {
+        id: targetGradeLevelId,
+        schoolId: user.schoolId,
+        deletedAt: null,
+      },
+      select: { id: true, type: true },
+    });
+    if (!targetGrade) return { ok: false, error: "Target grade level not found" };
+    resolvedGradeLevelId = targetGrade.id;
+    toFloating = targetGrade.type === "FLOATING";
   }
 
-  const sectionResult = await resolveTransferSection({
-    targetSectionId,
-    targetGradeLevelId,
-    schoolId: user.schoolId,
-    previousSectionId: learner.sectionId,
-    previousGradeLevelId: learner.gradeLevelId,
-    preserveOnSameGradeOmit: true,
-  });
-  if (!sectionResult.ok) return sectionResult;
-  const resolvedSectionId = sectionResult.sectionId;
+  // Every non-floating grade still requires a teacher, and that teacher must
+  // *advise a section in it* — advisory is one section per teacher now, so the
+  // legacy `taughtGrades` m2m is no longer the source of truth for "assigned to
+  // this grade". FLOATING has no adviser and no sections by definition.
+  let resolvedTeacherId: string | null = null;
+  let resolvedSectionId: string | null = null;
+
+  if (toFloating) {
+    if (targetTeacherId) {
+      return {
+        ok: false,
+        error: "Floating learners have no adviser — leave the teacher blank.",
+      };
+    }
+    if (targetSectionId && targetSectionId !== SECTION_CLEAR) {
+      return { ok: false, error: "Floating learners have no section." };
+    }
+  } else {
+    if (!targetTeacherId) return { ok: false, error: "Target teacher required" };
+
+    const targetTeacher = await prisma.user.findFirst({
+      where: {
+        id: targetTeacherId,
+        schoolId: user.schoolId,
+        role: "TEACHER",
+        deletedAt: null,
+        advisorySection: { gradeLevelId: resolvedGradeLevelId, deletedAt: null },
+      },
+      select: { id: true },
+    });
+    if (!targetTeacher) {
+      return {
+        ok: false,
+        error: "Teacher not found or does not advise a section in the target grade",
+      };
+    }
+    resolvedTeacherId = targetTeacher.id;
+
+    const sectionResult = await resolveTransferSection({
+      targetSectionId,
+      targetGradeLevelId: resolvedGradeLevelId,
+      schoolId: user.schoolId,
+      previousSectionId: learner.sectionId,
+      previousGradeLevelId: learner.gradeLevelId,
+      preserveOnSameGradeOmit: true,
+    });
+    if (!sectionResult.ok) return sectionResult;
+    resolvedSectionId = sectionResult.sectionId;
+  }
 
   const previousGradeId = learner.gradeLevelId;
 
@@ -170,9 +213,9 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
     await tx.learner.update({
       where: { id: learner.id },
       data: {
-        gradeLevelId: targetGradeLevelId,
+        gradeLevelId: resolvedGradeLevelId,
         sectionId: resolvedSectionId,
-        teacherId: targetTeacherId,
+        teacherId: resolvedTeacherId,
         archivedAt: null,
       },
     });
@@ -183,9 +226,9 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
           learnerId: learner.id,
           schoolId: user.schoolId,
           schoolYearId,
-          gradeLevelId: targetGradeLevelId,
+          gradeLevelId: resolvedGradeLevelId,
           sectionId: resolvedSectionId,
-          teacherId: targetTeacherId,
+          teacherId: resolvedTeacherId,
           status: "ACTIVE",
         },
       });
@@ -202,24 +245,29 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
       schoolId: user.schoolId,
       learnerId: learner.id,
       fromGradeLevelId: previousGradeId,
-      toGradeLevelId: targetGradeLevelId,
+      toGradeLevelId: resolvedGradeLevelId,
       toSectionId: resolvedSectionId,
-      toTeacherId: targetTeacherId,
+      toTeacherId: resolvedTeacherId,
+      toFloating,
     },
   });
 
   revalidatePath(`/teacher/grade/${previousGradeId}`);
-  revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
+  revalidatePath(`/teacher/grade/${resolvedGradeLevelId}`);
   revalidatePath(`/teacher/aral/${previousGradeId}`);
-  revalidatePath(`/teacher/aral/${targetGradeLevelId}`);
+  revalidatePath(`/teacher/aral/${resolvedGradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
   revalidatePath("/school-head/transfer");
   revalidatePath("/school-head/teachers");
+  // A first floating placement creates the FLOATING grade row, which the Grade
+  // Levels page renders.
+  revalidatePath("/school-head/grade-levels");
   revalidateSchoolDashboard(user.schoolId);
   if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
-  if (targetTeacherId !== learner.teacherId) {
-    revalidateTeacherCaches(targetTeacherId);
+  // Null on a transfer into FLOATING — there is no receiving adviser to bust.
+  if (resolvedTeacherId && resolvedTeacherId !== learner.teacherId) {
+    revalidateTeacherCaches(resolvedTeacherId);
   }
   return { ok: true };
 }
@@ -283,6 +331,10 @@ export async function transferLearnerCrossSchool(
     return { ok: false, error: "Target grade level not found in destination school" };
   }
 
+  // Advisory is one section per teacher now, so grade membership is derived from
+  // the advised section rather than the legacy `taughtGrades` m2m (which nothing
+  // writes any more). Cross-school transfer still requires a real receiving
+  // adviser — FLOATING is a same-school holding state, not a transfer target.
   const targetTeacher = await prisma.user.findFirst({
     where: {
       id: targetTeacherId,
@@ -290,13 +342,15 @@ export async function transferLearnerCrossSchool(
       role: "TEACHER",
       deletedAt: null,
       isActive: true,
-      taughtGrades: { some: { id: targetGradeLevelId } },
+      advisorySection: { gradeLevelId: targetGradeLevelId, deletedAt: null },
     },
+    select: { id: true },
   });
   if (!targetTeacher) {
     return {
       ok: false,
-      error: "Teacher not found or not assigned to target grade in destination school",
+      error:
+        "Teacher not found or does not advise a section in the target grade at the destination school",
     };
   }
 

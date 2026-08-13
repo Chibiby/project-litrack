@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { schoolStructureSchema } from "@/lib/validators/grade-level.schema";
+import {
+  CREATABLE_GRADE_LEVEL_TYPES,
+  createGradeLevelSchema,
+  PROFILING_GRADE_LEVEL_TYPES,
+  schoolStructureSchema,
+} from "@/lib/validators/grade-level.schema";
 
 describe("schoolStructureSchema", () => {
   it("accepts valid grade types and sections per grade", () => {
@@ -26,16 +31,32 @@ describe("schoolStructureSchema", () => {
     expect(bad.success).toBe(false);
   });
 
-  it("rejects KINDER and FLOATING (profiling is G1–G12 only)", () => {
+  it("accepts KINDER (school head profiling covers Kinder + G1–G12)", () => {
     expect(
       schoolStructureSchema.safeParse({
         gradeTypes: ["KINDER"],
         sectionsPerGrade: 1,
       }).success
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      schoolStructureSchema.safeParse({
+        gradeTypes: ["KINDER", "G1", "G2"],
+        sectionsPerGrade: 2,
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects FLOATING (system-managed, created on demand)", () => {
     expect(
       schoolStructureSchema.safeParse({
         gradeTypes: ["FLOATING"],
+        sectionsPerGrade: 1,
+      }).success
+    ).toBe(false);
+    // Also rejected when mixed in with valid grades.
+    expect(
+      schoolStructureSchema.safeParse({
+        gradeTypes: ["G1", "FLOATING"],
         sectionsPerGrade: 1,
       }).success
     ).toBe(false);
@@ -60,5 +81,37 @@ describe("schoolStructureSchema", () => {
         sectionsPerGrade: 27,
       }).success
     ).toBe(false);
+  });
+});
+
+describe("PROFILING_GRADE_LEVEL_TYPES", () => {
+  it("covers Kinder through G12 with Kinder first (render order)", () => {
+    expect(PROFILING_GRADE_LEVEL_TYPES[0]).toBe("KINDER");
+    expect(PROFILING_GRADE_LEVEL_TYPES).toHaveLength(13); // Kinder + G1–G12
+    expect(PROFILING_GRADE_LEVEL_TYPES.at(-1)).toBe("G12");
+  });
+
+  it("excludes FLOATING — it is created on demand, never picked", () => {
+    expect(PROFILING_GRADE_LEVEL_TYPES).not.toContain("FLOATING");
+  });
+});
+
+describe("createGradeLevelSchema", () => {
+  it("accepts KINDER", () => {
+    expect(createGradeLevelSchema.safeParse({ type: "KINDER" }).success).toBe(true);
+  });
+
+  it("accepts every creatable type", () => {
+    for (const type of CREATABLE_GRADE_LEVEL_TYPES) {
+      expect(createGradeLevelSchema.safeParse({ type }).success).toBe(true);
+    }
+  });
+
+  it("rejects FLOATING — system-managed via ensureFloatingGradeLevel", () => {
+    expect(createGradeLevelSchema.safeParse({ type: "FLOATING" }).success).toBe(false);
+  });
+
+  it("rejects an unknown type", () => {
+    expect(createGradeLevelSchema.safeParse({ type: "GRADE_1" }).success).toBe(false);
   });
 });

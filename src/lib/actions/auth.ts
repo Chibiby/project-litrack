@@ -28,6 +28,11 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
 import {
+  warmAdminRoutes,
+  warmSchoolHeadRoutes,
+  warmTeacherRoutes,
+} from "@/lib/auth/warm-routes";
+import {
   DECLINED_REGISTRATION_MESSAGE,
   DEACTIVATED_TEACHER_MESSAGE,
   isDeactivatedTeacher,
@@ -97,7 +102,7 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const rate = checkRateLimit(`login:school-head:${parsed.data.schoolId}`, LOGIN_RATE);
+  const rate = await checkRateLimit(`login:school-head:${parsed.data.schoolId}`, LOGIN_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await prisma.school.findUnique({
@@ -147,6 +152,8 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
     metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
   });
 
+  await warmSchoolHeadRoutes(school.id);
+
   redirect("/school-head");
 }
 
@@ -169,7 +176,7 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   const email = parsed.data.email.toLowerCase().trim();
   const { schoolId, password } = parsed.data;
 
-  const rate = checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
+  const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await assertActiveSchool(schoolId);
@@ -237,7 +244,17 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   });
 
   // REJECTED / deactivated already returned above.
-  redirect(teacher.approvalStatus === "PENDING" ? "/pending-approval" : "/teacher");
+  const pending = teacher.approvalStatus === "PENDING";
+  if (!pending) {
+    // PENDING teachers land on /pending-approval and never read this data.
+    await warmTeacherRoutes({
+      schoolId,
+      teacherId: teacher.id,
+      isSuperAdmin: false,
+    });
+  }
+
+  redirect(pending ? "/pending-approval" : "/teacher");
 }
 
 /**
@@ -266,7 +283,7 @@ export async function requestTeacherRegisterOtp(
   const email = parsed.data.email.toLowerCase().trim();
   const { schoolId } = parsed.data;
 
-  const rate = checkRateLimit(`otp:teacher:${schoolId}:${email}`, OTP_RATE);
+  const rate = await checkRateLimit(`otp:teacher:${schoolId}:${email}`, OTP_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await assertActiveSchool(schoolId);
@@ -313,6 +330,18 @@ type TeacherRegisterNames = {
   lastName: string;
 };
 
+/**
+ * Self-register outcome. The destination is returned instead of redirected to:
+ * the browser must apply the Set-Cookie from this action before requesting the
+ * success page, otherwise that page sees no session and bounces to /login.
+ */
+type TeacherRegisterResult =
+  | { ok: true; redirectTo: string }
+  | { ok: false; error: string };
+
+/** Success page for a teacher awaiting School Head approval. */
+const REGISTER_PENDING_PATH = "/account/created";
+
 /** Serialize concurrent teacher-register verifies per email (OTP is single-use). */
 const teacherRegisterVerifyInflight = new Map<string, Promise<unknown>>();
 
@@ -322,7 +351,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Finish teacher self-register after auth is established (OTP verify or recovery).
- * On success redirects (never returns).
+ * Returns the page the client should navigate to on success.
  */
 async function finishTeacherRegister(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -332,7 +361,7 @@ async function finishTeacherRegister(
     schoolId: string;
     names: TeacherRegisterNames;
   }
-): Promise<{ ok: false; error: string }> {
+): Promise<TeacherRegisterResult> {
   const result = await completeTeacherAuthAfterVerify({
     authId: params.authId,
     email: params.email,
@@ -367,7 +396,7 @@ async function finishTeacherRegister(
           console.error("[verifyTeacherRegisterOtp] authId link after pending recover:", err);
         }
       }
-      redirect("/account/created");
+      return { ok: true, redirectTo: REGISTER_PENDING_PATH };
     }
 
     if (result.signOut) {
@@ -380,7 +409,10 @@ async function finishTeacherRegister(
     return { ok: false, error: result.error };
   }
 
-  redirect(result.outcome === "approved" ? "/teacher" : "/account/created");
+  return {
+    ok: true,
+    redirectTo: result.outcome === "approved" ? "/teacher" : REGISTER_PENDING_PATH,
+  };
 }
 
 async function resolveTeacherRegisterAuthId(
@@ -418,7 +450,7 @@ async function recoverTeacherRegisterAfterConsumedOtp(
     password: string;
     names: TeacherRegisterNames;
   }
-): Promise<{ ok: false; error: string } | never> {
+): Promise<TeacherRegisterResult> {
   const { email, schoolId, password, names } = params;
 
   let authId = await resolveTeacherRegisterAuthId(supabase, email, password);
@@ -452,11 +484,12 @@ async function recoverTeacherRegisterAfterConsumedOtp(
 
 /**
  * Verify teacher registration OTP, set password, create pending teacher row.
- * On success redirects (never returns); on failure returns an error.
+ * Returns the destination on success so the client navigates after the session
+ * cookies land, or an error message on failure.
  */
 export async function verifyTeacherRegisterOtp(
   formData: FormData
-): Promise<{ ok: false; error: string } | never> {
+): Promise<TeacherRegisterResult> {
   const missing = requireSupabaseConfigured();
   if (missing) return missing;
 
@@ -482,7 +515,7 @@ export async function verifyTeacherRegisterOtp(
     lastName: parsed.data.lastName.trim(),
   };
 
-  const rate = checkRateLimit(`otp:verify:${schoolId}:${email}`, OTP_RATE);
+  const rate = await checkRateLimit(`otp:verify:${schoolId}:${email}`, OTP_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await assertActiveSchool(schoolId);
@@ -504,7 +537,7 @@ export async function verifyTeacherRegisterOtp(
     });
   }
 
-  const run = (async (): Promise<{ ok: false; error: string } | void> => {
+  const run = (async (): Promise<TeacherRegisterResult> => {
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.auth.verifyOtp({
       email,
@@ -548,7 +581,7 @@ export async function verifyTeacherRegisterOtp(
 
   teacherRegisterVerifyInflight.set(inflightKey, run);
   try {
-    return (await run) as { ok: false; error: string } | never;
+    return await run;
   } finally {
     if (teacherRegisterVerifyInflight.get(inflightKey) === run) {
       teacherRegisterVerifyInflight.delete(inflightKey);
@@ -568,7 +601,7 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const rate = checkRateLimit(`login:admin:${parsed.data.email.toLowerCase()}`, LOGIN_RATE);
+  const rate = await checkRateLimit(`login:admin:${parsed.data.email.toLowerCase()}`, LOGIN_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   try {
@@ -603,6 +636,8 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
       resourceId: user.id,
       metadata: { role: "SUPER_ADMIN" },
     });
+
+    await warmAdminRoutes();
 
     redirect("/admin");
   } catch (err) {
@@ -660,7 +695,7 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
 
   const user = await requireUser(undefined, true, { allowMustChangePassword: true });
 
-  const rate = checkRateLimit(`password:set:${user.id}`, PASSWORD_RATE);
+  const rate = await checkRateLimit(`password:set:${user.id}`, PASSWORD_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const parsed = setPasswordSchema.safeParse({
@@ -701,7 +736,7 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
 
   const user = await requireUser();
 
-  const rate = checkRateLimit(`password:change:${user.id}`, PASSWORD_RATE);
+  const rate = await checkRateLimit(`password:change:${user.id}`, PASSWORD_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const parsed = changePasswordSchema.safeParse({
@@ -749,7 +784,7 @@ export async function changeEmailAction(formData: FormData): Promise<ActionResul
 
   const user = await requireUser();
 
-  const rate = checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
+  const rate = await checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const parsed = changeEmailSchema.safeParse({
@@ -852,7 +887,7 @@ export async function requestPasswordReset(formData: FormData): Promise<ActionRe
   if (!parsed.success) return { ok: false, error: "Invalid email address" };
 
   const email = parsed.data.email.toLowerCase();
-  const rate = checkRateLimit(`password:forgot:${email}`, RECOVERY_RATE);
+  const rate = await checkRateLimit(`password:forgot:${email}`, RECOVERY_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   // Do not reveal whether the account exists. Skip reset for synthetic emails.
@@ -902,7 +937,7 @@ export async function completePasswordReset(formData: FormData): Promise<ActionR
     return { ok: false, error: "Reset session expired. Please request a new link." };
   }
 
-  const rate = checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
+  const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });

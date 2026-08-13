@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,6 +32,9 @@ const TEACHERS_UNLOCK_HELP =
 
 const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
 
+/** Kept in sync with REGISTER_PENDING_PATH in @/lib/actions/auth. */
+const REGISTER_PENDING_PATH = "/account/created";
+
 /** Mark next app shell paint to show the post-login splash (survives redirect). */
 function markPostLoginSplash() {
   try {
@@ -48,6 +52,7 @@ export function LoginForm({
   loginError?: string;
 }) {
   const [screen, setScreen] = useState<Screen>("select-role");
+  const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
   const [teachersOpen, setTeachersOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -177,21 +182,26 @@ export function LoginForm({
     startTransition(async () => {
       try {
         const res = await verifyTeacherRegisterOtp(buildRegisterFormData(true));
-        if (res && !res.ok) {
+        if (!res.ok) {
           toast.error(res.error);
           verifyRegisterLock.current = false;
           return;
         }
-        // Success redirects away; keep the lock held.
-        markPostLoginSplash();
-        resetSidebarExpandedPreference();
-      } catch (err) {
-        if (isRedirectError(err)) {
+        // Approved accounts land in the app shell (splash); pending accounts get
+        // the "Account created" page, which is a plain page and needs no splash.
+        if (res.redirectTo !== REGISTER_PENDING_PATH) {
           markPostLoginSplash();
           resetSidebarExpandedPreference();
-          throw err;
         }
+        // Navigate here rather than redirecting inside the action: the browser
+        // applies the new session cookies first, so the destination sees the
+        // session instead of bouncing back to /login.
+        // Lock stays held — the page is navigating away.
+        router.replace(res.redirectTo);
+      } catch (err) {
+        console.error("[login-form] teacher register verify failed:", err);
         verifyRegisterLock.current = false;
+        toast.error("Could not create your account. Please try again.");
       }
     });
   };

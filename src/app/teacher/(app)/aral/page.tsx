@@ -23,6 +23,7 @@ import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EnrollToAralDialog } from "@/components/aral/enroll-to-aral-dialog";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   gradeLevelIdWhere,
   parseLearnerListParams,
@@ -80,7 +81,7 @@ async function AralLearnersTable({
     isAralLearner: true,
     deletedAt: null,
     archivedAt: null,
-    ...(isSuperAdmin ? {} : { teacherId }),
+    ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
     ...sectionIdWhere(section),
   };
 
@@ -235,7 +236,7 @@ export default async function AralDashboard({
             id: list.grade,
             schoolId,
             deletedAt: null,
-            teachers: { some: { id: user.id } },
+            ...teacherGradeScope(user.id),
           },
       select: { id: true, type: true },
     });
@@ -275,7 +276,7 @@ export default async function AralDashboard({
         isAralLearner: true,
         deletedAt: null,
         archivedAt: null,
-        ...(isSuperAdmin ? {} : { teacherId: user.id }),
+        ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
         ...sectionIdWhere(list.section),
       },
     }),
@@ -298,6 +299,8 @@ export default async function AralDashboard({
           }[]
         )
       : prisma.learner.findMany({
+          // Deliberately adviser-only: `enrollLearnersToAral` is a roster write
+          // gated on the advisory grade, so the candidate list must match it.
           where: {
             gradeLevelId: actionGradeId,
             teacherId: user.id,

@@ -14,6 +14,15 @@ export type EnrollmentStatusValue = (typeof ENROLLMENT_STATUS)[number];
 export const SECTION_CLEAR = "__none__";
 
 /**
+ * Explicit "move to Floating" grade sentinel from transfer forms.
+ *
+ * Floating means no grade and no section. The per-school FLOATING `GradeLevel`
+ * row that backs it is created on demand and never offered in Grade Levels, so
+ * the form has no id to send — it sends this instead and the action resolves it.
+ */
+export const GRADE_FLOATING = "__floating__";
+
+/**
  * Transfer section field:
  * - omitted / empty → undefined (preserve previous when same-grade)
  * - `__none__` → clear sentinel
@@ -29,12 +38,28 @@ const optionalTransferSectionId = z
     return trimmed;
   });
 
+/**
+ * Transfer teacher field.
+ *
+ * Optional rather than required because the FLOATING grade has no adviser: a
+ * floating learner is precisely one with no grade and no section, so there is no
+ * teacher to name. The action still rejects a missing teacher for every real
+ * grade — only it knows the target grade's type.
+ */
+const optionalTransferTeacherId = z
+  .union([z.string(), z.undefined(), z.null()])
+  .transform((v) => {
+    if (v == null) return undefined;
+    const trimmed = String(v).trim();
+    return trimmed ? trimmed : undefined;
+  });
+
 /** SCHOOL_HEAD same-school transfer (grade / section / teacher). */
 export const transferLearnerSchema = z.object({
   learnerId: nonEmpty("Learner required"),
   targetGradeLevelId: nonEmpty("Target grade level required"),
   targetSectionId: optionalTransferSectionId,
-  targetTeacherId: nonEmpty("Target teacher required"),
+  targetTeacherId: optionalTransferTeacherId,
 });
 
 export type TransferLearnerInput = z.infer<typeof transferLearnerSchema>;

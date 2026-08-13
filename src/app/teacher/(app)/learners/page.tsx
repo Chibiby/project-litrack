@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   gradeLevelIdWhere,
   nameSearchWhere,
@@ -55,7 +56,8 @@ function learnerListWhere(opts: {
   const where: Prisma.LearnerWhereInput = {
     ...gradeLevelIdWhere(list.grade, assignedGradeIds),
     deletedAt: null,
-    ...(isSuperAdmin ? {} : { teacherId }),
+    // Learners in this teacher's care: advisory roster + ARAL designations.
+    ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
     ...sectionIdWhere(section),
     ...nameSearchWhere(list.q),
   };
@@ -97,7 +99,7 @@ async function LearnersHeaderSubtitle({
         deletedAt: null,
         archivedAt: list.filter === "archived" ? { not: null } : null,
         ...(list.filter === "aral" ? { isAralLearner: true } : {}),
-        ...(isSuperAdmin ? {} : { teacherId }),
+        ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
         ...sectionClause,
         ...nameSearchWhere(list.q),
       },
@@ -108,7 +110,7 @@ async function LearnersHeaderSubtitle({
         deletedAt: null,
         archivedAt: null,
         isAralLearner: true,
-        ...(isSuperAdmin ? {} : { teacherId }),
+        ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
       },
     }),
   ]);
@@ -277,7 +279,7 @@ export default async function TeacherLearnersPage({
             id: list.grade,
             schoolId,
             deletedAt: null,
-            teachers: { some: { id: user.id } },
+            ...teacherGradeScope(user.id),
           },
       select: { id: true, type: true },
     });

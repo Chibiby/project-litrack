@@ -62,6 +62,7 @@ describe("parseLearnerListParams", () => {
       filter: "all",
       sort: "name",
       section: "all",
+      grade: "all",
     });
   });
 

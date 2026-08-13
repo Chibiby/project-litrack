@@ -3,12 +3,14 @@
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   GRADE_LEVEL_LABELS,
   GENDER_LABELS,
   PARENT_EDUCATION_LABELS,
   GOV_BENEFIT_LABELS,
   labelReadingProfile,
+  formatEthnicity,
 } from "@/lib/constants/enum-labels";
 
 type ActionResult<T = unknown> =
@@ -47,6 +49,8 @@ const learnerExportSelect = {
   filipinoReadingProfile: true,
   governmentBenefits: true,
   parentEducation: true,
+  ethnicity: true,
+  ethnicityOther: true,
   isAralLearner: true,
   modeOfTransportation: true,
   distanceHomeToSchool: true,
@@ -66,6 +70,10 @@ function sectionFilterClause(sectionId?: string) {
   return { sectionId };
 }
 
+/**
+ * `teacherId` scopes the export to the learners in that teacher's care —
+ * their advisory roster plus any learner whose ARAL teacher they are.
+ */
 function learnerWhere(opts: {
   schoolId: string;
   teacherId?: string;
@@ -77,7 +85,7 @@ function learnerWhere(opts: {
     schoolId: opts.schoolId,
     deletedAt: null,
     archivedAt: null,
-    ...(opts.teacherId ? { teacherId: opts.teacherId } : {}),
+    ...(opts.teacherId ? teacherLearnerScope(opts.teacherId) : {}),
     ...(opts.gradeLevelId ? { gradeLevelId: opts.gradeLevelId } : {}),
     ...sectionFilterClause(opts.sectionId),
     ...(opts.aralOnly ? { isAralLearner: true } : {}),
@@ -130,6 +138,7 @@ async function buildLearnersWorkbook(
     { header: "Last name", key: "lastName", width: 14 },
     { header: "Age", key: "age", width: 8 },
     { header: "Gender", key: "gender", width: 10 },
+    { header: "Ethnicity", key: "ethnicity", width: 16 },
     { header: "Grade", key: "grade", width: 12 },
     { header: "Section", key: "section", width: 12 },
     { header: "English profile", key: "english", width: 28 },
@@ -148,6 +157,7 @@ async function buildLearnersWorkbook(
       lastName: l.lastName,
       age: l.age,
       gender: GENDER_LABELS[l.gender as keyof typeof GENDER_LABELS] ?? l.gender,
+      ethnicity: formatEthnicity(l.ethnicity, l.ethnicityOther, ""),
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
       english: labelReadingProfile(
@@ -214,12 +224,15 @@ export async function exportTeacherLearnersExcel(
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   if (filter.gradeLevelId) {
+    // Read-only export: an ARAL-only teacher reaches the grade through the
+    // learners designated to them. `learnerWhere` still narrows the rows to
+    // the learners in their care.
     const grade = await prisma.gradeLevel.findFirst({
       where: {
         id: filter.gradeLevelId,
         schoolId: user.schoolId,
         deletedAt: null,
-        teachers: { some: { id: user.id } },
+        ...teacherGradeScope(user.id),
       },
     });
     if (!grade) return { ok: false, error: "You are not assigned to this grade level" };

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
@@ -18,6 +19,7 @@ import { EmptyState } from "@/components/dashboard";
 import {
   GRADE_LEVEL_LABELS,
   GENDER_LABELS,
+  ETHNICITY_LABELS,
   PARENT_EDUCATION_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
   TRANSPORTATION_LABELS,
@@ -41,6 +43,7 @@ import {
 import { LearnerArchiveButton } from "@/components/learners/learner-archive-button";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
+import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -76,9 +79,14 @@ export default async function LearnerDetailPage({
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  const learnerFilter = isSuperAdmin
+  const learnerFilter: Prisma.LearnerWhereInput = isSuperAdmin
     ? { id: learnerId, deletedAt: null }
-    : { id: learnerId, teacherId: user.id, deletedAt: null };
+    : {
+        id: learnerId,
+        schoolId: user.schoolId ?? undefined,
+        deletedAt: null,
+        ...teacherLearnerScope(user.id),
+      };
 
   const learner = await prisma.learner.findFirst({
     where: learnerFilter,
@@ -87,6 +95,8 @@ export default async function LearnerDetailPage({
       fullName: true,
       age: true,
       gender: true,
+      ethnicity: true,
+      ethnicityOther: true,
       gradeLevelId: true,
       isAralLearner: true,
       archivedAt: true,
@@ -235,6 +245,16 @@ export default async function LearnerDetailPage({
               <p className="text-muted-foreground">Age / Gender</p>
               <p className="font-medium">
                 {learner.age} · {GENDER_LABELS[learner.gender]}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Ethnicity</p>
+              <p className="font-medium">
+                {learner.ethnicity
+                  ? learner.ethnicity === "OTHER"
+                    ? (learner.ethnicityOther ?? ETHNICITY_LABELS.OTHER)
+                    : ETHNICITY_LABELS[learner.ethnicity]
+                  : "—"}
               </p>
             </div>
             <div>

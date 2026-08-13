@@ -126,7 +126,7 @@ export async function regenerateSchoolHeadCredential(
   });
   if (!parsed.success) return { ok: false, error: "Invalid school" };
 
-  const rate = checkRateLimit(`regen:sh:${parsed.data.schoolId}`, REGEN_RATE);
+  const rate = await checkRateLimit(`regen:sh:${parsed.data.schoolId}`, REGEN_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await prisma.school.findFirst({

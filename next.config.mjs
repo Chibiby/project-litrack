@@ -1,5 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * Defaults to `.next`. Override with `NEXT_BUILD_DIST_DIR=.next-verify` to run
+   * a verification `next build` while `next dev` is running — otherwise the two
+   * fight over `.next` (EPERM on Windows) and the build clobbers the dev cache.
+   * Keep `.next-verify` out of git.
+   *
+   * Side effect: Next rewrites `tsconfig.json` and `next-env.d.ts` to reference
+   * whatever dist dir it built into, so `git checkout -- tsconfig.json
+   * next-env.d.ts` after a scratch build to drop the churn.
+   */
+  distDir: process.env.NEXT_BUILD_DIST_DIR || ".next",
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
