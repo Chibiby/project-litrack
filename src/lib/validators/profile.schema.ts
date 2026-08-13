@@ -68,11 +68,6 @@ const SPECIALIZATION = [
   "NA",
 ] as const;
 
-/** Unused since `mostSubjectHandled` left the teacher profiling flow; kept harmless. */
-const SUBJECT = [
-  "ENGLISH", "MATH", "SCIENCE", "FILIPINO", "TLE_EPP", "ARALPAN", "MAPEH", "TECHVOC", "VALUES_ED", "ABM",
-] as const;
-
 const SH_POSITION = [
   "TEACHER_I_TIC", "TEACHER_II_TIC", "TEACHER_III_TIC", "TEACHER_IV_TIC", "TEACHER_V_TIC",
   "HEAD_TEACHER_I", "HEAD_TEACHER_II", "HEAD_TEACHER_III", "HEAD_TEACHER_IV",
