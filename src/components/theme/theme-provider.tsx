@@ -19,6 +19,19 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /**
+ * Apply the theme to the DOM and persist it. Single source of truth for
+ * "a theme became active" — keeps the class and storage from drifting apart.
+ */
+function applyTheme(next: Theme): void {
+  document.documentElement.classList.toggle("dark", next === "dark");
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch {
+    // Private mode / blocked storage — the class still applied.
+  }
+}
+
+/**
  * Applies `.dark` on <html> and persists the choice.
  *
  * `ThemeScript` already set the class before first paint, so this effect is a
@@ -41,29 +54,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     const next = resolveInitialTheme(stored);
     setThemeState(next);
+    // Apply the class directly (not via applyTheme) — this is a read from
+    // storage, not a user choice, so it must not write storage back.
     document.documentElement.classList.toggle("dark", next === "dark");
     setHydrated(true);
   }, []);
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      // ignore
-    }
+    applyTheme(next);
   }, []);
 
   const toggleTheme = useCallback(() => {
     setThemeState((prev) => {
       const next: Theme = prev === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, next);
-      } catch {
-        // ignore
-      }
+      applyTheme(next);
       return next;
     });
   }, []);
