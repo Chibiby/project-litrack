@@ -30,6 +30,7 @@ describe("createIntentTracker", () => {
     expect(t.shouldPrefetch("#section")).toBe(false);
     expect(t.shouldPrefetch("https://deped.gov.ph")).toBe(false);
     expect(t.shouldPrefetch("mailto:a@b.c")).toBe(false);
+    expect(t.shouldPrefetch("//evil.com")).toBe(false);
   });
 
   it("stops once the per-page budget is spent", () => {
