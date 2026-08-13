@@ -44,7 +44,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic }: Props) {
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Change email</h2>
         <div className="space-y-1.5">

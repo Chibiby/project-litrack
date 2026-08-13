@@ -115,7 +115,7 @@ export async function SchoolHeadMetricsSection({
                 asChild
                 size="sm"
                 variant="outline"
-                className="bg-white"
+                className="bg-card"
               >
                 <Link
                   href={

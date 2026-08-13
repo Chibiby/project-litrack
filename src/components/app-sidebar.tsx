@@ -212,7 +212,7 @@ export function AppSidebar({
     const isCollapsed = opts?.collapsed ?? false;
 
     return (
-      <div className="flex h-full flex-col bg-white">
+      <div className="flex h-full flex-col bg-surface">
         <div
           className={cn(
             "flex min-h-[calc(var(--app-chrome-header-height)+1rem)] shrink-0 flex-col justify-center pt-4",
@@ -313,7 +313,7 @@ export function AppSidebar({
       {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-white lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-surface lg:flex",
           transitionsEnabled && "transition-[width] duration-200",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}

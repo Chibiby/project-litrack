@@ -180,7 +180,7 @@ export async function AdminRecentSchoolsSection() {
               variant="outline"
               size="sm"
               asChild
-              className="bg-white"
+              className="bg-card"
             >
               <Link href={`/school-head?schoolId=${school.id}`}>
                 {school.name}

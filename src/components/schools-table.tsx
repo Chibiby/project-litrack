@@ -199,7 +199,7 @@ export function SchoolsTable({
                 </p>
               </div>
             </div>
-            <div className="break-all rounded-lg border bg-white p-3 font-mono text-sm">
+            <div className="break-all rounded-lg border bg-card p-3 font-mono text-sm">
               {credential}
             </div>
             <div className="flex flex-wrap gap-2">

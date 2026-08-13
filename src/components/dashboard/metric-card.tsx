@@ -31,7 +31,7 @@ const toneStyles: Record<
     title: "text-primary-foreground/80",
     value: "text-primary-foreground",
     hint: "text-primary-foreground/70",
-    chip: "bg-white/20 text-primary-foreground",
+    chip: "bg-primary-foreground/20 text-primary-foreground",
   },
   amber: {
     card: "bg-secondary text-secondary-foreground border-secondary shadow-card",

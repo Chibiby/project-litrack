@@ -244,7 +244,7 @@ export function LoginForm({
 
   if (screen === "select-role") {
     return (
-      <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+      <Card className="rounded-xl border border-border/80 shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label htmlFor="login-school">School Name</Label>
@@ -307,7 +307,7 @@ export function LoginForm({
   }
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <button
           className="mb-2 text-xs text-muted-foreground underline"

@@ -30,7 +30,7 @@ export function CreateSchoolForm() {
               </p>
             </div>
           </div>
-          <div className="rounded-lg border bg-white p-3 font-mono text-sm break-all">
+          <div className="rounded-lg border bg-card p-3 font-mono text-sm break-all">
             {activationCredential}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -56,7 +56,7 @@ export function CreateSchoolForm() {
   }
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="pt-6">
         <form
           action={(fd) =>

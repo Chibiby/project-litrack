@@ -25,7 +25,7 @@ export default function SchoolHeadError({
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+    <main className="min-h-screen flex items-center justify-center bg-muted p-6">
       <div className="w-full max-w-md space-y-4 text-center">
         <h1 className="text-xl font-semibold tracking-tight">School Head page error</h1>
         <p className="text-sm text-muted-foreground">

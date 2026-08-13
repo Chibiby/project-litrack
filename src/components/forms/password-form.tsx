@@ -75,7 +75,7 @@ function PasswordFormChange({
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">{title}</h2>
         <AppForm
@@ -181,7 +181,7 @@ function PasswordFormSetOrReset({
   const action = mode === "set" ? setPasswordAction : completePasswordReset;
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">{title}</h2>
         <AppForm

@@ -107,7 +107,7 @@ function AppShellFallback({
             : CONTENT_OFFSET_CLASS.collapsed
         )}
       >
-        <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 shadow-sm backdrop-blur-md">
+        <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-header/90 shadow-sm backdrop-blur-md">
           <div className="flex w-full items-center gap-3 px-4 py-4 lg:gap-4 lg:px-8">
             <div className="w-8 shrink-0 lg:hidden" />
             <Button

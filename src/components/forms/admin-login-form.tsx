@@ -39,7 +39,7 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+    <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="pt-6">
         <AppForm
           form={form}

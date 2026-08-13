@@ -54,7 +54,7 @@ export default async function AuthResetPage({
         {sessionReady ? (
           <PasswordForm mode="reset" />
         ) : (
-          <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+          <Card className="rounded-xl border border-border/80 shadow-sm">
             <CardContent className="space-y-3 pt-6 text-center text-sm">
               <p className="text-destructive">{errorMessage}</p>
               <Link href="/forgot-password" className="underline hover:text-foreground">

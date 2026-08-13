@@ -68,8 +68,8 @@ export function RoleShell({
         >
           {/* Inset gutters live INSIDE the offset column so the panel stays clear of the rail. */}
           <div className="lg:p-4">
-            <div className="min-h-dvh shadow-sm lg:min-h-[calc(100dvh-2rem)] lg:rounded-xl lg:border lg:border-border/80 lg:bg-white">
-              <header className="h-[var(--app-chrome-header-height)] border-b border-border/80 bg-white lg:rounded-t-xl">
+            <div className="min-h-dvh shadow-sm lg:min-h-[calc(100dvh-2rem)] lg:rounded-xl lg:border lg:border-border/80 lg:bg-surface">
+              <header className="h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header lg:rounded-t-xl">
                 <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-8">
                   {/* Mobile: spacer for floating Sheet trigger. Desktop: collapse toggle. */}
                   <div className="w-8 shrink-0 lg:hidden" />

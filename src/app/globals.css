@@ -12,6 +12,11 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
+
+    /* Elevated chrome (shell panel, sidebar, sticky header). Distinct from
+       --card so panels can differ from content cards in dark mode. */
+    --surface: 0 0% 100%;
+    --surface-header: 0 0% 100%;
     /* Primary: saturated blue (#2563eb family) */
     --primary: 217 91% 53%;
     --primary-foreground: 0 0% 100%;
@@ -42,6 +47,10 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 41% 11%;
     --popover-foreground: 210 40% 98%;
+
+    /* Panels sit slightly above --background so the inset shell reads as raised. */
+    --surface: 222 44% 10%;
+    --surface-header: 222 42% 12%;
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 7%;
     --secondary: 38 80% 45%;

@@ -138,7 +138,7 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
                 asChild
                 size="sm"
                 variant="outline"
-                className="bg-white"
+                className="bg-card"
               >
                 <Link href={`/teacher/aral?grade=${g.id}`} prefetch={true}>
                   Complete ARAL profiling — {GRADE_LEVEL_LABELS[g.type]}

@@ -66,7 +66,7 @@ export default async function AccountCreatedPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">PROJECT LITRACK</h1>
         </div>
 
-        <Card className="rounded-xl border border-border/80 bg-white shadow-sm">
+        <Card className="rounded-xl border border-border/80 shadow-sm">
           <CardHeader>
             <CardTitle>Account created</CardTitle>
             <CardDescription>
