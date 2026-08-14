@@ -1,4 +1,4 @@
-﻿import { TableSectionSkeleton } from "@/components/loading";
+import { TableSectionSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for the schools list. Sidebar stays mounted in

@@ -1,4 +1,4 @@
-﻿import { TableSectionSkeleton } from "@/components/loading";
+import { TableSectionSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for reports. Sidebar stays mounted in RoleShell;

@@ -1,4 +1,4 @@
-﻿import { DualListCardSkeleton } from "@/components/loading";
+import { DualListCardSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for teachers. Sidebar stays mounted in RoleShell;

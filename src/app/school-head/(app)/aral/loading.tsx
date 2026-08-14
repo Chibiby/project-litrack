@@ -1,4 +1,4 @@
-﻿import { TableSectionSkeleton } from "@/components/loading";
+import { TableSectionSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for the ARAL designation list. Sidebar stays mounted in

@@ -1,4 +1,4 @@
-﻿import { TableSectionSkeleton } from "@/components/loading";
+import { TableSectionSkeleton } from "@/components/loading";
 
 /** Content-slot only — RoleShell sidebar stays mounted during soft nav. */
 export default function TeacherLearnersLoading() {

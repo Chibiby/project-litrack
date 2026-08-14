@@ -1,4 +1,4 @@
-﻿import {
+import {
   MetricsGridSkeleton,
   ChartSectionSkeleton,
 } from "@/components/loading";

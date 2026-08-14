@@ -1,4 +1,4 @@
-﻿import { ListCardSkeleton } from "@/components/loading";
+import { ListCardSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for grade levels. Sidebar stays mounted in RoleShell;
