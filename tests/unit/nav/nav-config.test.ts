@@ -3,6 +3,7 @@ import {
   flattenNavGroups,
   getNavGroups,
   resolveActiveHref,
+  resolveActiveItemId,
   resolvePageTitle,
 } from "@/lib/nav/nav-config";
 
@@ -66,6 +67,35 @@ describe("resolveActiveHref", () => {
 
   it("returns undefined for an unmatched path", () => {
     expect(resolveActiveHref("/account/set-password", items)).toBeUndefined();
+  });
+
+  it("restores plain longest-prefix matching for role roots (SUPER_ADMIN/SCHOOL_HEAD parity)", () => {
+    const adminItems = flattenNavGroups(getNavGroups("SUPER_ADMIN"));
+    expect(resolveActiveHref("/admin/settings", adminItems)).toBe("/admin");
+  });
+
+  it("still prefix-matches the teacher role root for non-nav nested routes", () => {
+    expect(resolveActiveHref("/teacher/settings/change-password", items)).toBe("/teacher");
+  });
+});
+
+describe("resolveActiveItemId", () => {
+  it("resolves the first of two colliding hrefs deterministically", () => {
+    const items = flattenNavGroups(getNavGroups("TEACHER", oneAral));
+    const id = resolveActiveItemId("/teacher/reports", items);
+    expect(id).toBe("teacher-terms-reports");
+  });
+
+  it("produces unique ids within each role's flattened nav list", () => {
+    for (const [role, grades] of [
+      ["TEACHER", oneAral],
+      ["SUPER_ADMIN", undefined],
+      ["SCHOOL_HEAD", undefined],
+    ] as const) {
+      const items = flattenNavGroups(getNavGroups(role, grades));
+      const ids = items.map((i) => i.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
   });
 });
 

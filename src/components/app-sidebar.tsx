@@ -33,7 +33,7 @@ import { Menu, Shield } from "lucide-react";
 import {
   flattenNavGroups,
   getNavGroups,
-  resolveActiveHref,
+  resolveActiveItemId,
   type NavItem,
 } from "@/lib/nav/nav-config";
 
@@ -125,7 +125,7 @@ export function AppSidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const navGroups = useMemo(() => getNavGroups(role, grades ?? []), [role, grades]);
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
-  const activeHref = resolveActiveHref(pathname, navItems);
+  const activeItemId = resolveActiveItemId(pathname, navItems);
   const roleLabel = role.toLowerCase().replaceAll("_", " ");
   const collapsed = !expanded;
 
@@ -211,9 +211,9 @@ export function AppSidebar({
           <nav aria-label="Primary" className="space-y-1">
             {navItems.map((item) => (
               <NavLink
-                key={item.href}
+                key={item.id}
                 item={item}
-                isActive={item.href === activeHref}
+                isActive={item.id === activeItemId}
                 onNavigate={onNavigate}
                 fullPrefetch={item.href === homeHref}
                 collapsed={isCollapsed}
