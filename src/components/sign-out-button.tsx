@@ -34,7 +34,7 @@ export function SignOutButton({ className }: { className?: string }) {
 
       className={cn(
 
-        "justify-start text-muted-foreground hover:text-red-700",
+        "justify-start text-muted-foreground hover:text-red-700 dark:hover:text-red-400",
 
         className ?? "w-full"
 
@@ -54,7 +54,7 @@ export function SignOutButton({ className }: { className?: string }) {
 
       ) : (
 
-        <LogOut className="mr-2 h-4 w-4 text-red-600" aria-hidden />
+        <LogOut className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" aria-hidden />
 
       )}
 

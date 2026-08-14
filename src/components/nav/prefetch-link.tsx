@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import {
   INTENT_DELAY_MS,
@@ -31,10 +31,18 @@ const PREFETCH_FULL = { kind: "full" } as NonNullable<
   Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]
 >;
 
-/** Clear the per-page-view prefetch budget (used by tests and on route change). */
+/** Clear the per-page-view prefetch budget (used by tests and, via PrefetchLink, on route change). */
 export function resetIntentBudget(): void {
   tracker.reset();
 }
+
+/**
+ * Pathname the budget was last reset for. Module-level because the tracker
+ * itself is module-level and shared by every PrefetchLink instance — a
+ * roster with 200 links must agree on "have we already reset for this
+ * navigation" rather than each instance resetting independently.
+ */
+let lastResetPathname: string | null = null;
 
 function connectionInfo(): NetworkInfo | undefined {
   if (typeof navigator === "undefined") return undefined;
@@ -58,7 +66,18 @@ export function PrefetchLink({
   ...rest
 }: PrefetchLinkProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    // Reset once per pathname change, not once per instance: many
+    // PrefetchLink instances mount/re-render on the same navigation, but
+    // the budget must only clear the first time so links that already
+    // recorded a prefetch for the new page aren't undone by a later one.
+    if (lastResetPathname === pathname) return;
+    lastResetPathname = pathname;
+    resetIntentBudget();
+  }, [pathname]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== undefined) {

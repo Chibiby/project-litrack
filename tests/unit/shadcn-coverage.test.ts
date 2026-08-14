@@ -23,6 +23,16 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * Coverage note (spec R1 names four raw element types: table, button, select,
+ * input): this guard currently enforces only `<table>` and `<button>`.
+ * Raw `<select>` (roughly two dozen) and raw `<input>` (roughly a dozen and
+ * a half) still exist across learner forms, transfer forms, and ARAL grids —
+ * converting them to shadcn primitives is a tracked follow-up, deliberately
+ * out of scope here because it touches many forms with no manual browser
+ * verification available in this session to catch a broken one. Do not read
+ * a pass here as "the app has no raw select/input elements."
+ */
 describe("shadcn coverage", () => {
   it("uses ui primitives instead of raw table and button elements", () => {
     const offenders: string[] = [];

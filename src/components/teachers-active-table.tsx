@@ -302,7 +302,7 @@ function TeachersManagedTable({
                     {row.aralLearnerCount > 0 ? (
                       <Badge
                         variant="outline"
-                        className="border-violet-200 text-violet-800"
+                        className="border-violet-200 text-violet-800 dark:text-violet-200"
                       >
                         {row.aralLearnerCount}
                       </Badge>
@@ -314,7 +314,7 @@ function TeachersManagedTable({
                     {row.profileCompleted ? (
                       <Badge variant="secondary">Profiled</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-300 text-amber-800">
+                      <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
                         Awaiting profiling
                       </Badge>
                     )}

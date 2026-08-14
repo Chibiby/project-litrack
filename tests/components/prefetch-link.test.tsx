@@ -5,6 +5,7 @@ const prefetch = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ prefetch }),
+  usePathname: () => "/teacher/reports",
 }));
 
 vi.mock("next/link", () => ({

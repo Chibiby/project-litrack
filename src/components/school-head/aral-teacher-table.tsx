@@ -227,7 +227,7 @@ export function AralTeacherTable({
                         value ? (
                           <Badge
                             variant="outline"
-                            className="border-violet-200 text-violet-800"
+                            className="border-violet-200 text-violet-800 dark:text-violet-200"
                           >
                             {teacherLabel.get(value) ?? "Assigned"}
                           </Badge>

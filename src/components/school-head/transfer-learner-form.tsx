@@ -167,7 +167,7 @@ export function TransferLearnerForm({
                 ))}
               </select>
               {gradeId && filteredTeachers.length === 0 ? (
-                <p className="text-xs text-amber-700">
+                <p className="text-xs text-amber-700 dark:text-amber-300">
                   No teacher advises a section in this grade yet. Assign an advisory
                   section on the Teachers page first.
                 </p>

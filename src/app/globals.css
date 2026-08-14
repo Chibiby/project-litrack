@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    /* Themes native form controls (select popups, checkboxes, date inputs)
+       and scrollbars to match the light/dark theme. */
+    color-scheme: light;
     /* Workspace: pale blue-gray (#eef3fa) */
     --background: 214 53% 96%;
     --foreground: 222 47% 11%;
@@ -40,6 +43,9 @@
   }
 
   .dark {
+    /* Themes native form controls (select popups, checkboxes, date inputs)
+       and scrollbars to match the light/dark theme. */
+    color-scheme: dark;
     /* Dark slate-blue */
     --background: 222 47% 7%;
     --foreground: 210 40% 98%;
