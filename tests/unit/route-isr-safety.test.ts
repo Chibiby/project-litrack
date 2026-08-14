@@ -24,7 +24,17 @@ describe("route ISR safety", () => {
     for (const file of walk(APP)) {
       const text = readFileSync(file, "utf8");
       const hasRevalidate = /export\s+const\s+revalidate\s*=/.test(text);
-      const readsSession = /require(?:School)?User\s*\(|getCurrentUser\s*\(/.test(text);
+      // Anything that makes this render vary per request, not just our auth
+      // helpers: require(School)?User/getCurrentUser are the app's own
+      // session guards; createSupabaseServerClient/createClient reach a
+      // Supabase server client that reads the request's auth cookie
+      // (auth.getUser, exchangeCodeForSession, ...); cookies()/headers() from
+      // next/headers are request-scoped reads by nature in a page.tsx or
+      // layout.tsx in this codebase.
+      const readsSession =
+        /require(?:School)?User\s*\(|getCurrentUser\s*\(|createSupabaseServerClient\s*\(|createClient\s*\(|cookies\s*\(|headers\s*\(/.test(
+          text,
+        );
       if (hasRevalidate && readsSession) {
         offenders.push(path.relative(APP, file).replace(/\\/g, "/"));
       }
