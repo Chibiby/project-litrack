@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { searchActiveLearners } from "@/lib/actions/search-learners";
@@ -103,9 +104,11 @@ export function LearnerSearchSelect({
             {value.fullName}{" "}
             <span className="text-muted-foreground">({value.gradeLabel})</span>
           </span>
-          <button
+          <Button
             type="button"
-            className="shrink-0 text-sm text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+            variant="link"
+            size="sm"
+            className="h-auto shrink-0 p-0 text-muted-foreground"
             disabled={disabled}
             onClick={() => {
               onChange(null);
@@ -115,7 +118,7 @@ export function LearnerSearchSelect({
             }}
           >
             Change
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="relative">
@@ -163,9 +166,10 @@ export function LearnerSearchSelect({
               ) : null}
               {hits.map((hit) => (
                 <li key={hit.id} role="option">
-                  <button
+                  <Button
                     type="button"
-                    className="flex w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                    variant="ghost"
+                    className="flex h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal"
                     onClick={() => {
                       onChange(hit);
                       setQuery("");
@@ -177,7 +181,7 @@ export function LearnerSearchSelect({
                     <span className="ml-1 text-muted-foreground">
                       ({hit.gradeLabel})
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

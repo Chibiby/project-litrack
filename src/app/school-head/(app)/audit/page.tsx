@@ -6,6 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { resolveSchoolContext } from "@/lib/school-context";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Surface } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
 import { ScrollText } from "lucide-react";
@@ -36,35 +45,35 @@ async function SchoolAuditTable({ schoolId }: { schoolId: string }) {
             icon={ScrollText}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="pb-2 pr-4 font-medium">When</th>
-                  <th className="pb-2 pr-4 font-medium">Action</th>
-                  <th className="pb-2 pr-4 font-medium">Resource</th>
-                  <th className="pb-2 font-medium">ID</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Surface className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Resource</TableHead>
+                  <TableHead>ID</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {logs.map((log) => (
-                  <tr key={log.id} className="border-b border-border/60">
-                    <td className="py-2 pr-4 whitespace-nowrap text-xs text-muted-foreground">
+                  <TableRow key={log.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {log.timestamp
                         .toISOString()
                         .replace("T", " ")
                         .slice(0, 19)}
-                    </td>
-                    <td className="py-2 pr-4 font-medium">{log.action}</td>
-                    <td className="py-2 pr-4">{log.resource}</td>
-                    <td className="py-2 font-mono text-xs text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="font-medium">{log.action}</TableCell>
+                    <TableCell>{log.resource}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {log.resourceId ?? "—"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Surface>
         )}
       </CardContent>
     </Card>

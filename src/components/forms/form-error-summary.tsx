@@ -2,6 +2,7 @@
 
 import { useFormContext, type FieldErrors, type FieldValues } from "react-hook-form";
 import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function flattenErrors(
@@ -63,9 +64,11 @@ export function FormErrorSummary({
           <ul className="mt-2 list-disc space-y-1 pl-4">
             {items.map((item) => (
               <li key={item.name}>
-                <button
+                <Button
                   type="button"
-                  className="text-left text-destructive underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-left text-destructive"
                   onClick={() => {
                     try {
                       setFocus(item.name as never);
@@ -79,7 +82,7 @@ export function FormErrorSummary({
                   }}
                 >
                   {item.message}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

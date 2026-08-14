@@ -309,13 +309,15 @@ export function LoginForm({
   return (
     <Card className="rounded-xl border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
-        <button
-          className="mb-2 text-xs text-muted-foreground underline"
-          onClick={goBackToSchoolSelect}
+        <Button
           type="button"
+          variant="link"
+          size="sm"
+          className="mb-2 h-auto p-0 text-xs text-muted-foreground"
+          onClick={goBackToSchoolSelect}
         >
           ← Change school
-        </button>
+        </Button>
 
         {screen === "school-head" ? (
           <>
@@ -554,20 +556,24 @@ export function LoginForm({
                   {pending ? "Creating account…" : "Create account"}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  <button
+                  <Button
                     type="button"
-                    className="underline hover:text-foreground disabled:no-underline disabled:opacity-50"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 disabled:no-underline"
                     disabled={pending || resendSeconds > 0}
                     onClick={handleResendCode}
                   >
                     {resendSeconds > 0
                       ? `Resend code in ${resendSeconds}s`
                       : "Resend code"}
-                  </button>
+                  </Button>
                   {" · "}
-                  <button
+                  <Button
                     type="button"
-                    className="underline hover:text-foreground"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0"
                     disabled={pending}
                     onClick={() => {
                       setTeacherStep("credentials");
@@ -575,7 +581,7 @@ export function LoginForm({
                     }}
                   >
                     Edit details
-                  </button>
+                  </Button>
                 </p>
               </form>
             )}
