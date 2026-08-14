@@ -64,9 +64,11 @@ export function AppHeader({
           <Menu className="h-5 w-5" aria-hidden />
         </Button>
 
-        <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
+        {/* Chrome label, not the page heading — AppShell's body <h1> is the
+            page's single top-level heading (spec a11y: one h1 per view). */}
+        <p className="truncate text-base font-semibold tracking-tight text-foreground">
           {title}
-        </h1>
+        </p>
 
         <div className="flex-1" />
 

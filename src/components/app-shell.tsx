@@ -68,6 +68,7 @@ export function AppShell({
       grades={grades}
       isSuperAdminView={isSuperAdminView}
       viewedSchoolName={viewedSchoolName}
+      hideTitle={hideTitle}
     >
       {children}
     </AppShellFallback>
@@ -85,6 +86,7 @@ function AppShellFallback({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  hideTitle,
 }: AppShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
 
@@ -117,16 +119,18 @@ function AppShellFallback({
         />
 
         <main id="main-content" className="w-full p-4 lg:p-6">
-          <div className="mb-4 lg:mb-6">
-            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
+          {!hideTitle ? (
+            <div className="mb-4 lg:mb-6">
+              <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+                {title}
+              </h1>
+              {subtitle ? (
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                  {subtitle}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

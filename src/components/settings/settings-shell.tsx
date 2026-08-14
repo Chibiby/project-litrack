@@ -79,8 +79,8 @@ export function SettingsShell({
   const subtitle = isSecurity ? securitySubtitle : profileSubtitle;
 
   return (
-    // Single padding layer inside RoleShell's inset panel (avoids double gutters).
-    <div className="w-full p-4 lg:p-8">
+    // Matches AppShell's content gutters (header is full-bleed, outside this panel).
+    <div className="w-full p-4 lg:p-6">
       <div className="mb-4 lg:mb-6">
         <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
           {title}

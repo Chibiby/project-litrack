@@ -36,13 +36,19 @@ describe("AppHeader", () => {
   it("shows the page title from the active nav item", () => {
     pathname.value = "/teacher";
     renderHeader();
-    expect(screen.getByRole("heading", { name: "Dashboard" })).not.toBeNull();
+    expect(screen.getByText("Dashboard")).not.toBeNull();
   });
 
   it("updates the title for a nested route", () => {
     pathname.value = "/teacher/learners/abc";
     renderHeader();
-    expect(screen.getByRole("heading", { name: "Learners" })).not.toBeNull();
+    expect(screen.getByText("Learners")).not.toBeNull();
+  });
+
+  it("does not render the header title as a heading (the body owns the page's h1)", () => {
+    pathname.value = "/teacher";
+    renderHeader();
+    expect(screen.queryByRole("heading", { name: "Dashboard" })).toBeNull();
   });
 
   it("renders search, notifications and the theme toggle", () => {

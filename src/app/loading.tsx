@@ -1,4 +1,4 @@
-import {
+﻿import {
   MetricsGridSkeleton,
   ChartSectionSkeleton,
 } from "@/components/loading";
@@ -15,7 +15,7 @@ export default function Loading() {
   return (
     <PostLoginLoadingBridge>
       <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">
+        <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-6">
           <div className="space-y-2">
             <Skeleton className="h-3.5 w-40" />
             <Skeleton className="h-7 w-64" />

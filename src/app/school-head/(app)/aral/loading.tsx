@@ -1,4 +1,4 @@
-import { TableSectionSkeleton } from "@/components/loading";
+﻿import { TableSectionSkeleton } from "@/components/loading";
 
 /**
  * Content-slot skeleton for the ARAL designation list. Sidebar stays mounted in
@@ -6,7 +6,7 @@ import { TableSectionSkeleton } from "@/components/loading";
  */
 export default function SchoolHeadAralLoading() {
   return (
-    <div className="w-full space-y-6 p-4 lg:p-8">
+    <div className="w-full space-y-6 p-4 lg:p-6">
       <TableSectionSkeleton rows={8} columns={5} />
     </div>
   );
