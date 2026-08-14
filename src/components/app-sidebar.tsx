@@ -29,29 +29,13 @@ import {
 } from "@/lib/auth/roles";
 import { SIDEBAR_WIDTH_CLASS } from "@/lib/sidebar-layout";
 import type { UserRole } from "@prisma/client";
+import { Menu, Shield } from "lucide-react";
 import {
-  LayoutDashboard,
-  School,
-  GraduationCap,
-  Users,
-  BookOpen,
-  Sparkles,
-  Menu,
-  Shield,
-  CalendarRange,
-  Megaphone,
-  ScrollText,
-  ArrowRightLeft,
-  Building2,
-  FileBarChart,
-} from "lucide-react";
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: number;
-}
+  flattenNavGroups,
+  getNavGroups,
+  resolveActiveHref,
+  type NavItem,
+} from "@/lib/nav/nav-config";
 
 interface AppSidebarProps {
   role: UserRole;
@@ -64,62 +48,6 @@ interface AppSidebarProps {
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
   transitionsEnabled?: boolean;
-}
-
-function getNavItems(role: UserRole, grades: AppSidebarProps["grades"] = []): NavItem[] {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return [
-        { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-        { label: "Schools", href: "/admin/schools", icon: School },
-        { label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
-        { label: "School years", href: "/admin/school-years", icon: CalendarRange },
-        { label: "Audit", href: "/admin/audit", icon: ScrollText },
-      ];
-    case "SCHOOL_HEAD":
-      return [
-        { label: "Dashboard", href: "/school-head", icon: LayoutDashboard },
-        { label: "School years", href: "/school-head/school-years", icon: CalendarRange },
-        { label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
-        { label: "Teachers", href: "/school-head/teachers", icon: Users },
-        { label: "ARAL", href: "/school-head/aral", icon: Sparkles },
-        { label: "Transfer", href: "/school-head/transfer", icon: ArrowRightLeft },
-        { label: "Announcements", href: "/school-head/announcements", icon: Megaphone },
-        { label: "School info", href: "/school-head/school-info", icon: Building2 },
-        { label: "Reports", href: "/school-head/reports", icon: FileBarChart },
-        { label: "Audit", href: "/school-head/audit", icon: ScrollText },
-      ];
-    case "TEACHER": {
-      const hasAral = grades?.some((g) => g.hasAral) ?? false;
-      return [
-        { label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
-        { label: "Learners", href: "/teacher/learners", icon: BookOpen },
-        {
-          label: "Aral",
-          href: "/teacher/aral",
-          icon: Sparkles,
-          badge: hasAral ? 1 : undefined,
-        },
-        { label: "Reports", href: "/teacher/reports", icon: FileBarChart },
-      ];
-    }
-    default:
-      return [];
-  }
-}
-
-/** Single active nav href: exact match preferred; otherwise longest prefix (so `/teacher` ≠ nested). */
-function resolveActiveHref(pathname: string, items: NavItem[]): string | undefined {
-  let best: string | undefined;
-  for (const item of items) {
-    const matches =
-      pathname === item.href || pathname.startsWith(`${item.href}/`);
-    if (!matches) continue;
-    if (!best || item.href.length > best.length) {
-      best = item.href;
-    }
-  }
-  return best;
 }
 
 function NavLink({
@@ -195,7 +123,8 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navItems = getNavItems(role, grades);
+  const navGroups = useMemo(() => getNavGroups(role, grades ?? []), [role, grades]);
+  const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   const activeHref = resolveActiveHref(pathname, navItems);
   const roleLabel = role.toLowerCase().replaceAll("_", " ");
   const collapsed = !expanded;
