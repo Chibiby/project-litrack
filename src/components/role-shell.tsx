@@ -1,11 +1,9 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { Menu } from "lucide-react";
 import { AppSidebar } from "./app-sidebar";
-import { Breadcrumbs } from "./breadcrumbs";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { AppHeader } from "@/components/shell/app-header";
+import type { ShellNotification } from "@/components/shell/notifications-menu";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { cn } from "@/lib/utils";
@@ -25,6 +23,7 @@ interface RoleShellProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
+  notifications?: ShellNotification[];
   children: React.ReactNode;
 }
 
@@ -40,6 +39,7 @@ export function RoleShell({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  notifications,
   children,
 }: RoleShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
@@ -67,35 +67,18 @@ export function RoleShell({
               : CONTENT_OFFSET_CLASS.collapsed
           )}
         >
-          {/* Inset gutters live INSIDE the offset column so the panel stays clear of the rail. */}
-          <div className="lg:p-4">
-            <div className="min-h-dvh shadow-sm lg:min-h-[calc(100dvh-2rem)] lg:rounded-xl lg:border lg:border-border/80 lg:bg-surface">
-              <header className="h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header lg:rounded-t-xl">
-                <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-8">
-                  {/* Mobile: spacer for floating Sheet trigger. Desktop: collapse toggle. */}
-                  <div className="w-8 shrink-0 lg:hidden" />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="hidden shrink-0 lg:inline-flex"
-                    onClick={toggle}
-                    aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-                    aria-expanded={expanded}
-                  >
-                    <Menu className="h-5 w-5" />
-                  </Button>
+          {/* Header sits OUTSIDE the content panel (spec R1): full-bleed bar,
+              then page content on the workspace ground with gutters. */}
+          <AppHeader
+            role={role}
+            grades={grades}
+            notifications={notifications}
+            expanded={expanded}
+            onToggleSidebar={toggle}
+          />
 
-                  <div className="min-w-0 flex-1">
-                    <Breadcrumbs className="min-w-0 justify-start" />
-                  </div>
-
-                  <ThemeToggle />
-                </div>
-              </header>
-
-              {children}
-            </div>
+          <div className="min-h-[calc(100dvh-var(--app-chrome-header-height))] bg-background">
+            {children}
           </div>
         </div>
       </div>

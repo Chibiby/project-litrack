@@ -1,11 +1,8 @@
 "use client";
 
-import { Menu } from "lucide-react";
 import { AppSidebar } from "./app-sidebar";
-import { Breadcrumbs } from "./breadcrumbs";
 import { useRoleShell } from "./role-shell";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { AppHeader } from "@/components/shell/app-header";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { cn } from "@/lib/utils";
@@ -21,6 +18,8 @@ interface AppShellProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
+  /** Suppresses the page title block — used by pages whose own header replaces it. */
+  hideTitle?: boolean;
 }
 
 export function AppShell({
@@ -33,27 +32,29 @@ export function AppShell({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  hideTitle,
 }: AppShellProps) {
   const inRoleShell = useRoleShell();
 
-  // Role layouts already mount sidebar + breadcrumb chrome; page only supplies
-  // the title block and main content (so loading.tsx never replaces breadcrumbs).
+  // Role layouts already mount sidebar + header chrome; page only supplies
+  // the title block and main content.
   if (inRoleShell) {
     return (
-      <div className="w-full p-4 lg:p-8">
-        <div className="mb-4 lg:mb-6">
-          <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            {title}
-          </h1>
-          {subtitle ? (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-
-        <main id="main-content">{children}</main>
-      </div>
+      <main id="main-content" className="w-full p-4 lg:p-6">
+        {!hideTitle ? (
+          <div className="mb-4 lg:mb-6">
+            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {children}
+      </main>
     );
   }
 
@@ -108,38 +109,24 @@ function AppShellFallback({
             : CONTENT_OFFSET_CLASS.collapsed
         )}
       >
-        <header className="sticky top-0 z-30 border-b border-border/80 bg-surface-header/90 shadow-sm backdrop-blur-md">
-          <div className="flex w-full items-center gap-3 px-4 py-4 lg:gap-4 lg:px-8">
-            <div className="w-8 shrink-0 lg:hidden" />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="hidden shrink-0 lg:inline-flex"
-              onClick={toggle}
-              aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-              aria-expanded={expanded}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
+        <AppHeader
+          role={role}
+          grades={grades}
+          expanded={expanded}
+          onToggleSidebar={toggle}
+        />
 
-            <div className="min-w-0 flex-1">
-              <Breadcrumbs className="mb-1 min-w-0 justify-start" />
-              <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-                {title}
-              </h1>
-              {subtitle ? (
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                  {subtitle}
-                </p>
-              ) : null}
-            </div>
-
-            <ThemeToggle className="self-start" />
+        <main id="main-content" className="w-full p-4 lg:p-6">
+          <div className="mb-4 lg:mb-6">
+            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                {subtitle}
+              </p>
+            ) : null}
           </div>
-        </header>
-
-        <main id="main-content" className="w-full p-4 lg:p-8">
           {children}
         </main>
       </div>
