@@ -49,7 +49,7 @@ export async function SchoolHeadMetricsSection({
   return (
     <>
       {!metrics?.activeYear ? (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
           No active school year. New learners will not get an Enrollment until
           you set one.{" "}
           <PrefetchLink
@@ -104,7 +104,7 @@ export async function SchoolHeadMetricsSection({
       </div>
 
       {(metrics?.setupTasks.length ?? 0) > 0 ? (
-        <Card className="mb-6 border-amber-200/80 bg-amber-50/40">
+        <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
           <CardHeader>
             <CardTitle className="text-base">Incomplete setup</CardTitle>
           </CardHeader>
@@ -183,7 +183,7 @@ export async function SchoolHeadChartsSection({
               icon={GraduationCap}
             />
           ) : (
-            <DashboardBarChart data={charts!.readingTrend} color="#7c3aed" />
+            <DashboardBarChart data={charts!.readingTrend} color="hsl(262 83% 58%)" />
           )}
         </ChartCard>
       </div>
@@ -218,7 +218,7 @@ export async function SchoolHeadChartsSection({
             <DashboardBarChart
               data={charts!.filipinoDistribution}
               height={260}
-              color="#d97706"
+              color="hsl(var(--secondary))"
             />
           )}
         </ChartCard>
@@ -309,7 +309,7 @@ export async function SchoolHeadRecentActivitySection({
             </ul>
           )}
           {(activity?.pendingAralProfiles ?? 0) > 0 ? (
-            <p className="mt-3 text-xs text-amber-800">
+            <p className="mt-3 text-xs text-amber-800 dark:text-amber-300">
               {activity!.pendingAralProfiles} ARAL learner(s) still need Sections
               B–E profiling.
             </p>

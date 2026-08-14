@@ -41,11 +41,11 @@ const toneStyles: Record<
     chip: "bg-black/10 text-secondary-foreground",
   },
   violet: {
-    card: "bg-violet-50 text-violet-700 border-violet-200 shadow-card",
-    title: "text-violet-600/80",
-    value: "text-violet-700",
-    hint: "text-violet-600/70",
-    chip: "bg-violet-100 text-violet-600",
+    card: "bg-violet-50 text-violet-700 border-violet-200 shadow-card dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300",
+    title: "text-violet-600/80 dark:text-violet-300/80",
+    value: "text-violet-700 dark:text-violet-300",
+    hint: "text-violet-600/70 dark:text-violet-300/70",
+    chip: "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300",
   },
 };
 

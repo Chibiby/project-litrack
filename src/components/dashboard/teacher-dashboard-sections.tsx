@@ -125,9 +125,9 @@ export async function TeacherGradeCardsSection(opts: TeacherOpts) {
   return (
     <>
       {pendingGrades.length > 0 ? (
-        <Card className="mb-6 border-violet-200 bg-violet-50/50">
+        <Card className="mb-6 border-violet-200 bg-violet-50/50 dark:border-violet-900/60 dark:bg-violet-950/40">
           <CardHeader>
-            <CardTitle className="text-base text-violet-800">
+            <CardTitle className="text-base text-violet-800 dark:text-violet-300">
               Quick actions
             </CardTitle>
           </CardHeader>

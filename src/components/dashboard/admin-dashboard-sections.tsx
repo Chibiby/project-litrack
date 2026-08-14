@@ -78,14 +78,14 @@ export async function AdminMetricsSection() {
 
       {(metrics?.schoolsInactive ?? 0) > 0 ||
       (metrics?.pendingTeacherApprovals ?? 0) > 0 ? (
-        <Card className="mb-6 border-amber-200/80 bg-amber-50/40">
+        <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-amber-700" />
+              <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
               Attention
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm text-amber-950">
+          <CardContent className="space-y-1 text-sm text-amber-950 dark:text-amber-100">
             {(metrics?.schoolsInactive ?? 0) > 0 ? (
               <p>{metrics!.schoolsInactive} inactive school(s).</p>
             ) : null}
@@ -144,7 +144,7 @@ export async function AdminChartsSection() {
         ) : (
           <DashboardLineChart
             data={activity!.activityByDay}
-            color="#d97706"
+            color="hsl(var(--secondary))"
           />
         )}
       </ChartCard>
@@ -161,7 +161,7 @@ export async function AdminRecentSchoolsSection() {
   }
 
   return (
-    <Card className="mb-6 border-amber-200/80 bg-amber-50/40">
+    <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <School className="h-5 w-5 text-primary" />

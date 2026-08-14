@@ -156,16 +156,6 @@ export async function getAdminRecentSchools() {
   );
 }
 
-/** @deprecated Prefer section fetchers; kept as composer for compatibility. */
-export async function getAdminDashboardStats() {
-  const [metrics, activity, recentSchools] = await Promise.all([
-    getAdminMetricCounts(),
-    getAdminActivitySeries(),
-    getAdminRecentSchools(),
-  ]);
-  return { ...metrics, ...activity, recentSchools };
-}
-
 // ─── School Head section fetchers ───────────────────────────────────────────
 
 export async function getSchoolHeadMetricCounts(schoolId: string) {
@@ -390,15 +380,6 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
   );
 }
 
-/** @deprecated Prefer section fetchers; kept as composer for compatibility. */
-export async function getSchoolHeadDashboardStats(schoolId: string) {
-  const [metrics, charts, activity] = await Promise.all([
-    getSchoolHeadMetricCounts(schoolId),
-    getSchoolHeadCharts(schoolId),
-    getSchoolHeadRecentActivity(schoolId),
-  ]);
-  return { ...metrics, ...charts, ...activity };
-}
 
 // ─── Teacher section fetchers ───────────────────────────────────────────────
 
@@ -723,20 +704,3 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
   );
 }
 
-/** @deprecated Prefer section fetchers; kept as composer for compatibility. */
-export async function getTeacherDashboardStats(opts: TeacherOpts) {
-  const [shellGrades, metrics, gradeBreakdown, gradeCards] = await Promise.all([
-    getTeacherShellGrades(opts),
-    getTeacherMetricCounts(opts),
-    getTeacherGradeChart(opts),
-    getTeacherGradeCards(opts),
-  ]);
-
-  return {
-    shellGrades,
-    gradeIds: shellGrades.map((g) => g.id),
-    ...metrics,
-    gradeBreakdown,
-    gradeCards,
-  };
-}
