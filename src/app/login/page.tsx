@@ -2,7 +2,11 @@ import { listSchoolsWithTeacherStatus } from "@/lib/actions/school";
 import { LoginForm } from "@/components/forms/login-form";
 import Image from "next/image";
 
-export const dynamic = "force-dynamic";
+/**
+ * Public route — renders no session data, so a shared Full Route Cache entry
+ * is safe. One hour: the copy changes only on deploy, and a deploy busts it.
+ */
+export const revalidate = 3600;
 
 type LoginPageProps = {
   searchParams: Promise<{ error?: string }>;
