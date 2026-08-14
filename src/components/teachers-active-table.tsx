@@ -302,7 +302,7 @@ function TeachersManagedTable({
                     {row.aralLearnerCount > 0 ? (
                       <Badge
                         variant="outline"
-                        className="border-violet-300 text-violet-800"
+                        className="border-violet-200 text-violet-800"
                       >
                         {row.aralLearnerCount}
                       </Badge>
