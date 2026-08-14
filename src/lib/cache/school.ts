@@ -21,7 +21,7 @@ export const getSchoolName = cache(
       {
         keyParts: ["school-name", schoolId],
         tags: [schoolNameTag(schoolId)],
-        revalidate: 300,
+        profile: "static",
       }
     );
   }

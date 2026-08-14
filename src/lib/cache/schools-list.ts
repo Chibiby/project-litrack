@@ -108,7 +108,7 @@ export function getSchoolsListPage(
         `r:${region}`,
       ],
       tags: [schoolsList],
-      revalidate: 60,
+      profile: "reference",
     }
   );
 }

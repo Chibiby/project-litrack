@@ -81,7 +81,7 @@ export async function getAdminMetricCounts() {
     {
       keyParts: ["admin-metric-counts"],
       tags: [adminDashboard],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -134,7 +134,7 @@ export async function getAdminActivitySeries() {
     {
       keyParts: ["admin-activity-series-v2"],
       tags: [adminDashboard],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -151,7 +151,7 @@ export async function getAdminRecentSchools() {
     {
       keyParts: ["admin-recent-schools"],
       tags: [adminDashboard, schoolsList],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -262,7 +262,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
     {
       keyParts: ["school-head-metric-counts", schoolId],
       tags: [schoolDashboard(schoolId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -348,7 +348,7 @@ export async function getSchoolHeadCharts(schoolId: string) {
     {
       keyParts: ["school-head-charts-v2", schoolId],
       tags: [schoolDashboard(schoolId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -385,7 +385,7 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
     {
       keyParts: ["school-head-recent-activity", schoolId],
       tags: [schoolDashboard(schoolId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -588,7 +588,7 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
         String(isSuperAdmin),
       ],
       tags: [teacherDashboard(teacherId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -632,7 +632,7 @@ export async function getTeacherGradeChart(
         String(isSuperAdmin),
       ],
       tags: [teacherDashboard(teacherId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
@@ -718,7 +718,7 @@ export async function getTeacherGradeCards(opts: TeacherOpts) {
         String(isSuperAdmin),
       ],
       tags: [teacherDashboard(teacherId)],
-      revalidate: 60,
+      profile: "aggregate",
     }
   );
 }
