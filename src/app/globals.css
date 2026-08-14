@@ -38,8 +38,13 @@
     --input: 214 32% 88%;
     --ring: 217 91% 53%;
     --radius: 0.75rem;
-    /* Shared sticky header + sidebar brand height (toolbar ~h-12; logo h-10) */
-    --app-chrome-header-height: 3rem;
+    /* ARAL violet accent (design mock #6D4AE0 — blue-leaning, hue 255). */
+    --violet: 255 75% 60%;
+    --violet-foreground: 0 0% 100%;
+    --violet-soft: 255 100% 97%;
+    --violet-soft-foreground: 255 60% 40%;
+    /* Shared header + sidebar brand height (toolbar h-16; logo h-10) */
+    --app-chrome-header-height: 4rem;
   }
 
   .dark {
@@ -70,6 +75,10 @@
     --border: 217 33% 18%;
     --input: 217 33% 18%;
     --ring: 217 91% 60%;
+    --violet: 255 80% 70%;
+    --violet-foreground: 255 60% 12%;
+    --violet-soft: 255 45% 17%;
+    --violet-soft-foreground: 255 85% 88%;
   }
 }
 
@@ -114,8 +123,8 @@
 
 /* Custom: violet section highlight (ARAL Update Data) — keep for ARAL profiling */
 .violet-section {
-  background: linear-gradient(180deg, hsl(262 100% 99%), hsl(262 96% 97%));
-  border-left: 4px solid hsl(262 83% 58%);
+  background: hsl(var(--violet-soft));
+  border-left: 4px solid hsl(var(--violet));
 }
 
 /* Printable reports → browser Print / Save as PDF */

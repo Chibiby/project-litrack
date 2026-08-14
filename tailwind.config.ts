@@ -51,18 +51,22 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        /* Violet scale kept for ARAL-specific UI (default Tailwind amber remains) */
+        /* ARAL accent. DEFAULT/soft are theme-aware; numbered steps stay
+           static so existing violet-200 / violet-950 utilities keep working. */
         violet: {
-          DEFAULT: "hsl(262 83% 58%)",
-          50: "hsl(262 100% 97%)",
-          100: "hsl(262 96% 93%)",
-          200: "hsl(262 90% 88%)",
-          500: "hsl(262 83% 58%)",
-          600: "hsl(262 72% 50%)",
-          700: "hsl(262 68% 42%)",
-          800: "hsl(262 65% 35%)",
-          900: "hsl(262 60% 26%)",
-          950: "hsl(262 55% 17%)",
+          DEFAULT: "hsl(var(--violet))",
+          foreground: "hsl(var(--violet-foreground))",
+          soft: "hsl(var(--violet-soft))",
+          "soft-foreground": "hsl(var(--violet-soft-foreground))",
+          50: "hsl(255 100% 97%)",
+          100: "hsl(255 96% 94%)",
+          200: "hsl(255 92% 89%)",
+          500: "hsl(255 75% 60%)",
+          600: "hsl(255 68% 53%)",
+          700: "hsl(255 62% 45%)",
+          800: "hsl(255 58% 37%)",
+          900: "hsl(255 54% 28%)",
+          950: "hsl(255 50% 18%)",
         },
       },
       borderRadius: {
