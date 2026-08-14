@@ -42,9 +42,10 @@ describe("route ISR safety", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("marks the public routes as revalidating", () => {
-    // Only login/page.tsx made the cut from the brief's four candidates.
-    // Excluded, and why (Task 9 session-freedom audit):
+  it("has no route-level ISR, because the only session-free candidate reads searchParams", () => {
+    // Route-level ISR (`export const revalidate`) is currently unused across
+    // the whole app. It was tried once: login/page.tsx is the only public,
+    // session-free page in the app (Task 9 audit) —
     //  - pending-approval/page.tsx: calls getCurrentUser() and renders the
     //    user's email and school name — per-user, must stay force-dynamic.
     //  - account/created/page.tsx: calls getCurrentUser() and renders the
@@ -53,11 +54,23 @@ describe("route ISR safety", () => {
     //    exchanges the caller's auth cookie (auth.getUser /
     //    exchangeCodeForSession) on every request — inherently per-request,
     //    never cacheable.
-    const publicPages = ["login/page.tsx"];
-    for (const rel of publicPages) {
-      const text = readFileSync(path.join(APP, rel), "utf8");
-      expect(text, rel).toMatch(/export\s+const\s+revalidate\s*=\s*\d+/);
-      expect(text, rel).not.toMatch(/export\s+const\s+dynamic\s*=\s*"force-dynamic"/);
+    // But login/page.tsx reads `searchParams` (for the `?error` toast), which
+    // forces dynamic rendering regardless of a `revalidate` export — the
+    // build confirmed it ships as `ƒ (Dynamic)`, not `● (ISR)`. So the
+    // export was removed as inert configuration (Task 12 follow-up).
+    //
+    // If you're here because you made some route genuinely static — e.g. by
+    // moving its `searchParams`/cookie/session read out of the server
+    // component — update this test to allow that specific file rather than
+    // deleting the check. It exists so a future `revalidate` export gets
+    // verified to actually take effect, not just assumed to.
+    const offenders: string[] = [];
+    for (const file of walk(APP)) {
+      const text = readFileSync(file, "utf8");
+      if (/export\s+const\s+revalidate\s*=/.test(text)) {
+        offenders.push(path.relative(APP, file).replace(/\\/g, "/"));
+      }
     }
+    expect(offenders).toEqual([]);
   });
 });

@@ -3,10 +3,17 @@ import { LoginForm } from "@/components/forms/login-form";
 import Image from "next/image";
 
 /**
- * Public route — renders no session data, so a shared Full Route Cache entry
- * is safe. One hour: the copy changes only on deploy, and a deploy busts it.
+ * Not ISR, despite being a public route. This page reads `searchParams`
+ * (for the `?error` toast), which opts it into dynamic rendering no matter
+ * what the segment config says — a `revalidate` export here builds as
+ * `ƒ (Dynamic)` and does nothing.
+ *
+ * Making it genuinely static would mean moving the `searchParams` read into
+ * the client LoginForm behind a Suspense boundary. That is viable but changes
+ * behaviour: the school list would be baked at build and up to an hour stale,
+ * so a newly-created school could not be selected by its teachers until the
+ * next revalidation. Deliberately not done — see docs/superpowers/plans/.
  */
-export const revalidate = 3600;
 
 type LoginPageProps = {
   searchParams: Promise<{ error?: string }>;
