@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/tooltip";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { UserAccountMenu } from "@/components/user-account-menu";
+import { SignOutButton } from "@/components/sign-out-button";
+import { logoutAction } from "@/lib/actions/auth";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import {
   roleHomePath,
@@ -70,21 +72,21 @@ function NavLink({
       {...(fullPrefetch ? { prefetch: true as const } : {})}
       onClick={onNavigate}
       aria-label={collapsed ? item.label : undefined}
+      aria-current={isActive ? "page" : undefined}
       className={cn(
-        "relative flex items-center rounded-xl text-sm font-medium transition-colors",
+        "relative flex items-center rounded-lg text-sm font-medium transition-colors",
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
         isActive
-          ? "bg-primary/10 text-primary"
+          ? "bg-violet-soft text-violet-soft-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >
-      {isActive && !collapsed && (
-        <span
-          aria-hidden
-          className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary"
-        />
-      )}
-      <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0",
+          isActive ? "text-violet-soft-foreground" : "text-muted-foreground"
+        )}
+      />
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {item.badge ? (
         collapsed ? (
@@ -93,7 +95,7 @@ function NavLink({
             className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-violet"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-white">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-violet-foreground">
             {item.badge}
           </span>
         )
@@ -203,26 +205,30 @@ export function AppSidebar({
         </div>
 
         <ScrollArea className={cn("flex-1 pb-5 pt-2", isCollapsed ? "px-1.5" : "px-3")}>
-          {!isCollapsed && (
-            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-              Menu
-            </p>
-          )}
-          <nav aria-label="Primary" className="space-y-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.id}
-                item={item}
-                isActive={item.id === activeItemId}
-                onNavigate={onNavigate}
-                fullPrefetch={item.href === homeHref}
-                collapsed={isCollapsed}
-              />
+          <nav aria-label="Primary" className="space-y-5">
+            {navGroups.map((group, groupIndex) => (
+              <div key={group.label ?? `group-${groupIndex}`} className="space-y-1">
+                {group.label && !isCollapsed ? (
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                    {group.label}
+                  </p>
+                ) : null}
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.id}
+                    item={item}
+                    isActive={item.id === activeItemId}
+                    onNavigate={onNavigate}
+                    fullPrefetch={item.href === homeHref}
+                    collapsed={isCollapsed}
+                  />
+                ))}
+              </div>
             ))}
           </nav>
         </ScrollArea>
 
-        <div className={cn("shrink-0 py-3", isCollapsed ? "px-1.5" : "px-3")}>
+        <div className={cn("shrink-0 space-y-1 py-3", isCollapsed ? "px-1.5" : "px-3")}>
           <UserAccountMenu
             role={accountRole}
             userName={userName}
@@ -232,6 +238,15 @@ export function AppSidebar({
             collapsed={isCollapsed}
             className={isCollapsed ? "w-full justify-center" : "w-full justify-start"}
           />
+          <form action={logoutAction}>
+            <SignOutButton
+              className={cn(
+                "w-full text-muted-foreground hover:text-foreground",
+                isCollapsed ? "justify-center px-2" : "justify-start px-3"
+              )}
+              iconOnly={isCollapsed}
+            />
+          </form>
         </div>
       </div>
     );
