@@ -8,7 +8,7 @@ import { Surface } from "@/components/ui/surface";
  */
 function StatSkeleton() {
   return (
-    <Surface as="section" className="p-5">
+    <Surface as="section" className="p-5" data-slot="stat-card-skeleton">
       <div className="flex items-center gap-3">
         <Skeleton className="size-11 rounded-xl" />
         <Skeleton className="h-4 w-24" />

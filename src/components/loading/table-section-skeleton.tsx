@@ -14,7 +14,7 @@ export function TableSectionSkeleton({
   className?: string;
 }) {
   return (
-    <Surface className={className} aria-hidden>
+    <Surface className={className} aria-hidden data-slot="table-skeleton">
       {showToolbar ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
           <Skeleton className="h-5 w-[180px]" />

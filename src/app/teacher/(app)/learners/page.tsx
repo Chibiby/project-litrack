@@ -11,7 +11,10 @@ import {
 import { LearnerStatCards } from "@/components/learners/learner-stat-cards";
 import { LearnerAddMenu } from "@/components/learners/learner-add-menu";
 import { EmptyState } from "@/components/dashboard";
-import { TableSectionSkeleton } from "@/components/loading";
+import {
+  LearnerStatCardsSkeleton,
+  LearnerTableSkeleton,
+} from "@/components/learners/learner-roster-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
@@ -319,7 +322,7 @@ export default async function TeacherLearnersPage({
         />
       ) : (
         <>
-          <Suspense fallback={<StatCardRowSkeleton />}>
+          <Suspense fallback={<LearnerStatCardsSkeleton />}>
             <LearnerStatCards
               assignedGradeIds={assignedGradeIds}
               teacherId={user.id}
@@ -328,7 +331,7 @@ export default async function TeacherLearnersPage({
           </Suspense>
 
           <div className="mt-4">
-            <Suspense fallback={<TableSectionSkeleton rows={8} columns={7} />}>
+            <Suspense fallback={<LearnerTableSkeleton />}>
               <LearnersBody
                 assignedGrades={assignedGrades}
                 schoolId={schoolId}
@@ -342,16 +345,5 @@ export default async function TeacherLearnersPage({
         </>
       )}
     </AppShell>
-  );
-}
-
-/** Holds the four-card row's height so the table below does not jump on load. */
-function StatCardRowSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {[0, 1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-[10.5rem] rounded-xl" />
-      ))}
-    </div>
   );
 }
