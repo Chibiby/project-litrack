@@ -119,8 +119,11 @@ function firePrefetches(
 }
 
 /**
- * Full-screen post-login splash. Shows only when `litrack:post-login` is set
- * (read-and-cleared on mount). Portaled to document.body at z-9999 so RoleShell
+ * Full-screen ARAL splash. Shows once per document load — after a login, and
+ * on every hard navigation (reload, Ctrl+Shift+R, a pasted URL) — through
+ * `consumePostLoginFlag`, which reads the login flag and the module-scoped
+ * boot latch together. Soft navigations keep the bundle alive, so it never
+ * fires on in-app movement. Portaled to document.body at z-9999 so RoleShell
  * chrome cannot contain/clip it; app hydrates underneath.
  *
  * Timing: the buildup (logo + shelf + phrases) runs for at least

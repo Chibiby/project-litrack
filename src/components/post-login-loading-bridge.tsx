@@ -8,8 +8,10 @@ const CREAM = "#FDFBF5";
 /**
  * Wraps role-home `loading.tsx` skeletons.
  *
- * Post-login hard navigations: paint a cream full-screen cover (no dashboard
- * skeleton flash) until `PostLoginSplash` takes over at z-9999.
+ * Hard navigations — a login redirect, a reload, Ctrl+Shift+R: paint a cream
+ * full-screen cover (no skeleton flash) until `PostLoginSplash` takes over at
+ * z-9999. The cream matches the splash's own background, so the handover from
+ * cover to splash is invisible.
  *
  * In-app soft navigations: `useLayoutEffect` clears the boot cover before
  * paint when the flag/latch is absent, so skeletons still show as usual.
