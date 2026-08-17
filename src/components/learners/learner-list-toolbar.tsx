@@ -1,15 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Filter } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,17 +10,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AddLearnerDialog } from "@/components/learners/add-learner-dialog";
 import type {
   LearnerFormGradeOption,
   LearnerFormSectionOption,
 } from "@/components/forms/learner-form";
 import type {
-  LearnerListFilter,
-  LearnerListGradeFilter,
+  LearnerAralStatusFilter,
+  LearnerGenderFilter,
   LearnerListSectionFilter,
-  LearnerListSort,
 } from "@/lib/learners/pagination";
+
+/**
+ * The roster toolbar, to the approved comp: one wide search field on the left,
+ * then the three facet dropdowns, then the bulk action menu hard right.
+ *
+ * The comp's Filter and Export buttons are gone by direction — every facet the
+ * popover used to hide is now a visible dropdown, so a second filter affordance
+ * would only duplicate them.
+ */
 
 export type SectionOption = { id: string; name: string };
 
@@ -36,8 +36,6 @@ export type LearnerGradeOption = {
   label: string;
 };
 
-export type { LearnerListGradeFilter };
-
 export type LearnerListAddLearnerProps = {
   gradeLevelId: string;
   grades: LearnerFormGradeOption[];
@@ -45,30 +43,22 @@ export type LearnerListAddLearnerProps = {
 };
 
 type Props = {
-  /** List route base — defaults to combined multi-grade path. */
   basePath?: string;
-  filter: LearnerListFilter;
-  sort: LearnerListSort;
-  /** Active grade filter (`all` or grade id). */
-  grade?: LearnerListGradeFilter;
   section: LearnerListSectionFilter;
-  grades?: LearnerGradeOption[];
   sections: SectionOption[];
+  gender: LearnerGenderFilter;
+  aralStatus: LearnerAralStatusFilter;
   schoolId?: string;
-  /** Current URL `q` — preserved on filter changes. */
+  /** Current URL `q` — preserved when a facet changes. */
   q?: string;
+  /** Current rows-per-page — preserved when a facet changes. */
+  perPage?: number;
   searchValue: string;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;
-  /** When set, mounts Add learner at the right end of the bar. */
-  addLearner?: LearnerListAddLearnerProps | null;
+  /** The bulk action menu, owned by the list so it can see the selection. */
+  bulkActions?: React.ReactNode;
 };
-
-const STATUS_OPTIONS: { value: LearnerListFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "aral", label: "ARAL" },
-  { value: "archived", label: "Archived" },
-];
 
 function buildHref(
   path: string,
@@ -82,59 +72,89 @@ function buildHref(
   return qs ? `${path}?${qs}` : path;
 }
 
+/**
+ * Facet control: a small caption stacked over the current value, matching the
+ * comp. `line-clamp-none` undoes SelectTrigger's single-line clamp, which would
+ * otherwise collapse the two rows into one.
+ */
+function FacetSelect({
+  id,
+  label,
+  value,
+  onValueChange,
+  children,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger
+        id={id}
+        aria-label={label}
+        className="h-auto w-full min-w-[8.5rem] gap-2 py-1.5 sm:w-auto [&>span]:line-clamp-none"
+      >
+        <span className="flex flex-col items-start text-left">
+          <span className="text-[11px] font-normal leading-tight text-muted-foreground">
+            {label}
+          </span>
+          <span className="text-sm font-medium leading-tight text-foreground">
+            <SelectValue />
+          </span>
+        </span>
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  );
+}
+
 export function LearnerListToolbar({
   basePath = "/teacher/learners",
-  filter,
-  sort,
-  grade = "all",
   section,
-  grades = [],
   sections,
+  gender,
+  aralStatus,
   schoolId,
   q = "",
+  perPage,
   searchValue,
   onSearchChange,
   onSearchSubmit,
-  addLearner = null,
+  bulkActions,
 }: Props) {
   const router = useRouter();
-  const showGrade = grades.length > 1;
-  const showSection = sections.length > 0;
-  const filterActive =
-    filter !== "all" ||
-    sort !== "name" ||
-    grade !== "all" ||
-    section !== "all";
 
   function navigate(next: {
-    filter?: LearnerListFilter;
-    sort?: LearnerListSort;
-    grade?: LearnerListGradeFilter;
     section?: LearnerListSectionFilter;
+    gender?: LearnerGenderFilter;
+    aralStatus?: LearnerAralStatusFilter;
   }) {
-    const nextFilter = next.filter ?? filter;
-    const nextSort = next.sort ?? sort;
-    const nextGrade = next.grade ?? grade;
     const nextSection = next.section ?? section;
-    const gradeChanged = nextGrade !== grade;
+    const nextGender = next.gender ?? gender;
+    const nextAralStatus = next.aralStatus ?? aralStatus;
 
     router.push(
       buildHref(basePath, {
         schoolId,
         q: q.trim() || undefined,
-        filter: nextFilter !== "all" ? nextFilter : undefined,
-        sort: nextSort !== "name" ? nextSort : undefined,
-        grade: nextGrade !== "all" ? nextGrade : undefined,
-        // Section IDs are grade-scoped — drop on grade change.
-        section:
-          gradeChanged || nextSection === "all" ? undefined : nextSection,
+        section: nextSection !== "all" ? nextSection : undefined,
+        gender: nextGender !== "all" ? nextGender : undefined,
+        aralStatus: nextAralStatus !== "all" ? nextAralStatus : undefined,
+        perPage: perPage ? String(perPage) : undefined,
       })
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-1 gap-2">
+    <div className="flex flex-col gap-3 border-b border-border/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative w-full lg:max-w-sm">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -145,175 +165,58 @@ export function LearnerListToolbar({
             }
           }}
           placeholder="Search by name…"
-          className="max-w-xs"
+          className="pl-9"
           aria-label="Search learners by name"
         />
-        <Button type="button" variant="secondary" size="sm" onClick={onSearchSubmit}>
-          Search
-        </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-        <Popover modal>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="relative"
-              aria-label="Filter learners"
-            >
-              <Filter className="h-4 w-4" aria-hidden />
-              Filter
-              {filterActive && (
-                <span
-                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary"
-                  aria-hidden
-                />
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-64 space-y-3 p-3">
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="learner-filter-status"
-                className="text-xs text-muted-foreground"
-              >
-                Status
-              </Label>
-              <Select
-                value={filter}
-                onValueChange={(value) =>
-                  navigate({ filter: value as LearnerListFilter })
-                }
-              >
-                <SelectTrigger
-                  id="learner-filter-status"
-                  className="h-8"
-                  aria-label="Filter by status"
-                >
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="learner-filter-sort"
-                className="text-xs text-muted-foreground"
-              >
-                Sort
-              </Label>
-              <Select
-                value={sort}
-                onValueChange={(value) =>
-                  navigate({ sort: value as LearnerListSort })
-                }
-              >
-                <SelectTrigger
-                  id="learner-filter-sort"
-                  className="h-8"
-                  aria-label="Sort learners"
-                >
-                  <SelectValue placeholder="Name" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="age">Age</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {showGrade && (
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="learner-filter-grade"
-                  className="text-xs text-muted-foreground"
-                >
-                  Grade
-                </Label>
-                <Select
-                  value={grade === "all" ? "all" : grade}
-                  onValueChange={(value) =>
-                    navigate({
-                      grade: value === "all" ? "all" : value,
-                    })
-                  }
-                >
-                  <SelectTrigger
-                    id="learner-filter-grade"
-                    className="h-8"
-                    aria-label="Filter by grade"
-                  >
-                    <SelectValue placeholder="All grades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All grades</SelectItem>
-                    {grades.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {showSection && (
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="learner-filter-section"
-                  className="text-xs text-muted-foreground"
-                >
-                  Section
-                </Label>
-                <Select
-                  value={section === "all" ? "all" : section}
-                  onValueChange={(value) =>
-                    navigate({
-                      section:
-                        value === "all"
-                          ? "all"
-                          : (value as LearnerListSectionFilter),
-                    })
-                  }
-                >
-                  <SelectTrigger
-                    id="learner-filter-section"
-                    className="h-8"
-                    aria-label="Filter by section"
-                  >
-                    <SelectValue placeholder="All sections" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All sections</SelectItem>
-                    <SelectItem value="none">No section</SelectItem>
-                    {sections.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        {addLearner ? (
-          <AddLearnerDialog
-            gradeLevelId={addLearner.gradeLevelId}
-            grades={addLearner.grades}
-            sections={addLearner.sections}
-          />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+        {sections.length > 0 ? (
+          <FacetSelect
+            id="learner-facet-section"
+            label="Section"
+            value={section === "all" ? "all" : section}
+            onValueChange={(value) =>
+              navigate({ section: value as LearnerListSectionFilter })
+            }
+          >
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="none">No section</SelectItem>
+            {sections.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </FacetSelect>
         ) : null}
+
+        <FacetSelect
+          id="learner-facet-gender"
+          label="Gender"
+          value={gender}
+          onValueChange={(value) =>
+            navigate({ gender: value as LearnerGenderFilter })
+          }
+        >
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="MALE">Male</SelectItem>
+          <SelectItem value="FEMALE">Female</SelectItem>
+        </FacetSelect>
+
+        <FacetSelect
+          id="learner-facet-aral"
+          label="ARAL Status"
+          value={aralStatus}
+          onValueChange={(value) =>
+            navigate({ aralStatus: value as LearnerAralStatusFilter })
+          }
+        >
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="with">With Profile</SelectItem>
+          <SelectItem value="without">No Profile</SelectItem>
+        </FacetSelect>
+
+        {bulkActions}
       </div>
     </div>
   );

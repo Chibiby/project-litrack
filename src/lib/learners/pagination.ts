@@ -1,7 +1,34 @@
 export const LEARNER_PAGE_SIZE = 20;
 
+/**
+ * Rows-per-page choices for the teacher roster footer. The roster defaults to
+ * 10 so the first screen matches the approved comp; every other list page keeps
+ * LEARNER_PAGE_SIZE by not passing a size through.
+ */
+export const LEARNER_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+export type LearnerPageSize = (typeof LEARNER_PAGE_SIZE_OPTIONS)[number];
+export const LEARNER_LIST_DEFAULT_PAGE_SIZE: LearnerPageSize = 10;
+
+/** Parse `?perPage=`, falling back to the roster default on anything unknown. */
+export function parseLearnerPageSize(raw: string | undefined): LearnerPageSize {
+  const n = Number.parseInt(raw ?? "", 10);
+  return (LEARNER_PAGE_SIZE_OPTIONS as readonly number[]).includes(n)
+    ? (n as LearnerPageSize)
+    : LEARNER_LIST_DEFAULT_PAGE_SIZE;
+}
+
 export type LearnerListFilter = "all" | "aral" | "archived";
 export type LearnerListSort = "name" | "age";
+
+/** Roster gender facet. `all` = no filter. */
+export type LearnerGenderFilter = "all" | "MALE" | "FEMALE";
+
+/**
+ * Roster ARAL facet — whether the learner has a saved `AralProfile` row.
+ * Distinct from `LearnerListFilter`'s `aral`, which is the `isAralLearner`
+ * designation: a learner can be designated without having been profiled yet.
+ */
+export type LearnerAralStatusFilter = "all" | "with" | "without";
 
 /** `all` = no filter; `none` = unassigned; otherwise a section id. */
 export type LearnerListSectionFilter = "all" | "none" | (string & {});
@@ -22,10 +49,17 @@ export type LearnerListParams = {
   sort: LearnerListSort;
   section: LearnerListSectionFilter;
   grade: LearnerListGradeFilter;
+  gender: LearnerGenderFilter;
+  aralStatus: LearnerAralStatusFilter;
 };
 
 const FILTERS: readonly LearnerListFilter[] = ["all", "aral", "archived"];
 const SORTS: readonly LearnerListSort[] = ["name", "age"];
+const ARAL_STATUSES: readonly LearnerAralStatusFilter[] = [
+  "all",
+  "with",
+  "without",
+];
 
 /**
  * Parse teacher grade-page list query params (?page=&q=&filter=&sort=&section=&grade=).
@@ -42,6 +76,8 @@ export function parseLearnerListParams(
     sort?: string;
     section?: string;
     grade?: string;
+    gender?: string;
+    aralStatus?: string;
   },
   pageSize: number = LEARNER_PAGE_SIZE
 ): LearnerListParams {
@@ -71,10 +107,35 @@ export function parseLearnerListParams(
     grade = gradeLower === "floating" ? "floating" : gradeRaw;
   }
 
+  // Uppercased to match the Prisma enum, so "all" can never round-trip through
+  // GENDERS — compare the two real values directly instead.
+  const genderRaw = (searchParams.gender ?? "").trim().toUpperCase();
+  const gender: LearnerGenderFilter =
+    genderRaw === "MALE" || genderRaw === "FEMALE" ? genderRaw : "all";
+
+  const aralStatusRaw = (searchParams.aralStatus ?? "all").trim().toLowerCase();
+  const aralStatus: LearnerAralStatusFilter = ARAL_STATUSES.includes(
+    aralStatusRaw as LearnerAralStatusFilter
+  )
+    ? (aralStatusRaw as LearnerAralStatusFilter)
+    : "all";
+
   const size = pageSize > 0 ? pageSize : LEARNER_PAGE_SIZE;
   const skip = (page - 1) * size;
 
-  return { page, pageSize: size, skip, take: size, q, filter, sort, section, grade };
+  return {
+    page,
+    pageSize: size,
+    skip,
+    take: size,
+    q,
+    filter,
+    sort,
+    section,
+    grade,
+    gender,
+    aralStatus,
+  };
 }
 
 /** Prisma `sectionId` clause for a parsed list section filter. */
@@ -84,6 +145,30 @@ export function sectionIdWhere(
   if (section === "all") return {};
   if (section === "none") return { sectionId: null };
   return { sectionId: section };
+}
+
+/** Prisma `gender` clause for the roster gender facet. */
+export function genderWhere(
+  gender: LearnerGenderFilter
+): { gender: "MALE" | "FEMALE" } | Record<string, never> {
+  if (gender === "all") return {};
+  return { gender };
+}
+
+/**
+ * Prisma clause for the roster ARAL facet — presence of the `AralProfile`
+ * one-to-one relation, not the `isAralLearner` designation.
+ */
+export function aralStatusWhere(
+  status: LearnerAralStatusFilter
+):
+  | { aralProfile: { isNot: null } }
+  | { aralProfile: { is: null } }
+  | Record<string, never> {
+  if (status === "all") return {};
+  return status === "with"
+    ? { aralProfile: { isNot: null } }
+    : { aralProfile: { is: null } };
 }
 
 /**

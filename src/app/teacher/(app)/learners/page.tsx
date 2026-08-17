@@ -8,15 +8,21 @@ import {
   LearnerListClient,
   type LearnerListRow,
 } from "@/components/learners/learner-list-client";
+import { LearnerStatCards } from "@/components/learners/learner-stat-cards";
+import { LearnerAddMenu } from "@/components/learners/learner-add-menu";
 import { EmptyState } from "@/components/dashboard";
 import { TableSectionSkeleton } from "@/components/loading";
+import { Skeleton } from "@/components/ui/skeleton";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
+  aralStatusWhere,
+  genderWhere,
   gradeLevelIdWhere,
   nameSearchWhere,
   parseLearnerListParams,
+  parseLearnerPageSize,
   sectionIdWhere,
   totalPages,
   type LearnerListGradeFilter,
@@ -29,11 +35,14 @@ interface TeacherLearnersPageProps {
   searchParams: Promise<{
     schoolId?: string;
     page?: string;
+    perPage?: string;
     q?: string;
     filter?: string;
     sort?: string;
     section?: string;
     grade?: string;
+    gender?: string;
+    aralStatus?: string;
   }>;
 }
 
@@ -59,6 +68,8 @@ function learnerListWhere(opts: {
     // Learners in this teacher's care: advisory roster + ARAL designations.
     ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
     ...sectionIdWhere(section),
+    ...genderWhere(list.gender),
+    ...aralStatusWhere(list.aralStatus),
     ...nameSearchWhere(list.q),
   };
 
@@ -74,52 +85,37 @@ function learnerListWhere(opts: {
   return where;
 }
 
-async function LearnersHeaderSubtitle({
+/**
+ * The add control needs the teacher's sections, which the header should not
+ * block on — it streams in beside the title while the heading paints at once.
+ */
+async function LearnersAddControl({
+  schoolId,
   assignedGradeIds,
-  teacherId,
-  isSuperAdmin,
-  list,
-  section,
-  schoolIdParam,
+  defaultGradeId,
+  gradeOptions,
 }: {
+  schoolId: string;
   assignedGradeIds: string[];
-  teacherId: string;
-  isSuperAdmin: boolean;
-  list: ReturnType<typeof parseLearnerListParams>;
-  section: LearnerListSectionFilter;
-  schoolIdParam?: string;
+  defaultGradeId: string;
+  gradeOptions: { id: string; type: string; label: string }[];
 }) {
-  const gradeClause = gradeLevelIdWhere(list.grade, assignedGradeIds);
-  const sectionClause = sectionIdWhere(section);
-
-  const [totalCount, aralCount] = await Promise.all([
-    prisma.learner.count({
-      where: {
-        ...gradeClause,
-        deletedAt: null,
-        archivedAt: list.filter === "archived" ? { not: null } : null,
-        ...(list.filter === "aral" ? { isAralLearner: true } : {}),
-        ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
-        ...sectionClause,
-        ...nameSearchWhere(list.q),
-      },
-    }),
-    prisma.learner.count({
-      where: {
-        ...gradeClause,
-        deletedAt: null,
-        archivedAt: null,
-        isAralLearner: true,
-        ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
-      },
-    }),
-  ]);
+  const sections = await prisma.section.findMany({
+    where: {
+      schoolId,
+      deletedAt: null,
+      gradeLevelId: { in: assignedGradeIds },
+    },
+    select: { id: true, name: true, gradeLevelId: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
-    <p className="text-sm text-muted-foreground">
-      {totalCount} learner{totalCount === 1 ? "" : "s"} · {aralCount} ARAL
-      {isSuperAdmin && schoolIdParam ? " (Admin View)" : ""}
-    </p>
+    <LearnerAddMenu
+      gradeLevelId={defaultGradeId}
+      grades={gradeOptions}
+      sections={sections}
+    />
   );
 }
 
@@ -149,9 +145,7 @@ async function LearnersBody({
       schoolId,
       deletedAt: null,
       gradeLevelId:
-        activeGrade === "all"
-          ? { in: assignedGradeIds }
-          : activeGrade,
+        activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
     },
     select: { id: true, name: true, gradeLevelId: true },
     orderBy: { name: "asc" },
@@ -166,8 +160,6 @@ async function LearnersBody({
     list: { ...list, grade: activeGrade },
     section,
   });
-  const orderBy: Prisma.LearnerOrderByWithRelationInput =
-    list.sort === "age" ? { age: "asc" } : { fullName: "asc" };
 
   const totalCount = await prisma.learner.count({ where });
   const pages = totalPages(totalCount, list.pageSize);
@@ -188,8 +180,10 @@ async function LearnersBody({
       gradeLevelId: true,
       gradeLevel: { select: { type: true } },
       section: { select: { id: true, name: true } },
+      // Presence only — this drives the ARAL STATUS column.
+      aralProfile: { select: { id: true } },
     },
-    orderBy,
+    orderBy: { fullName: "asc" },
     skip,
     take: list.take,
   });
@@ -200,6 +194,7 @@ async function LearnersBody({
     age: l.age,
     gender: l.gender,
     isAralLearner: l.isAralLearner,
+    hasAralProfile: l.aralProfile !== null,
     archivedAt: l.archivedAt ? l.archivedAt.toISOString() : null,
     englishReadingProfile: l.englishReadingProfile,
     filipinoReadingProfile: l.filipinoReadingProfile,
@@ -210,36 +205,25 @@ async function LearnersBody({
 
   const gradeOptions = assignedGrades.map((g) => ({
     id: g.id,
-    type: g.type,
     label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
   }));
-  const defaultGradeId =
-    activeGrade !== "all" ? activeGrade : (assignedGradeIds[0] ?? "");
 
   return (
     <LearnerListClient
       basePath="/teacher/learners"
-      filter={list.filter}
-      sort={list.sort}
       grade={activeGrade}
       section={section}
-      grades={gradeOptions.map((g) => ({ id: g.id, label: g.label }))}
+      gender={list.gender}
+      aralStatus={list.aralStatus}
+      grades={gradeOptions}
       sections={sections.map((s) => ({ id: s.id, name: s.name }))}
       schoolId={schoolIdParam}
       isSuperAdmin={isSuperAdmin}
       learners={rows}
       page={page}
+      pageSize={list.pageSize}
       totalCount={totalCount}
       q={list.q}
-      addLearner={
-        !isSuperAdmin && defaultGradeId
-          ? {
-              gradeLevelId: defaultGradeId,
-              grades: gradeOptions,
-              sections,
-            }
-          : null
-      }
     />
   );
 }
@@ -253,7 +237,8 @@ export default async function TeacherLearnersPage({
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  const list = parseLearnerListParams(sp);
+  const pageSize = parseLearnerPageSize(sp.perPage);
+  const list = parseLearnerListParams(sp, pageSize);
   const schoolId =
     (isSuperAdmin ? sp.schoolId : user.schoolId) ?? user.schoolId;
 
@@ -286,13 +271,47 @@ export default async function TeacherLearnersPage({
     if (extra) assignedGrades = [extra, ...assignedGrades];
   }
 
+  const assignedGradeIds = assignedGrades.map((g) => g.id);
+  const gradeOptions = assignedGrades.map((g) => ({
+    id: g.id,
+    type: g.type,
+    label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+  }));
+  const defaultGradeId =
+    list.grade !== "all" && assignedGradeIds.includes(list.grade)
+      ? list.grade
+      : (assignedGradeIds[0] ?? "");
+
   return (
     <AppShell
       title="Learners"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
+      hideTitle
     >
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:mb-6">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            Learners
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage and view all learners in your advisory.
+            {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
+          </p>
+        </div>
+        {!isSuperAdmin && defaultGradeId ? (
+          <Suspense fallback={<Skeleton className="h-9 w-44" />}>
+            <LearnersAddControl
+              schoolId={schoolId}
+              assignedGradeIds={assignedGradeIds}
+              defaultGradeId={defaultGradeId}
+              gradeOptions={gradeOptions}
+            />
+          </Suspense>
+        ) : null}
+      </div>
+
       {assignedGrades.length === 0 ? (
         <EmptyState
           title="No grades assigned"
@@ -300,35 +319,39 @@ export default async function TeacherLearnersPage({
         />
       ) : (
         <>
-          <div className="mb-4">
-            <Suspense
-              fallback={
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              }
-            >
-              <LearnersHeaderSubtitle
-                assignedGradeIds={assignedGrades.map((g) => g.id)}
+          <Suspense fallback={<StatCardRowSkeleton />}>
+            <LearnerStatCards
+              assignedGradeIds={assignedGradeIds}
+              teacherId={user.id}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </Suspense>
+
+          <div className="mt-4">
+            <Suspense fallback={<TableSectionSkeleton rows={8} columns={7} />}>
+              <LearnersBody
+                assignedGrades={assignedGrades}
+                schoolId={schoolId}
                 teacherId={user.id}
                 isSuperAdmin={isSuperAdmin}
-                list={list}
-                section={list.section}
                 schoolIdParam={sp.schoolId}
+                list={list}
               />
             </Suspense>
           </div>
-
-          <Suspense fallback={<TableSectionSkeleton rows={8} columns={6} />}>
-            <LearnersBody
-              assignedGrades={assignedGrades}
-              schoolId={schoolId}
-              teacherId={user.id}
-              isSuperAdmin={isSuperAdmin}
-              schoolIdParam={sp.schoolId}
-              list={list}
-            />
-          </Suspense>
         </>
       )}
     </AppShell>
+  );
+}
+
+/** Holds the four-card row's height so the table below does not jump on load. */
+function StatCardRowSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-[10.5rem] rounded-xl" />
+      ))}
+    </div>
   );
 }

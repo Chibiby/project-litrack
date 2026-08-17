@@ -9,6 +9,7 @@ import {
   learnerCreateSchema,
   learnerUpdateSchema,
   learnerIdSchema,
+  deleteLearnersSchema,
   enrollLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -480,6 +481,103 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
     teacherShell: learner.isAralLearner,
   });
   return { ok: true };
+}
+
+/**
+ * Bulk soft-delete from the roster selection bar.
+ *
+ * Sets `deletedAt`, which every learner query in the app already filters on, so
+ * the learners drop out of lists, counts, exports and reports at once. Their
+ * attendance, reading-level history and ARAL profile rows are deliberately left
+ * intact — this is the reversible delete the schema was designed for, not a
+ * cascade.
+ *
+ * The batch is all-or-nothing: if any selected id is outside the caller's
+ * school or care, nothing is deleted. A partial success here would silently
+ * misreport what the teacher just did.
+ */
+export async function deleteLearners(
+  formData: FormData
+): Promise<ActionResult<{ deleted: number }>> {
+  const user = await requireSchoolUser("TEACHER");
+  const parsed = deleteLearnersSchema.safeParse({
+    learnerIds: formData.getAll("learnerIds").map(String),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const ids = Array.from(new Set(parsed.data.learnerIds));
+  const learners = await prisma.learner.findMany({
+    where: { id: { in: ids }, deletedAt: null },
+    select: {
+      id: true,
+      schoolId: true,
+      teacherId: true,
+      aralTeacherId: true,
+      gradeLevelId: true,
+      isAralLearner: true,
+    },
+  });
+
+  if (learners.length !== ids.length) {
+    return { ok: false, error: "Some selected learners were not found" };
+  }
+  for (const learner of learners) {
+    if (learner.schoolId !== user.schoolId) {
+      return { ok: false, error: "Not found" };
+    }
+    if (!teacherCanAccessLearner(learner, user.id)) {
+      return { ok: false, error: "Not found" };
+    }
+  }
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.learner.updateMany({
+      where: { id: { in: ids } },
+      data: { deletedAt: now },
+    });
+    // End the active enrollment too, so the learner does not keep a live seat
+    // in the school year they were removed from.
+    await tx.enrollment.updateMany({
+      where: { learnerId: { in: ids }, status: "ACTIVE" },
+      data: { status: "ARCHIVED", endedAt: now },
+    });
+  });
+
+  for (const learner of learners) {
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.LEARNER_DELETE,
+      resource: "Learner",
+      resourceId: learner.id,
+      metadata: { schoolId: user.schoolId, learnerId: learner.id },
+    });
+  }
+
+  const gradeIds = Array.from(new Set(learners.map((l) => l.gradeLevelId)));
+  for (const gradeId of gradeIds) {
+    revalidatePath(`/teacher/grade/${gradeId}`);
+    revalidatePath(`/teacher/aral/${gradeId}`);
+  }
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  for (const learner of learners) {
+    revalidateLearnerScoped({
+      schoolId: learner.schoolId,
+      teacherId: learner.teacherId,
+      aralTeacherId: learner.aralTeacherId,
+      adminDashboard: true,
+      teacherShell: learner.isAralLearner,
+    });
+  }
+
+  return { ok: true, data: { deleted: learners.length } };
 }
 
 export async function toggleAralLearner(formData: FormData): Promise<ActionResult> {

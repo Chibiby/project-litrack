@@ -5,11 +5,17 @@ import {
   isPossibleDuplicate,
 } from "@/lib/learners/normalize";
 import {
+  aralStatusWhere,
+  genderWhere,
   parseLearnerListParams,
+  parseLearnerPageSize,
   sectionIdWhere,
   totalPages,
+  LEARNER_LIST_DEFAULT_PAGE_SIZE,
   LEARNER_PAGE_SIZE,
 } from "@/lib/learners/pagination";
+import { pageWindow } from "@/components/learners/learner-list-footer";
+import { learnerInitials } from "@/components/learners/learner-avatar";
 
 describe("normalizePersonName", () => {
   it("trims, lowercases, and collapses internal whitespace", () => {
@@ -63,6 +69,8 @@ describe("parseLearnerListParams", () => {
       sort: "name",
       section: "all",
       grade: "all",
+      gender: "all",
+      aralStatus: "all",
     });
   });
 
@@ -125,5 +133,70 @@ describe("totalPages", () => {
     expect(totalPages(20)).toBe(1);
     expect(totalPages(21)).toBe(2);
     expect(totalPages(40, 20)).toBe(2);
+  });
+});
+
+describe("roster gender facet", () => {
+  it("parses the two real values and falls back to all", () => {
+    expect(parseLearnerListParams({ gender: "MALE" }).gender).toBe("MALE");
+    expect(parseLearnerListParams({ gender: "female" }).gender).toBe("FEMALE");
+    expect(parseLearnerListParams({ gender: "all" }).gender).toBe("all");
+    expect(parseLearnerListParams({ gender: "xyz" }).gender).toBe("all");
+    expect(parseLearnerListParams({}).gender).toBe("all");
+  });
+
+  it("maps to a Prisma clause", () => {
+    expect(genderWhere("all")).toEqual({});
+    expect(genderWhere("MALE")).toEqual({ gender: "MALE" });
+    expect(genderWhere("FEMALE")).toEqual({ gender: "FEMALE" });
+  });
+});
+
+describe("roster ARAL profile facet", () => {
+  it("parses with/without and falls back to all", () => {
+    expect(parseLearnerListParams({ aralStatus: "with" }).aralStatus).toBe("with");
+    expect(parseLearnerListParams({ aralStatus: "WITHOUT" }).aralStatus).toBe(
+      "without"
+    );
+    expect(parseLearnerListParams({ aralStatus: "nope" }).aralStatus).toBe("all");
+    expect(parseLearnerListParams({}).aralStatus).toBe("all");
+  });
+
+  it("maps relation presence to a Prisma clause", () => {
+    expect(aralStatusWhere("all")).toEqual({});
+    expect(aralStatusWhere("with")).toEqual({ aralProfile: { isNot: null } });
+    expect(aralStatusWhere("without")).toEqual({ aralProfile: { is: null } });
+  });
+});
+
+describe("parseLearnerPageSize", () => {
+  it("accepts only the offered sizes", () => {
+    expect(parseLearnerPageSize("10")).toBe(10);
+    expect(parseLearnerPageSize("50")).toBe(50);
+    expect(parseLearnerPageSize("37")).toBe(LEARNER_LIST_DEFAULT_PAGE_SIZE);
+    expect(parseLearnerPageSize("-5")).toBe(LEARNER_LIST_DEFAULT_PAGE_SIZE);
+    expect(parseLearnerPageSize(undefined)).toBe(LEARNER_LIST_DEFAULT_PAGE_SIZE);
+  });
+});
+
+describe("pageWindow", () => {
+  it("lists every page while the run is short", () => {
+    expect(pageWindow(1, 1)).toEqual([1]);
+    expect(pageWindow(2, 5)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("collapses long runs around the current page", () => {
+    expect(pageWindow(1, 20)).toEqual([1, 2, "gap", 20]);
+    expect(pageWindow(10, 20)).toEqual([1, "gap", 9, 10, 11, "gap", 20]);
+    expect(pageWindow(20, 20)).toEqual([1, "gap", 19, 20]);
+  });
+});
+
+describe("learnerInitials", () => {
+  it("takes the first and last word, whatever the name shape", () => {
+    expect(learnerInitials("Asriel Gabby B. Andrews")).toBe("AA");
+    expect(learnerInitials("BRANDNLEE S HGOS")).toBe("BH");
+    expect(learnerInitials("Madonna")).toBe("M");
+    expect(learnerInitials("   ")).toBe("?");
   });
 });

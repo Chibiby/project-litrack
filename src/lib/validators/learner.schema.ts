@@ -214,6 +214,13 @@ export const learnerIdSchema = z.object({
 
 export type LearnerIdInput = z.infer<typeof learnerIdSchema>;
 
+/** Bulk soft-delete from the roster's selection bar. */
+export const deleteLearnersSchema = z.object({
+  learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
+});
+
+export type DeleteLearnersInput = z.infer<typeof deleteLearnersSchema>;
+
 /** Bulk enroll existing grade learners into ARAL. */
 export const enrollLearnersToAralSchema = z.object({
   gradeId: nonEmpty("Grade required"),

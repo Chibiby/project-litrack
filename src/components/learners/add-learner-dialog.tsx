@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -39,18 +40,29 @@ type Props = {
   gradeLevelId: string;
   grades: LearnerFormGradeOption[];
   sections: LearnerFormSectionOption[];
+  /** Lets the roster header square off the right edge for its split control. */
+  triggerClassName?: string;
 };
 
 /**
  * Defers the heavy LearnerForm chunk until the teacher opens "Add learner".
  */
-export function AddLearnerDialog({ gradeLevelId, grades, sections }: Props) {
+export function AddLearnerDialog({
+  gradeLevelId,
+  grades,
+  sections,
+  triggerClassName,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button type="button" size="sm" className="w-full sm:w-auto">
+        <Button
+          type="button"
+          size="sm"
+          className={cn("w-full sm:w-auto", triggerClassName)}
+        >
           <Plus className="h-4 w-4" />
           Add new learner
         </Button>

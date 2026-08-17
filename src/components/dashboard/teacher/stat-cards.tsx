@@ -36,7 +36,12 @@ export interface StatCardProps {
   hint: string;
   icon: LucideIcon;
   tone: StatTone;
-  action: { label: string; href: string };
+  /**
+   * Omit for a read-only figure. The roster's four cards describe the list
+   * directly beneath them, so a link out of the card would only point back at
+   * the page the reader is already on.
+   */
+  action?: { label: string; href: string };
 }
 
 export function StatCard({
@@ -69,17 +74,19 @@ export function StatCard({
       </p>
       <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
 
-      <PrefetchLink
-        href={action.href}
-        prefetch
-        className={cn(
-          "mt-4 inline-flex items-center gap-1.5 rounded-md text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-          LINK[tone]
-        )}
-      >
-        {action.label}
-        <ArrowRight aria-hidden className="size-4" />
-      </PrefetchLink>
+      {action ? (
+        <PrefetchLink
+          href={action.href}
+          prefetch
+          className={cn(
+            "mt-4 inline-flex items-center gap-1.5 rounded-md text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+            LINK[tone]
+          )}
+        >
+          {action.label}
+          <ArrowRight aria-hidden className="size-4" />
+        </PrefetchLink>
+      ) : null}
     </Surface>
   );
 }
