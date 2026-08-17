@@ -1,6 +1,6 @@
 import { Surface } from "@/components/ui/surface";
 import { CalendarDays } from "lucide-react";
-import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
+import { SCHOOL_TIME_ZONE, parseLocalDateKey } from "@/lib/date-keys";
 
 /**
  * The dashboard's opening line and date.
@@ -19,13 +19,16 @@ function greetingFor(hour: number): string {
 
 export function GreetingHeader({
   firstName,
-  today,
+  todayKey,
   subtitle,
 }: {
   firstName: string;
-  today: Date;
+  /** `YYYY-MM-DD`; the snapshot crosses a JSON cache, so it is never a Date. */
+  todayKey: string;
   subtitle?: string;
 }) {
+  const today = parseLocalDateKey(todayKey);
+
   const hour = Number(
     new Intl.DateTimeFormat("en-PH", {
       timeZone: SCHOOL_TIME_ZONE,
@@ -34,8 +37,12 @@ export function GreetingHeader({
     }).format(new Date())
   );
 
+  // Deliberately no timeZone here. `parseLocalDateKey` already produced the
+  // intended civil date as a runtime-local midnight, so re-projecting it into
+  // Manila would shift it a day whenever the runtime is ahead of UTC+8.
+  // The hour lookup above is the opposite case: it reads a real instant, so it
+  // does need the school's zone.
   const dateLabel = new Intl.DateTimeFormat("en-PH", {
-    timeZone: SCHOOL_TIME_ZONE,
     weekday: "long",
     month: "long",
     day: "numeric",

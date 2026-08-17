@@ -2,7 +2,11 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { teacherDashboard } from "@/lib/cache/tags";
-import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import {
+  formatLocalDateKey,
+  parseLocalDateKey,
+  schoolToday,
+} from "@/lib/date-keys";
 import {
   teacherGradeFilter,
   teacherLearnerFilter,
@@ -33,8 +37,15 @@ import {
 export type BandCount = { key: string; label: string; value: number };
 
 export type TeacherOverview = {
-  /** Local Manila civil date the whole page is keyed to. */
-  today: Date;
+  /**
+   * Local Manila civil date the whole page is keyed to, as `YYYY-MM-DD`.
+   *
+   * A string, not a Date, on purpose: this whole object crosses
+   * `unstable_cache`, which serialises to JSON, so a `Date` field would arrive
+   * back as a string and every method call on it would throw. Parse it at the
+   * point of use with `parseLocalDateKey`.
+   */
+  todayKey: string;
   weekStartKey: string;
   monthStartKey: string;
 
@@ -108,7 +119,7 @@ export async function getTeacherOverview(
       const careFilter = teacherLearnerFilter(opts);
 
       const empty: TeacherOverview = {
-        today: now,
+        todayKey: formatLocalDateKey(now),
         weekStartKey: formatLocalDateKey(weekStart),
         monthStartKey: formatLocalDateKey(monthStart),
         gradeCount: grades.length,
@@ -240,7 +251,7 @@ export async function getTeacherOverview(
       const aralGradeIds = aralGradeRows.map((g) => g.gradeLevelId);
 
       return {
-        today: now,
+        todayKey: formatLocalDateKey(now),
         weekStartKey: formatLocalDateKey(weekStart),
         monthStartKey: formatLocalDateKey(monthStart),
         gradeCount: grades.length,
@@ -358,14 +369,10 @@ export function buildDashboardTasks(
 ): DashboardTask[] {
   const tasks: DashboardTask[] = [];
 
-  const monthEnd = endOfMonth(data.today);
-  const weekEnd = endOfSchoolWeek(
-    new Date(
-      Number(data.weekStartKey.slice(0, 4)),
-      Number(data.weekStartKey.slice(5, 7)) - 1,
-      Number(data.weekStartKey.slice(8, 10))
-    )
-  );
+  // Both keys arrive as `YYYY-MM-DD` strings from the cache, never as Dates.
+  const today = parseLocalDateKey(data.todayKey);
+  const monthEnd = endOfMonth(today);
+  const weekEnd = endOfSchoolWeek(parseLocalDateKey(data.weekStartKey));
 
   tasks.push({
     id: "reading",
@@ -388,7 +395,7 @@ export function buildDashboardTasks(
     href: hrefs.attendance,
     badge:
       data.attendance.noClass > 0
-        ? dueWording(daysUntil(data.today, weekEnd))
+        ? dueWording(daysUntil(today, weekEnd))
         : data.aralLearners > 0
           ? "Complete"
           : null,

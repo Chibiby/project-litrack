@@ -10,7 +10,7 @@ import { schoolToday, formatLocalDateKey } from "@/lib/date-keys";
 
 function overview(over: Partial<TeacherOverview> = {}): TeacherOverview {
   return {
-    today: new Date(2026, 4, 13), // Wed 13 May 2026
+    todayKey: "2026-05-13", // Wed 13 May 2026
     weekStartKey: "2026-05-11", // Monday
     monthStartKey: "2026-05-01",
     gradeCount: 1,
@@ -65,6 +65,34 @@ describe("date cadence helpers", () => {
     expect(daysUntil(new Date(2026, 4, 13, 23), new Date(2026, 4, 15, 1))).toBe(2);
     expect(daysUntil(new Date(2026, 4, 15), new Date(2026, 4, 15))).toBe(0);
     expect(daysUntil(new Date(2026, 4, 16), new Date(2026, 4, 15))).toBe(-1);
+  });
+});
+
+describe("cache-boundary safety", () => {
+  /**
+   * `getTeacherOverview` returns through `cachedQuery` → `unstable_cache`,
+   * which serialises to JSON. A `Date` field would come back as a string and
+   * every date method called on it would throw at render time. These tests
+   * exercise the snapshot the way the cache actually hands it back.
+   */
+  it("carries no Date instances — they would not survive the cache", () => {
+    const walk = (value: unknown, path: string): string[] => {
+      if (value instanceof Date) return [path];
+      if (Array.isArray(value)) {
+        return value.flatMap((v, i) => walk(v, `${path}[${i}]`));
+      }
+      if (value && typeof value === "object") {
+        return Object.entries(value).flatMap(([k, v]) => walk(v, `${path}.${k}`));
+      }
+      return [];
+    };
+    expect(walk(overview(), "overview")).toEqual([]);
+  });
+
+  it("builds the same tasks after a JSON round-trip", () => {
+    const direct = buildDashboardTasks(overview(), HREFS);
+    const revived = JSON.parse(JSON.stringify(overview())) as TeacherOverview;
+    expect(buildDashboardTasks(revived, HREFS)).toEqual(direct);
   });
 });
 

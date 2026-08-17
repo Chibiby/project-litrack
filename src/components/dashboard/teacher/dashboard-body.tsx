@@ -103,7 +103,7 @@ export async function TeacherDashboardBody({
     <>
       <GreetingHeader
         firstName={firstName}
-        today={data.today}
+        todayKey={data.todayKey}
         subtitle={subtitle}
       />
 
