@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CalendarClock, Lightbulb, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * The dashboard's closing notice strip.
@@ -71,8 +72,10 @@ export function NoticeStrip() {
         ))}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={() => {
           setVisible(false);
           try {
@@ -82,10 +85,10 @@ export function NoticeStrip() {
           }
         }}
         aria-label="Dismiss these notes"
-        className="absolute right-3 top-3 rounded-md p-1 text-violet-700/70 transition-colors hover:bg-violet-100 hover:text-violet-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-200/70 dark:hover:bg-violet-900/50 dark:hover:text-violet-50"
+        className="absolute right-2 top-2 size-8 text-violet-700/70 hover:bg-violet-100 hover:text-violet-900 dark:text-violet-200/70 dark:hover:bg-violet-900/50 dark:hover:text-violet-50"
       >
         <X aria-hidden className="size-4" />
-      </button>
+      </Button>
     </section>
   );
 }
