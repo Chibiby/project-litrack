@@ -1,10 +1,8 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { AppShell } from "@/components/app-shell";
 import { TeacherDashboardBody } from "@/components/dashboard/teacher/dashboard-body";
-import { TeacherDashboardSkeleton } from "@/components/dashboard/teacher/dashboard-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,19 +41,21 @@ export default async function TeacherDashboard({
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
       viewedSchoolName={schoolName ?? undefined}
     >
-      <Suspense fallback={<TeacherDashboardSkeleton />}>
-        <TeacherDashboardBody
-          schoolId={targetSchoolId}
-          teacherId={user.id}
-          isSuperAdmin={isSuperAdmin}
-          firstName={isSuperAdmin ? "Admin" : user.firstName}
-          subtitle={
-            isSuperAdmin
-              ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`
-              : undefined
-          }
-        />
-      </Suspense>
+      {/* Rendered inline rather than behind a Suspense fallback: streaming a
+          skeleton in here still shows a loading screen on a hard refresh, and
+          the dashboard is one cached read, so waiting for it costs less than
+          the flash did. */}
+      <TeacherDashboardBody
+        schoolId={targetSchoolId}
+        teacherId={user.id}
+        isSuperAdmin={isSuperAdmin}
+        firstName={isSuperAdmin ? "Admin" : user.firstName}
+        subtitle={
+          isSuperAdmin
+            ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`
+            : undefined
+        }
+      />
     </AppShell>
   );
 }
