@@ -6,11 +6,9 @@ import {
   getSchoolHeadCharts,
   getSchoolHeadMetricCounts,
   getSchoolHeadRecentActivity,
-  getTeacherGradeCards,
-  getTeacherGradeChart,
-  getTeacherMetricCounts,
   getTeacherShellGrades,
 } from "@/lib/dashboard/aggregates";
+import { getTeacherOverview } from "@/lib/dashboard/teacher-overview";
 
 /**
  * Server-side warming of a role's landing-page queries, run at login before
@@ -76,10 +74,14 @@ async function warmAll(
  * Warm a teacher's dashboard. Skip for PENDING teachers — they land on
  * /pending-approval and never see this data.
  *
- * These are the same leaf fetchers the dashboard sections call, with the same
+ * These are the same leaf fetchers the dashboard calls, with the same
  * arguments, so they populate the exact `unstable_cache` entries the first
  * render will read. Warming the deprecated composed helpers instead would work
  * only by accident, and would put every leaf on one shared timeout budget.
+ *
+ * `getTeacherOverview` is one entry rather than three because the whole dashboard
+ * now renders from a single snapshot — warming it also warms the header's
+ * notification bell, which reads the same key from the teacher layout.
  */
 export async function warmTeacherRoutes(opts: {
   schoolId: string;
@@ -88,9 +90,7 @@ export async function warmTeacherRoutes(opts: {
 }): Promise<void> {
   await warmAll([
     () => getTeacherShellGrades(opts),
-    () => getTeacherMetricCounts(opts),
-    () => getTeacherGradeChart(opts),
-    () => getTeacherGradeCards(opts),
+    () => getTeacherOverview(opts),
   ]);
 }
 

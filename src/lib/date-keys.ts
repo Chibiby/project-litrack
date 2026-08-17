@@ -17,6 +17,33 @@ export function parseLocalDateKey(value?: string | null): Date {
   return today;
 }
 
+/**
+ * Every LITRACK school operates in Philippine Standard Time. Deployment
+ * environments do not: Vercel lambdas run with `TZ=UTC`, and no `TZ` is set in
+ * this repo's config, so a bare `new Date()` on the server resolves to the
+ * previous civil day for every request between 00:00 and 08:00 in Manila.
+ */
+export const SCHOOL_TIME_ZONE = "Asia/Manila";
+
+/**
+ * Today's civil date in the school's timezone, returned as a Date at *runtime*
+ * local midnight so it composes with `formatLocalDateKey`, `addDays`, and the
+ * week/month bounds helpers, all of which read local calendar fields.
+ *
+ * Use this rather than `new Date()` anywhere a "today", "this week", or "this
+ * month" boundary is being computed for a school.
+ */
+export function schoolToday(now: Date = new Date()): Date {
+  // en-CA formats as YYYY-MM-DD, which parseLocalDateKey already accepts.
+  const key = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SCHOOL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return parseLocalDateKey(key);
+}
+
 export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);

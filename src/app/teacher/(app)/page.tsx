@@ -3,16 +3,8 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { AppShell } from "@/components/app-shell";
-import {
-  TeacherMetricsSection,
-  TeacherChartSection,
-  TeacherGradeCardsSection,
-} from "@/components/dashboard/teacher-dashboard-sections";
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-  ListCardSkeleton,
-} from "@/components/loading";
+import { TeacherDashboardBody } from "@/components/dashboard/teacher/dashboard-body";
+import { TeacherDashboardSkeleton } from "@/components/dashboard/teacher/dashboard-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -36,50 +28,33 @@ export default async function TeacherDashboard({
   // Sidebar grades + school name for real teachers come from teacher/layout
   // (RoleShell). Only super-admin impersonation needs a page-level school name
   // for the title; AppShell ignores chrome props when already inside RoleShell.
-  const schoolName = isSuperAdmin
-    ? await getSchoolName(targetSchoolId)
-    : null;
-
-  const sectionOpts = {
-    schoolId: targetSchoolId,
-    teacherId: user.id,
-    isSuperAdmin,
-  };
+  const schoolName = isSuperAdmin ? await getSchoolName(targetSchoolId) : null;
 
   return (
     <AppShell
+      // The dashboard opens with its own greeting and date, so the shell's
+      // generic title block would only repeat it.
+      hideTitle
       title={
-        isSuperAdmin
-          ? `Teacher View - ${schoolName || "Unknown"}`
-          : `Hi, ${user.firstName}`
-      }
-      subtitle={
-        isSuperAdmin
-          ? "Super Admin View - All Grade Levels"
-          : "Your assigned grade levels"
+        isSuperAdmin ? `Teacher View - ${schoolName || "Unknown"}` : `Hi, ${user.firstName}`
       }
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
       viewedSchoolName={schoolName ?? undefined}
     >
-      <Suspense
-        fallback={
-          <>
-            <MetricsGridSkeleton variant="teacher" />
-            <MetricsGridSkeleton variant="teacher-secondary" />
-          </>
-        }
-      >
-        <TeacherMetricsSection {...sectionOpts} />
-      </Suspense>
-
-      <Suspense fallback={<ChartSectionSkeleton columns={1} />}>
-        <TeacherChartSection {...sectionOpts} />
-      </Suspense>
-
-      <Suspense fallback={<ListCardSkeleton grid items={3} />}>
-        <TeacherGradeCardsSection {...sectionOpts} />
+      <Suspense fallback={<TeacherDashboardSkeleton />}>
+        <TeacherDashboardBody
+          schoolId={targetSchoolId}
+          teacherId={user.id}
+          isSuperAdmin={isSuperAdmin}
+          firstName={isSuperAdmin ? "Admin" : user.firstName}
+          subtitle={
+            isSuperAdmin
+              ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`
+              : undefined
+          }
+        />
       </Suspense>
     </AppShell>
   );

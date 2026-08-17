@@ -7,6 +7,7 @@ import {
   labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import { cachedQuery } from "@/lib/cache/unstable";
+import { formatLocalDateKey } from "@/lib/date-keys";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   adminDashboard,
@@ -383,7 +384,7 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
 
 // ─── Teacher section fetchers ───────────────────────────────────────────────
 
-type TeacherOpts = {
+export type TeacherOpts = {
   schoolId: string;
   teacherId: string;
   isSuperAdmin: boolean;
@@ -396,7 +397,9 @@ type TeacherOpts = {
  * ARAL branch an ARAL-only teacher resolves to zero grades and every count
  * below silently returns 0.
  */
-function teacherGradeFilter(opts: TeacherOpts): Prisma.GradeLevelWhereInput {
+export function teacherGradeFilter(
+  opts: TeacherOpts
+): Prisma.GradeLevelWhereInput {
   return opts.isSuperAdmin
     ? { schoolId: opts.schoolId, deletedAt: null }
     : {
@@ -414,7 +417,9 @@ function teacherGradeFilter(opts: TeacherOpts): Prisma.GradeLevelWhereInput {
  * are therefore scoped to learners in their care (adviser OR designated ARAL
  * teacher), which is also what `/teacher/learners` lists.
  */
-function teacherLearnerFilter(opts: TeacherOpts): Prisma.LearnerWhereInput {
+export function teacherLearnerFilter(
+  opts: TeacherOpts
+): Prisma.LearnerWhereInput {
   return opts.isSuperAdmin ? {} : teacherLearnerScope(opts.teacherId);
 }
 
@@ -485,8 +490,41 @@ export async function getTeacherShellGrades(opts: TeacherOpts) {
   );
 }
 
-export async function getTeacherMetricCounts(opts: TeacherOpts) {
+/**
+ * Local Monday-start week. `end` is exclusive (next Monday).
+ * `schoolDaysElapsed` counts Mon–Fri up to and including today, capped at 5 —
+ * the denominator for "expected attendance marks" this week.
+ */
+export function weekBounds(now: Date): {
+  start: Date;
+  end: Date;
+  schoolDaysElapsed: number;
+} {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  // getDay(): Sun=0 … Sat=6. Monday-start offset.
+  const offset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - offset);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  const schoolDaysElapsed = Math.min(offset + 1, 5);
+  return { start, end, schoolDaysElapsed };
+}
+
+/** Local calendar month; `end` is exclusive (first of next month). */
+export function monthBounds(now: Date): { start: Date; end: Date } {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { start, end };
+}
+
+/** Attendance mix for the current week across the teacher's assigned grades. */
+export async function getTeacherAttendanceOverview(opts: TeacherOpts) {
   const { schoolId, teacherId, isSuperAdmin } = opts;
+  const { start, end, schoolDaysElapsed } = weekBounds(new Date());
+
   return cachedQuery(
     async () => {
       const grades = await prisma.gradeLevel.findMany({
@@ -494,79 +532,67 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
         select: { id: true },
       });
       const gradeIds = grades.map((g) => g.id);
-      const since7 = daysAgo(6);
+
+      const empty = {
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        noClass: 0,
+        totalMarks: 0,
+        presentRate: 0,
+      };
+      if (gradeIds.length === 0) return empty;
+
       const careFilter = teacherLearnerFilter(opts);
-      const learnerBase = {
+      const learnerWhere = {
         gradeLevelId: { in: gradeIds },
         deletedAt: null,
         archivedAt: null,
         ...careFilter,
       };
 
-      const [
-        totalLearners,
-        aralLearners,
-        pendingAralProfiling,
-        attendanceMarked,
-        readingRecords,
-      ] = await Promise.all([
-        gradeIds.length === 0
-          ? Promise.resolve(0)
-          : prisma.learner.count({ where: learnerBase }),
-        gradeIds.length === 0
-          ? Promise.resolve(0)
-          : prisma.learner.count({
-              where: { ...learnerBase, isAralLearner: true },
-            }),
-        gradeIds.length === 0
-          ? Promise.resolve(0)
-          : prisma.learner.count({
-              where: {
-                ...learnerBase,
-                isAralLearner: true,
-                aralProfile: null,
-              },
-            }),
-        gradeIds.length === 0
-          ? Promise.resolve(0)
-          : prisma.attendance.count({
-              where: {
-                date: { gte: since7 },
-                learner: {
-                  gradeLevelId: { in: gradeIds },
-                  deletedAt: null,
-                  ...careFilter,
-                },
-              },
-            }),
-        gradeIds.length === 0
-          ? Promise.resolve(0)
-          : prisma.readingLevelRecord.count({
-              where: {
-                learner: {
-                  gradeLevelId: { in: gradeIds },
-                  deletedAt: null,
-                  ...careFilter,
-                },
-              },
-            }),
+      const [groups, aralLearners] = await Promise.all([
+        prisma.attendance.groupBy({
+          by: ["status"],
+          where: {
+            date: { gte: start, lt: end },
+            learner: { gradeLevelId: { in: gradeIds }, deletedAt: null, ...careFilter },
+          },
+          _count: { _all: true },
+        }),
+        prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
       ]);
 
+      const byStatus = new Map(groups.map((g) => [g.status, g._count._all]));
+      const present = byStatus.get("PRESENT") ?? 0;
+      const absent = byStatus.get("ABSENT") ?? 0;
+      const late = byStatus.get("LATE") ?? 0;
+      const excused = byStatus.get("EXCUSED") ?? 0;
+      const totalMarks = present + absent + late + excused;
+
+      // Sessions with no record at all — expected marks minus what was entered.
+      const expected = aralLearners * schoolDaysElapsed;
+      const noClass = Math.max(expected - totalMarks, 0);
+      const denominator = totalMarks + noClass;
+
       return {
-        assignedGradeCount: grades.length,
-        totalLearners,
-        aralLearners,
-        pendingAralProfiling,
-        attendanceMarked,
-        readingRecords,
+        present,
+        absent,
+        late,
+        excused,
+        noClass,
+        totalMarks,
+        presentRate: denominator > 0 ? Math.round((present / denominator) * 100) : 0,
       };
     },
     {
       keyParts: [
-        "teacher-metric-counts-v2",
+        "teacher-attendance-overview-v1",
         schoolId,
         teacherId,
         String(isSuperAdmin),
+        formatLocalDateKey(start),
       ],
       tags: [teacherDashboard(teacherId)],
       profile: "aggregate",
@@ -574,133 +600,96 @@ export async function getTeacherMetricCounts(opts: TeacherOpts) {
   );
 }
 
-/** Returns NamedCount[] of learners per assigned grade. */
-export async function getTeacherGradeChart(
-  opts: TeacherOpts
-): Promise<NamedCount[]> {
+/** Monthly reading-level submission progress for ARAL learners. */
+export async function getTeacherReadingOverview(opts: TeacherOpts) {
   const { schoolId, teacherId, isSuperAdmin } = opts;
+  const { start, end } = monthBounds(new Date());
+
   return cachedQuery(
     async () => {
       const grades = await prisma.gradeLevel.findMany({
         where: teacherGradeFilter(opts),
-        select: {
-          type: true,
-          _count: {
-            select: {
-              learners: {
-                where: {
+        select: { id: true },
+      });
+      const gradeIds = grades.map((g) => g.id);
+
+      const empty = {
+        completed: 0,
+        pending: 0,
+        notAssessed: 0,
+        submitted: 0,
+        aralLearners: 0,
+        completionRate: 0,
+      };
+      if (gradeIds.length === 0) return empty;
+
+      const careFilter = teacherLearnerFilter(opts);
+      const learnerWhere = {
+        gradeLevelId: { in: gradeIds },
+        deletedAt: null,
+        archivedAt: null,
+        ...careFilter,
+      };
+
+      const [aralLearners, profiledLearners, distinctAssessed, submitted] =
+        await Promise.all([
+          prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
+          prisma.learner.count({
+            where: { ...learnerWhere, isAralLearner: true, aralProfile: { isNot: null } },
+          }),
+          prisma.readingLevelRecord
+            .groupBy({
+              by: ["learnerId"],
+              where: {
+                weekStart: { gte: start, lt: end },
+                learner: {
+                  gradeLevelId: { in: gradeIds },
                   deletedAt: null,
-                  archivedAt: null,
-                  ...teacherLearnerFilter(opts),
+                  isAralLearner: true,
+                  ...careFilter,
                 },
               },
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-
-      return grades.map((g) => ({
-        name: g.type,
-        value: g._count.learners,
-      }));
-    },
-    {
-      keyParts: [
-        "teacher-grade-chart-v2",
-        schoolId,
-        teacherId,
-        String(isSuperAdmin),
-      ],
-      tags: [teacherDashboard(teacherId)],
-      profile: "aggregate",
-    }
-  );
-}
-
-export async function getTeacherGradeCards(opts: TeacherOpts) {
-  const { schoolId, teacherId, isSuperAdmin } = opts;
-  return cachedQuery(
-    async () => {
-      const careFilter = teacherLearnerFilter(opts);
-      const grades = await prisma.gradeLevel.findMany({
-        where: teacherGradeFilter(opts),
-        select: {
-          id: true,
-          type: true,
-          _count: {
-            select: {
-              learners: {
-                where: { deletedAt: null, archivedAt: null, ...careFilter },
+            })
+            .then((rows) => rows.length),
+          prisma.readingLevelRecord.count({
+            where: {
+              weekStart: { gte: start, lt: end },
+              learner: {
+                gradeLevelId: { in: gradeIds },
+                deletedAt: null,
+                isAralLearner: true,
+                ...careFilter,
               },
             },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      });
+          }),
+        ]);
 
-      const gradeIds = grades.map((g) => g.id);
-      if (gradeIds.length === 0) {
-        return grades.map((g) => ({
-          id: g.id,
-          type: g.type,
-          learnerCount: g._count.learners,
-          aralCount: 0,
-          needsAralProfiling: false,
-        }));
-      }
+      const completed = distinctAssessed;
+      // Profiled but with no record yet this month.
+      const pending = Math.max(profiledLearners - completed, 0);
+      // Not even ARAL-profiled, so no assessment can exist.
+      const notAssessed = Math.max(aralLearners - profiledLearners, 0);
 
-      const [aralGroups, pendingGroups] = await Promise.all([
-        prisma.learner.groupBy({
-          by: ["gradeLevelId"],
-          where: {
-            gradeLevelId: { in: gradeIds },
-            deletedAt: null,
-            archivedAt: null,
-            isAralLearner: true,
-            ...careFilter,
-          },
-          _count: { _all: true },
-        }),
-        prisma.learner.groupBy({
-          by: ["gradeLevelId"],
-          where: {
-            gradeLevelId: { in: gradeIds },
-            deletedAt: null,
-            archivedAt: null,
-            isAralLearner: true,
-            aralProfile: null,
-            ...careFilter,
-          },
-          _count: { _all: true },
-        }),
-      ]);
-
-      const aralByGrade = new Map(
-        aralGroups.map((g) => [g.gradeLevelId, g._count._all])
-      );
-      const pendingByGrade = new Map(
-        pendingGroups.map((g) => [g.gradeLevelId, g._count._all])
-      );
-
-      return grades.map((g) => ({
-        id: g.id,
-        type: g.type,
-        learnerCount: g._count.learners,
-        aralCount: aralByGrade.get(g.id) ?? 0,
-        needsAralProfiling: (pendingByGrade.get(g.id) ?? 0) > 0,
-      }));
+      return {
+        completed,
+        pending,
+        notAssessed,
+        submitted,
+        aralLearners,
+        completionRate:
+          aralLearners > 0 ? Math.round((completed / aralLearners) * 100) : 0,
+      };
     },
     {
       keyParts: [
-        "teacher-grade-cards-v3",
+        "teacher-reading-overview-v1",
         schoolId,
         teacherId,
         String(isSuperAdmin),
+        formatLocalDateKey(start),
       ],
       tags: [teacherDashboard(teacherId)],
       profile: "aggregate",
     }
   );
 }
-

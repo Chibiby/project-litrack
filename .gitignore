@@ -21,3 +21,6 @@ prisma/migrations/dev.db*
 
 # Scratch dist dir for verification builds run alongside `next dev`
 .next-verify/
+
+# Impeccable design review captures (local evidence, not source)
+.impeccable/review/

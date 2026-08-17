@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function ChartPlaceholder({ height = 220 }: { height?: number }) {
+function ChartPlaceholder({ height = 220 }: { height?: number | string }) {
   return (
     <Skeleton className="w-full rounded-md" style={{ height }} aria-hidden />
   );
@@ -16,6 +16,14 @@ export const DashboardBarChart = dynamic(
       (m) => m.DashboardBarChart
     ),
   { ssr: false, loading: () => <ChartPlaceholder /> }
+);
+
+export const GradeLevelBarChart = dynamic(
+  () =>
+    import("@/components/dashboard/simple-charts").then(
+      (m) => m.GradeLevelBarChart
+    ),
+  { ssr: false, loading: () => <ChartPlaceholder height="100%" /> }
 );
 
 export const DashboardLineChart = dynamic(

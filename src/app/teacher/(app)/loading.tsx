@@ -1,8 +1,4 @@
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-  ListCardSkeleton,
-} from "@/components/loading";
+import { TeacherDashboardSkeleton } from "@/components/dashboard/teacher/dashboard-skeleton";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 
 /**
@@ -14,10 +10,8 @@ import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 export default function TeacherLoading() {
   return (
     <PostLoginLoadingBridge>
-      <div className="w-full space-y-6 p-4 lg:p-6">
-        <MetricsGridSkeleton variant="teacher" />
-        <ChartSectionSkeleton columns={1} />
-        <ListCardSkeleton grid items={3} />
+      <div className="w-full p-4 lg:p-6">
+        <TeacherDashboardSkeleton />
       </div>
     </PostLoginLoadingBridge>
   );
