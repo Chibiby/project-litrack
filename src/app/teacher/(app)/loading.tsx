@@ -1,21 +1,24 @@
+import { TableSectionSkeleton } from "@/components/loading";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 
 /**
- * Shell-level busy state for the whole `/teacher` tree — deliberately blank.
+ * Shell-level busy state for the whole `/teacher` tree.
  *
- * This boundary sits above the layout, so whatever it renders appears without
- * the sidebar or header and on every teacher route at once. Any skeleton here
- * is therefore a guess at a page it cannot know, and on a hard refresh it read
- * as a broken page rather than a loading one. Rendering nothing lets the
- * browser hold the current paint until the real HTML arrives.
+ * This boundary covers the *layout*, so it renders before RoleShell exists —
+ * no sidebar, no header — and it appears for every teacher route, not just the
+ * dashboard. It must therefore stay route-agnostic: a dashboard-shaped
+ * skeleton here showed four stat cards and two chart panels on top of
+ * `/teacher/learners`, which read as a broken page rather than a loading one.
  *
- * The file still exists for `PostLoginLoadingBridge`: post-login hard
- * navigations need its cream cover to bridge into `PostLoginSplash`. Deleting
- * the route would drop that cover and flash the login page instead.
- *
- * Per-route busy states live in each segment's own `loading.tsx`, inside the
- * mounted shell, which is the well-behaved case.
+ * Nested routes that need a closer match ship their own `loading.tsx`, and the
+ * dashboard's own skeleton lives in its page-level Suspense boundary.
  */
 export default function TeacherLoading() {
-  return <PostLoginLoadingBridge>{null}</PostLoginLoadingBridge>;
+  return (
+    <PostLoginLoadingBridge>
+      <div className="w-full space-y-4 p-4 lg:p-6">
+        <TableSectionSkeleton rows={8} columns={5} />
+      </div>
+    </PostLoginLoadingBridge>
+  );
 }
