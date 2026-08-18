@@ -29,8 +29,23 @@ profiling, and any change to how learners are created or enrolled.
 
 Wipe-and-replace was chosen with the blast radius stated. `School` deletion cascades to
 `GradeLevel`, `Section`, `Learner`, `Enrollment`, `Attendance`, `AttendanceDayMeta`,
-`ReadingLevelRecord`, ARAL rows, `Announcement`, `TeacherInvite`, and every school-scoped `User`
-(School Heads **and** Teachers). It is irreversible, and it leaves orphaned Supabase auth
+`ReadingLevelRecord`, ARAL rows, `Announcement`, and `TeacherInvite`.
+
+> **Correction (2026-08-18, found during implementation).** This paragraph originally also claimed
+> the cascade reaches every school-scoped `User`. **It does not.** `User_schoolId_fkey` is
+> `ON DELETE SET NULL` (`prisma/migrations/0_init/migration.sql:415`) — the Prisma relation is
+> optional and declares no `onDelete`, so SetNull is the default. Deleting `School` alone would
+> leave every School Head and Teacher row in place with `schoolId` set to `NULL`, and
+> `schoolId: null` is precisely how this application identifies a Super Admin. Acting on the
+> original claim would have silently turned hundreds of school-scoped accounts into rows
+> indistinguishable from the project owner's own.
+>
+> **Binding consequence:** the import script deletes those `User` rows explicitly, by an id list
+> captured *before* the delete, in the same transaction and strictly *after* the `School` delete.
+> That ordering is not stylistic — `Learner_teacherId_fkey` is `ON DELETE RESTRICT`
+> (`prisma/migrations/0_init/migration.sql:436`), so a teacher cannot be deleted while any learner
+> still references them; the `School` delete must cascade the learners away first. The
+> Super-Admin-count assertion below is the check that catches this class of error if it regresses. It is irreversible, and it leaves orphaned Supabase auth
 identities unless they are deleted explicitly.
 
 **Required consequences, all binding on the implementation:**
