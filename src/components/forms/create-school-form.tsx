@@ -91,8 +91,8 @@ export function CreateSchoolForm() {
               minLength={6}
             />
             <p className="text-xs text-muted-foreground">
-              Public identifier for the school (not a password). Letters, digits, underscore, dash.
-              Min 6 characters. This becomes the School Head's first-time password.
+              The school&apos;s DepEd identifier, and the School Head&apos;s first-time password —
+              they change it at first sign-in. Letters, digits, underscore, dash. Min 6 characters.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
