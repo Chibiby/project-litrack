@@ -408,3 +408,123 @@ here because the script is server-side logic against Prisma and Supabase.
 - No new dependency, in particular not `cmdk`.
 - No RLS policy change.
 - No migration at all under branch B0.
+
+---
+
+## Addendum — Real-file findings and branch resolutions (2026-08-18)
+
+The parser probe specified in R6 step 1 was run against the source workbook. Both pending
+branches are now **closed**, and three conditions the spec did not anticipate are resolved below.
+These clauses are binding and override the earlier text where they conflict.
+
+### Sheet shape (measured, not assumed)
+
+Single worksheet `Sheet1`, 405 rows. Header is **row 2**. Relevant columns:
+`SCHOOL ID` = B, `SCHOOL NAME` = C, `DISTRICT` = D. Column R holds an unlabelled address.
+Header-alias detection (R2) still applies — these positions are recorded as the expected
+outcome, not as indexes to hardcode.
+
+- **332 school rows**, 48 fully blank rows, 23 district banner rows (see R17).
+- **23 districts**, every school row populated, no blanks: Alabel 1–4, Glan 1–4, Kiamba 1–3,
+  Maasim 1–3, Maitum 1–2, Malapatan 1–3, Malungon 1–4.
+- Longest school name 64 chars, so the 200-char cap in R4 is never approached.
+
+### R6 → **Branch B0 confirmed**
+
+`duplicateNames` is empty — 332 distinct school names, case-insensitively and exactly.
+`School.name @unique` stands unchanged. **No migration is authored and `database-engineer` is
+not engaged.** The `hint` prop in R10 is retained for district display but is not load-bearing.
+
+### R7 → **Branch C0 confirmed**
+
+330 of 332 IDs are clean 6-digit numerics. No synthetic-email collisions exist across the roster.
+The `/^[A-Za-z0-9_-]+$/` regex is **not** widened. The two exceptions are data defects, handled
+by R18, not by relaxing validation.
+
+### R7b → minimum length holds
+
+Every valid ID is exactly 6 characters, satisfying Supabase's 6-character password minimum with
+no margin. The R7b raise of `createSchoolSchema.schoolIdCode` from 4 to 6 proceeds as specified.
+
+### R17 — District banner rows must be skipped
+
+The sheet groups schools under in-sheet section banners: the school-name cell reads
+`"ALABEL 1 DISTRICT"`, `"GLAN 2 DISTRICT"`, etc., with the School ID cell blank. Under R3 as
+originally written these are *errors* (exactly one of name/ID blank), which would fail the run on
+23 legitimate rows.
+
+**Required:** R3's skip rules gain a banner clause. A row is **skipped** — counted in `skipped`,
+never an error — when the School ID cell is blank **and** the school-name cell matches
+`/\bdistrict\b\s*$/i` after normalization. The existing subtotal/note rule is unchanged. A row
+with a blank ID whose name does *not* match the banner pattern remains an error, so a real school
+missing its ID is still surfaced.
+
+### R18 — Defective-row policy (owner decision, 2026-08-18)
+
+Five rows cannot yield a valid account as printed. The owner's instruction is that **no school is
+dropped**: the two with no ID are assigned `123456`, and each extension school shares its mother
+school's ID *as its password*. Implemented as follows.
+
+**The unique-key constraint that shapes this.** `School.schoolIdCode` is `@unique`, and
+`schoolHeadSyntheticEmail` derives the Supabase login address from it. Two schools therefore
+cannot store the same `schoolIdCode` — the second `auth.admin.createUser` would collide on an
+existing email. Uniqueness is structural and is not negotiable by widening the schema.
+
+**Passwords, however, need not be unique.** `loginSchoolHead` resolves the account from the
+selected `School.id`, looks up that school's own School Head, and authenticates that one account.
+Two schools holding the same password is therefore correct and safe.
+
+**Required — two decoupled values:**
+
+| Value | Rule |
+|---|---|
+| Supabase password | The **bare DepEd School ID** shared by the group (`130551`, `502694`, `130554`), or `123456` for the no-ID group. Never suffixed. |
+| Stored `schoolIdCode` | The bare ID for the **first** row of a group; every subsequent row gets `-N` appended (`130551-2`), solely to keep the row and its login email unique. |
+
+Ordering within a group is **by source row ascending**, so the suffix assignment is deterministic
+and stable across re-runs. The suffix is applied only on collision; the 327 unaffected schools
+keep a bare ID and are entirely unchanged by this clause.
+
+The specific rows:
+
+| Source row | School | Password | Stored `schoolIdCode` |
+|---|---|---|---|
+| 147 | Datal Bong ES – Green Valley extension | `123456` | `123456` |
+| 306 | Nabol NHS (Proposed) | `123456` | `123456-2` |
+| 270 | Sitio Lanao Integrated IP School | `502694` | `502694` |
+| 271 | Sitio Kling CLC – Sitio Lanao IPS Extension | `502694` | `502694-2` |
+| 280 | Del Hilado ES | `130551` | `130551` |
+| 281 | Del Hilado ES (Matlusi Extension) | `130551` | `130551-2` |
+| 299 | Naidas T. Opong ES | `130554` | `130554` |
+| 300 | Naidas T. Opong ES (Banlas Extension) | `130554` | `130554-2` |
+
+All **332 schools are created**. Row counts, not this table, drive the code: the script derives
+groups from the parsed data so a corrected spreadsheet needs no code change.
+
+**Consequences that must be honoured:**
+
+- R5's refusal on `duplicateIds` is **narrowed, not removed**. The parser still reports
+  `duplicateIds`; the script no longer treats them as fatal, because R18 defines their resolution.
+  `duplicateNames` remains fatal — B0 says there are none, and one appearing later means the
+  sheet changed in a way that needs a fresh decision.
+- The phase-1 report must print the full remap table it derived (source row → password group →
+  stored code) so the owner can see every deviation from the printed sheet before committing.
+- `123456` is a weak shared credential for two schools. It is acceptable only because
+  `mustChangePassword: true` forces replacement at first login and the account cannot be reached
+  without also selecting the right school. The phase-1 report flags it explicitly.
+- R14's rule — *the initial password is the School ID* — is unchanged for `createSchool` at
+  `/admin/schools/new`, where no collision can arise because the form rejects a duplicate ID.
+
+### R19 — Test coverage for the addendum
+
+Extending R15. Fixtures remain small generated `.xlsx` files; the real roster is never read by a
+test.
+
+- Banner-row skip (R17): `"ALABEL 1 DISTRICT"` with a blank ID is skipped, while a blank ID with an
+  ordinary school name is still an error.
+- Header detected at row 2 beneath a single banner row.
+- The R18 grouping helper is a **pure exported function** taking parsed rows and returning
+  `{ sourceRow, password, schoolIdCode }`, unit tested for: first-row-keeps-bare-ID, deterministic
+  `-N` by ascending source row, a three-member group, and no suffix when there is no collision.
+- Assigning `123456` to two distinct no-ID rows produces `123456` and `123456-2` with a shared
+  password.
