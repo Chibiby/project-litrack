@@ -14,16 +14,30 @@
  * Requires DIRECT_URL (preferred) or DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
  * SUPABASE_SERVICE_ROLE_KEY.
  *
- * WIPING IS IRREVERSIBLE. `School` cascades (ON DELETE CASCADE) to GradeLevel,
- * Section, Learner, Enrollment, Attendance, ReadingLevelRecord, the ARAL tables,
- * Announcement, and TeacherInvite. `User.schoolId` is a different story: that FK
- * is `ON DELETE SET NULL` (see prisma/migrations/0_init/migration.sql), NOT
- * cascade — deleting School alone would merely orphan school-scoped User rows
- * with schoolId nulled, making them indistinguishable from Super Admin accounts.
- * So the wipe below deletes those User rows explicitly, by id captured before the
- * School delete, in the same transaction and strictly after it (Learner.teacherId
- * is `ON DELETE RESTRICT` against User, so the referencing Learner rows must be
- * gone — via the School cascade — before a teacher User row can be deleted).
+ * WIPING IS IRREVERSIBLE. The wipe does NOT rely on cascade. Several FKs in
+ * this subtree are ON DELETE RESTRICT, not CASCADE (verified against
+ * prisma/migrations/*​/migration.sql, not just schema.prisma, since Prisma
+ * omits an explicit onDelete when it matches the connector default and that
+ * default differs by relation optionality):
+ *
+ *   Enrollment.schoolId, .gradeLevelId, .schoolYearId  -> RESTRICT
+ *   Learner.gradeLevelId, .teacherId                   -> RESTRICT
+ *   Announcement.authorId                              -> RESTRICT
+ *   Attendance.recordedById                            -> RESTRICT
+ *   AttendanceDayMeta.recordedById                      -> RESTRICT
+ *   ReadingLevelRecord.recordedById                     -> RESTRICT
+ *
+ * A bare `prisma.school.deleteMany({})` throws the moment any Enrollment row
+ * exists, and RESTRICT is checked immediately per-constraint — Postgres does
+ * not wait for some other FK's cascade to clear it first, so even where
+ * relying on cascade might happen to work, it would depend on trigger firing
+ * order. So the wipe below deletes every table in this subtree explicitly,
+ * children first, in one `$transaction`, in the order that satisfies every
+ * RESTRICT above (see the inline comments on each step). `User.schoolId` is a
+ * further special case: that FK is `ON DELETE SET NULL`, not cascade — deleting
+ * School alone would merely orphan school-scoped User rows with schoolId
+ * nulled, making them indistinguishable from Super Admin accounts. So User
+ * rows are deleted explicitly too, by id captured before anything else runs.
  * Super Admin rows (schoolId = null) are never touched.
  */
 import { writeFileSync } from "node:fs";
@@ -156,18 +170,41 @@ async function main(): Promise<void> {
     }
 
     // ---- Phase 2: inventory (blast radius) ---------------------------------
+    // Mirrors every table the Phase 4 wipe actually deletes (see that phase's
+    // header comment for the full RESTRICT/CASCADE audit) — an operator making
+    // an irreversible decision should see the true blast radius, not a subset.
     heading("PHASE 2 — INVENTORY (what a wipe would destroy)");
-    const [schools, learners, enrollments, attendance, readingLevels, sections, gradeLevels, schoolUsers] =
-      await Promise.all([
-        prisma.school.count(),
-        prisma.learner.count(),
-        prisma.enrollment.count(),
-        prisma.attendance.count(),
-        prisma.readingLevelRecord.count(),
-        prisma.section.count(),
-        prisma.gradeLevel.count(),
-        prisma.user.count({ where: { schoolId: { not: null } } }),
-      ]);
+    const [
+      schools,
+      gradeLevels,
+      sections,
+      schoolYears,
+      learners,
+      enrollments,
+      attendance,
+      attendanceDayMeta,
+      readingLevels,
+      aralProfiles,
+      announcements,
+      teacherInvites,
+      teacherSections,
+      schoolUsers,
+    ] = await Promise.all([
+      prisma.school.count(),
+      prisma.gradeLevel.count(),
+      prisma.section.count(),
+      prisma.schoolYear.count(),
+      prisma.learner.count(),
+      prisma.enrollment.count(),
+      prisma.attendance.count(),
+      prisma.attendanceDayMeta.count(),
+      prisma.readingLevelRecord.count(),
+      prisma.aralProfile.count(),
+      prisma.announcement.count(),
+      prisma.teacherInvite.count(),
+      prisma.teacherSection.count(),
+      prisma.user.count({ where: { schoolId: { not: null } } }),
+    ]);
     const superAdmins = await prisma.user.count({ where: { schoolId: null } });
     const byRole = await prisma.user.groupBy({
       by: ["role"],
@@ -178,14 +215,21 @@ async function main(): Promise<void> {
     console.log(`  School              ${schools}`);
     console.log(`  GradeLevel          ${gradeLevels}`);
     console.log(`  Section             ${sections}`);
+    console.log(`  SchoolYear          ${schoolYears}`);
     console.log(`  Learner             ${learners}`);
     console.log(`  Enrollment          ${enrollments}`);
     console.log(`  Attendance          ${attendance}`);
+    console.log(`  AttendanceDayMeta   ${attendanceDayMeta}`);
     console.log(`  ReadingLevelRecord  ${readingLevels}`);
+    console.log(`  AralProfile         ${aralProfiles}`);
+    console.log(`  Announcement        ${announcements}`);
+    console.log(`  TeacherInvite       ${teacherInvites}`);
+    console.log(`  TeacherSection      ${teacherSections}`);
     console.log(`  User (school-scoped) ${schoolUsers}`);
     for (const r of byRole) console.log(`    ${r.role.padEnd(16)} ${r._count._all}`);
     console.log(`  Supabase auth users to delete: ${schoolUsers}`);
     console.log(`\n  PRESERVED — User with schoolId = null (Super Admin): ${superAdmins}`);
+    console.log("  PRESERVED — AuditLog (no FK to User/School; history outlives the subjects it references)");
 
     // ---- Phase 3: plan & gate ----------------------------------------------
     heading("PHASE 3 — PLAN");
@@ -231,18 +275,90 @@ async function main(): Promise<void> {
         );
       }
 
-      // `School` cascades (ON DELETE CASCADE) to GradeLevel/Section/Learner/etc.,
-      // but `User.schoolId` is ON DELETE SET NULL, not cascade — deleting School
-      // alone would leave these User rows behind with schoolId nulled, which
-      // would then be indistinguishable from Super Admins. Delete them explicitly,
-      // by the id list captured above, strictly after the School delete: while
-      // School (and therefore its cascaded Learner rows) still exists,
-      // Learner.teacherId's ON DELETE RESTRICT would block deleting a teacher.
-      const [removedSchools, removedUsers] = await prisma.$transaction([
+      // Explicit topological delete, children first. Global deleteMany({}) is
+      // correct on every table below (this is a total wipe, not a per-school
+      // one) except User, which must exclude Super Admin rows — hence the
+      // `doomed` id list captured above, before anything else ran. Reordering
+      // this array will break it: several steps exist solely to clear an
+      // ON DELETE RESTRICT that a later step's target is subject to, and
+      // RESTRICT is checked immediately per-constraint — Postgres does not
+      // wait for some other FK's cascade to finish first, so leaving this to
+      // cascade is not an option.
+      //
+      // SchoolHeadProfile, TeacherProfile, and the "_TeacherGrades" join table
+      // all cascade cleanly from User (ON DELETE CASCADE) — deleting User last
+      // in this list disposes of them automatically; they need no step of
+      // their own. AuditLog is never touched: it has no FK to User or School
+      // (deliberately, so audit history outlives the subjects it references).
+      const [
+        removedAttendance,
+        removedAttendanceDayMeta,
+        removedReadingLevels,
+        removedAralProfiles,
+        removedEnrollments,
+        removedAnnouncements,
+        removedLearners,
+        removedTeacherSections,
+        removedSections,
+        removedGradeLevels,
+        removedSchoolYears,
+        removedTeacherInvites,
+        removedSchools,
+        removedUsers,
+      ] = await prisma.$transaction([
+        // 1. Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById -> User
+        //    is ON DELETE RESTRICT. Must be gone before step 8 (User).
+        prisma.attendance.deleteMany({}),
+        prisma.attendanceDayMeta.deleteMany({}),
+        prisma.readingLevelRecord.deleteMany({}),
+        // 2. AralProfile.learnerId -> Learner is CASCADE (no RESTRICT to clear),
+        //    deleted explicitly here anyway for a fully accounted-for wipe.
+        prisma.aralProfile.deleteMany({}),
+        // 3. Enrollment.schoolId / .gradeLevelId / .schoolYearId -> School /
+        //    GradeLevel / SchoolYear are ON DELETE RESTRICT. Must be gone
+        //    before step 6 (GradeLevel, SchoolYear) and step 7 (School).
+        prisma.enrollment.deleteMany({}),
+        // 4. Announcement.authorId -> User is ON DELETE RESTRICT. Must be gone
+        //    before step 8 (User).
+        prisma.announcement.deleteMany({}),
+        // 5. Learner.gradeLevelId -> GradeLevel and Learner.teacherId -> User
+        //    are both ON DELETE RESTRICT. Must be gone before step 6
+        //    (GradeLevel) and step 8 (User). Nothing RESTRICTs deleting
+        //    Learner itself, and everything that referenced it (Enrollment,
+        //    AralProfile, Attendance, ReadingLevelRecord — all CASCADE from
+        //    Learner) is already gone from steps 1-3, so this is safe now.
+        prisma.learner.deleteMany({}),
+        // 6. No RESTRICT among these five, or pointing at them, once steps 1-5
+        //    have run (TeacherSection/Section/GradeLevel/SchoolYear/TeacherInvite
+        //    all reference School with CASCADE, which is moot since they're
+        //    deleted explicitly here before School in step 7 anyway).
+        prisma.teacherSection.deleteMany({}),
+        prisma.section.deleteMany({}),
+        prisma.gradeLevel.deleteMany({}),
+        prisma.schoolYear.deleteMany({}),
+        prisma.teacherInvite.deleteMany({}),
+        // 7. Only remaining RESTRICT on School was Enrollment.schoolId,
+        //    cleared in step 3.
         prisma.school.deleteMany({}),
+        // 8. Every RESTRICT against User (Learner.teacherId, Announcement.authorId,
+        //    Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById) was
+        //    cleared in steps 1, 4, and 5. Scoped to the pre-captured id list so
+        //    Super Admin rows (schoolId = null) are never touched.
         prisma.user.deleteMany({ where: { id: { in: doomed.map((u) => u.id) } } }),
       ]);
-      console.log(`School rows deleted: ${removedSchools.count} (cascaded GradeLevel/Section/Learner/Enrollment/…)`);
+      console.log(`Attendance rows deleted: ${removedAttendance.count}`);
+      console.log(`AttendanceDayMeta rows deleted: ${removedAttendanceDayMeta.count}`);
+      console.log(`ReadingLevelRecord rows deleted: ${removedReadingLevels.count}`);
+      console.log(`AralProfile rows deleted: ${removedAralProfiles.count}`);
+      console.log(`Enrollment rows deleted: ${removedEnrollments.count}`);
+      console.log(`Announcement rows deleted: ${removedAnnouncements.count}`);
+      console.log(`Learner rows deleted: ${removedLearners.count}`);
+      console.log(`TeacherSection rows deleted: ${removedTeacherSections.count}`);
+      console.log(`Section rows deleted: ${removedSections.count}`);
+      console.log(`GradeLevel rows deleted: ${removedGradeLevels.count}`);
+      console.log(`SchoolYear rows deleted: ${removedSchoolYears.count}`);
+      console.log(`TeacherInvite rows deleted: ${removedTeacherInvites.count}`);
+      console.log(`School rows deleted: ${removedSchools.count}`);
       console.log(`User rows deleted: ${removedUsers.count} (schoolId is ON DELETE SET NULL, so deleted explicitly)`);
 
       const survivors = await prisma.user.count({ where: { schoolId: null } });
