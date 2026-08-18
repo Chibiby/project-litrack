@@ -88,11 +88,11 @@ export function CreateSchoolForm() {
               name="schoolIdCode"
               required
               pattern="[A-Za-z0-9_\-]+"
-              minLength={4}
+              minLength={6}
             />
             <p className="text-xs text-muted-foreground">
               Public identifier for the school (not a password). Letters, digits, underscore, dash.
-              Min 4 characters.
+              Min 6 characters. This becomes the School Head's first-time password.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
