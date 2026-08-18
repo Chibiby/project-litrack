@@ -2278,19 +2278,23 @@ const SCHOOLS = [
   { id: "3", name: "Glan Central ES", district: "Glan 2", teachersOpen: false },
 ];
 
-const openSchoolList = () => fireEvent.click(screen.getByRole("combobox"));
+// Radix's SelectTrigger ALSO renders role="combobox", so once the district filter
+// exists there are two on this screen. Query by label, never by role alone.
+const schoolTrigger = () => screen.getByLabelText("School Name");
+const districtTrigger = () => screen.getByLabelText("District");
+const openSchoolList = () => fireEvent.click(schoolTrigger());
 
 describe("LoginForm district filter", () => {
   it("defaults to All districts and shows every school", () => {
     render(<LoginForm schools={SCHOOLS} />);
-    expect(screen.getByText("All districts")).toBeTruthy();
+    expect(districtTrigger().textContent).toContain("All districts");
     openSchoolList();
     expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
   it("narrows the school list when a district is chosen", () => {
     render(<LoginForm schools={SCHOOLS} />);
-    fireEvent.click(screen.getByLabelText("District"));
+    fireEvent.click(districtTrigger());
     fireEvent.click(screen.getByText("Glan 2"));
     openSchoolList();
     const options = screen.getAllByRole("option");
@@ -2302,26 +2306,27 @@ describe("LoginForm district filter", () => {
     render(<LoginForm schools={SCHOOLS} />);
     openSchoolList();
     fireEvent.click(screen.getByText("Glan Central ES"));
-    expect(screen.getByRole("combobox").textContent).toContain("Glan Central ES");
+    expect(schoolTrigger().textContent).toContain("Glan Central ES");
 
-    fireEvent.click(screen.getByLabelText("District"));
+    fireEvent.click(districtTrigger());
     fireEvent.click(screen.getByText("Alabel 1"));
-    expect(screen.getByRole("combobox").textContent).toContain("Select your school");
+    expect(schoolTrigger().textContent).toContain("Select your school");
   });
 
   it("keeps a school selection the new district still contains", () => {
     render(<LoginForm schools={SCHOOLS} />);
     openSchoolList();
     fireEvent.click(screen.getByText("Alabel Central ES"));
-    fireEvent.click(screen.getByLabelText("District"));
+    fireEvent.click(districtTrigger());
     fireEvent.click(screen.getByText("Alabel 1"));
-    expect(screen.getByRole("combobox").textContent).toContain("Alabel Central ES");
+    expect(schoolTrigger().textContent).toContain("Alabel Central ES");
   });
 
   it("disables both role buttons until a school is selected", () => {
     render(<LoginForm schools={SCHOOLS} />);
-    expect(screen.getByRole("button", { name: "School Head" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Teachers" })).toBeDisabled();
+    // This repo has no @testing-library/jest-dom — use native DOM assertions only.
+    expect(screen.getByRole("button", { name: "School Head" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Teachers" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("shows the School ID first-time copy on the School Head screen", () => {
@@ -2340,8 +2345,22 @@ describe("LoginForm district filter", () => {
 });
 ```
 
-If `toBeDisabled` is unavailable (no `@testing-library/jest-dom` in this repo), assert
-`expect(btn.hasAttribute("disabled")).toBe(true)` instead. Check how `tests/components/app-sidebar.test.tsx` does it and match.
+**Two environment facts, already verified — do not rediscover them the hard way:**
+
+1. **This repo has no `@testing-library/jest-dom`.** `toBeDisabled`, `toBeInTheDocument`, and
+   `toHaveAttribute` do not exist. Use native DOM assertions (`hasAttribute`, `getAttribute`,
+   `textContent`) as the tests above do. Adding the dependency is forbidden by the Global
+   Constraints.
+2. **Radix `SelectTrigger` renders `role="combobox"`**, exactly like `SearchableSelect`'s
+   trigger. After this task the login screen has two, so `getByRole("combobox")` throws
+   "found multiple elements". Query by label. The `<Label htmlFor="login-district">` and
+   `<Label htmlFor="login-school">` in Step 5 are what make `getByLabelText` work — both
+   `<button>` and Radix's trigger are labelable elements, so the `htmlFor`/`id` pairing must
+   be kept intact.
+
+If Radix Select does not open under `fireEvent.click` (it listens on `pointerdown`), open it with
+`fireEvent.pointerDown(districtTrigger(), { button: 0, ctrlKey: false })` instead. Do not switch to
+`@testing-library/user-event` — it is not installed.
 
 - [ ] **Step 8: Run the form test**
 
@@ -2391,8 +2410,8 @@ test.describe("School Head district login", () => {
     await districtTrigger.click();
     await page.getByRole("option", { name: "Alabel 1" }).click();
 
-    const schoolCombobox = page.getByRole("combobox").last();
-    await schoolCombobox.click();
+    // Two role="combobox" nodes exist (Radix Select + SearchableSelect) — use the label.
+    await page.getByLabel("School Name").click();
 
     const search = page.getByPlaceholder("Search schools…");
     await expect(search).toBeFocused();
@@ -2403,7 +2422,7 @@ test.describe("School Head district login", () => {
 
   test("keyboard selection works without leaving the search box", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("combobox").last().click();
+    await page.getByLabel("School Name").click();
     const search = page.getByPlaceholder("Search schools…");
     await search.fill("es");
     await search.press("ArrowDown");
@@ -2414,7 +2433,7 @@ test.describe("School Head district login", () => {
 
   test("the School Head screen asks for the School ID on first sign-in", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("combobox").last().click();
+    await page.getByLabel("School Name").click();
     await page.getByRole("option").first().click();
     await page.getByRole("button", { name: "School Head" }).click();
 
