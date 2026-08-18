@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   loginSchoolHead,
   loginTeacher,
@@ -20,12 +21,18 @@ import {
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
+import {
+  ALL_DISTRICTS,
+  deriveDistricts,
+  schoolsInDistrict,
+  clearStaleSchool,
+} from "@/lib/login/district-filter";
 
 type Screen = "select-role" | "school-head" | "teacher";
 type TeacherIntent = "login" | "register";
 type TeacherStep = "credentials" | "otp";
 
-type SchoolWithStatus = { id: string; name: string; teachersOpen: boolean };
+type SchoolWithStatus = { id: string; name: string; district: string | null; teachersOpen: boolean };
 
 const TEACHERS_UNLOCK_HELP =
   "Teachers unlock once the School Head completes profiling and adds grade levels.";
@@ -54,8 +61,16 @@ export function LoginForm({
   const [screen, setScreen] = useState<Screen>("select-role");
   const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
+  const [district, setDistrict] = useState<string>(ALL_DISTRICTS);
   const [teachersOpen, setTeachersOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const districts = useMemo(() => deriveDistricts(schools), [schools]);
+  const visibleSchools = useMemo(() => schoolsInDistrict(schools, district), [schools, district]);
+  const schoolOptions = useMemo(
+    () => visibleSchools.map((s) => ({ value: s.id, label: s.name, hint: s.district ?? undefined })),
+    [visibleSchools]
+  );
 
   const [teacherIntent, setTeacherIntent] = useState<TeacherIntent>("login");
   const [teacherStep, setTeacherStep] = useState<TeacherStep>("credentials");
@@ -84,6 +99,16 @@ export function LoginForm({
     setSchoolId(value);
     const selected = schools.find((s) => s.id === value);
     setTeachersOpen(selected?.teachersOpen ?? false);
+  };
+
+  const handleDistrictChange = (value: string) => {
+    setDistrict(value);
+    const next = clearStaleSchool(schoolId, schoolsInDistrict(schools, value));
+    if (next !== schoolId) {
+      // The derived teachersOpen gate must not outlive the selection it came from.
+      setSchoolId(next);
+      setTeachersOpen(false);
+    }
   };
 
   const resetTeacherFlow = () => {
@@ -246,26 +271,41 @@ export function LoginForm({
     return (
       <Card className="rounded-xl border border-border/80 shadow-sm">
         <CardContent className="space-y-4 pt-6">
+          {districts.length > 0 ? (
+            <div className="space-y-2">
+              <Label htmlFor="login-district">District</Label>
+              <Select value={district} onValueChange={handleDistrictChange}>
+                <SelectTrigger id="login-district">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_DISTRICTS}>All districts</SelectItem>
+                  {districts.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="login-school">School Name</Label>
-            <Select value={schoolId} onValueChange={handleSchoolChange}>
-              <SelectTrigger id="login-school">
-                <SelectValue placeholder="Select your school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    No schools found. Contact admin.
-                  </div>
-                ) : (
-                  schools.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            {schools.length === 0 ? (
+              <p className="rounded-md border border-input bg-background p-4 text-center text-sm text-muted-foreground">
+                No schools found. Contact admin.
+              </p>
+            ) : (
+              <SearchableSelect
+                id="login-school"
+                options={schoolOptions}
+                value={schoolId}
+                onValueChange={handleSchoolChange}
+                placeholder="Select your school"
+                searchPlaceholder="Search schools…"
+                emptyMessage="No schools match your search."
+              />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3 pt-2">
             <Button
@@ -324,7 +364,7 @@ export function LoginForm({
             <form action={handleSchoolHeadSubmit} className="space-y-4">
               <h2 className="text-lg font-semibold">School Head sign in</h2>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">School ID or password</Label>
                 <PasswordInput
                   id="password"
                   name="password"
@@ -333,8 +373,7 @@ export function LoginForm({
                   autoComplete="current-password"
                 />
                 <p className="text-xs text-muted-foreground">
-                  First time? Use the activation credential from your administrator. Teachers create
-                  their own password when registering — School Heads use the school credential.
+                  First time signing in? Enter your School ID. You&apos;ll choose your own password next.
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={pending}>
