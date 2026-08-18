@@ -22,7 +22,7 @@ export const createSchoolSchema = z.object({
   schoolIdCode: z
     .string()
     .trim()
-    .min(4, "School ID must be at least 4 characters")
+    .min(6, "School ID must be at least 6 characters")
     .max(64)
     .regex(/^[A-Za-z0-9_-]+$/, "Only letters, digits, underscore and dash"),
   address: optionalField,
