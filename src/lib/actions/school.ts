@@ -22,12 +22,12 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
 const REGEN_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 
 /**
- * Super-admin only: creates a School + School Head auth user with a one-time
- * activation credential (NOT the School ID). Credential returned once; never stored.
+ * Super-admin only: creates a School + School Head auth user whose initial password
+ * IS the School ID. Returned once for the admin to relay; never stored in Prisma.
  */
 export async function createSchool(
   formData: FormData
-): Promise<ActionResult<{ id: string; activationCredential: string }>> {
+): Promise<ActionResult<{ id: string; initialPassword: string }>> {
   const admin = await requireUser("SUPER_ADMIN");
 
   const f = (k: string) => {
@@ -50,13 +50,15 @@ export async function createSchool(
   });
   if (exists) return { ok: false, error: "School name or School ID already exists" };
 
-  const activationCredential = generateActivationCredential();
+  // The School ID is the single, universal first-time credential — the same rule the
+  // roster import follows. `mustChangePassword: true` below forces replacement at first login.
+  const initialPassword = parsed.data.schoolIdCode;
   const supabaseAdmin = createSupabaseAdminClient();
   const syntheticEmail = schoolHeadSyntheticEmail(parsed.data.schoolIdCode);
 
   const { data: created, error: authErr } = await supabaseAdmin.auth.admin.createUser({
     email: syntheticEmail,
-    password: activationCredential,
+    password: initialPassword,
     email_confirm: true,
     app_metadata: { role: "SCHOOL_HEAD" },
     user_metadata: { role: "SCHOOL_HEAD" },
@@ -109,7 +111,7 @@ export async function createSchool(
 
   revalidatePath("/admin/schools");
   revalidateSchoolsList();
-  return { ok: true, data: { id: school.id, activationCredential } };
+  return { ok: true, data: { id: school.id, initialPassword } };
 }
 
 /**
@@ -202,6 +204,7 @@ export async function listSchoolsWithTeacherStatus() {
         select: {
           id: true,
           name: true,
+          district: true,
           _count: {
             select: {
               gradeLevels: { where: { deletedAt: null } },
@@ -223,6 +226,7 @@ export async function listSchoolsWithTeacherStatus() {
       return schools.map((s) => ({
         id: s.id,
         name: s.name,
+        district: s.district,
         teachersOpen: s.users.length > 0 && s._count.gradeLevels > 0,
       }));
     },

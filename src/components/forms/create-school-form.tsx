@@ -13,38 +13,38 @@ import { Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 export function CreateSchoolForm() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [activationCredential, setActivationCredential] = useState<string | null>(null);
+  const [initialPassword, setInitialPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  if (activationCredential) {
+  if (initialPassword) {
     return (
       <Card className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-start gap-2 text-amber-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
-              <h2 className="font-semibold">Activation credential (shown once)</h2>
+              <h2 className="font-semibold">School created</h2>
               <p className="mt-1 text-sm text-amber-900/90">
-                Copy and share this with the School Head securely. It will not be shown again.
-                They must change it on first login.
+                The School Head signs in with this School ID as their password, then chooses
+                their own on first login.
               </p>
             </div>
           </div>
           <div className="rounded-lg border bg-card p-3 font-mono text-sm break-all">
-            {activationCredential}
+            {initialPassword}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={async () => {
-                await navigator.clipboard.writeText(activationCredential);
+                await navigator.clipboard.writeText(initialPassword);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}
             >
               {copied ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-              {copied ? "Copied" : "Copy credential"}
+              {copied ? "Copied" : "Copy School ID"}
             </Button>
             <Button type="button" onClick={() => router.push("/admin/schools")}>
               Done — back to schools
@@ -66,8 +66,8 @@ export function CreateSchoolForm() {
                 toast.error(res.error);
                 return;
               }
-              if (res.data?.activationCredential) {
-                setActivationCredential(res.data.activationCredential);
+              if (res.data?.initialPassword) {
+                setInitialPassword(res.data.initialPassword);
                 toast.success("School created");
               } else {
                 toast.success("School created");
