@@ -12,7 +12,7 @@
  *   --allow-row-errors    skip malformed rows instead of aborting
  *
  * Requires DIRECT_URL (preferred) or DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
- * SUPABASE_SERVICE_ROLE_KEY.
+ * SUPABASE_SERVICE_ROLE_KEY, read from the shell or from `.env.local`.
  *
  * WIPING IS IRREVERSIBLE. The wipe does NOT rely on cascade. Several FKs in
  * this subtree are ON DELETE RESTRICT, not CASCADE (verified against
@@ -41,11 +41,11 @@
  * Super Admin rows (schoolId = null) are never touched.
  */
 import { writeFileSync } from "node:fs";
-import { PrismaClient } from "@prisma/client";
 import { parseSchoolRoster } from "../src/lib/import/school-roster";
 import { assignSchoolCredentials, type CredentialAssignment } from "../src/lib/import/school-credentials";
 import { schoolHeadSyntheticEmail } from "../src/lib/auth/synthetic-email";
 import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { connectScriptPrisma, loadEnvFile } from "./lib/script-db";
 
 export type CliOptions = {
   file: string;
@@ -86,13 +86,6 @@ function heading(text: string): void {
   console.log(`\n${"=".repeat(70)}\n${text}\n${"=".repeat(70)}`);
 }
 
-/** Long batch work belongs on the direct port, not through PgBouncer. */
-function makePrisma(): PrismaClient {
-  const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
-  if (!url) throw new Error("Set DIRECT_URL (preferred) or DATABASE_URL");
-  return new PrismaClient({ datasources: { db: { url } } });
-}
-
 async function inParallel<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let cursor = 0;
@@ -109,7 +102,9 @@ async function inParallel<T, R>(items: T[], limit: number, fn: (item: T) => Prom
 
 async function main(): Promise<void> {
   const opts = parseCliArgs(process.argv.slice(2));
-  const prisma = makePrisma();
+  const envKeys = loadEnvFile();
+  if (envKeys.length) console.log(`loaded .env.local (${envKeys.length} keys, values not printed)`);
+  const prisma = await connectScriptPrisma();
 
   try {
     // ---- Phase 1: parse & report -------------------------------------------
