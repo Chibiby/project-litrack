@@ -90,7 +90,14 @@ export function SearchableSelect({
   }, [query]);
 
   React.useEffect(() => {
-    if (!open) setQuery("");
+    if (!open) {
+      setQuery("");
+      // Reset the highlight here as well. When the query is already empty — the
+      // user opened, hovered a row, and clicked it — `setQuery("")` is a no-op,
+      // so the `[query]` effect above never fires and a mouse-set `activeIndex`
+      // would survive into the next open.
+      setActiveIndex(0);
+    }
   }, [open]);
 
   // Keep the active option in view without moving DOM focus off the search input.
