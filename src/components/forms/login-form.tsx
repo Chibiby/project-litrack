@@ -67,8 +67,10 @@ export function LoginForm({
 
   const districts = useMemo(() => deriveDistricts(schools), [schools]);
   const visibleSchools = useMemo(() => schoolsInDistrict(schools, district), [schools, district]);
+  // No `hint`: a second line under each school name (the district) is noise once the
+  // District filter above already states which district you are looking at.
   const schoolOptions = useMemo(
-    () => visibleSchools.map((s) => ({ value: s.id, label: s.name, hint: s.district ?? undefined })),
+    () => visibleSchools.map((s) => ({ value: s.id, label: s.name })),
     [visibleSchools]
   );
 
