@@ -27,7 +27,7 @@ profiling, and any change to how learners are created or enrolled.
 
 ## Risk acknowledgement (R0)
 
-Wipe-and-replace was chosen with the blast radius stated. `School` deletion cascades to
+Wipe-and-replace was chosen with the blast radius stated. The wipe destroys every `School` plus
 `GradeLevel`, `Section`, `Learner`, `Enrollment`, `Attendance`, `AttendanceDayMeta`,
 `ReadingLevelRecord`, ARAL rows, `Announcement`, and `TeacherInvite`.
 
@@ -41,12 +41,23 @@ Wipe-and-replace was chosen with the blast radius stated. `School` deletion casc
 > indistinguishable from the project owner's own.
 >
 > **Binding consequence:** the import script deletes those `User` rows explicitly, by an id list
-> captured *before* the delete, in the same transaction and strictly *after* the `School` delete.
-> That ordering is not stylistic — `Learner_teacherId_fkey` is `ON DELETE RESTRICT`
+> captured *before* the delete, in the same transaction and strictly *last*. That ordering is not
+> stylistic — `Learner_teacherId_fkey` is `ON DELETE RESTRICT`
 > (`prisma/migrations/0_init/migration.sql:436`), so a teacher cannot be deleted while any learner
-> still references them; the `School` delete must cascade the learners away first. The
-> Super-Admin-count assertion below is the check that catches this class of error if it regresses. It is irreversible, and it leaves orphaned Supabase auth
-identities unless they are deleted explicitly.
+> still references them; the explicit `Learner` delete earlier in the same transaction is what
+> clears that reference. The Super-Admin-count assertion below is the check that catches this class
+> of error if it regresses.
+>
+> **Second correction (2026-08-18, found while auditing the shipped script).** Cascade cannot be
+> relied on *anywhere* in the wipe, not just for `User`. Several school-scoped FKs are
+> `ON DELETE RESTRICT`, so a bare `prisma.school.deleteMany({})` throws on the first `Enrollment`
+> row. The script therefore performs an explicit topological delete — children first, fourteen
+> `deleteMany` calls in one `$transaction` — and depends on no cascade at all. Any rewrite that
+> "just deletes `School` and lets Prisma cascade" will fail loudly rather than corrupt data, but it
+> will fail.
+
+The wipe is irreversible, and it leaves orphaned Supabase auth identities unless they are deleted
+explicitly.
 
 **Required consequences, all binding on the implementation:**
 
@@ -246,7 +257,10 @@ in `package.json`. It runs in six ordered phases, each logged with a clear headi
    `--i-understand-this-deletes-all-data`, refuse and exit non-zero.
 4. **Wipe** (only when both wipe flags present). Delete Supabase auth users for all `User` rows
    with a non-null `schoolId`, batched with a concurrency cap, tolerating already-missing users.
-   Then delete `School` rows and let Prisma cascade. `schoolId: null` rows survive untouched.
+   Then delete the school-scoped rows with an explicit topological delete — children first, one
+   `$transaction` — **not** a bare `School` delete, which the `ON DELETE RESTRICT` FKs reject.
+   School-scoped `User` rows go last, by an id list captured before the delete.
+   `schoolId: null` rows survive untouched.
 5. **Create.** Per school, mirroring `createSchool` in `src/lib/actions/school.ts` so semantics stay
    in one shape: `supabaseAdmin.auth.admin.createUser({ email: schoolHeadSyntheticEmail(schoolIdCode),
    password: schoolIdCode, email_confirm: true, app_metadata: { role: "SCHOOL_HEAD" } })` → a Prisma
@@ -543,3 +557,47 @@ test.
   `-N` by ascending source row, a three-member group, and no suffix when there is no collision.
 - Assigning `123456` to two distinct no-ID rows produces `123456` and `123456-2` with a shared
   password.
+
+### R20 — Addendum independently re-verified, and two sheet defects it exposed
+
+A second, database-free probe re-measured every claim above against the source workbook on
+2026-08-18 (parser modules only — no `PrismaClient`, no `DATABASE_URL`, never
+`scripts/import-schools.ts`, whose phase 2 counts live rows). **36 of 36 asserted claims
+reproduce**: 405 sheet rows, header row 2, 332 school rows, 71 skipped, 0 errors, 2 no-ID rows,
+23 districts by exact name summing to 332, zero duplicate names, the three duplicate-ID groups,
+the full R18 password/code table, 330 clean 6-digit IDs, a 64-char longest name, and identical
+credential assignment across a full re-parse. Nothing in the Addendum needs correcting.
+
+The probe also recorded two things the Addendum did not, both properties of the sheet rather
+than of the code.
+
+**1. The address is present but unreachable, so it is never imported.** The sheet has 18
+columns; the header row labels only columns 1–14. Column R (18) carries the address
+("Magsaysay St., Poblacion, Alabel, Sarangani") under **no header at all**. Header-alias
+detection therefore never binds `columns.address`, and `School.address` is written `null` for
+all 332 schools — measured, not inferred: `rowsWithAddress` is 0. `region` and `division` are 0
+for the same reason: the sheet has no such columns.
+
+This is a sheet defect, not a parser defect, and the fix belongs in the sheet: typing `ADDRESS`
+into cell R2 makes the existing `address` alias match, with **zero code change**. Hardcoding
+column 18 is rejected — it contradicts this Addendum's own rule that measured positions are
+"the expected outcome, not indexes to hardcode", and it would silently mis-map any re-exported
+sheet whose columns shift. If the owner would rather leave the sheet alone, addresses stay null;
+nothing else in the import or the login depends on them.
+
+**2. Columns 5–14 hold School Head personal data, and none of it is imported — keep it that
+way.** The sheet carries the head's full name, sex, designation, plantilla item, age, years in
+post, Facebook name, mobile number, and DepEd email address. No `HEADER_ALIASES` entry matches
+any of those headers, so the parser drops every one of them. That is the correct outcome under
+both the owner's scope decision (*district, school name and School ID and nothing else*) and
+the PH Data Privacy Act commitments in `docs/privacy.md`. In particular, do **not** quietly wire
+column 14 ("Email add of SH") into the School Head profile's `contactEmail` — importing 332
+people's personal contact details is a decision for the owner to make explicitly, not a
+convenience for an implementer to add.
+
+**Minor, cosmetic:** a handful of school names are truncated in the sheet with unbalanced
+parentheses — row 8 `"Banlibato Integrated School (Multigrade 3&4, 5&6"` and row 147
+`"Datal Bong ES - Green Valley extension (Multigrade (Kinder & 2 )"` (also the 64-char longest).
+They import verbatim and will read oddly in the login dropdown. Cleaning them is a spreadsheet
+edit, not a code change. For the record, the two no-ID rows read `"No School ID yet"` (row 147)
+and `"0"` (row 306) in the School ID cell.
