@@ -153,6 +153,16 @@ enum TeacherPosition {
   MASTER_TEACHER_IV
 }
 
+/// Whether a teacher holds a DepEd plantilla item or serves the school on some
+/// other footing (volunteer, LGU-funded, parent-teacher, private hire).
+///
+/// A different axis from `TeacherPosition`, which records plantilla RANK and
+/// only ever applies to a DepEd item.
+enum EmploymentType {
+  DEPED_PLANTILLA
+  NON_DEPED
+}
+
 enum Specialization {
   GENERAL_EDUCATION
   ENGLISH
@@ -323,6 +333,12 @@ enum EnrollmentStatus {
   ARCHIVED
 }
 
+enum NotificationType {
+  /// A teacher was designated as the ARAL tutor for one or more learners by
+  /// somebody else.
+  ARAL_ASSIGNED
+}
+
 // =====================================================
 // MODELS
 // =====================================================
@@ -349,6 +365,7 @@ model School {
   sections       Section[]
   enrollments    Enrollment[]
   announcements  Announcement[]
+  notifications  Notification[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -410,6 +427,8 @@ model User {
   teacherEnrollments     Enrollment[]         @relation("TeacherEnrollments")
   announcements          Announcement[]
   teacherInvites         TeacherInvite[]      @relation("TeacherInviteUser")
+  notifications          Notification[]       @relation("NotificationRecipient")
+  notificationsCaused    Notification[]       @relation("NotificationActor")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -452,11 +471,20 @@ model TeacherProfile {
   userId String @unique
 
   // I. Respondent Information
-  contactNumber String?
+  contactNumber  String?
   /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
-  contactEmail  String?
-  designation   String?
-  position      TeacherPosition?
+  contactEmail   String?
+  designation    String?
+  position       TeacherPosition?
+  /// DepEd plantilla or not. Nullable because every profile completed before this
+  /// field existed never answered the question, and a default would make those
+  /// rows claim an answer nobody gave.
+  ///
+  /// DISPLAY ONLY. It is shown as a chip when designating an ARAL tutor so the
+  /// person choosing can see who they are picking. It must never narrow the list
+  /// of eligible tutors — a non-DepEd teacher is a valid ARAL tutor, which is the
+  /// whole reason the field exists.
+  employmentType EmploymentType?
 
   // II. Professional Background
   educationalAttainment  EducationalAttainment
@@ -759,6 +787,39 @@ model ReadingLevelRecord {
 
   @@unique([learnerId, weekStart])
   @@index([weekStart])
+}
+
+/// An in-app message addressed to one user, with its own read state.
+///
+/// The shell bell previously rendered values DERIVED from dashboard numbers, which
+/// cannot carry "who did this to me" or "I have seen it". Both are required for an
+/// ARAL designation, so designations get a row.
+model Notification {
+  id          String           @id @default(uuid())
+  schoolId    String
+  recipientId String
+  /// Who caused it. Nullable so removing an account leaves the notification
+  /// readable rather than deleting the recipient's history with it.
+  actorId     String?
+  type        NotificationType
+  /// Learner ids this notification is about. Ids only: the sentence the recipient
+  /// reads is composed at read time from the current learner rows, so no learner
+  /// PII is duplicated into this table and a renamed or removed learner cannot
+  /// leave stale text in the feed.
+  ///
+  /// One row per action, not per learner — enrolling twelve learners at once
+  /// notifies the tutor once.
+  learnerIds  String[]
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  recipient User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User?  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// The feed read: this recipient's unread rows, newest first.
+  @@index([recipientId, readAt, createdAt])
+  @@index([schoolId, createdAt])
 }
 
 model AuditLog {

@@ -41,11 +41,13 @@ export function teacherLearnerScope(teacherId: string): Prisma.LearnerWhereInput
 /**
  * `where` fragment for "grade levels this teacher advises in".
  *
- * Union of the legacy `taughtGrades` m2m mirror (still dual-written; backfill
- * "losers" who lost a contested section keep those rows) and the grade derived
- * from the section they actually advise. Deliberately excludes ARAL — use it for
- * roster operations (create/import a learner, roster export) that belong to the
- * adviser and not to an ARAL tracker.
+ * The grade is derived from the section they advise — `User.advisorySectionId` is
+ * the authoritative axis, and it is `@unique`, so this resolves to at most one
+ * grade. Deliberately excludes ARAL: use it for roster operations (create/import a
+ * learner, roster export) that belong to the adviser and not to an ARAL tracker.
+ *
+ * A teacher with no advisory section matches nothing, by design. The interface
+ * says so and names the fix rather than showing a blank page.
  *
  * Owns the `OR` key: spread it into a `where` that has no `OR` of its own.
  */
@@ -53,31 +55,32 @@ export function teacherAdvisoryGradeScope(
   teacherId: string
 ): Prisma.GradeLevelWhereInput {
   return {
-    OR: [
-      { teachers: { some: { id: teacherId } } },
-      { sections: { some: { deletedAt: null, adviser: { id: teacherId } } } },
-    ],
+    OR: [{ sections: { some: { deletedAt: null, adviser: { id: teacherId } } } }],
   };
 }
 
 /**
  * `where` fragment for "grade levels this teacher may open".
  *
- * Union of three sources, deliberately additive so no legacy account loses
- * access:
- *   1. `taughtGrades` — the legacy m2m mirror, still dual-written. Backfill
- *      "losers" (teachers who lost a contested section) keep these rows.
- *   2. the grade of the section they actually advise — the authoritative axis.
- *   3. any grade holding a learner whose designated ARAL teacher they are —
+ * Union of the two axes a teacher can hold:
+ *   1. the grade of the section they advise — the authoritative axis.
+ *   2. any grade holding a learner whose designated ARAL teacher they are —
  *      this is what lets an ARAL-only teacher (no advisory section) reach the
  *      ARAL pages for that grade.
+ *
+ * The legacy `taughtGrades` m2m mirror is NOT consulted. It is still dual-written
+ * by `setTeacherAdvisory` for now, but it is no longer read for access anywhere:
+ * `advisorySectionId` is `@unique` and that write strips every other section link,
+ * so the mirror can only ever agree with the advisory pointer or lag behind it.
+ *
+ * A teacher who advises nothing and tutors nobody matches no grades. That is the
+ * intended outcome, not a gap — see `teacherAdvisoryGradeScope`.
  *
  * Owns the `OR` key, same caveat as `teacherLearnerScope`.
  */
 export function teacherGradeScope(teacherId: string): Prisma.GradeLevelWhereInput {
   return {
     OR: [
-      { teachers: { some: { id: teacherId } } },
       { sections: { some: { deletedAt: null, adviser: { id: teacherId } } } },
       { learners: { some: { aralTeacherId: teacherId, deletedAt: null } } },
     ],

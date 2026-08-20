@@ -25,6 +25,11 @@ export function HeaderSearch({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      // A window "keydown" listener receives anything dispatched under that
+      // type, including a bare `new Event("keydown")` from a browser extension
+      // or dev tooling, which carries no `key` at all. TypeScript types `key`
+      // as string, so nothing but this guard stops that from throwing.
+      if (typeof event.key !== "string") return;
       if (event.key.toLowerCase() !== "k") return;
       if (!event.metaKey && !event.ctrlKey) return;
       event.preventDefault();

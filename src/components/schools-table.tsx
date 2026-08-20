@@ -28,6 +28,7 @@ import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/scho
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
 import { ConfirmAction } from "@/components/confirm-action";
 import { setSchoolActive } from "@/lib/actions/school-management";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
   listOptimisticReducer,
   runOptimistic,
@@ -311,7 +312,7 @@ export function SchoolsTable({
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{school.name}</span>
                       <Link
-                        href={`/school-head?schoolId=${school.id}`}
+                        href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
                         prefetch={true}
                         aria-label={`Open ${school.name} as School Head`}
                         className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

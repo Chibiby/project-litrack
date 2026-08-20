@@ -11,24 +11,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type {
-  LearnerFormGradeOption,
-  LearnerFormSectionOption,
-} from "@/components/forms/learner-form";
-import type {
   LearnerAralStatusFilter,
   LearnerGenderFilter,
-  LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
 
 /**
  * The roster toolbar, to the approved comp: one wide search field on the left,
- * then the three facet dropdowns, then the bulk action menu hard right.
+ * then the facet dropdowns, then the bulk action menu hard right.
  *
  * The comp's Filter and Export buttons are gone by direction — every facet the
  * popover used to hide is now a visible dropdown, so a second filter affordance
  * would only duplicate them.
+ *
+ * Section is not a facet here: the roster already prints each learner's section
+ * in its own column, and a teacher scanning one advisory class has nothing to
+ * narrow. The ARAL grade pages keep their section filter — that plumbing still
+ * lives in `pagination.ts`.
  */
 
+/** Still exported for the ARAL grade pages' section filter. */
 export type SectionOption = { id: string; name: string };
 
 export type LearnerGradeOption = {
@@ -36,16 +37,8 @@ export type LearnerGradeOption = {
   label: string;
 };
 
-export type LearnerListAddLearnerProps = {
-  gradeLevelId: string;
-  grades: LearnerFormGradeOption[];
-  sections: LearnerFormSectionOption[];
-};
-
 type Props = {
   basePath?: string;
-  section: LearnerListSectionFilter;
-  sections: SectionOption[];
   gender: LearnerGenderFilter;
   aralStatus: LearnerAralStatusFilter;
   schoolId?: string;
@@ -113,8 +106,6 @@ function FacetSelect({
 
 export function LearnerListToolbar({
   basePath = "/teacher/learners",
-  section,
-  sections,
   gender,
   aralStatus,
   schoolId,
@@ -128,11 +119,9 @@ export function LearnerListToolbar({
   const router = useRouter();
 
   function navigate(next: {
-    section?: LearnerListSectionFilter;
     gender?: LearnerGenderFilter;
     aralStatus?: LearnerAralStatusFilter;
   }) {
-    const nextSection = next.section ?? section;
     const nextGender = next.gender ?? gender;
     const nextAralStatus = next.aralStatus ?? aralStatus;
 
@@ -140,7 +129,6 @@ export function LearnerListToolbar({
       buildHref(basePath, {
         schoolId,
         q: q.trim() || undefined,
-        section: nextSection !== "all" ? nextSection : undefined,
         gender: nextGender !== "all" ? nextGender : undefined,
         aralStatus: nextAralStatus !== "all" ? nextAralStatus : undefined,
         perPage: perPage ? String(perPage) : undefined,
@@ -171,25 +159,6 @@ export function LearnerListToolbar({
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-        {sections.length > 0 ? (
-          <FacetSelect
-            id="learner-facet-section"
-            label="Section"
-            value={section === "all" ? "all" : section}
-            onValueChange={(value) =>
-              navigate({ section: value as LearnerListSectionFilter })
-            }
-          >
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="none">No section</SelectItem>
-            {sections.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </FacetSelect>
-        ) : null}
-
         <FacetSelect
           id="learner-facet-gender"
           label="Gender"
@@ -212,8 +181,8 @@ export function LearnerListToolbar({
           }
         >
           <SelectItem value="all">All</SelectItem>
-          <SelectItem value="with">With Profile</SelectItem>
-          <SelectItem value="without">No Profile</SelectItem>
+          <SelectItem value="enrolled">Enrolled</SelectItem>
+          <SelectItem value="not-enrolled">Not enrolled</SelectItem>
         </FacetSelect>
 
         {bulkActions}

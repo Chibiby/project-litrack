@@ -10,6 +10,7 @@ import {
 } from "@/lib/validators/announcement.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -42,7 +43,7 @@ export async function createAnnouncement(formData: FormData): Promise<ActionResu
     metadata: { schoolId: user.schoolId, title: announcement.title },
   });
 
-  revalidatePath("/school-head/announcements");
+  revalidatePath(SCHOOL_HEAD_ROUTES.announcements);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
@@ -82,7 +83,7 @@ export async function updateAnnouncement(formData: FormData): Promise<ActionResu
     metadata: { schoolId: user.schoolId, title: parsed.data.title },
   });
 
-  revalidatePath("/school-head/announcements");
+  revalidatePath(SCHOOL_HEAD_ROUTES.announcements);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
@@ -120,7 +121,7 @@ export async function deleteAnnouncement(formData: FormData): Promise<ActionResu
     metadata: { schoolId: user.schoolId, title: existing.title },
   });
 
-  revalidatePath("/school-head/announcements");
+  revalidatePath(SCHOOL_HEAD_ROUTES.announcements);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

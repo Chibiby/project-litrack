@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Button } from "@/components/ui/button";
 import { CalendarRange, ExternalLink } from "lucide-react";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ export default async function AdminSchoolYearsPage() {
                       </TableCell>
                       <TableCell>
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/school-head/school-years?schoolId=${y.school.id}`}>
+                          <Link href={`${SCHOOL_HEAD_ROUTES.schoolYears}?schoolId=${y.school.id}`}>
                             <ExternalLink className="h-3.5 w-3.5" />
                           </Link>
                         </Button>

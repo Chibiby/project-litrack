@@ -23,6 +23,8 @@ interface RoleShellProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
+  /** Account-menu label when the role enum is not what the person is called. */
+  roleLabel?: string;
   notifications?: ShellNotification[];
   children: React.ReactNode;
 }
@@ -39,6 +41,7 @@ export function RoleShell({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  roleLabel,
   notifications,
   children,
 }: RoleShellProps) {
@@ -54,6 +57,7 @@ export function RoleShell({
           grades={grades}
           isSuperAdminView={isSuperAdminView}
           viewedSchoolName={viewedSchoolName}
+          roleLabel={roleLabel}
           expanded={expanded}
           transitionsEnabled={hydrated}
         />

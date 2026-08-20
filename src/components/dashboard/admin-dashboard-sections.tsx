@@ -4,6 +4,7 @@ import {
   getAdminActivitySeries,
   getAdminRecentSchools,
 } from "@/lib/dashboard/aggregates";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -182,7 +183,9 @@ export async function AdminRecentSchoolsSection() {
               asChild
               className="bg-card"
             >
-              <PrefetchLink href={`/school-head?schoolId=${school.id}`}>
+              <PrefetchLink
+                href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+              >
                 {school.name}
                 {!school.isActive ? " (inactive)" : ""}
                 <ExternalLink className="ml-1 h-3 w-3" />

@@ -165,6 +165,19 @@ export const SCHOOL_HEAD_POSITION_LABELS = {
   TECHVOC_AD: "TECHVOC Ad",
 } as const;
 
+/**
+ * Whether a teacher holds a DepEd plantilla item. A different axis from
+ * `TEACHER_POSITION_LABELS`, which records the rank of such an item.
+ *
+ * Short by design: these read as a chip beside a name in the ARAL tutor picker,
+ * where "Non-DepEd (volunteer, LGU-funded, private hire…)" would crowd out the
+ * teacher it describes.
+ */
+export const EMPLOYMENT_TYPE_LABELS = {
+  DEPED_PLANTILLA: "DepEd",
+  NON_DEPED: "Non-DepEd",
+} as const;
+
 export const TEACHER_POSITION_LABELS = {
   TEACHER_I: "Teacher I",
   TEACHER_II: "Teacher II",

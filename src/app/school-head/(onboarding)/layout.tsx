@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { OnboardingShell } from "@/components/onboarding-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 
@@ -13,7 +14,7 @@ export default async function SchoolHeadOnboardingLayout({
   const user = await requireUser("SCHOOL_HEAD");
 
   if (user.profileCompleted) {
-    redirect("/school-head");
+    redirect(SCHOOL_HEAD_ROUTES.dashboard);
   }
 
   return (

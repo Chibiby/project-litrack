@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Upload } from "lucide-react";
+import { ChevronDown, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,10 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AddLearnerDialog } from "@/components/learners/add-learner-dialog";
-import type {
-  LearnerFormGradeOption,
-  LearnerFormSectionOption,
-} from "@/components/forms/learner-form";
+import type { LearnerFormPlacement } from "@/components/forms/learner-form";
 
 /**
  * The comp's split primary control: the button adds one learner, the chevron
@@ -22,19 +19,19 @@ import type {
  */
 export function LearnerAddMenu({
   gradeLevelId,
-  grades,
-  sections,
+  gradeType,
+  placement,
 }: {
   gradeLevelId: string;
-  grades: LearnerFormGradeOption[];
-  sections: LearnerFormSectionOption[];
+  gradeType: string;
+  placement: LearnerFormPlacement;
 }) {
   return (
     <div className="flex w-full sm:w-auto">
       <AddLearnerDialog
         gradeLevelId={gradeLevelId}
-        grades={grades}
-        sections={sections}
+        gradeType={gradeType}
+        placement={placement}
         triggerClassName="rounded-r-none"
       />
       <DropdownMenu>
@@ -57,6 +54,28 @@ export function LearnerAddMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  );
+}
+
+/**
+ * Stands in for the add control when the teacher advises no section.
+ *
+ * A learner has to land somewhere, and the only somewhere a teacher can create
+ * one is their own advisory — so the button says why it cannot be pressed rather
+ * than opening a dialog that could only fail on submit. The reason is the same
+ * sentence the server returns, so the two can never drift.
+ */
+export function LearnerAddMenuDisabled({ reason }: { reason: string }) {
+  return (
+    <div className="flex w-full flex-col items-start gap-1 sm:w-auto sm:items-end">
+      <Button type="button" size="sm" disabled className="w-full sm:w-auto">
+        <Plus className="h-4 w-4" aria-hidden />
+        Add new learner
+      </Button>
+      <p className="max-w-xs text-xs text-muted-foreground sm:text-right">
+        {reason}
+      </p>
     </div>
   );
 }

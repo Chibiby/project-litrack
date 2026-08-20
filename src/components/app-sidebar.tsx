@@ -46,6 +46,12 @@ interface AppSidebarProps {
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
   viewedSchoolName?: string;
+  /**
+   * Overrides the label under the user's name in the account menu. Set it where
+   * the role enum is not what the person is called — a Non-DepEd ARAL Volunteer
+   * has the TEACHER role but is not a teacher. Defaults to the humanised role.
+   */
+  roleLabel?: string;
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -66,6 +72,51 @@ function NavLink({
   collapsed?: boolean;
 }) {
   const Icon = item.icon;
+
+  // Announced but not built. Rendered as inert text rather than a disabled link:
+  // a link that goes nowhere is worse than a label that says why. It carries no
+  // href and no tab stop, so keyboard users skip it instead of landing on a dead
+  // end. The "Soon" pill matches the roster's bulk-actions and profile-modal
+  // treatment, so the convention reads the same wherever it appears.
+  if (item.soon) {
+    const row = (
+      <div
+        aria-disabled
+        className={cn(
+          "relative flex items-center rounded-lg text-sm font-medium text-muted-foreground/70",
+          collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+        {collapsed ? (
+          // No room for the pill on the rail, so the state rides the same
+          // top-right dot the badge uses — muted rather than violet, because
+          // nothing here is waiting for the teacher.
+          <span
+            aria-hidden
+            className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/40"
+          />
+        ) : (
+          <>
+            <span className="flex-1 truncate">{item.label}</span>
+            <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Soon
+            </span>
+          </>
+        )}
+      </div>
+    );
+
+    if (!collapsed) return row;
+
+    return (
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>{row}</TooltipTrigger>
+        <TooltipContent side="right">{item.label} — soon</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   const link = (
     <PrefetchLink
       href={item.href}
@@ -120,6 +171,7 @@ export function AppSidebar({
   grades,
   isSuperAdminView,
   viewedSchoolName,
+  roleLabel: roleLabelOverride,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
@@ -128,7 +180,7 @@ export function AppSidebar({
   const navGroups = useMemo(() => getNavGroups(role, grades ?? []), [role, grades]);
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   const activeItemId = resolveActiveItemId(pathname, navItems);
-  const roleLabel = role.toLowerCase().replaceAll("_", " ");
+  const roleLabel = roleLabelOverride ?? role.toLowerCase().replaceAll("_", " ");
   const collapsed = !expanded;
 
   useEffect(() => {

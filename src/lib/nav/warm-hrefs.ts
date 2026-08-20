@@ -30,21 +30,20 @@ export function getShellWarmHrefs(role: UserRole): string[] {
  */
 const MAX_NESTED_LEARNER_WARMS = 2;
 
-/** Learner view/edit (+ import) hrefs for the visible grade roster page. */
+/**
+ * Learner detail (+ import) hrefs for the visible grade roster page.
+ * No edit href: editing is a dialog now, so there is no such route to warm.
+ */
 export function getGradeLearnerWarmHrefs(
   gradeId: string,
-  learners: readonly { id: string; archivedAt?: Date | string | null }[]
+  learners: readonly { id: string }[]
 ): string[] {
   const hrefs: string[] = [
     `/teacher/learners?grade=${gradeId}`,
     `/teacher/grade/${gradeId}/import`,
   ];
   for (const learner of learners.slice(0, MAX_NESTED_LEARNER_WARMS)) {
-    const base = `/teacher/grade/${gradeId}/learners/${learner.id}`;
-    hrefs.push(base);
-    if (!learner.archivedAt) {
-      hrefs.push(`${base}/edit`);
-    }
+    hrefs.push(`/teacher/grade/${gradeId}/learners/${learner.id}`);
   }
   return hrefs;
 }
@@ -65,17 +64,15 @@ export function getAralLearnerWarmHrefs(
 }
 
 /**
- * Sibling destinations from a learner detail/edit page.
- * Keep this narrow: roster back + edit only (ARAL actions are one click away).
+ * Sibling destinations from a learner detail page.
+ * Keep this narrow: roster back, plus the ARAL grid for an ARAL learner. Editing
+ * is a dialog on the page itself now, so there is no edit route to warm.
  */
 export function getLearnerDetailWarmHrefs(
   gradeId: string,
-  learner: { id: string; isAralLearner?: boolean; archivedAt?: Date | string | null }
+  learner: { id: string; isAralLearner?: boolean }
 ): string[] {
   const hrefs: string[] = [`/teacher/learners?grade=${gradeId}`];
-  if (!learner.archivedAt) {
-    hrefs.push(`/teacher/grade/${gradeId}/learners/${learner.id}/edit`);
-  }
   if (learner.isAralLearner) {
     hrefs.push(`/teacher/aral?grade=${gradeId}`);
   }

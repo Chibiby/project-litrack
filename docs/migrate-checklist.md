@@ -20,10 +20,23 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260811000002_advisory_section_and_aral_teacher`
 - `20260811000003_backfill_advisory_and_aral`
 - `20260811000004_advisory_section_unique`
+- `20260812000001_teacher_profile_aral_volunteer_fields`
+- `20260819000001_teacher_employment_type_and_notifications`
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
 `npx prisma migrate status` first.
+
+Do **not** apply a `migration.sql` by hand. Pasting the SQL into the Supabase SQL
+Editor performs the DDL but writes no `_prisma_migrations` row, so Prisma still
+counts the migration as pending — the next `migrate deploy` re-runs it, fails on
+the objects that already exist, and marks the migration failed. Recovering from
+that needs `prisma migrate resolve --applied <migration_name>`. Let
+`migrate deploy` do the DDL and the bookkeeping together.
+
+`prisma/rls-policies.sql` is a separate step and needs no migration bookkeeping —
+run it in the SQL Editor after `migrate deploy` whenever a migration adds a table,
+because a new table's RLS is off until that file enables it.
 
 ---
 

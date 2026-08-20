@@ -1,12 +1,15 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import { requireUser } from "@/lib/auth/session";
-import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
-import { resolveSchoolContext } from "@/lib/school-context";
-import { AppShell } from "@/components/app-shell";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import {
+  resolveSchoolHeadView,
+  type SchoolHeadView,
+} from "@/lib/school-head/view";
+import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { Callout } from "@/components/ui/callout";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { listAralTutors } from "@/lib/teachers/aral-tutor";
 import {
   LEARNER_PAGE_SIZE,
   nameSearchWhere,
@@ -38,14 +41,14 @@ function parseParams(searchParams: { page?: string; q?: string }) {
 }
 
 async function AralBody({
-  schoolId,
-  isSuperAdminView,
+  view,
   params,
 }: {
-  schoolId: string;
-  isSuperAdminView: boolean;
+  view: SchoolHeadView;
   params: ReturnType<typeof parseParams>;
 }) {
+  const { schoolId, isSuperAdminView } = view;
+
   const learnerWhere: Prisma.LearnerWhereInput = {
     schoolId,
     deletedAt: null,
@@ -71,28 +74,9 @@ async function AralBody({
     }),
     prisma.learner.count({ where: learnerWhere }),
     // The whole active roster: an ARAL-only teacher (no advisory section) is a
-    // valid designee, so this must not be narrowed to advisers.
-    prisma.user.findMany({
-      where: {
-        schoolId,
-        role: "TEACHER",
-        deletedAt: null,
-        isActive: true,
-        approvalStatus: "APPROVED",
-      },
-      select: {
-        id: true,
-        fullName: true,
-        advisorySection: {
-          select: {
-            name: true,
-            deletedAt: true,
-            gradeLevel: { select: { type: true } },
-          },
-        },
-      },
-      orderBy: { fullName: "asc" },
-    }),
+    // valid designee, so this must not be narrowed to advisers. Shared with the
+    // teacher's own picker so the two can never disagree about who qualifies.
+    listAralTutors(schoolId),
   ]);
 
   const rows: AralLearnerRow[] = learners.map((l) => ({
@@ -104,34 +88,27 @@ async function AralBody({
     aralTeacherId: l.aralTeacherId,
   }));
 
-  const teacherOptions: AralTeacherOption[] = teachers.map((t) => {
-    const advisory =
-      t.advisorySection && t.advisorySection.deletedAt === null
-        ? t.advisorySection
-        : null;
-    return {
-      id: t.id,
-      fullName: t.fullName,
-      advisoryLabel: advisory
-        ? `${GRADE_LEVEL_LABELS[advisory.gradeLevel.type]}-${advisory.name}`
-        : null,
-    };
-  });
+  const teacherOptions: AralTeacherOption[] = teachers.map((t) => ({
+    id: t.id,
+    fullName: t.name,
+    advisoryLabel: t.advisoryLabel,
+    employmentType: t.employmentType,
+  }));
 
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        ARAL learners are the learners whose reading and writing are tracked
-        weekly. Their ARAL teacher is independent of who advises their section —
+    <>
+      {/* Violet is the reserved ARAL accent, so the one place it earns a whole
+          banner is here. */}
+      <Callout variant="aral">
+        An ARAL teacher is independent of who advises the learner&apos;s section —
         designate any active teacher, including one who advises no section at all.
         Reassign here before removing a teacher who still holds ARAL learners.
-      </p>
+      </Callout>
 
       {teacherOptions.length === 0 && !isSuperAdminView ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No active teachers yet — approve a teacher before designating ARAL
-          teachers.
-        </div>
+        <Callout title="No active teachers yet">
+          Approve a teacher before designating ARAL teachers.
+        </Callout>
       ) : null}
 
       <AralTeacherTable
@@ -143,54 +120,35 @@ async function AralBody({
           totalPages: totalPages(learnerCount),
           totalCount: learnerCount,
           q: params.q,
-          basePath: "/school-head/aral",
+          basePath: SCHOOL_HEAD_ROUTES.aral,
           searchParams: {
             schoolId: isSuperAdminView ? schoolId : undefined,
             q: params.q || undefined,
           },
         }}
       />
-    </div>
+    </>
   );
 }
 
 export default async function SchoolHeadAralPage({ searchParams }: PageProps) {
   const raw = await searchParams;
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.profileCompleted && user.role !== "SUPER_ADMIN") {
-    redirect("/school-head/profiling");
-  }
-
-  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
-    user,
+  const { view } = await resolveSchoolHeadView(
     raw.schoolId,
-    "/school-head/aral"
+    SCHOOL_HEAD_ROUTES.aral
   );
 
   const params = parseParams(raw);
-  const schoolName = await getSchoolName(schoolId);
 
   return (
-    <AppShell
-      title={isSuperAdminView ? `ARAL — ${schoolName ?? ""}` : "ARAL learners"}
-      subtitle={
-        isSuperAdminView
-          ? "Super Admin View"
-          : "Designate the teacher who tracks each ARAL learner weekly"
-      }
-      role={user.role}
-      userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={schoolName ?? undefined}
-      isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={schoolName ?? undefined}
+    <SchoolHeadPage
+      title="ARAL learners"
+      description="Designate the teacher who tracks each ARAL learner's reading and writing every week."
+      view={view}
     >
       <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
-        <AralBody
-          schoolId={schoolId}
-          isSuperAdminView={isSuperAdminView}
-          params={params}
-        />
+        <AralBody view={view} params={params} />
       </Suspense>
-    </AppShell>
+    </SchoolHeadPage>
   );
 }

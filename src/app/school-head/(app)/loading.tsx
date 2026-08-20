@@ -2,6 +2,7 @@ import {
   MetricsGridSkeleton,
   ChartSectionSkeleton,
 } from "@/components/loading";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 
 /**
@@ -13,10 +14,12 @@ import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 export default function SchoolHeadLoading() {
   return (
     <PostLoginLoadingBridge>
-      <div className="w-full space-y-6 p-4 lg:p-6">
-        <MetricsGridSkeleton variant="school-head" />
-        <ChartSectionSkeleton columns={2} />
-      </div>
+      <SchoolHeadPageSkeleton>
+        <div className="space-y-6">
+          <MetricsGridSkeleton variant="school-head" />
+          <ChartSectionSkeleton columns={2} />
+        </div>
+      </SchoolHeadPageSkeleton>
     </PostLoginLoadingBridge>
   );
 }

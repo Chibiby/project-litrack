@@ -9,6 +9,7 @@ import {
 } from "@/lib/validators/school-year.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -61,7 +62,7 @@ export async function createSchoolYear(formData: FormData): Promise<ActionResult
       },
     });
 
-    revalidatePath("/school-head/school-years");
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolYears);
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
@@ -109,7 +110,7 @@ export async function setActiveSchoolYear(formData: FormData): Promise<ActionRes
     metadata: { schoolId: user.schoolId, label: year.label },
   });
 
-  revalidatePath("/school-head/school-years");
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolYears);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

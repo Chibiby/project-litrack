@@ -25,6 +25,10 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
+  listAralTutors,
+  type AralTutorOption,
+} from "@/lib/teachers/aral-tutor";
+import {
   gradeLevelIdWhere,
   parseLearnerListParams,
   sectionIdWhere,
@@ -269,7 +273,7 @@ export default async function AralDashboard({
   const actionGradeId =
     activeGrade !== "all" ? activeGrade : assignedGradeIds[0]!;
 
-  const [aralCount, gradeSections, enrollCandidates] = await Promise.all([
+  const [aralCount, gradeSections, enrollCandidates, tutors] = await Promise.all([
     prisma.learner.count({
       where: {
         ...gradeLevelIdWhere(activeGrade, assignedGradeIds),
@@ -315,6 +319,11 @@ export default async function AralDashboard({
           },
           orderBy: { fullName: "asc" },
         }),
+    // Empty for Super Admin for the same reason the candidate list above is:
+    // with no learners to enroll, there is nobody to designate.
+    isSuperAdmin
+      ? Promise.resolve([] as AralTutorOption[])
+      : listAralTutors(schoolId),
   ]);
 
   const sectionIds = new Set(gradeSections.map((s) => s.id));
@@ -383,6 +392,8 @@ export default async function AralDashboard({
             <EnrollToAralDialog
               gradeId={actionGradeId}
               candidates={candidates}
+              tutors={tutors}
+              selfId={user.id}
             />
           )}
         </div>

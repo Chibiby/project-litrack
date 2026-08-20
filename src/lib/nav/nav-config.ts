@@ -1,12 +1,10 @@
 import {
   ArrowRightLeft,
   BookOpen,
-  Building2,
   CalendarDays,
   CalendarRange,
   FileBarChart,
   FileText,
-  GraduationCap,
   LayoutDashboard,
   Megaphone,
   School,
@@ -15,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 export interface NavItem {
   id: string;
@@ -22,6 +21,12 @@ export interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  /**
+   * Announced but not built. The item renders as inert text with a "Soon" pill,
+   * and every resolver below skips it — so an item parked on an href another item
+   * already serves cannot steal that route's highlight or header title.
+   */
+  soon?: boolean;
 }
 
 /** A labelled sidebar section. `label` omitted renders the items with no heading. */
@@ -67,16 +72,28 @@ export function getNavGroups(
       return [
         {
           items: [
-            { id: "school-head-dashboard", label: "Dashboard", href: "/school-head", icon: LayoutDashboard },
-            { id: "school-head-school-years", label: "School years", href: "/school-head/school-years", icon: CalendarRange },
-            { id: "school-head-grade-levels", label: "Grade Levels", href: "/school-head/grade-levels", icon: GraduationCap },
-            { id: "school-head-teachers", label: "Teachers", href: "/school-head/teachers", icon: Users },
-            { id: "school-head-aral", label: "ARAL", href: "/school-head/aral", icon: Sparkles },
-            { id: "school-head-transfer", label: "Transfer", href: "/school-head/transfer", icon: ArrowRightLeft },
-            { id: "school-head-announcements", label: "Announcements", href: "/school-head/announcements", icon: Megaphone },
-            { id: "school-head-school-info", label: "School info", href: "/school-head/school-info", icon: Building2 },
-            { id: "school-head-reports", label: "Reports", href: "/school-head/reports", icon: FileBarChart },
-            { id: "school-head-audit", label: "Audit", href: "/school-head/audit", icon: ScrollText },
+            { id: "school-head-dashboard", label: "Dashboard", href: SCHOOL_HEAD_ROUTES.dashboard, icon: LayoutDashboard },
+          ],
+        },
+        {
+          // Things a School Head changes. "School" replaces the three separate
+          // entries (school years, grade levels, school info) that were really
+          // one job; they are tabs inside the workspace now.
+          label: "Manage",
+          items: [
+            { id: "school-head-school", label: "School", href: SCHOOL_HEAD_ROUTES.school, icon: School },
+            { id: "school-head-teachers", label: "Teachers", href: SCHOOL_HEAD_ROUTES.teachers, icon: Users },
+            { id: "school-head-aral", label: "ARAL Program", href: SCHOOL_HEAD_ROUTES.aral, icon: Sparkles },
+            { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
+          ],
+        },
+        {
+          // Things a School Head publishes or reads back.
+          label: "Records",
+          items: [
+            { id: "school-head-announcements", label: "Announcements", href: SCHOOL_HEAD_ROUTES.announcements, icon: Megaphone },
+            { id: "school-head-reports", label: "Reports", href: SCHOOL_HEAD_ROUTES.reports, icon: FileBarChart },
+            { id: "school-head-audit", label: "Audit", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText },
           ],
         },
       ];
@@ -87,6 +104,16 @@ export function getNavGroups(
           items: [
             { id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
             { id: "teacher-learners", label: "Learners", href: "/teacher/learners", icon: BookOpen },
+            // Per-term grades report, not an ARAL surface — it sits with the
+            // roster it reports on. Keeps its href for when it is wired; `soon`
+            // is what stops it shadowing the live Reports item below.
+            {
+              id: "teacher-terms-reports",
+              label: "End of Terms Reports",
+              href: "/teacher/reports",
+              icon: FileText,
+              soon: true,
+            },
           ],
         },
         {
@@ -104,12 +131,6 @@ export function getNavGroups(
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,
             },
-            {
-              id: "teacher-terms-reports",
-              label: "End of Terms Reports",
-              href: "/teacher/reports",
-              icon: FileText,
-            },
           ],
         },
         {
@@ -125,13 +146,22 @@ export function flattenNavGroups(groups: NavGroup[]): NavItem[] {
   return groups.flatMap((g) => g.items);
 }
 
+/**
+ * The items that actually serve a route. A `soon` item is a placeholder parked on
+ * the href it will eventually own, so resolving against it would highlight a dead
+ * row and title the page after a feature that does not exist yet.
+ */
+function navigable(items: NavItem[]): NavItem[] {
+  return items.filter((i) => !i.soon);
+}
+
 /** Single active href: exact match preferred; otherwise longest prefix. */
 export function resolveActiveHref(
   pathname: string,
   items: NavItem[]
 ): string | undefined {
   let best: string | undefined;
-  for (const item of items) {
+  for (const item of navigable(items)) {
     const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
     if (!matches) continue;
     if (!best || item.href.length > best.length) {
@@ -147,9 +177,11 @@ function isRoleRootHref(href: string): boolean {
 
 /**
  * Single active item id, resolved by the same longest-prefix rule as
- * `resolveActiveHref`. When multiple items share an href (e.g. two teacher
- * entries both point at `/teacher/reports`), the first item in the list
- * wins deterministically so highlighting and React keys never collide.
+ * `resolveActiveHref`. `soon` items are skipped, so `End of Terms Reports` —
+ * parked on `/teacher/reports` until it is built — cannot take the highlight from
+ * the live `Reports` item that serves the route. Where two live items share an
+ * href, the first in the list wins deterministically so highlighting and React
+ * keys never collide.
  */
 export function resolveActiveItemId(
   pathname: string,
@@ -157,7 +189,7 @@ export function resolveActiveItemId(
 ): string | undefined {
   const activeHref = resolveActiveHref(pathname, items);
   if (!activeHref) return undefined;
-  return items.find((i) => i.href === activeHref)?.id;
+  return navigable(items).find((i) => i.href === activeHref)?.id;
 }
 
 function humanise(segment: string): string {
@@ -170,10 +202,11 @@ function humanise(segment: string): string {
  * Header title: the active nav item's label, else a humanised trailing
  * segment. A role-root item (e.g. `/teacher`) only supplies its label on an
  * exact pathname match — otherwise unrelated nested routes (e.g.
- * `/teacher/settings/...`) would misreport as "Dashboard".
+ * `/teacher/settings/...`) would misreport as "Dashboard". `soon` items never
+ * supply a title, for the same reason they never take the highlight.
  */
 export function resolvePageTitle(pathname: string, groups: NavGroup[]): string {
-  const items = flattenNavGroups(groups);
+  const items = navigable(flattenNavGroups(groups));
   const activeHref = resolveActiveHref(pathname, items);
   if (activeHref) {
     const match = items.find((i) => i.href === activeHref);

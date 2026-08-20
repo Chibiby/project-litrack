@@ -9,7 +9,11 @@ import {
   sectionIdSchema,
 } from "@/lib/validators/section.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
+import {
+  revalidateSchoolDashboard,
+  revalidateSchoolHeadTeachers,
+} from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { nextUnusedLetter } from "@/lib/section-letters";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -73,8 +77,7 @@ export async function createSection(formData: FormData): Promise<ActionResult> {
       },
     });
 
-    revalidatePath("/school-head/sections");
-    revalidatePath("/school-head/grade-levels");
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
@@ -122,8 +125,7 @@ export async function updateSection(formData: FormData): Promise<ActionResult> {
       },
     });
 
-    revalidatePath("/school-head/sections");
-    revalidatePath("/school-head/grade-levels");
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {
@@ -219,9 +221,8 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
       metadata: { schoolId: user.schoolId, sectionId: section.id, name: section.name },
     });
 
-    revalidatePath("/school-head/sections");
-    revalidatePath("/school-head/grade-levels");
-    revalidatePath("/school-head/teachers");
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+    revalidateSchoolHeadTeachers();
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   } catch (err) {

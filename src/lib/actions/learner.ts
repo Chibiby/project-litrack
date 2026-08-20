@@ -11,14 +11,26 @@ import {
   learnerIdSchema,
   deleteLearnersSchema,
   enrollLearnersToAralSchema,
+  enrollRosterLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
-import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import {
+  revalidateLearnerScoped,
+  revalidateSchoolHeadTeachers,
+} from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
   teacherAdvisoryGradeScope,
   teacherCanAccessLearner,
+  teacherLearnerScope,
 } from "@/lib/teachers/scope";
+import {
+  getAdvisoryPlacement,
+  NO_ADVISORY_MESSAGE,
+} from "@/lib/teachers/advisory";
+import { isEligibleAralTutor } from "@/lib/teachers/aral-tutor";
+import { notifyAralAssigned } from "@/lib/notifications";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
@@ -77,26 +89,6 @@ function buildFullName(firstName: string, middleName: string | undefined, lastNa
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
 
-/** Validate optional section belongs to grade + school and is not soft-deleted. */
-async function resolveSectionForGrade(
-  sectionId: string | undefined,
-  gradeLevelId: string,
-  schoolId: string
-): Promise<{ ok: true; sectionId: string | null } | { ok: false; error: string }> {
-  if (!sectionId) return { ok: true, sectionId: null };
-  const section = await prisma.section.findFirst({
-    where: {
-      id: sectionId,
-      schoolId,
-      gradeLevelId,
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-  if (!section) return { ok: false, error: "Section not found in this grade" };
-  return { ok: true, sectionId: section.id };
-}
-
 export async function createLearner(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
@@ -110,24 +102,22 @@ export async function createLearner(
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  // Rostering a new learner is an adviser action: an ARAL teacher tracks
-  // learners they were designated, they do not create them.
-  const grade = await prisma.gradeLevel.findFirst({
-    where: {
-      id: parsed.data.gradeLevelId,
-      schoolId: user.schoolId,
-      deletedAt: null,
-      ...teacherAdvisoryGradeScope(user.id),
-    },
-  });
-  if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
+  // Placement is DERIVED from the section this teacher advises, never submitted.
+  // The dropdowns that used to send it were built from the ARAL-inclusive grade
+  // list while this action validated against the advisory-only one, so every
+  // teacher who also tutored ARAL learners was offered a grade the action then
+  // refused — and the modal could open pre-set to it.
+  const advisory = await getAdvisoryPlacement(user);
+  if (!advisory) return { ok: false, error: NO_ADVISORY_MESSAGE };
 
-  const sectionResult = await resolveSectionForGrade(
-    parsed.data.sectionId,
-    parsed.data.gradeLevelId,
-    user.schoolId
-  );
-  if (!sectionResult.ok) return sectionResult;
+  // A stale client can still post the grade it was showing. Refuse rather than
+  // quietly rerouting the learner into a grade the teacher never chose.
+  if (
+    parsed.data.gradeLevelId &&
+    parsed.data.gradeLevelId !== advisory.gradeLevelId
+  ) {
+    return { ok: false, error: "You are not assigned to this grade level" };
+  }
 
   const firstName = parsed.data.firstName.trim();
   const lastName = parsed.data.lastName.trim();
@@ -171,8 +161,8 @@ export async function createLearner(
     const created = await tx.learner.create({
       data: {
         schoolId: user.schoolId,
-        gradeLevelId: parsed.data.gradeLevelId,
-        sectionId: sectionResult.sectionId,
+        gradeLevelId: advisory.gradeLevelId,
+        sectionId: advisory.sectionId,
         teacherId: user.id,
         firstName,
         middleName,
@@ -220,11 +210,12 @@ export async function createLearner(
       schoolId: user.schoolId,
       learnerId: learner.id,
       gradeLevelId: learner.gradeLevelId,
+      sectionId: learner.sectionId,
       enrollmentCreated: Boolean(activeYear),
     },
   });
 
-  revalidatePath(`/teacher/grade/${parsed.data.gradeLevelId}`);
+  revalidatePath(`/teacher/grade/${advisory.gradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidateLearnerScoped({
     schoolId: user.schoolId,
@@ -256,12 +247,11 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Not found" };
   }
 
-  const sectionResult = await resolveSectionForGrade(
-    parsed.data.sectionId,
-    learner.gradeLevelId,
-    user.schoolId
-  );
-  if (!sectionResult.ok) return sectionResult;
+  // Placement is not editable here. The edit form no longer offers a section, and
+  // moving a learner between sections is the School Head's transfer flow — not a
+  // side effect of correcting a spelling. Any `sectionId` in the payload is
+  // ignored rather than trusted.
+  const sectionId = learner.sectionId;
 
   const firstName = parsed.data.firstName.trim();
   const lastName = parsed.data.lastName.trim();
@@ -294,19 +284,12 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         parentEducation: parsed.data.parentEducation,
         ...ethnicityData(parsed.data),
         ...sectionBData(parsed.data),
-        sectionId: sectionResult.sectionId,
       },
     });
 
-    const active = await tx.enrollment.findFirst({
-      where: { learnerId: learner.id, status: "ACTIVE" },
-    });
-    if (active && active.sectionId !== sectionResult.sectionId) {
-      await tx.enrollment.update({
-        where: { id: active.id },
-        data: { sectionId: sectionResult.sectionId },
-      });
-    }
+    // No enrollment write. The learner's section is untouched above, so the active
+    // Enrollment row already points where it should — the reconcile that used to
+    // live here existed only because this action could move a learner.
   });
 
   await writeAudit({
@@ -318,7 +301,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
     metadata: {
       schoolId: user.schoolId,
       learnerId: learner.id,
-      sectionId: sectionResult.sectionId,
+      sectionId,
     },
   });
 
@@ -600,12 +583,19 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
   }
 
   const becoming = !learner.isAralLearner;
-  // Keep the ARAL designation consistent with the flag: enrolling defaults the
-  // designated ARAL teacher to whoever enrolled (matching the Wave 0 backfill,
-  // where the adviser was also the ARAL teacher) without clobbering a
-  // designation the School Head already made; un-enrolling clears it so
-  // `aralTeacherId` never grants access to a non-ARAL learner.
-  const nextAralTeacherId = becoming ? (learner.aralTeacherId ?? user.id) : null;
+  // Keep the ARAL designation consistent with the flag. Enrolling honours an
+  // explicit pick, else falls back to a designation the School Head already made,
+  // else to whoever enrolled. Un-enrolling clears it so `aralTeacherId` never
+  // grants access to a non-ARAL learner.
+  const picked = String(formData.get("aralTeacherId") ?? "").trim();
+  if (becoming && picked && picked !== user.id) {
+    if (!(await isEligibleAralTutor(picked, user.schoolId))) {
+      return { ok: false, error: "Teacher not found" };
+    }
+  }
+  const nextAralTeacherId = becoming
+    ? picked || learner.aralTeacherId || user.id
+    : null;
   await prisma.learner.update({
     where: { id: learner.id },
     data: {
@@ -614,6 +604,15 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
       aralTeacherId: nextAralTeacherId,
     },
   });
+
+  if (becoming && nextAralTeacherId) {
+    await notifyAralAssigned({
+      schoolId: user.schoolId,
+      recipientId: nextAralTeacherId,
+      actorId: user.id,
+      learnerIds: [learner.id],
+    });
+  }
 
   await writeAudit({
     userId: user.id,
@@ -649,7 +648,7 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
  */
 export async function enrollLearnersToAral(
   input: unknown
-): Promise<ActionResult<{ enrolled: number }>> {
+): Promise<ActionResult<{ enrolled: number; redesignated: number }>> {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
@@ -672,6 +671,19 @@ export async function enrollLearnersToAral(
   if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
 
   const uniqueIds = [...new Set(parsed.data.learnerIds)];
+
+  // Who tutors them. Any teacher at the school qualifies — DepEd plantilla or
+  // not, advisory section or not — because the designation is precisely what lets
+  // a volunteer or ARAL-only teacher work on ARAL learners. Omitted means the
+  // enrolling adviser keeps them, which is what the picker defaults to.
+  const aralTeacherId = parsed.data.aralTeacherId ?? user.id;
+  if (
+    aralTeacherId !== user.id &&
+    !(await isEligibleAralTutor(aralTeacherId, user.schoolId))
+  ) {
+    return { ok: false, error: "Teacher not found" };
+  }
+
   const learners = await prisma.learner.findMany({
     where: {
       id: { in: uniqueIds },
@@ -681,7 +693,7 @@ export async function enrollLearnersToAral(
       deletedAt: null,
       archivedAt: null,
     },
-    select: { id: true, isAralLearner: true },
+    select: { id: true, isAralLearner: true, aralTeacherId: true },
   });
 
   if (learners.length !== uniqueIds.length) {
@@ -689,20 +701,49 @@ export async function enrollLearnersToAral(
   }
 
   const toEnroll = learners.filter((l) => !l.isAralLearner).map((l) => l.id);
+  // Already in ARAL but tutored by somebody else. The teacher picked a tutor for
+  // this whole selection, so honour that for them too rather than silently
+  // skipping them — a selection that partly took effect is worse than either
+  // outcome.
+  const toRedesignate = learners
+    .filter((l) => l.isAralLearner && l.aralTeacherId !== aralTeacherId)
+    .map((l) => l.id);
   const enrolledAt = new Date();
 
-  if (toEnroll.length > 0) {
-    await prisma.learner.updateMany({
-      where: { id: { in: toEnroll } },
-      data: {
-        isAralLearner: true,
-        aralEnrolledAt: enrolledAt,
-        // Default the ARAL designation to the enrolling adviser; the School Head
-        // can reassign it later with setLearnerAralTeacher.
-        aralTeacherId: user.id,
-      },
+  // One transaction for both writes. The teacher picked one tutor for one
+  // selection; enrolling some learners and then failing to move the rest would
+  // leave the roster in a state nobody chose, and the toast counts the two
+  // groups separately, so a partial apply would also be misreported.
+  if (toEnroll.length > 0 || toRedesignate.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      if (toEnroll.length > 0) {
+        await tx.learner.updateMany({
+          where: { id: { in: toEnroll } },
+          data: {
+            isAralLearner: true,
+            aralEnrolledAt: enrolledAt,
+            aralTeacherId,
+          },
+        });
+      }
+
+      if (toRedesignate.length > 0) {
+        await tx.learner.updateMany({
+          where: { id: { in: toRedesignate } },
+          data: { aralTeacherId },
+        });
+      }
     });
   }
+
+  // One message per action, not per learner: enrolling twelve learners at once
+  // tells the tutor once. Self-assignment writes nothing.
+  await notifyAralAssigned({
+    schoolId: user.schoolId,
+    recipientId: aralTeacherId,
+    actorId: user.id,
+    learnerIds: [...toEnroll, ...toRedesignate],
+  });
 
   await writeAudit({
     userId: user.id,
@@ -715,6 +756,8 @@ export async function enrollLearnersToAral(
       gradeLevelId: grade.id,
       learnerIds: toEnroll,
       enrolled: toEnroll.length,
+      redesignated: toRedesignate.length,
+      aralTeacherId,
       requested: uniqueIds.length,
     },
   });
@@ -728,8 +771,209 @@ export async function enrollLearnersToAral(
     teacherId: user.id,
     teacherShell: true,
   });
+  // The designated tutor's own sidebar and metrics are derived from the learners
+  // they track, so a designation to somebody else has to bust their caches too.
+  if (aralTeacherId !== user.id) {
+    revalidateLearnerScoped({
+      schoolId: user.schoolId,
+      aralTeacherId,
+      teacherShell: true,
+    });
+  }
 
-  return { ok: true, data: { enrolled: toEnroll.length } };
+  // Both counts, because the caller reports them separately: a selection that
+  // enrolled nobody may still have moved learners to a new tutor, and "already
+  // in ARAL" would be the wrong thing to say about that.
+  return {
+    ok: true,
+    data: { enrolled: toEnroll.length, redesignated: toRedesignate.length },
+  };
+}
+
+/**
+ * Enroll learners picked on the teacher roster into ARAL, and/or hand
+ * already-enrolled ones to a different ARAL tutor.
+ *
+ * A sibling of `enrollLearnersToAral` rather than a wrapper around it. That
+ * action is scoped to one grade the caller *advises*, which is exactly right for
+ * the ARAL grade page and wrong here: the roster spans every grade the teacher
+ * holds and includes learners they reach only through an ARAL designation. Nor
+ * can this call it once per grade — a teacher who enrolls twelve learners in one
+ * gesture would get one notification and one audit row per grade for a single act.
+ *
+ * Assigns and reassigns; it never clears. Clearing a designation is the School
+ * Head's call (`setLearnerAralTeacher`), because the designation is what grants an
+ * ARAL-only teacher their access, and revoking it is not a roster operation.
+ */
+export async function enrollRosterLearnersToAral(
+  input: unknown
+): Promise<ActionResult<{ enrolled: number; redesignated: number }>> {
+  const user = await requireSchoolUser("TEACHER");
+  if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
+
+  const parsed = enrollRosterLearnersToAralSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const uniqueIds = [...new Set(parsed.data.learnerIds)];
+
+  // Any teacher at the school qualifies — DepEd plantilla or not, advisory
+  // section or not — because the designation is precisely what lets a volunteer
+  // or ARAL-only teacher work on ARAL learners. Omitted means the caller keeps
+  // them, which is what the picker defaults to.
+  const aralTeacherId = parsed.data.aralTeacherId ?? user.id;
+  if (
+    aralTeacherId !== user.id &&
+    !(await isEligibleAralTutor(aralTeacherId, user.schoolId))
+  ) {
+    return { ok: false, error: "Teacher not found" };
+  }
+
+  const learners = await prisma.learner.findMany({
+    where: {
+      id: { in: uniqueIds },
+      schoolId: user.schoolId,
+      deletedAt: null,
+      archivedAt: null,
+      // Advisory roster + ARAL designations — the same scope the roster lists by,
+      // so anything visible there is actionable here and nothing else is.
+      ...teacherLearnerScope(user.id),
+    },
+    select: {
+      id: true,
+      gradeLevelId: true,
+      teacherId: true,
+      isAralLearner: true,
+      aralTeacherId: true,
+    },
+  });
+
+  // One generic answer for "not yours", "another school's", "archived" and
+  // "never existed", so a probe cannot tell them apart.
+  if (learners.length !== uniqueIds.length) {
+    return { ok: false, error: "One or more learners are no longer on your roster" };
+  }
+
+  const toEnroll = learners.filter((l) => !l.isAralLearner).map((l) => l.id);
+  // Already in ARAL but tutored by somebody else. The teacher picked one tutor
+  // for this whole selection, so honour it for them too rather than silently
+  // skipping them — a selection that partly took effect is worse than either
+  // outcome.
+  const toRedesignate = learners
+    .filter((l) => l.isAralLearner && l.aralTeacherId !== aralTeacherId)
+    .map((l) => l.id);
+
+  // Nothing to do: every learner is already in ARAL with this tutor. Returning
+  // early keeps the audit log free of a row claiming a change that never
+  // happened, and the caller still gets both counts to report from.
+  if (toEnroll.length === 0 && toRedesignate.length === 0) {
+    return { ok: true, data: { enrolled: 0, redesignated: 0 } };
+  }
+
+  const enrolledAt = new Date();
+
+  // One transaction for both writes: the teacher picked one tutor for one
+  // selection, and enrolling some while failing to move the rest would leave the
+  // roster in a state nobody chose — which the two separate counts would then
+  // also misreport.
+  await prisma.$transaction(async (tx) => {
+    if (toEnroll.length > 0) {
+      await tx.learner.updateMany({
+        where: { id: { in: toEnroll } },
+        data: { isAralLearner: true, aralEnrolledAt: enrolledAt, aralTeacherId },
+      });
+    }
+    if (toRedesignate.length > 0) {
+      await tx.learner.updateMany({
+        where: { id: { in: toRedesignate } },
+        data: { aralTeacherId },
+      });
+    }
+  });
+
+  const affected = [...toEnroll, ...toRedesignate];
+
+  // One message per action, not per learner. Self-assignment writes nothing.
+  await notifyAralAssigned({
+    schoolId: user.schoolId,
+    recipientId: aralTeacherId,
+    actorId: user.id,
+    learnerIds: affected,
+  });
+
+  // Named for what the teacher did: enrolling somebody is an enrolment even when
+  // the same gesture also moved others, and a selection that only changed hands
+  // is a designation change and reads better in the log under that name.
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action:
+      toEnroll.length > 0
+        ? AUDIT_ACTIONS.LEARNER_ENROLL_ARAL
+        : AUDIT_ACTIONS.LEARNER_SET_ARAL_TEACHER,
+    resource: "Learner",
+    resourceId: affected.length === 1 ? affected[0] : null,
+    metadata: {
+      schoolId: user.schoolId,
+      source: "roster",
+      learnerIds: affected,
+      enrolled: toEnroll.length,
+      redesignated: toRedesignate.length,
+      aralTeacherId,
+      requested: uniqueIds.length,
+    },
+  });
+
+  // The roster spans grades, so bust each one the selection actually touched
+  // rather than the caller's whole set.
+  const affectedSet = new Set(affected);
+  const gradeIds = [
+    ...new Set(
+      learners.filter((l) => affectedSet.has(l.id)).map((l) => l.gradeLevelId)
+    ),
+  ];
+  for (const gradeId of gradeIds) {
+    revalidatePath(`/teacher/grade/${gradeId}`);
+    revalidatePath(`/teacher/aral/${gradeId}`);
+  }
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+
+  revalidateLearnerScoped({
+    schoolId: user.schoolId,
+    teacherId: user.id,
+    teacherShell: true,
+  });
+  // The designated tutor's own sidebar and metrics are derived from the learners
+  // they track, so a designation to somebody else has to bust their caches too.
+  if (aralTeacherId !== user.id) {
+    revalidateLearnerScoped({
+      schoolId: user.schoolId,
+      aralTeacherId,
+      teacherShell: true,
+    });
+  }
+  // The outgoing tutor of a reassigned learner loses them from their own ARAL
+  // list, so their caches are just as stale as the incoming tutor's.
+  const previousTutorIds = new Set(
+    learners
+      .filter((l) => affectedSet.has(l.id) && l.aralTeacherId)
+      .map((l) => l.aralTeacherId as string)
+  );
+  for (const previousId of previousTutorIds) {
+    if (previousId === aralTeacherId || previousId === user.id) continue;
+    revalidateLearnerScoped({
+      schoolId: user.schoolId,
+      aralTeacherId: previousId,
+      teacherShell: true,
+    });
+  }
+
+  return {
+    ok: true,
+    data: { enrolled: toEnroll.length, redesignated: toRedesignate.length },
+  };
 }
 
 const setLearnerAralTeacherSchema = z.object({
@@ -781,16 +1025,12 @@ export async function setLearnerAralTeacher(
   }
 
   if (nextAralTeacherId) {
-    const teacher = await prisma.user.findFirst({
-      where: {
-        id: nextAralTeacherId,
-        schoolId: user.schoolId,
-        role: "TEACHER",
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (!teacher) return { ok: false, error: "Teacher not found" };
+    // Same rule the picker's list is built from. It used to accept any
+    // non-deleted teacher while the list showed only active approved ones, so the
+    // action quietly accepted people the School Head was never offered.
+    if (!(await isEligibleAralTutor(nextAralTeacherId, user.schoolId))) {
+      return { ok: false, error: "Teacher not found" };
+    }
   }
 
   if (learner.aralTeacherId === nextAralTeacherId) return { ok: true };
@@ -799,6 +1039,15 @@ export async function setLearnerAralTeacher(
     where: { id: learner.id },
     data: { aralTeacherId: nextAralTeacherId },
   });
+
+  if (nextAralTeacherId) {
+    await notifyAralAssigned({
+      schoolId: user.schoolId,
+      recipientId: nextAralTeacherId,
+      actorId: user.id,
+      learnerIds: [learner.id],
+    });
+  }
 
   await writeAudit({
     userId: user.id,
@@ -814,8 +1063,8 @@ export async function setLearnerAralTeacher(
     },
   });
 
-  revalidatePath("/school-head/teachers");
-  revalidatePath("/school-head/transfer");
+  revalidateSchoolHeadTeachers();
+  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
   revalidatePath("/teacher/aral");
   revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived

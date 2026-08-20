@@ -41,10 +41,11 @@ import {
   readingProfileLabelsForGradeType,
 } from "@/lib/constants/enum-labels";
 import { LearnerArchiveButton } from "@/components/learners/learner-archive-button";
+import { LearnerEditButton } from "@/components/learners/learner-edit-button";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getLearnerDetailWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { teacherLearnerScope } from "@/lib/teachers/scope";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -213,11 +214,10 @@ export default async function LearnerDetailPage({
         {!isSuperAdmin && (
           <div className="flex flex-wrap gap-2">
             {!learner.archivedAt && (
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/teacher/grade/${gradeId}/learners/${learner.id}/edit`}>
-                  <Pencil className="h-4 w-4" /> Edit
-                </Link>
-              </Button>
+              <LearnerEditButton
+                learnerId={learner.id}
+                isAralLearner={learner.isAralLearner}
+              />
             )}
             <LearnerArchiveButton
               learnerId={learner.id}

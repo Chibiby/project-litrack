@@ -24,11 +24,15 @@ export type LearnerListSort = "name" | "age";
 export type LearnerGenderFilter = "all" | "MALE" | "FEMALE";
 
 /**
- * Roster ARAL facet — whether the learner has a saved `AralProfile` row.
- * Distinct from `LearnerListFilter`'s `aral`, which is the `isAralLearner`
- * designation: a learner can be designated without having been profiled yet.
+ * Roster ARAL facet — whether the learner is enrolled in ARAL (`isAralLearner`).
+ *
+ * This used to filter on the presence of a saved `AralProfile` row instead, which
+ * answered a different question: a learner is enrolled the moment a teacher
+ * enrols them, and profiled only once somebody fills in Sections B–E. The roster
+ * still shows profiling in its own column ("ARAL Profile"); enrolment is what the
+ * facet narrows by, because that is what the Enroll as ARAL action changes.
  */
-export type LearnerAralStatusFilter = "all" | "with" | "without";
+export type LearnerAralStatusFilter = "all" | "enrolled" | "not-enrolled";
 
 /** `all` = no filter; `none` = unassigned; otherwise a section id. */
 export type LearnerListSectionFilter = "all" | "none" | (string & {});
@@ -57,8 +61,8 @@ const FILTERS: readonly LearnerListFilter[] = ["all", "aral", "archived"];
 const SORTS: readonly LearnerListSort[] = ["name", "age"];
 const ARAL_STATUSES: readonly LearnerAralStatusFilter[] = [
   "all",
-  "with",
-  "without",
+  "enrolled",
+  "not-enrolled",
 ];
 
 /**
@@ -156,19 +160,17 @@ export function genderWhere(
 }
 
 /**
- * Prisma clause for the roster ARAL facet — presence of the `AralProfile`
- * one-to-one relation, not the `isAralLearner` designation.
+ * Prisma clause for the roster ARAL facet — the `isAralLearner` enrolment flag.
+ *
+ * Not the `AralProfile` relation: profiling has its own column, and a teacher who
+ * filters "Not enrolled" is looking for learners to enrol, not learners nobody has
+ * profiled yet.
  */
 export function aralStatusWhere(
   status: LearnerAralStatusFilter
-):
-  | { aralProfile: { isNot: null } }
-  | { aralProfile: { is: null } }
-  | Record<string, never> {
+): { isAralLearner: boolean } | Record<string, never> {
   if (status === "all") return {};
-  return status === "with"
-    ? { aralProfile: { isNot: null } }
-    : { aralProfile: { is: null } };
+  return { isAralLearner: status === "enrolled" };
 }
 
 /**

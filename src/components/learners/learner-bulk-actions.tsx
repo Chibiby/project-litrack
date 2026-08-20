@@ -21,26 +21,32 @@ import { ConfirmAction } from "@/components/confirm-action";
 
 /**
  * The roster's bulk action menu, occupying the slot the comp gives to Filter
- * and Export. Delete is wired; the rest are declared but inert on purpose, so
- * the menu shows where those capabilities will land without pretending they
- * work yet. Each inert row is disabled and labelled "Soon" — never a silent
- * no-op the teacher would read as a failure.
+ * and Export. Delete and Enroll in ARAL are wired; the rest are declared but
+ * inert on purpose, so the menu shows where those capabilities will land
+ * without pretending they work yet. Each inert row is disabled and labelled
+ * "Soon" — never a silent no-op the teacher would read as a failure.
  */
 
 /** Actions the menu will grow into. Keep the labels, wire them one at a time. */
 const PLANNED = [
   { key: "transfer", label: "Transfer student", icon: ArrowLeftRight },
-  { key: "aral", label: "Enroll in ARAL", icon: Sparkles },
   { key: "export", label: "Export selected", icon: Download },
 ] as const;
 
 export function LearnerBulkActions({
   selectedCount,
   onDelete,
+  onEnrollAral,
   pending = false,
 }: {
   selectedCount: number;
   onDelete: () => Promise<void> | void;
+  /**
+   * Opens the ARAL tutor picker for the selection. The menu does not enroll by
+   * itself: a learner needs a tutor before joining the program, and naming one
+   * is a choice, not a confirmation.
+   */
+  onEnrollAral: () => void;
   pending?: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -74,6 +80,20 @@ export function LearnerBulkActions({
               : "Select learners to act on"}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            disabled={!hasSelection || pending}
+            // Same reason as Delete: Radix unmounts the trigger before the
+            // dialog mounts, so opening on the next frame keeps focus from
+            // returning to something that is no longer there.
+            onSelect={(e) => {
+              e.preventDefault();
+              requestAnimationFrame(onEnrollAral);
+            }}
+          >
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Enroll in ARAL
+          </DropdownMenuItem>
 
           <DropdownMenuItem
             disabled={!hasSelection || pending}

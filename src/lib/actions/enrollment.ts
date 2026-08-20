@@ -14,9 +14,11 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { ensureFloatingGradeLevel } from "@/lib/grades/floating";
 import {
   revalidateSchoolDashboard,
+  revalidateSchoolHeadTeachers,
   revalidateSchoolsList,
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -258,11 +260,11 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
   revalidatePath(`/teacher/aral/${resolvedGradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
-  revalidatePath("/school-head/transfer");
-  revalidatePath("/school-head/teachers");
+  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+  revalidateSchoolHeadTeachers();
   // A first floating placement creates the FLOATING grade row, which the Grade
   // Levels page renders.
-  revalidatePath("/school-head/grade-levels");
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidateSchoolDashboard(user.schoolId);
   if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
   // Null on a transfer into FLOATING — there is no receiving adviser to bust.
@@ -443,7 +445,7 @@ export async function transferLearnerCrossSchool(
   revalidatePath("/teacher/aral");
   revalidatePath("/admin/transfers");
   revalidatePath("/admin/schools");
-  revalidatePath("/school-head/transfer");
+  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
   revalidateSchoolDashboard(fromSchoolId);
   revalidateSchoolDashboard(targetSchoolId);
   revalidateSchoolsList();

@@ -1,11 +1,14 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { getSchoolName } from "@/lib/cache/school";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { resolveSchoolContext } from "@/lib/school-context";
-import { AppShell } from "@/components/app-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
+import {
+  SchoolHeadPage,
+  schoolHeadHref,
+} from "@/components/school-head/school-head-page";
+import { Callout } from "@/components/ui/callout";
+import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { TransferLearnerForm } from "@/components/school-head/transfer-learner-form";
@@ -18,13 +21,9 @@ interface PageProps {
   searchParams: Promise<{ schoolId?: string }>;
 }
 
-async function TransferBody({
-  schoolId,
-  isSuperAdminView,
-}: {
-  schoolId: string;
-  isSuperAdminView: boolean;
-}) {
+async function TransferBody({ view }: { view: SchoolHeadView }) {
+  const { schoolId, isSuperAdminView } = view;
+
   const [learnerCount, grades, sections, teachers, activeYear] =
     await Promise.all([
       prisma.learner.count({
@@ -68,27 +67,23 @@ async function TransferBody({
   return (
     <>
       {!activeYear ? (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No active school year. Transfer will update learner pointers, but a
-          new Enrollment row is only created when an active year exists.{" "}
-          <a
-            href={
-              isSuperAdminView
-                ? `/school-head/school-years?schoolId=${schoolId}`
-                : "/school-head/school-years"
-            }
-            className="underline"
+        <Callout title="No active school year">
+          The learner will move now, but the transfer will not be added to their
+          enrolment history until a school year is active.{" "}
+          <Link
+            href={schoolHeadHref(view, SCHOOL_HEAD_ROUTES.schoolYears)}
+            className="font-medium underline"
           >
             Manage school years
-          </a>
-        </div>
+          </Link>
+        </Callout>
       ) : null}
 
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Transfer</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Surface as="section" className="max-w-xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold">Choose a learner</h2>
+        </SurfaceHeader>
+        <SurfaceBody>
           {isSuperAdminView ? (
             <p className="text-sm text-muted-foreground">
               Transfers must be performed by the School Head for this school.
@@ -121,46 +116,28 @@ async function TransferBody({
               })}
             />
           )}
-        </CardContent>
-      </Card>
+        </SurfaceBody>
+      </Surface>
     </>
   );
 }
 
 export default async function TransferPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const user = await requireUser("SCHOOL_HEAD");
-  if (!user.profileCompleted && user.role !== "SUPER_ADMIN")
-    redirect("/school-head/profiling");
-
-  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
-    user,
+  const { view } = await resolveSchoolHeadView(
     params.schoolId,
-    "/school-head/transfer"
+    SCHOOL_HEAD_ROUTES.transfer
   );
 
-  const schoolName = await getSchoolName(schoolId);
-
   return (
-    <AppShell
-      title={
-        isSuperAdminView
-          ? `Transfer — ${schoolName ?? ""}`
-          : "Transfer learner"
-      }
-      subtitle="Move a learner to another grade, section, and adviser — or to Floating"
-      role={user.role}
-      userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={schoolName ?? undefined}
-      isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={schoolName ?? undefined}
+    <SchoolHeadPage
+      title="Transfer a learner"
+      description="Move a learner to another grade, section, and adviser — or to Floating."
+      view={view}
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
-        <TransferBody
-          schoolId={schoolId}
-          isSuperAdminView={isSuperAdminView}
-        />
+        <TransferBody view={view} />
       </Suspense>
-    </AppShell>
+    </SchoolHeadPage>
   );
 }

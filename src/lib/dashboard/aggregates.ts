@@ -9,6 +9,7 @@ import {
 import { cachedQuery } from "@/lib/cache/unstable";
 import { formatLocalDateKey } from "@/lib/date-keys";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
   adminDashboard,
   schoolsList,
@@ -212,21 +213,21 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         setupTasks.push({
           id: "profile",
           label: "Complete School Head profiling",
-          href: "/school-head/profiling",
+          href: SCHOOL_HEAD_ROUTES.profiling,
         });
       }
       if (!activeYear) {
         setupTasks.push({
           id: "year",
           label: "Set an active school year",
-          href: "/school-head/school-years",
+          href: SCHOOL_HEAD_ROUTES.schoolYears,
         });
       }
       if (gradeCount === 0) {
         setupTasks.push({
           id: "grades",
           label: "Create grade levels",
-          href: "/school-head/grade-levels",
+          href: SCHOOL_HEAD_ROUTES.schoolGradeLevels,
         });
       }
       if (gradesNeedingSections > 0) {
@@ -236,7 +237,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
             gradesNeedingSections === 1
               ? "Add sections for a grade with learners"
               : `Add sections for ${gradesNeedingSections} grades with learners`,
-          href: "/school-head/grade-levels",
+          href: SCHOOL_HEAD_ROUTES.schoolGradeLevels,
         });
       }
 
@@ -427,8 +428,13 @@ export function teacherLearnerFilter(
  * Primitive-keyed inner cache so layout + page dedupe works.
  * React cache() uses referential equality — object opts would miss.
  * Nest: React cache → cachedQuery → prisma (same pattern as getSchoolName).
+ *
+ * Returns everything the sidebar chrome needs, not just grades: the teacher
+ * layout is held to two blocking reads, so the designation that decides whether
+ * the account chip says "Teacher" or "ARAL Volunteer" rides along here instead
+ * of buying a third await on every /teacher navigation.
  */
-const getTeacherShellGradesCached = cache(
+const getTeacherShellContextCached = cache(
   async (schoolId: string, teacherId: string, isSuperAdmin: boolean) => {
     return cachedQuery(
       async () => {
@@ -437,57 +443,85 @@ const getTeacherShellGradesCached = cache(
         // hasAral counts ARAL learners in *this teacher's* care, so the ARAL nav
         // appears for a designated ARAL teacher and not for a teacher who merely
         // shares a grade with somebody else's ARAL learners.
-        const grades = await prisma.gradeLevel.findMany({
-          where: teacherGradeFilter(opts),
-          select: {
-            id: true,
-            type: true,
-            _count: {
-              select: {
-                learners: {
-                  where: {
-                    deletedAt: null,
-                    archivedAt: null,
-                    isAralLearner: true,
-                    ...teacherLearnerFilter(opts),
+        const [grades, profile] = await Promise.all([
+          prisma.gradeLevel.findMany({
+            where: teacherGradeFilter(opts),
+            select: {
+              id: true,
+              type: true,
+              _count: {
+                select: {
+                  learners: {
+                    where: {
+                      deletedAt: null,
+                      archivedAt: null,
+                      isAralLearner: true,
+                      ...teacherLearnerFilter(opts),
+                    },
                   },
                 },
               },
             },
-          },
-          orderBy: { createdAt: "asc" },
-        });
+            orderBy: { createdAt: "asc" },
+          }),
+          // A Super Admin impersonating the shell has no TeacherProfile, so skip
+          // the read rather than let a miss read as "not a volunteer".
+          // `findFirst` over `findUnique` to keep the tenant in the where clause
+          // even though userId is unique; TeacherProfile carries no schoolId.
+          isSuperAdmin
+            ? Promise.resolve(null)
+            : prisma.teacherProfile.findFirst({
+                where: { userId: teacherId, user: { schoolId } },
+                select: { designation: true },
+              }),
+        ]);
 
-        return grades.map((g) => ({
-          id: g.id,
-          type: g.type,
-          hasAral: g._count.learners > 0,
-        }));
+        return {
+          grades: grades.map((g) => ({
+            id: g.id,
+            type: g.type,
+            hasAral: g._count.learners > 0,
+          })),
+          designation: profile?.designation ?? null,
+        };
       },
       {
         keyParts: [
-          "teacher-shell-grades-v3",
+          "teacher-shell-context-v4",
           schoolId,
           teacherId,
           String(isSuperAdmin),
         ],
         tags: [teacherShell(teacherId)],
-        // Shell chrome is structural (grade links + hasAral). Longer TTL reduces
-        // layout DB work on soft nav; mutations still bust via teacherShell tag
-        // when ARAL presence / assignments change.
+        // Shell chrome is structural (grade links + hasAral + designation).
+        // Longer TTL reduces layout DB work on soft nav; mutations still bust via
+        // teacherShell tag when ARAL presence / assignments / the profile change.
         revalidate: 300,
       }
     );
   }
 );
 
-/** Lightweight grades for AppShell sidebar — no full learner payloads. */
-export async function getTeacherShellGrades(opts: TeacherOpts) {
-  return getTeacherShellGradesCached(
+/**
+ * Sidebar chrome for a teacher: grade links plus the designation that names the
+ * role in the account menu. One cache entry, so callers that need both pay once.
+ */
+export async function getTeacherShellContext(opts: TeacherOpts) {
+  return getTeacherShellContextCached(
     opts.schoolId,
     opts.teacherId,
     opts.isSuperAdmin
   );
+}
+
+/** Lightweight grades for AppShell sidebar — no full learner payloads. */
+export async function getTeacherShellGrades(opts: TeacherOpts) {
+  const { grades } = await getTeacherShellContextCached(
+    opts.schoolId,
+    opts.teacherId,
+    opts.isSuperAdmin
+  );
+  return grades;
 }
 
 /**

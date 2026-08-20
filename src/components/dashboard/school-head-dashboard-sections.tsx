@@ -5,6 +5,7 @@ import {
   getSchoolHeadRecentActivity,
 } from "@/lib/dashboard/aggregates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Callout } from "@/components/ui/callout";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
@@ -24,6 +25,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { toDateKey } from "@/lib/utils";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 function schoolPath(path: string, schoolId: string, isSuperAdminView: boolean) {
   return isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
@@ -49,20 +51,19 @@ export async function SchoolHeadMetricsSection({
   return (
     <>
       {!metrics?.activeYear ? (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-          No active school year. New learners will not get an Enrollment until
-          you set one.{" "}
+        <Callout title="No active school year">
+          New learners will not get an Enrollment until you set one.{" "}
           <PrefetchLink
-            href={sh("/school-head/school-years")}
+            href={sh(SCHOOL_HEAD_ROUTES.schoolYears)}
             prefetch={true}
             className="font-medium underline"
           >
             Manage school years
           </PrefetchLink>
-        </div>
+        </Callout>
       ) : null}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           title="Learners"
           value={metrics?.learnerCount ?? 0}
@@ -73,20 +74,20 @@ export async function SchoolHeadMetricsSection({
           title="Teachers"
           value={metrics?.teacherCount ?? 0}
           icon={UserPlus}
-          href={sh("/school-head/teachers")}
+          href={sh(SCHOOL_HEAD_ROUTES.teachers)}
         />
         <MetricCard
           title="Grades"
           value={metrics?.gradeCount ?? 0}
           icon={GraduationCap}
           tone="primary"
-          href={sh("/school-head/grade-levels")}
+          href={sh(SCHOOL_HEAD_ROUTES.schoolGradeLevels)}
         />
         <MetricCard
           title="Sections"
           value={metrics?.sectionCount ?? 0}
           icon={Layers}
-          href={sh("/school-head/grade-levels")}
+          href={sh(SCHOOL_HEAD_ROUTES.schoolGradeLevels)}
         />
         <MetricCard
           title="ARAL"
@@ -99,23 +100,22 @@ export async function SchoolHeadMetricsSection({
           value={metrics?.activeYear?.label ?? "None"}
           hint={metrics?.activeYear ? "Active" : "Set an active year"}
           icon={CalendarRange}
-          href={sh("/school-head/school-years")}
+          href={sh(SCHOOL_HEAD_ROUTES.schoolYears)}
         />
       </div>
 
       {(metrics?.setupTasks.length ?? 0) > 0 ? (
-        <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
-          <CardHeader>
-            <CardTitle className="text-base">Incomplete setup</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
+        <Callout title="Finish setting up your school">
+          <div className="mt-2 flex flex-wrap gap-2">
             {metrics!.setupTasks.map((t) => (
               <Button
                 key={t.id}
                 asChild
                 size="sm"
                 variant="outline"
-                className="bg-card"
+                // The amber callout already carries the tint; the buttons sit on
+                // card white so they read as actions rather than more banner.
+                className="bg-card text-foreground"
               >
                 <PrefetchLink
                   href={
@@ -129,8 +129,8 @@ export async function SchoolHeadMetricsSection({
                 </PrefetchLink>
               </Button>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </Callout>
       ) : null}
     </>
   );
@@ -157,7 +157,7 @@ export async function SchoolHeadChartsSection({
 
   return (
     <>
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Attendance (last 7 days)"
           description="Present/late marks recorded"
@@ -188,7 +188,7 @@ export async function SchoolHeadChartsSection({
         </ChartCard>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="English reading profiles"
           description="Current Section A distribution"
@@ -253,10 +253,10 @@ export async function SchoolHeadRecentActivitySection({
         <CardContent>
           {(activity?.announcements.length ?? 0) === 0 ? (
             <EmptyState
-              title="No data yet"
+              title="No notices yet"
               description="Post an announcement for your school."
-              actionHref={sh("/school-head/announcements")}
-              actionLabel="Announcements"
+              actionHref={sh(SCHOOL_HEAD_ROUTES.announcements)}
+              actionLabel="Post an announcement"
               icon={Megaphone}
               className="border-0 bg-transparent py-6"
             />
@@ -284,9 +284,9 @@ export async function SchoolHeadRecentActivitySection({
         <CardContent>
           {(activity?.recentAudit.length ?? 0) === 0 ? (
             <EmptyState
-              title="No data yet"
+              title="Nothing audited yet"
               description="Audited school actions will appear here."
-              actionHref={sh("/school-head/audit")}
+              actionHref={sh(SCHOOL_HEAD_ROUTES.audit)}
               actionLabel="Audit log"
               className="border-0 bg-transparent py-6"
             />

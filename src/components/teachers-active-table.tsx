@@ -23,6 +23,7 @@ import {
   removeTeacher,
   setTeacherActive,
 } from "@/lib/actions/school-head";
+import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { formatDate } from "@/lib/utils";
 import {
   listOptimisticReducer,
@@ -50,11 +51,38 @@ export type ActiveTeacherRow = {
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
   aralLearnerCount: number;
   /**
-   * Read-only mirror of the teacher's advisory section (grade derived from it).
-   * Teachers set this themselves in profiling — the School Head cannot edit it
-   * here; this column exists only so the roster is legible.
+   * The teacher's advisory section (grade derived from it), or `null` when they
+   * have none. `sectionId` is what the School Head's picker binds to; the two
+   * names are for display.
+   *
+   * A teacher sets this themselves in profiling, and a School Head can change it
+   * here afterwards — see `setTeacherAdvisorySection`.
    */
-  assignment: { gradeName: string; sectionName: string } | null;
+  assignment: {
+    sectionId: string;
+    gradeName: string;
+    sectionName: string;
+  } | null;
+};
+
+/**
+ * The sections a School Head may assign, grouped by grade so the picker can use
+ * `<optgroup>` instead of one flat list of every section in the school.
+ *
+ * Sections already held by another teacher are included rather than filtered
+ * out, carrying `adviserName` so the option can say who holds it. Hiding them
+ * would leave a School Head hunting for a section that simply is not in the
+ * list; showing them named explains itself, and the server still refuses the
+ * save.
+ */
+export type AdvisoryGradeOption = {
+  gradeLabel: string;
+  sections: {
+    id: string;
+    name: string;
+    adviserId: string | null;
+    adviserName: string | null;
+  }[];
 };
 
 export type DeclinedTeacherRow = {
@@ -63,6 +91,75 @@ export type DeclinedTeacherRow = {
   email: string;
   rejectedAt: string | null;
 };
+
+/**
+ * The School Head's advisory picker for one teacher.
+ *
+ * A native `<select>` rather than the shadcn `Select`, matching the in-table
+ * picker in `aral-teacher-table.tsx`: `<optgroup>` groups the sections by grade
+ * for free, and a native control inside a table row stays keyboard- and
+ * screen-reader-navigable without a popover fighting the row for space.
+ */
+function AdvisoryCell({
+  row,
+  value,
+  options,
+  saving,
+  disabled,
+  onChange,
+}: {
+  row: ActiveTeacherRow;
+  value: string | null;
+  options: AdvisoryGradeOption[];
+  saving: boolean;
+  disabled: boolean;
+  onChange: (row: ActiveTeacherRow, sectionId: string | null) => void;
+}) {
+  const selectId = `advisory-${row.id}`;
+
+  // No grade has a section, so there is nothing to offer. Saying so beats a
+  // dropdown whose only entry is "Unassigned".
+  if (options.length === 0) {
+    return (
+      <TableCell className="text-sm text-muted-foreground">
+        No sections yet
+      </TableCell>
+    );
+  }
+
+  return (
+    <TableCell>
+      <Label htmlFor={selectId} className="sr-only">
+        Advisory section for {row.fullName}
+      </Label>
+      <select
+        id={selectId}
+        className="h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm"
+        value={value ?? ""}
+        disabled={disabled}
+        onChange={(e) =>
+          onChange(row, e.target.value === "" ? null : e.target.value)
+        }
+      >
+        <option value="">Unassigned</option>
+        {options.map((grade) => (
+          <optgroup key={grade.gradeLabel} label={grade.gradeLabel}>
+            {grade.sections.map((s) => (
+              <option key={s.id} value={s.id}>
+                {/* Named, not hidden: the server refuses an occupied section, so
+                    the option has to say whose it is or the refusal is a riddle. */}
+                {s.adviserId && s.adviserId !== row.id
+                  ? `${s.name} — ${s.adviserName || "taken"}`
+                  : s.name}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {saving ? <p className="mt-1 text-xs text-muted-foreground">Saving…</p> : null}
+    </TableCell>
+  );
+}
 
 function TeacherManageActions({
   row,
@@ -152,6 +249,7 @@ function TeachersManagedTable({
   mode,
   readOnly = false,
   list,
+  advisoryOptions,
 }: {
   title: string;
   emptyLabel: string;
@@ -159,6 +257,13 @@ function TeachersManagedTable({
   mode: "active" | "inactive";
   readOnly?: boolean;
   list?: TeachersListPagination;
+  /**
+   * Present only where advisory editing makes sense. Omitted for the inactive
+   * table on purpose: an inactive teacher cannot sign in, and `advisorySectionId`
+   * is unique, so parking a section on one would lock it away from every teacher
+   * who could actually use it.
+   */
+  advisoryOptions?: AdvisoryGradeOption[];
 }) {
   const router = useRouter();
   const [rowPending, startRowTransition] = useTransition();
@@ -168,10 +273,65 @@ function TeachersManagedTable({
     (state: ActiveTeacherRow[], op: ListOptimisticOp<ActiveTeacherRow>) =>
       listOptimisticReducer(state, op)
   );
+  /** Row-local advisory picks, so a select reflects the change before the refresh. */
+  const [advisoryOverrides, setAdvisoryOverrides] = useState<
+    Record<string, string | null>
+  >({});
+  const [savingAdvisoryId, setSavingAdvisoryId] = useState<string | null>(null);
+
+  /**
+   * The options when advisory editing is on, `undefined` when it is off — one
+   * value rather than a separate boolean, because TypeScript narrows this at the
+   * use site and would not narrow `advisoryOptions` from a boolean flag.
+   */
+  const editableAdvisory = readOnly ? undefined : advisoryOptions;
 
   useEffect(() => {
     setSearchValue(list?.q ?? "");
   }, [list?.q]);
+
+  // Server data wins once it arrives; drop stale overrides.
+  useEffect(() => {
+    setAdvisoryOverrides({});
+  }, [rows]);
+
+  const advisoryValueFor = (row: ActiveTeacherRow): string | null =>
+    row.id in advisoryOverrides
+      ? advisoryOverrides[row.id]
+      : row.assignment?.sectionId ?? null;
+
+  const onChangeAdvisory = (
+    row: ActiveTeacherRow,
+    sectionId: string | null
+  ) => {
+    const previous = advisoryValueFor(row);
+    if (previous === sectionId) return;
+
+    setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: sectionId }));
+    setSavingAdvisoryId(row.id);
+
+    const fd = new FormData();
+    fd.set("teacherId", row.id);
+    // Empty string clears the advisory — the action maps "" to null.
+    fd.set("sectionId", sectionId ?? "");
+
+    startRowTransition(async () => {
+      const res = await setTeacherAdvisorySection(fd);
+      setSavingAdvisoryId(null);
+      if (!res.ok) {
+        // Roll back, so the select never shows an advisory that did not stick.
+        setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: previous }));
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        sectionId
+          ? `Advisory updated for ${row.fullName}`
+          : `${row.fullName} is now unassigned`
+      );
+      router.refresh();
+    });
+  };
 
   const displayCount = list?.totalCount ?? optimisticRows.length;
 
@@ -291,13 +451,24 @@ function TeachersManagedTable({
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.fullName}</TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
-                  <TableCell className="text-sm">
-                    {row.assignment ? (
-                      `${row.assignment.gradeName} — ${row.assignment.sectionName}`
-                    ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </TableCell>
+                  {editableAdvisory ? (
+                    <AdvisoryCell
+                      row={row}
+                      value={advisoryValueFor(row)}
+                      options={editableAdvisory}
+                      saving={savingAdvisoryId === row.id}
+                      disabled={rowPending}
+                      onChange={onChangeAdvisory}
+                    />
+                  ) : (
+                    <TableCell className="text-sm">
+                      {row.assignment ? (
+                        `${row.assignment.gradeName} · ${row.assignment.sectionName}`
+                      ) : (
+                        <span className="text-muted-foreground">Unassigned</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm">
                     {row.aralLearnerCount > 0 ? (
                       <Badge
@@ -353,10 +524,12 @@ export function TeachersActiveTable({
   rows,
   readOnly = false,
   list,
+  advisoryOptions,
 }: {
   rows: ActiveTeacherRow[];
   readOnly?: boolean;
   list?: TeachersListPagination;
+  advisoryOptions?: AdvisoryGradeOption[];
 }) {
   return (
     <TeachersManagedTable
@@ -370,6 +543,7 @@ export function TeachersActiveTable({
       mode="active"
       readOnly={readOnly}
       list={list}
+      advisoryOptions={advisoryOptions}
     />
   );
 }

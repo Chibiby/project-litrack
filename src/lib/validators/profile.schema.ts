@@ -318,17 +318,26 @@ export const teacherProfileSchema = baseProfile
   .extend({
     designation: nonEmpty("Designation is required").max(100),
     position: optionalTeacherPosition,
-    currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES),
+    currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
     yearsInService: teacherYearsInServiceSchema,
   })
   .superRefine((data, ctx) => {
     refineProfileConditionals(data, ctx);
     refineTeacherDesignationPosition(data, ctx);
-    // Every designation except the ARAL Volunteer must pick an advisory
-    // section; the volunteer's `sectionId` stays optional (undefined clears
-    // any existing advisory).
-    if (data.designation !== ARAL_VOLUNTEER_DESIGNATION && data.sectionId === undefined) {
+    // An ARAL Volunteer holds no classroom assignment at all: they advise no
+    // section and they are not attached to a grade. Every other designation
+    // describes a classroom teaching role, so both stay required there.
+    // `undefined` on either field clears whatever the teacher held before.
+    if (data.designation === ARAL_VOLUNTEER_DESIGNATION) return;
+    if (data.currentGradeAssignment === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a grade level",
+        path: ["currentGradeAssignment"],
+      });
+    }
+    if (data.sectionId === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Select a section",

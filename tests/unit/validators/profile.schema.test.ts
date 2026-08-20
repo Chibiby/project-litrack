@@ -491,13 +491,22 @@ describe("teacherProfileSchema", () => {
     if (absent.success) expect(absent.data.yearsInService).toBeUndefined();
   });
 
-  it("requires currentGradeAssignment for every teacher designation", () => {
+  it("requires currentGradeAssignment for every designation except the ARAL Volunteer", () => {
     const { currentGradeAssignment: _g, ...teacherNoGrade } = teacherBase;
-    expect(teacherProfileSchema.safeParse(teacherNoGrade).success).toBe(false);
+    const missing = teacherProfileSchema.safeParse(teacherNoGrade);
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      const issue = missing.error.errors.find(
+        (e) => e.path[0] === "currentGradeAssignment",
+      );
+      expect(issue?.message).toBe("Select a grade level");
+    }
     expect(
       teacherProfileSchema.safeParse({ ...teacherBase, currentGradeAssignment: undefined })
         .success,
     ).toBe(false);
+    // Not a member of the enum, so this fails on the shape whatever the
+    // designation is — the form sends `undefined` for "none", never "".
     expect(
       teacherProfileSchema.safeParse({ ...teacherBase, currentGradeAssignment: "" }).success,
     ).toBe(false);
@@ -512,10 +521,16 @@ describe("teacherProfileSchema", () => {
       }).success,
     ).toBe(false);
 
-    // ARAL Volunteer: section is optional, grade is not
+    // The ARAL Volunteer holds no classroom assignment at all, so grade goes
+    // optional alongside section — a volunteer can save with neither.
     const { currentGradeAssignment: _g3, ...volunteerNoGrade } = aralVolunteerBase;
-    expect(teacherProfileSchema.safeParse(volunteerNoGrade).success).toBe(false);
+    const volunteer = teacherProfileSchema.safeParse(volunteerNoGrade);
+    expect(volunteer.success).toBe(true);
+    if (volunteer.success) {
+      expect(volunteer.data.currentGradeAssignment).toBeUndefined();
+    }
 
+    // ...and may still declare one if they happen to work with a single grade.
     expect(teacherProfileSchema.safeParse(aralVolunteerBase).success).toBe(true);
   });
 

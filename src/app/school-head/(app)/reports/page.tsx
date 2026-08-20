@@ -1,10 +1,8 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { getSchoolName } from "@/lib/cache/school";
 import { prisma } from "@/lib/prisma";
-import { resolveSchoolContext } from "@/lib/school-context";
-import { AppShell } from "@/components/app-shell";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { resolveSchoolHeadView } from "@/lib/school-head/view";
+import { SchoolHeadPage } from "@/components/school-head/school-head-page";
 import { OnDemandReportPanel } from "@/components/reports/on-demand-report-panel";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { TableSectionSkeleton } from "@/components/loading";
@@ -46,33 +44,20 @@ async function SchoolHeadReportBody({ schoolId }: { schoolId: string }) {
 
 export default async function SchoolHeadReportsPage({ searchParams }: Props) {
   const params = await searchParams;
-  const user = await requireUser("SCHOOL_HEAD");
-
-  if (!user.profileCompleted && user.role !== "SUPER_ADMIN") {
-    redirect("/school-head/profiling");
-  }
-
-  const { schoolId, isSuperAdminView } = await resolveSchoolContext(
-    user,
+  const { view } = await resolveSchoolHeadView(
     params.schoolId,
-    "/school-head/reports"
+    SCHOOL_HEAD_ROUTES.reports
   );
 
-  const schoolName = await getSchoolName(schoolId);
-
   return (
-    <AppShell
+    <SchoolHeadPage
       title="Reports"
-      subtitle="Excel export and printable school learner summary"
-      role={user.role}
-      userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      schoolName={schoolName ?? undefined}
-      isSuperAdminView={isSuperAdminView}
-      viewedSchoolName={isSuperAdminView ? (schoolName ?? undefined) : undefined}
+      description="Filter the school roster, then download it as Excel or open a printable summary."
+      view={view}
     >
       <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
-        <SchoolHeadReportBody schoolId={schoolId} />
+        <SchoolHeadReportBody schoolId={view.schoolId} />
       </Suspense>
-    </AppShell>
+    </SchoolHeadPage>
   );
 }

@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
   schoolLoginSchema,
   adminLoginSchema,
@@ -154,7 +155,7 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
 
   await warmSchoolHeadRoutes(school.id);
 
-  redirect("/school-head");
+  redirect(SCHOOL_HEAD_ROUTES.dashboard);
 }
 
 /**

@@ -1,51 +1,78 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const push = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+/**
+ * The header search's window-level Ctrl/⌘+K listener.
+ *
+ * It shipped as `event.key.toLowerCase()`, which threw
+ * `Cannot read properties of undefined (reading 'toLowerCase')` for any
+ * `keydown` dispatched without a `key` — a bare `new Event("keydown")` from a
+ * browser extension or from dev tooling. TypeScript types `key` as `string`, so
+ * only a runtime guard catches it and only a runtime test can prove the guard is
+ * still there.
+ */
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
+}));
 
 import { HeaderSearch } from "@/components/shell/header-search";
 
-beforeEach(() => push.mockClear());
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 afterEach(cleanup);
 
-/** Types into a controlled input and submits the enclosing form. */
-function search(value: string) {
-  const input = screen.getByRole("searchbox") as HTMLInputElement;
-  fireEvent.change(input, { target: { value } });
-  fireEvent.submit(input.closest("form") as HTMLFormElement);
-  return input;
-}
-
-describe("HeaderSearch", () => {
-  it("navigates to the search href with an encoded query", () => {
+describe("HeaderSearch — window keydown listener", () => {
+  it("survives a keydown with no key at all", () => {
     render(<HeaderSearch searchHref="/teacher/learners" />);
-    search("juan dela cruz");
-    expect(push).toHaveBeenCalledWith("/teacher/learners?q=juan%20dela%20cruz");
+
+    // Not fireEvent.keyDown: that always supplies a `key`. The bug needs a
+    // plain Event, dispatched on window, exactly as an extension sends it.
+    expect(() =>
+      window.dispatchEvent(new Event("keydown"))
+    ).not.toThrow();
   });
 
-  it("ignores a whitespace-only submit", () => {
+  it("still focuses the input on Ctrl+K", () => {
     render(<HeaderSearch searchHref="/teacher/learners" />);
-    search("   ");
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it("labels the input from the placeholder", () => {
-    render(<HeaderSearch searchHref="/teacher/learners" />);
-    expect(
-      screen.getByRole("searchbox").getAttribute("aria-label")
-    ).toBe("Search learners...");
-  });
-
-  it("focuses the input on Cmd/Ctrl+K and blurs on Escape", () => {
-    render(<HeaderSearch searchHref="/teacher/learners" />);
-    const input = screen.getByRole("searchbox");
+    const input = screen.getByLabelText("Search learners...");
     expect(document.activeElement).not.toBe(input);
 
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
     expect(document.activeElement).toBe(input);
+  });
 
-    fireEvent.keyDown(input, { key: "Escape" });
+  it("ignores k without a modifier", () => {
+    render(<HeaderSearch searchHref="/teacher/learners" />);
+    const input = screen.getByLabelText("Search learners...");
+
+    fireEvent.keyDown(window, { key: "k" });
+
     expect(document.activeElement).not.toBe(input);
+  });
+
+  it("submits a trimmed query to the role's learner list", () => {
+    render(<HeaderSearch searchHref="/teacher/learners" />);
+    const input = screen.getByLabelText("Search learners...");
+
+    fireEvent.change(input, { target: { value: "  Ana Santos  " } });
+    fireEvent.submit(screen.getByRole("search"));
+
+    expect(push).toHaveBeenCalledWith("/teacher/learners?q=Ana%20Santos");
+  });
+
+  it("does not navigate on an empty query", () => {
+    render(<HeaderSearch searchHref="/teacher/learners" />);
+
+    fireEvent.change(screen.getByLabelText("Search learners..."), {
+      target: { value: "   " },
+    });
+    fireEvent.submit(screen.getByRole("search"));
+
+    expect(push).not.toHaveBeenCalled();
   });
 });

@@ -4,9 +4,11 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { toast } from "sonner";
+import { AlertCircle, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppForm, useAppForm, markFormClean } from "@/components/forms/app-form";
+import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { ProfileWizardChrome, type WizardStepDef } from "@/components/forms/profiling/wizard-chrome";
 import {
   FormCheckboxChips,
@@ -187,7 +189,7 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
     yearsInService: values.yearsInServiceApplicable
       ? values.yearsInService || undefined
       : undefined,
-    currentGradeAssignment: values.currentGradeAssignment,
+    currentGradeAssignment: values.currentGradeAssignment || undefined,
     sectionId: values.sectionId || undefined,
     hasReadingTraining: values.hasReadingTraining,
     readingTrainings:
@@ -237,6 +239,62 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
   [],
 ];
 
+/** Anchor for the server-error banner, so a failed save can scroll itself into view. */
+const SAVE_ERROR_ID = "teacher-profile-save-error";
+
+/**
+ * Field → the label the teacher actually sees above it. A summary that lists
+ * three bare "Required" lines names nothing; with these it names the fields,
+ * which is the whole difference between "something is wrong" and "go fill in
+ * Contact number". Keep in step with the labels in the JSX below.
+ */
+const FIELD_LABELS: Partial<Record<keyof TeacherFormValues, string>> = {
+  firstName: "First name",
+  middleName: "Middle name",
+  lastName: "Last name",
+  contactNumber: "Contact number",
+  designationKind: "Designation",
+  designationOther: "Specify designation",
+  position: "Position",
+  educationalAttainment: "Highest Educational Attainment",
+  fieldOfSpecialization: "Field of Specialization",
+  specializationOther: "Specify specialization",
+  yearsInServiceApplicable: "Do you have a specific number of years in service?",
+  yearsInService: "Years in Service",
+  currentGradeAssignment: "Current Grade Level / Assignment",
+  sectionId: "Section",
+  hasReadingTraining: "Trainings related to literacy/reading?",
+  readingTrainings: "Recent reading trainings (last 5y)",
+  hasEnglishTraining: "Trainings related to English Curriculum?",
+  englishTrainings: "Recent English trainings (last 5y)",
+  highestTrainingLevel: "Highest level of trainings attended",
+};
+
+/** Which wizard step a field lives on, or -1 for a field on no step. */
+function stepOfField(field: keyof TeacherFormValues): number {
+  return STEP_FIELDS.findIndex((fields) => fields.includes(field));
+}
+
+/**
+ * A payload key from `teacherProfileSchema` → the form field that produced it.
+ *
+ * `buildPayload` names every key after its field except `designation`, which is
+ * assembled from the two designation controls — so that is the only translation
+ * needed. Membership is checked against {@link FIELD_LABELS} on purpose: a key we
+ * cannot name is a key we should not silently jump to, and it falls through to
+ * being reported on its own instead.
+ */
+function payloadFieldFor(
+  path: string,
+  values: TeacherFormValues
+): keyof TeacherFormValues | undefined {
+  if (path === "designation") {
+    return values.designationKind === "__OTHER__" ? "designationOther" : "designationKind";
+  }
+  const field = path as keyof TeacherFormValues;
+  return FIELD_LABELS[field] ? field : undefined;
+}
+
 export function TeacherProfileForm({
   defaultValues,
   presentation = "wizard",
@@ -255,6 +313,12 @@ export function TeacherProfileForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(0);
+  /**
+   * The server's reason for refusing the save, kept on screen rather than in a
+   * toast. Half of these say retrying will not help, and a message that
+   * disappears after four seconds cannot say that usefully.
+   */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = presentation === "edit";
   const initialDesig = resolveDesignationKind(defaultValues.designation);
   // Tracks whether the user has explicitly toggled the years-in-service
@@ -300,9 +364,11 @@ export function TeacherProfileForm({
   const hasEnglish = form.watch("hasEnglishTraining");
   const values = form.watch();
 
-  // A designation only needs an advisory section when it corresponds to an
-  // actual classroom teaching role; the ARAL Volunteer designation does not.
-  const sectionRequired = designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+  // A designation only needs a classroom assignment when it corresponds to an
+  // actual teaching role. The ARAL Volunteer holds neither a grade nor a
+  // section, so both fields go optional together — one flag, because there is
+  // no designation where one applies and the other does not.
+  const assignmentRequired = designationKind !== ARAL_VOLUNTEER_DESIGNATION;
 
   const gradeOptions = useMemo(
     () =>
@@ -314,11 +380,11 @@ export function TeacherProfileForm({
         // grade the field is currently set to, so editing an existing
         // profile never strands the teacher on an unselectable value.
         disabled:
-          sectionRequired &&
+          assignmentRequired &&
           !g.sections.some((s) => !s.takenByOther) &&
           g.type !== values.currentGradeAssignment,
       })),
-    [gradeLevels, sectionRequired, values.currentGradeAssignment]
+    [gradeLevels, assignmentRequired, values.currentGradeAssignment]
   );
 
   const sectionOptions = useMemo(() => {
@@ -345,7 +411,7 @@ export function TeacherProfileForm({
 
   /** No grade has an open section (and none is already ours) — profiling is stuck. */
   const noAssignableSections =
-    sectionRequired &&
+    assignmentRequired &&
     gradeLevels.every((g) =>
       g.sections.every((s) => s.takenByOther && s.id !== values.sectionId)
     );
@@ -439,10 +505,14 @@ export function TeacherProfileForm({
     }
 
     if (index === 2) {
-      if (!v.currentGradeAssignment) {
-        form.setError("currentGradeAssignment", { message: "Required" });
+      const needsAssignment = v.designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+      if (needsAssignment && !v.currentGradeAssignment) {
+        form.setError("currentGradeAssignment", { message: "Select a grade level" });
         ok = false;
-      } else if (!gradeOptions.some((o) => o.value === v.currentGradeAssignment)) {
+      } else if (
+        v.currentGradeAssignment &&
+        !gradeOptions.some((o) => o.value === v.currentGradeAssignment)
+      ) {
         // Stale/orphaned value (e.g. a legacy grade type or one the school
         // deactivated) that isn't among the currently-configured grades —
         // never silently submit it, force an explicit re-pick.
@@ -451,7 +521,7 @@ export function TeacherProfileForm({
         });
         ok = false;
       }
-      if (v.designationKind !== ARAL_VOLUNTEER_DESIGNATION && !v.sectionId) {
+      if (needsAssignment && !v.sectionId) {
         form.setError("sectionId", { message: "Select a section" });
         ok = false;
       } else if (v.sectionId && !sectionOptions.some((o) => o.value === v.sectionId)) {
@@ -501,10 +571,51 @@ export function TeacherProfileForm({
   }
 
   async function submitProfile(onSuccess: () => void) {
-    const payload = buildPayload(form.getValues());
+    setSaveError(null);
+    const values = form.getValues();
+    const payload = buildPayload(values);
     const parsed = teacherProfileSchema.safeParse(payload);
     if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message ?? "Invalid input");
+      // These issues are raised against the transformed payload, not the form,
+      // so without this mapping they can only ever be toasted as text. Mapped,
+      // each one marks its own field, names itself in the summary, and the
+      // wizard can jump to the step that holds it.
+      const fields: (keyof TeacherFormValues)[] = [];
+      const unmapped: string[] = [];
+      for (const issue of parsed.error.errors) {
+        const field = payloadFieldFor(String(issue.path[0] ?? ""), values);
+        if (!field) {
+          unmapped.push(issue.message);
+          continue;
+        }
+        if (!fields.includes(field)) fields.push(field);
+        form.setError(field, { message: issue.message });
+      }
+
+      if (fields.length > 0) {
+        // Earliest step first: sending someone to the last offending step would
+        // make them walk back through the ones before it anyway.
+        const steps = fields.map(stepOfField).filter((i) => i >= 0);
+        const earliest = steps.length > 0 ? Math.min(...steps) : undefined;
+        if (!isEdit && earliest !== undefined) setStep(earliest);
+        const target =
+          fields.find((f) => stepOfField(f) === earliest) ?? fields[0];
+        // The field may live on a step that has only just been mounted.
+        requestAnimationFrame(() => {
+          try {
+            form.setFocus(target);
+          } catch {
+            /* ignore */
+          }
+        });
+        toast.error(
+          fields.length === 1
+            ? "1 field needs your attention"
+            : `${fields.length} fields need your attention`
+        );
+      }
+      // An issue we could not attach to a field still has to be said out loud.
+      for (const message of unmapped) toast.error(message);
       return;
     }
     startTransition(async () => {
@@ -513,12 +624,21 @@ export function TeacherProfileForm({
         markFormClean(form);
         toast.success("Profile saved");
         onSuccess();
-      } else toast.error(res.error);
+      } else {
+        setSaveError(res.error);
+        toast.error("Couldn't save your profile");
+        requestAnimationFrame(() => {
+          document
+            .getElementById(SAVE_ERROR_ID)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
     });
   }
 
   async function handleSave() {
     form.clearErrors();
+    setSaveError(null);
     let ok = true;
     ok = (await validateStep(0, { clear: false })) && ok;
     ok = (await validateStep(1, { clear: false })) && ok;
@@ -529,6 +649,7 @@ export function TeacherProfileForm({
   }
 
   async function handleContinue() {
+    setSaveError(null);
     if (step < TEACHER_STEPS.length - 1) {
       const ok = await validateStep(step);
       if (!ok) return;
@@ -545,6 +666,54 @@ export function TeacherProfileForm({
 
   const sections = (
     <>
+      {saveError ? (
+        <div
+          id={SAVE_ERROR_ID}
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p className="min-w-0 flex-1">{saveError}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto shrink-0 p-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setSaveError(null)}
+            aria-label="Dismiss this message"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
+      {/*
+        `waitForSubmit={false}` because the wizard's Continue button is a plain
+        button, not a submit — RHF never records a submit, so the default gate
+        would hide this however many fields are marked. Step names and jumps are
+        wizard-only: in the flat edit view every field is already on screen, and
+        naming a step the reader cannot see would be worse than saying nothing.
+      */}
+      <FormErrorSummary
+        title="These fields need your attention:"
+        waitForSubmit={false}
+        fieldLabels={FIELD_LABELS}
+        sectionOf={
+          isEdit
+            ? undefined
+            : (field) => {
+                const index = stepOfField(field as keyof TeacherFormValues);
+                return index >= 0 ? TEACHER_STEPS[index]?.shortLabel : undefined;
+              }
+        }
+        onJump={
+          isEdit
+            ? undefined
+            : (field) => {
+                const index = stepOfField(field as keyof TeacherFormValues);
+                if (index >= 0) setStep(index);
+              }
+        }
+      />
       {isEdit || step === 0 ? (
         <Card>
           <CardHeader>
@@ -737,8 +906,14 @@ export function TeacherProfileForm({
               control={form.control}
               name="currentGradeAssignment"
               label="Current Grade Level / Assignment"
-              description="The grade you're assigned to. Fully-booked grades are disabled unless you don't need a classroom section."
-              required
+              description={
+                assignmentRequired
+                  ? "The grade you're assigned to. Fully-booked grades are disabled unless you don't need a classroom section."
+                  : "Optional for the ARAL Volunteer designation — you aren't attached to a grade level."
+              }
+              required={assignmentRequired}
+              allowEmpty={!assignmentRequired}
+              emptyLabel="N/A — no grade assignment"
               options={gradeOptions}
               placeholder="Select grade"
               onValueChange={(newGradeType) => {
@@ -757,12 +932,12 @@ export function TeacherProfileForm({
               name="sectionId"
               label="Section"
               description={
-                sectionRequired
+                assignmentRequired
                   ? "The classroom section you'll advise. Sections already taken by another teacher are disabled."
                   : "Optional for the ARAL Volunteer designation — you don't advise a classroom section."
               }
-              required={sectionRequired}
-              allowEmpty={!sectionRequired}
+              required={assignmentRequired}
+              allowEmpty={!assignmentRequired}
               emptyLabel="N/A — no classroom section"
               options={sectionOptions}
               placeholder={values.currentGradeAssignment ? "Select section" : "Select a grade first"}
@@ -891,7 +1066,11 @@ export function TeacherProfileForm({
               rows={[
                 [
                   "Grade assignment",
-                  labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment),
+                  // "N/A" rather than labelOf's "—": for a volunteer this is a
+                  // deliberate choice, not a value they forgot to fill in.
+                  values.currentGradeAssignment
+                    ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment)
+                    : "N/A",
                 ],
                 [
                   "Section",

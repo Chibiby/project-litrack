@@ -35,6 +35,7 @@ import { PROFILING_GRADE_LEVEL_TYPES } from "@/lib/validators/grade-level.schema
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
 import { saveSchoolHeadProfile } from "@/lib/actions/school-head";
 import { toFormData } from "@/lib/forms/to-form-data";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /** Default School Head position when none is stored yet (read-only in UI). */
 export const SH_DEFAULT_POSITION = "PRINCIPAL_I" as const;
@@ -418,7 +419,7 @@ export function SchoolHeadProfileForm({
         sectionsPerGrade,
       },
       // Land on grade levels so the SH can review/rename the bootstrapped sections.
-      onSuccess: () => router.push("/school-head/grade-levels"),
+      onSuccess: () => router.push(SCHOOL_HEAD_ROUTES.schoolGradeLevels),
     });
   }
 

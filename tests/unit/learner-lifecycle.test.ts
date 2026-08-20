@@ -152,20 +152,32 @@ describe("roster gender facet", () => {
   });
 });
 
-describe("roster ARAL profile facet", () => {
-  it("parses with/without and falls back to all", () => {
-    expect(parseLearnerListParams({ aralStatus: "with" }).aralStatus).toBe("with");
-    expect(parseLearnerListParams({ aralStatus: "WITHOUT" }).aralStatus).toBe(
-      "without"
+describe("roster ARAL enrolment facet", () => {
+  it("parses enrolled/not-enrolled and falls back to all", () => {
+    expect(parseLearnerListParams({ aralStatus: "enrolled" }).aralStatus).toBe(
+      "enrolled"
     );
+    expect(
+      parseLearnerListParams({ aralStatus: "NOT-ENROLLED" }).aralStatus
+    ).toBe("not-enrolled");
     expect(parseLearnerListParams({ aralStatus: "nope" }).aralStatus).toBe("all");
     expect(parseLearnerListParams({}).aralStatus).toBe("all");
   });
 
-  it("maps relation presence to a Prisma clause", () => {
+  // The old "with"/"without" values filtered on the AralProfile relation, which
+  // answered a different question — profiled, not enrolled. They are gone, so
+  // they must fall back rather than quietly narrowing by the new meaning.
+  it("does not honour the retired profile-presence values", () => {
+    expect(parseLearnerListParams({ aralStatus: "with" }).aralStatus).toBe("all");
+    expect(parseLearnerListParams({ aralStatus: "without" }).aralStatus).toBe(
+      "all"
+    );
+  });
+
+  it("maps the enrolment flag to a Prisma clause", () => {
     expect(aralStatusWhere("all")).toEqual({});
-    expect(aralStatusWhere("with")).toEqual({ aralProfile: { isNot: null } });
-    expect(aralStatusWhere("without")).toEqual({ aralProfile: { is: null } });
+    expect(aralStatusWhere("enrolled")).toEqual({ isAralLearner: true });
+    expect(aralStatusWhere("not-enrolled")).toEqual({ isAralLearner: false });
   });
 });
 

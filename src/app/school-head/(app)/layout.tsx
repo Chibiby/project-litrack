@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function SchoolHeadAppLayout({
 
   // Only gate real school heads — SUPER_ADMIN may view without profiling.
   if (user.role === "SCHOOL_HEAD" && !user.profileCompleted) {
-    redirect("/school-head/profiling");
+    redirect(SCHOOL_HEAD_ROUTES.profiling);
   }
 
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;

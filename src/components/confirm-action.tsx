@@ -83,6 +83,12 @@ export function ConfirmAction({
               try {
                 await onConfirm();
                 setOpen(false);
+              } catch {
+                // A rejected onConfirm is how a failed action asks to stay open
+                // for a retry — settleActionResult toasts the error and then
+                // throws. Swallow it here: the user has already been told, and
+                // letting it escape an async handler only logs an unhandled
+                // rejection. Behaviour is otherwise unchanged (no setOpen).
               } finally {
                 setPending(false);
               }

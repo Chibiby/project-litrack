@@ -1,6 +1,24 @@
 import "server-only";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import * as tags from "@/lib/cache/tags";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+
+/**
+ * The School Head teachers workspace — all four tabs at once.
+ *
+ * Each tab renders the same four badge counts, so approving, declining,
+ * deactivating or reassigning one teacher changes what the other three display.
+ * `revalidatePath` busts a single page and not its children, so one call on the
+ * workspace root would leave Pending, Inactive and Declined serving stale rows
+ * *and* stale badges — silently, because a path that revalidates nothing never
+ * throws.
+ */
+export function revalidateSchoolHeadTeachers() {
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachers);
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachersPending);
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachersInactive);
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachersDeclined);
+}
 
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {

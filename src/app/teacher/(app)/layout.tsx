@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
-import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
+import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,7 @@ export default async function TeacherAppLayout({
 
   let schoolName: string | undefined;
   let grades: { id: string; label: string; hasAral?: boolean }[] | undefined;
+  let roleLabel: string | undefined;
 
   // Layouts cannot read searchParams; super-admin school impersonation still
   // gets admin nav via role === SUPER_ADMIN. Real teachers get grade links.
@@ -38,9 +41,9 @@ export default async function TeacherAppLayout({
   // streams in behind an already-painted shell.
   if (user.role === "TEACHER" && user.schoolId) {
     try {
-      const [name, shellGrades] = await Promise.all([
+      const [name, shell] = await Promise.all([
         getSchoolName(user.schoolId),
-        getTeacherShellGrades({
+        getTeacherShellContext({
           schoolId: user.schoolId,
           teacherId: user.id,
           isSuperAdmin: false,
@@ -48,11 +51,18 @@ export default async function TeacherAppLayout({
       ]);
 
       schoolName = name ?? undefined;
-      grades = shellGrades.map((g) => ({
+      grades = shell.grades.map((g) => ({
         id: g.id,
         label: GRADE_LEVEL_LABELS[g.type],
         hasAral: g.hasAral,
       }));
+      // A Non-DepEd ARAL Volunteer holds the TEACHER role but is not a teacher,
+      // and the account menu is where they see themselves named. Left undefined
+      // for everyone else — and if the read above failed, the default label
+      // stands rather than a wrong one.
+      if (shell.designation === ARAL_VOLUNTEER_DESIGNATION) {
+        roleLabel = "ARAL Volunteer";
+      }
     } catch (err) {
       console.error("[teacher/layout] shell grades/school name failed:", err);
     }
@@ -67,9 +77,17 @@ export default async function TeacherAppLayout({
         userName={userName}
         schoolName={schoolName}
         grades={grades}
+        roleLabel={roleLabel}
       >
         {children}
       </RoleShell>
+      {/*
+        Also a sibling, and also portaled — but it adds nothing to what this
+        layout awaits: it fetches from the client once the shell has painted and
+        the splash above has cleared the screen. Renders nothing when the
+        teacher has no waiting designation, which is the usual case.
+      */}
+      <AralAssignmentAlerts />
     </>
   );
 }

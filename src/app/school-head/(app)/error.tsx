@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { Button } from "@/components/ui/button";
 
 export default function SchoolHeadError({
@@ -40,7 +41,7 @@ export default function SchoolHeadError({
             Try again
           </Button>
           <Button asChild variant="outline">
-            <Link href="/school-head">Back to dashboard</Link>
+            <Link href={SCHOOL_HEAD_ROUTES.dashboard}>Back to dashboard</Link>
           </Button>
         </div>
       </div>

@@ -12,11 +12,12 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getNavGroups, resolvePageTitle, type NavGrade } from "@/lib/nav/nav-config";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import type { UserRole } from "@prisma/client";
 
 const SEARCH_HREF: Record<UserRole, string> = {
   SUPER_ADMIN: "/admin/schools",
-  SCHOOL_HEAD: "/school-head/teachers",
+  SCHOOL_HEAD: SCHOOL_HEAD_ROUTES.teachers,
   TEACHER: "/teacher/learners",
 };
 

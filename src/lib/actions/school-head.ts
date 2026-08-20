@@ -18,9 +18,11 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 import {
   revalidateSchoolDashboard,
+  revalidateSchoolHeadTeachers,
   revalidateSchoolsList,
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -318,9 +320,8 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
     });
   }
 
-  revalidatePath("/school-head/settings/profile");
-  revalidatePath("/school-head/grade-levels");
-  revalidatePath("/school-head/sections");
+  revalidatePath(SCHOOL_HEAD_ROUTES.settingsProfile);
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidateSchoolDashboard(schoolId);
   // Login "teachers open" depends on a profiled School Head + grade levels.
   revalidateSchoolsList();
@@ -350,7 +351,7 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
     metadata: { schoolId: user.schoolId, gradeLevelId: grade.id, type: grade.type },
   });
 
-  revalidatePath("/school-head/grade-levels");
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidateSchoolDashboard(user.schoolId);
   // Login "teachers open" depends on at least one grade level.
   revalidateSchoolsList();
@@ -418,7 +419,7 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
     },
   });
 
-  revalidatePath("/school-head/teachers");
+  revalidateSchoolHeadTeachers();
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -464,7 +465,7 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidatePath("/school-head/teachers");
+  revalidateSchoolHeadTeachers();
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -520,7 +521,7 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidatePath("/school-head/teachers");
+  revalidateSchoolHeadTeachers();
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
@@ -582,7 +583,7 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
     },
   });
 
-  revalidatePath("/school-head/teachers");
+  revalidateSchoolHeadTeachers();
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -684,7 +685,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidatePath("/school-head/teachers");
+  revalidateSchoolHeadTeachers();
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };

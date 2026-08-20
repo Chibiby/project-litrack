@@ -9,7 +9,10 @@ import {
   type LearnerListRow,
 } from "@/components/learners/learner-list-client";
 import { LearnerStatCards } from "@/components/learners/learner-stat-cards";
-import { LearnerAddMenu } from "@/components/learners/learner-add-menu";
+import {
+  LearnerAddMenu,
+  LearnerAddMenuDisabled,
+} from "@/components/learners/learner-add-menu";
 import { EmptyState } from "@/components/dashboard";
 import {
   LearnerStatCardsSkeleton,
@@ -20,16 +23,18 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
+  getAdvisoryPlacement,
+  NO_ADVISORY_MESSAGE,
+} from "@/lib/teachers/advisory";
+import {
   aralStatusWhere,
   genderWhere,
   gradeLevelIdWhere,
   nameSearchWhere,
   parseLearnerListParams,
   parseLearnerPageSize,
-  sectionIdWhere,
   totalPages,
   type LearnerListGradeFilter,
-  type LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
 
 export const dynamic = "force-dynamic";
@@ -42,19 +47,10 @@ interface TeacherLearnersPageProps {
     q?: string;
     filter?: string;
     sort?: string;
-    section?: string;
     grade?: string;
     gender?: string;
     aralStatus?: string;
   }>;
-}
-
-function resolveSection(
-  section: LearnerListSectionFilter,
-  sectionIds: Set<string>
-): LearnerListSectionFilter {
-  if (section === "all" || section === "none") return section;
-  return sectionIds.has(section) ? section : "all";
 }
 
 function learnerListWhere(opts: {
@@ -62,15 +58,13 @@ function learnerListWhere(opts: {
   teacherId: string;
   isSuperAdmin: boolean;
   list: ReturnType<typeof parseLearnerListParams>;
-  section: LearnerListSectionFilter;
 }): Prisma.LearnerWhereInput {
-  const { assignedGradeIds, teacherId, isSuperAdmin, list, section } = opts;
+  const { assignedGradeIds, teacherId, isSuperAdmin, list } = opts;
   const where: Prisma.LearnerWhereInput = {
     ...gradeLevelIdWhere(list.grade, assignedGradeIds),
     deletedAt: null,
     // Learners in this teacher's care: advisory roster + ARAL designations.
     ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
-    ...sectionIdWhere(section),
     ...genderWhere(list.gender),
     ...aralStatusWhere(list.aralStatus),
     ...nameSearchWhere(list.q),
@@ -80,7 +74,10 @@ function learnerListWhere(opts: {
     where.archivedAt = { not: null };
   } else {
     where.archivedAt = null;
-    if (list.filter === "aral") {
+    // `?filter=aral` is a legacy entry point that narrows the same column the
+    // ARAL facet does. Applying it unconditionally would silently overrule an
+    // explicit "Not enrolled" into an empty list, so the facet wins.
+    if (list.filter === "aral" && list.aralStatus === "all") {
       where.isAralLearner = true;
     }
   }
@@ -89,35 +86,29 @@ function learnerListWhere(opts: {
 }
 
 /**
- * The add control needs the teacher's sections, which the header should not
- * block on — it streams in beside the title while the heading paints at once.
+ * The add control needs the teacher's advisory section, which the header should
+ * not block on — it streams in beside the title while the heading paints at once.
+ *
+ * Reads the placement from the same helper `createLearner` uses, so the dialog
+ * cannot offer a placement the save would reject. A teacher who advises nothing
+ * gets a disabled button carrying the server's own reason instead.
  */
 async function LearnersAddControl({
-  schoolId,
-  assignedGradeIds,
-  defaultGradeId,
-  gradeOptions,
+  user,
 }: {
-  schoolId: string;
-  assignedGradeIds: string[];
-  defaultGradeId: string;
-  gradeOptions: { id: string; type: string; label: string }[];
+  user: { id: string; schoolId: string; advisorySectionId: string | null };
 }) {
-  const sections = await prisma.section.findMany({
-    where: {
-      schoolId,
-      deletedAt: null,
-      gradeLevelId: { in: assignedGradeIds },
-    },
-    select: { id: true, name: true, gradeLevelId: true },
-    orderBy: { name: "asc" },
-  });
+  const advisory = await getAdvisoryPlacement(user);
+  if (!advisory) return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
 
   return (
     <LearnerAddMenu
-      gradeLevelId={defaultGradeId}
-      grades={gradeOptions}
-      sections={sections}
+      gradeLevelId={advisory.gradeLevelId}
+      gradeType={advisory.gradeType}
+      placement={{
+        gradeLabel: advisory.gradeLabel,
+        sectionName: advisory.sectionName,
+      }}
     />
   );
 }
@@ -143,6 +134,9 @@ async function LearnersBody({
       ? list.grade
       : "all";
 
+  // Section is no longer a facet, but it is still a column: this answers "does
+  // this grade use sections at all", which is what decides whether the column
+  // earns its width.
   const sections = await prisma.section.findMany({
     where: {
       schoolId,
@@ -150,18 +144,15 @@ async function LearnersBody({
       gradeLevelId:
         activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
     },
-    select: { id: true, name: true, gradeLevelId: true },
+    select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
-  const sectionIds = new Set(sections.map((s) => s.id));
-  const section = resolveSection(list.section, sectionIds);
   const where = learnerListWhere({
     assignedGradeIds,
     teacherId,
     isSuperAdmin,
     list: { ...list, grade: activeGrade },
-    section,
   });
 
   const totalCount = await prisma.learner.count({ where });
@@ -183,7 +174,7 @@ async function LearnersBody({
       gradeLevelId: true,
       gradeLevel: { select: { type: true } },
       section: { select: { id: true, name: true } },
-      // Presence only — this drives the ARAL STATUS column.
+      // Presence only — this drives the ARAL Profile column.
       aralProfile: { select: { id: true } },
     },
     orderBy: { fullName: "asc" },
@@ -215,7 +206,6 @@ async function LearnersBody({
     <LearnerListClient
       basePath="/teacher/learners"
       grade={activeGrade}
-      section={section}
       gender={list.gender}
       aralStatus={list.aralStatus}
       grades={gradeOptions}
@@ -275,15 +265,6 @@ export default async function TeacherLearnersPage({
   }
 
   const assignedGradeIds = assignedGrades.map((g) => g.id);
-  const gradeOptions = assignedGrades.map((g) => ({
-    id: g.id,
-    type: g.type,
-    label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
-  }));
-  const defaultGradeId =
-    list.grade !== "all" && assignedGradeIds.includes(list.grade)
-      ? list.grade
-      : (assignedGradeIds[0] ?? "");
 
   return (
     <AppShell
@@ -303,13 +284,14 @@ export default async function TeacherLearnersPage({
             {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
           </p>
         </div>
-        {!isSuperAdmin && defaultGradeId ? (
+        {!isSuperAdmin ? (
           <Suspense fallback={<Skeleton className="h-9 w-44" />}>
             <LearnersAddControl
-              schoolId={schoolId}
-              assignedGradeIds={assignedGradeIds}
-              defaultGradeId={defaultGradeId}
-              gradeOptions={gradeOptions}
+              user={{
+                id: user.id,
+                schoolId,
+                advisorySectionId: user.advisorySectionId,
+              }}
             />
           </Suspense>
         ) : null}

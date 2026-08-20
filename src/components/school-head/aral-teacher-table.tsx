@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
+import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
+import { EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
 import { setLearnerAralTeacher } from "@/lib/actions/learner";
 
 export type AralTeacherOption = {
@@ -24,7 +26,35 @@ export type AralTeacherOption = {
   fullName: string;
   /** Advisory section label, or null for an ARAL-only teacher. */
   advisoryLabel: string | null;
+  /**
+   * Whether they hold a DepEd plantilla item, or null if never recorded.
+   *
+   * Shown, never applied: any active teacher may be designated regardless, which
+   * is the point of tracking it separately from the advisory.
+   */
+  employmentType: "DEPED_PLANTILLA" | "NON_DEPED" | null;
 };
+
+/** "Marivic Santos (Grade 3 · Sampaguita)". The chip beside it carries employment. */
+function describeTeacher(t: AralTeacherOption): string {
+  return t.advisoryLabel
+    ? `${t.fullName} (${t.advisoryLabel})`
+    : `${t.fullName} (ARAL-only)`;
+}
+
+/**
+ * The same name with the employment type folded in, for a native `<option>` —
+ * which holds text and nothing else, so there the chip has to become a word.
+ */
+function describeTeacherOption(t: AralTeacherOption): string {
+  const detail = [
+    t.employmentType ? EMPLOYMENT_TYPE_LABELS[t.employmentType] : null,
+    t.advisoryLabel ?? "ARAL-only",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return `${t.fullName} (${detail})`;
+}
 
 export type AralLearnerRow = {
   id: string;
@@ -81,16 +111,10 @@ export function AralTeacherTable({
     setOverrides({});
   }, [rows]);
 
-  const teacherLabel = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of teachers) {
-      map.set(
-        t.id,
-        t.advisoryLabel ? `${t.fullName} (${t.advisoryLabel})` : `${t.fullName} (ARAL-only)`
-      );
-    }
-    return map;
-  }, [teachers]);
+  const teacherById = useMemo(
+    () => new Map(teachers.map((t) => [t.id, t])),
+    [teachers]
+  );
 
   const pushListQuery = (next: { page?: number; q?: string }) => {
     const params = new URLSearchParams();
@@ -128,7 +152,7 @@ export function AralTeacherTable({
       }
       toast.success(
         nextId
-          ? `${row.fullName} assigned to ${teacherLabel.get(nextId) ?? "teacher"}`
+          ? `${row.fullName} assigned to ${teacherById.get(nextId)?.fullName ?? "teacher"}`
           : `ARAL teacher cleared for ${row.fullName}`
       );
       router.refresh();
@@ -211,6 +235,7 @@ export function AralTeacherTable({
             ) : (
               rows.map((row) => {
                 const value = row.id in overrides ? overrides[row.id] : row.aralTeacherId;
+                const assigned = value ? teacherById.get(value) ?? null : null;
                 const selectId = `aral-teacher-${row.id}`;
                 return (
                   <TableRow key={row.id}>
@@ -225,12 +250,17 @@ export function AralTeacherTable({
                     <TableCell>
                       {readOnly ? (
                         value ? (
-                          <Badge
-                            variant="outline"
-                            className="border-violet-200 text-violet-800 dark:text-violet-200"
-                          >
-                            {teacherLabel.get(value) ?? "Assigned"}
-                          </Badge>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="border-violet-200 text-violet-800 dark:text-violet-200"
+                            >
+                              {assigned ? describeTeacher(assigned) : "Assigned"}
+                            </Badge>
+                            <EmploymentTypeChip
+                              employmentType={assigned?.employmentType ?? null}
+                            />
+                          </span>
                         ) : (
                           <Badge variant="outline">Not designated</Badge>
                         )
@@ -254,7 +284,7 @@ export function AralTeacherTable({
                             <option value="">Not designated</option>
                             {teachers.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {teacherLabel.get(t.id)}
+                                {describeTeacherOption(t)}
                               </option>
                             ))}
                           </select>

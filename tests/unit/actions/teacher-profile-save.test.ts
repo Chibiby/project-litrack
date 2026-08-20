@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
- * Action-level coverage for `saveTeacherProfile`, the sole writer of
- * `User.advisorySectionId` now that the School Head's manual advisory UI is gone.
+ * Action-level coverage for `saveTeacherProfile`, one of two writers of
+ * `User.advisorySectionId` — the teacher's own self-assignment during profiling.
+ * The other is `setTeacherAdvisorySection` (see the sibling test file), where a
+ * School Head assigns or changes it on the teacher's behalf.
  *
  * Only the leaf infrastructure is mocked (Prisma client, session, audit, cache).
  * The real `teacherProfileSchema` and the real `setTeacherAdvisory` helper run,
@@ -112,11 +115,14 @@ vi.mock("next/cache", () => ({
 
 const revalidateTeacherCaches = vi.fn();
 const revalidateSchoolDashboard = vi.fn();
+const revalidateSchoolHeadTeachers = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateTeacherCaches: (...args: unknown[]) =>
     revalidateTeacherCaches(...(args as [])),
   revalidateSchoolDashboard: (...args: unknown[]) =>
     revalidateSchoolDashboard(...(args as [])),
+  revalidateSchoolHeadTeachers: (...args: unknown[]) =>
+    revalidateSchoolHeadTeachers(...(args as [])),
 }));
 
 // Imported after the mock factories above are registered.
@@ -158,6 +164,10 @@ function buildFormData(overrides: Record<string, string | string[]> = {}): FormD
 beforeEach(() => {
   vi.clearAllMocks();
   userUpdateError = null;
+  // Failure messages are asserted as the *teacher* would see them. Outside
+  // production `describeDbFailure` appends the raw error for the developer, so
+  // the no-leak assertions below only mean anything in production.
+  vi.stubEnv("NODE_ENV", "production");
   sections = [
     { id: SECTION_ID, gradeLevelId: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null },
     { id: OTHER_SECTION_ID, gradeLevelId: GRADE_ID, schoolId: OTHER_SCHOOL_ID, deletedAt: null },
@@ -173,6 +183,16 @@ beforeEach(() => {
   // The action logs failures with console.error; keep test output pristine.
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+/** Assert the save failed and hand back the message the teacher would read. */
+function failureMessage(result: { ok: true } | { ok: false; error: string }): string {
+  if (result.ok) throw new Error("expected the save to fail, but it succeeded");
+  return result.error;
+}
 
 describe("saveTeacherProfile", () => {
   it("assigns the advisory section and dual-writes TeacherSection for a Teacher", async () => {
@@ -219,8 +239,13 @@ describe("saveTeacherProfile", () => {
         metadata: expect.objectContaining({ sectionId: SECTION_ID, designation: "Teacher" }),
       }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith("/school-head/teachers");
-    expect(revalidatePath).toHaveBeenCalledWith("/school-head/grade-levels");
+    // The teachers workspace is busted through its named helper, which covers
+    // all four tab routes — one `revalidatePath` on the root would leave the
+    // Pending, Inactive and Declined tabs serving stale rows and stale badges.
+    expect(revalidateSchoolHeadTeachers).toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith(
+      SCHOOL_HEAD_ROUTES.schoolGradeLevels
+    );
     // Grade/section self-assignment changes the sidebar shell too, so the
     // combined helper (dashboard + shell) must be the one called.
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
@@ -267,6 +292,33 @@ describe("saveTeacherProfile", () => {
     );
   });
 
+  it("saves an ARAL Volunteer who holds neither a grade nor a section", async () => {
+    // The whole point of the designation: an ARAL-only volunteer is attached to
+    // no classroom at all, so both halves of the teaching assignment are blank
+    // and the save still has to go through.
+    const result = await saveTeacherProfile(
+      buildFormData({
+        designation: ARAL_VOLUNTEER_DESIGNATION,
+        position: "",
+        currentGradeAssignment: "",
+        sectionId: "",
+        fieldOfSpecialization: "NA",
+        yearsInService: "",
+      }),
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Persisted as NULL rather than skipped, so a teacher who moves to the
+    // volunteer designation clears the grade they used to hold.
+    const upsert = calls.profileUpsert[0] as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(upsert.create.currentGradeAssignment).toBeNull();
+    expect(upsert.update.currentGradeAssignment).toBeNull();
+    expect(calls.sectionCreateMany).toHaveLength(0);
+  });
+
   it("returns the shared section-taken message on a P2002 race instead of throwing", async () => {
     userUpdateError = Object.assign(new Error("Unique constraint failed"), {
       code: "P2002",
@@ -287,8 +339,12 @@ describe("saveTeacherProfile", () => {
       meta: { target: ["email"] },
     });
 
-    const result = await saveTeacherProfile(buildFormData());
-    expect(result).toEqual({ ok: false, error: "Failed to save profile. Please try again." });
+    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    expect(error).not.toContain("adviser");
+    expect(error).not.toContain("User_email_key");
+    // Unclassifiable, so the honest advice is "retry, and quote this if it sticks".
+    expect(error).toContain("DB-UNKNOWN");
+    expect(error).toMatch(/try again/i);
   });
 
   it("never leaks raw database error text to the client", async () => {
@@ -296,9 +352,39 @@ describe("saveTeacherProfile", () => {
       'prepared statement "s3" already exists at Section.id = deadbeef',
     );
 
-    const result = await saveTeacherProfile(buildFormData());
-    expect(result).toEqual({ ok: false, error: "Failed to save profile. Please try again." });
-    expect(JSON.stringify(result)).not.toContain("prepared statement");
+    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    expect(error).not.toContain("prepared statement");
+    expect(error).not.toContain("deadbeef");
+    expect(error).toContain("DB-UNKNOWN");
+  });
+
+  it("says a stale schema will not fix itself rather than telling the teacher to retry", async () => {
+    // The failure this replaced: a migration that relaxes a NOT NULL or adds an
+    // enum value is authored but never applied, so the same submission is
+    // rejected forever. "Please try again" sent the teacher into a loop that
+    // could not succeed, and named nothing an administrator could act on.
+    userUpdateError = Object.assign(new Error('column "employmentType" does not exist'), {
+      code: "P2022",
+    });
+
+    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    expect(error).toMatch(/won't help/i);
+    expect(error).toContain("DB-SCHEMA");
+    expect(error).not.toContain("employmentType");
+  });
+
+  it("still prefers the specific section-conflict message over the generic classifier", async () => {
+    // Regression guard for ordering: the two branches that know exactly what
+    // went wrong must run before the catch-all, or a section race would come
+    // back as an unhelpful "the database rejected the change".
+    userUpdateError = Object.assign(new Error("Unique constraint failed"), {
+      code: "P2002",
+      meta: { target: ["advisorySectionId"] },
+    });
+
+    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    expect(error).toBe("That section already has an adviser.");
+    expect(error).not.toContain("DB-");
   });
 
   it("rejects a section from another school without leaking its existence", async () => {
@@ -348,7 +434,10 @@ describe("saveTeacherProfile", () => {
 
   it("rejects a submission missing the now-required grade assignment", async () => {
     const result = await saveTeacherProfile(buildFormData({ currentGradeAssignment: "" }));
-    expect(result.ok).toBe(false);
+    // The conditional rule fired — not some unrelated rejection. A classroom
+    // designation is what makes the grade mandatory.
+    expect(result).toEqual({ ok: false, error: "Select a grade level" });
     expect(transaction).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
   });
 });

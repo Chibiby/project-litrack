@@ -1,4 +1,5 @@
 import { TableSectionSkeleton } from "@/components/loading";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
 /**
  * Content-slot skeleton for reports. Sidebar stays mounted in RoleShell;
@@ -6,8 +7,8 @@ import { TableSectionSkeleton } from "@/components/loading";
  */
 export default function SchoolHeadReportsLoading() {
   return (
-    <div className="w-full space-y-6 p-4 lg:p-6">
+    <SchoolHeadPageSkeleton>
       <TableSectionSkeleton rows={12} columns={6} />
-    </div>
+    </SchoolHeadPageSkeleton>
   );
 }

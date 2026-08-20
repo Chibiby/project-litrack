@@ -8,7 +8,6 @@ import {
   useState,
   useTransition,
 } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Surface } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
@@ -43,10 +42,15 @@ import {
   type LearnerAralStatusFilter,
   type LearnerGenderFilter,
   type LearnerListGradeFilter,
-  type LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { deleteLearners } from "@/lib/actions/learner";
+import { LearnerProfileModal } from "@/components/learners/learner-profile-modal";
+import {
+  AssignAralTutorDialog,
+  type AssignAralTutorTarget,
+} from "@/components/learners/assign-aral-tutor-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import {
   listOptimisticReducer,
@@ -77,6 +81,12 @@ import {
  *    treatment is kept; the hue order is corrected. See reading-band-pill.
  *  - Grade is a column only for a teacher who holds more than one grade — the
  *    comp's single-grade case renders exactly as drawn.
+ *  - Actions holds two controls, both dialogs rather than navigations. View
+ *    opens the read-only Student Profile dialog (learner-profile-modal); Edit
+ *    moved into that dialog's footer, so the row no longer carries a pencil.
+ *    The violet spark enrolls into ARAL, and appears only on a learner who is
+ *    not in the program yet — for one already in it, the same decision is a
+ *    change of tutor, which lives on the profile dialog's ARAL tab.
  */
 
 /** Debounce pause before applying typed search (ms). */
@@ -94,7 +104,7 @@ export type LearnerListRow = {
   englishReadingProfile: string;
   filipinoReadingProfile: string;
   section: { id: string; name: string } | null;
-  /** Grade owning this learner — used for detail/edit links in multi-grade lists. */
+  /** Grade owning this learner — used for the detail link in multi-grade lists. */
   gradeLevelId: string;
   gradeType: string;
 };
@@ -103,10 +113,14 @@ export type LearnerListClientProps = {
   /** List route base — defaults to `/teacher/learners`. */
   basePath?: string;
   grade?: LearnerListGradeFilter;
-  section: LearnerListSectionFilter;
   gender: LearnerGenderFilter;
   aralStatus: LearnerAralStatusFilter;
   grades?: LearnerGradeOption[];
+  /**
+   * Sections in the listed grades. Not a facet any more — the presence of any
+   * section is what decides whether the Section column earns its width, which
+   * an empty page of rows could not answer on its own.
+   */
   sections: SectionOption[];
   schoolId?: string;
   isSuperAdmin: boolean;
@@ -126,7 +140,6 @@ const HEAD_CLASS =
 export function LearnerListClient({
   basePath = "/teacher/learners",
   grade = "all",
-  section,
   gender,
   aralStatus,
   grades = [],
@@ -145,6 +158,12 @@ export function LearnerListClient({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Learner whose read-only profile dialog is open; `null` when closed. */
+  const [profileLearnerId, setProfileLearnerId] = useState<string | null>(null);
+  /** Subject of the open ARAL tutor picker; `null` when closed. */
+  const [aralTarget, setAralTarget] = useState<AssignAralTutorTarget | null>(
+    null
+  );
   const [optimisticLearners, dispatchOptimistic] = useOptimistic(
     learners,
     (state: LearnerListRow[], op: LearnerOp) => listOptimisticReducer(state, op)
@@ -211,7 +230,6 @@ export function LearnerListClient({
   const pageSearchParams: Record<string, string | undefined> = {
     q: q.trim() || undefined,
     grade: grade !== "all" ? grade : undefined,
-    section: section !== "all" ? section : undefined,
     gender: gender !== "all" ? gender : undefined,
     aralStatus: aralStatus !== "all" ? aralStatus : undefined,
     perPage:
@@ -254,12 +272,40 @@ export function LearnerListClient({
       invalidateNavWarm();
     });
 
+  /** One row's spark: a learner not in ARAL yet, so this is always an enrolment. */
+  const openEnrollOne = (l: LearnerListRow) =>
+    setAralTarget({
+      learnerIds: [l.id],
+      learnerName: l.fullName,
+      currentTutorId: null,
+      enrolling: true,
+    });
+
+  const openBulkAral = () => {
+    const picked = optimisticLearners.filter((l) => selected.has(l.id));
+    if (picked.length === 0) return;
+    // Archived learners live behind their own filter, so a selection is wholly
+    // archived or wholly active — never mixed. The action would refuse them with
+    // a message about the roster, which is not the reason.
+    if (picked.every((l) => l.archivedAt)) {
+      toast.error("Archived learners cannot be enrolled in ARAL");
+      return;
+    }
+    const rows = picked.filter((l) => !l.archivedAt);
+    setAralTarget({
+      learnerIds: rows.map((l) => l.id),
+      learnerName: rows.length === 1 ? (rows[0]?.fullName ?? null) : null,
+      currentTutorId: null,
+      // Every one of them already in ARAL makes this a change of tutor, and the
+      // dialog says so rather than offering to enroll them twice.
+      enrolling: rows.some((l) => !l.isAralLearner),
+    });
+  };
+
   return (
     <Surface as="section" className="overflow-hidden">
       <LearnerListToolbar
         basePath={basePath}
-        section={section}
-        sections={sections}
         gender={gender}
         aralStatus={aralStatus}
         schoolId={schoolId}
@@ -273,6 +319,7 @@ export function LearnerListClient({
             <LearnerBulkActions
               selectedCount={selectedOnPage.length}
               onDelete={handleBulkDelete}
+              onEnrollAral={openBulkAral}
               pending={pending}
             />
           )
@@ -285,14 +332,14 @@ export function LearnerListClient({
             title={
               q.trim()
                 ? "No matching learners"
-                : section !== "all" || gender !== "all" || aralStatus !== "all"
+                : gender !== "all" || aralStatus !== "all"
                   ? "No learners match these filters"
                   : "No learners yet"
             }
             description={
               q.trim()
                 ? "Try a different name search."
-                : section !== "all" || gender !== "all" || aralStatus !== "all"
+                : gender !== "all" || aralStatus !== "all"
                   ? "Clear a filter to widen the list."
                   : "Add a learner using the button above the stat cards."
             }
@@ -324,7 +371,7 @@ export function LearnerListClient({
                 {showSection && (
                   <TableHead className={HEAD_CLASS}>Section</TableHead>
                 )}
-                <TableHead className={HEAD_CLASS}>ARAL Status</TableHead>
+                <TableHead className={HEAD_CLASS}>ARAL Profile</TableHead>
                 <TableHead className={HEAD_CLASS}>English Level</TableHead>
                 <TableHead className={HEAD_CLASS}>Filipino Level</TableHead>
                 <TableHead className={`${HEAD_CLASS} text-right`}>
@@ -397,33 +444,33 @@ export function LearnerListClient({
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         <Button
-                          asChild
+                          type="button"
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
+                          onClick={() => setProfileLearnerId(l.id)}
                         >
-                          <Link
-                            href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`}
+                          <Eye className="h-4 w-4" aria-hidden />
+                          <span className="sr-only">
+                            View {l.fullName}&apos;s profile
+                          </span>
+                        </Button>
+                        {!isSuperAdmin && !l.isAralLearner && !l.archivedAt && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 border-violet-200 text-violet-700 hover:bg-violet-soft hover:text-violet-soft-foreground"
+                            disabled={pending}
+                            title="Enroll as ARAL"
+                            onClick={() => openEnrollOne(l)}
                           >
-                            <Eye className="h-4 w-4" aria-hidden />
+                            <Sparkles className="h-4 w-4" aria-hidden />
                             <span className="sr-only">
-                              View {l.fullName}&apos;s profile
+                              Enroll {l.fullName} as ARAL
                             </span>
-                          </Link>
-                        </Button>
-                        <Button
-                          asChild
-                          size="icon"
-                          variant="outline"
-                          className="h-8 w-8"
-                        >
-                          <Link
-                            href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}/edit`}
-                          >
-                            <Pencil className="h-4 w-4" aria-hidden />
-                            <span className="sr-only">Edit {l.fullName}</span>
-                          </Link>
-                        </Button>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -441,6 +488,29 @@ export function LearnerListClient({
         totalCount={totalCount}
         pageSize={pageSize}
         searchParams={pageSearchParams}
+      />
+
+      {/* One dialog instance for the whole page — the open row is state, not
+          markup, so switching rows re-fetches instead of remounting. The row's
+          ARAL flag rides along so the dialog's footer names its ARAL action
+          correctly while the fetch is still in flight. */}
+      <LearnerProfileModal
+        learnerId={profileLearnerId}
+        onClose={() => setProfileLearnerId(null)}
+        isSuperAdmin={isSuperAdmin}
+        initialIsAralLearner={
+          optimisticLearners.find((l) => l.id === profileLearnerId)
+            ?.isAralLearner ?? false
+        }
+      />
+
+      {/* Also one instance, and for the same reason: the row spark and the bulk
+          menu are two ways into one decision, so they set its subject rather
+          than each carrying a dialog of their own. */}
+      <AssignAralTutorDialog
+        target={aralTarget}
+        onClose={() => setAralTarget(null)}
+        onDone={() => setSelected(new Set())}
       />
     </Surface>
   );

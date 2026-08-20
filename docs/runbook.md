@@ -102,4 +102,6 @@ Never apply remote migrations without approval. Command: `npx prisma migrate dep
   ```
 
   Such a build rewrites two tracked files to point at the scratch dir: it appends `.next-verify/types/**/*.ts` to `tsconfig.json` (reformatting the whole file), and repoints the `reference path` in `next-env.d.ts`. Both edits are unwanted — `git checkout -- tsconfig.json next-env.d.ts` afterwards.
+
+  This EPERM is **not** a blocked verification. `prisma generate` writes `node_modules/.prisma/client/index.d.ts` before it swaps the native engine, so the TypeScript types are already current when the rename fails — check the file's mtime rather than assuming the client is stale. The DLL itself only changes when the *Prisma version* changes, not when the schema does, so a schema-only change leaves the existing engine correct and typecheck / lint / test / build all run against fresh types. Even after the EPERM, run the four gates instead of stopping.
 - **Webpack PackFileCacheStrategy “Serializing big strings …”:** Harmless Next 14.2 / webpack filesystem-cache noise when packing large compiled modules (often CSS or dependency graphs). This repo has no large JSON/base64/env strings inlined into client modules. Do **not** switch webpack `cache` to `memory` just to silence it — that slows rebuilds. Safe to ignore unless cold compiles regress badly.

@@ -34,14 +34,18 @@ const optionalMiddleName = z
   .or(z.literal("").transform(() => undefined));
 
 /** Empty / whitespace → undefined; otherwise require uuid. */
-const optionalSectionId = z
-  .union([z.string(), z.undefined(), z.null()])
-  .transform((v) => {
-    if (v == null) return undefined;
-    const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  })
-  .pipe(z.union([z.string().uuid("Invalid section"), z.undefined()]));
+function optionalUuid(message: string) {
+  return z
+    .union([z.string(), z.undefined(), z.null()])
+    .transform((v) => {
+      if (v == null) return undefined;
+      const trimmed = String(v).trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    })
+    .pipe(z.union([z.string().uuid(message), z.undefined()]));
+}
+
+const optionalSectionId = optionalUuid("Invalid section");
 
 /** Empty string / null → undefined for optional enums. */
 function optionalEnum<T extends readonly [string, ...string[]]>(values: T) {
@@ -225,6 +229,28 @@ export type DeleteLearnersInput = z.infer<typeof deleteLearnersSchema>;
 export const enrollLearnersToAralSchema = z.object({
   gradeId: nonEmpty("Grade required"),
   learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
+  /**
+   * Who tutors them. Omitted means the enrolling teacher takes it themselves,
+   * which is what the picker defaults to. Any teacher at the school is valid —
+   * DepEd or not, advisory section or not — so this is only shape-checked here;
+   * the action verifies the person.
+   */
+  aralTeacherId: optionalUuid("Invalid teacher"),
 });
 
 export type EnrollLearnersToAralInput = z.infer<typeof enrollLearnersToAralSchema>;
+
+/**
+ * Enroll (or move) learners picked from the teacher roster, which spans every
+ * grade the teacher holds — so there is no `gradeId` to check them against. The
+ * action scopes them to the caller's own learners instead.
+ */
+export const enrollRosterLearnersToAralSchema = z.object({
+  learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
+  /** Same rule as above: shape-checked here, the person is verified in the action. */
+  aralTeacherId: optionalUuid("Invalid teacher"),
+});
+
+export type EnrollRosterLearnersToAralInput = z.infer<
+  typeof enrollRosterLearnersToAralSchema
+>;

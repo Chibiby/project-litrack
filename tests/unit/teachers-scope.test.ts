@@ -51,13 +51,16 @@ describe("teacherLearnerScope", () => {
 });
 
 describe("teacherAdvisoryGradeScope", () => {
-  it("covers the legacy m2m mirror and the advised section's grade, but not ARAL", () => {
+  it("covers the advised section's grade only, not the legacy mirror and not ARAL", () => {
     const where = teacherAdvisoryGradeScope(TEACHER);
-    expect(where.OR).toHaveLength(2);
+    // One branch: `advisorySectionId` is the authoritative axis and it is unique,
+    // so the legacy `taughtGrades` mirror can only agree with it or lag behind.
+    // It is still dual-written, but it is no longer read for access.
+    expect(where.OR).toHaveLength(1);
     expect(where.OR).toEqual([
-      { teachers: { some: { id: TEACHER } } },
       { sections: { some: { deletedAt: null, adviser: { id: TEACHER } } } },
     ]);
+    expect(JSON.stringify(where)).not.toContain("teachers");
     // Roster operations belong to the adviser — an ARAL designation must not
     // widen who can create or import learners into a grade.
     expect(JSON.stringify(where)).not.toContain("aralTeacherId");
@@ -73,12 +76,13 @@ describe("teacherAdvisoryGradeScope", () => {
 describe("teacherGradeScope", () => {
   it("adds ARAL-designated learners so an ARAL-only teacher can open the grade", () => {
     const where = teacherGradeScope(TEACHER);
-    expect(where.OR).toHaveLength(3);
+    expect(where.OR).toHaveLength(2);
     expect(where.OR).toEqual([
-      { teachers: { some: { id: TEACHER } } },
       { sections: { some: { deletedAt: null, adviser: { id: TEACHER } } } },
       { learners: { some: { aralTeacherId: TEACHER, deletedAt: null } } },
     ]);
+    // The legacy m2m mirror is not consulted on either axis.
+    expect(JSON.stringify(where)).not.toContain("teachers");
   });
 
   it("is strictly wider than the advisory-only scope", () => {
@@ -89,7 +93,7 @@ describe("teacherGradeScope", () => {
 
   it("excludes soft-deleted learners from the ARAL branch", () => {
     const where = teacherGradeScope(TEACHER);
-    const aralBranch = (where.OR as Record<string, unknown>[])[2];
+    const aralBranch = (where.OR as Record<string, unknown>[])[1];
     expect(aralBranch).toEqual({
       learners: { some: { aralTeacherId: TEACHER, deletedAt: null } },
     });

@@ -13,6 +13,7 @@ import {
   revalidateSchoolDashboard,
   revalidateSchoolsList,
 } from "@/lib/cache/revalidate";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -60,7 +61,7 @@ export async function updateSchoolInfo(formData: FormData): Promise<ActionResult
     metadata: { schoolId: user.schoolId, name: parsed.data.name },
   });
 
-  revalidatePath("/school-head/school-info");
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolInfo);
   revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   return { ok: true };
