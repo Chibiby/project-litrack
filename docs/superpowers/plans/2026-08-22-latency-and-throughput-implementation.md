@@ -126,16 +126,20 @@ on. No latency change is expected from this task.
 4. **Ruling — span mechanism.** Do **not** touch `src/lib/prisma.ts`. It has no per-query seam
    (only a static `log` array on the constructor), and adding an extension or middleware to hang
    spans on would disturb the production `log: ["error"]` gate for no measurement benefit.
-   Prisma spans come from `@vercel/otel`'s auto-instrumentation. Hand-roll exactly two spans,
+   **Corrected after the Task 1 review:** `@vercel/otel` ships fetch auto-instrumentation ONLY, and
+   Prisma 5 tracing is a preview feature this program deliberately leaves off, so there are **no**
+   DB query spans anywhere in the app. The `litrack.auth.user_lookup` span below is the only DB
+   timing signal that exists — absent query spans elsewhere are expected, not a broken exporter,
+   plan tier, or deploy link. Hand-roll exactly two spans,
    both in `src/lib/auth/session.ts`:
-   - one wrapping `await supabase.auth.getUser()` (session.ts:63-65)
-   - one wrapping the `loadUserByAuthId` call (helper declared at session.ts:41-56)
+   - one wrapping `await supabase.auth.getUser()` (locate by symbol: the `supabase.auth.getUser()` call inside `getCurrentUserCached`)
+   - one wrapping the `loadUserByAuthId` call (helper declared immediately above `getCurrentUserCached`)
 
    Use `trace.getTracer("litrack")` from `@opentelemetry/api` with `startActiveSpan`. The
    second span **must** record whether the Prisma `P2024` retry path fired, as a span attribute
    (e.g. `litrack.user_lookup.retried`), or the numbers will read as one round trip when they
    were two.
-5. Both spans sit inside `React.cache()` (session.ts:61). Add a short comment saying so — they
+5. Both spans sit inside `React.cache()` (the `cache(...)` wrapper on `getCurrentUserCached`). Add a short comment saying so — they
    fire once per request regardless of how many callers ask for the user, and a reader comparing
    span counts to call sites will otherwise think instrumentation is missing.
 6. `NEXT_OTEL_VERBOSE` is read by Next.js itself, not by app code. **Ruling:** no change to
@@ -210,7 +214,7 @@ module-cached JWKS, removing one full round trip from the critical path.
 
 **Steps.**
 
-1. In `getCurrentUserCached` (the `getUser()` call is at session.ts:63-65), replace
+1. In `getCurrentUserCached` (locate the `getUser()` call by symbol, not by line — Task 1 shifted this file), replace
    `supabase.auth.getUser()` with `supabase.auth.getClaims()`. The authenticated subject is
    `data.claims.sub` — use it wherever the old code used `user.id` for the `authId` lookup.
 2. **Ruling — mandatory try/catch.** `getClaims()` is **not** a drop-in for `getUser()`'s
@@ -236,8 +240,9 @@ module-cached JWKS, removing one full round trip from the critical path.
 4. Apply the same try/catch treatment to the call at `src/middleware.ts:56` while you are in
    there. Middleware is defence-in-depth (Global Constraint 6) — a throw there must fail closed
    to the login redirect, never to a 500.
-5. The spec's reference to `session.ts:51` points at nothing relevant (it is a `: "";`). The
-   helper the spec meant is `loadUserByAuthId`, declared at session.ts:41-56. **It is untouched
+5. The spec's line reference for this helper points at nothing relevant (it lands on a `: "";`). The
+   helper the spec meant is `loadUserByAuthId`, declared immediately above `getCurrentUserCached`.
+   **It is untouched
    by this task** — only its caller changes.
 
 **Verification.** Four gates. Then read `src/lib/auth/roles.ts` and confirm nothing there
