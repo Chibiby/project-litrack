@@ -4,14 +4,21 @@ import * as tags from "@/lib/cache/tags";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
- * The School Head teachers workspace — all four tabs at once.
+ * The School Head teachers workspace — all four tab pathnames.
  *
- * Each tab renders the same four badge counts, so approving, declining,
- * deactivating or reassigning one teacher changes what the other three display.
- * `revalidatePath` busts a single page and not its children, so one call on the
- * workspace root would leave Pending, Inactive and Declined serving stale rows
- * *and* stale badges — silently, because a path that revalidates nothing never
- * throws.
+ * As of 2026-08 this is a no-op against both server caches, and the comment
+ * previously here was wrong about the mechanism. `revalidatePath(p)` with no
+ * `type` emits one softTag that matches only a render whose concrete URL is
+ * exactly `p` — hence four calls for four pathnames — but no page under
+ * `src/app/school-head/(app)/teachers/` reads through `cachedQuery`, and every
+ * role page is `force-dynamic`, so none of them has a Data Cache or Full Route
+ * Cache entry for those softTags to hit. The tab badges are fresh because the
+ * pages re-query per request, and the client Router Cache is cleared wholesale
+ * by any server action regardless of this call.
+ *
+ * Kept as the one place the workspace's invalidation is expressed. Task 12 adds
+ * a `schoolTeachers` tag for these reads; that is when this starts doing work,
+ * and when it will need a `schoolId` argument.
  */
 export function revalidateSchoolHeadTeachers() {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachers);

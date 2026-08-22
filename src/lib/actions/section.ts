@@ -12,6 +12,7 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
   revalidateSchoolDashboard,
   revalidateSchoolHeadTeachers,
+  revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { nextUnusedLetter } from "@/lib/section-letters";
@@ -158,7 +159,7 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
   if (!section) return { ok: false, error: "Section not found" };
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const affectedTeacherIds = await prisma.$transaction(async (tx) => {
       await tx.section.update({
         where: { id: section.id },
         data: { deletedAt: new Date() },
@@ -177,6 +178,12 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
       // Advisory pointer must not survive its section: the section is only
       // soft-deleted, so the FK stays valid and the teacher would otherwise keep
       // an advisory slot on a section nobody can see.
+      // Read the advisers first — once the pointer is null there is no way back
+      // to who they were, and their caches have to be busted below.
+      const advisers = await tx.user.findMany({
+        where: { advisorySectionId: section.id },
+        select: { id: true },
+      });
       await tx.user.updateMany({
         where: { advisorySectionId: section.id },
         data: { advisorySectionId: null },
@@ -210,6 +217,8 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
           });
         }
       }
+
+      return [...new Set([...advisers.map((a) => a.id), ...teacherIds])];
     });
 
     await writeAudit({
@@ -224,6 +233,14 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolHeadTeachers();
     revalidateSchoolDashboard(user.schoolId);
+    // The advisory pointer and the `taughtGrades` links this transaction cleared
+    // are exactly what `getTeacherShellContext` and the teacher dashboard read,
+    // and those entries live for 300s. Nothing else here busts a teacher tag, so
+    // without this the affected teachers keep being offered a section and a grade
+    // that no longer exist.
+    for (const teacherId of affectedTeacherIds) {
+      revalidateTeacherCaches(teacherId);
+    }
     return { ok: true };
   } catch (err) {
     console.error("[deleteSection]", err);
