@@ -53,7 +53,15 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const { data, error } = await supabase.auth.getClaims();
+  let claimsResult: Awaited<ReturnType<typeof supabase.auth.getClaims>>;
+  try {
+    claimsResult = await supabase.auth.getClaims();
+  } catch (err) {
+    console.error("[middleware] getClaims failed:", err);
+    return { supabaseResponse, user: null as SessionUser | null };
+  }
+
+  const { data, error } = claimsResult;
 
   if (error || !data?.claims?.sub) {
     return { supabaseResponse, user: null as SessionUser | null };
