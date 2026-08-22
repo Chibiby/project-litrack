@@ -68,8 +68,8 @@ export function AdminProfileForm({
             />
           </div>
         </div>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save profile"}
+        <Button type="submit" loading={pending} loadingText="Saving…">
+          Save profile
         </Button>
       </form>
 

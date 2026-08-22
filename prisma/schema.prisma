@@ -339,6 +339,31 @@ enum NotificationType {
   ARAL_ASSIGNED
 }
 
+/// The three grading terms. The calendar window each term covers is DERIVED from
+/// the active `SchoolYear.startDate`, never stored, so a school starting in June
+/// and one starting in August both get correct windows with no extra rows.
+enum TermPeriod {
+  FIRST
+  SECOND
+  THIRD
+}
+
+/// Learning areas on the term grade sheet.
+///
+/// Deliberately NOT the `Subject` enum: that one is a dead teacher-survey
+/// artifact (`ARALPAN`, `ABM`, `TECHVOC`) kept only for existing profile rows,
+/// and a live feature must not depend on a set that is scheduled for removal.
+enum LearningArea {
+  ENGLISH
+  FILIPINO
+  MATHEMATICS
+  SCIENCE
+  ARALING_PANLIPUNAN
+  EDUKASYON_SA_PAGPAPAKATAO
+  MAPEH
+  TLE
+}
+
 // =====================================================
 // MODELS
 // =====================================================
@@ -382,6 +407,7 @@ model SchoolYear {
 
   school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   enrollments Enrollment[]
+  termGrades  TermGrade[]
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
@@ -423,6 +449,7 @@ model User {
   aralLearners           Learner[]            @relation("AralTeacherLearners")
   recordedAttendance     Attendance[]         @relation("AttendanceRecorder")
   recordedReadingLevels  ReadingLevelRecord[] @relation("ReadingRecorder")
+  recordedTermGrades     TermGrade[]          @relation("TermGradeRecorder")
   recordedAttendanceDays AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
   teacherEnrollments     Enrollment[]         @relation("TeacherEnrollments")
   announcements          Announcement[]
@@ -678,6 +705,7 @@ model Learner {
   aralProfile   AralProfile?
   attendances   Attendance[]
   readingLevels ReadingLevelRecord[]
+  termGrades    TermGrade[]
 
   @@index([schoolId, gradeLevelId, isAralLearner, deletedAt])
   @@index([teacherId])
@@ -787,6 +815,27 @@ model ReadingLevelRecord {
 
   @@unique([learnerId, weekStart])
   @@index([weekStart])
+}
+
+/// One learner's grade in one learning area for one term of one school year.
+/// Corrected by overwrite, never soft-deleted - hence no `deletedAt`.
+model TermGrade {
+  id           String       @id @default(uuid())
+  learnerId    String
+  schoolYearId String
+  term         TermPeriod
+  subject      LearningArea
+  score        Int // 60-100, enforced by a CHECK constraint in SQL
+  recordedById String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  recordedBy User       @relation("TermGradeRecorder", fields: [recordedById], references: [id])
+
+  @@unique([learnerId, schoolYearId, term, subject])
+  @@index([schoolYearId, term])
 }
 
 /// An in-app message addressed to one user, with its own read state.

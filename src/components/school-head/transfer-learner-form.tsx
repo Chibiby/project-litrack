@@ -175,8 +175,8 @@ export function TransferLearnerForm({
             </div>
           </>
         )}
-        <Button type="submit" disabled={pending}>
-          {pending ? "Transferring…" : toFloating ? "Move to Floating" : "Transfer learner"}
+        <Button type="submit" loading={pending} loadingText="Transferring…">
+          {toFloating ? "Move to Floating" : "Transfer learner"}
         </Button>
       </form>
 

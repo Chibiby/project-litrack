@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { LogOut, Loader2 } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { logoutAction } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -111,16 +111,12 @@ function SignOutTrigger({
       size="sm"
       className="text-muted-foreground hover:text-foreground"
       type={type}
-      disabled={pending}
-      aria-busy={pending}
+      loading={pending}
+      loadingText="Signing out…"
       onClick={onClick}
     >
-      {pending ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-      ) : (
-        <LogOut className="mr-2 h-4 w-4" aria-hidden />
-      )}
-      {pending ? "Signing out…" : "Sign out"}
+      <LogOut className="mr-2 h-4 w-4" aria-hidden />
+      Sign out
     </Button>
   );
 }

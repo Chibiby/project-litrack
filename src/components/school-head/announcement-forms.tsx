@@ -45,8 +45,8 @@ export function CreateAnnouncementForm() {
         <Label htmlFor="body">Body</Label>
         <Textarea id="body" name="body" rows={4} required disabled={pending} />
       </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Publishing…" : "Publish"}
+      <Button type="submit" loading={pending} loadingText="Publishing…">
+        Publish
       </Button>
     </form>
   );
@@ -100,7 +100,13 @@ export function AnnouncementActions({
         <Input name="title" defaultValue={title} disabled={isPending} />
         <Textarea name="body" defaultValue={body} rows={3} disabled={isPending} />
         <div className="flex gap-2">
-          <Button type="submit" size="sm" variant="outline" disabled={isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            variant="outline"
+            loading={isPending}
+            loadingText="Saving…"
+          >
             Save
           </Button>
           <ConfirmAction

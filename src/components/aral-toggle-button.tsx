@@ -60,10 +60,11 @@ export function AralToggleButton({
             size="sm"
             variant="default"
             className="bg-violet hover:bg-violet/90"
-            disabled={pending}
+            loading={pending}
+            loadingText="Updating…"
           >
             <Sparkles className="h-4 w-4" />
-            {pending ? "Updating…" : "ARAL ✓"}
+            ARAL ✓
           </Button>
         }
         onConfirm={handle}
@@ -75,7 +76,8 @@ export function AralToggleButton({
     <Button
       size="sm"
       variant="outline"
-      disabled={pending}
+      loading={pending}
+      loadingText="Marking…"
       onClick={() => {
         void Promise.resolve(handle()).catch(() => {
           /* toast already shown */
@@ -83,7 +85,7 @@ export function AralToggleButton({
       }}
     >
       <Sparkles className="h-4 w-4" />
-      {pending ? "Marking…" : "Mark ARAL"}
+      Mark ARAL
     </Button>
   );
 }

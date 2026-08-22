@@ -210,7 +210,9 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
       </Card>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save ARAL profile"}</Button>
+        <Button type="submit" loading={pending} loadingText="Saving…">
+          Save ARAL profile
+        </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
       </div>
     </form>

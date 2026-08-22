@@ -15,14 +15,15 @@ export function PendingApprovalActions() {
       <Button
         type="button"
         className="w-full"
-        disabled={pending}
+        loading={pending}
+        loadingText="Checking…"
         onClick={() => {
           startTransition(() => {
             router.refresh();
           });
         }}
       >
-        {pending ? "Checking…" : "Check approval status"}
+        Check approval status
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         After approval you can sign in and complete teacher profiling.

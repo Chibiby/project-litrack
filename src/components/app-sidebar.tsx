@@ -52,6 +52,17 @@ interface AppSidebarProps {
    * has the TEACHER role but is not a teacher. Defaults to the humanised role.
    */
   roleLabel?: string;
+  /**
+   * Renders the advisory-only `Learners` item inert with a "DepEd only" pill
+   * rather than dropping it; see `NavOptions.isAralVolunteer`.
+   */
+  isAralVolunteer?: boolean;
+  /**
+   * Points the "End of Terms Reports" item at the grade-scoped sheet instead of
+   * the resolver route, so the row can match its own URL; see
+   * `NavOptions.advisoryGradeLevelId`.
+   */
+  advisoryGradeLevelId?: string | null;
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -73,12 +84,24 @@ function NavLink({
 }) {
   const Icon = item.icon;
 
-  // Announced but not built. Rendered as inert text rather than a disabled link:
-  // a link that goes nowhere is worse than a label that says why. It carries no
-  // href and no tab stop, so keyboard users skip it instead of landing on a dead
-  // end. The "Soon" pill matches the roster's bulk-actions and profile-modal
-  // treatment, so the convention reads the same wherever it appears.
-  if (item.soon) {
+  // Two kinds of row cannot be clicked: one announced but not built, one built
+  // but not open to this account. Both render as inert text rather than a
+  // disabled link — a link that goes nowhere is worse than a label that says why
+  // — and both carry no href and no tab stop, so keyboard users skip them
+  // instead of landing on a dead end.
+  //
+  // `pillUpper` is the one thing that differs. "Soon" is a status word and
+  // upper-cases cleanly, matching the roster's bulk-actions and profile-modal
+  // treatment; an unavailability pill names a thing ("DepEd only") and
+  // upper-casing would mangle the proper noun to DEPED.
+  const inert: { pill: string; reason: string; pillUpper: boolean } | null =
+    item.soon
+      ? { pill: "Soon", reason: "soon", pillUpper: true }
+      : item.unavailable
+        ? { ...item.unavailable, pillUpper: false }
+        : null;
+
+  if (inert) {
     const row = (
       <div
         aria-disabled
@@ -99,11 +122,21 @@ function NavLink({
         ) : (
           <>
             <span className="flex-1 truncate">{item.label}</span>
-            <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Soon
+            <span
+              className={cn(
+                "ml-auto shrink-0 text-[10px] font-medium text-muted-foreground",
+                inert.pillUpper && "uppercase tracking-wide"
+              )}
+            >
+              {inert.pill}
             </span>
           </>
         )}
+        {/* The pill has room for three words at most, so the full reason is
+            carried here instead. An inert row has no tab stop and therefore no
+            tooltip a keyboard can reach — this is what makes the reason
+            available to a screen reader rather than to the mouse alone. */}
+        <span className="sr-only">{`${item.label} — ${inert.reason}`}</span>
       </div>
     );
 
@@ -112,7 +145,7 @@ function NavLink({
     return (
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>{row}</TooltipTrigger>
-        <TooltipContent side="right">{item.label} — soon</TooltipContent>
+        <TooltipContent side="right">{`${item.label} — ${inert.reason}`}</TooltipContent>
       </Tooltip>
     );
   }
@@ -172,12 +205,17 @@ export function AppSidebar({
   isSuperAdminView,
   viewedSchoolName,
   roleLabel: roleLabelOverride,
+  isAralVolunteer,
+  advisoryGradeLevelId,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navGroups = useMemo(() => getNavGroups(role, grades ?? []), [role, grades]);
+  const navGroups = useMemo(
+    () => getNavGroups(role, grades ?? [], { isAralVolunteer, advisoryGradeLevelId }),
+    [role, grades, isAralVolunteer, advisoryGradeLevelId]
+  );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   const activeItemId = resolveActiveItemId(pathname, navItems);
   const roleLabel = roleLabelOverride ?? role.toLowerCase().replaceAll("_", " ");

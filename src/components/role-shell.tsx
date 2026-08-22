@@ -25,6 +25,16 @@ interface RoleShellProps {
   viewedSchoolName?: string;
   /** Account-menu label when the role enum is not what the person is called. */
   roleLabel?: string;
+  /**
+   * Renders the advisory-only `Learners` item inert rather than dropping it, and
+   * drops the header search that targets it; see `NavOptions.isAralVolunteer`.
+   */
+  isAralVolunteer?: boolean;
+  /**
+   * Points the "End of Terms Reports" row at the grade-scoped sheet the teacher
+   * actually lands on; see `NavOptions.advisoryGradeLevelId`.
+   */
+  advisoryGradeLevelId?: string | null;
   notifications?: ShellNotification[];
   children: React.ReactNode;
 }
@@ -42,6 +52,8 @@ export function RoleShell({
   isSuperAdminView,
   viewedSchoolName,
   roleLabel,
+  isAralVolunteer,
+  advisoryGradeLevelId,
   notifications,
   children,
 }: RoleShellProps) {
@@ -58,6 +70,8 @@ export function RoleShell({
           isSuperAdminView={isSuperAdminView}
           viewedSchoolName={viewedSchoolName}
           roleLabel={roleLabel}
+          isAralVolunteer={isAralVolunteer}
+          advisoryGradeLevelId={advisoryGradeLevelId}
           expanded={expanded}
           transitionsEnabled={hydrated}
         />
@@ -77,6 +91,8 @@ export function RoleShell({
             role={role}
             grades={grades}
             notifications={notifications}
+            isAralVolunteer={isAralVolunteer}
+            advisoryGradeLevelId={advisoryGradeLevelId}
             expanded={expanded}
             onToggleSidebar={toggle}
           />

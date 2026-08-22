@@ -150,8 +150,13 @@ function PasswordFormChange({
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Saving…" : "Update password"}
+          <Button
+            type="submit"
+            className="w-full"
+            loading={pending}
+            loadingText="Updating…"
+          >
+            Update password
           </Button>
         </AppForm>
       </CardContent>
@@ -235,8 +240,13 @@ function PasswordFormSetOrReset({
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Saving…" : "Save password"}
+          <Button
+            type="submit"
+            className="w-full"
+            loading={pending}
+            loadingText="Saving…"
+          >
+            Save password
           </Button>
         </AppForm>
       </CardContent>

@@ -55,7 +55,8 @@ export function LearnerArchiveButton({
       <Button
         size="sm"
         variant="outline"
-        disabled={pending}
+        loading={pending}
+        loadingText="Restoring…"
         onClick={() => {
           void Promise.resolve(handle()).catch(() => {
             /* toast already shown */
@@ -63,7 +64,7 @@ export function LearnerArchiveButton({
         }}
       >
         <ArchiveRestore className="h-4 w-4" />
-        {pending ? "Restoring…" : "Restore"}
+        Restore
       </Button>
     );
   }
@@ -77,9 +78,9 @@ export function LearnerArchiveButton({
       variant="destructive"
       disabled={pending}
       trigger={
-        <Button size="sm" variant="outline" disabled={pending}>
+        <Button size="sm" variant="outline" loading={pending} loadingText="Archiving…">
           <Archive className="h-4 w-4" />
-          {pending ? "Archiving…" : "Archive"}
+          Archive
         </Button>
       }
       onConfirm={handle}

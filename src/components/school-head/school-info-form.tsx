@@ -67,8 +67,8 @@ export function SchoolInfoForm({ school }: { school: SchoolInfo }) {
           />
         </div>
       </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Save changes"}
+      <Button type="submit" loading={pending} loadingText="Saving…">
+        Save changes
       </Button>
     </form>
   );

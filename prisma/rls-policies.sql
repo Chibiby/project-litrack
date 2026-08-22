@@ -32,8 +32,15 @@ ALTER TABLE "AralProfile"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Attendance"           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AttendanceDayMeta"    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ReadingLevelRecord"   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TermGrade"            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Notification"         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLog"             ENABLE ROW LEVEL SECURITY;
+
+-- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
+-- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
+-- never reaches it -- but it holds real teacher-to-grade assignments and Supabase grants
+-- anon privileges on it like any other public-schema table. Same silent hole, same fix.
+ALTER TABLE "_TeacherGrades"       ENABLE ROW LEVEL SECURITY;
 
 -- Deny-all default for anon. (No policies = no rows visible to anon.)
 -- Service role automatically bypasses RLS.

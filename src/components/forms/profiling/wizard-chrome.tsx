@@ -43,7 +43,8 @@ export function ProfileWizardChrome({
   const isFirst = currentStep === 0;
   const isLast = currentStep === total - 1;
   const primaryLabel =
-    continueLabel ?? (isLast ? (pending ? "Saving…" : "Save profile") : "Continue");
+    continueLabel ?? (isLast ? "Save profile" : "Continue");
+  const primaryLoadingText = isLast ? "Saving…" : "Continuing…";
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -138,7 +139,8 @@ export function ProfileWizardChrome({
         <Button
           type="button"
           onClick={onContinue}
-          disabled={pending}
+          loading={pending}
+          loadingText={primaryLoadingText}
           className="min-w-[7.5rem]"
         >
           {primaryLabel}

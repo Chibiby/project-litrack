@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -35,7 +35,13 @@ export function TeachersPendingTable({
   rows: PendingTeacherRow[];
   readOnly?: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  /**
+   * `rowId:action` for the request in flight. One shared `pending` flag would
+   * disable every other teacher's buttons and spin Approve and Decline together
+   * — the reviewer could not tell which decision was being sent.
+   */
+  const [actingKey, setActingKey] = useState<string | null>(null);
   const [optimisticRows, dispatchOptimistic] = useOptimistic(
     rows,
     (state: PendingTeacherRow[], op: ListOptimisticOp<PendingTeacherRow>) =>
@@ -45,25 +51,30 @@ export function TeachersPendingTable({
   const runApprove = (userId: string) => {
     const fd = new FormData();
     fd.set("userId", userId);
+    setActingKey(`${userId}:approve`);
     // Grade/section assignment now happens when the teacher completes their own
     // profile, so approval no longer takes a section.
     void runOptimistic(startTransition, async () => {
       dispatchOptimistic({ type: "remove", id: userId });
       const res = await approveTeacher(fd);
       await settleActionResult(res, "Teacher approved");
-    }).catch(() => {
-      /* toast already shown */
-    });
+    })
+      .catch(() => {
+        /* toast already shown */
+      })
+      .finally(() => setActingKey(null));
   };
 
-  const runReject = (userId: string) =>
-    runOptimistic(startTransition, async () => {
+  const runReject = (userId: string) => {
+    setActingKey(`${userId}:reject`);
+    return runOptimistic(startTransition, async () => {
       dispatchOptimistic({ type: "remove", id: userId });
       const fd = new FormData();
       fd.set("userId", userId);
       const res = await rejectTeacher(fd);
       await settleActionResult(res, "Registration declined");
-    });
+    }).finally(() => setActingKey(null));
+  };
 
   return (
     <Card>
@@ -92,6 +103,7 @@ export function TeachersPendingTable({
               </TableRow>
             ) : (
               optimisticRows.map((row) => {
+                const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.fullName}</TableCell>
@@ -103,7 +115,9 @@ export function TeachersPendingTable({
                       <TableCell className="space-x-1 text-right align-top">
                         <Button
                           size="sm"
-                          disabled={pending}
+                          loading={actingKey === `${row.id}:approve`}
+                          loadingText="Approving…"
+                          disabled={rowBusy}
                           onClick={() => runApprove(row.id)}
                         >
                           Approve
@@ -113,13 +127,15 @@ export function TeachersPendingTable({
                           description={`${row.fullName} will not be able to sign in.`}
                           confirmLabel="Decline"
                           variant="destructive"
-                          disabled={pending}
+                          disabled={rowBusy}
                           trigger={
                             <Button
                               size="sm"
                               variant="ghost"
                               className="text-destructive"
-                              disabled={pending}
+                              loading={actingKey === `${row.id}:reject`}
+                              loadingText="Declining…"
+                              disabled={rowBusy}
                             >
                               Decline
                             </Button>

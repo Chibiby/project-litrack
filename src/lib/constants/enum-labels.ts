@@ -220,6 +220,34 @@ export const SUBJECT_LABELS = {
   ABM: "ABM",
 } as const;
 
+/**
+ * The learning areas an end-of-term grade sheet records. Separate from
+ * `SUBJECT_LABELS`, which is a teacher-survey artifact the schema marks for
+ * removal — a live feature must not depend on it.
+ */
+export const LEARNING_AREA_LABELS = {
+  ENGLISH: "English",
+  FILIPINO: "Filipino",
+  MATHEMATICS: "Mathematics",
+  SCIENCE: "Science",
+  ARALING_PANLIPUNAN: "Araling Panlipunan",
+  EDUKASYON_SA_PAGPAPAKATAO: "Edukasyon sa Pagpapakatao",
+  MAPEH: "MAPEH",
+  TLE: "TLE",
+} as const;
+
+/** Column order for the term grade sheet and its export. */
+export const LEARNING_AREA_ORDER = [
+  "ENGLISH",
+  "FILIPINO",
+  "MATHEMATICS",
+  "SCIENCE",
+  "ARALING_PANLIPUNAN",
+  "EDUKASYON_SA_PAGPAPAKATAO",
+  "MAPEH",
+  "TLE",
+] as const;
+
 export const READING_TRAINING_LABELS = {
   ARAL: "ARAL",
   TEACHING_READING: "Teaching Reading",

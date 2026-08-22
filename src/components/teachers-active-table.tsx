@@ -164,13 +164,14 @@ function AdvisoryCell({
 function TeacherManageActions({
   row,
   mode,
-  pending,
+  busy,
   onSetActive,
   onRemove,
 }: {
   row: ActiveTeacherRow;
   mode: "active" | "inactive";
-  pending: boolean;
+  /** Which of this row's actions is in flight, or `null` when the row is idle. */
+  busy: "setActive" | "remove" | null;
   onSetActive: (row: ActiveTeacherRow, isActive: boolean) => Promise<void>;
   onRemove: (row: ActiveTeacherRow) => Promise<void>;
 }) {
@@ -185,6 +186,10 @@ function TeacherManageActions({
         ? `${row.fullName} is the ARAL teacher for ${row.aralLearnerCount} learner(s). Designate another ARAL teacher for them first.`
         : null;
 
+  // This row's other action is locked while one is running; every *other* row
+  // stays live, so one slow request no longer freezes the whole table.
+  const rowBusy = busy !== null;
+
   return (
     <TableCell className="space-x-1 text-right">
       {mode === "active" ? (
@@ -193,9 +198,15 @@ function TeacherManageActions({
           description={`${row.fullName} will not be able to sign in until reactivated. Learners stay assigned.`}
           confirmLabel="Deactivate"
           variant="destructive"
-          disabled={pending}
+          disabled={rowBusy}
           trigger={
-            <Button size="sm" variant="outline" disabled={pending}>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={busy === "setActive"}
+              loadingText="Deactivating…"
+              disabled={rowBusy}
+            >
               Deactivate
             </Button>
           }
@@ -207,9 +218,15 @@ function TeacherManageActions({
           description={`${row.fullName} will be able to sign in again.`}
           confirmLabel="Reactivate"
           variant="default"
-          disabled={pending}
+          disabled={rowBusy}
           trigger={
-            <Button size="sm" variant="outline" disabled={pending}>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={busy === "setActive"}
+              loadingText="Reactivating…"
+              disabled={rowBusy}
+            >
               Reactivate
             </Button>
           }
@@ -224,13 +241,15 @@ function TeacherManageActions({
         }
         confirmLabel="Remove"
         variant="destructive"
-        disabled={blockedReason !== null || pending}
+        disabled={blockedReason !== null || rowBusy}
         trigger={
           <Button
             size="sm"
             variant="ghost"
             className="text-destructive"
-            disabled={blockedReason !== null || pending}
+            loading={busy === "remove"}
+            loadingText="Removing…"
+            disabled={blockedReason !== null || rowBusy}
             title={blockedReason ?? "Remove teacher"}
           >
             Remove
@@ -266,7 +285,13 @@ function TeachersManagedTable({
   advisoryOptions?: AdvisoryGradeOption[];
 }) {
   const router = useRouter();
-  const [rowPending, startRowTransition] = useTransition();
+  const [, startRowTransition] = useTransition();
+  /**
+   * `rowId:action` for the request in flight. A single table-wide pending flag
+   * disabled every row's controls and spun none of them, so a School Head could
+   * not tell which teacher was being changed.
+   */
+  const [actingKey, setActingKey] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState(list?.q ?? "");
   const [optimisticRows, dispatchOptimistic] = useOptimistic(
     rows,
@@ -351,8 +376,9 @@ function TeachersManagedTable({
     router.push(qs ? `${list.basePath}?${qs}` : list.basePath);
   };
 
-  const onSetActive = (row: ActiveTeacherRow, isActive: boolean) =>
-    runOptimistic(startRowTransition, async () => {
+  const onSetActive = (row: ActiveTeacherRow, isActive: boolean) => {
+    setActingKey(`${row.id}:setActive`);
+    return runOptimistic(startRowTransition, async () => {
       dispatchOptimistic({ type: "remove", id: row.id });
       const fd = new FormData();
       fd.set("userId", row.id);
@@ -362,16 +388,19 @@ function TeachersManagedTable({
         res,
         isActive ? "Teacher reactivated" : "Teacher deactivated"
       );
-    });
+    }).finally(() => setActingKey(null));
+  };
 
-  const onRemove = (row: ActiveTeacherRow) =>
-    runOptimistic(startRowTransition, async () => {
+  const onRemove = (row: ActiveTeacherRow) => {
+    setActingKey(`${row.id}:remove`);
+    return runOptimistic(startRowTransition, async () => {
       dispatchOptimistic({ type: "remove", id: row.id });
       const fd = new FormData();
       fd.set("userId", row.id);
       const res = await removeTeacher(fd);
       await settleActionResult(res, "Teacher removed");
-    });
+    }).finally(() => setActingKey(null));
+  };
 
   // Name, Email, Grade & section, ARAL, Profile, Approved (+ Actions when editable).
   const colSpan = readOnly ? 6 : 7;
@@ -447,7 +476,14 @@ function TeachersManagedTable({
                 </TableCell>
               </TableRow>
             ) : (
-              optimisticRows.map((row) => (
+              optimisticRows.map((row) => {
+                const rowBusy =
+                  actingKey === `${row.id}:setActive`
+                    ? ("setActive" as const)
+                    : actingKey === `${row.id}:remove`
+                      ? ("remove" as const)
+                      : null;
+                return (
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.fullName}</TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
@@ -457,7 +493,7 @@ function TeachersManagedTable({
                       value={advisoryValueFor(row)}
                       options={editableAdvisory}
                       saving={savingAdvisoryId === row.id}
-                      disabled={rowPending}
+                      disabled={savingAdvisoryId === row.id || rowBusy !== null}
                       onChange={onChangeAdvisory}
                     />
                   ) : (
@@ -497,13 +533,14 @@ function TeachersManagedTable({
                     <TeacherManageActions
                       row={row}
                       mode={mode}
-                      pending={rowPending}
+                      busy={rowBusy}
                       onSetActive={onSetActive}
                       onRemove={onRemove}
                     />
                   ) : null}
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -573,7 +610,9 @@ export function TeachersDeclinedTable({
   rows: DeclinedTeacherRow[];
   readOnly?: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  /** The teacher being cleared, so only their row reads as busy. */
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const runClear = (userId: string, name: string) => {
     if (
@@ -585,13 +624,18 @@ export function TeachersDeclinedTable({
     }
     const fd = new FormData();
     fd.set("userId", userId);
+    setActingId(userId);
     startTransition(async () => {
-      const res = await clearRejectedTeacher(fd);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        const res = await clearRejectedTeacher(fd);
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        toast.success("They can register again");
+      } finally {
+        setActingId(null);
       }
-      toast.success("They can register again");
     });
   };
 
@@ -623,7 +667,8 @@ export function TeachersDeclinedTable({
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={pending}
+                      loading={actingId === row.id}
+                      loadingText="Allowing…"
                       onClick={() => runClear(row.id, row.fullName)}
                     >
                       Allow re-register

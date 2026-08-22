@@ -20,6 +20,8 @@ interface AppShellProps {
   viewedSchoolName?: string;
   /** Suppresses the page title block — used by pages whose own header replaces it. */
   hideTitle?: boolean;
+  /** Right-aligned controls on the title line. Ignored when `hideTitle` is set. */
+  actions?: React.ReactNode;
 }
 
 export function AppShell({
@@ -33,6 +35,7 @@ export function AppShell({
   isSuperAdminView,
   viewedSchoolName,
   hideTitle,
+  actions,
 }: AppShellProps) {
   const inRoleShell = useRoleShell();
 
@@ -42,16 +45,7 @@ export function AppShell({
     return (
       <main id="main-content" className="w-full p-4 lg:p-6">
         {!hideTitle ? (
-          <div className="mb-4 lg:mb-6">
-            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
+          <PageTitleBlock title={title} subtitle={subtitle} actions={actions} />
         ) : null}
         {children}
       </main>
@@ -69,9 +63,35 @@ export function AppShell({
       isSuperAdminView={isSuperAdminView}
       viewedSchoolName={viewedSchoolName}
       hideTitle={hideTitle}
+      actions={actions}
     >
       {children}
     </AppShellFallback>
+  );
+}
+
+/** Title, optional subtitle, and optional right-aligned actions on the same line. */
+function PageTitleBlock({
+  title,
+  subtitle,
+  actions,
+}: Pick<AppShellProps, "title" | "subtitle" | "actions">) {
+  return (
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 lg:mb-6">
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          {title}
+        </h1>
+        {subtitle ? (
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+      {actions != null && (
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      )}
+    </div>
   );
 }
 
@@ -87,6 +107,7 @@ function AppShellFallback({
   isSuperAdminView,
   viewedSchoolName,
   hideTitle,
+  actions,
 }: AppShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
 
@@ -120,16 +141,11 @@ function AppShellFallback({
 
         <main id="main-content" className="w-full p-4 lg:p-6">
           {!hideTitle ? (
-            <div className="mb-4 lg:mb-6">
-              <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-                {title}
-              </h1>
-              {subtitle ? (
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                  {subtitle}
-                </p>
-              ) : null}
-            </div>
+            <PageTitleBlock
+              title={title}
+              subtitle={subtitle}
+              actions={actions}
+            />
           ) : null}
           {children}
         </main>

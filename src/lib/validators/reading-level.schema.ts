@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { nonEmpty } from "./common";
 import { getMonday } from "@/lib/utils";
+import { monthStartOf } from "@/lib/month-range";
 
 const READING_PROFILE = [
   "NON_DECODER_LOW_EMERGENT",
@@ -41,6 +42,13 @@ const WEEKLY_WRITING_LEVEL = [
 /** Coerce to Date, normalize to Monday 00:00 local. */
 const weekStartField = z.coerce.date().transform((d) => getMonday(d));
 
+/**
+ * Coerce to Date, normalize to the 1st of that month at 00:00 local — the same
+ * idea as `weekStartField`, one period up. Any date inside August 2026 posts as
+ * `2026-08-01`, so a month is always addressed by one canonical anchor.
+ */
+const monthStartField = z.coerce.date().transform((d) => monthStartOf(d));
+
 const notesField = z
   .string()
   .trim()
@@ -71,21 +79,35 @@ export const readingLevelSchema = z.object({
 
 export type ReadingLevelInput = z.infer<typeof readingLevelSchema>;
 
+/**
+ * One learner's assessment, shared by the weekly and monthly bulk schemas so the
+ * two periods can never come to accept different fields.
+ */
+const bulkEntryFields = z.object({
+  learnerId: nonEmpty(),
+  englishProfile: z.enum(READING_PROFILE),
+  filipinoProfile: z.enum(READING_PROFILE),
+  wordRecognitionLevel: z.enum(WEEKLY_WORD_RECOGNITION_LEVEL),
+  readingComprehensionLevel: z.enum(WEEKLY_READING_COMPREHENSION_LEVEL),
+  writingLevel: writingLevelField,
+  notes: notesField,
+});
+
 export const readingLevelBulkSchema = z.object({
   weekStart: weekStartField,
-  entries: z
-    .array(
-      z.object({
-        learnerId: nonEmpty(),
-        englishProfile: z.enum(READING_PROFILE),
-        filipinoProfile: z.enum(READING_PROFILE),
-        wordRecognitionLevel: z.enum(WEEKLY_WORD_RECOGNITION_LEVEL),
-        readingComprehensionLevel: z.enum(WEEKLY_READING_COMPREHENSION_LEVEL),
-        writingLevel: writingLevelField,
-        notes: notesField,
-      })
-    )
-    .min(1),
+  entries: z.array(bulkEntryFields).min(1),
 });
 
 export type ReadingLevelBulkInput = z.infer<typeof readingLevelBulkSchema>;
+
+/**
+ * The monthly grid's payload. Identical to the weekly one except the period is a
+ * month anchor — see `bulkRecordMonthlyReadingLevel` for why the stored column
+ * is still named `weekStart`.
+ */
+export const readingLevelMonthlyBulkSchema = z.object({
+  monthStart: monthStartField,
+  entries: z.array(bulkEntryFields).min(1),
+});
+
+export type ReadingLevelMonthlyBulkInput = z.infer<typeof readingLevelMonthlyBulkSchema>;

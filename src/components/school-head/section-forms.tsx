@@ -59,8 +59,8 @@ export function CreateSectionForm({
         <Label htmlFor="name">Section name</Label>
         <Input id="name" name="name" placeholder="e.g. Mabini" required disabled={pending} />
       </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Add section"}
+      <Button type="submit" loading={pending} loadingText="Saving…">
+        Add section
       </Button>
     </form>
   );
@@ -123,7 +123,13 @@ export function SectionRowActions({
           disabled={isPending}
           aria-label="Section name"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          loading={isPending}
+          loadingText="Saving…"
+        >
           Save
         </Button>
       </form>
@@ -279,8 +285,14 @@ export function GradeSectionsPanel({
                 className="h-8"
               />
             </div>
-            <Button type="submit" size="sm" variant="outline" disabled={pending}>
-              {pending ? "Saving…" : "Add"}
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              loading={pending}
+              loadingText="Saving…"
+            >
+              Add
             </Button>
           </form>
 

@@ -43,7 +43,8 @@ export function CreateGradeLevelButton({
       size="sm"
       variant="outline"
       className="w-full"
-      disabled={pending}
+      loading={pending}
+      loadingText="Creating…"
       onClick={() => {
         const handle = onCreate ?? runStandalone;
         void Promise.resolve(handle()).catch(() => {
@@ -52,7 +53,7 @@ export function CreateGradeLevelButton({
       }}
     >
       <Plus className="h-4 w-4" />
-      {pending ? "Creating…" : "Create"}
+      Create
     </Button>
   );
 }

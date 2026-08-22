@@ -629,15 +629,12 @@ export function LearnerForm({
         ) : null}
         <Button
           type="submit"
-          disabled={pending}
+          loading={pending}
+          loadingText="Saving…"
           onClick={handleSubmitClick}
           className={onCancel ? "justify-center" : "w-full justify-center"}
         >
-          {pending
-            ? "Saving…"
-            : duplicatePending && !isEdit
-              ? "Create anyway"
-              : label}
+          {duplicatePending && !isEdit ? "Create anyway" : label}
         </Button>
       </footer>
     </form>

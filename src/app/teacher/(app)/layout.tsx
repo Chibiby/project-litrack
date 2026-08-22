@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
@@ -27,6 +27,8 @@ export default async function TeacherAppLayout({
   let schoolName: string | undefined;
   let grades: { id: string; label: string; hasAral?: boolean }[] | undefined;
   let roleLabel: string | undefined;
+  let isAralVolunteer = false;
+  let advisoryGradeLevelId: string | null = null;
 
   // Layouts cannot read searchParams; super-admin school impersonation still
   // gets admin nav via role === SUPER_ADMIN. Real teachers get grade links.
@@ -56,12 +58,23 @@ export default async function TeacherAppLayout({
         label: GRADE_LEVEL_LABELS[g.type],
         hasAral: g.hasAral,
       }));
+      // The "End of Terms Reports" sheet is grade-scoped but its grade comes from
+      // the advised section, so the nav needs this to point the row at the URL the
+      // teacher actually lands on. Defaults to null, so a failed read leaves that
+      // row live on the `/teacher/terms-reports` resolver rather than breaking it.
+      advisoryGradeLevelId = shell.advisoryGradeLevelId;
       // A Non-DepEd ARAL Volunteer holds the TEACHER role but is not a teacher,
       // and the account menu is where they see themselves named. Left undefined
       // for everyone else — and if the read above failed, the default label
       // stands rather than a wrong one.
-      if (shell.designation === ARAL_VOLUNTEER_DESIGNATION) {
+      if (isAralVolunteerDesignation(shell.designation)) {
         roleLabel = "ARAL Volunteer";
+        // Same read also decides the nav: no advisory section means no advisory
+        // roster, so the `Learners` row renders inert with its reason and
+        // `/teacher/learners` turns them away. Defaults to false, so a failed
+        // read leaves that row live rather than disabling a page for a teacher
+        // who is entitled to it.
+        isAralVolunteer = true;
       }
     } catch (err) {
       console.error("[teacher/layout] shell grades/school name failed:", err);
@@ -78,6 +91,8 @@ export default async function TeacherAppLayout({
         schoolName={schoolName}
         grades={grades}
         roleLabel={roleLabel}
+        isAralVolunteer={isAralVolunteer}
+        advisoryGradeLevelId={advisoryGradeLevelId}
       >
         {children}
       </RoleShell>

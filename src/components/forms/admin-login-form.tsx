@@ -101,8 +101,14 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={disabled || pending}>
-            {pending ? "Signing in…" : "Sign in"}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={disabled}
+            loading={pending}
+            loadingText="Signing in…"
+          >
+            Sign in
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             <Link href="/forgot-password" className="underline hover:text-foreground">

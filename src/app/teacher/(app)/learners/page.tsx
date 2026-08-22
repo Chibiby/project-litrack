@@ -20,8 +20,12 @@ import {
 } from "@/components/learners/learner-roster-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
-import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
+import {
+  deniesAdvisoryRoster,
+  teacherGradeScope,
+  teacherLearnerScope,
+} from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacement,
   NO_ADVISORY_MESSAGE,
@@ -36,6 +40,7 @@ import {
   totalPages,
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
+import { Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -237,11 +242,41 @@ export default async function TeacherLearnersPage({
 
   if (!schoolId) redirect("/login");
 
-  const shellGrades = await getTeacherShellGrades({
+  // The teacher layout already awaited this exact call for this request, and it is
+  // React-`cache()`d on (schoolId, teacherId, isSuperAdmin) — so reading the
+  // designation here costs no extra query. `grades` is the half this page used
+  // before; the designation rides along.
+  const { grades: shellGrades, designation } = await getTeacherShellContext({
     schoolId,
     teacherId: user.id,
     isSuperAdmin,
   });
+
+  // A Non-DepEd ARAL Volunteer advises no section, so this roster is not theirs.
+  // The sidebar shows the row inert with a "DepEd only" pill; this is the gate
+  // behind it, because a disabled row is not access control — the row can be
+  // bypassed by typing the URL, and the dashboard cards still link here. The copy
+  // answers the same question the pill raises, at the length a page allows.
+  // The Super Admin carve-out and the fail-open behaviour both live in
+  // `deniesAdvisoryRoster`, which is unit-tested — see its doc for why the
+  // impersonation branch must not be folded away.
+  if (deniesAdvisoryRoster({ isSuperAdmin, designation })) {
+    return (
+      <AppShell
+        title="Learners"
+        role={user.role}
+        userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      >
+        <EmptyState
+          icon={Sparkles}
+          title="Open to DepEd advisers only"
+          description="The advisory roster belongs to the DepEd teacher who advises a section. As a Non-DepEd ARAL Volunteer you don't advise one, so there's nothing to manage here. Your ARAL learners are in the ARAL Program."
+          actionHref="/teacher/aral"
+          actionLabel="Go to ARAL Program"
+        />
+      </AppShell>
+    );
+  }
 
   // Redirects may land with ?grade= for a grade not in shell cache yet —
   // still include it when the teacher (or SA) can access it.

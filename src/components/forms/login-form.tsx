@@ -378,8 +378,13 @@ export function LoginForm({
                   First time signing in? Enter your School ID. You&apos;ll choose your own password next.
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? "Signing in…" : "Sign in"}
+              <Button
+                type="submit"
+                className="w-full"
+                loading={pending}
+                loadingText="Signing in…"
+              >
+                Sign in
               </Button>
             </form>
             <p className="text-center text-xs text-muted-foreground">
@@ -460,8 +465,13 @@ export function LoginForm({
                     disabled={pending}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={pending}>
-                  {pending ? "Signing in…" : "Sign in"}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  loading={pending}
+                  loadingText="Signing in…"
+                >
+                  Sign in
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
                   <Link href="/forgot-password" className="underline hover:text-foreground">
@@ -554,8 +564,13 @@ export function LoginForm({
                     disabled={pending}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={pending}>
-                  {pending ? "Sending…" : "Send verification code"}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  loading={pending}
+                  loadingText="Sending…"
+                >
+                  Send verification code
                 </Button>
               </form>
             ) : (
@@ -592,9 +607,11 @@ export function LoginForm({
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={pending || code.length !== 6}
+                  disabled={code.length !== 6}
+                  loading={pending}
+                  loadingText="Creating account…"
                 >
-                  {pending ? "Creating account…" : "Create account"}
+                  Create account
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
                   <Button

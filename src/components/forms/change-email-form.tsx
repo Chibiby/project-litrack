@@ -134,8 +134,13 @@ export function ChangeEmailForm({ currentEmail, isSynthetic }: Props) {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Saving…" : "Update email"}
+          <Button
+            type="submit"
+            className="w-full"
+            loading={pending}
+            loadingText="Updating…"
+          >
+            Update email
           </Button>
         </AppForm>
       </CardContent>

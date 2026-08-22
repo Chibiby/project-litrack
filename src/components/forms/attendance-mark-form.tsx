@@ -37,8 +37,13 @@ export function AttendanceMarkForm({ learnerId }: { learnerId: string }) {
         <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" name="notes" rows={2} />
       </div>
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Saving…" : "Save"}
+      <Button
+        type="submit"
+        loading={pending}
+        loadingText="Saving…"
+        className="w-full"
+      >
+        Save
       </Button>
     </form>
   );

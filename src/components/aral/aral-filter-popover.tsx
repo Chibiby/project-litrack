@@ -80,8 +80,13 @@ export function AralFilterPopover({
 }: Props) {
   const router = useRouter();
   const showGrade = grades.length > 1 || (allowAllGrades && grades.length > 0);
+  // The dot may only advertise controls this popover actually renders. The
+  // monthly reading level bar owns its own Section select and passes
+  // `showSection={false}`, so counting section here would light the trigger for
+  // a filter the teacher cannot see or clear inside it.
   const filterActive =
-    section !== "all" || (allowAllGrades && gradeId !== "all");
+    (showSection && section !== "all") ||
+    (allowAllGrades && gradeId !== "all");
 
   if (!showGrade && !showSection) return null;
 

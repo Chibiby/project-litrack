@@ -379,13 +379,13 @@ export default async function AralDashboard({
           <Button asChild size="sm" variant="outline">
             <Link href={attendanceHref}>
               <CalendarDays className="h-4 w-4" />
-              Daily attendance
+              Weekly attendance
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">
             <Link href={readingHref}>
               <BookOpen className="h-4 w-4" />
-              Weekly reading level
+              Monthly reading level
             </Link>
           </Button>
           {!isSuperAdmin && (

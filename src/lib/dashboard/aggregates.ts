@@ -433,6 +433,14 @@ export function teacherLearnerFilter(
  * layout is held to two blocking reads, so the designation that decides whether
  * the account chip says "Teacher" or "ARAL Volunteer" rides along here instead
  * of buying a third await on every /teacher navigation.
+ *
+ * `advisoryGradeLevelId` — the grade of the section this teacher advises, or
+ * `null` — rides along for the same reason. The sidebar needs it to build the
+ * "End of Terms Reports" href as a real `/teacher/aral/<gradeId>/terms-reports`
+ * URL that a nav item can match, instead of pointing at a resolver route whose
+ * redirect target matches nothing and leaves "Dashboard" highlighted. Fetching
+ * it per-page would add a third blocking read to every /teacher navigation, so
+ * it is a third promise on a query already in flight.
  */
 const getTeacherShellContextCached = cache(
   async (schoolId: string, teacherId: string, isSuperAdmin: boolean) => {
@@ -443,7 +451,7 @@ const getTeacherShellContextCached = cache(
         // hasAral counts ARAL learners in *this teacher's* care, so the ARAL nav
         // appears for a designated ARAL teacher and not for a teacher who merely
         // shares a grade with somebody else's ARAL learners.
-        const [grades, profile] = await Promise.all([
+        const [grades, profile, advisorySection] = await Promise.all([
           prisma.gradeLevel.findMany({
             where: teacherGradeFilter(opts),
             select: {
@@ -474,6 +482,19 @@ const getTeacherShellContextCached = cache(
                 where: { userId: teacherId, user: { schoolId } },
                 select: { designation: true },
               }),
+          // A Super Admin impersonating the shell advises nothing, so skip the
+          // read rather than let a miss read as "has an advisory".
+          // `deletedAt: null` is load-bearing: `deleteSection` soft-deletes and
+          // then nulls the pointer, so without it the nav could offer a link
+          // into a section nobody can see. Same filter as `getAdvisoryPlacement`
+          // (src/lib/teachers/advisory.ts), which the linked page re-reads —
+          // the two must agree or the page refuses a link the sidebar advertises.
+          isSuperAdmin
+            ? Promise.resolve(null)
+            : prisma.section.findFirst({
+                where: { adviser: { id: teacherId }, schoolId, deletedAt: null },
+                select: { gradeLevelId: true },
+              }),
         ]);
 
         return {
@@ -483,11 +504,12 @@ const getTeacherShellContextCached = cache(
             hasAral: g._count.learners > 0,
           })),
           designation: profile?.designation ?? null,
+          advisoryGradeLevelId: advisorySection?.gradeLevelId ?? null,
         };
       },
       {
         keyParts: [
-          "teacher-shell-context-v4",
+          "teacher-shell-context-v5",
           schoolId,
           teacherId,
           String(isSuperAdmin),

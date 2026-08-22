@@ -46,8 +46,8 @@ export function CreateSchoolYearForm() {
         <input type="checkbox" name="setActive" value="true" className="rounded border" />
         Set as active school year
       </label>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Create school year"}
+      <Button type="submit" loading={pending} loadingText="Creating…">
+        Create school year
       </Button>
     </form>
   );
@@ -88,7 +88,9 @@ export function SetActiveYearButton({
       type="button"
       size="sm"
       variant="outline"
-      disabled={disabled || isPending}
+      disabled={disabled}
+      loading={isPending}
+      loadingText="Setting active…"
       onClick={() => {
         const handle = onSetActive ?? runStandalone;
         void Promise.resolve(handle()).catch(() => {
@@ -96,7 +98,7 @@ export function SetActiveYearButton({
         });
       }}
     >
-      {isPending ? "…" : "Set active"}
+      Set active
     </Button>
   );
 }

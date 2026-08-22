@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +78,7 @@ export function ConfirmAction({
                 buttonVariants({ variant: "destructive" })
             )}
             disabled={pending}
+            aria-busy={pending || undefined}
             onClick={async (e) => {
               e.preventDefault();
               setPending(true);
@@ -94,7 +96,17 @@ export function ConfirmAction({
               }
             }}
           >
-            {pending ? "Working…" : confirmLabel}
+            {pending ? (
+              <>
+                {/* Radix's Action is not our `Button`, so the spinner is
+                    explicit here — `buttonVariants()` on it already supplies
+                    the gap and svg sizing the Button would have. */}
+                <Loader2 className="animate-spin" aria-hidden />
+                Working…
+              </>
+            ) : (
+              confirmLabel
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

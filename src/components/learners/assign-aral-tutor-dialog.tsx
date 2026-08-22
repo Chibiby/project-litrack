@@ -240,9 +240,10 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
                 size="sm"
                 className="mt-2"
                 onClick={load}
-                disabled={loading}
+                loading={loading}
+                loadingText="Loading…"
               >
-                {loading ? "Loading…" : "Try again"}
+                Try again
               </Button>
             </div>
           ) : chosenId === null ? (
@@ -300,15 +301,13 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={pending || chosenId === null || loadError !== null}
+            loading={pending}
+            loadingText={enrolling ? "Enrolling…" : "Saving…"}
+            disabled={chosenId === null || loadError !== null}
           >
-            {pending
-              ? enrolling
-                ? "Enrolling…"
-                : "Saving…"
-              : enrolling
-                ? `Enroll${count > 1 ? ` ${count}` : ""}`
-                : "Save tutor"}
+            {enrolling
+              ? `Enroll${count > 1 ? ` ${count}` : ""}`
+              : "Save tutor"}
           </Button>
         </DialogFooter>
       </DialogContent>

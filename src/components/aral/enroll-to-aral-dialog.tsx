@@ -308,11 +308,11 @@ export function EnrollToAralDialog({
           <Button
             type="button"
             onClick={handleEnroll}
-            disabled={pending || selected.size === 0}
+            disabled={selected.size === 0}
+            loading={pending}
+            loadingText="Enrolling…"
           >
-            {pending
-              ? "Enrolling…"
-              : `Enroll${selected.size > 0 ? ` (${selected.size})` : ""}`}
+            {`Enroll${selected.size > 0 ? ` (${selected.size})` : ""}`}
           </Button>
         </SheetFooter>
       </SheetContent>

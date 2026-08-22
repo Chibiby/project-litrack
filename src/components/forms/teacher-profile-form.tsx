@@ -1127,8 +1127,13 @@ export function TeacherProfileForm({
       {isEdit ? (
         <div className="space-y-6">
           {sections}
-          <Button type="submit" disabled={pending} className="min-w-[7.5rem]">
-            {pending ? "Saving…" : "Save profile"}
+          <Button
+            type="submit"
+            loading={pending}
+            loadingText="Saving…"
+            className="min-w-[7.5rem]"
+          >
+            Save profile
           </Button>
         </div>
       ) : (

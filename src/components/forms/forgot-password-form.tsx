@@ -88,8 +88,13 @@ export function ForgotPasswordForm() {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Sending…" : "Send reset link"}
+          <Button
+            type="submit"
+            className="w-full"
+            loading={pending}
+            loadingText="Sending…"
+          >
+            Send reset link
           </Button>
         </AppForm>
         <p className="text-center text-xs text-muted-foreground">

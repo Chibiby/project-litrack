@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   attendanceMarkSchema,
-  attendanceBulkSchema,
+  attendanceWeekSchema,
 } from "@/lib/validators/attendance.schema";
 import {
   readingLevelSchema,
   readingLevelBulkSchema,
+  readingLevelMonthlyBulkSchema,
 } from "@/lib/validators/reading-level.schema";
 
 describe("attendanceMarkSchema", () => {
@@ -32,20 +33,134 @@ describe("attendanceMarkSchema", () => {
   });
 });
 
-describe("attendanceBulkSchema", () => {
-  it("accepts a date with one or more entry rows", () => {
-    const ok = attendanceBulkSchema.safeParse({
-      date: "2026-08-06",
-      entries: [
-        { learnerId: "l1", status: "PRESENT" },
-        { learnerId: "l2", status: "ABSENT", notes: "Sick" },
-      ],
-    });
-    expect(ok.success).toBe(true);
+describe("attendanceWeekSchema", () => {
+  const base = {
+    gradeId: "grade-1",
+    weekStart: "2026-08-10", // Monday
+    cells: [
+      { learnerId: "l1", date: "2026-08-10", status: "PRESENT" as const },
+      { learnerId: "l2", date: "2026-08-11", status: "ABSENT" as const },
+    ],
+    remarks: [{ learnerId: "l1", notes: "Improving" }],
+  };
 
+  it("accepts a week of cells with remarks", () => {
+    expect(attendanceWeekSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("accepts a null status — the cell means No Class, not absent", () => {
     expect(
-      attendanceBulkSchema.safeParse({ date: "2026-08-06", entries: [] }).success,
+      attendanceWeekSchema.safeParse({
+        ...base,
+        cells: [{ learnerId: "l1", date: "2026-08-10", status: null }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown status", () => {
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        cells: [{ learnerId: "l1", date: "2026-08-10", status: "TARDY" }],
+      }).success,
     ).toBe(false);
+  });
+
+  it("requires YYYY-MM-DD date keys", () => {
+    for (const date of ["2026-8-10", "10/08/2026", "2026-08-10T00:00:00Z", ""]) {
+      expect(
+        attendanceWeekSchema.safeParse({
+          ...base,
+          cells: [{ learnerId: "l1", date, status: "PRESENT" }],
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      attendanceWeekSchema.safeParse({ ...base, weekStart: "2026-8-10" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects empty ids", () => {
+    expect(attendanceWeekSchema.safeParse({ ...base, gradeId: "  " }).success).toBe(
+      false,
+    );
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        cells: [{ learnerId: "", date: "2026-08-10", status: "PRESENT" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        remarks: [{ learnerId: "", notes: "x" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a payload with nothing to save", () => {
+    const res = attendanceWeekSchema.safeParse({
+      ...base,
+      cells: [],
+      remarks: [],
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.errors[0]?.message).toBe("Nothing to save");
+    }
+  });
+
+  it("caps cells at 1400 and remarks at 200", () => {
+    const cell = (i: number) => ({
+      learnerId: `l${i}`,
+      date: "2026-08-10",
+      status: "PRESENT" as const,
+    });
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        cells: Array.from({ length: 1400 }, (_, i) => cell(i)),
+      }).success,
+    ).toBe(true);
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        cells: Array.from({ length: 1401 }, (_, i) => cell(i)),
+      }).success,
+    ).toBe(false);
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        remarks: Array.from({ length: 201 }, (_, i) => ({
+          learnerId: `l${i}`,
+          notes: "x",
+        })),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("enforces remark max length 500 and trims", () => {
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        remarks: [{ learnerId: "l1", notes: "x".repeat(500) }],
+      }).success,
+    ).toBe(true);
+    expect(
+      attendanceWeekSchema.safeParse({
+        ...base,
+        remarks: [{ learnerId: "l1", notes: "x".repeat(501) }],
+      }).success,
+    ).toBe(false);
+
+    const trimmed = attendanceWeekSchema.safeParse({
+      ...base,
+      remarks: [{ learnerId: "l1", notes: "  Improving  " }],
+    });
+    expect(trimmed.success).toBe(true);
+    if (trimmed.success) {
+      expect(trimmed.data.remarks[0]?.notes).toBe("Improving");
+    }
   });
 });
 
@@ -167,6 +282,99 @@ describe("readingLevelBulkSchema", () => {
             filipinoProfile: "INDEPENDENT_GRADE_READY",
           },
         ],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("readingLevelMonthlyBulkSchema", () => {
+  const entry = {
+    learnerId: "l1",
+    englishProfile: "INSTRUCTIONAL_DEVELOPING" as const,
+    filipinoProfile: "INDEPENDENT_GRADE_READY" as const,
+    wordRecognitionLevel: "LEVEL_5" as const,
+    readingComprehensionLevel: "LEVEL_1" as const,
+  };
+
+  it("normalizes monthStart to the 1st, so a month has one anchor", () => {
+    // Every date in August has to land on the same row key, or two teachers
+    // assessing on different days would create two rows for one month.
+    for (const monthStart of ["2026-08-01", "2026-08-13", "2026-08-31"]) {
+      const res = readingLevelMonthlyBulkSchema.safeParse({
+        monthStart,
+        entries: [entry],
+      });
+      expect(res.success).toBe(true);
+      if (!res.success) continue;
+      expect(res.data.monthStart.getFullYear()).toBe(2026);
+      expect(res.data.monthStart.getMonth()).toBe(7);
+      expect(res.data.monthStart.getDate()).toBe(1);
+      expect(res.data.monthStart.getHours()).toBe(0);
+    }
+  });
+
+  it("does not snap to Monday — that is the weekly schema's rule", () => {
+    // August 1 2026 is a Saturday. The weekly schema would move it to July 27.
+    const res = readingLevelMonthlyBulkSchema.safeParse({
+      monthStart: "2026-08-13",
+      entries: [entry],
+    });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.monthStart.getMonth()).toBe(7);
+    expect(res.data.monthStart.getDate()).toBe(1);
+  });
+
+  it("accepts the same entry fields as the weekly bulk schema", () => {
+    const res = readingLevelMonthlyBulkSchema.safeParse({
+      monthStart: "2026-08-01",
+      entries: [{ ...entry, writingLevel: "LEVEL_2", notes: "  Reads aloud  " }],
+    });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.entries[0]?.writingLevel).toBe("LEVEL_2");
+    expect(res.data.entries[0]?.notes).toBe("Reads aloud");
+  });
+
+  it("treats an empty writing level as unset rather than invalid", () => {
+    const res = readingLevelMonthlyBulkSchema.safeParse({
+      monthStart: "2026-08-01",
+      entries: [{ ...entry, writingLevel: "" }],
+    });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.entries[0]?.writingLevel).toBeUndefined();
+  });
+
+  it("rejects entries missing WR or RC", () => {
+    expect(
+      readingLevelMonthlyBulkSchema.safeParse({
+        monthStart: "2026-08-01",
+        entries: [
+          {
+            learnerId: "l1",
+            englishProfile: "INSTRUCTIONAL_DEVELOPING",
+            filipinoProfile: "INDEPENDENT_GRADE_READY",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a payload with no entries", () => {
+    expect(
+      readingLevelMonthlyBulkSchema.safeParse({
+        monthStart: "2026-08-01",
+        entries: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a weekStart key — the monthly payload names its own period", () => {
+    expect(
+      readingLevelMonthlyBulkSchema.safeParse({
+        weekStart: "2026-08-03",
+        entries: [entry],
       }).success,
     ).toBe(false);
   });

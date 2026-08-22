@@ -62,6 +62,12 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     skippedDuplicate: number;
   } | null>(null);
   const [pending, startTransition] = useTransition();
+  /**
+   * Which server round-trip is running. All three share one transition, so
+   * `pending` alone cannot say whether the template, the parse, or the commit
+   * is in flight — and it would spin the template button during an import.
+   */
+  const [busy, setBusy] = useState<"template" | "parse" | "commit" | null>(null);
 
   const validCount = useMemo(
     () => results.filter((r) => r.ok && (allowDuplicates || !r.duplicateWarning)).length,
@@ -69,14 +75,19 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
   );
 
   function handleTemplate() {
+    setBusy("template");
     startTransition(async () => {
-      const res = await getLearnerImportTemplate({ gradeLevelId });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        const res = await getLearnerImportTemplate({ gradeLevelId });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        downloadBlob("litrack-learner-import-template.csv", res.data.csv, "text/csv;charset=utf-8");
+        toast.success("Template downloaded");
+      } finally {
+        setBusy(null);
       }
-      downloadBlob("litrack-learner-import-template.csv", res.data.csv, "text/csv;charset=utf-8");
-      toast.success("Template downloaded");
     });
   }
 
@@ -99,15 +110,20 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
           return;
         }
         setRawRows(rows);
+        setBusy("parse");
         startTransition(async () => {
-          const res = await previewLearnerImport({ gradeLevelId, rows });
-          if (!res.ok) {
-            toast.error(res.error);
-            return;
+          try {
+            const res = await previewLearnerImport({ gradeLevelId, rows });
+            if (!res.ok) {
+              toast.error(res.error);
+              return;
+            }
+            setResults(res.data.results);
+            setSummary(res.data.summary);
+            setStep("preview");
+          } finally {
+            setBusy(null);
           }
-          setResults(res.data.results);
-          setSummary(res.data.summary);
-          setStep("preview");
         });
       },
       error: (err) => toast.error(err.message),
@@ -115,24 +131,29 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
   }
 
   function handleCommit() {
+    setBusy("commit");
     startTransition(async () => {
-      const res = await commitLearnerImport({
-        gradeLevelId,
-        rows: rawRows,
-        allowDuplicates,
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        const res = await commitLearnerImport({
+          gradeLevelId,
+          rows: rawRows,
+          allowDuplicates,
+        });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        setCommitStats({
+          imported: res.data.imported,
+          skippedInvalid: res.data.skippedInvalid,
+          skippedDuplicate: res.data.skippedDuplicate,
+        });
+        setResults(res.data.results);
+        setStep("done");
+        toast.success(`Imported ${res.data.imported} learner(s)`);
+      } finally {
+        setBusy(null);
       }
-      setCommitStats({
-        imported: res.data.imported,
-        skippedInvalid: res.data.skippedInvalid,
-        skippedDuplicate: res.data.skippedDuplicate,
-      });
-      setResults(res.data.results);
-      setStep("done");
-      toast.success(`Imported ${res.data.imported} learner(s)`);
     });
   }
 
@@ -149,6 +170,8 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
           variant="outline"
           size="sm"
           onClick={handleTemplate}
+          loading={busy === "template"}
+          loadingText="Preparing…"
           disabled={pending}
         >
           <Download className="h-4 w-4" /> Download CSV template
@@ -179,7 +202,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                 disabled={pending}
               />
             </label>
-            {pending && (
+            {busy === "parse" && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Parsing and validating…
               </p>
@@ -275,13 +298,11 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
               <Button
                 type="button"
                 onClick={handleCommit}
+                loading={busy === "commit"}
+                loadingText="Importing…"
                 disabled={pending || validCount === 0}
               >
-                {pending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  `Import ${validCount} valid row(s)`
-                )}
+                {`Import ${validCount} valid row(s)`}
               </Button>
             </div>
           </CardContent>

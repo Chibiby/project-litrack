@@ -114,8 +114,8 @@ export function CreateSchoolForm() {
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={pending}>
-              {pending ? "Creating…" : "Create school"}
+            <Button type="submit" loading={pending} loadingText="Creating…">
+              Create school
             </Button>
             <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel

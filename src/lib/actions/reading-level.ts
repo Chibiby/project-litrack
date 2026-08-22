@@ -6,9 +6,10 @@ import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
 import {
   readingLevelSchema,
-  readingLevelBulkSchema,
+  readingLevelMonthlyBulkSchema,
 } from "@/lib/validators/reading-level.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { formatLocalDateKey } from "@/lib/date-keys";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
   teacherCanAccessLearner,
@@ -110,21 +111,30 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
 }
 
 /**
- * Upsert weekly reading levels for many ARAL learners.
- * Input: `{ weekStart, entries: [{ learnerId, englishProfile, filipinoProfile, wordRecognitionLevel, readingComprehensionLevel, notes? }] }`
- * `weekStart` is coerced/normalized to Monday.
+ * Upsert one month's reading levels for many ARAL learners.
+ * Input: `{ monthStart, entries: [{ learnerId, englishProfile, filipinoProfile, wordRecognitionLevel, readingComprehensionLevel, writingLevel?, notes? }] }`
+ * `monthStart` is coerced and normalized to the 1st of the month.
+ *
+ * The stored column is still `weekStart`. The ARAL reading level is assessed
+ * monthly — the nav, the teacher dashboard task, and every dashboard aggregate
+ * already treat it that way — so the row is keyed to the 1st of the month rather
+ * than a Monday. That reuses the existing `@@unique([learnerId, weekStart])`,
+ * which then reads as "one assessment per learner per month", and needs no
+ * migration. Rows written by the earlier weekly grid stay exactly where they
+ * are; `fetchAralReadingLevelForMonth` reads the whole month, so they still
+ * prefill the grid and saving consolidates them onto the anchor.
  */
-export async function bulkRecordWeeklyReadingLevel(
+export async function bulkRecordMonthlyReadingLevel(
   input: unknown
 ): Promise<ActionResult<{ upserted: number }>> {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = readingLevelBulkSchema.safeParse(input);
+  const parsed = readingLevelMonthlyBulkSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const weekStart = parsed.data.weekStart;
+  const monthStart = parsed.data.monthStart;
   const learnerIds = [...new Set(parsed.data.entries.map((e) => e.learnerId))];
 
   const learners = await prisma.learner.findMany({
@@ -153,18 +163,18 @@ export async function bulkRecordWeeklyReadingLevel(
         where: {
           learnerId_weekStart: {
             learnerId: entry.learnerId,
-            weekStart,
+            weekStart: monthStart,
           },
         },
         create: {
           learnerId: entry.learnerId,
-          weekStart,
+          weekStart: monthStart,
           englishProfile: entry.englishProfile,
           filipinoProfile: entry.filipinoProfile,
           wordRecognitionLevel: entry.wordRecognitionLevel,
           readingComprehensionLevel: entry.readingComprehensionLevel,
           writingLevel: entry.writingLevel ?? null,
-          notes: entry.notes,
+          notes: entry.notes ?? null,
           recordedById: user.id,
         },
         update: {
@@ -172,9 +182,11 @@ export async function bulkRecordWeeklyReadingLevel(
           filipinoProfile: entry.filipinoProfile,
           wordRecognitionLevel: entry.wordRecognitionLevel,
           readingComprehensionLevel: entry.readingComprehensionLevel,
-          // The grid posts full row state, so an omitted writing level clears it.
+          // The grid posts full row state, so anything the teacher cleared has to
+          // be written as null. `undefined` would tell Prisma to leave the column
+          // alone, and a deleted remark would quietly come back on the next read.
           writingLevel: entry.writingLevel ?? null,
-          notes: entry.notes,
+          notes: entry.notes ?? null,
           recordedById: user.id,
         },
       })
@@ -190,7 +202,7 @@ export async function bulkRecordWeeklyReadingLevel(
     resourceId: gradeIds[0] ?? null,
     metadata: {
       schoolId: user.schoolId,
-      weekStart: weekStart.toISOString().slice(0, 10),
+      monthStart: formatLocalDateKey(monthStart),
       upserted: parsed.data.entries.length,
       learnerIds,
       gradeLevelIds: gradeIds,

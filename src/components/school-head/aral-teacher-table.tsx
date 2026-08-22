@@ -96,10 +96,15 @@ export function AralTeacherTable({
   readOnly?: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(list.q);
   /** Row-local overrides so a select reflects the change before the refresh lands. */
   const [overrides, setOverrides] = useState<Record<string, string | null>>({});
+  /**
+   * The learner whose designation is saving. This locks that one select while
+   * its write is in flight; a table-wide flag froze every other row too, so one
+   * slow save stopped a School Head from designating anybody else.
+   */
   const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,20 +147,25 @@ export function AralTeacherTable({
     fd.set("aralTeacherId", nextId ?? "");
 
     startTransition(async () => {
-      const res = await setLearnerAralTeacher(fd);
-      setSavingId(null);
-      if (!res.ok) {
-        // Roll the select back so it never shows an assignment that did not stick.
-        setOverrides((prev) => ({ ...prev, [row.id]: previous }));
-        toast.error(res.error);
-        return;
+      // `finally` rather than a plain call after the await: a thrown action
+      // would otherwise leave this row locked and reading "Saving…" forever.
+      try {
+        const res = await setLearnerAralTeacher(fd);
+        if (!res.ok) {
+          // Roll the select back so it never shows an assignment that did not stick.
+          setOverrides((prev) => ({ ...prev, [row.id]: previous }));
+          toast.error(res.error);
+          return;
+        }
+        toast.success(
+          nextId
+            ? `${row.fullName} assigned to ${teacherById.get(nextId)?.fullName ?? "teacher"}`
+            : `ARAL teacher cleared for ${row.fullName}`
+        );
+        router.refresh();
+      } finally {
+        setSavingId(null);
       }
-      toast.success(
-        nextId
-          ? `${row.fullName} assigned to ${teacherById.get(nextId)?.fullName ?? "teacher"}`
-          : `ARAL teacher cleared for ${row.fullName}`
-      );
-      router.refresh();
     });
   };
 
@@ -273,7 +283,7 @@ export function AralTeacherTable({
                             id={selectId}
                             className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                             value={value ?? ""}
-                            disabled={pending || teachers.length === 0}
+                            disabled={savingId === row.id || teachers.length === 0}
                             onChange={(e) =>
                               onChangeTeacher(
                                 row,

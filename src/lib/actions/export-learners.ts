@@ -12,6 +12,7 @@ import {
   labelReadingProfile,
   formatEthnicity,
 } from "@/lib/constants/enum-labels";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -264,7 +265,9 @@ export async function exportTeacherLearnersExcel(
   });
 
   const buffer = await buildLearnersWorkbook(learners, school?.name ?? "School");
-  const filename = `litrack-learners-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  // Local date key, never `toISOString()`: the school runs at UTC+8, so between
+  // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
+  const filename = `litrack-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
 
   await writeAudit({
     userId: user.id,
@@ -338,7 +341,9 @@ export async function exportSchoolHeadLearnersExcel(
   });
 
   const buffer = await buildLearnersWorkbook(learners, school?.name ?? "School");
-  const filename = `litrack-school-learners-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  // Local date key, never `toISOString()`: the school runs at UTC+8, so between
+  // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
+  const filename = `litrack-school-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
 
   await writeAudit({
     userId: user.id,

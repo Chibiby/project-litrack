@@ -60,10 +60,25 @@ export const AUDIT_ACTIONS = {
   LEARNER_SET_ARAL_TEACHER: "LEARNER_SET_ARAL_TEACHER",
   ARAL_PROFILE_SAVE: "ARAL_PROFILE_SAVE",
   ATTENDANCE_MARK: "ATTENDANCE_MARK",
+  /**
+   * Retired with the daily grid it served. Kept because rows already written
+   * under this action stay in `AuditLog`, and the viewers render the stored
+   * string — dropping the key would leave history without a name.
+   */
   ATTENDANCE_BULK_MARK: "ATTENDANCE_BULK_MARK",
+  /** One week of a grade's ARAL attendance saved from the weekly grid. */
+  ATTENDANCE_WEEK_SAVE: "ATTENDANCE_WEEK_SAVE",
   ATTENDANCE_DAY_HOLIDAY: "ATTENDANCE_DAY_HOLIDAY",
   READING_LEVEL_RECORD: "READING_LEVEL_RECORD",
   READING_LEVEL_BULK_RECORD: "READING_LEVEL_BULK_RECORD",
+  /**
+   * One term of one advisory section's grade sheet saved. Metadata carries the
+   * placement, the term, saved/cleared counts and learner ids — never the score
+   * values, which are learner PII.
+   */
+  TERM_GRADES_BULK_SAVE: "TERM_GRADES_BULK_SAVE",
+  /** A term grade sheet downloaded as Excel. Counts only, no scores. */
+  TERM_GRADES_EXPORT: "TERM_GRADES_EXPORT",
   IMPORT_LEARNERS: "IMPORT_LEARNERS",
   EXPORT_LEARNERS_EXCEL: "EXPORT_LEARNERS_EXCEL",
   EXPORT_PRINTABLE_REPORT: "EXPORT_PRINTABLE_REPORT",

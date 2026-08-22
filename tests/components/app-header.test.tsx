@@ -17,7 +17,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 
 afterEach(cleanup);
 
-function renderHeader(onToggle = vi.fn()) {
+function renderHeader(onToggle = vi.fn(), props?: { isAralVolunteer?: boolean }) {
   render(
     <ThemeProvider>
       <AppHeader
@@ -26,6 +26,7 @@ function renderHeader(onToggle = vi.fn()) {
         notifications={[]}
         expanded
         onToggleSidebar={onToggle}
+        {...props}
       />
     </ThemeProvider>
   );
@@ -64,5 +65,34 @@ describe("AppHeader", () => {
     const onToggle = renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it("drops the search box for an ARAL volunteer but keeps the rest of the bar", () => {
+    // The teacher search target is /teacher/learners, which a volunteer cannot
+    // open. A box that navigates somewhere its query is ignored is worse than no
+    // box, so it is removed rather than repointed.
+    pathname.value = "/teacher/aral";
+    renderHeader(vi.fn(), { isAralVolunteer: true });
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.getByRole("button", { name: /notifications/i })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /switch to (dark|light) mode/i })
+    ).not.toBeNull();
+  });
+
+  it("still names the roster page for a volunteer, whose Learners item is inert", () => {
+    // For a volunteer the Learners item is marked `unavailable`, so navigable()
+    // drops it and the title can no longer come from the nav label. It falls
+    // through to the humanised path segment — which lands on "Learners" anyway.
+    // Worth asserting through the component because both failure modes are
+    // silent: a blank chrome label, or "Dashboard" leaking in from the /teacher
+    // role-root prefix match. The volunteer can still reach this URL (dashboard
+    // cards link here), so the header must name where they are.
+    pathname.value = "/teacher/learners";
+    renderHeader(vi.fn(), { isAralVolunteer: true });
+    expect(screen.getByText("Learners")).not.toBeNull();
+    // The header carries no nav links, so the inert row's absence here is
+    // expected — the searchbox is the only volunteer-conditional control.
+    expect(screen.queryByRole("searchbox")).toBeNull();
   });
 });

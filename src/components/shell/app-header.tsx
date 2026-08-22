@@ -35,17 +35,33 @@ export function AppHeader({
   role,
   grades,
   notifications = [],
+  isAralVolunteer,
+  advisoryGradeLevelId,
   expanded,
   onToggleSidebar,
 }: {
   role: UserRole;
   grades?: NavGrade[];
   notifications?: ShellNotification[];
+  /**
+   * Renders the advisory-only `Learners` nav item inert and drops the search box,
+   * whose target is that roster; see `NavOptions.isAralVolunteer`.
+   */
+  isAralVolunteer?: boolean;
+  /**
+   * Lets the "End of Terms Reports" row match the grade-scoped sheet, so the title
+   * reads the item's label instead of the URL segment; see
+   * `NavOptions.advisoryGradeLevelId`.
+   */
+  advisoryGradeLevelId?: string | null;
   expanded: boolean;
   onToggleSidebar: () => void;
 }) {
   const pathname = usePathname();
-  const navGroups = useMemo(() => getNavGroups(role, grades ?? []), [role, grades]);
+  const navGroups = useMemo(
+    () => getNavGroups(role, grades ?? [], { isAralVolunteer, advisoryGradeLevelId }),
+    [role, grades, isAralVolunteer, advisoryGradeLevelId]
+  );
   const title = resolvePageTitle(pathname, navGroups);
 
   return (
@@ -73,11 +89,21 @@ export function AppHeader({
 
         <div className="flex-1" />
 
-        <HeaderSearch
-          searchHref={SEARCH_HREF[role]}
-          placeholder={SEARCH_PLACEHOLDER[role]}
-          className="hidden w-full max-w-xs sm:block"
-        />
+        {/* The teacher target is the advisory roster, so a volunteer has nothing
+            to search. Hidden rather than pointed at the ARAL roster, which does
+            not read `?q=` — a box that silently drops the query is worse than no
+            box. The flex-1 spacer above absorbs the width.
+            Deliberately not symmetric with the nav, which keeps `Learners` as an
+            inert row: a labelled row can carry the reason it is shut, an empty
+            input cannot, and typing into one only to be turned away is a worse
+            answer than its absence. */}
+        {!isAralVolunteer && (
+          <HeaderSearch
+            searchHref={SEARCH_HREF[role]}
+            placeholder={SEARCH_PLACEHOLDER[role]}
+            className="hidden w-full max-w-xs sm:block"
+          />
+        )}
 
         <NotificationsMenu notifications={notifications} />
 

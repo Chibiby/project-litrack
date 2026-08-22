@@ -218,8 +218,8 @@ export function CrossSchoolTransferForm({
           </select>
         </div>
 
-        <Button type="submit" disabled={pending}>
-          {pending ? "Transferring…" : "Transfer across schools"}
+        <Button type="submit" loading={pending} loadingText="Transferring…">
+          Transfer across schools
         </Button>
       </form>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { setSchoolActive } from "@/lib/actions/school-management";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
@@ -23,6 +23,12 @@ export function SchoolActiveToggle({
   const [localPending, startTransition] = useTransition();
   const pending = pendingProp ?? localPending;
   const shownActive = onToggle ? isActive : optimisticActive;
+  /**
+   * Which way the click was headed. The optimistic flag flips the moment the
+   * transition starts, so `shownActive` already reads as the *new* state and
+   * cannot say whether we are activating or deactivating.
+   */
+  const [busyNext, setBusyNext] = useState<boolean | null>(null);
 
   const runStandalone = (next: boolean) =>
     runOptimistic(startTransition, async () => {
@@ -42,7 +48,14 @@ export function SchoolActiveToggle({
       type="button"
       variant="ghost"
       size="sm"
-      disabled={pending}
+      loading={pending}
+      loadingText={
+        busyNext === null
+          ? undefined
+          : busyNext
+            ? "Activating…"
+            : "Deactivating…"
+      }
       title={shownActive ? "Deactivate school" : "Activate school"}
       onClick={() => {
         const next = !shownActive;
@@ -55,12 +68,15 @@ export function SchoolActiveToggle({
         ) {
           return;
         }
+        setBusyNext(next);
         const handle = onToggle
           ? () => Promise.resolve(onToggle(next))
           : () => runStandalone(next);
-        void handle().catch(() => {
-          /* toast already shown */
-        });
+        void handle()
+          .catch(() => {
+            /* toast already shown */
+          })
+          .finally(() => setBusyNext(null));
       }}
     >
       {shownActive ? "Deactivate" : "Activate"}

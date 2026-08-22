@@ -91,8 +91,14 @@ function RegenButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      disabled={pending}
+      // An icon button that happened to be drawn at `sm`'s box. `size="icon"` is
+      // what makes the shared spinner *replace* the key glyph instead of sitting
+      // beside it; h-9/w-10 keeps the exact footprint `size="sm"` gave it, so the
+      // row of actions is unchanged when idle.
+      size="icon"
+      className="h-9 w-10"
+      loading={pending}
+      loadingText="Regenerating credential…"
       title="Regenerate School Head activation credential"
       aria-label={`Regenerate activation credential for ${schoolName}`}
       onClick={() => {
@@ -141,7 +147,13 @@ export function SchoolsTable({
   const router = useRouter();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  /**
+   * The school whose toggle is in flight. A single table-wide flag put *every*
+   * row's toggle into its loading state at once, so changing one school read as
+   * if the whole list were changing.
+   */
+  const [actingId, setActingId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState(list.q);
   const [optimisticSchools, dispatchOptimistic] = useOptimistic(
     schools,
@@ -165,8 +177,11 @@ export function SchoolsTable({
     router.push(qs ? `/admin/schools?${qs}` : "/admin/schools");
   };
 
-  const toggleActive = (school: SchoolRow, nextActive: boolean) =>
-    runOptimistic(startTransition, async () => {
+  const toggleActive = (school: SchoolRow, nextActive: boolean) => {
+    setActingId(school.id);
+    // The rejection still travels to the toggle, which is what keeps its own
+    // busy label alive until the action settles either way.
+    return runOptimistic(startTransition, async () => {
       dispatchOptimistic({
         type: "patch",
         id: school.id,
@@ -180,7 +195,8 @@ export function SchoolsTable({
         res,
         nextActive ? "School activated" : "School deactivated"
       );
-    });
+    }).finally(() => setActingId(null));
+  };
 
   const from =
     list.totalCount > 0 ? (list.page - 1) * list.pageSize + 1 : 0;
@@ -357,7 +373,7 @@ export function SchoolsTable({
                         schoolId={school.id}
                         isActive={school.isActive}
                         schoolName={school.name}
-                        pending={pending}
+                        pending={actingId === school.id}
                         onToggle={(nextActive) => toggleActive(school, nextActive)}
                       />
                       <RegenButton

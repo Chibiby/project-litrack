@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
  * The two teacher pointers on a learner. Wave 1 split the single
@@ -85,4 +86,38 @@ export function teacherGradeScope(teacherId: string): Prisma.GradeLevelWhereInpu
       { learners: { some: { aralTeacherId: teacherId, deletedAt: null } } },
     ],
   };
+}
+
+/** True when this `TeacherProfile.designation` marks a Non-DepEd ARAL Volunteer. */
+export function isAralVolunteerDesignation(
+  designation: string | null | undefined
+): boolean {
+  return designation === ARAL_VOLUNTEER_DESIGNATION;
+}
+
+/**
+ * Whether the advisory roster (`/teacher/learners`) must be closed to this user.
+ *
+ * A Non-DepEd ARAL Volunteer advises no section, so that roster is not theirs —
+ * their learners are in the ARAL programme, reached through its own pages.
+ *
+ * The `isSuperAdmin` branch is load-bearing and must not be folded away as
+ * redundant. `getTeacherShellContext` happens to return `designation: null` for a
+ * Super Admin today (they hold no `TeacherProfile`, so the read is skipped), which
+ * makes the guard look like belt-and-braces. It is not: a Super Admin passes every
+ * role check by impersonation, and if that read is ever made unconditional, one who
+ * *does* carry a profile with this designation would be locked out of a page they
+ * are entitled to. Deciding it here, from both inputs, keeps the two facts in one
+ * place with a test on it.
+ *
+ * Fails OPEN on a missing designation, which is the safe direction here: wrongly
+ * hiding the roster from an entitled DepEd teacher is a worse failure than showing
+ * a volunteer a link this same predicate then refuses.
+ */
+export function deniesAdvisoryRoster(args: {
+  isSuperAdmin: boolean;
+  designation: string | null | undefined;
+}): boolean {
+  if (args.isSuperAdmin) return false;
+  return isAralVolunteerDesignation(args.designation);
 }

@@ -13,7 +13,7 @@ import {
   fetchPrintableReport,
   type PrintableReportData,
 } from "@/lib/actions/export-learners";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText } from "lucide-react";
 
 type Props = {
   role: "TEACHER" | "SCHOOL_HEAD";
@@ -116,18 +116,15 @@ export function OnDemandReportPanel({
           <Button
             type="button"
             variant="outline"
-            disabled={pending}
+            loading={pending}
+            loadingText="Loading summary…"
             onClick={() => {
               startTransition(async () => {
                 await ensureReport({});
               });
             }}
           >
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="h-4 w-4" />
-            )}
+            <FileText className="h-4 w-4" />
             Load printable summary
           </Button>
         </div>

@@ -9,7 +9,7 @@ import {
   exportSchoolHeadLearnersExcel,
   exportTeacherLearnersExcel,
 } from "@/lib/actions/export-learners";
-import { Download, Loader2, Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 
 export type ReportSectionOption = {
   id: string;
@@ -61,6 +61,11 @@ export function ExportControls({
   const [selectedGrade, setSelectedGrade] = useState(gradeLevelId ?? "");
   const [selectedSection, setSelectedSection] = useState("");
   const [pending, startTransition] = useTransition();
+  /**
+   * Which export is running. Both buttons share one transition, so `pending`
+   * alone would spin them together and say nothing about what was clicked.
+   */
+  const [busy, setBusy] = useState<"excel" | "print" | null>(null);
 
   const sectionOptions = useMemo(() => {
     if (!selectedGrade) return sections;
@@ -82,18 +87,23 @@ export function ExportControls({
   }
 
   function handleExcel() {
+    setBusy("excel");
     startTransition(async () => {
-      const filter = currentFilters();
-      const res =
-        role === "TEACHER"
-          ? await exportTeacherLearnersExcel(filter)
-          : await exportSchoolHeadLearnersExcel(filter);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        const filter = currentFilters();
+        const res =
+          role === "TEACHER"
+            ? await exportTeacherLearnersExcel(filter)
+            : await exportSchoolHeadLearnersExcel(filter);
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        downloadBase64Xlsx(res.data.base64, res.data.filename);
+        toast.success("Excel downloaded");
+      } finally {
+        setBusy(null);
       }
-      downloadBase64Xlsx(res.data.base64, res.data.filename);
-      toast.success("Excel downloaded");
     });
   }
 
@@ -102,8 +112,13 @@ export function ExportControls({
       window.print();
       return;
     }
+    setBusy("print");
     startTransition(async () => {
-      await onPrint(currentFilters());
+      try {
+        await onPrint(currentFilters());
+      } finally {
+        setBusy(null);
+      }
     });
   }
 
@@ -160,20 +175,25 @@ export function ExportControls({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={handleExcel} disabled={pending}>
-          {pending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
+        <Button
+          type="button"
+          onClick={handleExcel}
+          loading={busy === "excel"}
+          loadingText="Preparing Excel…"
+          disabled={pending}
+        >
+          <Download className="h-4 w-4" />
           Download Excel
         </Button>
-        <Button type="button" variant="outline" onClick={handlePrint} disabled={pending}>
-          {pending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Printer className="h-4 w-4" />
-          )}{" "}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handlePrint}
+          loading={busy === "print"}
+          loadingText="Preparing…"
+          disabled={pending}
+        >
+          <Printer className="h-4 w-4" />
           Print / Save PDF
         </Button>
       </div>
