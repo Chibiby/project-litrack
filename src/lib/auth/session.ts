@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace, type Span } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
@@ -42,6 +42,32 @@ function isTeacherPendingGate(user: User): boolean {
 /** Spans for the two blocking round trips every authenticated request pays for. */
 const tracer = trace.getTracer("litrack");
 
+/**
+ * Instrumentation must never be able to fail a request. `span.end()` delegates to the configured
+ * span processors with no guard of its own, so a processor or exporter that threw synchronously
+ * would escape the `finally` blocks below and *replace* the real completion — turning a successful
+ * auth into a 500, or masking a genuine P2024 error with an exporter error. These two helpers keep
+ * every telemetry call inside a swallow, so the auth path stays byte-for-byte what it was before
+ * the spans existed.
+ */
+function endSpan(span: Span, attributes: Record<string, boolean>): void {
+  try {
+    for (const [key, value] of Object.entries(attributes)) span.setAttribute(key, value);
+    span.end();
+  } catch (err) {
+    console.error("[session] span end failed:", err);
+  }
+}
+
+function recordSpanError(span: Span, err: unknown): void {
+  try {
+    span.recordException(err as Error);
+    span.setStatus({ code: SpanStatusCode.ERROR });
+  } catch (spanErr) {
+    console.error("[session] span error record failed:", spanErr);
+  }
+}
+
 /** `onRetry` fires before the second attempt, so a retry that then throws is still recorded. */
 async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<User | null> {
   // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
@@ -57,6 +83,9 @@ async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<U
     if (code !== "P2024") throw err;
     await new Promise((r) => setTimeout(r, 75));
     onRetry?.();
+    // This await must stay inside the `catch`. Moving it into the `try` above would make a second
+    // failure retry again instead of propagating, and no test would catch that — see the retry-path
+    // coverage gap noted in docs/backlog.md.
     return await prisma.user.findUnique({ where: { authId } });
   }
 }
@@ -76,42 +105,41 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   const authUser = await tracer.startActiveSpan(
     "litrack.auth.session_verify",
     async (span) => {
+      // Unauthenticated requests skip the network entirely, so keep the two populations apart or
+      // the p50 reads as much faster than it is. Recorded in the finally, and with the same
+      // truthiness test as the `if (!authUser)` guard below, so an error path still lands in a
+      // labelled bucket and the attribute can never disagree with the guard.
+      let authenticated = false;
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        // Unauthenticated requests skip the network entirely, so keep the two
-        // populations apart or the p50 reads as much faster than it is. Same
-        // truthiness test as the `if (!authUser)` guard below, so they cannot disagree.
-        span.setAttribute("litrack.session.authenticated", Boolean(user));
+        authenticated = Boolean(user);
         return user;
       } catch (err) {
-        span.recordException(err as Error);
-        span.setStatus({ code: SpanStatusCode.ERROR });
+        recordSpanError(span, err);
         throw err;
       } finally {
-        span.end();
+        endSpan(span, { "litrack.session.authenticated": authenticated });
       }
     }
   );
   if (!authUser) return null;
 
   const user = await tracer.startActiveSpan("litrack.auth.user_lookup", async (span) => {
-    // The retry path issues a second findUnique after a 75 ms sleep; without this the
-    // span duration reads as one round trip when it was two plus the backoff. Recorded
-    // in the finally so a retry that then throws still reports retried=true.
+    // The retry path issues a second findUnique after a 75 ms sleep; without this the span
+    // duration reads as one round trip when it was two plus the backoff. Recorded in the finally
+    // so a retry that then throws still reports retried=true.
     let retried = false;
     try {
       return await loadUserByAuthId(authUser.id, () => {
         retried = true;
       });
     } catch (err) {
-      span.recordException(err as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
+      recordSpanError(span, err);
       throw err;
     } finally {
-      span.setAttribute("litrack.user_lookup.retried", retried);
-      span.end();
+      endSpan(span, { "litrack.user_lookup.retried": retried });
     }
   });
   if (!user) return null;
