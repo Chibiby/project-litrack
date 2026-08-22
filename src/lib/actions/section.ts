@@ -233,11 +233,12 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolHeadTeachers();
     revalidateSchoolDashboard(user.schoolId);
-    // The advisory pointer and the `taughtGrades` links this transaction cleared
-    // are exactly what `getTeacherShellContext` and the teacher dashboard read,
-    // and those entries live for 300s. Nothing else here busts a teacher tag, so
-    // without this the affected teachers keep being offered a section and a grade
-    // that no longer exist.
+    // `teacherGradeScope` resolves a teacher's grades from the section they advise
+    // (`deletedAt: null` + `adviser`), and this transaction breaks that both ways:
+    // it soft-deletes the section and nulls `advisorySectionId`. Nothing else here
+    // busts a teacher tag, so the shell would keep offering a dead section for 300s
+    // and the dashboard miscount for 60s. `TeacherSection` holders are included
+    // defensively — no cached read consults that table today.
     for (const teacherId of affectedTeacherIds) {
       revalidateTeacherCaches(teacherId);
     }

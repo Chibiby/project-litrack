@@ -10,9 +10,9 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
  * previously here was wrong about the mechanism. `revalidatePath(p)` with no
  * `type` emits one softTag that matches only a render whose concrete URL is
  * exactly `p` — hence four calls for four pathnames — but no page under
- * `src/app/school-head/(app)/teachers/` reads through `cachedQuery`, and every
- * role page is `force-dynamic`, so none of them has a Data Cache or Full Route
- * Cache entry for those softTags to hit. The tab badges are fresh because the
+ * `src/app/school-head/(app)/teachers/` reads through `cachedQuery`, and all four
+ * are `force-dynamic`, so none of them has a Data Cache or Full Route Cache entry
+ * for those softTags to hit. The tab badges are fresh because the
  * pages re-query per request, and the client Router Cache is cleared wholesale
  * by any server action regardless of this call.
  *
