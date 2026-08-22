@@ -73,12 +73,21 @@ function endSpan(span: Span, attributes: Attributes): void {
   }
 }
 
+/**
+ * Split the same way, because the ERROR status is the only thing separating a failed span from a
+ * genuinely anonymous one (see the `authenticated` comment below): a `recordException` failure must
+ * not also cost the status.
+ */
 function recordSpanError(span: Span, err: unknown): void {
   try {
     span.recordException(err as Error);
+  } catch (spanErr) {
+    logSpanFailure("[session] span recordException failed:", spanErr);
+  }
+  try {
     span.setStatus({ code: SpanStatusCode.ERROR });
   } catch (spanErr) {
-    logSpanFailure("[session] span error record failed:", spanErr);
+    logSpanFailure("[session] span setStatus failed:", spanErr);
   }
 }
 
