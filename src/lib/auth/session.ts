@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { SpanStatusCode, trace, type Span } from "@opentelemetry/api";
+import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
@@ -43,19 +43,33 @@ function isTeacherPendingGate(user: User): boolean {
 const tracer = trace.getTracer("litrack");
 
 /**
- * Instrumentation must never be able to fail a request. `span.end()` delegates to the configured
- * span processors with no guard of its own, so a processor or exporter that threw synchronously
- * would escape the `finally` blocks below and *replace* the real completion — turning a successful
- * auth into a 500, or masking a genuine P2024 error with an exporter error. These two helpers keep
- * every telemetry call inside a swallow, so the auth path stays byte-for-byte what it was before
- * the spans existed.
+ * Telemetry must never be able to fail a request. `span.end()` delegates to the configured span
+ * processors with no guard of its own, so a processor that threw synchronously would escape the
+ * `finally` blocks below and *replace* the real completion — turning a successful auth into a 500,
+ * or masking a genuine P2024 behind an exporter error. Every telemetry call goes through these
+ * helpers, and each swallow is independent so one failure cannot skip the step after it.
  */
-function endSpan(span: Span, attributes: Record<string, boolean>): void {
+function logSpanFailure(message: string, err: unknown): void {
   try {
-    for (const [key, value] of Object.entries(attributes)) span.setAttribute(key, value);
+    console.error(message, err);
+  } catch {
+    // Reporting a telemetry failure must not fail the request either. Node's global console
+    // swallows stream write errors, but inspecting `err` runs first and outside that guard, and
+    // the platform log forwarder may have replaced console entirely.
+  }
+}
+
+/** Attributes and `end()` are guarded separately so a rejected attribute cannot skip the export. */
+function endSpan(span: Span, attributes: Attributes): void {
+  try {
+    span.setAttributes(attributes);
+  } catch (err) {
+    logSpanFailure("[session] span setAttributes failed:", err);
+  }
+  try {
     span.end();
   } catch (err) {
-    console.error("[session] span end failed:", err);
+    logSpanFailure("[session] span end failed:", err);
   }
 }
 
@@ -64,7 +78,7 @@ function recordSpanError(span: Span, err: unknown): void {
     span.recordException(err as Error);
     span.setStatus({ code: SpanStatusCode.ERROR });
   } catch (spanErr) {
-    console.error("[session] span error record failed:", spanErr);
+    logSpanFailure("[session] span error record failed:", spanErr);
   }
 }
 
@@ -84,8 +98,8 @@ async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<U
     await new Promise((r) => setTimeout(r, 75));
     onRetry?.();
     // This await must stay inside the `catch`. Moving it into the `try` above would make a second
-    // failure retry again instead of propagating, and no test would catch that — see the retry-path
-    // coverage gap noted in docs/backlog.md.
+    // failure retry again instead of propagating, and no test would catch that — see "Deferred
+    // follow-ups (latency & throughput program)" in docs/backlog.md.
     return await prisma.user.findUnique({ where: { authId } });
   }
 }
@@ -107,8 +121,9 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
     async (span) => {
       // Unauthenticated requests skip the network entirely, so keep the two populations apart or
       // the p50 reads as much faster than it is. Recorded in the finally, and with the same
-      // truthiness test as the `if (!authUser)` guard below, so an error path still lands in a
-      // labelled bucket and the attribute can never disagree with the guard.
+      // truthiness test as the `if (!authUser)` guard below, so the attribute can never disagree
+      // with the guard. Note the throw path also reports false, sharing the label with a genuinely
+      // anonymous request — filter on span status too if you need those two separated.
       let authenticated = false;
       try {
         const {
