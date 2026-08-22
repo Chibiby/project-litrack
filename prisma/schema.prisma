@@ -3,10 +3,23 @@
 
 generator client {
   provider        = "prisma-client-js"
-  // Nested select/include otherwise costs one round trip per relation. With this
-  // on, `relationLoadStrategy: "join"` makes the engine emit a single LATERAL
-  // join instead. Read sites opt in explicitly rather than relying on the
-  // default. Kill switch per environment: PRISMA_RELATION_LOAD_STRATEGY.
+  // Nested select/include otherwise costs one round trip per relation; with this
+  // on the engine emits a single LATERAL join instead.
+  //
+  // This is NOT an opt-in gate. With the flag on and PostgreSQL, `join` is the
+  // engine's default for EVERY relation read in the app (engine commit
+  // 605197351a3c8bdd595af2d2a9bc3025bca48ea2: get_relation_load_strategy falls
+  // back to Join when a query passes no strategy). The measurable win of R4.2
+  // lives on this line, not at any call site.
+  //
+  // The explicit `relationLoadStrategy: "join"` on the measured hot paths is
+  // therefore redundant with today's default. It is kept as a pin, so those
+  // paths cannot silently change behaviour if the default flips or the
+  // semantics move when this leaves preview.
+  //
+  // To roll back: delete relationJoins here and re-run `prisma generate`.
+  // See docs/migrations.md — the PRISMA_RELATION_LOAD_STRATEGY env var is not a
+  // usable kill switch for the pinned sites.
   previewFeatures = ["relationJoins"]
 }
 

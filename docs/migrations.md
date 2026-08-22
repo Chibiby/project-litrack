@@ -62,8 +62,16 @@ Prisma’s schema language cannot express partial unique indexes, so this lives 
 
 ## Preview features
 
-`generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so read sites can pass `relationLoadStrategy: "join"` and have the engine fetch relations in one `LATERAL` join instead of one round trip per relation. Accepted values are `"join"` and `"query"`; our read sites set it **explicitly** because the default under 5.22.0 is not something we can pin down offline, and an explicit value behaves the same whatever the default turns out to be.
+`generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.
 
-Kill switch if a join plan regresses in one environment: `PRISMA_RELATION_LOAD_STRATEGY=query`, which the native query engine reads (no effect on Data Proxy / Accelerate, which do not run that binary). Caveat for whoever reaches for it — that variable is present in the engine binary but is **not** in Prisma’s public docs, so treat it as engine-internal and unversioned; the supported fix is to change the per-query `relationLoadStrategy` argument and redeploy.
+**With this flag on and PostgreSQL, `join` is the default — app-wide.** It is not an opt-in gate. The blast radius is **every relation read in the app** (on the order of 50, across roughly 19 files), not only the handful of hot paths that pass the argument explicitly. This was established by reading the query engine at the commit `@prisma/engines-version` pins for 5.22.0, `605197351a3c8bdd595af2d2a9bc3025bca48ea2`: in `get_relation_load_strategy`, an explicit strategy is honoured as-is, and a query that passes none falls back to `Join`. The decision is engine-side — `relationLoadStrategy` appears nowhere in the client runtime.
+
+A few measured hot-path reads do pass `relationLoadStrategy: "join"` explicitly. Those are **pins, redundant with today’s default**, kept so the hot paths cannot silently change behaviour if the default flips or the semantics move when the feature leaves preview. They are not what makes R4.2 faster; the flag is. Accepted values are `"join"` and `"query"`.
+
+### Rolling back
+
+Remove `relationJoins` from `previewFeatures`, run `npx prisma generate`, redeploy. One line, effective on all affected reads including the pinned ones. That is the kill switch.
+
+`PRISMA_RELATION_LOAD_STRATEGY` is **not** a substitute, and anyone reaching for it in an incident needs both of these facts. First, the engine consults it **only for queries that pass no explicit `relationLoadStrategy`** — so it cannot roll back the pinned hot paths, which are exactly the sites someone under pressure would most want to change. Second, its accepted value strings are **unverified**: the variable name is present in the engine binary, but it is absent from Prisma’s public docs and no value literal sits near it, so a wrong string would silently do nothing while looking like a guard. Treat it as an undocumented, unversioned, partial lever at best.
 
 This is a generator flag only: it changes no table, column, or index, and needs no migration.
