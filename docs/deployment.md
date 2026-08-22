@@ -39,24 +39,28 @@ measured baseline is what will confirm the real figure.
 
 Four things to know before changing it:
 
-- **This file is the only thing pinning the region.** Delete or rename it, add a `vercel.ts`
-  (a project may have only one config file), add a per-function `regions` block, pass `--regions`
-  to `vercel deploy`, or point the project's Root Directory somewhere other than the repo root, and
-  functions move back across the Pacific — the app keeps working and simply gets slow again, with no
-  error to notice. If page latency regresses sharply after a config change, check this first.
+- **This file is the only thing pinning the region.** Delete or rename it, add a per-function
+  `regions` block (which overrides the project-level setting for the functions it matches), pass
+  `--regions` to `vercel deploy`, or point the project's Root Directory somewhere other than the
+  repo root, and functions move back across the Pacific — the app keeps working and simply gets slow
+  again, with no error to notice. If page latency regresses sharply after a config change, check this
+  first. Adding a `vercel.ts` is the one path that may instead fail loudly: a project may have only
+  one config file, and Vercel does not document which wins, so expect either outcome.
 - **Compute in `sin1` costs 1.25× `iad1`,** not 1.5×: Active CPU $0.160/hr vs $0.128/hr and
   Provisioned Memory $0.0133 vs $0.0106 per GB-hr
   ([fluid compute pricing](https://vercel.com/docs/functions/usage-and-pricing)). CDN line items are
   ~1.30× (Edge Requests $2.60 vs $2.00 per million; ISR / Runtime Cache writes $5.20 vs $4.00) and
-  Fast Data Transfer ~1.07× ($0.16 vs $0.15 per GB). Those are Pro on-demand rates; Hobby bills flat
-  included allowances with no regional rates, so on Hobby the region carries no direct billing
-  consequence.
-- **Part of that premium pays for itself, though the net is unmeasured.** Vercel bills Active CPU
-  only while your code actually runs and pauses it during I/O, but bills Provisioned Memory for the
-  whole instance lifetime *including* I/O waits. This app is I/O-bound on Postgres, so today it pays
-  memory for every cross-Pacific wait. Co-locating shortens those waits and so shortens the billed
-  instance lifetime: CPU cost rises ~25% while memory-hours fall. Confirm the direction against a
-  real invoice rather than trusting this paragraph.
+  Fast Data Transfer ~1.07× ($0.16 vs $0.15 per GB). Those are Pro on-demand rates, which are the
+  ones that apply here — `.vercel/project.json` holds a `team_` scope, and only Hobby escapes
+  regional rates by billing flat included allowances instead.
+- **Part of that premium may pay for itself; the net is unmeasured and the direction is unproven.**
+  Under fluid compute — Vercel's default billing model, though nobody has read this project's
+  setting — Active CPU is billed only while your code actually runs and pauses during I/O, while
+  Provisioned Memory bills for the whole instance lifetime *including* I/O waits. This app is
+  I/O-bound on Postgres, so today it pays memory for every cross-Pacific wait; co-locating shortens
+  those waits and so shortens the billed instance lifetime, and CPU cost rises ~25% while
+  memory-hours fall. The older duration-billed model has no such split, so none of that reasoning
+  holds there. Either way, confirm the direction against a real invoice rather than this paragraph.
 - **Keep it to exactly one region.** Hobby permits a single region, and requesting more than the plan
   allows fails the deployment before the build starts. Do not "improve" this into a multi-region array.
 

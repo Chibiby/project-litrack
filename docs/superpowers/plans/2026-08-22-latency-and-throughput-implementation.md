@@ -183,14 +183,17 @@ round trip on a path that costs at least two sequential round trips per authenti
    No `functions`, no `crons`, no `headers` — security headers live in `next.config.mjs` and
    must stay there.
 2. In `docs/deployment.md`, add a short subsection under the Vercel section: why `sin1`
-   (co-location with the Supabase project in `ap-southeast-1`), that `sin1` compute bills at 1.25× `iad1` (corrected 2026-08-22 from an uncited "1.5×"; source in the spec)
-   rates, and that this file is the only thing pinning the region.
+   (co-location with the Supabase project in `ap-southeast-1`), that `sin1` compute bills at
+   1.25× `iad1` rates (corrected 2026-08-22 from an uncited "1.5×" — source in the spec), and
+   that this file is the only thing pinning the region.
 3. **This task ships alone.** Its commit must contain only the two files above, so the human can
    deploy it and re-measure with nothing else confounding the delta. Do not touch source.
 
-**Ruling — what cannot be verified here.** Whether the project is currently linked to Vercel,
-which region it deploys to today, whether Fluid Compute is on, and the plan tier are all
-dashboard reads. They stay human actions and are listed in Task 16's checklist. Authoring
+**Ruling — what cannot be verified here.** Which region the project deploys to today and whether
+Fluid Compute is on are dashboard reads. Two items originally listed here were resolved locally
+during the fix round: `.vercel/project.json` proves the project **is** linked (`project-litrack`),
+and its `orgId` is a `team_` scope, which puts the account on Pro or Enterprise rather than Hobby —
+so the Pro on-demand regional rates are the operative ones. They stay human actions and are listed in Task 16's checklist. Authoring
 `vercel.json` is correct regardless of the current region: if it is already `sin1` the file is
 a no-op that documents the requirement.
 
