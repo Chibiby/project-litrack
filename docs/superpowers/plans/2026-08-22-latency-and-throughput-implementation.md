@@ -51,7 +51,9 @@ requirements are met.
     reports DONE. `npm run build` must pass for tasks that touch config, the root layout,
     routes, or dependencies — and for every task in doubt. On Windows, if
     `npm run build` fails with `EPERM ... rename query_engine-windows.dll.node` because a
-    dev server is running, build to the scratch dir instead:
+    dev server is running, note that the failure is in `prisma generate` — the first half of
+    `prisma generate && next build` — so `next build` never starts and the error is not about
+    your change. Skip that half and build to a scratch dir instead:
     `$env:NEXT_BUILD_DIST_DIR = ".next-verify"; npx next build` — then
     `git checkout -- tsconfig.json next-env.d.ts` to drop the churn it causes. That EPERM is
     **not** a blocked verification: run all four gates anyway.
