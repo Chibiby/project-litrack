@@ -169,7 +169,8 @@ export async function getUnreadAralAssignments(user: {
     // Deep-link only when every surviving learner sits in one grade, which is the
     // ordinary case — a bulk enrolment runs inside a single roster.
     const gradeIds = [...new Set(live.map((l) => l.gradeLevelId))];
-    const href = gradeIds.length === 1 ? `/teacher/aral/${gradeIds[0]}` : "/teacher/aral";
+    const href =
+      gradeIds.length === 1 ? `/teacher/aral?grade=${gradeIds[0]}` : "/teacher/aral";
 
     const count = live.length || row.learnerIds.length;
     return {

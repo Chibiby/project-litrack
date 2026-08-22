@@ -286,7 +286,7 @@ describe("getUnreadAralAssignments", () => {
     expect(alert.title).toBe("Teacher Marivic Santos assigned you 2 ARAL learners.");
     expect(alert.description).toBe("Ana Cruz and Ben Dela Cruz");
     // One grade, so the popup can land the tutor on the grid they will use.
-    expect(alert.href).toBe("/teacher/aral/grade-g3");
+    expect(alert.href).toBe("/teacher/aral?grade=grade-g3");
   });
 
   it("says an ARAL learner, singular, for a selection of one", async () => {
