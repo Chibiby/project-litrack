@@ -102,10 +102,18 @@ export type AuditEntry = {
  * Insert an AuditLog row. Failures are logged and never thrown.
  *
  * The insert is dispatched through `after()`, so the caller no longer pays a
- * database round trip on the response path — nothing reads an audit row
- * synchronously. `writeAudit` itself is still *called* synchronously by its
- * caller, so every `await writeAudit(...)` call site keeps its existing shape
- * and its ordering relative to the rest of the action; only the write moves.
+ * database round trip on the response path. `writeAudit` itself is still
+ * *called* synchronously by its caller, so every `await writeAudit(...)` call
+ * site keeps its existing shape and its ordering relative to the rest of the
+ * action; only the write moves.
+ *
+ * Known consequence of that move, bounded and self-healing. `AuditLog` has
+ * exactly one cached reader — `getSchoolHeadRecentActivity` in
+ * `src/lib/dashboard/aggregates.ts`, tagged `schoolDashboard(schoolId)`. A
+ * mutating action busts that tag *during* the request while the row lands
+ * *after* the response, so a render landing between the two can cache a result
+ * that omits the row for the cache profile's TTL. No row is lost and no tenancy
+ * boundary moves; the omission clears on the next tag bust or at TTL expiry.
  */
 export async function writeAudit(entry: AuditEntry): Promise<void> {
   await deferOrRun(() => insertOneRow(entry));
@@ -160,12 +168,17 @@ async function insertManyRows(entries: AuditEntry[]): Promise<void> {
  * Hand `write` to `after()` so it runs once the response has been flushed, and
  * run it inline when `after()` refuses.
  *
- * `after()` throws synchronously in three cases, all of them *before* the task
- * is queued: E468 (called outside a request scope — scripts, unit tests), E91
- * (`waitUntil` unavailable on the host, thrown from `addCallback` rather than
- * from the entry point) and E50 (task is neither a promise nor a function,
- * which we avoid by construction — we always pass a function). Because nothing
- * is queued in any of the three, the fallback cannot double-write.
+ * The property the fallback depends on is **not** the list of things `after()`
+ * can throw — it is that every one of them is raised *synchronously, before
+ * anything is enqueued*. `callbackQueue.add` is the last statement on the path,
+ * so a throw means the task was never queued and catch-and-run-inline cannot
+ * double-write. That is why the `catch` is bare: do not narrow it to specific
+ * error codes. The known throws are examples, not a closed set — E468 (called
+ * outside a request scope: scripts, unit tests), E91 (`waitUntil` unavailable on
+ * the host), E50 (task is neither a promise nor a function, which we avoid by
+ * construction), E563 (`waitUntil` already awaited) and a bare `TypeError` when
+ * a work store carries no `afterContext`. Any future addition upstream of the
+ * enqueue is handled by the same catch for free.
  *
  * The fallback *runs* the write rather than dropping it: AuditLog is a PH Data
  * Privacy Act artifact, and permanently losing a row is strictly worse than the

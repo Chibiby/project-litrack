@@ -7,20 +7,32 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  *  - the *call* is same-tick (only the insert is deferred), so `await
  *    writeAudit(...)` call sites keep their ordering;
- *  - `after()` refusing (it throws three different ways, and queues nothing when
- *    it does) falls back to an inline write instead of dropping the row;
+ *  - `after()` refusing (it throws several ways, always before it enqueues
+ *    anything) falls back to an inline write instead of dropping the row;
  *  - the never-throws contract holds on both paths.
+ *
+ * The last `describe` covers `resolveSchoolContext`'s ADMIN_SCHOOL_VIEW block,
+ * which is the other deferral in the same change. It lives here rather than in
+ * its own file so it shares this `after()` harness, and so it can assert through
+ * the *real* `writeAudit` down to the insert.
  */
 
 const auditLogCreate = vi.fn(async (_args: unknown) => ({ id: "audit-row" }));
 const auditLogCreateMany = vi.fn(async (_args: unknown) => ({ count: 0 }));
+const auditLogFindFirst = vi.fn(async (_args: unknown) => null as { id: string } | null);
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     auditLog: {
       create: (...args: unknown[]) => auditLogCreate(...(args as [never])),
       createMany: (...args: unknown[]) => auditLogCreateMany(...(args as [never])),
+      findFirst: (...args: unknown[]) => auditLogFindFirst(...(args as [never])),
     },
   },
+}));
+
+const redirect = vi.fn();
+vi.mock("next/navigation", () => ({
+  redirect: (...args: unknown[]) => redirect(...(args as [])),
 }));
 
 type AfterTask = () => Promise<void> | void;
@@ -39,6 +51,7 @@ vi.mock("next/server", () => ({
 
 // Imported after the mock factories above are registered.
 const { writeAudit, writeAuditMany, AUDIT_ACTIONS } = await import("@/lib/audit");
+const { resolveSchoolContext } = await import("@/lib/school-context");
 
 /** Reproduces a Next error object, including the __NEXT_ERROR_CODE marker. */
 function nextError(code: string, message: string) {
@@ -66,11 +79,18 @@ const ENTRY = {
   metadata: { schoolId: "school-1", learnerId: "learner-1" },
 };
 
-/** Run every queued `after()` task, as Next does once the response is flushed. */
+/**
+ * Run every queued `after()` task, as Next does once the response is flushed.
+ * Drains rather than taking one pass, because a deferred callback may itself
+ * queue another (`resolveSchoolContext`'s block nests `writeAudit`'s `after()`),
+ * and Next's queue is drained to idle, not one level deep.
+ */
 async function flushAfterTasks() {
-  const tasks = afterTasks;
-  afterTasks = [];
-  for (const task of tasks) await task();
+  while (afterTasks.length > 0) {
+    const tasks = afterTasks;
+    afterTasks = [];
+    for (const task of tasks) await task();
+  }
 }
 
 let consoleError: ReturnType<typeof vi.spyOn>;
@@ -81,6 +101,7 @@ beforeEach(() => {
   afterRefusal = null;
   auditLogCreate.mockResolvedValue({ id: "audit-row" });
   auditLogCreateMany.mockResolvedValue({ count: 0 });
+  auditLogFindFirst.mockResolvedValue(null);
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -249,5 +270,73 @@ describe("writeAuditMany", () => {
 
     expect(afterTasks).toHaveLength(0);
     expect(auditLogCreateMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `resolveSchoolContext` defers its ADMIN_SCHOOL_VIEW block whole — the 8-hour
+ * dedup `findFirst` *and* the write — so the read-back and the write stay ordered
+ * relative to each other. Splitting them would turn the pre-existing
+ * concurrent-request race into reliable duplicate rows, so the deferred
+ * `findFirst` is the property worth pinning.
+ */
+describe("resolveSchoolContext — deferred ADMIN_SCHOOL_VIEW audit", () => {
+  type ContextUser = Parameters<typeof resolveSchoolContext>[0];
+  const ADMIN = {
+    id: "admin-1",
+    role: "SUPER_ADMIN",
+    schoolId: null,
+  } as unknown as ContextUser;
+
+  it("registers one deferred task and touches AuditLog for neither read nor write", async () => {
+    const result = await resolveSchoolContext(ADMIN, "school-1", "/school-head");
+
+    expect(result).toEqual({ schoolId: "school-1", isSuperAdminView: true });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(afterTasks).toHaveLength(1);
+    // The dedup read-back is deferred WITH the write, so the page render pays
+    // for neither. This is the assertion that inverts if the deferral is
+    // reverted: an inline block calls findFirst before this line runs.
+    expect(auditLogFindFirst).not.toHaveBeenCalled();
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("performs the dedup read and then the insert once flushed", async () => {
+    await resolveSchoolContext(ADMIN, "school-1", "/school-head");
+    await flushAfterTasks();
+
+    expect(auditLogFindFirst).toHaveBeenCalledTimes(1);
+    expect(auditLogCreate).toHaveBeenCalledTimes(1);
+    expect(auditLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "admin-1",
+        schoolId: "school-1",
+        action: "ADMIN_SCHOOL_VIEW",
+        resource: "School",
+        resourceId: "school-1",
+        metadata: { schoolId: "school-1", path: "/school-head" },
+      },
+    });
+  });
+
+  it("runs the block inline, and still writes the row, when after() refuses", async () => {
+    afterRefusal = E468;
+
+    const result = await resolveSchoolContext(ADMIN, "school-1", "/school-head");
+
+    expect(result).toEqual({ schoolId: "school-1", isSuperAdminView: true });
+    expect(afterTasks).toHaveLength(0);
+    expect(auditLogFindFirst).toHaveBeenCalledTimes(1);
+    expect(auditLogCreate).toHaveBeenCalledTimes(1);
+    expect(auditLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "admin-1",
+        schoolId: "school-1",
+        action: "ADMIN_SCHOOL_VIEW",
+        resource: "School",
+        resourceId: "school-1",
+        metadata: { schoolId: "school-1", path: "/school-head" },
+      },
+    });
   });
 });
