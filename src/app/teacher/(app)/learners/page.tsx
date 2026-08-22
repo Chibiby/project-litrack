@@ -139,20 +139,6 @@ async function LearnersBody({
       ? list.grade
       : "all";
 
-  // Section is no longer a facet, but it is still a column: this answers "does
-  // this grade use sections at all", which is what decides whether the column
-  // earns its width.
-  const sections = await prisma.section.findMany({
-    where: {
-      schoolId,
-      deletedAt: null,
-      gradeLevelId:
-        activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
-    },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-
   const where = learnerListWhere({
     assignedGradeIds,
     teacherId,
@@ -160,7 +146,23 @@ async function LearnersBody({
     list: { ...list, grade: activeGrade },
   });
 
-  const totalCount = await prisma.learner.count({ where });
+  // Section is no longer a facet, but it is still a column: this answers "does
+  // this grade use sections at all", which is what decides whether the column
+  // earns its width.
+  const [sections, totalCount] = await Promise.all([
+    prisma.section.findMany({
+      where: {
+        schoolId,
+        deletedAt: null,
+        gradeLevelId:
+          activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.learner.count({ where }),
+  ]);
+
   const pages = totalPages(totalCount, list.pageSize);
   const page = Math.min(list.page, pages);
   const skip = (page - 1) * list.pageSize;
