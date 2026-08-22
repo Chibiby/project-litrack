@@ -59,6 +59,7 @@ async function AralBody({
 
   const [learners, learnerCount, teachers] = await Promise.all([
     prisma.learner.findMany({
+      relationLoadStrategy: "join",
       where: learnerWhere,
       select: {
         id: true,

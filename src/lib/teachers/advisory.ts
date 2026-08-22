@@ -44,6 +44,7 @@ export async function getAdvisoryPlacement(user: {
   if (!user.advisorySectionId) return null;
 
   const section = await prisma.section.findFirst({
+    relationLoadStrategy: "join",
     where: {
       id: user.advisorySectionId,
       schoolId: user.schoolId,

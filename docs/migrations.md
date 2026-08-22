@@ -59,3 +59,11 @@ CREATE UNIQUE INDEX "Enrollment_learner_active_unique"
 ```
 
 Prisma’s schema language cannot express partial unique indexes, so this lives only in the SQL migration. Keep it when editing Enrollment-related migrations.
+
+## Preview features
+
+`generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so read sites can pass `relationLoadStrategy: "join"` and have the engine fetch relations in one `LATERAL` join instead of one round trip per relation. Accepted values are `"join"` and `"query"`; our read sites set it **explicitly** because the default under 5.22.0 is not something we can pin down offline, and an explicit value behaves the same whatever the default turns out to be.
+
+Kill switch if a join plan regresses in one environment: `PRISMA_RELATION_LOAD_STRATEGY=query`, which the native query engine reads (no effect on Data Proxy / Accelerate, which do not run that binary). Caveat for whoever reaches for it — that variable is present in the engine binary but is **not** in Prisma’s public docs, so treat it as engine-internal and unversioned; the supported fix is to change the per-query `relationLoadStrategy` argument and redeploy.
+
+This is a generator flag only: it changes no table, column, or index, and needs no migration.

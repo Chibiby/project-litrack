@@ -2,7 +2,12 @@
 // Datasource: Supabase Postgres
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Nested select/include otherwise costs one round trip per relation. With this
+  // on, `relationLoadStrategy: "join"` makes the engine emit a single LATERAL
+  // join instead. Read sites opt in explicitly rather than relying on the
+  // default. Kill switch per environment: PRISMA_RELATION_LOAD_STRATEGY.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

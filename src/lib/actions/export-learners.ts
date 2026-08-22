@@ -101,6 +101,7 @@ async function fetchLearnersForExport(opts: {
   aralOnly?: boolean;
 }) {
   return prisma.learner.findMany({
+    relationLoadStrategy: "join",
     where: learnerWhere(opts),
     select: learnerExportSelect,
     orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],
@@ -115,6 +116,7 @@ async function fetchLearnersForReport(opts: {
   aralOnly?: boolean;
 }) {
   return prisma.learner.findMany({
+    relationLoadStrategy: "join",
     where: learnerWhere(opts),
     select: learnerReportSelect,
     orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],

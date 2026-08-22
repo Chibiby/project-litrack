@@ -42,6 +42,7 @@ export type AralTutorOption = {
 /** Every teacher who may be designated, by surname — one order for every picker. */
 export async function listAralTutors(schoolId: string): Promise<AralTutorOption[]> {
   const teachers = await prisma.user.findMany({
+    relationLoadStrategy: "join",
     where: aralTutorScope(schoolId),
     select: {
       id: true,

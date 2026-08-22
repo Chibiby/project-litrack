@@ -166,6 +166,7 @@ async function LearnersBody({
   const skip = (page - 1) * list.pageSize;
 
   const learners = await prisma.learner.findMany({
+    relationLoadStrategy: "join",
     where,
     select: {
       id: true,
