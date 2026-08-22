@@ -98,7 +98,6 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
     },
   });
 
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   revalidatePath("/teacher/aral");
   revalidatePath(
     `/teacher/aral/${learner.gradeLevelId}/learners/${learner.id}/attendance`
@@ -310,7 +309,6 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   });
 
   revalidatePath(`/teacher/aral/${grade.id}/attendance`);
-  revalidatePath(`/teacher/aral/${grade.id}`);
   revalidatePath("/teacher/aral");
   for (const l of learners) {
     revalidatePath(`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/attendance`);
@@ -400,7 +398,6 @@ export async function setAttendanceDayHoliday(
     },
   });
 
-  revalidatePath(`/teacher/aral/${grade.id}`);
   revalidatePath(`/teacher/aral/${grade.id}/attendance`);
   revalidatePath("/teacher/aral");
 

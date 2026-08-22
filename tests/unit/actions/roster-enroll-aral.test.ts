@@ -487,7 +487,9 @@ describe("enrollRosterLearnersToAral — what it busts", () => {
 
     const paths = revalidatePath.mock.calls.map((c) => c[0]);
     expect(paths).toContain("/teacher/grade/grade-g3");
-    expect(paths).toContain("/teacher/aral/grade-g3");
+    // The grade-scoped ARAL index route was removed in R4.3, so no bare
+    // `/teacher/aral/<gradeId>` path should be revalidated any more.
+    expect(paths.filter((p) => /^\/teacher\/aral\/[^/]+$/.test(p))).toEqual([]);
     expect(paths).not.toContain("/teacher/grade/grade-g4");
     expect(paths).toContain("/teacher/learners");
     expect(paths).toContain("/teacher/aral");

@@ -363,7 +363,6 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
   });
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
@@ -452,7 +451,6 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
   });
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
@@ -546,7 +544,6 @@ export async function deleteLearners(
   const gradeIds = Array.from(new Set(learners.map((l) => l.gradeLevelId)));
   for (const gradeId of gradeIds) {
     revalidatePath(`/teacher/grade/${gradeId}`);
-    revalidatePath(`/teacher/aral/${gradeId}`);
   }
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
@@ -628,7 +625,6 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
   });
 
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   revalidatePath(`/teacher/grade/${learner.gradeLevelId}/learners/${learner.id}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
@@ -763,7 +759,6 @@ export async function enrollLearnersToAral(
   });
 
   revalidatePath(`/teacher/grade/${grade.id}`);
-  revalidatePath(`/teacher/aral/${grade.id}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
   revalidateLearnerScoped({
@@ -935,7 +930,6 @@ export async function enrollRosterLearnersToAral(
   ];
   for (const gradeId of gradeIds) {
     revalidatePath(`/teacher/grade/${gradeId}`);
-    revalidatePath(`/teacher/aral/${gradeId}`);
   }
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
@@ -1066,7 +1060,6 @@ export async function setLearnerAralTeacher(
   revalidateSchoolHeadTeachers();
   revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
   revalidatePath("/teacher/aral");
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived
   // from the learners they track, so both have to be busted.
   revalidateLearnerScoped({

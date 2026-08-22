@@ -332,7 +332,6 @@ export async function commitLearnerImport(input: {
   revalidatePath(`/teacher/grade/${input.gradeLevelId}`);
   revalidatePath("/teacher/learners");
   if (importedAral > 0) {
-    revalidatePath(`/teacher/aral/${input.gradeLevelId}`);
     revalidatePath("/teacher/aral");
   }
   revalidateLearnerScoped({

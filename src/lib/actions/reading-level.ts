@@ -95,7 +95,6 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
     },
   });
 
-  revalidatePath(`/teacher/aral/${learner.gradeLevelId}`);
   revalidatePath("/teacher/aral");
   revalidatePath(
     `/teacher/aral/${learner.gradeLevelId}/learners/${learner.id}/reading-level`
@@ -210,7 +209,6 @@ export async function bulkRecordMonthlyReadingLevel(
   });
 
   for (const gradeId of gradeIds) {
-    revalidatePath(`/teacher/aral/${gradeId}`);
     revalidatePath(`/teacher/aral/${gradeId}/reading-level`);
   }
   revalidatePath("/teacher/aral");

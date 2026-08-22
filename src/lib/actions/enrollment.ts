@@ -256,8 +256,6 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
 
   revalidatePath(`/teacher/grade/${previousGradeId}`);
   revalidatePath(`/teacher/grade/${resolvedGradeLevelId}`);
-  revalidatePath(`/teacher/aral/${previousGradeId}`);
-  revalidatePath(`/teacher/aral/${resolvedGradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
   revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
@@ -439,8 +437,6 @@ export async function transferLearnerCrossSchool(
 
   revalidatePath(`/teacher/grade/${previousGradeId}`);
   revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
-  revalidatePath(`/teacher/aral/${previousGradeId}`);
-  revalidatePath(`/teacher/aral/${targetGradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
   revalidatePath("/admin/transfers");
