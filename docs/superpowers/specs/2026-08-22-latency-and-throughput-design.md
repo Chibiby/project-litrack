@@ -157,7 +157,7 @@ Ship via `vercel.json` at repo root:
 
 `vercel.ts` + `@vercel/config` is the newer, TypeScript-typed alternative and does **not** deprecate `vercel.json`. For a single static `regions` line it earns nothing — it adds a dependency and build-time execution for identical effect. Use `vercel.json`. Never both. A dashboard setting achieves the same thing; the file's advantage is that it is reviewable in git.
 
-Single-region pinning is available on every plan. `sin1` compute is priced at 1.5× US rates — note for budgeting.
+Single-region pinning is available on every plan. `sin1` compute is priced at **1.25×** `iad1` — Active CPU $0.160/hr vs $0.128/hr, Provisioned Memory $0.0133 vs $0.0106 per GB-hr, per <https://vercel.com/docs/functions/usage-and-pricing>. (This line read "1.5×" until 2026-08-22; that number was uncited and wrong. CDN line items are ~1.30×, Fast Data Transfer ~1.07×.) Note for budgeting — and note that Provisioned Memory bills through I/O waits while Active CPU does not, so shorter round trips shorten the billed instance lifetime and offset part of the rate premium.
 
 **Ship this alone, change nothing else in the same deploy, and re-measure.** Given the expected magnitude, bundling it with other work would make attribution impossible and would likely mask whether anything else mattered.
 

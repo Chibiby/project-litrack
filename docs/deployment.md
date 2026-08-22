@@ -31,19 +31,40 @@ LITRACK is a Next.js 14 App Router app. Production hosting target: **Vercel**. D
 ### Function region — `sin1`
 
 `vercel.json` pins Vercel Functions to `sin1` (Singapore). The Supabase project lives in
-`ap-southeast-1`, also Singapore, and functions default to a US region, so without this pin every
-database round trip crosses the Pacific — roughly 200 ms each, on a path that pays at least two
-sequential round trips per authenticated render. Co-locating the two is the single largest latency
-win available to this app, and it is worth far more than any query-level optimisation.
+`ap-southeast-1`, also Singapore, and functions default to a US region — `iad1` (Washington D.C.)
+unless changed — so without this pin every database round trip crosses the Pacific. The design spec
+puts that at roughly 200 ms per round trip (from a community AWS latency matrix, not an AWS-official
+figure), on a path that pays at least two sequential round trips per authenticated render. The
+measured baseline is what will confirm the real figure.
 
-Two things to know before changing it:
+Four things to know before changing it:
 
-- **`sin1` bills at 1.5× the US rates.** That is the deliberate trade: a small compute premium for
-  a large, uniform latency reduction on every authenticated page.
-- **This file is the only thing pinning the region.** Deleting `vercel.json`, or overriding the
-  region in the Vercel dashboard, silently moves functions back across the Pacific — the app keeps
-  working and simply gets slow again, with no error to notice. If page latency regresses sharply
-  after a config change, check this first.
+- **This file is the only thing pinning the region.** Delete or rename it, add a `vercel.ts`
+  (a project may have only one config file), add a per-function `regions` block, pass `--regions`
+  to `vercel deploy`, or point the project's Root Directory somewhere other than the repo root, and
+  functions move back across the Pacific — the app keeps working and simply gets slow again, with no
+  error to notice. If page latency regresses sharply after a config change, check this first.
+- **Compute in `sin1` costs 1.25× `iad1`,** not 1.5×: Active CPU $0.160/hr vs $0.128/hr and
+  Provisioned Memory $0.0133 vs $0.0106 per GB-hr
+  ([fluid compute pricing](https://vercel.com/docs/functions/usage-and-pricing)). CDN line items are
+  ~1.30× (Edge Requests $2.60 vs $2.00 per million; ISR / Runtime Cache writes $5.20 vs $4.00) and
+  Fast Data Transfer ~1.07× ($0.16 vs $0.15 per GB). Those are Pro on-demand rates; Hobby bills flat
+  included allowances with no regional rates, so on Hobby the region carries no direct billing
+  consequence.
+- **Part of that premium pays for itself, though the net is unmeasured.** Vercel bills Active CPU
+  only while your code actually runs and pauses it during I/O, but bills Provisioned Memory for the
+  whole instance lifetime *including* I/O waits. This app is I/O-bound on Postgres, so today it pays
+  memory for every cross-Pacific wait. Co-locating shortens those waits and so shortens the billed
+  instance lifetime: CPU cost rises ~25% while memory-hours fall. Confirm the direction against a
+  real invoice rather than trusting this paragraph.
+- **Keep it to exactly one region.** Hobby permits a single region, and requesting more than the plan
+  allows fails the deployment before the build starts. Do not "improve" this into a multi-region array.
+
+The pin does **not** cover everything. Routing Middleware deploys to all regions regardless of region
+settings, and static assets come from the CDN edge — so `src/middleware.ts` runs wherever the request
+lands. That costs nothing today because `src/lib/supabase/middleware.ts` verifies JWT claims locally,
+but on a project still using legacy HS* symmetric signing keys that call falls back to a network
+`getUser()` and reaches Singapore from an unpinned region.
 
 ## Database migrations (production)
 

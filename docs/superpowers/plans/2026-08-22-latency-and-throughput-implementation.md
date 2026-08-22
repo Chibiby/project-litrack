@@ -183,7 +183,7 @@ round trip on a path that costs at least two sequential round trips per authenti
    No `functions`, no `crons`, no `headers` — security headers live in `next.config.mjs` and
    must stay there.
 2. In `docs/deployment.md`, add a short subsection under the Vercel section: why `sin1`
-   (co-location with the Supabase project in `ap-southeast-1`), that `sin1` bills at 1.5× US
+   (co-location with the Supabase project in `ap-southeast-1`), that `sin1` compute bills at 1.25× `iad1` (corrected 2026-08-22 from an uncited "1.5×"; source in the spec)
    rates, and that this file is the only thing pinning the region.
 3. **This task ships alone.** Its commit must contain only the two files above, so the human can
    deploy it and re-measure with nothing else confounding the delta. Do not touch source.
