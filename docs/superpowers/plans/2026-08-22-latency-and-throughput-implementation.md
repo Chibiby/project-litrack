@@ -81,7 +81,7 @@ predicted to save, labelled as prediction.
 ## Reading these tasks
 
 Every task names a **recon file** under
-`.superpowers/sdd/2026-08-22-latency-and-throughput-design/`. That file was produced by a
+`.superpowers/sdd/2026-08-22-latency-and-throughput-implementation/`. That file was produced by a
 read-only verification pass against the actual code and it **overrides the spec on every
 factual detail** (line numbers, file paths, what a function currently does). The spec still
 owns intent and scope. Where a task says "Ruling:", that decision is already made — implement
