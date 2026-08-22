@@ -1,10 +1,10 @@
-import { registerOTel } from "@vercel/otel";
-
-/**
- * Next.js calls this once per server runtime on boot. `registerOTel` installs the
- * OpenTelemetry SDK plus Vercel's auto-instrumentation (fetch, Prisma), which is
- * where query spans come from — `src/lib/prisma.ts` is deliberately untouched.
- */
-export function register() {
-  registerOTel({ serviceName: "litrack" });
+export async function register() {
+  // Node-runtime only. `register()` runs in every runtime, and an unguarded call
+  // compiles the whole OTel SDK into the edge middleware bundle (+58 kB gzipped) and
+  // boots it before the first cookie refresh on every fresh edge isolate. Middleware
+  // has no hand-rolled spans and no Prisma, so it gains nothing from that. The
+  // per-compilation NEXT_RUNTIME define folds this branch away in the edge build.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("./instrumentation.node");
+  }
 }

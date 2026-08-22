@@ -42,15 +42,13 @@ function isTeacherPendingGate(user: User): boolean {
 /** Spans for the two blocking round trips every authenticated request pays for. */
 const tracer = trace.getTracer("litrack");
 
-/** Result of the user lookup, carrying whether the P2024 retry path fired. */
-type UserLookup = { user: User | null; retried: boolean };
-
-async function loadUserByAuthId(authId: string): Promise<UserLookup> {
+/** `onRetry` fires before the second attempt, so a retry that then throws is still recorded. */
+async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<User | null> {
   // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
   // can briefly queue past the serverless pool wait; a short backoff clears most
   // transient failures before they hit teacher/error.tsx.
   try {
-    return { user: await prisma.user.findUnique({ where: { authId } }), retried: false };
+    return await prisma.user.findUnique({ where: { authId } });
   } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
@@ -58,7 +56,8 @@ async function loadUserByAuthId(authId: string): Promise<UserLookup> {
         : "";
     if (code !== "P2024") throw err;
     await new Promise((r) => setTimeout(r, 75));
-    return { user: await prisma.user.findUnique({ where: { authId } }), retried: true };
+    onRetry?.();
+    return await prisma.user.findUnique({ where: { authId } });
   }
 }
 
@@ -82,8 +81,9 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
           data: { user },
         } = await supabase.auth.getUser();
         // Unauthenticated requests skip the network entirely, so keep the two
-        // populations apart or the p50 reads as much faster than it is.
-        span.setAttribute("litrack.session.authenticated", user !== null);
+        // populations apart or the p50 reads as much faster than it is. Same
+        // truthiness test as the `if (!authUser)` guard below, so they cannot disagree.
+        span.setAttribute("litrack.session.authenticated", Boolean(user));
         return user;
       } catch (err) {
         span.recordException(err as Error);
@@ -97,17 +97,20 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   if (!authUser) return null;
 
   const user = await tracer.startActiveSpan("litrack.auth.user_lookup", async (span) => {
+    // The retry path issues a second findUnique after a 75 ms sleep; without this the
+    // span duration reads as one round trip when it was two plus the backoff. Recorded
+    // in the finally so a retry that then throws still reports retried=true.
+    let retried = false;
     try {
-      const lookup = await loadUserByAuthId(authUser.id);
-      // The retry path issues a second findUnique after a 75 ms sleep; without this the
-      // span duration reads as one round trip when it was two plus the backoff.
-      span.setAttribute("litrack.user_lookup.retried", lookup.retried);
-      return lookup.user;
+      return await loadUserByAuthId(authUser.id, () => {
+        retried = true;
+      });
     } catch (err) {
       span.recordException(err as Error);
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw err;
     } finally {
+      span.setAttribute("litrack.user_lookup.retried", retried);
       span.end();
     }
   });
