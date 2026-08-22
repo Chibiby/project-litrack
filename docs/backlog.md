@@ -59,6 +59,58 @@ Opened 2026-08-22 by the program in `docs/superpowers/plans/2026-08-22-latency-a
 - **No test covers `loadUserByAuthId`'s P2024 retry path** (`src/lib/auth/session.ts`). The helper retries exactly once on a Prisma pool timeout, then propagates a second failure. That "exactly once" is asserted only by reading the code: moving the second `await` from the `catch` into the `try` would make a second failure retry again instead of propagating, and every gate would still pass. The helper is module-private, `session.ts` has never had a test, and `vitest.config.ts` declares no `setupFiles`, so covering it means introducing Supabase + Prisma + `next/headers` mocks — new test infrastructure, which a performance program is the wrong vehicle for. Mitigated in the meantime by a comment at the retry pinning the `await`'s placement and naming this failure mode. To close it: add the mock setup, then assert one retry on P2024, propagation on a second P2024, and immediate propagation on any other error code.
 - **`tsconfig.tsbuildinfo` is tracked in git and absent from `.gitignore`.** Pre-existing as of `66fe386`. Every `npm run typecheck` therefore dirties the working tree, the file lands in unrelated commits, and it conflicts on most merges. To close it: `git rm --cached tsconfig.tsbuildinfo` plus a `.gitignore` line. Left alone here because it touches every contributor's tree and belongs in its own commit rather than inside a perf fix round.
 
+### Security findings surfaced by the latency & throughput program (2026-08-22)
+
+A read-only security audit run before implementing R4.1 (`getUser()` → `getClaims()`) traced the installed
+`@supabase/auth-js` 2.106.1 source and every account-lockout path in the app. **R4.1 was cancelled as a
+result** — see the ruling in `docs/superpowers/plans/2026-08-22-latency-and-throughput-implementation.md`
+Task 3 and the program's report. These findings are all **pre-existing**; none was introduced by the
+program, and none is fixed by it.
+
+- **HIGH · School Head lockout has no enforceable post-condition.** `regenerateSchoolHeadCredential`
+  (`src/lib/actions/school.ts:150-161`) is the only implemented lockout for a `SCHOOL_HEAD` — no action
+  anywhere sets `isActive: false` or `deletedAt` on one, although `docs/runbook.md:86` tells an incident
+  responder to do exactly that. It sets a new Supabase password plus `mustChangePassword: true` and
+  `isActive: true`, and does not sign the user out. Its only DB-side post-condition is
+  `mustChangePassword`, which routes to `/account/set-password`, whose `setPasswordAction`
+  (`src/lib/actions/auth.ts:693-728`) writes a new password **with no current-credential re-auth** —
+  unlike `changePasswordAction:753-757`, which does verify. So a still-valid session held at lockout time
+  can set a password of its own choosing, invalidating the credential the Super Admin just issued, with
+  the audit row reading `PASSWORD_CHANGE / set_password` under the victim's userId. Today the exposure is
+  bounded by whether GoTrue revokes sessions on `PUT /admin/users/{id}` — **an open question, unverifiable
+  from this repo.** It becomes unbounded (to the access-token TTL) if session verification ever moves
+  local. Note `setPasswordAction` also serves email password recovery via `/auth/reset`, where the user has
+  no current password by definition — so requiring re-auth needs flow discrimination, not a blanket check.
+  Related: `regenerateSchoolHeadCredential` setting `isActive: true` unconditionally re-activates.
+- **MEDIUM · a soft-deleted School does not end its users' sessions.** `deleteSchool`
+  (`src/lib/actions/school.ts:243-260`) soft-deletes only the `School` row. `getCurrentUserCached`
+  (`src/lib/auth/session.ts`) never joins `School`, and `resolveSchoolContext`
+  (`src/lib/school-context.ts:62-63`) returns `user.schoolId` unchecked. `loginSchoolHead`
+  (`src/lib/actions/auth.ts:109-115`) does block a *fresh* login, so this affects only sessions already
+  open at delete time — which then keep full read/write on a school the admin believes is gone,
+  indefinitely. To close it: check `School.deletedAt` / `isActive` in the session gate or in
+  `resolveSchoolContext`.
+- **LOW · the forced-password-change gate is not universal.** `mustChangePassword` is enforced in
+  `requireUser`, not `getCurrentUser`. Three call sites use `getCurrentUser()` directly and skip it:
+  `src/app/admin/layout.tsx:16`, `src/app/pending-approval/page.tsx:17`,
+  `src/app/account/created/page.tsx:21`. Render-only impact today, but it means the gate is not a
+  reliable place to hang anything stronger.
+- **LOW · the access-token TTL is undeclared.** There is no `supabase/config.toml`, and nothing in
+  `src/lib/env.ts` or `docs/deployment.md` records it, so the window on any session-validity question is
+  literally unknown rather than merely long. Pin it deliberately in the Supabase dashboard and write the
+  value into `docs/deployment.md`.
+- **LOW · `getCurrentUserCached`'s verification branch has no test coverage.** `tests/unit/` does not mock
+  the Supabase client, so mishandling the auth result — e.g. treating `getClaims()`'s
+  `{data: null, error: null}` no-session arm as authenticated — would pass all four CI gates. Same missing
+  infrastructure as the P2024 retry gap noted above.
+
+**Also flagged, so nobody swaps them blind later.** Two `getUser()` call sites must **not** become
+`getClaims()`: `completePasswordReset` (`src/lib/actions/auth.ts:934-941`) and
+`src/app/auth/reset/page.tsx:28-31` use it to prove a *recovery* session still exists, and local
+verification would remove the server's ability to say that session was already consumed or revoked. And
+`resolveTeacherRegisterAuthId` (`src/lib/actions/auth.ts:424-430`) reads `sessionUser?.email` — `claims.email`
+is the email at token-issue time, not live, so swapping it introduces a stale-value bug.
+
 ## Open decisions for user (non-blocking for Wave 1–2 code)
 1. Applying committed migrations to the remote Supabase database (needed before live testing of new features). Follow `docs/migrate-checklist.md` (backup → `migrate deploy` with DIRECT_URL → verify → regen SH credentials → smoke). Options: user-approved `migrate deploy`, or a Supabase preview branch.
 2. Resend sender domain for invitation/recovery emails (`RESEND_FROM_EMAIL`).
