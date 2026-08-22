@@ -28,6 +28,23 @@ LITRACK is a Next.js 14 App Router app. Production hosting target: **Vercel**. D
    - Seed vars are **not** required on Vercel unless you run seed from CI (prefer local/one-off)
 4. Deploy. Confirm build logs show Prisma generate + Next build success.
 
+### Function region — `sin1`
+
+`vercel.json` pins Vercel Functions to `sin1` (Singapore). The Supabase project lives in
+`ap-southeast-1`, also Singapore, and functions default to a US region, so without this pin every
+database round trip crosses the Pacific — roughly 200 ms each, on a path that pays at least two
+sequential round trips per authenticated render. Co-locating the two is the single largest latency
+win available to this app, and it is worth far more than any query-level optimisation.
+
+Two things to know before changing it:
+
+- **`sin1` bills at 1.5× the US rates.** That is the deliberate trade: a small compute premium for
+  a large, uniform latency reduction on every authenticated page.
+- **This file is the only thing pinning the region.** Deleting `vercel.json`, or overriding the
+  region in the Vercel dashboard, silently moves functions back across the Pacific — the app keeps
+  working and simply gets slow again, with no error to notice. If page latency regresses sharply
+  after a config change, check this first.
+
 ## Database migrations (production)
 
 Run from a trusted machine with production `DIRECT_URL` (port 5432), **after approval**:
