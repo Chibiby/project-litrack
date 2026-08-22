@@ -22,6 +22,9 @@ LITRACK is a Next.js 14 App Router app. Production hosting target: **Vercel**. D
    - `NEXT_PUBLIC_APP_URL` (production site URL)
    - `SYNTHETIC_EMAIL_DOMAIN`
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (required for real invite/recovery email)
+   - `NEXT_OTEL_VERBOSE` — optional, debugging only. Read by Next.js itself, not app code;
+     set to `1` to emit verbose OpenTelemetry spans (including internal framework spans).
+     Leave unset in Production; it is very noisy.
    - Seed vars are **not** required on Vercel unless you run seed from CI (prefer local/one-off)
 4. Deploy. Confirm build logs show Prisma generate + Next build success.
 

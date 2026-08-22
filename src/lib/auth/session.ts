@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
@@ -38,12 +39,18 @@ function isTeacherPendingGate(user: User): boolean {
   return user.role === "TEACHER" && user.approvalStatus === "PENDING";
 }
 
-async function loadUserByAuthId(authId: string): Promise<User | null> {
+/** Spans for the two blocking round trips every authenticated request pays for. */
+const tracer = trace.getTracer("litrack");
+
+/** Result of the user lookup, carrying whether the P2024 retry path fired. */
+type UserLookup = { user: User | null; retried: boolean };
+
+async function loadUserByAuthId(authId: string): Promise<UserLookup> {
   // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
   // can briefly queue past the serverless pool wait; a short backoff clears most
   // transient failures before they hit teacher/error.tsx.
   try {
-    return await prisma.user.findUnique({ where: { authId } });
+    return { user: await prisma.user.findUnique({ where: { authId } }), retried: false };
   } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
@@ -51,21 +58,59 @@ async function loadUserByAuthId(authId: string): Promise<User | null> {
         : "";
     if (code !== "P2024") throw err;
     await new Promise((r) => setTimeout(r, 75));
-    return prisma.user.findUnique({ where: { authId } });
+    return { user: await prisma.user.findUnique({ where: { authId } }), retried: true };
   }
 }
 
 /**
  * Cached by allowPending boolean so React cache() dedupes correctly across callers.
+ *
+ * The two spans below therefore fire ONCE PER REQUEST, not once per caller — a reader
+ * comparing span counts against the number of `requireUser` call sites in a render will
+ * see far fewer spans and should not read that as missing instrumentation.
  */
 const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User | null> => {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+
+  // Session verification against Supabase Auth. Spans the whole verification step, not
+  // one particular client method, so it survives changing how the session is verified.
+  const authUser = await tracer.startActiveSpan(
+    "litrack.auth.session_verify",
+    async (span) => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        // Unauthenticated requests skip the network entirely, so keep the two
+        // populations apart or the p50 reads as much faster than it is.
+        span.setAttribute("litrack.session.authenticated", user !== null);
+        return user;
+      } catch (err) {
+        span.recordException(err as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        span.end();
+      }
+    }
+  );
   if (!authUser) return null;
 
-  const user = await loadUserByAuthId(authUser.id);
+  const user = await tracer.startActiveSpan("litrack.auth.user_lookup", async (span) => {
+    try {
+      const lookup = await loadUserByAuthId(authUser.id);
+      // The retry path issues a second findUnique after a 75 ms sleep; without this the
+      // span duration reads as one round trip when it was two plus the backoff.
+      span.setAttribute("litrack.user_lookup.retried", lookup.retried);
+      return lookup.user;
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
   if (!user) return null;
 
   if (user.deletedAt) {
