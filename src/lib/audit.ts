@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -99,20 +100,84 @@ export type AuditEntry = {
 
 /**
  * Insert an AuditLog row. Failures are logged and never thrown.
+ *
+ * The insert is dispatched through `after()`, so the caller no longer pays a
+ * database round trip on the response path — nothing reads an audit row
+ * synchronously. `writeAudit` itself is still *called* synchronously by its
+ * caller, so every `await writeAudit(...)` call site keeps its existing shape
+ * and its ordering relative to the rest of the action; only the write moves.
  */
 export async function writeAudit(entry: AuditEntry): Promise<void> {
+  await deferOrRun(() => insertOneRow(entry));
+}
+
+/**
+ * Insert N AuditLog rows in a single statement.
+ *
+ * Use this instead of `await writeAudit(...)` in a loop. Deferring N per-row
+ * inserts individually would be worse than the serial loop it replaces:
+ * `after()`'s callback queue is built with no options, so its concurrency is
+ * `Infinity` and all N writes fire at once against a pool whose
+ * `connection_limit` is floored at 3 (`src/lib/db-url.ts`) — the overflow times
+ * out as P2024 after the response has already been sent, and the rows are lost.
+ * One `createMany` per call site keeps the fan-out at one and turns N round
+ * trips into one.
+ */
+export async function writeAuditMany(entries: AuditEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  await deferOrRun(() => insertManyRows(entries));
+}
+
+/** AuditLog has no relations, so one row shape serves `create` and `createMany`. */
+function toRowData(entry: AuditEntry): Prisma.AuditLogCreateManyInput {
+  return {
+    userId: entry.userId ?? null,
+    schoolId: entry.schoolId ?? null,
+    action: entry.action,
+    resource: entry.resource,
+    resourceId: entry.resourceId ?? null,
+    metadata: (entry.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
+  };
+}
+
+async function insertOneRow(entry: AuditEntry): Promise<void> {
   try {
-    await prisma.auditLog.create({
-      data: {
-        userId: entry.userId ?? null,
-        schoolId: entry.schoolId ?? null,
-        action: entry.action,
-        resource: entry.resource,
-        resourceId: entry.resourceId ?? null,
-        metadata: (entry.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
-      },
-    });
+    await prisma.auditLog.create({ data: toRowData(entry) });
   } catch (err) {
     console.error("[audit] write failed:", err);
   }
+}
+
+async function insertManyRows(entries: AuditEntry[]): Promise<void> {
+  try {
+    await prisma.auditLog.createMany({ data: entries.map(toRowData) });
+  } catch (err) {
+    console.error("[audit] write failed:", err);
+  }
+}
+
+/**
+ * Hand `write` to `after()` so it runs once the response has been flushed, and
+ * run it inline when `after()` refuses.
+ *
+ * `after()` throws synchronously in three cases, all of them *before* the task
+ * is queued: E468 (called outside a request scope — scripts, unit tests), E91
+ * (`waitUntil` unavailable on the host, thrown from `addCallback` rather than
+ * from the entry point) and E50 (task is neither a promise nor a function,
+ * which we avoid by construction — we always pass a function). Because nothing
+ * is queued in any of the three, the fallback cannot double-write.
+ *
+ * The fallback *runs* the write rather than dropping it: AuditLog is a PH Data
+ * Privacy Act artifact, and permanently losing a row is strictly worse than the
+ * round trip the deferral saves. `write` owns its own try/catch and logs
+ * `[audit] write failed:`, so this never throws on either path and Next's
+ * `onTaskError` never sees an audit failure.
+ */
+function deferOrRun(write: () => Promise<void>): Promise<void> {
+  try {
+    after(write);
+  } catch {
+    return write();
+  }
+  return Promise.resolve();
 }

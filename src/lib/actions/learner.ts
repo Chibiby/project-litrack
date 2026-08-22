@@ -13,7 +13,7 @@ import {
   enrollLearnersToAralSchema,
   enrollRosterLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
-import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import {
   revalidateLearnerScoped,
@@ -532,16 +532,16 @@ export async function deleteLearners(
     });
   });
 
-  for (const learner of learners) {
-    await writeAudit({
+  await writeAuditMany(
+    learners.map((learner) => ({
       userId: user.id,
       schoolId: user.schoolId,
       action: AUDIT_ACTIONS.LEARNER_DELETE,
       resource: "Learner",
       resourceId: learner.id,
       metadata: { schoolId: user.schoolId, learnerId: learner.id },
-    });
-  }
+    }))
+  );
 
   const gradeIds = Array.from(new Set(learners.map((l) => l.gradeLevelId)));
   for (const gradeId of gradeIds) {

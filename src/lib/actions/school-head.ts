@@ -14,7 +14,7 @@ import {
 import { lettersNeededToReachCount } from "@/lib/section-letters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
-import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 
 import {
   revalidateSchoolDashboard,
@@ -299,26 +299,28 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
     },
   });
 
-  for (const gradeId of bootstrap.createdGradeIds) {
-    await writeAudit({
+  // One batched insert for every row the bootstrap created. Both loops wrote
+  // one row per created id, so deferring them individually would fan out into
+  // (grades + sections) concurrent inserts after the response; batching keeps it
+  // at a single statement.
+  await writeAuditMany([
+    ...bootstrap.createdGradeIds.map((gradeId) => ({
       userId: user.id,
       schoolId,
       action: AUDIT_ACTIONS.GRADE_LEVEL_CREATE,
       resource: "GradeLevel",
       resourceId: gradeId,
       metadata: { schoolId, gradeLevelId: gradeId, source: "profiling_bootstrap" },
-    });
-  }
-  for (const sectionId of bootstrap.createdSectionIds) {
-    await writeAudit({
+    })),
+    ...bootstrap.createdSectionIds.map((sectionId) => ({
       userId: user.id,
       schoolId,
       action: AUDIT_ACTIONS.SECTION_CREATE,
       resource: "Section",
       resourceId: sectionId,
       metadata: { schoolId, sectionId, source: "profiling_bootstrap" },
-    });
-  }
+    })),
+  ]);
 
   revalidatePath(SCHOOL_HEAD_ROUTES.settingsProfile);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
