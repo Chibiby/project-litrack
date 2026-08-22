@@ -307,6 +307,13 @@ describe("resolveSchoolContext — deferred ADMIN_SCHOOL_VIEW audit", () => {
 
     expect(auditLogFindFirst).toHaveBeenCalledTimes(1);
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
+    // "and then" — the dedup read must precede the write, which is the whole
+    // point of deferring the block as a unit rather than the insert alone.
+    // invocationCallOrder is a global monotonic counter, so it compares across
+    // the two spies.
+    expect(auditLogFindFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      auditLogCreate.mock.invocationCallOrder[0]
+    );
     expect(auditLogCreate).toHaveBeenCalledWith({
       data: {
         userId: "admin-1",
