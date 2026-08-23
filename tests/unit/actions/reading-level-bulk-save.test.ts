@@ -81,7 +81,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
     .map((id) => ({ id: `rlr-${id}` }));
 });
 
-const transaction = vi.fn(async (arg: unknown) => {
+const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
   if (typeof arg === "function") {
     return (arg as (tx: unknown) => unknown)({
       $queryRaw: (...a: unknown[]) => queryRaw(...(a as [never])),

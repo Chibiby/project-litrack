@@ -159,7 +159,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
   throw new Error(`unexpected statement: ${sql}`);
 });
 
-const transaction = vi.fn(async (arg: unknown) => {
+const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
   if (typeof arg === "function") {
     return (arg as (tx: unknown) => unknown)({
       $queryRaw: (...a: unknown[]) => queryRaw(...(a as [never])),
@@ -195,9 +195,7 @@ vi.mock("@/lib/prisma", () => ({
       return transaction;
     },
     gradeLevel: { findFirst: (...a: unknown[]) => gradeFindFirst(...(a as [never])) },
-    attendanceDayMeta: {
-      findMany: (...a: unknown[]) => dayMetaFindMany(...(a as [never])),
-    },
+    attendanceDayMeta: { findMany: () => dayMetaFindMany() },
     learner: { findMany: (...a: unknown[]) => learnerFindMany(...(a as [never])) },
   },
 }));
