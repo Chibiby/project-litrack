@@ -53,9 +53,11 @@
 --        psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/concurrent-indexes.sql
 --      NOT the transaction pooler on 6543.
 --
---   4. Verify every index below is valid (query in the VERIFY section at the
---      bottom of this file). Do this before step 5 — step 5 tells Prisma the
---      DDL is done, so a silently-invalid index would go unnoticed.
+--   4. Read the validity table this file prints at the end (the VERIFY section is
+--      a live SELECT, so it runs as part of step 3). Expect 12 rows, all valid.
+--      Check it before step 5 — step 5 tells Prisma the DDL is done, so a
+--      silently-invalid index would go unnoticed from then on. A zero exit code
+--      is NOT sufficient evidence; look at the rows.
 --
 --   5. Record the migration as applied WITHOUT re-running its SQL:
 --        npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
@@ -78,7 +80,20 @@
 --
 --   DROP INDEX CONCURRENTLY IF EXISTS "<index_name>";
 --
--- then re-run that one statement. Find them with the VERIFY query below.
+-- DROP INDEX CONCURRENTLY also cannot run inside a transaction block, for the same
+-- reason CREATE INDEX CONCURRENTLY cannot. Run it with psql on DIRECT_URL, not in
+-- the Supabase SQL Editor and not under `psql -1` / --single-transaction.
+--
+-- Then RE-RUN THIS WHOLE FILE. Do not re-run just the one failed statement: this
+-- file is invoked with ON_ERROR_STOP=1, so a failure aborts the run and every
+-- statement AFTER the failing one never executed either. Re-running the whole file
+-- is correct and cheap because every statement is IF NOT EXISTS-guarded — the
+-- indexes that already built successfully are skipped.
+--
+-- Beware the trap in the other direction: IF NOT EXISTS only checks that the NAME
+-- is taken, so it will happily skip an INVALID index and report success. Drop the
+-- invalid ones FIRST, then re-run. Otherwise `migrate deploy` and this file will
+-- both report success over a permanently broken index.
 --
 -- This is the one DROP in this file's documentation and it is scoped to an index
 -- this file created moments earlier. It is not a licence to drop anything else.
@@ -138,33 +153,48 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Notification_actorId_idx" ON "Notificat
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuditLog_timestamp_idx" ON "AuditLog"("timestamp");
 
 -- ============================================================================
--- VERIFY — run this after the statements above, BEFORE `migrate resolve`
+-- VERIFY — runs automatically as part of this file, BEFORE `migrate resolve`
 -- ============================================================================
 --
--- Expect 12 rows, every one with valid = true.
+-- This is a LIVE statement, not a commented snippet, so
+-- `psql -f prisma/concurrent-indexes.sql` prints the validity table as part of the
+-- same command that built the indexes. The docs call this check mandatory, so it
+-- should not depend on remembering to paste a second query.
 --
---   SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
---   FROM pg_class c
---   JOIN pg_index i ON i.indexrelid = c.oid
---   WHERE c.relname IN (
---     'Enrollment_sectionId_idx',
---     'Enrollment_schoolYearId_idx',
---     'Learner_gradeLevelId_isAralLearner_fullName_idx',
---     'Learner_sectionId_idx',
---     'Learner_schoolId_fullName_idx',
---     'Announcement_authorId_idx',
---     'Attendance_recordedById_idx',
---     'AttendanceDayMeta_recordedById_idx',
---     'ReadingLevelRecord_recordedById_idx',
---     'TermGrade_recordedById_idx',
---     'Notification_actorId_idx',
---     'AuditLog_timestamp_idx'
---   )
---   ORDER BY c.relname;
+-- It is strictly READ-ONLY (a SELECT against the pg_class / pg_index catalogs) and
+-- cannot fail under ON_ERROR_STOP=1: a name that is missing simply does not come
+-- back as a row.
 --
--- Fewer than 12 rows  => a statement did not run. Re-run that one.
--- valid = false       => that build failed. DROP INDEX CONCURRENTLY it (see
---                        "IF A BUILD FAILS" above), then re-run that statement.
+-- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
--- Any invalid index left in place is the worst of both worlds: unused by the
--- planner, still maintained on every write.
+--   Expect exactly 12 rows, every one with valid = t.
+--
+--   Fewer than 12 rows => that index was never built. Re-run this whole file
+--                         (every statement is IF NOT EXISTS-guarded).
+--   valid = f          => that build FAILED. Drop it with
+--                         DROP INDEX CONCURRENTLY (see "IF A BUILD FAILS" above,
+--                         and note it needs psql for the same transaction
+--                         reason), then re-run this whole file.
+--
+-- An invalid index left in place is the worst of both worlds: ignored by the
+-- planner, still maintained on every write — and IF NOT EXISTS will skip over it
+-- forever, so nothing will tell you again.
+
+SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
+FROM pg_class c
+JOIN pg_index i ON i.indexrelid = c.oid
+WHERE c.relname IN (
+  'Enrollment_sectionId_idx',
+  'Enrollment_schoolYearId_idx',
+  'Learner_gradeLevelId_isAralLearner_fullName_idx',
+  'Learner_sectionId_idx',
+  'Learner_schoolId_fullName_idx',
+  'Announcement_authorId_idx',
+  'Attendance_recordedById_idx',
+  'AttendanceDayMeta_recordedById_idx',
+  'ReadingLevelRecord_recordedById_idx',
+  'TermGrade_recordedById_idx',
+  'Notification_actorId_idx',
+  'AuditLog_timestamp_idx'
+)
+ORDER BY c.relname;

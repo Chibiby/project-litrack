@@ -78,6 +78,8 @@ Remove `relationJoins` from `previewFeatures`, run `npx prisma generate`, redepl
 
 ## Concurrent index builds
 
+**This section is the normative statement of the concurrent-index rule.** The operational copies of it — in `prisma/concurrent-indexes.sql`, the header comment of `prisma/migrations/20260823000001_add_perf_indexes/migration.sql`, and `docs/migrate-checklist.md` section (b1) — are deliberate duplicates, kept so each file stands alone at the moment someone is using it; if the rule changes, all four must be updated together.
+
 Index-only migrations have a second, hand-applied artifact. `20260823000001_add_perf_indexes` is the first:
 
 - `prisma/migrations/20260823000001_add_perf_indexes/migration.sql` — plain `CREATE INDEX IF NOT EXISTS`. CI, fresh clones, local dev and any new Supabase project get this the normal way, via `migrate deploy`.
@@ -87,6 +89,6 @@ The split is forced, not stylistic: plain `CREATE INDEX` holds an ACCESS EXCLUSI
 
 Both files must keep **byte-identical index names**, taken from `prisma migrate diff --script` output, or the migration's `IF NOT EXISTS` stops protecting the production database and you get duplicate indexes under different names.
 
-A failed `CONCURRENTLY` build leaves an **invalid** index behind — unused by the planner, still maintained on every write — which must be dropped with `DROP INDEX CONCURRENTLY` before retrying.
+A failed `CONCURRENTLY` build leaves an **invalid** index behind — unused by the planner, still maintained on every write — which must be dropped with `DROP INDEX CONCURRENTLY` (also not runnable inside a transaction block, so also `psql` only) before retrying. Note that `IF NOT EXISTS` does **not** rescue this case: an invalid index still holds its name, so both the script and a later `migrate deploy` skip it and report success. Verify validity explicitly; do not infer it from a green exit code.
 
 Full human procedure, including the validity-verification query: **`docs/migrate-checklist.md` section (b1)**, which is also the one sanctioned carve-out to that file's "never apply a `migration.sql` by hand" rule.

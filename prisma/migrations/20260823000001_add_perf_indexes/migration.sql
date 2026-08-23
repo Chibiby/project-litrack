@@ -30,6 +30,13 @@
 -- index NAMES being identical in both files. They are the names
 -- `prisma migrate diff` generates from prisma/schema.prisma — do not rename one
 -- without renaming the other, or IF NOT EXISTS silently stops protecting anything.
+--
+-- IF NOT EXISTS DOES NOT REPAIR A BROKEN INDEX. It only checks that the name is
+-- taken. If a CONCURRENTLY build failed, the resulting INVALID index still exists
+-- under that name, so this migration skips it and `migrate deploy` reports success
+-- — leaving an index the planner never uses and every writer maintains forever.
+-- That is a failure mode which looks exactly like success. Verify validity (see
+-- docs/migrate-checklist.md section (b1)) rather than trusting a green deploy.
 
 -- CreateIndex
 -- R6 #4 — deleteSection's `enrollment.updateMany({ where: { sectionId } })`;

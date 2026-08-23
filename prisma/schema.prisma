@@ -667,9 +667,22 @@ model Enrollment {
   @@index([gradeLevelId, sectionId])
   /// R6 #4. `deleteSection` runs `enrollment.updateMany({ where: { sectionId } })`;
   /// `[gradeLevelId, sectionId]` cannot serve it because `sectionId` is not leading.
-  /// Also the lookup side of this FK's `SetNull` action.
+  /// It is also the lookup side of this FK's `SetNull` action, though that is a
+  /// schema-level property only: sections are soft-deleted today, so no
+  /// referential action actually fires. The `updateMany` above is the real consumer.
   @@index([sectionId])
   /// R6 #5. `[schoolId, schoolYearId]` does not lead with `schoolYearId`.
+  ///
+  /// NOTE (fix round 1): this is the one index of the twelve with **no consumer in
+  /// `src/` today**. Every Enrollment read keys on `learnerId` or `sectionId`; the
+  /// one place pairing `schoolYearId` with `learnerId` and `status` is already
+  /// served by `[learnerId, status]`; no raw SQL targets `"Enrollment"`; and every
+  /// other appearance of `schoolYearId` is Enrollment *write* data, not a `where`.
+  /// It covers the implicit `Restrict` probe when a `SchoolYear` row is hard-removed
+  /// — and no `schoolYear.delete` exists in `src/` either, so that probe never fires
+  /// from app code. Kept deliberately as forward cover. If a future index audit is
+  /// looking for something to reclaim, start here, and re-check those five things
+  /// rather than redoing the search.
   @@index([schoolYearId])
 }
 
@@ -735,14 +748,28 @@ model Learner {
   @@index([teacherId])
   @@index([aralTeacherId])
   @@index([schoolId, aralTeacherId, isAralLearner, deletedAt])
-  /// R6 #2. Grade-scoped ARAL listings ordered by name. Distinct from #6 below:
-  /// this one leads with `gradeLevelId` for the teacher learners list, which is
-  /// tenant-scoped transitively through the teacher's assigned grade ids and so
-  /// carries no `schoolId` predicate to lead with.
+  /// R6 #2. Grade-scoped ARAL listings ordered by name. The two sites this fits
+  /// are the ARAL weekly grids, where `gradeLevelId` and `isAralLearner` are both
+  /// plain equalities and the sort column follows:
+  /// `src/app/teacher/(app)/aral/[gradeId]/attendance/page.tsx` (`learnerWhere`,
+  /// then `orderBy: { fullName: "asc" }`) and `resolveGradeLearnerWhere` in
+  /// `src/lib/actions/aral-grid.ts`.
+  ///
+  /// Do NOT drop `isAralLearner` from this key to serve the teacher learners list
+  /// (`learnerListWhere`): that list sends `gradeLevelId` as `IN (…)` and usually
+  /// omits `isAralLearner`, so it needs a *separate* index, not a reordering of
+  /// this one. Removing `isAralLearner` here would widen the ARAL grids' scan from
+  /// this grade's ARAL learners to its entire non-archived roster.
+  ///
+  /// Distinct from #6 below: this one leads with `gradeLevelId`, which the teacher
+  /// learners list needs because it is tenant-scoped transitively through the
+  /// teacher's assigned grade ids and carries no `schoolId` predicate to lead with.
   @@index([gradeLevelId, isAralLearner, fullName])
   /// R6 #4. `deleteSection` runs `learner.updateMany({ where: { sectionId } })`,
-  /// an otherwise unindexed full-table scan inside a transaction. Also the lookup
-  /// side of this FK's `SetNull` action.
+  /// an otherwise unindexed full-table scan inside a transaction. It is also the
+  /// lookup side of this FK's `SetNull` action, though that is a schema-level
+  /// property only: sections are soft-deleted today, so no referential action
+  /// actually fires. The `updateMany` is the real consumer.
   @@index([sectionId])
   /// R6 #6. School-scoped name-ordered listings and the learner search `ILIKE`,
   /// which no b-tree can serve directly — this reduces it to one school's rows in

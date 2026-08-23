@@ -22,6 +22,7 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260811000004_advisory_section_unique`
 - `20260812000001_teacher_profile_aral_volunteer_fields`
 - `20260819000001_teacher_employment_type_and_notifications`
+- `20260822000001_term_grades`
 - `20260823000001_add_perf_indexes` — **see the carve-out in (b1) before applying this one to
   production.** It is 12 additive `CREATE INDEX` statements and nothing else; production takes
   `prisma/concurrent-indexes.sql` instead of letting `migrate deploy` run it.
@@ -128,9 +129,11 @@ Hence two artifacts for the same twelve indexes. Both are committed; both produc
    (`CREATE INDEX CONCURRENTLY cannot run inside a transaction block`). Do not pass
    `-1` / `--single-transaction` to psql either, for the same reason.
 
-4. **Verify every index is `valid` before step 5.** Step 5 tells Prisma the DDL is
-   done, so a silently-invalid index would go unnoticed afterwards. Expect 12 rows,
-   all `valid = true`:
+4. **Check that every index is `valid` before step 5.** Step 5 tells Prisma the DDL
+   is done, so a silently-invalid index would go unnoticed from then on. This query
+   is a **live statement at the end of `prisma/concurrent-indexes.sql`**, so step 3
+   already printed it — read that output rather than pasting this again. A zero exit
+   code is not sufficient evidence; look at the rows. Expect 12, all `valid = t`:
 
    ```sql
    SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
@@ -174,8 +177,24 @@ must be dropped before retrying:
 DROP INDEX CONCURRENTLY IF EXISTS "<index_name>";
 ```
 
-then re-run that single `CREATE INDEX CONCURRENTLY` statement. The verify query in
-step 4 is how you find them (`valid = false`, or fewer than 12 rows).
+`DROP INDEX CONCURRENTLY` **also cannot run inside a transaction block**, for the
+same reason `CREATE INDEX CONCURRENTLY` cannot. Run it with `psql` on `DIRECT_URL`
+— not in the Supabase SQL Editor, and not under `psql -1` / `--single-transaction`.
+Whoever is reading this is by definition already recovering from a failed build, so
+it is worth saying twice.
+
+Then **re-run the whole file**, not just the statement that failed. The script is
+invoked with `ON_ERROR_STOP=1`, so a failure aborts the run and every statement
+*after* the failing one never executed either. Re-running everything is correct and
+cheap because each statement is `IF NOT EXISTS`-guarded, so the indexes that already
+built are skipped.
+
+> **`IF NOT EXISTS` does not repair an invalid index.** It only checks whether the
+> name is taken. An INVALID index still occupies its name, so both this script and a
+> later `prisma migrate deploy` will skip it and report **success** — leaving an
+> index the planner never uses and every writer pays for, permanently. This is a
+> failure mode that looks exactly like success. Always drop invalid indexes before
+> re-running, and trust the validity query above rather than a green exit code.
 
 This is the only `DROP` sanctioned anywhere in this checklist, and it is scoped to
 an index the same script created minutes earlier. It is not licence to drop
