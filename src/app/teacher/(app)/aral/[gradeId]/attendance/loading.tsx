@@ -1,4 +1,5 @@
 import { AralAttendanceRouteSkeleton } from "@/components/loading";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Busy state for the weekly attendance sheet.
@@ -8,5 +9,9 @@ import { AralAttendanceRouteSkeleton } from "@/components/loading";
  * same three things the page paints first — and nothing else.
  */
 export default function TeacherAralAttendanceLoading() {
-  return <AralAttendanceRouteSkeleton />;
+  return (
+    <RouteLoadingOverlay>
+      <AralAttendanceRouteSkeleton />
+    </RouteLoadingOverlay>
+  );
 }

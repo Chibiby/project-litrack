@@ -1,0 +1,147 @@
+/**
+ * Looping book-shelf loader — the ARAL splash animation, adapted for waiting.
+ *
+ * `post-login-splash.module.css` draws the same shelf, but that one is a
+ * one-shot: `PostLoginSplash` advances `filledCount` from `setTimeout`, so the
+ * books fill once and stop. A loading boundary runs for an unknown duration, so
+ * this is a pure-CSS loop with no JS state and no timers — the fill cascades
+ * left to right, empties, and repeats until the boundary unmounts.
+ *
+ * Deliberately a copy rather than a shared stylesheet. The splash rules are
+ * coupled to its reveal sequence (`.shelfDone` fades the whole shelf out so the
+ * ARAL logo can land on top of it), and importing them here would make either
+ * file timing the other file problem. The palette is duplicated for the same
+ * reason: these five hexes are the DepEd/ARAL accents, and they are restated
+ * here so this component keeps working if the splash is ever restyled.
+ */
+
+.shelf {
+  --bl-w: 22px;
+  --bl-h: 30px;
+  --bl-gap: 6px;
+  --bl-spine: 4px;
+  --bl-gray: #d9d4c6;
+  --bl-red: #d31c2b;
+  --bl-navy: #1b4c82;
+  --bl-gold: #f6b527;
+  --bl-shadow: rgba(18, 50, 85, 0.14);
+
+  display: flex;
+  align-items: flex-end;
+  gap: var(--bl-gap);
+}
+
+/* Content-slot size. Same proportions, roughly 72% scale. */
+.shelfSm {
+  --bl-w: 16px;
+  --bl-h: 22px;
+  --bl-gap: 5px;
+  --bl-spine: 3px;
+}
+
+.book {
+  /* Overridden per position below; a fallback keeps the keyframes valid if the
+     book count and the nth-child rules ever drift apart. */
+  --bl-fill: var(--bl-navy);
+
+  position: relative;
+  width: var(--bl-w);
+  height: var(--bl-h);
+  border-radius: 2px;
+  background: var(--bl-gray);
+  box-shadow: 0 2px 4px var(--bl-shadow);
+  animation: bl-fill 2.4s ease-in-out infinite;
+}
+
+/* Spine. */
+.book::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--bl-spine);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px 0 0 2px;
+}
+
+/* The two page lines. Positioned in percentages rather than the splash fixed
+   pixels, so the small variant scales without a second set of rules. */
+.book::after {
+  content: "";
+  position: absolute;
+  left: 32%;
+  right: 18%;
+  top: 33%;
+  height: 1.5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 0 rgba(255, 255, 255, 0.45);
+  opacity: 0.55;
+  animation: bl-lines 2.4s ease-in-out infinite;
+}
+
+/* Fill colours and the cascade. The 0.18s stagger over five books means the wave
+   crosses the shelf in 0.72s and the whole loop reads as one breath. A single
+   `animation-delay` value applies to both animations on the element. */
+.book:nth-child(1) { --bl-fill: var(--bl-red); animation-delay: 0s; }
+.book:nth-child(2) { --bl-fill: var(--bl-gold); animation-delay: 0.18s; }
+.book:nth-child(3) { --bl-fill: var(--bl-navy); animation-delay: 0.36s; }
+.book:nth-child(4) { --bl-fill: var(--bl-gold); animation-delay: 0.54s; }
+.book:nth-child(5) { --bl-fill: var(--bl-red); animation-delay: 0.72s; }
+
+.book:nth-child(1)::after { animation-delay: 0s; }
+.book:nth-child(2)::after { animation-delay: 0.18s; }
+.book:nth-child(3)::after { animation-delay: 0.36s; }
+.book:nth-child(4)::after { animation-delay: 0.54s; }
+.book:nth-child(5)::after { animation-delay: 0.72s; }
+
+@keyframes bl-fill {
+  0%,
+  100% {
+    background: var(--bl-gray);
+    transform: translateY(0) scale(1);
+  }
+  14%,
+  55% {
+    background: var(--bl-fill);
+    transform: translateY(-3px) scale(1.04);
+  }
+  70% {
+    background: var(--bl-gray);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bl-lines {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  14%,
+  55% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.55;
+  }
+}
+
+/**
+ * Reduced motion: no cascade, no lift. The shelf still renders in colour rather
+ * than collapsing to grey, so it reads as an intentional illustration instead of
+ * an unfinished one, and the `role="status"` text carries the actual meaning.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .book,
+  .book::after {
+    animation: none;
+  }
+  .book {
+    background: var(--bl-fill);
+    transform: none;
+  }
+  .book::after {
+    opacity: 1;
+  }
+}

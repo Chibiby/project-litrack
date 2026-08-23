@@ -1,6 +1,7 @@
 import { ListCardSkeleton } from "@/components/loading";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { SCHOOL_WORKSPACE_TABS } from "@/components/school-head/workspace-tabs";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Covers all three School workspace tabs.
@@ -12,8 +13,10 @@ import { SCHOOL_WORKSPACE_TABS } from "@/components/school-head/workspace-tabs";
  */
 export default function SchoolWorkspaceLoading() {
   return (
-    <SchoolHeadPageSkeleton tabs={SCHOOL_WORKSPACE_TABS.length}>
-      <ListCardSkeleton grid items={6} />
-    </SchoolHeadPageSkeleton>
+    <RouteLoadingOverlay>
+      <SchoolHeadPageSkeleton tabs={SCHOOL_WORKSPACE_TABS.length}>
+        <ListCardSkeleton grid items={6} />
+      </SchoolHeadPageSkeleton>
+    </RouteLoadingOverlay>
   );
 }

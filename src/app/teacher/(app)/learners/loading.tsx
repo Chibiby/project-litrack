@@ -1,4 +1,5 @@
 import { LearnerRosterSkeleton } from "@/components/learners/learner-roster-skeleton";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Content-slot only — RoleShell sidebar stays mounted during soft nav.
@@ -8,5 +9,9 @@ import { LearnerRosterSkeleton } from "@/components/learners/learner-roster-skel
  * skeleton for a differently-shaped second one.
  */
 export default function TeacherLearnersLoading() {
-  return <LearnerRosterSkeleton />;
+  return (
+    <RouteLoadingOverlay>
+      <LearnerRosterSkeleton />
+    </RouteLoadingOverlay>
+  );
 }

@@ -145,9 +145,28 @@ function paddingClassesOf(el: Element): string[] {
   return Array.from(el.classList).filter((c) => PADDING_CLASS.test(c));
 }
 
-/** A boundary's outermost element — the one that owns the route's gutter. */
+/**
+ * A boundary's outermost element — the one that owns the route's gutter.
+ *
+ * `RouteLoadingOverlay` wraps a boundary skeleton so it can position the
+ * slow-load book animation over it, which displaces the skeleton root by exactly
+ * one level. Step past that single wrapper — keyed to its own `data-slot`, not to
+ * "whatever is on top" — so the gutter and `aria-busy` contracts below keep
+ * asserting against the element that actually owns them.
+ *
+ * Keyed rather than generic on purpose. A helper that unwrapped any single child
+ * would make every assertion below indifferent to nesting, and the padding
+ * contract is precisely a claim about which element is outermost. Any *other*
+ * stray wrapper must still fail these tests.
+ */
 function boundaryRootOf(container: HTMLElement): HTMLElement {
-  const root = container.firstElementChild;
+  let root = container.firstElementChild;
+  if (
+    root instanceof HTMLElement &&
+    root.dataset.slot === "route-loading-overlay"
+  ) {
+    root = root.firstElementChild;
+  }
   expect(root).toBeInstanceOf(HTMLElement);
   return root as HTMLElement;
 }

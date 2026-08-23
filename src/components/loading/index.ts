@@ -1,3 +1,5 @@
+export { BookLoader } from "./book-loader";
+export type { BookLoaderProps } from "./book-loader";
 export { ContentRouteLoading } from "./content-route-loading";
 export { MetricsGridSkeleton } from "./metrics-grid-skeleton";
 export type { MetricsGridVariant } from "./metrics-grid-skeleton";

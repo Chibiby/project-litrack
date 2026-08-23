@@ -1,4 +1,5 @@
 import { AralReadingLevelRouteSkeleton } from "@/components/loading";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Busy state for the monthly reading level sheet.
@@ -8,5 +9,9 @@ import { AralReadingLevelRouteSkeleton } from "@/components/loading";
  * same three things the page paints first — and nothing else.
  */
 export default function TeacherAralReadingLevelLoading() {
-  return <AralReadingLevelRouteSkeleton />;
+  return (
+    <RouteLoadingOverlay>
+      <AralReadingLevelRouteSkeleton />
+    </RouteLoadingOverlay>
+  );
 }

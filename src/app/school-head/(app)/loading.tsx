@@ -2,6 +2,7 @@ import {
   MetricsGridSkeleton,
   ChartSectionSkeleton,
 } from "@/components/loading";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
 
@@ -13,13 +14,18 @@ import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
  */
 export default function SchoolHeadLoading() {
   return (
+    // Overlay INSIDE the bridge — same reasoning as `src/app/admin/loading.tsx`.
+    // The bridge only renders children in `skeleton` mode, so nested this way the
+    // overlay's timer cannot fire a book over the post-login cream cover.
     <PostLoginLoadingBridge>
-      <SchoolHeadPageSkeleton>
-        <div className="space-y-6">
-          <MetricsGridSkeleton variant="school-head" />
-          <ChartSectionSkeleton columns={2} />
-        </div>
-      </SchoolHeadPageSkeleton>
+      <RouteLoadingOverlay>
+        <SchoolHeadPageSkeleton>
+          <div className="space-y-6">
+            <MetricsGridSkeleton variant="school-head" />
+            <ChartSectionSkeleton columns={2} />
+          </div>
+        </SchoolHeadPageSkeleton>
+      </RouteLoadingOverlay>
     </PostLoginLoadingBridge>
   );
 }

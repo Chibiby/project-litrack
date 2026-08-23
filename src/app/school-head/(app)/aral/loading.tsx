@@ -1,5 +1,6 @@
 import { TableSectionSkeleton } from "@/components/loading";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Content-slot skeleton for the ARAL designation list. Sidebar stays mounted in
@@ -7,8 +8,10 @@ import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
  */
 export default function SchoolHeadAralLoading() {
   return (
-    <SchoolHeadPageSkeleton>
-      <TableSectionSkeleton rows={8} columns={5} />
-    </SchoolHeadPageSkeleton>
+    <RouteLoadingOverlay>
+      <SchoolHeadPageSkeleton>
+        <TableSectionSkeleton rows={8} columns={5} />
+      </SchoolHeadPageSkeleton>
+    </RouteLoadingOverlay>
   );
 }

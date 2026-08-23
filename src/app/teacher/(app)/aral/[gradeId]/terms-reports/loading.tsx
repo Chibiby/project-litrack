@@ -1,4 +1,5 @@
 import { AralTermGradesRouteSkeleton } from "@/components/loading";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Busy state for the end of terms grade sheet.
@@ -8,5 +9,9 @@ import { AralTermGradesRouteSkeleton } from "@/components/loading";
  * same three things the page paints first — and nothing else.
  */
 export default function TeacherAralTermsReportsLoading() {
-  return <AralTermGradesRouteSkeleton />;
+  return (
+    <RouteLoadingOverlay>
+      <AralTermGradesRouteSkeleton />
+    </RouteLoadingOverlay>
+  );
 }

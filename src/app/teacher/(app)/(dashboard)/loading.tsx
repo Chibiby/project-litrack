@@ -1,4 +1,5 @@
 import { TeacherDashboardSkeleton } from "@/components/dashboard/teacher/dashboard-skeleton";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * The dashboard's own boundary.
@@ -14,8 +15,10 @@ import { TeacherDashboardSkeleton } from "@/components/dashboard/teacher/dashboa
  */
 export default function TeacherDashboardLoading() {
   return (
-    <div className="w-full p-4 lg:p-6">
-      <TeacherDashboardSkeleton />
-    </div>
+    <RouteLoadingOverlay>
+      <div className="w-full p-4 lg:p-6">
+        <TeacherDashboardSkeleton />
+      </div>
+    </RouteLoadingOverlay>
   );
 }

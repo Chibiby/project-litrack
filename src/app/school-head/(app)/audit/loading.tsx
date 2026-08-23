@@ -1,5 +1,6 @@
 import { TableSectionSkeleton } from "@/components/loading";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Content-slot skeleton for the audit table. Column count matches the four
@@ -7,8 +8,10 @@ import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
  */
 export default function Loading() {
   return (
-    <SchoolHeadPageSkeleton>
-      <TableSectionSkeleton rows={10} columns={4} />
-    </SchoolHeadPageSkeleton>
+    <RouteLoadingOverlay>
+      <SchoolHeadPageSkeleton>
+        <TableSectionSkeleton rows={10} columns={4} />
+      </SchoolHeadPageSkeleton>
+    </RouteLoadingOverlay>
   );
 }

@@ -1,6 +1,7 @@
 import { TableSectionSkeleton } from "@/components/loading";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { TEACHER_TABS } from "@/components/school-head/workspace-tabs";
+import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 
 /**
  * Content-slot skeleton for the whole teachers workspace.
@@ -12,8 +13,10 @@ import { TEACHER_TABS } from "@/components/school-head/workspace-tabs";
  */
 export default function SchoolHeadTeachersLoading() {
   return (
-    <SchoolHeadPageSkeleton tabs={Object.keys(TEACHER_TABS).length}>
-      <TableSectionSkeleton rows={6} columns={7} />
-    </SchoolHeadPageSkeleton>
+    <RouteLoadingOverlay>
+      <SchoolHeadPageSkeleton tabs={Object.keys(TEACHER_TABS).length}>
+        <TableSectionSkeleton rows={6} columns={7} />
+      </SchoolHeadPageSkeleton>
+    </RouteLoadingOverlay>
   );
 }
