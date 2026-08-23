@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
+import { NavLinkIcon } from "@/components/nav/nav-link-icon";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -162,10 +163,17 @@ function NavLink({
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
         isActive
           ? "bg-violet-soft text-violet-soft-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          : // The pending clause is what a keyboard user gets: a mouse user is
+            // already sitting on the row, so `hover:` has it covered, but a row
+            // activated by Enter would otherwise change nothing but its icon.
+            // Deliberately the muted treatment and not the violet one — violet
+            // means "the page you are on", and while this row loads that is
+            // still the row above or below it.
+            "text-muted-foreground hover:bg-muted hover:text-foreground has-[[data-nav-pending]]:bg-muted has-[[data-nav-pending]]:text-foreground"
       )}
     >
-      <Icon
+      <NavLinkIcon
+        icon={item.icon}
         className={cn(
           "h-4 w-4 shrink-0",
           isActive ? "text-violet-soft-foreground" : "text-muted-foreground"

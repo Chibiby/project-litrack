@@ -2,16 +2,35 @@ import { render, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pathname = vi.hoisted(() => ({ value: "/teacher" }));
+/**
+ * Which row Next currently reports as navigating. Held as an href rather than a
+ * boolean so the mock can answer per-link — a global flag would make every row
+ * pending at once and the "only the clicked row spins" case unfalsifiable.
+ */
+const pendingHref = vi.hoisted(() => ({ value: null as string | null }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.value,
   useRouter: () => ({ prefetch: vi.fn(), push: vi.fn() }),
 }));
-vi.mock("next/link", () => ({
-  default: ({ children, href, prefetch: _p, ...rest }: any) => (
-    <a href={href} {...rest}>{children}</a>
-  ),
-}));
+vi.mock("next/link", async () => {
+  const { createContext, useContext } = await import("react");
+  // The real `useLinkStatus` reads the enclosing Link, so the mock has to carry
+  // an enclosing Link too. A context provider adds no DOM node, so every
+  // existing assertion about this subtree still holds.
+  const HrefContext = createContext<string | null>(null);
+  return {
+    default: ({ children, href, prefetch: _p, ...rest }: any) => (
+      <a href={href} {...rest}>
+        <HrefContext.Provider value={href}>{children}</HrefContext.Provider>
+      </a>
+    ),
+    useLinkStatus: () => ({
+      pending:
+        pendingHref.value !== null && useContext(HrefContext) === pendingHref.value,
+    }),
+  };
+});
 vi.mock("@/components/nav-prefetcher", () => ({
   NavPrefetcher: () => null,
 }));
@@ -20,6 +39,10 @@ vi.mock("@/lib/actions/auth", () => ({ logoutAction: vi.fn() }));
 import { AppSidebar } from "@/components/app-sidebar";
 
 afterEach(cleanup);
+afterEach(() => {
+  // Module-level, so it would otherwise leak a spinning row into later cases.
+  pendingHref.value = null;
+});
 
 function renderTeacherSidebar(props?: {
   roleLabel?: string;
@@ -419,5 +442,80 @@ describe("AppSidebar — school head", () => {
     expect(
       screen.getAllByRole("link", { name: "Teachers" })[0].getAttribute("href")
     ).toBe("/school-head/teachers");
+  });
+});
+
+describe("AppSidebar — click feedback while the destination loads", () => {
+  beforeEach(() => {
+    pathname.value = "/teacher";
+  });
+
+  /** Every rendered copy of the row for `href` (desktop rail, and the sheet if open). */
+  function rowsFor(href: string): HTMLElement[] {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(`a[href="${href}"]`)
+    );
+  }
+
+  it("shows nothing pending when no navigation is in flight", () => {
+    renderTeacherSidebar();
+
+    expect(document.querySelectorAll("[data-nav-pending]")).toHaveLength(0);
+  });
+
+  it("marks the navigating row, and only that row", () => {
+    pendingHref.value = "/teacher/learners";
+    renderTeacherSidebar();
+
+    const learners = rowsFor("/teacher/learners");
+    expect(learners.length).toBeGreaterThan(0);
+    for (const row of learners) {
+      expect(row.querySelector("[data-nav-pending]")).not.toBeNull();
+    }
+
+    // The point of the feature is that one row answers the click. If the flag
+    // leaked to every row the sidebar would read as entirely busy, which is both
+    // wrong and no more informative than the frozen sidebar it replaces.
+    expect(document.querySelectorAll("[data-nav-pending]")).toHaveLength(
+      learners.length
+    );
+    for (const row of rowsFor("/teacher")) {
+      expect(row.querySelector("[data-nav-pending]")).toBeNull();
+    }
+  });
+
+  it("keeps the row readable while it spins", () => {
+    pendingHref.value = "/teacher/learners";
+    renderTeacherSidebar();
+
+    // The spinner replaces the icon, not the label: a row that lost its text
+    // mid-navigation would be a worse answer than no feedback at all.
+    const [row] = rowsFor("/teacher/learners");
+    expect(row.textContent).toContain("Learners");
+    expect(screen.getAllByRole("link", { name: "Learners" }).length).toBeGreaterThan(0);
+  });
+
+  it("does not announce the wait a second time", () => {
+    pendingHref.value = "/teacher/learners";
+    const { container } = renderTeacherSidebar();
+
+    // The destination boundary announces it once it commits (BookLoader carries
+    // `role="status"`). A live region here as well would report one navigation
+    // twice, so the spinner is deliberately silent.
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(0);
+    expect(container.querySelectorAll("[aria-live]")).toHaveLength(0);
+  });
+
+  it("still marks the row on the collapsed rail, where the icon is the whole row", () => {
+    pendingHref.value = "/teacher/learners";
+    renderTeacherSidebar({ expanded: false });
+
+    // Collapsed rows drop their label, so the icon swap is the only feedback
+    // available — it has to survive the collapse.
+    const rows = rowsFor("/teacher/learners");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.querySelector("[data-nav-pending]")).not.toBeNull();
+    }
   });
 });
