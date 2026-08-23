@@ -107,7 +107,11 @@ export type ReadingLevelBulkInput = z.infer<typeof readingLevelBulkSchema>;
  */
 export const readingLevelMonthlyBulkSchema = z.object({
   monthStart: monthStartField,
-  entries: z.array(bulkEntryFields).min(1),
+  // Bounded because the grid is NOT a diff: it posts every row where
+  // `isRowComplete`, seeded from the existing DB records, so a fully-encoded page
+  // re-posts all of its rows on every save. At the 100-learner page size that is
+  // 100 entries; 200 is headroom without letting one request become unbounded.
+  entries: z.array(bulkEntryFields).min(1).max(200, "Too many rows in one save"),
 });
 
 export type ReadingLevelMonthlyBulkInput = z.infer<typeof readingLevelMonthlyBulkSchema>;

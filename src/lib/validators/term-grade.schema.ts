@@ -33,7 +33,10 @@ export const termGradesSaveSchema = z.object({
         score: z.number().int().min(60).max(100).nullable(),
       })
     )
-    .min(1),
+    .min(1)
+    // Worst legitimate payload is one full page re-typed: 100 learners x 8
+    // subjects = 800. 1000 is headroom; past that it is not a grade sheet.
+    .max(1000, "Too many cells in one save"),
 });
 
 export type TermGradesSaveInput = z.infer<typeof termGradesSaveSchema>;
