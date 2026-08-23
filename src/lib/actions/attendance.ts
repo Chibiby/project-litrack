@@ -1,8 +1,9 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/date-keys";
 import { attendanceDeadline, formatLongDate } from "@/lib/week-range";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
   teacherCanAccessLearner,
@@ -229,64 +231,160 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     };
   }
 
-  // One ordered transaction. The array form runs sequentially, which matters:
-  // a weekly remark is an update over the rows the upserts above create, so it
-  // has to come last or a first-time entry would lose its remark.
-  const ops: Prisma.PrismaPromise<unknown>[] = [];
-  const clearIndexes: number[] = [];
-  const remarkIndexes: number[] = [];
-  let upserted = 0;
+  // Three set-based statements, still ordered. The order is load-bearing: a
+  // weekly remark is an UPDATE over rows the insert creates, so it has to run
+  // last or a first-time entry would lose its remark. Clears sit between them,
+  // exactly as the per-row version had them, so a cell cleared in the same save
+  // is not resurrected by the remark pass.
+  const weekKey = formatLocalDateKey(weekStart);
+  const marks = cells.filter(
+    (c): c is Cell & { status: NonNullable<Cell["status"]> } => c.status !== null
+  );
+  const clears = cells.filter((c) => c.status === null);
 
-  for (const cell of cells) {
-    if (cell.status === null) continue;
-    ops.push(
-      prisma.attendance.upsert({
-        where: { learnerId_date: { learnerId: cell.learnerId, date: cell.date } },
-        create: {
-          learnerId: cell.learnerId,
-          date: cell.date,
-          weekStart,
-          status: cell.status,
-          recordedById: user.id,
-        },
-        // `notes` is deliberately not set here — remarks are weekly and are
-        // applied below across the learner's whole week, not per day.
-        update: { status: cell.status, recordedById: user.id },
-      })
-    );
-    upserted += 1;
-  }
-
-  for (const cell of cells) {
-    if (cell.status !== null) continue;
-    clearIndexes.push(ops.length);
-    ops.push(
-      prisma.attendance.deleteMany({
-        where: { learnerId: cell.learnerId, date: cell.date },
-      })
-    );
-  }
-
+  // Remarks are keyed on the learner's whole week, so two remarks for one learner
+  // would make `UPDATE … FROM (VALUES …)` pick a source row arbitrarily. Dedupe
+  // last-wins, matching how `cellByKey` above already treats repeated cells.
+  const remarkByLearner = new Map<string, { learnerId: string; notes: string | null }>();
   for (const remark of parsed.data.remarks) {
-    remarkIndexes.push(ops.length);
-    ops.push(
-      prisma.attendance.updateMany({
-        where: { learnerId: remark.learnerId, weekStart },
-        data: { notes: remark.notes.length > 0 ? remark.notes : null },
-      })
-    );
+    remarkByLearner.set(remark.learnerId, {
+      learnerId: remark.learnerId,
+      notes: remark.notes.length > 0 ? remark.notes : null,
+    });
+  }
+  const remarks = [...remarkByLearner.values()];
+
+  const now = new Date();
+  let upserted = 0;
+  let cleared = 0;
+  const remarkedLearnerIds = new Set<string>();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1. Marks. `id` and `updatedAt` are supplied explicitly because Prisma's
+      //    `@default(uuid())` and `@updatedAt` are CLIENT-side and neither column
+      //    has a database default; `updatedAt` is bumped in DO UPDATE too, or the
+      //    column would freeze at first-insert time with nothing to fail.
+      //    `notes` is deliberately absent from both branches — remarks are weekly
+      //    and are applied in step 3 across the learner's whole week.
+      //    Dates bind as YYYY-MM-DD TEXT and cast in SQL: `Attendance.date` and
+      //    `.weekStart` are `@db.Date`, and binding a local-midnight `Date` would
+      //    write the intended day on Vercel (TZ=UTC) and the previous one on a
+      //    UTC+8 developer machine.
+      for (const chunk of chunkRows(marks, BULK_CHUNK_ROWS)) {
+        const values = Prisma.join(
+          chunk.map(
+            (c) => Prisma.sql`(
+              ${randomUUID()}::text,
+              ${c.learnerId}::text,
+              ${formatLocalDateKey(c.date)}::date,
+              ${weekKey}::date,
+              ${c.status}::"AttendanceStatus",
+              ${user.id}::text,
+              ${now}::timestamp(3)
+            )`
+          )
+        );
+        const written = await tx.$queryRaw<{ id: string }[]>`
+          INSERT INTO "Attendance" (
+            "id", "learnerId", "date", "weekStart", "status", "recordedById",
+            "updatedAt"
+          )
+          SELECT v."id", v."learnerId", v."date", v."weekStart", v."status",
+                 v."recordedById", v."updatedAt"
+          FROM (VALUES ${values}) AS v (
+            "id", "learnerId", "date", "weekStart", "status", "recordedById",
+            "updatedAt"
+          )
+          JOIN "Learner" l
+            ON l."id" = v."learnerId"
+           AND l."schoolId" = ${user.schoolId}
+           AND l."gradeLevelId" = ${grade.id}
+           AND l."deletedAt" IS NULL
+           AND l."isAralLearner" = TRUE
+          ON CONFLICT ("learnerId", "date") DO UPDATE SET
+            "status" = EXCLUDED."status",
+            "recordedById" = EXCLUDED."recordedById",
+            "updatedAt" = EXCLUDED."updatedAt"
+          RETURNING "id"
+        `;
+        if (written.length !== chunk.length) {
+          throw new Error(
+            `attendance bulk write touched ${written.length} of ${chunk.length} rows`
+          );
+        }
+        upserted += written.length;
+      }
+
+      // 2. Clears. `cleared` was a SUM of per-statement counts, so it is the
+      //    number of rows actually deleted — not the number of cells submitted,
+      //    which differ whenever a teacher clears an already-empty cell.
+      for (const chunk of chunkRows(clears, BULK_CHUNK_ROWS)) {
+        const values = Prisma.join(
+          chunk.map(
+            (c) => Prisma.sql`(
+              ${c.learnerId}::text,
+              ${formatLocalDateKey(c.date)}::date
+            )`
+          )
+        );
+        const deleted = await tx.$queryRaw<{ id: string }[]>`
+          DELETE FROM "Attendance" a
+          USING (VALUES ${values}) AS v ("learnerId", "date"),
+                "Learner" l
+          WHERE a."learnerId" = v."learnerId"
+            AND a."date" = v."date"
+            AND l."id" = a."learnerId"
+            AND l."schoolId" = ${user.schoolId}
+            AND l."gradeLevelId" = ${grade.id}
+            AND l."deletedAt" IS NULL
+          RETURNING a."id"
+        `;
+        cleared += deleted.length;
+      }
+
+      // 3. Remarks. `remarksApplied` was a COUNT OF STATEMENTS whose count > 0,
+      //    which is a different reduction from `cleared` above: a remark applies
+      //    once per learner however many days it touched. `RETURNING "learnerId"`
+      //    gives one row per updated day, so the DISTINCT learner ids reproduce
+      //    the old number exactly, and `remarksSkipped` is the submitted remarks
+      //    minus those.
+      for (const chunk of chunkRows(remarks, BULK_CHUNK_ROWS)) {
+        const values = Prisma.join(
+          chunk.map(
+            (r) => Prisma.sql`(
+              ${r.learnerId}::text,
+              ${r.notes}::text
+            )`
+          )
+        );
+        const touched = await tx.$queryRaw<{ learnerId: string }[]>`
+          UPDATE "Attendance" a
+          SET "notes" = v."notes",
+              "updatedAt" = ${now}::timestamp(3)
+          FROM (VALUES ${values}) AS v ("learnerId", "notes"),
+               "Learner" l
+          WHERE a."learnerId" = v."learnerId"
+            AND a."weekStart" = ${weekKey}::date
+            AND l."id" = a."learnerId"
+            AND l."schoolId" = ${user.schoolId}
+            AND l."gradeLevelId" = ${grade.id}
+            AND l."deletedAt" IS NULL
+          RETURNING a."learnerId"
+        `;
+        for (const row of touched) remarkedLearnerIds.add(row.learnerId);
+      }
+    }, BULK_TX_OPTIONS);
+  } catch (err) {
+    console.error("[saveAralWeeklyAttendance] transaction failed:", err);
+    return { ok: false, error: "Could not save the week. Please try again." };
   }
 
-  const results = await prisma.$transaction(ops);
-  const countAt = (i: number) =>
-    (results[i] as { count: number } | undefined)?.count ?? 0;
-
-  const cleared = clearIndexes.reduce((sum, i) => sum + countAt(i), 0);
   // `Attendance.notes` is per-day, so a weekly remark has nowhere to live until
   // the learner has at least one marked day in the week. Count those instead of
   // dropping them silently — the grid tells the teacher.
-  const remarksApplied = remarkIndexes.filter((i) => countAt(i) > 0).length;
-  const remarksSkipped = remarkIndexes.length - remarksApplied;
+  const remarksApplied = remarkedLearnerIds.size;
+  const remarksSkipped = remarks.length - remarksApplied;
 
   await writeAudit({
     userId: user.id,
