@@ -152,12 +152,24 @@ Hence two artifacts for the same twelve indexes. Both are committed; both produc
    ```
 
    **If step 3 exited non-zero, no table was printed at all** — `ON_ERROR_STOP=1`
-   aborts psql at the first error and this query is the file's last statement, so a
-   failed build kills the run before it. That is not "fewer than 12 rows"; it is no
-   result set. Paste the query above, see how far the build got, then go to
-   [If an index build fails](#if-an-index-build-fails). Conversely, a **zero** exit
-   with no table in front of you means you are not looking at the end of the
-   output — the query did run.
+   aborts psql at the first error and this query is the file's last statement, so the
+   run died before reaching it. That is not "fewer than 12 rows"; it is no result
+   set. Paste the query above, then **branch on the error psql printed**, because the
+   two causes have opposite remedies:
+
+   - **`25001` (`cannot run inside a transaction block`) — nothing was built.** You
+     ran the file through something that opens an implicit transaction: the Supabase
+     SQL Editor, `psql -1` / `--single-transaction`, or a `~/.psqlrc` containing
+     `\set AUTOCOMMIT off` (`psql -f` still reads it — the step 3 command has no
+     `-X`). There is no invalid index to drop, and re-running as-is reproduces the
+     same failure. Fix the invocation per step 3 and start over.
+   - **Any other error — a real build failure.** Go to
+     [If an index build fails](#if-an-index-build-fails).
+
+   **Zero rows** from the pasted query is the tell that distinguishes them: nothing
+   was built at all, which points at `25001` rather than at a failed build.
+   Conversely, a **zero** exit with no table in front of you means you are not
+   looking at the end of the output — the query did run.
 
    This query proves index **name and validity only**, not column list or order. If
    you need to confirm the definitions match the migration, use the `pg_indexes`

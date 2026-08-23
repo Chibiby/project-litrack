@@ -750,16 +750,24 @@ model Learner {
   @@index([schoolId, aralTeacherId, isAralLearner, deletedAt])
   /// R6 #2. Grade-scoped ARAL listings ordered by name. The consumer set is OPEN —
   /// the ARAL grade-scoped listings, including but not limited to the sites below.
-  /// Every site found so far constrains `gradeLevelId` and `isAralLearner` as plain
-  /// equalities and sorts on `fullName` alone, so this order serves all of them and
-  /// none wants a different one:
+  /// `isAralLearner` is a plain equality at every site. `gradeLevelId` is a plain
+  /// equality on the `[gradeId]` grid paths, where it comes from the route segment
+  /// rather than a query string; on `aral/page.tsx` it can also arrive as `IN (…)`
+  /// (see that bullet). What varies is how much of the key a site can use, never
+  /// which order it wants: `IN (…)` still filters on the leading column but stops
+  /// delivering `fullName` globally ordered, so those calls pay for a sort that the
+  /// equality paths do not. **This column order is the right one for all of them,
+  /// and no site found so far wants a different one.**
   /// - `aral/[gradeId]/reading-level/page.tsx` — `count` plus `findMany` with
   ///   `orderBy fullName` AND `skip`/`take`. The ordered scan is worth most here,
   ///   because pagination is what pays for an unindexed sort.
-  /// - `aral/page.tsx` (`aralWhere`) — `gradeLevelIdWhere` returns a plain
-  ///   `{ gradeLevelId }` when `?grade=` names an assigned grade (see
-  ///   `src/lib/learners/pagination.ts`), which is this index's exact shape, also
-  ///   with `skip`/`take`. The same page's enroll-candidate query pairs
+  /// - `aral/page.tsx` (`aralWhere`) — `gradeLevelIdWhere`
+  ///   (`src/lib/learners/pagination.ts`) has THREE return shapes, not one: a plain
+  ///   `{ gradeLevelId }` when `?grade=` names an assigned grade, which is this
+  ///   index's exact shape and also paginates; `{ gradeLevelId: { in: [...] } }`
+  ///   otherwise; and for `?grade=floating` that same `IN (…)` plus a third
+  ///   predicate, `gradeLevel: { type: "FLOATING" }`, which sits on the relation and
+  ///   not on this index at all. The same page's enroll-candidate query pairs
   ///   `gradeLevelId` with `isAralLearner: false`.
   /// - `aral/[gradeId]/attendance/page.tsx` (`learnerWhere`, then
   ///   `orderBy: { fullName: "asc" }`).
@@ -774,10 +782,12 @@ model Learner {
   /// Do NOT drop `isAralLearner` from this key to serve the teacher learners list
   /// (`learnerListWhere`): on its default path that list sends `gradeLevelId` as
   /// `IN (…)` and omits `isAralLearner`, so it needs a *separate* index, not a
-  /// reordering of this one. (With `?grade=<assigned id>&aral=enrolled` that list
-  /// does produce this index's exact shape and is served fully.) Removing
-  /// `isAralLearner` here would widen every ARAL grid's scan from this grade's ARAL
-  /// learners to its entire non-archived roster.
+  /// reordering of this one. (With `?grade=<assigned id>&aralStatus=enrolled` that
+  /// list does produce this index's exact shape and is served fully. The param is
+  /// `aralStatus`, read at `src/lib/learners/pagination.ts`; there is no `aral`
+  /// search param, and an unrecognised key would silently fall back to "all".)
+  /// Removing `isAralLearner` here would widen every ARAL grid's scan from this
+  /// grade's ARAL learners to its entire non-archived roster.
   ///
   /// Distinct from #6 below: this one leads with `gradeLevelId`, which the teacher
   /// learners list needs because it is tenant-scoped transitively through the
