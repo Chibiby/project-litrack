@@ -665,6 +665,12 @@ model Enrollment {
   @@index([schoolId, schoolYearId])
   @@index([teacherId])
   @@index([gradeLevelId, sectionId])
+  /// R6 #4. `deleteSection` runs `enrollment.updateMany({ where: { sectionId } })`;
+  /// `[gradeLevelId, sectionId]` cannot serve it because `sectionId` is not leading.
+  /// Also the lookup side of this FK's `SetNull` action.
+  @@index([sectionId])
+  /// R6 #5. `[schoolId, schoolYearId]` does not lead with `schoolYearId`.
+  @@index([schoolYearId])
 }
 
 model Learner {
@@ -729,6 +735,20 @@ model Learner {
   @@index([teacherId])
   @@index([aralTeacherId])
   @@index([schoolId, aralTeacherId, isAralLearner, deletedAt])
+  /// R6 #2. Grade-scoped ARAL listings ordered by name. Distinct from #6 below:
+  /// this one leads with `gradeLevelId` for the teacher learners list, which is
+  /// tenant-scoped transitively through the teacher's assigned grade ids and so
+  /// carries no `schoolId` predicate to lead with.
+  @@index([gradeLevelId, isAralLearner, fullName])
+  /// R6 #4. `deleteSection` runs `learner.updateMany({ where: { sectionId } })`,
+  /// an otherwise unindexed full-table scan inside a transaction. Also the lookup
+  /// side of this FK's `SetNull` action.
+  @@index([sectionId])
+  /// R6 #6. School-scoped name-ordered listings and the learner search `ILIKE`,
+  /// which no b-tree can serve directly — this reduces it to one school's rows in
+  /// name order. NOT redundant with #2: same trailing sort column, different lead
+  /// column, so neither subsumes the other. Do not consolidate them.
+  @@index([schoolId, fullName])
 }
 
 model Announcement {
@@ -747,6 +767,9 @@ model Announcement {
 
   @@index([schoolId, publishedAt])
   @@index([deletedAt])
+  /// R6 #5. FK-enforcement lookup side. Required relation with no `onDelete`, so
+  /// Prisma's implicit action is `Restrict` — every `User` delete probes this.
+  @@index([authorId])
 }
 
 model AralProfile {
@@ -795,6 +818,8 @@ model Attendance {
   @@unique([learnerId, date])
   @@index([learnerId, weekStart])
   @@index([date])
+  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
+  @@index([recordedById])
 }
 
 /// Grade-level day metadata (e.g. holiday) for ARAL attendance grids.
@@ -812,6 +837,8 @@ model AttendanceDayMeta {
 
   @@unique([gradeLevelId, date])
   @@index([date])
+  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
+  @@index([recordedById])
 }
 
 model ReadingLevelRecord {
@@ -833,6 +860,8 @@ model ReadingLevelRecord {
 
   @@unique([learnerId, weekStart])
   @@index([weekStart])
+  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
+  @@index([recordedById])
 }
 
 /// One learner's grade in one learning area for one term of one school year.
@@ -854,6 +883,8 @@ model TermGrade {
 
   @@unique([learnerId, schoolYearId, term, subject])
   @@index([schoolYearId, term])
+  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
+  @@index([recordedById])
 }
 
 /// An in-app message addressed to one user, with its own read state.
@@ -887,6 +918,9 @@ model Notification {
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
   @@index([schoolId, createdAt])
+  /// R6 #5. Lookup side of this FK's `SetNull` action — removing an account must
+  /// find every notification it caused and null the pointer.
+  @@index([actorId])
 }
 
 model AuditLog {
@@ -904,4 +938,11 @@ model AuditLog {
   @@index([userId, timestamp])
   @@index([schoolId, timestamp])
   @@index([resource, resourceId])
+  /// R6 #1. The Super Admin audit view is a deliberately cross-tenant top-N
+  /// (`orderBy timestamp desc, take 150`, no `where`), and the dashboard's
+  /// `timestamp >= $1` range scan uses the same index. Neither is served by the
+  /// composites above, which all lead with a different column. Ascending on
+  /// purpose: PostgreSQL scans a b-tree backwards at equal cost, so a `sort: Desc`
+  /// modifier would buy nothing and would change the generated index definition.
+  @@index([timestamp])
 }
