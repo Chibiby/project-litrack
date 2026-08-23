@@ -279,7 +279,15 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
               ${c.learnerId}::text,
               ${formatLocalDateKey(c.date)}::date,
               ${weekKey}::date,
-              ${c.status}::"AttendanceStatus",
+              -- Double cast, deliberately: ::text::"Enum" and not ::"Enum". A bare
+              -- enum cast describes the bind parameter AS that enum type, and it is
+              -- unsettled whether Prisma 5.22 will encode a JS string into such a
+              -- parameter. Casting to text first pins the parameter to text, then
+              -- applies the documented text -> enum cast. The result type is
+              -- identical, so the VALUES column types and the ON CONFLICT behaviour
+              -- do not change. Every enum bind in this file and in reading-level.ts
+              -- and term-grades.ts is doubled for the same reason. Do not simplify.
+              ${c.status}::text::"AttendanceStatus",
               ${user.id}::text,
               ${now}::timestamp(3)
             )`

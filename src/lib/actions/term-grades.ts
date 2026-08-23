@@ -205,8 +205,8 @@ export async function saveTermGrades(
               ${randomUUID()}::text,
               ${e.learnerId}::text,
               ${schoolYear.id}::text,
-              ${parsed.data.term}::"TermPeriod",
-              ${e.subject}::"LearningArea",
+              ${parsed.data.term}::text::"TermPeriod",
+              ${e.subject}::text::"LearningArea",
               ${e.score}::integer,
               ${user.id}::text,
               ${now}::timestamp(3)
