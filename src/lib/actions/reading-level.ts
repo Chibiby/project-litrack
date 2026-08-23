@@ -1,6 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
@@ -10,6 +12,7 @@ import {
 } from "@/lib/validators/reading-level.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { formatLocalDateKey } from "@/lib/date-keys";
+import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
   teacherCanAccessLearner,
@@ -17,6 +20,18 @@ import {
 } from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+
+/** One `ReadingLevelRecord` row, already deduped on its conflict tuple. */
+type RawReadingLevelRow = {
+  id: string;
+  learnerId: string;
+  englishProfile: string;
+  filipinoProfile: string;
+  wordRecognitionLevel: string | null;
+  readingComprehensionLevel: string | null;
+  writingLevel: string | null;
+  notes: string | null;
+};
 
 export async function recordReadingLevel(formData: FormData): Promise<ActionResult> {
   const user = await requireSchoolUser("TEACHER");
@@ -156,42 +171,113 @@ export async function bulkRecordMonthlyReadingLevel(
 
   const byId = new Map(learners.map((l) => [l.id, l]));
 
-  await prisma.$transaction(
-    parsed.data.entries.map((entry) =>
-      prisma.readingLevelRecord.upsert({
-        where: {
-          learnerId_weekStart: {
-            learnerId: entry.learnerId,
-            weekStart: monthStart,
-          },
-        },
-        create: {
-          learnerId: entry.learnerId,
-          weekStart: monthStart,
-          englishProfile: entry.englishProfile,
-          filipinoProfile: entry.filipinoProfile,
-          wordRecognitionLevel: entry.wordRecognitionLevel,
-          readingComprehensionLevel: entry.readingComprehensionLevel,
-          writingLevel: entry.writingLevel ?? null,
-          notes: entry.notes ?? null,
-          recordedById: user.id,
-        },
-        update: {
-          englishProfile: entry.englishProfile,
-          filipinoProfile: entry.filipinoProfile,
-          wordRecognitionLevel: entry.wordRecognitionLevel,
-          readingComprehensionLevel: entry.readingComprehensionLevel,
-          // The grid posts full row state, so anything the teacher cleared has to
-          // be written as null. `undefined` would tell Prisma to leave the column
-          // alone, and a deleted remark would quietly come back on the next read.
-          writingLevel: entry.writingLevel ?? null,
-          notes: entry.notes ?? null,
-          recordedById: user.id,
-        },
-      })
-    )
-  );
+  // Dedupe on the conflict tuple BEFORE the statement is built. The old array
+  // form ran one `upsert` per entry serially, so a duplicated learner was a
+  // harmless last-write-wins; a single multi-row `ON CONFLICT DO UPDATE` raises
+  // Postgres 21000 ("cannot affect row a second time") and aborts the whole save.
+  // `weekStart` is the same `monthStart` for every row here, so it is keyed in
+  // explicitly rather than assumed — the tuple is ([learnerId, weekStart]), and
+  // this dedupes on the value about to be written, not on a variable name.
+  const monthKey = formatLocalDateKey(monthStart);
+  const rowByTuple = new Map<string, RawReadingLevelRow>();
+  for (const entry of parsed.data.entries) {
+    rowByTuple.set(`${entry.learnerId}:${monthKey}`, {
+      id: randomUUID(),
+      learnerId: entry.learnerId,
+      englishProfile: entry.englishProfile,
+      filipinoProfile: entry.filipinoProfile,
+      wordRecognitionLevel: entry.wordRecognitionLevel,
+      readingComprehensionLevel: entry.readingComprehensionLevel,
+      // The grid posts full row state, so anything the teacher cleared has to be
+      // written as null rather than left alone.
+      writingLevel: entry.writingLevel ?? null,
+      notes: entry.notes ?? null,
+    });
+  }
+  const rows = [...rowByTuple.values()];
 
+  const now = new Date();
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const chunk of chunkRows(rows, BULK_CHUNK_ROWS)) {
+        // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
+        // and `@updatedAt` are CLIENT-side, and neither column has a database
+        // default. `updatedAt` is bumped in DO UPDATE too — omitting it there
+        // would freeze the column at first-insert time silently, with no error.
+        //
+        // `weekStart` binds the YYYY-MM-DD TEXT from `formatLocalDateKey` and
+        // casts in SQL. Binding the `Date` would re-serialize local midnight as a
+        // UTC instant, which agrees with the intended day on Vercel (TZ=UTC) and
+        // disagrees on a UTC+8 developer machine.
+        const values = Prisma.join(
+          chunk.map(
+            (r) => Prisma.sql`(
+              ${r.id}::text,
+              ${r.learnerId}::text,
+              ${monthKey}::date,
+              ${r.englishProfile}::"ReadingProfile",
+              ${r.filipinoProfile}::"ReadingProfile",
+              ${r.wordRecognitionLevel}::"WeeklyWordRecognitionLevel",
+              ${r.readingComprehensionLevel}::"WeeklyReadingComprehensionLevel",
+              ${r.writingLevel}::"WeeklyWritingLevel",
+              ${r.notes}::text,
+              ${user.id}::text,
+              ${now}::timestamp(3)
+            )`
+          )
+        );
+
+        // The tenant predicate lives IN the statement. The scoped `findMany` above
+        // already fails the whole batch on any foreign id, so this join can only
+        // match every row — but `ReadingLevelRecord` carries no `schoolId` of its
+        // own, and a raw INSERT with no tenant predicate would be one deleted
+        // guard away from writing across schools. The row count is checked below,
+        // so a predicate that ever excluded a row rolls the transaction back
+        // rather than committing a partial save.
+        const written = await tx.$queryRaw<{ id: string }[]>`
+          INSERT INTO "ReadingLevelRecord" (
+            "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
+            "wordRecognitionLevel", "readingComprehensionLevel", "writingLevel",
+            "notes", "recordedById", "updatedAt"
+          )
+          SELECT v."id", v."learnerId", v."weekStart", v."englishProfile",
+                 v."filipinoProfile", v."wordRecognitionLevel",
+                 v."readingComprehensionLevel", v."writingLevel", v."notes",
+                 v."recordedById", v."updatedAt"
+          FROM (VALUES ${values}) AS v (
+            "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
+            "wordRecognitionLevel", "readingComprehensionLevel", "writingLevel",
+            "notes", "recordedById", "updatedAt"
+          )
+          JOIN "Learner" l
+            ON l."id" = v."learnerId"
+           AND l."schoolId" = ${user.schoolId}
+           AND l."deletedAt" IS NULL
+           AND l."isAralLearner" = TRUE
+          ON CONFLICT ("learnerId", "weekStart") DO UPDATE SET
+            "englishProfile" = EXCLUDED."englishProfile",
+            "filipinoProfile" = EXCLUDED."filipinoProfile",
+            "wordRecognitionLevel" = EXCLUDED."wordRecognitionLevel",
+            "readingComprehensionLevel" = EXCLUDED."readingComprehensionLevel",
+            "writingLevel" = EXCLUDED."writingLevel",
+            "notes" = EXCLUDED."notes",
+            "recordedById" = EXCLUDED."recordedById",
+            "updatedAt" = EXCLUDED."updatedAt"
+          RETURNING "id"
+        `;
+        if (written.length !== chunk.length) {
+          throw new Error(
+            `reading-level bulk write touched ${written.length} of ${chunk.length} rows`
+          );
+        }
+      }
+    }, BULK_TX_OPTIONS);
+  } catch (err) {
+    console.error("[bulkRecordMonthlyReadingLevel] transaction failed:", err);
+    return { ok: false, error: "Could not save the reading levels. Please try again." };
+  }
+
+  const upserted = rows.length;
   const gradeIds = [...new Set(learners.map((l) => l.gradeLevelId))];
   await writeAudit({
     userId: user.id,
@@ -202,7 +288,7 @@ export async function bulkRecordMonthlyReadingLevel(
     metadata: {
       schoolId: user.schoolId,
       monthStart: formatLocalDateKey(monthStart),
-      upserted: parsed.data.entries.length,
+      upserted,
       learnerIds,
       gradeLevelIds: gradeIds,
     },
@@ -227,5 +313,5 @@ export async function bulkRecordMonthlyReadingLevel(
     }
   }
 
-  return { ok: true, data: { upserted: parsed.data.entries.length } };
+  return { ok: true, data: { upserted } };
 }
