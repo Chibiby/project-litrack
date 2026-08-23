@@ -79,18 +79,56 @@ function makeLearner(overrides: Partial<LearnerRow> = {}): LearnerRow {
 }
 
 const learnerFindFirst = vi.fn(
-  async (args: { where: { id: string; deletedAt: null } }) =>
-    learnerRow.id === args.where.id && learnerRow.deletedAt === null
-      ? { ...learnerRow }
-      : null
+  async (args: {
+    // `schoolId` is optional because today's `where` (enrollment.ts:108) does not
+    // send it at all. `human-actions.md` §5.8 recommends adding it; this fake has
+    // to behave correctly both before and after that lands.
+    where: { id: string; deletedAt: null; schoolId?: string };
+  }) => {
+    if (learnerRow.id !== args.where.id) return null;
+    if (learnerRow.deletedAt !== null) return null;
+    // Absent key means DO NOT FILTER, and that is load-bearing rather than lazy.
+    // Filtering on an absent `schoolId` would compare against `undefined`, return
+    // `null` today, and make case 4 pass through the wrong mechanism — bailing at
+    // :110 with "Learner not found" instead of reaching `assertSameSchool` — so
+    // the case would be green while proving nothing about the guard it exists to
+    // protect. Only filter once the query actually asks us to.
+    if (
+      args.where.schoolId !== undefined &&
+      args.where.schoolId !== learnerRow.schoolId
+    ) {
+      return null;
+    }
+    return { ...learnerRow };
+  }
 );
 
-/** Honours `schoolId` so a fixture cannot accidentally cross tenants unnoticed. */
+/**
+ * Which school each fixture grade row belongs to. The real query
+ * (enrollment.ts:130-135) sends `id` + `schoolId` + `deletedAt`, so a grade in
+ * another school must miss. `grade-4` exists in both schools because the
+ * same-school cases transfer within `school-1` and the cross-school case
+ * transfers into `school-2`.
+ */
+const GRADE_SCHOOLS: Record<string, string[]> = {
+  [FROM_GRADE_ID]: [SCHOOL_ID],
+  [TO_GRADE_ID]: [SCHOOL_ID, OTHER_SCHOOL_ID],
+};
+
+/**
+ * Honours `schoolId`, so a School Head aiming a transfer at another school's
+ * grade misses here and the action refuses at :138 — which is what the real
+ * `where` does. This weakens none of the four cases below: each one's grade
+ * lookup already uses the school it should.
+ */
 const gradeLevelFindFirst = vi.fn(
-  async (args: { where: { id: string; schoolId: string } }) => ({
-    id: args.where.id,
-    type: args.where.id === TO_GRADE_ID ? "G4" : "G3",
-  })
+  async (args: { where: { id: string; schoolId: string } }) => {
+    if (!GRADE_SCHOOLS[args.where.id]?.includes(args.where.schoolId)) return null;
+    return {
+      id: args.where.id,
+      type: args.where.id === TO_GRADE_ID ? "G4" : "G3",
+    };
+  }
 );
 
 const userFindFirst = vi.fn(async (args: { where: { id: string } }) => ({
@@ -274,23 +312,74 @@ describe("transferLearner — teacher cache fan-out", () => {
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_OUT);
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_IN);
     expect(revalidateTeacherCaches).toHaveBeenCalledTimes(2);
-    // Pins the `if (learner.aralTeacherId)` guard — the half of the one-liner a
-    // future simplification is most likely to drop.
+    // The variant this actually nets is the one that launders the null and still
+    // compiles: `revalidateTeacherCaches(learner.aralTeacherId!)` or `?? ""`,
+    // which ships and busts `teacher-dashboard:null` / `teacher-shell:null` on
+    // every transfer of a tutorless learner. Dropping the guard outright is not
+    // this case's job — `revalidateTeacherCaches` takes `(userId: string)` and
+    // `Learner.aralTeacherId` is `String?`, so the unguarded call is a TS2345
+    // that `npm run typecheck` stops before Vitest (esbuild, no typecheck) ever
+    // runs it. Either laundered form shows up here as a third call.
     expect(revalidateTeacherCaches).not.toHaveBeenCalledWith(null);
     expect(revalidateTeacherCaches).not.toHaveBeenCalledWith(undefined);
   });
 
   it("refuses another school's learner without disclosing which school it is in", async () => {
-    // The learner lookup at enrollment.ts:108 carries NO `schoolId` in its
-    // `where`. Tenancy on this action rests entirely on the `assertSameSchool`
-    // call below it: delete that one line and a School Head can transfer any
-    // learner in the database.
+    // Tenancy on this action currently rests entirely on `assertSameSchool`
+    // (:113-117), because the learner lookup at :108 sends no `schoolId`. Delete
+    // that block today and a School Head transfers any learner in the database.
+    //
+    // But there are two correct ways to refuse a foreign learner, and this case
+    // must accept either, because `human-actions.md` §5.8 recommends adding the
+    // second and the pure-addition form of that edit keeps the first:
+    //
+    //   guard reached (today)        :113-117  → "Not found"
+    //   `where`-scoped lookup miss   :108-110  → "Learner not found"
+    //
+    // So the property asserted here is the one that actually matters: GREEN if at
+    // least one tenancy mechanism is present, RED only when BOTH are absent —
+    // which is the only state that is unsafe in production. Pinning the exact
+    // string instead would turn a strictly-safer hardening into a test failure.
     learnerRow = makeLearner({ schoolId: OTHER_SCHOOL_ID });
 
     const result = await transferLearner(sameSchoolFormData());
-    expect(result).toEqual({ ok: false, error: "Not found" });
 
-    expect(assertSameSchool).toHaveBeenCalledWith(SCHOOL_ID, OTHER_SCHOOL_ID);
+    // Anti-vacuity gate, and it is not optional. "Learner not found" is also what
+    // a typo'd fixture id produces, so without proving the action really looked
+    // for THIS learner, the loosened assertion below could pass while the case
+    // tests nothing at all.
+    expect(learnerFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: LEARNER_ID }),
+      })
+    );
+
+    // `toEqual` still pins the shape and rejects any other message — a leaked
+    // stack trace or "Target grade level not found" fails here.
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringMatching(/^(?:Not found|Learner not found)$/),
+    });
+
+    // The result assertion above already reddens when both mechanisms are gone,
+    // because the action then returns ok. This adds the case it does NOT cover:
+    // a refusal that arrives for some unrelated reason while no tenancy mechanism
+    // is present at all, which would otherwise satisfy the matcher above.
+    const guardReached = assertSameSchool.mock.calls.length > 0;
+    const lookupWasScoped = learnerFindFirst.mock.calls.some(
+      (call) => call[0].where.schoolId !== undefined
+    );
+    expect(guardReached || lookupWasScoped).toBe(true);
+
+    // Conditional by design: after §5.8's `where` scoping the lookup misses and
+    // the guard is never reached, so an unconditional version of this would fail
+    // on a safe change. Kept rather than dropped because while the guard IS the
+    // mechanism it must compare the caller's school against the learner's — the
+    // argument contract is worth pinning, and the assertions above carry the red.
+    if (guardReached) {
+      expect(assertSameSchool).toHaveBeenCalledWith(SCHOOL_ID, OTHER_SCHOOL_ID);
+    }
+
     expect(transaction).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
     expect(revalidateTeacherCaches).not.toHaveBeenCalled();
