@@ -22,12 +22,15 @@ export type GradeSectionOption = { id: string; name: string };
  * `["a-b"]`, and sorted on a copy so two callers holding the same set in a
  * different order do not mint two entries.
  *
- * `schoolDashboard(schoolId)` is the tag: `createSection`, `updateSection` and
- * `deleteSection` are the only writers of these rows and all three call
- * `revalidateSchoolDashboard`. That tag is deliberately broader than sections —
- * every learner mutation busts it too — so the practical effect of `volatile`
- * here is to collapse this read across a burst of navigation that contains no
- * write, not to hold it for a full 15 s in a school that is being edited.
+ * `schoolDashboard(schoolId)` is the tag, and it covers every writer: the three
+ * section actions (`createSection`, `updateSection`, `deleteSection`) each call
+ * `revalidateSchoolDashboard`; `createNextLetterSection` delegates to
+ * `createSection`; and `bootstrapSchoolStructure`, which is the only other code in
+ * `src` that writes this table, runs solely from `saveSchoolHeadProfile`, which
+ * calls it too. That tag is deliberately broader than sections — every learner
+ * mutation busts it too — so the practical effect of `volatile` here is to collapse
+ * this read across a burst of navigation that contains no write, not to hold it for
+ * a full 15 s in a school that is being edited.
  *
  * No `Date` crosses the cache boundary: `deletedAt` is a filter, not a selection.
  */

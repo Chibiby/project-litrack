@@ -24,9 +24,10 @@ export type ActiveSchoolYear = {
  *
  * At most one row per school by design, so the key is `schoolId` alone and the
  * result is tiny. Tagged `schoolDashboard(schoolId)`: `createSchoolYear` and
- * `activateSchoolYear` are the only writers of `isActive`, `label` and
- * `startDate`, and both call `revalidateSchoolDashboard`. `null` is cached like
- * any other result and cleared by the same tag when a year is activated.
+ * `setActiveSchoolYear` are the only two actions that write `SchoolYear` at all
+ * (`src/lib/actions/school-year.ts` holds the only four writes in `src`), and both
+ * call `revalidateSchoolDashboard`. `null` is cached like any other result and
+ * cleared by the same tag when a year is activated.
  *
  * The string conversion happens *inside* the cached function, with
  * `formatLocalDateKey` and never `toISOString()`. This is exactly equivalent to
