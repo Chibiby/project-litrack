@@ -22,6 +22,9 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260811000004_advisory_section_unique`
 - `20260812000001_teacher_profile_aral_volunteer_fields`
 - `20260819000001_teacher_employment_type_and_notifications`
+- `20260823000001_add_perf_indexes` — **see the carve-out in (b1) before applying this one to
+  production.** It is 12 additive `CREATE INDEX` statements and nothing else; production takes
+  `prisma/concurrent-indexes.sql` instead of letting `migrate deploy` run it.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
@@ -33,6 +36,12 @@ counts the migration as pending — the next `migrate deploy` re-runs it, fails 
 the objects that already exist, and marks the migration failed. Recovering from
 that needs `prisma migrate resolve --applied <migration_name>`. Let
 `migrate deploy` do the DDL and the bookkeeping together.
+
+That rule stands. There is exactly **one** narrow carve-out, for concurrent index
+builds, and it exists because of a hard PostgreSQL/Prisma mechanical conflict
+rather than as a shortcut — see **(b1)** below. In that case the bookkeeping is
+still done, just explicitly with `resolve --applied` as a required step instead of
+an afterthought. Any other hand-application is still the mistake described above.
 
 `prisma/rls-policies.sql` is a separate step and needs no migration bookkeeping —
 run it in the SQL Editor after `migrate deploy` whenever a migration adds a table,
@@ -68,6 +77,125 @@ Expected: all pending migrations apply cleanly; exit code 0.
 If the remote DB predates `0_init`, baseline first — see `docs/migrations.md`.
 
 Optional after migrate: apply `prisma/rls-policies.sql` in the Supabase SQL Editor.
+
+---
+
+## (b1) Carve-out: concurrent index builds on a populated database
+
+**Applies to `20260823000001_add_perf_indexes` and any future index-only migration.**
+For everything else, section (b) is the whole story — use `migrate deploy` and stop
+reading here.
+
+### Why this carve-out is legitimate
+
+It is mechanical, not a convenience:
+
+- Plain `CREATE INDEX` takes an **ACCESS EXCLUSIVE** lock on the table for the
+  entire build. Every read and every write on that table blocks until it finishes.
+  On a populated `Learner` or `Attendance`, that is user-visible downtime.
+- `CREATE INDEX CONCURRENTLY` takes only **SHARE UPDATE EXCLUSIVE**, so reads and
+  writes continue throughout. It costs two table passes instead of one, so it is
+  slower in wall-clock terms — that is the trade, and on a live database it is the
+  right one.
+- But `CREATE INDEX CONCURRENTLY` **cannot run inside a transaction block**, and
+  `prisma migrate deploy` wraps every migration file in one. So the concurrent form
+  physically cannot live in a `migration.sql`.
+
+Hence two artifacts for the same twelve indexes. Both are committed; both produce
+**byte-identical index names** (they were generated from the same
+`prisma migrate diff --script` output), which is what makes the migration's
+`IF NOT EXISTS` a real safety net rather than decoration.
+
+### The sequence
+
+1. Back up / confirm the PITR window — section (a).
+
+2. Read-only check of what is pending:
+
+   ```powershell
+   npx prisma migrate status
+   ```
+
+3. Apply the concurrent script on the **direct** connection (port 5432, session
+   mode — *not* the 6543 transaction pooler):
+
+   ```powershell
+   psql "$env:DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/concurrent-indexes.sql
+   ```
+
+   **Do not use the Supabase SQL Editor for this file.** It can wrap statements in
+   a transaction, which makes every `CONCURRENTLY` statement fail with `25001`
+   (`CREATE INDEX CONCURRENTLY cannot run inside a transaction block`). Do not pass
+   `-1` / `--single-transaction` to psql either, for the same reason.
+
+4. **Verify every index is `valid` before step 5.** Step 5 tells Prisma the DDL is
+   done, so a silently-invalid index would go unnoticed afterwards. Expect 12 rows,
+   all `valid = true`:
+
+   ```sql
+   SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
+   FROM pg_class c
+   JOIN pg_index i ON i.indexrelid = c.oid
+   WHERE c.relname IN (
+     'Enrollment_sectionId_idx', 'Enrollment_schoolYearId_idx',
+     'Learner_gradeLevelId_isAralLearner_fullName_idx', 'Learner_sectionId_idx',
+     'Learner_schoolId_fullName_idx', 'Announcement_authorId_idx',
+     'Attendance_recordedById_idx', 'AttendanceDayMeta_recordedById_idx',
+     'ReadingLevelRecord_recordedById_idx', 'TermGrade_recordedById_idx',
+     'Notification_actorId_idx', 'AuditLog_timestamp_idx'
+   )
+   ORDER BY c.relname;
+   ```
+
+   The full statement list and this query also live at the bottom of
+   `prisma/concurrent-indexes.sql`, so the file is self-sufficient at 2am.
+
+5. Record the migration as applied **without** re-running its SQL:
+
+   ```powershell
+   npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
+   ```
+
+   Skipping this leaves the migration pending forever and the next `migrate deploy`
+   re-runs it. It would in fact *succeed* — the migration uses `IF NOT EXISTS` — but
+   it would take ACCESS EXCLUSIVE locks to accomplish nothing, which is precisely
+   the downtime step 3 avoided. Do not skip it.
+
+6. `npx prisma migrate status` again — expect no pending migrations.
+
+### If an index build fails
+
+A failed or interrupted `CREATE INDEX CONCURRENTLY` leaves behind an **INVALID**
+index. This is the worst of both worlds: the planner will not use it (no read
+benefit) but PostgreSQL still maintains it on every write (full write cost). It
+must be dropped before retrying:
+
+```sql
+DROP INDEX CONCURRENTLY IF EXISTS "<index_name>";
+```
+
+then re-run that single `CREATE INDEX CONCURRENTLY` statement. The verify query in
+step 4 is how you find them (`valid = false`, or fewer than 12 rows).
+
+This is the only `DROP` sanctioned anywhere in this checklist, and it is scoped to
+an index the same script created minutes earlier. It is not licence to drop
+anything else.
+
+### Verify the live index set matches the committed schema
+
+This has **never been verified** against production in this program. Worth doing
+once while you are here — list the indexes PostgreSQL actually has on the nine
+affected tables and compare against `@@index` / `@@unique` in `prisma/schema.prisma`:
+
+```sql
+\d+ "Learner"
+\d+ "Enrollment"
+```
+
+Expect `Enrollment` to carry one index that is **not** expressible in
+`schema.prisma`: the partial unique `Enrollment_learner_active_unique` (one `ACTIVE`
+row per learner). That is intentional — see `docs/migrations.md`. Any *other*
+divergence is a finding worth reporting before it compounds.
 
 ---
 
