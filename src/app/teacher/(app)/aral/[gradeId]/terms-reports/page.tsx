@@ -14,6 +14,8 @@ import {
 import { AralTermGradesSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
+import { getGradeSections } from "@/lib/cache/grade-sections";
+import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { deniesAdvisoryRoster, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacement,
@@ -30,7 +32,11 @@ import {
   sectionIdWhere,
   totalPages,
 } from "@/lib/learners/pagination";
-import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import {
+  formatLocalDateKey,
+  parseLocalDateKey,
+  schoolToday,
+} from "@/lib/date-keys";
 import {
   getTermWindows,
   isTermLocked,
@@ -184,10 +190,7 @@ export default async function AralGradeTermsReportsPage({
   // Terms are windows over the active school year, so without one there is
   // nothing to key a row to. A real state the schema permits: explain it rather
   // than render a grid that would silently discard everything typed into it.
-  const schoolYear = await prisma.schoolYear.findFirst({
-    where: { schoolId: grade.schoolId, isActive: true },
-    select: { id: true, label: true, startDate: true },
-  });
+  const schoolYear = await getActiveSchoolYear(grade.schoolId);
   if (!schoolYear) {
     return (
       <AppShell
@@ -206,7 +209,7 @@ export default async function AralGradeTermsReportsPage({
   }
 
   const todayKey = formatLocalDateKey(schoolToday());
-  const windows = getTermWindows(schoolYear.startDate);
+  const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey));
   const activeTerm = resolveActiveTerm(windows, sp.term, todayKey);
   const activeWindow = windows.find((w) => w.term === activeTerm) ?? windows[0];
   const terms = windows.map((w) => ({
@@ -368,14 +371,9 @@ async function AralTermGradesGrid({
 
   const [gradeSections, learners, termGrades] = await Promise.all([
     isSuperAdmin
-      ? prisma.section.findMany({
-          where: {
-            gradeLevelId: grade.id,
-            schoolId: grade.schoolId,
-            deletedAt: null,
-          },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" },
+      ? getGradeSections({
+          schoolId: grade.schoolId,
+          gradeLevelIds: [grade.id],
         })
       : Promise.resolve([] as { id: string; name: string }[]),
     prisma.learner.findMany({

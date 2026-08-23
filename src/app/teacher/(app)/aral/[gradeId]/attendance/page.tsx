@@ -10,6 +10,7 @@ import { AralWeeklyAttendancePanel } from "@/components/aral/aral-weekly-attenda
 import { AralAttendanceSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { getGradeSections } from "@/lib/cache/grade-sections";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   AralEnrollAction,
@@ -189,14 +190,9 @@ async function AralWeeklyAttendanceGrid({
 
   const [gradeSections, learners, attendances, holidays, shellGrades] =
     await Promise.all([
-      prisma.section.findMany({
-        where: {
-          gradeLevelId: grade.id,
-          schoolId: grade.schoolId,
-          deletedAt: null,
-        },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
+      getGradeSections({
+        schoolId: grade.schoolId,
+        gradeLevelIds: [grade.id],
       }),
       prisma.learner.findMany({
         where: learnerWhere,

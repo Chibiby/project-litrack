@@ -259,7 +259,7 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
   revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   // A first floating placement creates the FLOATING grade row, which the Grade
   // Levels page renders.
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);

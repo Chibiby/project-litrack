@@ -1057,7 +1057,7 @@ export async function setLearnerAralTeacher(
     },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
   revalidatePath("/teacher/aral");
   // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived

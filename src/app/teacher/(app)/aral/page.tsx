@@ -23,6 +23,7 @@ import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EnrollToAralDialog } from "@/components/aral/enroll-to-aral-dialog";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { getGradeSections } from "@/lib/cache/grade-sections";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   listAralTutors,
@@ -270,15 +271,9 @@ export default async function AralDashboard({
     activeGrade !== "all" ? activeGrade : assignedGradeIds[0]!;
 
   const [gradeSections, enrollCandidates, tutors] = await Promise.all([
-    prisma.section.findMany({
-      where: {
-        schoolId,
-        deletedAt: null,
-        gradeLevelId:
-          activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
-      },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
+    getGradeSections({
+      schoolId,
+      gradeLevelIds: activeGrade === "all" ? assignedGradeIds : [activeGrade],
     }),
     isSuperAdmin
       ? Promise.resolve(

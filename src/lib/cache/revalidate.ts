@@ -4,27 +4,41 @@ import * as tags from "@/lib/cache/tags";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
- * The School Head teachers workspace — all four tab pathnames.
+ * The School Head teachers workspace — all four tab pathnames — plus this
+ * school's teacher list wherever it is cached.
  *
- * As of 2026-08 this is a no-op against both server caches, and the comment
- * previously here was wrong about the mechanism. `revalidatePath(p)` with no
- * `type` emits one softTag that matches only a render whose concrete URL is
- * exactly `p` — hence four calls for four pathnames — but no page under
- * `src/app/school-head/(app)/teachers/` reads through `cachedQuery`, and all four
- * are `force-dynamic`, so none of them has a Data Cache or Full Route Cache entry
- * for those softTags to hit. The tab badges are fresh because the
- * pages re-query per request, and the client Router Cache is cleared wholesale
- * by any server action regardless of this call.
+ * `revalidatePath(p)` with no `type` emits one softTag that matches only a
+ * render whose concrete URL is exactly `p`, which is why there are four calls
+ * for four pathnames rather than one for the folder. Those four still reach no
+ * server cache: no page under `src/app/school-head/(app)/teachers/` reads
+ * through `cachedQuery`, and all four are `force-dynamic`, so none of them has
+ * a Data Cache or Full Route Cache entry for those softTags to hit. The tab
+ * badges are fresh because the pages re-query per request, and the client
+ * Router Cache is cleared wholesale by any server action regardless of this
+ * call.
  *
- * Kept as the one place the workspace's invalidation is expressed. Task 12 adds
- * a `schoolTeachers` tag for these reads; that is when this starts doing work,
- * and when it will need a `schoolId` argument.
+ * What does work now is the tag: `schoolTeachers(schoolId)` busts the Data
+ * Cache entries holding this school's teacher list — `listAralTutors`, read by
+ * the ARAL tutor pickers on `/teacher/aral`, the two ARAL grade sheets,
+ * `/school-head/aral`, and the `listAralTutorOptions` action. Those readers are
+ * `force-dynamic` too, so they have a Data Cache entry and still no Full Route
+ * Cache entry — two different caches, and only the first one is invalidated
+ * here. Rendered HTML is never cached on a role page.
+ *
+ * Takes a `schoolId` because that tag is tenant-scoped. Pass the same
+ * `schoolId` the calling action scoped its own ownership check to.
  */
-export function revalidateSchoolHeadTeachers() {
+export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachers);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersPending);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersInactive);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersDeclined);
+  revalidateSchoolTeachers(schoolId);
+}
+
+/** One school's cached teacher list (ARAL tutor pickers). */
+export function revalidateSchoolTeachers(schoolId: string) {
+  revalidateTag(tags.schoolTeachers(schoolId));
 }
 
 /** Admin system-wide dashboard aggregates. */

@@ -23,3 +23,15 @@ export function teacherShell(userId: string): string {
 export function schoolName(schoolId: string): string {
   return `school-name:${schoolId}`;
 }
+
+/**
+ * One school's teacher roster, as every picker and list reads it.
+ *
+ * Tenant-scoped by construction: a teacher list is school data, so this takes a
+ * `schoolId` like every other non-global tag here. An unscoped
+ * `"school-teachers"` string would make one school's teacher mutation flush
+ * every other school's entry.
+ */
+export function schoolTeachers(schoolId: string): string {
+  return `school-teachers:${schoolId}`;
+}

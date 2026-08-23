@@ -107,18 +107,25 @@ export type AuditEntry = {
  * site keeps its existing shape and its ordering relative to the rest of the
  * action; only the write moves.
  *
- * Known consequence of that move, bounded and self-healing. As of this commit
- * `AuditLog` has two cached readers, both in `src/lib/dashboard/aggregates.ts`
- * and both on `profile: "aggregate"`: `getSchoolHeadRecentActivity`, tagged
- * `schoolDashboard(schoolId)`, and `getAdminActivitySeries`, tagged
- * `adminDashboard`. Grep for both access styles before trusting that list —
- * `getAdminActivitySeries` reaches the table through `$queryRaw` with
- * `"AuditLog"` in a SQL string, so a `prisma.auditLog` grep does not find it.
- * For either tag: a mutating action busts it *during* the request while the row
- * lands *after* the response, so a render landing between the two can cache a
- * result short by that row for the profile's TTL. No row is lost and no tenancy
- * boundary moves; it clears on the next tag bust or at TTL expiry. The two
- * `/audit` viewer pages are `force-dynamic` and uncached, so they are unaffected.
+ * Known consequence of that move, bounded and self-healing, and now narrowed to
+ * one reader. `AuditLog` has exactly one cached reader:
+ * `getAdminActivitySeries` in `src/lib/dashboard/aggregates.ts`, on
+ * `profile: "aggregate"` and tagged `adminDashboard`. Grep for both access styles
+ * before trusting that count — it reaches the table through `$queryRaw` with
+ * `"AuditLog"` in a SQL string, so a `prisma.auditLog` grep does not find it. For
+ * that tag: a mutating action busts it *during* the request while the row lands
+ * *after* the response, so a render landing between the two can cache a result
+ * short by that row for the profile's TTL. No row is lost and no tenancy boundary
+ * moves; it clears on the next tag bust or at TTL expiry. It is tolerable there
+ * because the value is a seven-day, day-bucketed count series on a bar chart.
+ *
+ * `getSchoolHeadRecentActivity` used to be the second such reader and no longer
+ * is: its audit slice was deliberately moved outside `cachedQuery` (see the
+ * comment on that function), because a rail whose job is to say what just happened
+ * is the one place this skew is visible.
+ *
+ * The two `/audit` viewer pages are `force-dynamic` and uncached, so they are
+ * unaffected.
  */
 export async function writeAudit(entry: AuditEntry): Promise<void> {
   await deferOrRun(() => insertOneRow(entry));

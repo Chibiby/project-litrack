@@ -133,7 +133,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   });
 
   revalidatePath("/teacher/settings/profile");
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   // Grade/section self-assignment changes the teacher's sidebar grade links,
   // not just their dashboard metrics — and the school-head dashboard counts
@@ -267,7 +267,7 @@ export async function setTeacherAdvisorySection(
     },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   // The teacher sees their own advisory on their profile and in their sidebar
   // grade links, so a change made here has to reach their surfaces too.

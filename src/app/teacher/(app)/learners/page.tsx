@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
+import { getGradeSections } from "@/lib/cache/grade-sections";
 import {
   deniesAdvisoryRoster,
   teacherGradeScope,
@@ -150,15 +151,9 @@ async function LearnersBody({
   // this grade use sections at all", which is what decides whether the column
   // earns its width.
   const [sections, totalCount] = await Promise.all([
-    prisma.section.findMany({
-      where: {
-        schoolId,
-        deletedAt: null,
-        gradeLevelId:
-          activeGrade === "all" ? { in: assignedGradeIds } : activeGrade,
-      },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
+    getGradeSections({
+      schoolId,
+      gradeLevelIds: activeGrade === "all" ? assignedGradeIds : [activeGrade],
     }),
     prisma.learner.count({ where }),
   ]);

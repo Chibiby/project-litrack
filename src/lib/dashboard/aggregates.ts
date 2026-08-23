@@ -371,22 +371,42 @@ export async function getSchoolHeadCharts(schoolId: string) {
   );
 }
 
+/**
+ * The School Head dashboard's activity rail: announcements, the audit tail, and
+ * the count of ARAL learners still missing a profile.
+ *
+ * Two of the three slices are cached and one deliberately is not, so the two
+ * `Promise.all`s below are not redundant: the outer one keeps the uncached read
+ * running beside the cached pair instead of behind it, and the inner one is what
+ * the cache entry actually holds.
+ *
+ * `announcements` and `pendingAralProfiles` change only through actions that call
+ * `revalidateSchoolDashboard`, so `schoolDashboard(schoolId)` is a complete
+ * invalidation path for both.
+ *
+ * `recentAudit` is read outside the cache because it has no invalidation path at
+ * all. `writeAudit` inserts the row and never revalidates a tag, and some of those
+ * inserts are deferred with `after()` — they land *after* the response, so even a
+ * `revalidateTag` at the mutation site could not cover them. Cached, this rail
+ * would show a School Head their own just-taken action as absent for the whole
+ * TTL, on the one surface whose entire job is to say what just happened. Left
+ * uncached it is also the cheapest of the three: eight rows off the
+ * `(schoolId, timestamp)` order, no joins, no aggregation.
+ *
+ * `timestamp` therefore stays a real `Date` here, while `announcements[].createdAt`
+ * is a JSON string out of the cache. Both consumers pass through `toDateKey`,
+ * which is typed `Date | string` for exactly this reason.
+ */
 export async function getSchoolHeadRecentActivity(schoolId: string) {
-  return cachedQuery(
-    async () => {
-      const [announcements, recentAudit, pendingAralProfiles] =
-        await Promise.all([
+  const [cached, recentAudit] = await Promise.all([
+    cachedQuery(
+      async () => {
+        const [announcements, pendingAralProfiles] = await Promise.all([
           prisma.announcement.findMany({
             where: { schoolId, deletedAt: null },
             orderBy: { createdAt: "desc" },
             take: 5,
             select: { id: true, title: true, createdAt: true },
-          }),
-          prisma.auditLog.findMany({
-            where: { schoolId },
-            orderBy: { timestamp: "desc" },
-            take: 8,
-            select: { id: true, action: true, resource: true, timestamp: true },
           }),
           prisma.learner.count({
             where: {
@@ -398,14 +418,29 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
           }),
         ]);
 
-      return { announcements, recentAudit, pendingAralProfiles };
-    },
-    {
-      keyParts: ["school-head-recent-activity", schoolId],
-      tags: [schoolDashboard(schoolId)],
-      profile: "aggregate",
-    }
-  );
+        return { announcements, pendingAralProfiles };
+      },
+      {
+        // `-v2`: the cached value lost a field. The key parts are unchanged, so
+        // nothing would evict the old three-field entry on its own.
+        keyParts: ["school-head-recent-activity-v2", schoolId],
+        tags: [schoolDashboard(schoolId)],
+        profile: "aggregate",
+      }
+    ),
+    prisma.auditLog.findMany({
+      where: { schoolId },
+      orderBy: { timestamp: "desc" },
+      take: 8,
+      select: { id: true, action: true, resource: true, timestamp: true },
+    }),
+  ]);
+
+  return {
+    announcements: cached.announcements,
+    recentAudit,
+    pendingAralProfiles: cached.pendingAralProfiles,
+  };
 }
 
 

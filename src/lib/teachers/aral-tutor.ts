@@ -1,6 +1,8 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { cachedQuery } from "@/lib/cache/unstable";
+import { schoolTeachers } from "@/lib/cache/tags";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 /**
@@ -39,44 +41,72 @@ export type AralTutorOption = {
   employmentType: "DEPED_PLANTILLA" | "NON_DEPED" | null;
 };
 
-/** Every teacher who may be designated, by surname — one order for every picker. */
+/**
+ * Every teacher who may be designated, by surname — one order for every picker.
+ *
+ * Cached here rather than at the call sites, so all four readers share one entry:
+ * the ARAL dashboard, the enroll control on the two ARAL grade sheets, the School
+ * Head ARAL tab, and the `listAralTutorOptions` action behind the on-demand
+ * picker. Keyed on `schoolId` alone because that is the whole of the `where`
+ * besides fixed literals — nothing here is teacher-scoped, so no `teacherId` or
+ * `isSuperAdmin` part would discriminate anything.
+ *
+ * `schoolTeachers(schoolId)` is busted by `revalidateSchoolHeadTeachers`, which
+ * every teacher approve / reject / clear / deactivate / remove, profile save and
+ * advisory reassignment already calls. A section *rename* changes `advisoryLabel`
+ * without reaching that helper, which is the one gap `volatile`'s 15 s covers.
+ *
+ * Returns `AralTutorOption[]`, which holds no `Date`: `advisorySection.deletedAt`
+ * is selected but collapsed to a truthiness check below and never escapes, so
+ * nothing here can arrive back from the JSON round trip as a string with `Date`
+ * methods called on it.
+ */
 export async function listAralTutors(schoolId: string): Promise<AralTutorOption[]> {
-  const teachers = await prisma.user.findMany({
-    relationLoadStrategy: "join",
-    where: aralTutorScope(schoolId),
-    select: {
-      id: true,
-      fullName: true,
-      firstName: true,
-      lastName: true,
-      teacherProfile: { select: { employmentType: true } },
-      advisorySection: {
+  return cachedQuery(
+    async () => {
+      const teachers = await prisma.user.findMany({
+        relationLoadStrategy: "join",
+        where: aralTutorScope(schoolId),
         select: {
-          name: true,
-          deletedAt: true,
-          gradeLevel: { select: { type: true } },
+          id: true,
+          fullName: true,
+          firstName: true,
+          lastName: true,
+          teacherProfile: { select: { employmentType: true } },
+          advisorySection: {
+            select: {
+              name: true,
+              deletedAt: true,
+              gradeLevel: { select: { type: true } },
+            },
+          },
         },
-      },
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      });
+
+      return teachers.map((t) => {
+        const advisory =
+          t.advisorySection && !t.advisorySection.deletedAt
+            ? `${GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ?? t.advisorySection.gradeLevel.type} · ${t.advisorySection.name}`
+            : null;
+
+        return {
+          id: t.id,
+          name:
+            t.fullName?.trim() ||
+            [t.firstName, t.lastName].filter(Boolean).join(" ").trim() ||
+            "Unnamed teacher",
+          advisoryLabel: advisory,
+          employmentType: t.teacherProfile?.employmentType ?? null,
+        };
+      });
     },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
-
-  return teachers.map((t) => {
-    const advisory =
-      t.advisorySection && !t.advisorySection.deletedAt
-        ? `${GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ?? t.advisorySection.gradeLevel.type} · ${t.advisorySection.name}`
-        : null;
-
-    return {
-      id: t.id,
-      name:
-        t.fullName?.trim() ||
-        [t.firstName, t.lastName].filter(Boolean).join(" ").trim() ||
-        "Unnamed teacher",
-      advisoryLabel: advisory,
-      employmentType: t.teacherProfile?.employmentType ?? null,
-    };
-  });
+    {
+      keyParts: ["aral-tutors-v1", schoolId],
+      tags: [schoolTeachers(schoolId)],
+      profile: "volatile",
+    }
+  );
 }
 
 /** True when this id is a teacher at this school who may hold a designation. */

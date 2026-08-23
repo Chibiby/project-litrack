@@ -421,7 +421,7 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
     },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -467,7 +467,7 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -523,7 +523,7 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
@@ -585,7 +585,7 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
     },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -687,7 +687,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     metadata: { schoolId: user.schoolId, teacherId: teacher.id },
   });
 
-  revalidateSchoolHeadTeachers();
+  revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };

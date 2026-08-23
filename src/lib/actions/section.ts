@@ -231,7 +231,7 @@ export async function deleteSection(formData: FormData): Promise<ActionResult> {
     });
 
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
-    revalidateSchoolHeadTeachers();
+    revalidateSchoolHeadTeachers(user.schoolId);
     revalidateSchoolDashboard(user.schoolId);
     // `teacherGradeScope` resolves a teacher's grades from the section they advise
     // (`deletedAt: null` + `adviser`), and this transaction breaks that both ways:

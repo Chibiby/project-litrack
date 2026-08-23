@@ -10,6 +10,7 @@ import { AralMonthlyReadingLevelPanel } from "@/components/aral/aral-monthly-rea
 import { AralReadingLevelSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
+import { getGradeSections } from "@/lib/cache/grade-sections";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { countMonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import {
@@ -197,14 +198,9 @@ async function AralMonthlyReadingLevelGrid({
   // repeating it.
   const [totalCount, gradeSections, records, shellGrades] = await Promise.all([
     prisma.learner.count({ where: learnerWhere }),
-    prisma.section.findMany({
-      where: {
-        gradeLevelId: grade.id,
-        schoolId: grade.schoolId,
-        deletedAt: null,
-      },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
+    getGradeSections({
+      schoolId: grade.schoolId,
+      gradeLevelIds: [grade.id],
     }),
     // Every matching learner's records, not just this page's: the grid keys its
     // rows by learner id, so the wider set costs one small query and no client
