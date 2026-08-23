@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { BULK_TX_OPTIONS, chunkRows, IMPORT_CHUNK_ROWS } from "@/lib/db/bulk-write";
+import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import {
   learnerCsvTemplate,
   mapCsvRowToImportCandidate,
@@ -295,7 +295,7 @@ export async function commitLearnerImport(input: {
           // Two statements per chunk instead of two per row. At the 500-row cap
           // above that is 10 round trips rather than 1000 — the difference
           // between finishing and dying on the 5 s default with `P2028`.
-          for (const chunk of chunkRows(learnerRows, IMPORT_CHUNK_ROWS)) {
+          for (const chunk of chunkRows(learnerRows, BULK_CHUNK_ROWS)) {
             const created = await tx.learner.createManyAndReturn({
               data: chunk,
               select: {

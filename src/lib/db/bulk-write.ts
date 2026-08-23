@@ -33,9 +33,6 @@ export const BULK_TX_OPTIONS = {
  */
 export const BULK_CHUNK_ROWS = 100;
 
-/** `Learner` is the widest bulk row; kept explicit so it can diverge if it grows. */
-export const IMPORT_CHUNK_ROWS = BULK_CHUNK_ROWS;
-
 /** Split `rows` into consecutive chunks of at most `size`. Never yields empty. */
 export function chunkRows<T>(rows: readonly T[], size: number): T[][] {
   const chunks: T[][] = [];
