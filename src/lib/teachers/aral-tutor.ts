@@ -53,8 +53,11 @@ export type AralTutorOption = {
  *
  * `schoolTeachers(schoolId)` is busted by `revalidateSchoolHeadTeachers`, which
  * every teacher approve / reject / clear / deactivate / remove, profile save and
- * advisory reassignment already calls. A section *rename* changes `advisoryLabel`
- * without reaching that helper, which is the one gap `volatile`'s 15 s covers.
+ * advisory reassignment already calls. A section *rename* also changes
+ * `advisoryLabel`, and it touches no `User` row at all, so it reaches none of
+ * those paths — `updateSection` therefore busts this tag directly via
+ * `revalidateSchoolTeachers`. Both halves of `advisoryLabel` are covered as a
+ * result: who advises what, and what the section is called.
  *
  * Returns `AralTutorOption[]`, which holds no `Date`: `advisorySection.deletedAt`
  * is selected but collapsed to a truthiness check below and never escapes, so

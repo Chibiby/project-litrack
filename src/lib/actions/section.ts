@@ -12,6 +12,7 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
   revalidateSchoolDashboard,
   revalidateSchoolHeadTeachers,
+  revalidateSchoolTeachers,
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -128,6 +129,12 @@ export async function updateSection(formData: FormData): Promise<ActionResult> {
 
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolDashboard(user.schoolId);
+    // `listAralTutors` builds each teacher's `advisoryLabel` from
+    // `advisorySection.name`, so a rename changes that cached list without
+    // touching a single `User` row. Nothing else here busts `schoolTeachers`,
+    // and every ARAL tutor picker would keep the old section name for the
+    // entry's remaining TTL.
+    revalidateSchoolTeachers(user.schoolId);
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
