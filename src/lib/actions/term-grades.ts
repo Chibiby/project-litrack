@@ -1,10 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import {
@@ -160,55 +162,98 @@ export async function saveTermGrades(
     return { ok: false, error: NOT_IN_ADVISORY_MESSAGE };
   }
 
-  const toSave: (TermGradeEntry & { score: number })[] = [];
-  const toClear: TermGradeEntry[] = [];
+  // Split, then dedupe WITHIN each side on the conflict tuple. Deduping across
+  // the combined `entries` array would let a clear win over an encoded score and
+  // invert the deliberate ordering decision below.
+  const saveByTuple = new Map<string, TermGradeEntry & { score: number }>();
+  const clearByTuple = new Map<string, TermGradeEntry>();
   for (const entry of parsed.data.entries) {
-    if (entry.score === null) toClear.push(entry);
-    else toSave.push({ ...entry, score: entry.score });
+    const tuple = `${entry.learnerId}:${schoolYear.id}:${parsed.data.term}:${entry.subject}`;
+    if (entry.score === null) clearByTuple.set(tuple, entry);
+    else saveByTuple.set(tuple, { ...entry, score: entry.score });
   }
+  const toSave = [...saveByTuple.values()];
+  const toClear = [...clearByTuple.values()];
 
-  await prisma.$transaction([
-    // Deletions run first so that, in the impossible-but-cheap case of a cell
-    // arriving twice, the encoded score wins over the clear.
-    ...(toClear.length
-      ? [
-          prisma.termGrade.deleteMany({
-            where: {
-              schoolYearId: schoolYear.id,
-              term: parsed.data.term,
-              OR: toClear.map((e) => ({
-                learnerId: e.learnerId,
-                subject: e.subject,
-              })),
-            },
-          }),
-        ]
-      : []),
-    ...toSave.map((entry) =>
-      prisma.termGrade.upsert({
-        where: {
-          learnerId_schoolYearId_term_subject: {
-            learnerId: entry.learnerId,
+  const now = new Date();
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Deletions run first so that, in the impossible-but-cheap case of a cell
+      // arriving twice, the encoded score wins over the clear. Already one
+      // set-based statement, so it is left as Prisma rather than rewritten.
+      if (toClear.length > 0) {
+        await tx.termGrade.deleteMany({
+          where: {
             schoolYearId: schoolYear.id,
             term: parsed.data.term,
-            subject: entry.subject,
+            OR: toClear.map((e) => ({
+              learnerId: e.learnerId,
+              subject: e.subject,
+            })),
           },
-        },
-        create: {
-          learnerId: entry.learnerId,
-          schoolYearId: schoolYear.id,
-          term: parsed.data.term,
-          subject: entry.subject,
-          score: entry.score,
-          recordedById: user.id,
-        },
-        update: {
-          score: entry.score,
-          recordedById: user.id,
-        },
-      })
-    ),
-  ]);
+        });
+      }
+
+      for (const chunk of chunkRows(toSave, BULK_CHUNK_ROWS)) {
+        // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
+        // and `@updatedAt` are CLIENT-side and neither column has a database
+        // default. `updatedAt` is bumped in DO UPDATE as well — leaving it out
+        // there freezes the column at first-insert time with no error at all.
+        const values = Prisma.join(
+          chunk.map(
+            (e) => Prisma.sql`(
+              ${randomUUID()}::text,
+              ${e.learnerId}::text,
+              ${schoolYear.id}::text,
+              ${parsed.data.term}::"TermPeriod",
+              ${e.subject}::"LearningArea",
+              ${e.score}::integer,
+              ${user.id}::text,
+              ${now}::timestamp(3)
+            )`
+          )
+        );
+
+        // The tenant predicate is inside the statement. `TermGrade` carries no
+        // `schoolId` of its own, so without this join the roster `findMany` above
+        // would be the entire tenant boundary for a raw write. The `RETURNING`
+        // count check below turns any excluded row into a rollback rather than a
+        // partial commit.
+        const written = await tx.$queryRaw<{ id: string }[]>`
+          INSERT INTO "TermGrade" (
+            "id", "learnerId", "schoolYearId", "term", "subject", "score",
+            "recordedById", "updatedAt"
+          )
+          SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."subject",
+                 v."score", v."recordedById", v."updatedAt"
+          FROM (VALUES ${values}) AS v (
+            "id", "learnerId", "schoolYearId", "term", "subject", "score",
+            "recordedById", "updatedAt"
+          )
+          JOIN "Learner" l
+            ON l."id" = v."learnerId"
+           AND l."schoolId" = ${user.schoolId}
+           AND l."gradeLevelId" = ${advisory.gradeLevelId}
+           AND l."sectionId" = ${advisory.sectionId}
+           AND l."deletedAt" IS NULL
+           AND l."archivedAt" IS NULL
+          ON CONFLICT ("learnerId", "schoolYearId", "term", "subject") DO UPDATE SET
+            "score" = EXCLUDED."score",
+            "recordedById" = EXCLUDED."recordedById",
+            "updatedAt" = EXCLUDED."updatedAt"
+          RETURNING "id"
+        `;
+        if (written.length !== chunk.length) {
+          throw new Error(
+            `term-grades bulk write touched ${written.length} of ${chunk.length} rows`
+          );
+        }
+      }
+    }, BULK_TX_OPTIONS);
+  } catch (err) {
+    console.error("[saveTermGrades] transaction failed:", err);
+    return { ok: false, error: "Could not save the grade sheet. Please try again." };
+  }
 
   await writeAudit({
     userId: user.id,

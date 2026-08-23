@@ -176,13 +176,87 @@ const schoolYearFindFirst = vi.fn(
 );
 
 /**
- * The write surface. `upsert`/`deleteMany` are builders in Prisma's array-form
- * transaction — the action calls them to construct operations, so "wrote nothing"
- * means these were never even called, not merely that the transaction was empty.
+ * The write surface.
+ *
+ * Encoded cells are no longer written through `prisma.termGrade.upsert`. They go
+ * out as ONE multi-row `INSERT … ON CONFLICT DO UPDATE` per chunk, issued with
+ * `tx.$queryRaw`, because a per-row upsert loop could not finish a full sheet
+ * inside a transaction timeout. So "wrote nothing" now means: the raw statement
+ * was never issued, `deleteMany` was never called, and the transaction never
+ * opened. Asserting on `upsert` would be asserting on a builder the action no
+ * longer has — a dead assertion that reads as coverage.
+ *
+ * `queryRaw` below is not a stub. It models the tenant JOIN in the real
+ * statement: a row comes back only if the learner it names satisfies the school,
+ * grade and section ids THAT WERE ACTUALLY BOUND into the SQL. That is what makes
+ * this fake fail in the right direction — delete `l."schoolId" = $n` from the
+ * action and `SCHOOL_ID` stops being bound, no rows come back, the action's own
+ * `RETURNING` count check throws, and the happy path goes red. Once the Prisma
+ * `where` object is gone, the bound-parameter list is the only witness that a
+ * tenant predicate held.
  */
-const termGradeUpsert = vi.fn((args: unknown) => ({ op: "upsert", args }));
-const termGradeDeleteMany = vi.fn((args: unknown) => ({ op: "deleteMany", args }));
-const transaction = vi.fn(async (ops: unknown[]) => ops);
+type RawCall = { sql: string; params: unknown[] };
+let rawWrites: RawCall[];
+
+/** Prisma nests `Prisma.sql`/`Prisma.join` fragments; bound params are the leaves. */
+function flattenBoundParams(values: readonly unknown[]): unknown[] {
+  const out: unknown[] = [];
+  for (const v of values) {
+    const nested = (v as { values?: unknown[] } | null)?.values;
+    if (v && typeof v === "object" && Array.isArray(nested)) {
+      out.push(...flattenBoundParams(nested));
+    } else {
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+const queryRaw = vi.fn(
+  async (strings: readonly string[], ...values: unknown[]) => {
+    const params = flattenBoundParams(values);
+    rawWrites.push({ sql: strings.join(" ? "), params });
+
+    // One returned row per (learner, subject) pair whose learner clears the bound
+    // predicate. `deletedAt`/`archivedAt IS NULL` are literal SQL rather than
+    // binds, so they are read off the row directly.
+    return params
+      .filter(
+        (p): p is string =>
+          typeof p === "string" && learners.some((l) => l.id === p)
+      )
+      .filter((id) => {
+        const row = learners.find((l) => l.id === id)!;
+        return (
+          params.includes(row.schoolId) &&
+          params.includes(row.gradeLevelId) &&
+          (row.sectionId === null || params.includes(row.sectionId)) &&
+          row.deletedAt === null &&
+          row.archivedAt === null
+        );
+      })
+      .map((id) => ({ id: `termgrade-${id}` }));
+  }
+);
+
+const termGradeDeleteMany = vi.fn(async (args: unknown) => ({ count: 1, args }));
+
+/**
+ * The save path is an INTERACTIVE transaction now (the raw statement has to be
+ * awaited, and the delete has to be ordered before it), so the callback is run
+ * against a `tx` client wired to the same mocks.
+ */
+const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
+  if (typeof arg === "function") {
+    return (arg as (tx: unknown) => unknown)({
+      $queryRaw: (...a: unknown[]) => queryRaw(...(a as [never])),
+      termGrade: {
+        deleteMany: (...a: unknown[]) => termGradeDeleteMany(...(a as [never])),
+      },
+    });
+  }
+  return arg;
+});
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -200,10 +274,6 @@ vi.mock("@/lib/prisma", () => ({
     },
     schoolYear: {
       findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [never])),
-    },
-    termGrade: {
-      upsert: (...args: unknown[]) => termGradeUpsert(...(args as [never])),
-      deleteMany: (...args: unknown[]) => termGradeDeleteMany(...(args as [never])),
     },
   },
 }));
@@ -246,14 +316,30 @@ vi.mock("@/lib/cache/revalidate", () => ({
 // Imported after the mock factories above are registered.
 const { saveTermGrades } = await import("@/lib/actions/term-grades");
 
-/** Every write path the action can take, for the "wrote nothing" assertions. */
+/**
+ * Every write path the action can take, for the "wrote nothing" assertions.
+ *
+ * `queryRaw` replaced `termGrade.upsert` here when the save became set-based. The
+ * old `upsert` assertion is deliberately GONE rather than left behind: the action
+ * cannot call that builder any more, so it could never fail again, and 20 refusal
+ * tests would have kept passing while the action wrote every row.
+ */
 function expectNoWrites() {
-  expect(termGradeUpsert).not.toHaveBeenCalled();
+  expect(queryRaw).not.toHaveBeenCalled();
+  expect(rawWrites).toHaveLength(0);
   expect(termGradeDeleteMany).not.toHaveBeenCalled();
   expect(transaction).not.toHaveBeenCalled();
   expect(writeAudit).not.toHaveBeenCalled();
   expect(revalidatePath).not.toHaveBeenCalled();
   expect(revalidateLearnerScoped).not.toHaveBeenCalled();
+}
+
+/** A2-2: the bound-parameter list is the only tenancy witness a raw write has. */
+function expectNoForeignParamsBound(secrets: string[]) {
+  const serialized = JSON.stringify(rawWrites);
+  for (const secret of secrets) {
+    expect(serialized).not.toContain(secret);
+  }
 }
 
 type Entry = { learnerId: string; subject: string; score: number | null };
@@ -303,6 +389,7 @@ beforeEach(() => {
     advisorySectionId: SECTION_ID,
   };
   learnerFindManyArgs = [];
+  rawWrites = [];
 });
 
 afterEach(() => {
@@ -343,7 +430,9 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
     expect(res).toEqual({ ok: true, data: { saved: 2, cleared: 1 } });
     expect(requireSchoolUser).toHaveBeenCalledWith("TEACHER");
     expect(transaction).toHaveBeenCalledTimes(1);
-    expect(termGradeUpsert).toHaveBeenCalledTimes(2);
+    // ONE statement for both encoded cells, not one per cell.
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(rawWrites).toHaveLength(1);
 
     // A cleared cell is a DELETED row, not a null write: `TermGrade.score` is a
     // non-nullable Int, so absence of a row is the only "not encoded".
@@ -356,27 +445,31 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
       },
     });
 
+    const { sql, params } = rawWrites[0];
+    // The conflict target IS the unique constraint, and `updatedAt` is bumped in
+    // the DO UPDATE branch. Prisma's `@updatedAt` is client-side and there is no
+    // database trigger, so omitting that clause would freeze the column at
+    // first-insert time forever — silently, with nothing to fail.
+    expect(sql).toContain(
+      'ON CONFLICT ("learnerId", "schoolYearId", "term", "subject") DO UPDATE'
+    );
+    expect(sql).toContain('"updatedAt" = EXCLUDED."updatedAt"');
     // The school year is part of the key: a term enum carries no year, so without
     // it next year's Second Term English would collide with this one.
-    expect(termGradeUpsert.mock.calls[0][0]).toMatchObject({
-      where: {
-        learnerId_schoolYearId_term_subject: {
-          learnerId: "learner-a",
-          schoolYearId: SCHOOL_YEAR_ID,
-          term: OPEN_TERM,
-          subject: "ENGLISH",
-        },
-      },
-      create: {
-        learnerId: "learner-a",
-        schoolYearId: SCHOOL_YEAR_ID,
-        term: OPEN_TERM,
-        subject: "ENGLISH",
-        score: 87,
-        recordedById: TEACHER_ID,
-      },
-      update: { score: 87, recordedById: TEACHER_ID },
-    });
+    expect(params).toContain(SCHOOL_YEAR_ID);
+    // Tenancy: the predicate is bound, not interpolated, and it is the tenant.
+    expect(sql).toContain('l."schoolId" =');
+    expect(sql).toContain('l."deletedAt" IS NULL');
+    expect(params).toContain(SCHOOL_ID);
+    expect(params).toContain(SECTION_ID);
+    for (const id of ["learner-a", "learner-b"]) {
+      expect(params).toContain(id);
+    }
+    // Scores are bound values, and `recordedById` is the caller — never a client
+    // -supplied id.
+    expect(params).toContain(87);
+    expect(params).toContain(93);
+    expect(params).toContain(TEACHER_ID);
 
     // Placement, counts and learner ids — and an EXACT shape, because that is the
     // only assertion a newly added `scores` key cannot slip past.
@@ -577,6 +670,45 @@ describe("saveTermGrades — refusal 3: a cross-tenant learner id", () => {
     }
   });
 
+  it("never binds a foreign id into the write statement", async () => {
+    // A2-2 applied to the write path. Written against `rawWrites` rather than
+    // against the absence of a call, so it keeps its meaning if the action is ever
+    // changed to build its SQL before the roster check.
+    learners.push(foreign());
+
+    await post({
+      entries: [
+        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
+        { learnerId: "learner-other-school", subject: "MATHEMATICS", score: 93 },
+      ],
+    });
+
+    expectNoForeignParamsBound([
+      OTHER_SCHOOL_ID,
+      OTHER_SECTION_ID,
+      "learner-other-school",
+    ]);
+  });
+
+  it("binds only this tenant's ids on a save that really happens", async () => {
+    // The other half of the property, and the reason the test above cannot pass
+    // vacuously: here the statement IS issued, and it still carries no foreign id.
+    learners.push(foreign(), learner({ id: "learner-near", sectionId: OTHER_SECTION_ID }));
+
+    const res = await post({
+      entries: [{ learnerId: "learner-a", subject: "ENGLISH", score: 87 }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(rawWrites).toHaveLength(1);
+    expectNoForeignParamsBound([
+      OTHER_SCHOOL_ID,
+      OTHER_SECTION_ID,
+      "learner-other-school",
+      "learner-near",
+    ]);
+  });
+
   it("writes NOTHING for the valid half of a cross-tenant batch", async () => {
     // The worst shippable bug in this repo would be a partial commit here: one of
     // this teacher's own learners saved, the foreign id merely skipped, and no
@@ -760,5 +892,120 @@ describe("saveTermGrades — the two that cost nothing extra", () => {
 
     expect(res).toEqual({ ok: true, data: { saved: 3, cleared: 0 } });
     expect(learnerFindManyArgs[0].where.id).toEqual({ in: ["learner-a"] });
+  });
+});
+
+describe("saveTermGrades — the set-based write", () => {
+  it("dedupes a repeated conflict tuple instead of hitting Postgres 21000", async () => {
+    // The serial array form made a duplicated cell a harmless last-write-wins. One
+    // multi-row `ON CONFLICT DO UPDATE` raises 21000 ("cannot affect row a second
+    // time") and aborts the WHOLE save, so the tuple must be deduped before the
+    // statement is built. Last one wins.
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
+        { learnerId: "learner-a", subject: "ENGLISH", score: 93 },
+      ],
+    });
+
+    expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
+    expect(rawWrites).toHaveLength(1);
+    // The superseded score never reaches the database.
+    expect(rawWrites[0].params).toContain(93);
+    expect(rawWrites[0].params).not.toContain(87);
+  });
+
+  it("dedupes a repeated cleared tuple too", async () => {
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", subject: "ENGLISH", score: null },
+        { learnerId: "learner-a", subject: "ENGLISH", score: null },
+      ],
+    });
+
+    expect(res).toEqual({ ok: true, data: { saved: 0, cleared: 1 } });
+    expect(termGradeDeleteMany.mock.calls[0][0]).toEqual({
+      where: {
+        schoolYearId: SCHOOL_YEAR_ID,
+        term: OPEN_TERM,
+        OR: [{ learnerId: "learner-a", subject: "ENGLISH" }],
+      },
+    });
+    // Nothing encoded, so no INSERT is issued at all.
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("lets an encoded score win over a clear of the same tuple", async () => {
+    // The documented precedence rule, preserved through the rewrite: deletions are
+    // ordered BEFORE the insert, and the two sides are deduped separately. Deduping
+    // across the combined array would invert this.
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", subject: "ENGLISH", score: null },
+        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
+      ],
+    });
+
+    expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 1 } });
+    expect(termGradeDeleteMany).toHaveBeenCalledTimes(1);
+    expect(rawWrites[0].params).toContain(87);
+  });
+
+  it("accepts a full sheet — 100 learners x 8 subjects — in one transaction", async () => {
+    // The payload the cap is sized for. It must be ACCEPTED, and it must not
+    // degenerate back into a statement per cell.
+    learners = Array.from({ length: 100 }, (_, i) =>
+      learner({ id: `learner-${i}` })
+    );
+    const subjects = [
+      "ENGLISH",
+      "FILIPINO",
+      "MATHEMATICS",
+      "SCIENCE",
+      "ARALING_PANLIPUNAN",
+      "EDUKASYON_SA_PAGPAPAKATAO",
+      "MAPEH",
+      "TLE",
+    ];
+    const entries = learners.flatMap((l) =>
+      subjects.map((subject) => ({ learnerId: l.id, subject, score: 87 }))
+    );
+    expect(entries).toHaveLength(800);
+
+    const res = await post({ entries });
+
+    expect(res).toEqual({ ok: true, data: { saved: 800, cleared: 0 } });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    // 800 rows at the 100-row chunk size: 8 statements, not 800.
+    expect(queryRaw).toHaveBeenCalledTimes(8);
+  });
+
+  it("passes an explicit timeout and maxWait rather than inheriting 5 s / 2 s", async () => {
+    // The whole point of the task: the default 5 s budget cannot carry a full
+    // sheet across a 220 ms link.
+    await post();
+
+    const options = transaction.mock.calls[0][1] as {
+      timeout: number;
+      maxWait: number;
+    };
+    expect(options.timeout).toBeGreaterThan(5_000);
+    expect(options.maxWait).toBeGreaterThan(2_000);
+  });
+
+  it("rejects more than 1000 entries with the house error shape", async () => {
+    const entries = Array.from({ length: 1001 }, (_, i) => ({
+      learnerId: `learner-${i}`,
+      subject: "ENGLISH",
+      score: 87,
+    }));
+
+    const res = await post({ entries });
+
+    expect(res.ok).toBe(false);
+    expect(typeof (res as { error: string }).error).toBe("string");
+    expectNoWrites();
+    // Refused by Zod, before the roster was read.
+    expect(learnerFindMany).not.toHaveBeenCalled();
   });
 });
