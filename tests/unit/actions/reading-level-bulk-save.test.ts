@@ -90,13 +90,33 @@ const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
   return arg;
 });
 
+/**
+ * A learner that really exists, in a school this teacher is not in. Its `teacherId`
+ * is deliberately this teacher's, so the ONLY thing that can exclude it is the
+ * `schoolId` scope — which is what makes the refusal test below a live probe of
+ * tenancy rather than of teacher assignment.
+ */
+const CROSS_TENANT_LEARNER = "learner-other-school";
+
+/**
+ * Two tenants in one table. Modelled so an UNSCOPED query returns the cross-tenant
+ * row, exactly as Postgres would: drop `schoolId: user.schoolId` from the action and
+ * the row comes back, the save proceeds, and the refusal test goes red.
+ */
 const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
-  if (args.where.schoolId !== SCHOOL_ID) return [];
   const requested = (args.where.id as { in: string[] }).in;
-  return requested
-    .filter((id) => learnerIds.includes(id))
-    .map((id) => ({
-      id,
+  const table = [
+    ...learnerIds.map((id) => ({ id, schoolId: SCHOOL_ID })),
+    { id: CROSS_TENANT_LEARNER, schoolId: OTHER_SCHOOL_ID },
+  ];
+  return table
+    .filter(
+      (r) =>
+        requested.includes(r.id) &&
+        (args.where.schoolId === undefined || r.schoolId === args.where.schoolId)
+    )
+    .map((r) => ({
+      id: r.id,
       gradeLevelId: GRADE_ID,
       teacherId: TEACHER_ID,
       aralTeacherId: null,
@@ -244,21 +264,28 @@ describe("bulkRecordMonthlyReadingLevel — tenancy", () => {
     expect(rawCalls[0].sql).toContain('l."isAralLearner" = TRUE');
   });
 
-  it("refuses a learner the scoped roster query did not return", async () => {
-    const res = await post([entry("learner-other-school")]);
+  it("refuses a learner that exists in another school", async () => {
+    // A live tenancy probe, not a decorative one. CROSS_TENANT_LEARNER exists in the
+    // fake table under OTHER_SCHOOL_ID with this teacher's own teacherId, so only
+    // the `schoolId: user.schoolId` scope can exclude it. Drop that scope from the
+    // action and the roster query returns the row, the length check passes, and this
+    // goes red on `queryRaw` having been called.
+    const res = await post([entry(CROSS_TENANT_LEARNER)]);
 
     expect(res.ok).toBe(false);
     expect(queryRaw).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
-    // The refusal names nothing that could act as an existence oracle.
-    const serialized = JSON.stringify(res);
-    for (const secret of [OTHER_SCHOOL_ID, "learner-other-school"]) {
-      expect(serialized).not.toContain(secret);
-    }
+    // The scoped query was still asked with the caller's OWN tenant, never the
+    // learner's — nothing in the request can widen it.
+    expect(learnerFindMany.mock.calls[0][0].where.schoolId).toBe(SCHOOL_ID);
+    // And the refusal cannot serve as an existence oracle: a learner in another
+    // school is indistinguishable from one that does not exist at all.
+    const missing = await post([entry("learner-does-not-exist")]);
+    expect(JSON.stringify(missing)).toBe(JSON.stringify(res));
   });
 
   it("writes nothing for the valid half of a mixed batch", async () => {
-    const res = await post([entry("learner-a"), entry("learner-other-school")]);
+    const res = await post([entry("learner-a"), entry(CROSS_TENANT_LEARNER)]);
 
     expect(res.ok).toBe(false);
     expect(queryRaw).not.toHaveBeenCalled();

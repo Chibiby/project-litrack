@@ -213,13 +213,32 @@ const gradeFindFirst = vi.fn(async (args: { where: Record<string, unknown> }) =>
 
 const dayMetaFindMany = vi.fn(async () => [] as { date: Date }[]);
 
+/**
+ * A learner that really exists, in a school this teacher is not in. Its `teacherId`
+ * is deliberately this teacher's and its grade is this grade, so the ONLY thing that
+ * can exclude it is the `schoolId` scope.
+ */
+const CROSS_TENANT_LEARNER = "learner-not-mine";
+
+/**
+ * Two tenants in one table, modelled so an UNSCOPED query returns the cross-tenant
+ * row exactly as Postgres would. Drop `schoolId: user.schoolId` from the action and
+ * the row comes back, the length check passes, and the refusal test goes red.
+ */
 const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
   const requested = (args.where.id as { in: string[] }).in;
-  if (args.where.schoolId !== SCHOOL_ID) return [];
-  return requested
-    .filter((id) => learnerIds.includes(id))
-    .map((id) => ({
-      id,
+  const table = [
+    ...learnerIds.map((id) => ({ id, schoolId: SCHOOL_ID })),
+    { id: CROSS_TENANT_LEARNER, schoolId: OTHER_SCHOOL_ID },
+  ];
+  return table
+    .filter(
+      (r) =>
+        requested.includes(r.id) &&
+        (args.where.schoolId === undefined || r.schoolId === args.where.schoolId)
+    )
+    .map((r) => ({
+      id: r.id,
       gradeLevelId: GRADE_ID,
       teacherId: TEACHER_ID,
       aralTeacherId: null,
@@ -508,17 +527,28 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
       expect(call.sql).toContain('l."schoolId" =');
       expect(call.sql).toContain('l."deletedAt" IS NULL');
     }
-    expect(JSON.stringify(rawCalls)).not.toContain(OTHER_SCHOOL_ID);
+    // No `not.toContain(OTHER_SCHOOL_ID)` here: the statements can only ever bind
+    // `user.schoolId`, so that assertion could not fail and said nothing. The live
+    // cross-tenant probe is the next test.
   });
 
-  it("refuses a learner the roster query did not return, writing nothing", async () => {
+  it("refuses a learner that exists in another school, writing nothing", async () => {
+    // CROSS_TENANT_LEARNER exists in the fake table under OTHER_SCHOOL_ID, with this
+    // teacher's own teacherId and this grade — only `schoolId: user.schoolId` on the
+    // roster query excludes it. Remove that and this goes red.
     const res = await post({
-      cells: [{ learnerId: "learner-not-mine", date: TUESDAY, status: "PRESENT" }],
+      cells: [{ learnerId: CROSS_TENANT_LEARNER, date: TUESDAY, status: "PRESENT" }],
     });
 
     expect(res.ok).toBe(false);
     expect(queryRaw).not.toHaveBeenCalled();
     expect(transaction).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
+    expect(learnerFindMany.mock.calls[0][0].where.schoolId).toBe(SCHOOL_ID);
+    // Indistinguishable from a learner that does not exist at all — no oracle.
+    const missing = await post({
+      cells: [{ learnerId: "learner-nowhere", date: TUESDAY, status: "PRESENT" }],
+    });
+    expect(JSON.stringify(missing)).toBe(JSON.stringify(res));
   });
 });
