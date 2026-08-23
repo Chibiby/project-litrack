@@ -901,7 +901,7 @@ model AttendanceDayMeta {
 model ReadingLevelRecord {
   id                        String                           @id @default(uuid())
   learnerId                 String
-  weekStart                 DateTime                         @db.Date // Monday of the recorded week
+  weekStart                 DateTime                         @db.Date // Anchor of the recorded assessment period. The live monthly writer stores the 1st of the month; older rows from the retired weekly grid hold a Monday.
   englishProfile            ReadingProfile
   filipinoProfile           ReadingProfile
   wordRecognitionLevel      WeeklyWordRecognitionLevel?

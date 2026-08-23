@@ -8,6 +8,7 @@ import {
 } from "@/lib/constants/enum-labels";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { formatLocalDateKey } from "@/lib/date-keys";
+import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
@@ -269,12 +270,11 @@ export async function getSchoolHeadCharts(schoolId: string) {
   return cachedQuery(
     async () => {
       const since7 = daysAgo(6);
-      // `readingTrend` below renders `slice(-6)` — the 6 most recent recorded
-      // weeks. 12 weeks of headroom keeps all 6 points for a school that skips
-      // weeks, while bounding the scan to a fixed window instead of the whole
-      // history. Week-unaligned on purpose: `weekStart` is one row per week, so
-      // a mid-week floor can only drop a whole week, never clip one.
-      const since12w = daysAgo(84);
+      // `weekStart` holds one anchor per assessment period, not per week — the
+      // live writer stores the 1st of the month (`src/lib/actions/reading-level.ts:132-135`).
+      // `take: 6` below is what makes the chart correct at any cadence; this
+      // floor only caps how much history the scan can reach.
+      const readingScanFloor = addMonths(daysAgo(0), -17);
 
       const [attendanceGrouped, learnersWithProfiles, readingProgress] =
         await Promise.all([
@@ -296,10 +296,11 @@ export async function getSchoolHeadCharts(schoolId: string) {
             by: ["weekStart"],
             where: {
               learner: { schoolId, deletedAt: null },
-              weekStart: { gte: since12w },
+              weekStart: { gte: readingScanFloor },
             },
             _count: { _all: true },
-            orderBy: { weekStart: "asc" },
+            orderBy: { weekStart: "desc" },
+            take: 6,
           }),
         ]);
 
@@ -340,10 +341,14 @@ export async function getSchoolHeadCharts(schoolId: string) {
         READING_PROFILE_LABELS
       ).map((k) => ({ name: labelProfile(k), value: filMap.get(k) ?? 0 }));
 
-      const readingTrend: NamedCount[] = readingProgress.slice(-6).map((r) => ({
-        name: r.weekStart.toISOString().slice(0, 10),
-        value: r._count._all,
-      }));
+      // Queried newest-first so `take: 6` keeps the 6 most recent periods;
+      // reversed on a copy so the series still runs oldest to newest.
+      const readingTrend: NamedCount[] = [...readingProgress]
+        .reverse()
+        .map((r) => ({
+          name: r.weekStart.toISOString().slice(0, 10),
+          value: r._count._all,
+        }));
 
       return {
         attendanceTrend,
