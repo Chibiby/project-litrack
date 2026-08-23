@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { schoolDashboard } from "@/lib/cache/tags";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 
 /**
@@ -22,6 +23,7 @@ import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
  */
 
 const SCHOOL_ID = "school-malandag";
+const OTHER_SCHOOL_ID = "school-kiblawan";
 
 /**
  * Built with the local `Date` constructor and asserted with local calendar
@@ -50,17 +52,35 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+type CacheCall = {
+  keyParts: string[];
+  options: { tags: string[]; revalidate?: number | false };
+};
+
+/** Every `unstable_cache(...)` registration, in call order. */
+let cacheCalls: CacheCall[] = [];
+
 // `cachedQuery` calls `unstable_cache(fn, keyParts, opts)()`. Returning `fn`
 // unwrapped runs the read every time while still evaluating `keyParts`, so a
-// throwing key part would surface here.
+// throwing key part would surface here. The key parts are recorded rather than
+// discarded because the tenant discriminator lives in them and nowhere else —
+// the same recording mock `cache-grade-sections.test.ts` uses.
 vi.mock("next/cache", () => ({
-  unstable_cache: (fn: () => unknown) => fn,
+  unstable_cache: (
+    fn: () => unknown,
+    keyParts: string[],
+    options: { tags: string[]; revalidate?: number | false }
+  ) => {
+    cacheCalls.push({ keyParts, options });
+    return fn;
+  },
 }));
 
 const { getActiveSchoolYear } = await import("@/lib/cache/school-year");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cacheCalls = [];
   row = { id: "sy-1", label: "2026-2027", startDate: START_DATE };
 });
 
@@ -88,6 +108,30 @@ describe("getActiveSchoolYear", () => {
       2026, 5, 1,
     ]);
     expect(formatLocalDateKey(parsed)).toBe(START_KEY);
+  });
+
+  it("keeps the schoolId in the key and the tag, so two schools never share an entry", async () => {
+    await getActiveSchoolYear(SCHOOL_ID);
+    await getActiveSchoolYear(OTHER_SCHOOL_ID);
+
+    // Constraint 4, asserted on the key itself. The `where` assertion in the
+    // first case proves the *query* is scoped; only this proves the *entry* is.
+    // Drop `schoolId` from `keyParts` and both schools read one cached year —
+    // the cross-tenant leak, with a green suite and no visible symptom until two
+    // tenants are live. Pinned as a whole array so reordering fails it too.
+    expect(cacheCalls).toHaveLength(2);
+    expect(cacheCalls[0].keyParts).toEqual(["active-school-year-v1", SCHOOL_ID]);
+    expect(cacheCalls[1].keyParts).toEqual([
+      "active-school-year-v1",
+      OTHER_SCHOOL_ID,
+    ]);
+    expect(cacheCalls[0].keyParts).not.toEqual(cacheCalls[1].keyParts);
+
+    // And each entry must be bustable without touching the other.
+    expect(cacheCalls[0].options.tags).toEqual([schoolDashboard(SCHOOL_ID)]);
+    expect(cacheCalls[1].options.tags).toEqual([
+      schoolDashboard(OTHER_SCHOOL_ID),
+    ]);
   });
 
   it("lets no Date cross the cache boundary", async () => {
