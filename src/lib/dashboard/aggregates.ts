@@ -134,7 +134,13 @@ export async function getAdminActivitySeries() {
       };
     },
     {
-      keyParts: ["admin-activity-series-v2"],
+      keyParts: [
+        "admin-activity-series-v2",
+        // The 7-day window above is `daysAgo(6)`; this is derived from the same
+        // helper, so the key can never name a different day than the window it
+        // caches. Admin-scoped read — no tenant discriminator exists to carry.
+        formatLocalDateKey(daysAgo(0)),
+      ],
       tags: [adminDashboard],
       profile: "aggregate",
     }
@@ -263,6 +269,12 @@ export async function getSchoolHeadCharts(schoolId: string) {
   return cachedQuery(
     async () => {
       const since7 = daysAgo(6);
+      // `readingTrend` below renders `slice(-6)` — the 6 most recent recorded
+      // weeks. 12 weeks of headroom keeps all 6 points for a school that skips
+      // weeks, while bounding the scan to a fixed window instead of the whole
+      // history. Week-unaligned on purpose: `weekStart` is one row per week, so
+      // a mid-week floor can only drop a whole week, never clip one.
+      const since12w = daysAgo(84);
 
       const [attendanceGrouped, learnersWithProfiles, readingProgress] =
         await Promise.all([
@@ -282,7 +294,10 @@ export async function getSchoolHeadCharts(schoolId: string) {
           }),
           prisma.readingLevelRecord.groupBy({
             by: ["weekStart"],
-            where: { learner: { schoolId, deletedAt: null } },
+            where: {
+              learner: { schoolId, deletedAt: null },
+              weekStart: { gte: since12w },
+            },
             _count: { _all: true },
             orderBy: { weekStart: "asc" },
           }),
@@ -338,7 +353,13 @@ export async function getSchoolHeadCharts(schoolId: string) {
       };
     },
     {
-      keyParts: ["school-head-charts-v2", schoolId],
+      keyParts: [
+        "school-head-charts-v2",
+        schoolId,
+        // The windows above are derived from `daysAgo`; so is this, so the key
+        // can never name a different day than the window it caches.
+        formatLocalDateKey(daysAgo(0)),
+      ],
       tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }
