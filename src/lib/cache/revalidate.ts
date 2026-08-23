@@ -9,13 +9,16 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
  *
  * `revalidatePath(p)` with no `type` emits one softTag that matches only a
  * render whose concrete URL is exactly `p`, which is why there are four calls
- * for four pathnames rather than one for the folder. Those four still reach no
- * server cache: no page under `src/app/school-head/(app)/teachers/` reads
- * through `cachedQuery`, and all four are `force-dynamic`, so none of them has
- * a Data Cache or Full Route Cache entry for those softTags to hit. The tab
- * badges are fresh because the pages re-query per request, and the client
- * Router Cache is cleared wholesale by any server action regardless of this
- * call.
+ * for four pathnames rather than one for the folder. All four of those pages are
+ * `force-dynamic`, so none of them has a Full Route Cache entry for those
+ * softTags to hit. They are not free of the Data Cache, though: all four call
+ * `resolveSchoolHeadView`, which on a Super Admin drill-down (`?schoolId=`)
+ * awaits `getSchoolName` (`src/lib/cache/school.ts`) — a `cachedQuery` read — so
+ * that path does create a `school-name:<id>` entry. Do not rely on these
+ * `revalidatePath` calls to clear it; the tag `schoolName(schoolId)` is its named
+ * bust, and `revalidateSchoolDashboard` is what emits that. The tab badges are
+ * fresh because the pages re-query per request, and the client Router Cache is
+ * cleared wholesale by any server action regardless of this call.
  *
  * What does work now is the tag: `schoolTeachers(schoolId)` busts the Data
  * Cache entries holding this school's teacher list — `listAralTutors`, read by
