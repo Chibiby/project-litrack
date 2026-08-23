@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { BULK_TX_OPTIONS, chunkRows, IMPORT_CHUNK_ROWS } from "@/lib/db/bulk-write";
 import {
   learnerCsvTemplate,
   mapCsvRowToImportCandidate,
@@ -251,63 +253,93 @@ export async function commitLearnerImport(input: {
     where: { schoolId: user.schoolId, isActive: true },
   });
 
+  // One row per learner, built before the transaction opens so no mapping work
+  // happens while a Postgres transaction is held open.
+  const learnerRows: Prisma.LearnerCreateManyInput[] = toInsert.map((data) => ({
+    schoolId: user.schoolId,
+    gradeLevelId: input.gradeLevelId,
+    teacherId: user.id,
+    // Unknown / blank section names → null; row still imports.
+    sectionId: resolveSectionIdByName(data.sectionName, gradeSections).sectionId,
+    firstName: data.firstName,
+    middleName: data.middleName,
+    lastName: data.lastName,
+    fullName: buildFullName(data.firstName, data.middleName, data.lastName),
+    age: data.age,
+    gender: data.gender,
+    ethnicity: data.ethnicity ?? null,
+    ethnicityOther: data.ethnicity === "OTHER" ? (data.ethnicityOther ?? null) : null,
+    englishReadingProfile: data.englishReadingProfile,
+    englishFrustrationSubtypes: data.englishFrustrationSubtypes,
+    filipinoReadingProfile: data.filipinoReadingProfile,
+    filipinoFrustrationSubtypes: data.filipinoFrustrationSubtypes,
+    governmentBenefits: data.governmentBenefits,
+    parentEducation: data.parentEducation,
+    modeOfTransportation: data.modeOfTransportation ?? null,
+    distanceHomeToSchool: data.distanceHomeToSchool ?? null,
+    previousTransfers: data.previousTransfers ?? null,
+    transferDetails:
+      data.previousTransfers === "MULTIPLE"
+        ? (data.transferDetails?.trim() || null)
+        : null,
+    isAralLearner: data.isAralLearner ?? false,
+    aralEnrolledAt: data.isAralLearner ? new Date() : null,
+  }));
+
   let imported = 0;
   let importedAral = 0;
-  if (toInsert.length > 0) {
-    await prisma.$transaction(async (tx) => {
-      for (const data of toInsert) {
-        const fullName = buildFullName(data.firstName, data.middleName, data.lastName);
-        // Unknown / blank section names → null; row still imports.
-        const { sectionId } = resolveSectionIdByName(data.sectionName, gradeSections);
-        const created = await tx.learner.create({
-          data: {
-            schoolId: user.schoolId,
-            gradeLevelId: input.gradeLevelId,
-            teacherId: user.id,
-            sectionId,
-            firstName: data.firstName,
-            middleName: data.middleName,
-            lastName: data.lastName,
-            fullName,
-            age: data.age,
-            gender: data.gender,
-            ethnicity: data.ethnicity ?? null,
-            ethnicityOther: data.ethnicity === "OTHER" ? (data.ethnicityOther ?? null) : null,
-            englishReadingProfile: data.englishReadingProfile,
-            englishFrustrationSubtypes: data.englishFrustrationSubtypes,
-            filipinoReadingProfile: data.filipinoReadingProfile,
-            filipinoFrustrationSubtypes: data.filipinoFrustrationSubtypes,
-            governmentBenefits: data.governmentBenefits,
-            parentEducation: data.parentEducation,
-            modeOfTransportation: data.modeOfTransportation ?? null,
-            distanceHomeToSchool: data.distanceHomeToSchool ?? null,
-            previousTransfers: data.previousTransfers ?? null,
-            transferDetails:
-              data.previousTransfers === "MULTIPLE"
-                ? (data.transferDetails?.trim() || null)
-                : null,
-            isAralLearner: data.isAralLearner ?? false,
-            aralEnrolledAt: data.isAralLearner ? new Date() : null,
-          },
-        });
+  if (learnerRows.length > 0) {
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          // Two statements per chunk instead of two per row. At the 500-row cap
+          // above that is 10 round trips rather than 1000 — the difference
+          // between finishing and dying on the 5 s default with `P2028`.
+          for (const chunk of chunkRows(learnerRows, IMPORT_CHUNK_ROWS)) {
+            const created = await tx.learner.createManyAndReturn({
+              data: chunk,
+              select: {
+                id: true,
+                gradeLevelId: true,
+                sectionId: true,
+                isAralLearner: true,
+              },
+            });
 
-        if (activeYear) {
-          await tx.enrollment.create({
-            data: {
-              learnerId: created.id,
-              schoolId: user.schoolId,
-              schoolYearId: activeYear.id,
-              gradeLevelId: created.gradeLevelId,
-              sectionId: created.sectionId,
-              teacherId: user.id,
-              status: "ACTIVE",
-            },
-          });
-        }
-        imported++;
-        if (created.isAralLearner) importedAral++;
-      }
-    });
+            // Enrollment rows are derived from the RETURNED rows, not zipped
+            // against `chunk`, so this does not depend on the order Postgres
+            // hands them back.
+            if (activeYear) {
+              await tx.enrollment.createMany({
+                data: created.map((c) => ({
+                  learnerId: c.id,
+                  schoolId: user.schoolId,
+                  schoolYearId: activeYear.id,
+                  gradeLevelId: c.gradeLevelId,
+                  sectionId: c.sectionId,
+                  teacherId: user.id,
+                  status: "ACTIVE" as const,
+                })),
+              });
+            }
+
+            imported += created.length;
+            importedAral += created.filter((c) => c.isAralLearner).length;
+          }
+        },
+        BULK_TX_OPTIONS
+      );
+    } catch (err) {
+      // The wizard's `handleCommit` has `try { … } finally { … }` and no `catch`,
+      // so a thrown `P2028` used to surface as a Next.js server-action error
+      // instead of the toast it is written for. Nothing was committed — the
+      // whole import is one transaction — so reporting zero is accurate.
+      console.error("[commitLearnerImport] transaction failed:", err);
+      return {
+        ok: false,
+        error: "Could not save the import. Please try again with a smaller file.",
+      };
+    }
   }
 
   const summary = summarizeImportResults(results);
