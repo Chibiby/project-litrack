@@ -38,7 +38,17 @@ const GRADE_ID = "grade-g7";
 const WEEK_START = "2026-08-24";
 const TUESDAY = "2026-08-25";
 
-type Day = { learnerId: string; dateKey: string; notes: string | null };
+/**
+ * `weekStart` is optional only as a fixture convenience: omitted means "the week
+ * under test", which is true of every row seeded with a 2026-08-24..30 date. The
+ * remark statement filters on it, so a test that seeds OTHER weeks must set it.
+ */
+type Day = {
+  learnerId: string;
+  dateKey: string;
+  notes: string | null;
+  weekStart?: string;
+};
 
 let attendance: Day[];
 let learnerIds: string[];
@@ -112,12 +122,24 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
 
   if (sql.includes('INSERT INTO "Attendance"')) {
     const rows = pairsFrom(params);
+    // Each inserted row binds `date` then `weekStart`, so the save's week is the
+    // second date key in the list. The stored row has to carry it or the remark
+    // statement below cannot filter on it.
+    const dateKeys = params.filter(
+      (p): p is string => typeof p === "string" && DATE_KEY.test(p)
+    );
+    const weekStart = dateKeys[1];
     for (const r of rows) {
       const existing = attendance.find(
         (a) => a.learnerId === r.learnerId && a.dateKey === r.dateKey
       );
       if (!existing) {
-        attendance.push({ learnerId: r.learnerId, dateKey: r.dateKey, notes: null });
+        attendance.push({
+          learnerId: r.learnerId,
+          dateKey: r.dateKey,
+          notes: null,
+          weekStart,
+        });
       }
     }
     return rows.map((r) => ({ id: `att-${r.learnerId}-${r.dateKey}` }));
@@ -144,11 +166,26 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
     const ids = params.filter(
       (p): p is string => typeof p === "string" && learnerIds.includes(p)
     );
+    // The statement's only bound date key is the week: its VALUES rows are
+    // (learnerId, notes). Modelling `a."weekStart" = $n::date` is the whole point
+    // of this branch — without it, deleting that predicate from the action lets a
+    // remark for one week overwrite `notes` in every other week, silently.
+    const weekKey = params.find(
+      (p): p is string => typeof p === "string" && DATE_KEY.test(p)
+    );
     const touched: { learnerId: string }[] = [];
     for (const id of ids) {
       // A remark lands on every marked day the learner has that week, and on none
       // at all if they have no marked day — the "skipped" case.
-      for (const day of attendance.filter((a) => a.learnerId === id)) {
+      // No week bound at all means the predicate is gone from the statement, so
+      // Postgres would match EVERY week. Model that, rather than matching nothing:
+      // it makes the mutation fail for the reason it actually breaks production.
+      const days = attendance.filter(
+        (a) =>
+          a.learnerId === id &&
+          (weekKey === undefined || (a.weekStart ?? WEEK_START) === weekKey)
+      );
+      for (const day of days) {
         day.notes = "set";
         touched.push({ learnerId: id });
       }
@@ -315,6 +352,31 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
       ok: true,
       data: { upserted: 0, cleared: 0, remarksApplied: 1, remarksSkipped: 0 },
     });
+  });
+
+  it("confines a remark to the week being saved", async () => {
+    // The remark statement's `a."weekStart" = $n::date` predicate is the only thing
+    // stopping a week-3 remark from overwriting `notes` in weeks 1, 2 and 4: the
+    // UPDATE otherwise matches on learnerId alone. `Attendance.notes` is per-day,
+    // so those other weeks' remarks would be destroyed with no way to recover them.
+    attendance = [
+      { learnerId: "learner-a", dateKey: "2026-08-11", notes: "week 1", weekStart: "2026-08-10" },
+      { learnerId: "learner-a", dateKey: "2026-08-18", notes: "week 2", weekStart: "2026-08-17" },
+      { learnerId: "learner-a", dateKey: TUESDAY, notes: null, weekStart: WEEK_START },
+      { learnerId: "learner-a", dateKey: "2026-09-01", notes: "week 4", weekStart: "2026-08-31" },
+    ];
+
+    const res = await post({
+      remarks: [{ learnerId: "learner-a", notes: "this week only" }],
+    });
+
+    expect(res).toMatchObject({ ok: true, data: { remarksApplied: 1 } });
+    expect(attendance.map((a) => a.notes)).toEqual([
+      "week 1",
+      "week 2",
+      "set",
+      "week 4",
+    ]);
   });
 
   it("counts a remark for a learner with no marked day as skipped", async () => {
