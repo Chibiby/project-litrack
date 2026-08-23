@@ -62,8 +62,9 @@
 --      BUT: if step 3 exited NON-ZERO, no table was printed at all. ON_ERROR_STOP=1
 --      aborts psql at the first error, and the VERIFY SELECT is the last statement
 --      in the file, so the run died before reaching it. That is neither of the two
---      cases in the VERIFY notes below — it is no result set at all. Read the error
---      psql printed, because the two causes have OPPOSITE remedies:
+--      cases in the VERIFY notes below — it is no result set at all. Run the VERIFY
+--      SELECT at the end of this file by hand to see how far the build got, then
+--      read the error psql printed, because the causes have OPPOSITE remedies:
 --
 --        25001 ("cannot run inside a transaction block") => nothing was built. You
 --          ran the file through something that opens an implicit transaction — the
@@ -72,11 +73,13 @@
 --          -X). There is no invalid index to drop and re-running as-is reproduces
 --          the same failure. Go back to the warning at the top of this file and to
 --          step 3 above, fix how you are invoking it, then start over.
---        any other error => a real build failure. Go to "IF A BUILD FAILS".
+--        any other error => read it against the hand-run's output. A valid = f row
+--          is a real build failure: go to "IF A BUILD FAILS". ZERO rows means the
+--          statement never started, so fix what the error names (host, database,
+--          role, file path) and start over.
 --
---      Run the VERIFY SELECT at the end of this file by hand to tell them apart:
---      ZERO rows means nothing was built at all, which points at 25001, not at a
---      failed build. Conversely, a zero exit with no table in front of you means
+--      ZERO rows means nothing was built and there is nothing to drop, whatever the
+--      error was. Conversely, a zero exit with no table in front of you means
 --      you are not looking at the end of the output, not that the query is missing.
 --
 --   5. Record the migration as applied WITHOUT re-running its SQL:
@@ -198,14 +201,19 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuditLog_timestamp_idx" ON "AuditLog"("
 --   NO table printed   => psql aborted before reaching this statement, because
 --     and non-zero exit   ON_ERROR_STOP=1 stops at the first error and this is the
 --                         last statement in the file. Not "fewer than 12 rows" —
---                         zero rows, because the query never ran. Run it by hand,
---                         then branch on the error psql printed:
+--                         zero rows, because the query never ran. Run it by hand to
+--                         see how far the build got, then branch on the error psql
+--                         printed:
 --                           25001 => nothing was built; you ran the file inside an
 --                             implicit transaction (SQL Editor, psql -1, AUTOCOMMIT
 --                             off). Nothing to drop; fix the invocation per step 3
 --                             and the header warning, then start over.
---                           anything else => real build failure, "IF A BUILD FAILS".
---                         Zero rows from the hand-run is the tell for 25001.
+--                           anything else => a valid = f row is a real build
+--                             failure, "IF A BUILD FAILS"; zero rows means the
+--                             statement never started, so fix what the error names
+--                             (host, database, role, file path) and start over.
+--                         Zero rows from the hand-run means nothing was built and
+--                         there is nothing to drop, whatever the error was.
 --
 -- An invalid index left in place is the worst of both worlds: ignored by the
 -- planner, still maintained on every write — and IF NOT EXISTS will skip over it
