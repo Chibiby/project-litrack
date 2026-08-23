@@ -53,6 +53,8 @@ type Day = {
 let attendance: Day[];
 let learnerIds: string[];
 let rawCalls: { sql: string; params: unknown[] }[];
+/** Makes the INSERT RETURN one row fewer than it was given — see the guard test. */
+let dropOneReturnedRow: boolean;
 
 function flattenBoundParams(values: readonly unknown[]): unknown[] {
   const out: unknown[] = [];
@@ -142,7 +144,11 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
         });
       }
     }
-    return rows.map((r) => ({ id: `att-${r.learnerId}-${r.dateKey}` }));
+    const marked = rows.map((r) => ({ id: `att-${r.learnerId}-${r.dateKey}` }));
+    // One row silently skipped by the JOIN — a soft-deleted or cross-tenant learner.
+    // Postgres reports no error for that, so the guard is the only thing that turns
+    // it into a refusal instead of a week saved with a hole in it.
+    return dropOneReturnedRow ? marked.slice(1) : marked;
   }
 
   if (sql.includes('DELETE FROM "Attendance"')) {
@@ -305,6 +311,33 @@ beforeEach(() => {
   attendance = [];
   learnerIds = ["learner-a", "learner-b", "learner-c"];
   rawCalls = [];
+  dropOneReturnedRow = false;
+});
+
+describe("saveAralWeeklyAttendance — the RETURNING count guard", () => {
+  it("refuses the whole save when the INSERT writes fewer rows than it was given", async () => {
+    // The last defence against a silently skipped row. The JOIN drops any learner
+    // that is soft-deleted, non-ARAL, or in another tenant, and Postgres reports NO
+    // error — the teacher would be shown a saved week with one learner's marks
+    // missing. Nothing else in this file fires the branch, so an inverted or deleted
+    // comparison would go unnoticed.
+    dropOneReturnedRow = true;
+
+    const res = await post({
+      cells: [
+        { learnerId: "learner-a", date: TUESDAY, status: "PRESENT" },
+        { learnerId: "learner-b", date: TUESDAY, status: "ABSENT" },
+      ],
+    });
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Could not save the week. Please try again.",
+    });
+    expect(writeAudit).not.toHaveBeenCalled();
+    // The row count is not leaked to the client.
+    expect((res as { error: string }).error).not.toMatch(/\d/);
+  });
 });
 
 describe("saveAralWeeklyAttendance — the Asia/Manila date bind", () => {

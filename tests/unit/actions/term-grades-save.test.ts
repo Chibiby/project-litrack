@@ -197,6 +197,8 @@ const schoolYearFindFirst = vi.fn(
  */
 type RawCall = { sql: string; params: unknown[] };
 let rawWrites: RawCall[];
+/** Makes the statement RETURN one row fewer than it was given — see the guard test. */
+let dropOneReturnedRow = false;
 
 /** Prisma nests `Prisma.sql`/`Prisma.join` fragments; bound params are the leaves. */
 function flattenBoundParams(values: readonly unknown[]): unknown[] {
@@ -220,7 +222,7 @@ const queryRaw = vi.fn(
     // One returned row per (learner, subject) pair whose learner clears the bound
     // predicate. `deletedAt`/`archivedAt IS NULL` are literal SQL rather than
     // binds, so they are read off the row directly.
-    return params
+    const returned = params
       .filter(
         (p): p is string =>
           typeof p === "string" && learners.some((l) => l.id === p)
@@ -236,6 +238,10 @@ const queryRaw = vi.fn(
         );
       })
       .map((id) => ({ id: `termgrade-${id}` }));
+    // One row silently skipped by the JOIN. Postgres reports no error for that, so
+    // the guard is the only thing standing between it and a partial save reported
+    // as a success. See the RETURNING-count-guard test.
+    return dropOneReturnedRow ? returned.slice(1) : returned;
   }
 );
 
@@ -390,6 +396,7 @@ beforeEach(() => {
   };
   learnerFindManyArgs = [];
   rawWrites = [];
+  dropOneReturnedRow = false;
 });
 
 afterEach(() => {
@@ -892,6 +899,33 @@ describe("saveTermGrades — the two that cost nothing extra", () => {
 
     expect(res).toEqual({ ok: true, data: { saved: 3, cleared: 0 } });
     expect(learnerFindManyArgs[0].where.id).toEqual({ in: ["learner-a"] });
+  });
+});
+
+describe("saveTermGrades — the RETURNING count guard", () => {
+  it("refuses the whole save when the statement writes fewer rows than it was given", async () => {
+    // The last defence against a silently skipped row. The JOIN drops any learner
+    // that is soft-deleted, archived, or outside the caller's tenant or section, and
+    // Postgres reports NO error for that — the teacher would see a saved grade sheet
+    // with one learner's marks missing. Nothing else in this file fires the branch,
+    // so an inverted or deleted comparison would go unnoticed.
+    dropOneReturnedRow = true;
+
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
+        { learnerId: "learner-b", subject: "MATHEMATICS", score: 93 },
+      ],
+    });
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Could not save the grade sheet. Please try again.",
+    });
+    // The throw is inside the transaction, so the delete rolls back with it.
+    expect(writeAudit).not.toHaveBeenCalled();
+    // The row count is not leaked to the client.
+    expect((res as { error: string }).error).not.toMatch(/\d/);
   });
 });
 

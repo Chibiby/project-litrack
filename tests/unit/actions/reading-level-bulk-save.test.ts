@@ -30,6 +30,8 @@ const GRADE_ID = "grade-g7";
 
 let learnerIds: string[];
 let rawCalls: { sql: string; params: unknown[] }[];
+/** Makes the INSERT RETURN one row fewer than it was given — see the guard test. */
+let dropOneReturnedRow: boolean;
 
 function flattenBoundParams(values: readonly unknown[]): unknown[] {
   const out: unknown[] = [];
@@ -76,9 +78,13 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
   const params = flattenBoundParams(values);
   rawCalls.push({ sql: renderSql(strings, values), params });
   if (!params.includes(SCHOOL_ID)) return [];
-  return params
+  const returned = params
     .filter((p): p is string => typeof p === "string" && learnerIds.includes(p))
     .map((id) => ({ id: `rlr-${id}` }));
+  // One row silently skipped by the JOIN — a soft-deleted learner, or one in
+  // another tenant. Postgres reports no error for that; the guard is the only
+  // thing that turns it into a refusal instead of a partial save.
+  return dropOneReturnedRow ? returned.slice(1) : returned;
 });
 
 const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
@@ -173,6 +179,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   learnerIds = ["learner-a", "learner-b"];
   rawCalls = [];
+  dropOneReturnedRow = false;
 });
 
 describe("bulkRecordMonthlyReadingLevel — the month anchor", () => {
@@ -251,6 +258,28 @@ describe("bulkRecordMonthlyReadingLevel — payload size", () => {
     };
     expect(options.timeout).toBeGreaterThan(5_000);
     expect(options.maxWait).toBeGreaterThan(2_000);
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — the RETURNING count guard", () => {
+  it("refuses the whole save when the statement writes fewer rows than it was given", async () => {
+    // The last defence against a silently skipped row. The JOIN drops any learner
+    // that is soft-deleted, non-ARAL or in another tenant, and Postgres reports NO
+    // error for that — the teacher would be told the save succeeded while one
+    // learner's assessment quietly went nowhere. Nothing else in the suite fires
+    // this branch, so an inverted or deleted comparison would go unnoticed.
+    dropOneReturnedRow = true;
+
+    const res = await post([entry("learner-a"), entry("learner-b")]);
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Could not save the reading levels. Please try again.",
+    });
+    // Refused, not partially committed: the throw is inside the transaction.
+    expect(writeAudit).not.toHaveBeenCalled();
+    // And the row count is not leaked to the client.
+    expect((res as { error: string }).error).not.toMatch(/\d/);
   });
 });
 
