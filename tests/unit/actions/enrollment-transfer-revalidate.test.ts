@@ -302,10 +302,14 @@ describe("transferLearner — teacher cache fan-out", () => {
     // `resolvedTeacherId !== learner.teacherId`, so three is the right number.
     expect(revalidateTeacherCaches).toHaveBeenCalledTimes(3);
 
-    // The teachers workspace helper carries this school's id, because it also
-    // busts the tenant-scoped `schoolTeachers(schoolId)` tag that holds the ARAL
-    // tutor list — whose `advisoryLabel` this transfer can change. Bare
-    // `toHaveBeenCalled()` would pass on a site that sent another school's id.
+    // Pinned with the id rather than bare, because this helper is tenant-scoped:
+    // it busts `schoolTeachers(schoolId)` on top of the four teachers-workspace
+    // pathnames (`src/lib/cache/revalidate.ts:35-41`). A site passing another
+    // school's id would clear that tenant's entry and leave this one stale, and
+    // `toHaveBeenCalled()` would not notice. The claim is about the argument, not
+    // about which of the helper's two halves a transfer needs — a transfer writes
+    // only `Enrollment` and `Learner`, so it changes nothing the cached tutor list
+    // holds.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
