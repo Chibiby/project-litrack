@@ -242,7 +242,10 @@ describe("saveTeacherProfile", () => {
     // The teachers workspace is busted through its named helper, which covers
     // all four tab routes — one `revalidatePath` on the root would leave the
     // Pending, Inactive and Declined tabs serving stale rows and stale badges.
-    expect(revalidateSchoolHeadTeachers).toHaveBeenCalled();
+    // Asserted with the id, not bare: the helper also busts the tenant-scoped
+    // `schoolTeachers(schoolId)` tag, so a site passing another school's id
+    // would clear the wrong tenant's ARAL tutor list and leave this one stale.
+    expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(
       SCHOOL_HEAD_ROUTES.schoolGradeLevels
     );

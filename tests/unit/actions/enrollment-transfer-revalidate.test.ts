@@ -301,6 +301,12 @@ describe("transferLearner — teacher cache fan-out", () => {
     // Three distinct ids, and the incoming call is guarded by
     // `resolvedTeacherId !== learner.teacherId`, so three is the right number.
     expect(revalidateTeacherCaches).toHaveBeenCalledTimes(3);
+
+    // The teachers workspace helper carries this school's id, because it also
+    // busts the tenant-scoped `schoolTeachers(schoolId)` tag that holds the ARAL
+    // tutor list — whose `advisoryLabel` this transfer can change. Bare
+    // `toHaveBeenCalled()` would pass on a site that sent another school's id.
+    expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
   it("makes no third call when the learner has no designated ARAL tutor", async () => {

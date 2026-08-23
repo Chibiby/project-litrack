@@ -228,7 +228,10 @@ describe("deleteSection — teacher cache fan-out", () => {
     // sensitive to the order of the read and the update rather than incidental.
     expect(users.find((u) => u.id === ADVISER_ID)?.advisorySectionId).toBeNull();
 
-    expect(revalidateSchoolHeadTeachers).toHaveBeenCalled();
+    // With the id, not bare: this helper busts the tenant-scoped
+    // `schoolTeachers(schoolId)` tag, so another school's id here would clear
+    // the wrong tenant's ARAL tutor list and leave this one stale.
+    expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     expect(writeAudit).toHaveBeenCalledWith(
