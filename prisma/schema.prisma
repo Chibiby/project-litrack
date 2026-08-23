@@ -786,13 +786,10 @@ model Learner {
   /// `aralStatus`, read at `src/lib/learners/pagination.ts`; there is no `aral`
   /// search param, and an unrecognised key would silently fall back to "all".)
   /// Removing `isAralLearner` here would widen every ARAL grid's scan from this
-  /// grade's ARAL learners to its entire non-archived roster. Whoever sizes that
-  /// separate index needs one more shape: `learners/page.tsx` is the only one of
-  /// `gradeLevelIdWhere`'s two callers that passes `list.grade` unnormalised, so
-  /// `?grade=floating` reaches its third return shape — the same `IN (…)` plus
-  /// `gradeLevel: { type: "FLOATING" }`, a predicate on the `GradeLevel` relation
-  /// rather than on any `Learner` column, so that path needs a join on top of the
-  /// `IN (…)`.
+  /// grade's ARAL learners to its entire non-archived roster.
+  /// `gradeLevelIdWhere`'s third shape (the `FLOATING` one) is unreachable from
+  /// both callers today: each normalises `grade` against assigned grade ids first,
+  /// and no grade id is `"floating"`, so that separate index can ignore it.
   ///
   /// Distinct from #6 below: this one leads with `gradeLevelId`, which the teacher
   /// learners list needs because it is tenant-scoped transitively through the
