@@ -511,6 +511,41 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
 });
 
 describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
+  it("rejects 1401 cells before any write", async () => {
+    // The `.max(1400)` cap (200 learners x 7 days) pre-dates this program, and the
+    // set-based rewrite deliberately relied on it instead of paginating: it is what
+    // bounds one save to a fixed number of statements. Nothing asserted it, so it
+    // could be relaxed later with the suite still green.
+    learnerIds = Array.from({ length: 1401 }, (_, i) => `learner-${i}`);
+    const cells = learnerIds.map((learnerId) => ({
+      learnerId,
+      date: TUESDAY,
+      status: "PRESENT",
+    }));
+
+    const res = await post({ cells });
+
+    expect(res.ok).toBe(false);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(queryRaw).not.toHaveBeenCalled();
+    // Refused by Zod, before the grade or the roster was even read.
+    expect(gradeFindFirst).not.toHaveBeenCalled();
+    expect(learnerFindMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects 201 remarks before any write", async () => {
+    learnerIds = Array.from({ length: 201 }, (_, i) => `learner-${i}`);
+    const remarks = learnerIds.map((learnerId) => ({ learnerId, notes: "note" }));
+
+    const res = await post({ remarks });
+
+    expect(res.ok).toBe(false);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(queryRaw).not.toHaveBeenCalled();
+    expect(gradeFindFirst).not.toHaveBeenCalled();
+    expect(learnerFindMany).not.toHaveBeenCalled();
+  });
+
   it("saves a 100-learner week in a handful of statements, not one per cell", async () => {
     // 100 learners x 5 school days = 500 cells, the worst case the cap allows once
     // Task 14 paginates the grid. Per-cell statements were what blew the 5 s
