@@ -131,9 +131,10 @@ Hence two artifacts for the same twelve indexes. Both are committed; both produc
 
 4. **Check that every index is `valid` before step 5.** Step 5 tells Prisma the DDL
    is done, so a silently-invalid index would go unnoticed from then on. This query
-   is a **live statement at the end of `prisma/concurrent-indexes.sql`**, so step 3
-   already printed it — read that output rather than pasting this again. A zero exit
-   code is not sufficient evidence; look at the rows. Expect 12, all `valid = t`:
+   is a **live statement at the end of `prisma/concurrent-indexes.sql`**, so a
+   *successful* step 3 already printed it — read that output rather than pasting
+   this again. A zero exit code is not sufficient evidence; look at the rows. Expect
+   12, all `valid = t`:
 
    ```sql
    SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
@@ -149,6 +150,20 @@ Hence two artifacts for the same twelve indexes. Both are committed; both produc
    )
    ORDER BY c.relname;
    ```
+
+   **If step 3 exited non-zero, no table was printed at all** — `ON_ERROR_STOP=1`
+   aborts psql at the first error and this query is the file's last statement, so a
+   failed build kills the run before it. That is not "fewer than 12 rows"; it is no
+   result set. Paste the query above, see how far the build got, then go to
+   [If an index build fails](#if-an-index-build-fails). Conversely, a **zero** exit
+   with no table in front of you means you are not looking at the end of the
+   output — the query did run.
+
+   This query proves index **name and validity only**, not column list or order. If
+   you need to confirm the definitions match the migration, use the `pg_indexes`
+   query in
+   [Verify the live index set matches the committed schema](#verify-the-live-index-set-matches-the-committed-schema)
+   below.
 
    The full statement list and this query also live at the bottom of
    `prisma/concurrent-indexes.sql`, so the file is self-sufficient at 2am.

@@ -59,6 +59,15 @@
 --      silently-invalid index would go unnoticed from then on. A zero exit code
 --      is NOT sufficient evidence; look at the rows.
 --
+--      BUT: if step 3 exited NON-ZERO, no table was printed at all. ON_ERROR_STOP=1
+--      aborts psql at the first error, and the VERIFY SELECT is the last statement
+--      in the file, so a failed build kills the run before it. That is neither of
+--      the two cases in the VERIFY notes below — it is no result set at all. In
+--      that case run the VERIFY SELECT at the end of this file by hand to see how
+--      far the build got, then go to "IF A BUILD FAILS". Conversely, a zero exit
+--      with no table in front of you means you are not looking at the end of the
+--      output, not that the query is missing.
+--
 --   5. Record the migration as applied WITHOUT re-running its SQL:
 --        npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
 --
@@ -162,8 +171,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuditLog_timestamp_idx" ON "AuditLog"("
 -- should not depend on remembering to paste a second query.
 --
 -- It is strictly READ-ONLY (a SELECT against the pg_class / pg_index catalogs) and
--- cannot fail under ON_ERROR_STOP=1: a name that is missing simply does not come
--- back as a row.
+-- cannot itself fail under ON_ERROR_STOP=1: a name that is missing simply does not
+-- come back as a row. It can, however, be SKIPPED — see the third case below.
 --
 -- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
@@ -175,6 +184,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuditLog_timestamp_idx" ON "AuditLog"("
 --                         DROP INDEX CONCURRENTLY (see "IF A BUILD FAILS" above,
 --                         and note it needs psql for the same transaction
 --                         reason), then re-run this whole file.
+--   NO table printed   => psql aborted before reaching this statement, because
+--     and non-zero exit   ON_ERROR_STOP=1 stops at the first error and this is the
+--                         last statement in the file. Not "fewer than 12 rows" —
+--                         zero rows, because the query never ran. Run it by hand to
+--                         see which builds completed, then "IF A BUILD FAILS".
 --
 -- An invalid index left in place is the worst of both worlds: ignored by the
 -- planner, still maintained on every write — and IF NOT EXISTS will skip over it

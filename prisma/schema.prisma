@@ -748,18 +748,36 @@ model Learner {
   @@index([teacherId])
   @@index([aralTeacherId])
   @@index([schoolId, aralTeacherId, isAralLearner, deletedAt])
-  /// R6 #2. Grade-scoped ARAL listings ordered by name. The two sites this fits
-  /// are the ARAL weekly grids, where `gradeLevelId` and `isAralLearner` are both
-  /// plain equalities and the sort column follows:
-  /// `src/app/teacher/(app)/aral/[gradeId]/attendance/page.tsx` (`learnerWhere`,
-  /// then `orderBy: { fullName: "asc" }`) and `resolveGradeLearnerWhere` in
-  /// `src/lib/actions/aral-grid.ts`.
+  /// R6 #2. Grade-scoped ARAL listings ordered by name. The consumer set is OPEN —
+  /// the ARAL grade-scoped listings, including but not limited to the sites below.
+  /// Every site found so far constrains `gradeLevelId` and `isAralLearner` as plain
+  /// equalities and sorts on `fullName` alone, so this order serves all of them and
+  /// none wants a different one:
+  /// - `aral/[gradeId]/reading-level/page.tsx` — `count` plus `findMany` with
+  ///   `orderBy fullName` AND `skip`/`take`. The ordered scan is worth most here,
+  ///   because pagination is what pays for an unindexed sort.
+  /// - `aral/page.tsx` (`aralWhere`) — `gradeLevelIdWhere` returns a plain
+  ///   `{ gradeLevelId }` when `?grade=` names an assigned grade (see
+  ///   `src/lib/learners/pagination.ts`), which is this index's exact shape, also
+  ///   with `skip`/`take`. The same page's enroll-candidate query pairs
+  ///   `gradeLevelId` with `isAralLearner: false`.
+  /// - `aral/[gradeId]/attendance/page.tsx` (`learnerWhere`, then
+  ///   `orderBy: { fullName: "asc" }`).
+  /// - `resolveGradeLearnerWhere` in `src/lib/actions/aral-grid.ts` — used only as a
+  ///   nested `learner:` relation filter, never with an `orderBy` on `Learner`, so
+  ///   it uses the equality prefix and not the sort delivery.
+  ///
+  /// The page paths above are under `src/app/teacher/(app)/`. Do not read the list
+  /// as exhaustive: if a future audit finds these paths refactored, re-derive the
+  /// set before reclaiming the index — two of the four paginate off it.
   ///
   /// Do NOT drop `isAralLearner` from this key to serve the teacher learners list
-  /// (`learnerListWhere`): that list sends `gradeLevelId` as `IN (…)` and usually
-  /// omits `isAralLearner`, so it needs a *separate* index, not a reordering of
-  /// this one. Removing `isAralLearner` here would widen the ARAL grids' scan from
-  /// this grade's ARAL learners to its entire non-archived roster.
+  /// (`learnerListWhere`): on its default path that list sends `gradeLevelId` as
+  /// `IN (…)` and omits `isAralLearner`, so it needs a *separate* index, not a
+  /// reordering of this one. (With `?grade=<assigned id>&aral=enrolled` that list
+  /// does produce this index's exact shape and is served fully.) Removing
+  /// `isAralLearner` here would widen every ARAL grid's scan from this grade's ARAL
+  /// learners to its entire non-archived roster.
   ///
   /// Distinct from #6 below: this one leads with `gradeLevelId`, which the teacher
   /// learners list needs because it is tenant-scoped transitively through the
