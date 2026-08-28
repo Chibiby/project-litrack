@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
+import { useNavPath } from "@/components/nav/nav-path";
 import { HeaderSearch } from "@/components/shell/header-search";
 import {
   NotificationsMenu,
@@ -57,12 +57,16 @@ export function AppHeader({
   expanded: boolean;
   onToggleSidebar: () => void;
 }) {
-  const pathname = usePathname();
+  // The optimistic nav path, not the committed pathname — the same source the
+  // sidebar's highlight reads. The two are the only chrome that names the current
+  // page, and a rail that jumps to Teachers while this bar still says Dashboard
+  // is worse than both of them waiting. See `@/components/nav/nav-path`.
+  const { navPath } = useNavPath();
   const navGroups = useMemo(
     () => getNavGroups(role, grades ?? [], { isAralVolunteer, advisoryGradeLevelId }),
     [role, grades, isAralVolunteer, advisoryGradeLevelId]
   );
-  const title = resolvePageTitle(pathname, navGroups);
+  const title = resolvePageTitle(navPath, navGroups);
 
   return (
     <header className="sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { NavLinkIcon } from "@/components/nav/nav-link-icon";
+import { useNavPath } from "@/components/nav/nav-path";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -74,12 +75,18 @@ function NavLink({
   item,
   isActive,
   onNavigate,
+  onActivate,
+  onSettled,
   fullPrefetch = false,
   collapsed = false,
 }: {
   item: NavItem;
   isActive: boolean;
   onNavigate?: () => void;
+  /** Records this row's click as the optimistic nav path. */
+  onActivate?: () => void;
+  /** Retires this row's optimistic highlight; see `NavLinkIconProps.onSettled`. */
+  onSettled?: () => void;
   fullPrefetch?: boolean;
   collapsed?: boolean;
 }) {
@@ -155,25 +162,36 @@ function NavLink({
     <PrefetchLink
       href={item.href}
       {...(fullPrefetch ? { prefetch: true as const } : {})}
-      onClick={onNavigate}
+      onClick={() => {
+        // Recorded before the drawer's own close callback runs, so the highlight
+        // has already moved by the time the sheet starts animating away.
+        onActivate?.();
+        onNavigate?.();
+      }}
       aria-label={collapsed ? item.label : undefined}
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "relative flex items-center rounded-lg text-sm font-medium transition-colors",
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
         isActive
-          ? "bg-violet-soft text-violet-soft-foreground"
-          : // The pending clause is what a keyboard user gets: a mouse user is
-            // already sitting on the row, so `hover:` has it covered, but a row
-            // activated by Enter would otherwise change nothing but its icon.
-            // Deliberately the muted treatment and not the violet one — violet
-            // means "the page you are on", and while this row loads that is
-            // still the row above or below it.
+          ? // Violet now means "the page you are on *or on your way to*" —
+            // `isActive` is resolved from the optimistic nav path, so a clicked
+            // row takes this treatment in the same frame as the click rather
+            // than several hundred milliseconds later. The spinning icon inside
+            // is what still distinguishes the two.
+            "bg-violet-soft text-violet-soft-foreground"
+          : // The row a click cannot light this way: one whose navigation was
+            // started by something other than its own record — a link the
+            // provider never saw, or a sidebar mounted with no provider at all.
+            // A mouse user is already sitting on it, so `hover:` has that
+            // covered; this is what a keyboard user gets for a row activated by
+            // Enter, which would otherwise change nothing but its icon.
             "text-muted-foreground hover:bg-muted hover:text-foreground has-[[data-nav-pending]]:bg-muted has-[[data-nav-pending]]:text-foreground"
       )}
     >
       <NavLinkIcon
         icon={item.icon}
+        onSettled={onSettled}
         className={cn(
           "h-4 w-4 shrink-0",
           isActive ? "text-violet-soft-foreground" : "text-muted-foreground"
@@ -225,7 +243,17 @@ export function AppSidebar({
     [role, grades, isAralVolunteer, advisoryGradeLevelId]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
-  const activeItemId = resolveActiveItemId(pathname, navItems);
+  // `navPath`, not `pathname`: during a click the router has not committed yet
+  // this is the href the person is on their way to, which is what moves the
+  // highlight — and `aria-current` with it — on click rather than on arrival.
+  //
+  // Where two live rows share an href (a teacher with zero or 2+ ARAL grades has
+  // both ARAL rows pointing at `/teacher/aral`), `resolveActiveItemId` awards the
+  // first in list order. That is the same row it would award on arrival, so the
+  // optimistic highlight lands where the committed one does — earlier, not
+  // elsewhere.
+  const { navPath, markPending, clearPending } = useNavPath();
+  const activeItemId = resolveActiveItemId(navPath, navItems);
   const roleLabel = roleLabelOverride ?? role.toLowerCase().replaceAll("_", " ");
   const collapsed = !expanded;
 
@@ -252,7 +280,12 @@ export function AppSidebar({
           <Link
             href={homeHref}
             prefetch={true}
-            onClick={onNavigate}
+            onClick={() => {
+              // The wordmark is a nav row in disguise — it lands on the same
+              // dashboard the first item does, so it moves the same highlight.
+              markPending(homeHref);
+              onNavigate?.();
+            }}
             className={cn(
               "flex items-center font-semibold",
               isCollapsed ? "justify-center" : "gap-3"
@@ -317,6 +350,8 @@ export function AppSidebar({
                     item={item}
                     isActive={item.id === activeItemId}
                     onNavigate={onNavigate}
+                    onActivate={() => markPending(item.href)}
+                    onSettled={() => clearPending(item.href)}
                     fullPrefetch={item.href === homeHref}
                     collapsed={isCollapsed}
                   />

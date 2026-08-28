@@ -2,6 +2,7 @@
 
 import { AppSidebar } from "./app-sidebar";
 import { useRoleShell } from "./role-shell";
+import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
@@ -112,44 +113,48 @@ function AppShellFallback({
   const { expanded, toggle, hydrated } = useSidebarExpanded();
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppSidebar
-        role={role}
-        userName={userName}
-        schoolName={schoolName}
-        grades={grades}
-        isSuperAdminView={isSuperAdminView}
-        viewedSchoolName={viewedSchoolName}
-        expanded={expanded}
-        transitionsEnabled={hydrated}
-      />
-
-      <div
-        className={cn(
-          hydrated && "transition-[margin] duration-200",
-          expanded
-            ? CONTENT_OFFSET_CLASS.expanded
-            : CONTENT_OFFSET_CLASS.collapsed
-        )}
-      >
-        <AppHeader
+    // Same pairing as RoleShell: the rail and the header both read the optimistic
+    // nav path, so the provider has to sit above both of them.
+    <NavPathProvider>
+      <div className="min-h-screen bg-background">
+        <AppSidebar
           role={role}
+          userName={userName}
+          schoolName={schoolName}
           grades={grades}
+          isSuperAdminView={isSuperAdminView}
+          viewedSchoolName={viewedSchoolName}
           expanded={expanded}
-          onToggleSidebar={toggle}
+          transitionsEnabled={hydrated}
         />
 
-        <main id="main-content" className="w-full p-4 lg:p-6">
-          {!hideTitle ? (
-            <PageTitleBlock
-              title={title}
-              subtitle={subtitle}
-              actions={actions}
-            />
-          ) : null}
-          {children}
-        </main>
+        <div
+          className={cn(
+            hydrated && "transition-[margin] duration-200",
+            expanded
+              ? CONTENT_OFFSET_CLASS.expanded
+              : CONTENT_OFFSET_CLASS.collapsed
+          )}
+        >
+          <AppHeader
+            role={role}
+            grades={grades}
+            expanded={expanded}
+            onToggleSidebar={toggle}
+          />
+
+          <main id="main-content" className="w-full p-4 lg:p-6">
+            {!hideTitle ? (
+              <PageTitleBlock
+                title={title}
+                subtitle={subtitle}
+                actions={actions}
+              />
+            ) : null}
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </NavPathProvider>
   );
 }

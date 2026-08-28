@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import { AppSidebar } from "./app-sidebar";
+import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
@@ -61,47 +62,53 @@ export function RoleShell({
 
   return (
     <RoleShellContext.Provider value={true}>
-      <div className="min-h-screen bg-background">
-        <AppSidebar
-          role={role}
-          userName={userName}
-          schoolName={schoolName}
-          grades={grades}
-          isSuperAdminView={isSuperAdminView}
-          viewedSchoolName={viewedSchoolName}
-          roleLabel={roleLabel}
-          isAralVolunteer={isAralVolunteer}
-          advisoryGradeLevelId={advisoryGradeLevelId}
-          expanded={expanded}
-          transitionsEnabled={hydrated}
-        />
-
-        {/* Exact ml match to sidebar width — no underlap (do not use smaller pl). */}
-        <div
-          className={cn(
-            hydrated && "transition-[margin] duration-200",
-            expanded
-              ? CONTENT_OFFSET_CLASS.expanded
-              : CONTENT_OFFSET_CLASS.collapsed
-          )}
-        >
-          {/* Header sits OUTSIDE the content panel (spec R1): full-bleed bar,
-              then page content on the workspace ground with gutters. */}
-          <AppHeader
+      {/* Wraps the rail and the header together: they are the two consumers of
+          the optimistic nav path and this is the deepest node containing both.
+          {children} stays server-rendered either way — the provider is a client
+          boundary, not a client subtree. */}
+      <NavPathProvider>
+        <div className="min-h-screen bg-background">
+          <AppSidebar
             role={role}
+            userName={userName}
+            schoolName={schoolName}
             grades={grades}
-            notifications={notifications}
+            isSuperAdminView={isSuperAdminView}
+            viewedSchoolName={viewedSchoolName}
+            roleLabel={roleLabel}
             isAralVolunteer={isAralVolunteer}
             advisoryGradeLevelId={advisoryGradeLevelId}
             expanded={expanded}
-            onToggleSidebar={toggle}
+            transitionsEnabled={hydrated}
           />
 
-          <div className="min-h-[calc(100dvh-var(--app-chrome-header-height))] bg-background">
-            {children}
+          {/* Exact ml match to sidebar width — no underlap (do not use smaller pl). */}
+          <div
+            className={cn(
+              hydrated && "transition-[margin] duration-200",
+              expanded
+                ? CONTENT_OFFSET_CLASS.expanded
+                : CONTENT_OFFSET_CLASS.collapsed
+            )}
+          >
+            {/* Header sits OUTSIDE the content panel (spec R1): full-bleed bar,
+                then page content on the workspace ground with gutters. */}
+            <AppHeader
+              role={role}
+              grades={grades}
+              notifications={notifications}
+              isAralVolunteer={isAralVolunteer}
+              advisoryGradeLevelId={advisoryGradeLevelId}
+              expanded={expanded}
+              onToggleSidebar={toggle}
+            />
+
+            <div className="min-h-[calc(100dvh-var(--app-chrome-header-height))] bg-background">
+              {children}
+            </div>
           </div>
         </div>
-      </div>
+      </NavPathProvider>
     </RoleShellContext.Provider>
   );
 }
