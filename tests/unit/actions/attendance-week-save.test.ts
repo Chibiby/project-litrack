@@ -15,12 +15,15 @@ import { formatLocalDateKey } from "@/lib/date-keys";
  *
  * What is contract here, and so asserted rather than assumed:
  *
- *   - The three values the grid's toast is built from are three DIFFERENT
- *     reductions. `cleared` is a sum of rows actually deleted; `remarksApplied` is
- *     a count of LEARNERS whose week had somewhere to put a remark; `remarksSkipped`
- *     is the rest. The old code derived them by indexing `results[i]` off an array
- *     transaction; the set-based rewrite derives them from `RETURNING`, and nothing
- *     else in the repo would notice if one of the three were wrong.
+ *   - `upserted` and `cleared` are two DIFFERENT reductions. `cleared` is a sum of
+ *     rows actually deleted, not of cells submitted — clearing an already-empty
+ *     cell deletes nothing. The old code derived both by indexing `results[i]` off
+ *     an array transaction; the set-based rewrite derives them from `RETURNING`,
+ *     and nothing else in the repo would notice if either were wrong.
+ *   - A reason belongs to the DAY it explains and is written by the mark INSERT.
+ *     There is no second, week-wide UPDATE pass any more; the mock has no branch
+ *     for one, so reintroducing it fails loudly instead of silently overwriting
+ *     per-day reasons.
  *   - Every date reaches SQL as a `YYYY-MM-DD` STRING. `Attendance.date` and
  *     `.weekStart` are `@db.Date`, so a bound `Date` object is a silent
  *     off-by-one-day outside production.
@@ -113,9 +116,10 @@ function pairsFrom(params: unknown[]): { learnerId: string; dateKey: string }[] 
 }
 
 /**
- * Models the three statements against the fake table above. Deliberately NOT a
- * stub returning fixed counts: `cleared` and `remarksApplied` are only meaningful
- * if the rows that come back depend on what is really there.
+ * Models the two statements against the fake table above. Deliberately NOT a stub
+ * returning fixed counts: `cleared` is only meaningful if the rows that come back
+ * depend on what is really there, and a per-day reason is only observable if the
+ * fake row keeps the note the INSERT actually bound.
  */
 const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) => {
   const sql = renderSql(strings, values);
@@ -131,18 +135,24 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
       (p): p is string => typeof p === "string" && DATE_KEY.test(p)
     );
     const weekStart = dateKeys[1];
-    for (const r of rows) {
+    // Each row binds (uuid, learnerId, date, weekStart, status, notes, …), so the
+    // note sits four places past its own learner id. Scanned by position rather
+    // than looked up by id: one learner legitimately has several days in a save,
+    // and `indexOf` would give every one of them the FIRST day's reason.
+    for (let i = 0; i < params.length; i++) {
+      const id = params[i];
+      if (typeof id !== "string" || !learnerIds.includes(id)) continue;
+      const dateKey = params[i + 1];
+      const note = params[i + 4];
+      if (typeof dateKey !== "string" || !DATE_KEY.test(dateKey)) continue;
+      const notes = typeof note === "string" ? note : null;
       const existing = attendance.find(
-        (a) => a.learnerId === r.learnerId && a.dateKey === r.dateKey
+        (a) => a.learnerId === id && a.dateKey === dateKey
       );
-      if (!existing) {
-        attendance.push({
-          learnerId: r.learnerId,
-          dateKey: r.dateKey,
-          notes: null,
-          weekStart,
-        });
-      }
+      // ON CONFLICT DO UPDATE sets `notes` unconditionally, so an existing row
+      // takes the incoming value exactly as the real statement would.
+      if (existing) existing.notes = notes;
+      else attendance.push({ learnerId: id, dateKey, notes, weekStart });
     }
     const marked = rows.map((r) => ({ id: `att-${r.learnerId}-${r.dateKey}` }));
     // One row silently skipped by the JOIN — a soft-deleted or cross-tenant learner.
@@ -168,37 +178,11 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
     return removed;
   }
 
-  if (sql.includes('UPDATE "Attendance"')) {
-    const ids = params.filter(
-      (p): p is string => typeof p === "string" && learnerIds.includes(p)
-    );
-    // The statement's only bound date key is the week: its VALUES rows are
-    // (learnerId, notes). Modelling `a."weekStart" = $n::date` is the whole point
-    // of this branch — without it, deleting that predicate from the action lets a
-    // remark for one week overwrite `notes` in every other week, silently.
-    const weekKey = params.find(
-      (p): p is string => typeof p === "string" && DATE_KEY.test(p)
-    );
-    const touched: { learnerId: string }[] = [];
-    for (const id of ids) {
-      // A remark lands on every marked day the learner has that week, and on none
-      // at all if they have no marked day — the "skipped" case.
-      // No week bound at all means the predicate is gone from the statement, so
-      // Postgres would match EVERY week. Model that, rather than matching nothing:
-      // it makes the mutation fail for the reason it actually breaks production.
-      const days = attendance.filter(
-        (a) =>
-          a.learnerId === id &&
-          (weekKey === undefined || (a.weekStart ?? WEEK_START) === weekKey)
-      );
-      for (const day of days) {
-        day.notes = "set";
-        touched.push({ learnerId: id });
-      }
-    }
-    return touched;
-  }
-
+  // There is deliberately no `UPDATE "Attendance"` branch. The weekly-remark
+  // UPDATE pass is gone: a reason rides on the cell it explains and is written by
+  // the INSERT itself. Reintroducing a second pass would fall through to the throw
+  // below rather than quietly passing, which is the point — that pass is what used
+  // to overwrite a per-day reason with a week-wide one.
   throw new Error(`unexpected statement: ${sql}`);
 });
 
@@ -291,17 +275,18 @@ vi.mock("@/lib/week-range", async (importOriginal) => {
 
 const { saveAralWeeklyAttendance } = await import("@/lib/actions/attendance");
 
-type Cell = { learnerId: string; date: string; status: string | null };
+type Cell = {
+  learnerId: string;
+  date: string;
+  status: string | null;
+  notes?: string | null;
+};
 
-function post(overrides: {
-  cells?: Cell[];
-  remarks?: { learnerId: string; notes: string }[];
-} = {}) {
+function post(overrides: { cells?: Cell[] } = {}) {
   return saveAralWeeklyAttendance({
     gradeId: GRADE_ID,
     weekStart: WEEK_START,
     cells: [],
-    remarks: [],
     ...overrides,
   });
 }
@@ -386,126 +371,138 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
     expect((res as { data: { cleared: number } }).data.cleared).toBe(1);
   });
 
-  it("counts remarksApplied per LEARNER, not per updated row", async () => {
-    // A remark spans every marked day in the learner's week, so counting returned
-    // rows would report 3 for one learner. The old code counted STATEMENTS with a
-    // non-zero count; the rewrite must count distinct learners to match.
-    attendance = [
-      { learnerId: "learner-a", dateKey: "2026-08-24", notes: null },
-      { learnerId: "learner-a", dateKey: "2026-08-25", notes: null },
-      { learnerId: "learner-a", dateKey: "2026-08-26", notes: null },
-    ];
-
+  it("stores each day's reason on that day, not across the week", async () => {
+    // The whole point of moving the reason onto the cell. Under the old weekly
+    // remark, one note was smeared over every marked day and could not say which
+    // day it was about; here two days in one save keep two different reasons.
     const res = await post({
-      remarks: [{ learnerId: "learner-a", notes: "Improving steadily" }],
-    });
-
-    expect(res).toMatchObject({
-      ok: true,
-      data: { upserted: 0, cleared: 0, remarksApplied: 1, remarksSkipped: 0 },
-    });
-  });
-
-  it("confines a remark to the week being saved", async () => {
-    // The remark statement's `a."weekStart" = $n::date` predicate is the only thing
-    // stopping a week-3 remark from overwriting `notes` in weeks 1, 2 and 4: the
-    // UPDATE otherwise matches on learnerId alone. `Attendance.notes` is per-day,
-    // so those other weeks' remarks would be destroyed with no way to recover them.
-    attendance = [
-      { learnerId: "learner-a", dateKey: "2026-08-11", notes: "week 1", weekStart: "2026-08-10" },
-      { learnerId: "learner-a", dateKey: "2026-08-18", notes: "week 2", weekStart: "2026-08-17" },
-      { learnerId: "learner-a", dateKey: TUESDAY, notes: null, weekStart: WEEK_START },
-      { learnerId: "learner-a", dateKey: "2026-09-01", notes: "week 4", weekStart: "2026-08-31" },
-    ];
-
-    const res = await post({
-      remarks: [{ learnerId: "learner-a", notes: "this week only" }],
-    });
-
-    expect(res).toMatchObject({ ok: true, data: { remarksApplied: 1 } });
-    expect(attendance.map((a) => a.notes)).toEqual([
-      "week 1",
-      "week 2",
-      "set",
-      "week 4",
-    ]);
-  });
-
-  it("counts a remark for a learner with no marked day as skipped", async () => {
-    // `Attendance.notes` is per-day, so a weekly remark has nowhere to live until
-    // the learner has at least one marked day. The grid tells the teacher, so the
-    // number has to be right.
-    attendance = [{ learnerId: "learner-a", dateKey: TUESDAY, notes: null }];
-
-    const res = await post({
-      remarks: [
-        { learnerId: "learner-a", notes: "has a marked day" },
-        { learnerId: "learner-b", notes: "has none" },
-        { learnerId: "learner-c", notes: "has none either" },
+      cells: [
+        {
+          learnerId: "learner-a",
+          date: "2026-08-24",
+          status: "ABSENT",
+          notes: "Sick / Illness",
+        },
+        {
+          learnerId: "learner-a",
+          date: "2026-08-25",
+          status: "EXCUSED",
+          notes: "Family emergency",
+        },
       ],
     });
 
-    expect(res).toMatchObject({
-      ok: true,
-      data: { remarksApplied: 1, remarksSkipped: 2 },
+    expect(res).toMatchObject({ ok: true, data: { upserted: 2 } });
+    expect(
+      attendance.map((a) => [a.dateKey, a.notes])
+    ).toEqual([
+      ["2026-08-24", "Sick / Illness"],
+      ["2026-08-25", "Family emergency"],
+    ]);
+  });
+
+  it("issues no UPDATE statement at all", async () => {
+    // The weekly-remark pass is gone. Were it reintroduced, the mock's fallthrough
+    // would throw `unexpected statement` — this asserts the shape directly so the
+    // reason for its absence is recorded next to it.
+    await post({
+      cells: [
+        {
+          learnerId: "learner-a",
+          date: TUESDAY,
+          status: "ABSENT",
+          notes: "Sick / Illness",
+        },
+      ],
+    });
+
+    expect(rawCalls.every((c) => !c.sql.includes('UPDATE "Attendance"'))).toBe(true);
+    const insert = rawCalls.find((c) => c.sql.includes('INSERT INTO "Attendance"'))!;
+    // The reason is written by the INSERT, on conflict included, or an edit to an
+    // already-marked day would leave the old reason in place.
+    expect(insert.sql).toContain('"notes" = EXCLUDED."notes"');
+    expect(insert.params).toContain("Sick / Illness");
+  });
+
+  it("clears a stored reason when the day turns Present", async () => {
+    // Present takes no reason — the picker says so and the action enforces it, so a
+    // day that was Absent for a reason must not keep that reason once it is Present.
+    // The client is not trusted here: it sends the note and the action drops it.
+    attendance = [
+      { learnerId: "learner-a", dateKey: TUESDAY, notes: "Sick / Illness" },
+    ];
+
+    await post({
+      cells: [
+        {
+          learnerId: "learner-a",
+          date: TUESDAY,
+          status: "PRESENT",
+          notes: "Sick / Illness",
+        },
+      ],
+    });
+
+    expect(attendance).toHaveLength(1);
+    expect(attendance[0]).toMatchObject({
+      learnerId: "learner-a",
+      dateKey: TUESDAY,
+      notes: null,
     });
   });
 
-  it("applies a remark to a day created in the same save", async () => {
-    // The ordering invariant: the remark UPDATE runs after the mark INSERT, so a
-    // first-time entry keeps its remark. Reversing the two would report this as
-    // skipped.
-    const res = await post({
-      cells: [{ learnerId: "learner-a", date: TUESDAY, status: "PRESENT" }],
-      remarks: [{ learnerId: "learner-a", notes: "First week back" }],
-    });
-
-    expect(res).toMatchObject({
-      ok: true,
-      data: { upserted: 1, remarksApplied: 1, remarksSkipped: 0 },
-    });
-    const order = rawCalls.map((c) =>
-      c.sql.includes("INSERT") ? "insert" : c.sql.includes("DELETE") ? "delete" : "update"
-    );
-    expect(order.indexOf("insert")).toBeLessThan(order.indexOf("update"));
-  });
-
-  it("does not resurrect a cell cleared in the same save", async () => {
-    // Clears are ordered between marks and remarks, as they were before. A remark
-    // must not find the day the same save deleted.
+  it("treats a reason-only edit as a real change", async () => {
+    // The grid sends a cell when EITHER half changed, so re-typing a reason on an
+    // unchanged status still travels. Nothing else proves the action accepts it.
     attendance = [{ learnerId: "learner-a", dateKey: TUESDAY, notes: null }];
 
     const res = await post({
-      cells: [{ learnerId: "learner-a", date: TUESDAY, status: null }],
-      remarks: [{ learnerId: "learner-a", notes: "gone" }],
+      cells: [
+        {
+          learnerId: "learner-a",
+          date: TUESDAY,
+          status: "ABSENT",
+          notes: "Personal reason",
+        },
+      ],
     });
 
-    expect(res).toMatchObject({
-      ok: true,
-      data: { cleared: 1, remarksApplied: 0, remarksSkipped: 1 },
+    expect(res).toMatchObject({ ok: true, data: { upserted: 1 } });
+    expect(attendance[0]?.notes).toBe("Personal reason");
+  });
+
+  it("takes a cleared day's row away, reason and all", async () => {
+    // A clear deletes the row, so the reason cannot outlive the day it explained.
+    attendance = [
+      { learnerId: "learner-a", dateKey: TUESDAY, notes: "Sick / Illness" },
+    ];
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: TUESDAY, status: null }],
     });
+
+    expect(res).toMatchObject({ ok: true, data: { cleared: 1 } });
     expect(attendance).toHaveLength(0);
   });
 
-  it("reports all four counts in the audit row, with no remark text", async () => {
+  it("reports both counts in the audit row, with no reason text", async () => {
     attendance = [{ learnerId: "learner-b", dateKey: TUESDAY, notes: null }];
 
     await post({
       cells: [
-        { learnerId: "learner-a", date: TUESDAY, status: "PRESENT" },
+        {
+          learnerId: "learner-a",
+          date: TUESDAY,
+          status: "ABSENT",
+          notes: "Reads with confidence now",
+        },
         { learnerId: "learner-b", date: TUESDAY, status: null },
       ],
-      remarks: [{ learnerId: "learner-a", notes: "Reads with confidence now" }],
     });
 
     const metadata = writeAudit.mock.calls[0][0].metadata;
-    expect(metadata).toMatchObject({
-      upserted: 1,
-      cleared: 1,
-      remarksApplied: 1,
-      remarksSkipped: 0,
-    });
-    // Remark text is learner PII and never enters an audit row.
+    expect(metadata).toMatchObject({ upserted: 1, cleared: 1 });
+    // Reason text is learner PII and never enters an audit row.
     expect(JSON.stringify(metadata)).not.toContain("Reads with confidence");
   });
 });
@@ -533,11 +530,19 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
     expect(learnerFindMany).not.toHaveBeenCalled();
   });
 
-  it("rejects 201 remarks before any write", async () => {
-    learnerIds = Array.from({ length: 201 }, (_, i) => `learner-${i}`);
-    const remarks = learnerIds.map((learnerId) => ({ learnerId, notes: "note" }));
-
-    const res = await post({ remarks });
+  it("rejects a reason longer than 500 characters before any write", async () => {
+    // The per-cell reason inherits the 500-char cap the weekly remark had. It is
+    // the only bound on how much text one cell can carry into the INSERT.
+    const res = await post({
+      cells: [
+        {
+          learnerId: "learner-a",
+          date: TUESDAY,
+          status: "ABSENT",
+          notes: "x".repeat(501),
+        },
+      ],
+    });
 
     expect(res.ok).toBe(false);
     expect(transaction).not.toHaveBeenCalled();
@@ -583,10 +588,10 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
         { learnerId: "learner-a", date: TUESDAY, status: "PRESENT" },
         { learnerId: "learner-b", date: TUESDAY, status: null },
       ],
-      remarks: [{ learnerId: "learner-a", notes: "note" }],
     });
 
-    expect(rawCalls).toHaveLength(3);
+    // Two statements now, not three: the weekly-remark UPDATE is gone.
+    expect(rawCalls).toHaveLength(2);
     for (const call of rawCalls) {
       // Bound, not interpolated — the only witness a raw statement has that the
       // tenant predicate held.

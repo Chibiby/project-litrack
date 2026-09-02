@@ -13,6 +13,7 @@ import {
 } from "@/components/aral/aral-filter-popover";
 import {
   AralWeeklyAttendanceGridForm,
+  BulkAttendanceActions,
   type AralWeeklyAttendanceGridFormHandle,
   type WeeklyAttendanceGridExisting,
   type WeeklyAttendanceGridLearner,
@@ -98,6 +99,8 @@ export function AralWeeklyAttendancePanel({
   const [holidayKeys, setHolidayKeys] = useState(initialHolidayKeys);
   const [loading, setLoading] = useState(false);
   const [savePending, setSavePending] = useState(false);
+  /** Mirrored out of the grid so the toolbar's Bulk Actions can show a count. */
+  const [selectedCount, setSelectedCount] = useState(0);
   const formRef = useRef<AralWeeklyAttendanceGridFormHandle>(null);
   const desiredWeekRef = useRef(initialWeekKey);
   const requestIdRef = useRef(0);
@@ -240,17 +243,24 @@ export function AralWeeklyAttendancePanel({
                 preserveParams={{ week: pickerWeek }}
               />
               {canSave ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => formRef.current?.save()}
-                  disabled={actionsLocked}
-                  loading={savePending}
-                  loadingText="Saving…"
-                >
-                  <Save className="h-4 w-4" aria-hidden />
-                  Save Weekly Attendance
-                </Button>
+                <>
+                  <BulkAttendanceActions
+                    selectedCount={selectedCount}
+                    disabled={actionsLocked}
+                    onApply={(action) => formRef.current?.applyBulk(action)}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => formRef.current?.save()}
+                    disabled={actionsLocked}
+                    loading={savePending}
+                    loadingText="Saving…"
+                  >
+                    <Save className="h-4 w-4" aria-hidden />
+                    Save Weekly Attendance
+                  </Button>
+                </>
               ) : null}
             </>
           }
@@ -275,6 +285,7 @@ export function AralWeeklyAttendancePanel({
               showSection={showSection}
               readOnly={readOnly || loading || gridLocked}
               onSavePendingChange={setSavePending}
+              onSelectionChange={setSelectedCount}
             />
           </div>
           {loading && (

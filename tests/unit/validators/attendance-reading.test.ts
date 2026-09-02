@@ -39,12 +39,16 @@ describe("attendanceWeekSchema", () => {
     weekStart: "2026-08-10", // Monday
     cells: [
       { learnerId: "l1", date: "2026-08-10", status: "PRESENT" as const },
-      { learnerId: "l2", date: "2026-08-11", status: "ABSENT" as const },
+      {
+        learnerId: "l2",
+        date: "2026-08-11",
+        status: "ABSENT" as const,
+        notes: "Sick / Illness",
+      },
     ],
-    remarks: [{ learnerId: "l1", notes: "Improving" }],
   };
 
-  it("accepts a week of cells with remarks", () => {
+  it("accepts a week of cells, with and without a reason", () => {
     expect(attendanceWeekSchema.safeParse(base).success).toBe(true);
   });
 
@@ -90,27 +94,17 @@ describe("attendanceWeekSchema", () => {
         cells: [{ learnerId: "", date: "2026-08-10", status: "PRESENT" }],
       }).success,
     ).toBe(false);
-    expect(
-      attendanceWeekSchema.safeParse({
-        ...base,
-        remarks: [{ learnerId: "", notes: "x" }],
-      }).success,
-    ).toBe(false);
   });
 
   it("rejects a payload with nothing to save", () => {
-    const res = attendanceWeekSchema.safeParse({
-      ...base,
-      cells: [],
-      remarks: [],
-    });
+    const res = attendanceWeekSchema.safeParse({ ...base, cells: [] });
     expect(res.success).toBe(false);
     if (!res.success) {
       expect(res.error.errors[0]?.message).toBe("Nothing to save");
     }
   });
 
-  it("caps cells at 1400 and remarks at 200", () => {
+  it("caps cells at 1400", () => {
     const cell = (i: number) => ({
       learnerId: `l${i}`,
       date: "2026-08-10",
@@ -128,39 +122,42 @@ describe("attendanceWeekSchema", () => {
         cells: Array.from({ length: 1401 }, (_, i) => cell(i)),
       }).success,
     ).toBe(false);
-    expect(
-      attendanceWeekSchema.safeParse({
-        ...base,
-        remarks: Array.from({ length: 201 }, (_, i) => ({
-          learnerId: `l${i}`,
-          notes: "x",
-        })),
-      }).success,
-    ).toBe(false);
   });
 
-  it("enforces remark max length 500 and trims", () => {
-    expect(
-      attendanceWeekSchema.safeParse({
-        ...base,
-        remarks: [{ learnerId: "l1", notes: "x".repeat(500) }],
-      }).success,
-    ).toBe(true);
-    expect(
-      attendanceWeekSchema.safeParse({
-        ...base,
-        remarks: [{ learnerId: "l1", notes: "x".repeat(501) }],
-      }).success,
-    ).toBe(false);
-
-    const trimmed = attendanceWeekSchema.safeParse({
+  it("enforces the per-cell reason max length 500 and trims", () => {
+    const cell = (notes: string) => ({
       ...base,
-      remarks: [{ learnerId: "l1", notes: "  Improving  " }],
+      cells: [
+        { learnerId: "l1", date: "2026-08-25", status: "ABSENT" as const, notes },
+      ],
     });
+
+    expect(attendanceWeekSchema.safeParse(cell("x".repeat(500))).success).toBe(true);
+    expect(attendanceWeekSchema.safeParse(cell("x".repeat(501))).success).toBe(false);
+
+    const trimmed = attendanceWeekSchema.safeParse(cell("  Sick / Illness  "));
     expect(trimmed.success).toBe(true);
     if (trimmed.success) {
-      expect(trimmed.data.remarks[0]?.notes).toBe("Improving");
+      expect(trimmed.data.cells[0]?.notes).toBe("Sick / Illness");
     }
+  });
+
+  it("accepts a cell with no reason, and a reason explicitly cleared", () => {
+    // `undefined` is "no reason" and `null` clears a stored one; both are how a
+    // Present day and a cleared day travel.
+    const omitted = attendanceWeekSchema.safeParse({
+      ...base,
+      cells: [{ learnerId: "l1", date: "2026-08-25", status: "PRESENT" }],
+    });
+    expect(omitted.success).toBe(true);
+
+    const nulled = attendanceWeekSchema.safeParse({
+      ...base,
+      cells: [
+        { learnerId: "l1", date: "2026-08-25", status: null, notes: null },
+      ],
+    });
+    expect(nulled.success).toBe(true);
   });
 });
 

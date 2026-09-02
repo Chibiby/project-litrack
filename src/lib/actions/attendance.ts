@@ -125,9 +125,6 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   ActionResult<{
     upserted: number;
     cleared: number;
-    remarksApplied: number;
-    /** Remarks with nowhere to live: the learner has no marked day that week. */
-    remarksSkipped: number;
   }>
 > {
   const user = await requireSchoolUser("TEACHER");
@@ -184,6 +181,14 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     learnerId: string;
     date: Date;
     status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED" | null;
+    /**
+     * The reason for THIS day. Authoritative for every cell that appears in
+     * `cells`: a cell only travels when the teacher changed it, and the grid
+     * always sends the reason it means to end up with, so `undefined` (the
+     * field omitted) means "no reason" and clears a stored one rather than
+     * leaving it behind on a day whose status just changed.
+     */
+    notes: string | null;
   };
   const cellByKey = new Map<string, Cell>();
   for (const cell of parsed.data.cells) {
@@ -196,21 +201,20 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     cellByKey.set(`${cell.learnerId}:${cell.date}`, {
       learnerId: cell.learnerId,
       date,
+      // A Present day carries no reason by construction — the picker says so —
+      // and an empty string is stored as NULL rather than as a blank note.
+      notes:
+        cell.status === "PRESENT" || !cell.notes ? null : cell.notes,
       status: cell.status,
     });
   }
   const cells = [...cellByKey.values()];
 
-  if (cells.length === 0 && parsed.data.remarks.length === 0) {
+  if (cells.length === 0) {
     return { ok: false, error: "Nothing to save" };
   }
 
-  const learnerIds = [
-    ...new Set([
-      ...cells.map((c) => c.learnerId),
-      ...parsed.data.remarks.map((r) => r.learnerId),
-    ]),
-  ];
+  const learnerIds = [...new Set(cells.map((c) => c.learnerId))];
 
   const learners = await prisma.learner.findMany({
     where: {
@@ -231,33 +235,20 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     };
   }
 
-  // Three set-based statements, still ordered. The order is load-bearing: a
-  // weekly remark is an UPDATE over rows the insert creates, so it has to run
-  // last or a first-time entry would lose its remark. Clears sit between them,
-  // exactly as the per-row version had them, so a cell cleared in the same save
-  // is not resurrected by the remark pass.
+  // Two set-based statements. The third — a weekly-remark UPDATE that had to run
+  // last so a first-time entry kept its remark — is gone: a reason now rides on
+  // the cell it explains and is written by the INSERT itself, so there is no
+  // second pass that could overwrite a per-day reason or resurrect a cleared
+  // cell. Clears still run after marks, exactly as before.
   const weekKey = formatLocalDateKey(weekStart);
   const marks = cells.filter(
     (c): c is Cell & { status: NonNullable<Cell["status"]> } => c.status !== null
   );
   const clears = cells.filter((c) => c.status === null);
 
-  // Remarks are keyed on the learner's whole week, so two remarks for one learner
-  // would make `UPDATE … FROM (VALUES …)` pick a source row arbitrarily. Dedupe
-  // last-wins, matching how `cellByKey` above already treats repeated cells.
-  const remarkByLearner = new Map<string, { learnerId: string; notes: string | null }>();
-  for (const remark of parsed.data.remarks) {
-    remarkByLearner.set(remark.learnerId, {
-      learnerId: remark.learnerId,
-      notes: remark.notes.length > 0 ? remark.notes : null,
-    });
-  }
-  const remarks = [...remarkByLearner.values()];
-
   const now = new Date();
   let upserted = 0;
   let cleared = 0;
-  const remarkedLearnerIds = new Set<string>();
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -265,8 +256,11 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
       //    `@default(uuid())` and `@updatedAt` are CLIENT-side and neither column
       //    has a database default; `updatedAt` is bumped in DO UPDATE too, or the
       //    column would freeze at first-insert time with nothing to fail.
-      //    `notes` is deliberately absent from both branches — remarks are weekly
-      //    and are applied in step 3 across the learner's whole week.
+      //    `notes` is written here, in both branches. The reason belongs to this
+      //    one day, so DO UPDATE sets it unconditionally: a cell that travels is
+      //    a cell the teacher changed, and the value it carries is the reason the
+      //    day should end up with — including NULL, which is how switching a day
+      //    to Present drops the reason its Absent left behind.
       //    Dates bind as YYYY-MM-DD TEXT and cast in SQL: `Attendance.date` and
       //    `.weekStart` are `@db.Date`, and binding a local-midnight `Date` would
       //    write the intended day on Vercel (TZ=UTC) and the previous one on a
@@ -287,6 +281,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
               ${formatLocalDateKey(c.date)}::date,
               ${weekKey}::date,
               ${c.status}::text::"AttendanceStatus",
+              ${c.notes}::text,
               ${user.id}::text,
               ${now}::timestamp(3)
             )`
@@ -294,14 +289,14 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
         );
         const written = await tx.$queryRaw<{ id: string }[]>`
           INSERT INTO "Attendance" (
-            "id", "learnerId", "date", "weekStart", "status", "recordedById",
-            "updatedAt"
+            "id", "learnerId", "date", "weekStart", "status", "notes",
+            "recordedById", "updatedAt"
           )
           SELECT v."id", v."learnerId", v."date", v."weekStart", v."status",
-                 v."recordedById", v."updatedAt"
+                 v."notes", v."recordedById", v."updatedAt"
           FROM (VALUES ${values}) AS v (
-            "id", "learnerId", "date", "weekStart", "status", "recordedById",
-            "updatedAt"
+            "id", "learnerId", "date", "weekStart", "status", "notes",
+            "recordedById", "updatedAt"
           )
           JOIN "Learner" l
             ON l."id" = v."learnerId"
@@ -311,6 +306,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
            AND l."isAralLearner" = TRUE
           ON CONFLICT ("learnerId", "date") DO UPDATE SET
             "status" = EXCLUDED."status",
+            "notes" = EXCLUDED."notes",
             "recordedById" = EXCLUDED."recordedById",
             "updatedAt" = EXCLUDED."updatedAt"
           RETURNING "id"
@@ -349,49 +345,11 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
         `;
         cleared += deleted.length;
       }
-
-      // 3. Remarks. `remarksApplied` was a COUNT OF STATEMENTS whose count > 0,
-      //    which is a different reduction from `cleared` above: a remark applies
-      //    once per learner however many days it touched. `RETURNING "learnerId"`
-      //    gives one row per updated day, so the DISTINCT learner ids reproduce
-      //    the old number exactly, and `remarksSkipped` is the submitted remarks
-      //    minus those.
-      for (const chunk of chunkRows(remarks, BULK_CHUNK_ROWS)) {
-        const values = Prisma.join(
-          chunk.map(
-            (r) => Prisma.sql`(
-              ${r.learnerId}::text,
-              ${r.notes}::text
-            )`
-          )
-        );
-        const touched = await tx.$queryRaw<{ learnerId: string }[]>`
-          UPDATE "Attendance" a
-          SET "notes" = v."notes",
-              "updatedAt" = ${now}::timestamp(3)
-          FROM (VALUES ${values}) AS v ("learnerId", "notes"),
-               "Learner" l
-          WHERE a."learnerId" = v."learnerId"
-            AND a."weekStart" = ${weekKey}::date
-            AND l."id" = a."learnerId"
-            AND l."schoolId" = ${user.schoolId}
-            AND l."gradeLevelId" = ${grade.id}
-            AND l."deletedAt" IS NULL
-          RETURNING a."learnerId"
-        `;
-        for (const row of touched) remarkedLearnerIds.add(row.learnerId);
-      }
     }, BULK_TX_OPTIONS);
   } catch (err) {
     console.error("[saveAralWeeklyAttendance] transaction failed:", err);
     return { ok: false, error: "Could not save the week. Please try again." };
   }
-
-  // `Attendance.notes` is per-day, so a weekly remark has nowhere to live until
-  // the learner has at least one marked day in the week. Count those instead of
-  // dropping them silently — the grid tells the teacher.
-  const remarksApplied = remarkedLearnerIds.size;
-  const remarksSkipped = remarks.length - remarksApplied;
 
   await writeAudit({
     userId: user.id,
@@ -399,7 +357,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     action: AUDIT_ACTIONS.ATTENDANCE_WEEK_SAVE,
     resource: "Attendance",
     resourceId: grade.id,
-    // Counts and ids only. Remark text is learner PII and never enters an audit
+    // Counts and ids only. Reason text is learner PII and never enters an audit
     // row.
     metadata: {
       schoolId: user.schoolId,
@@ -407,8 +365,6 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
       weekStart: parsed.data.weekStart,
       upserted,
       cleared,
-      remarksApplied,
-      remarksSkipped,
       learnerIds,
     },
   });
@@ -428,10 +384,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     }
   }
 
-  return {
-    ok: true,
-    data: { upserted, cleared, remarksApplied, remarksSkipped },
-  };
+  return { ok: true, data: { upserted, cleared } };
 }
 
 /**
