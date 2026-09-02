@@ -134,6 +134,20 @@ function triggerDownload(base64: string, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * The hub's one title-line control, rendered by the page into the shell's
+ * `actions` slot so it sits on the real page heading rather than on a second
+ * one of the hub's own.
+ */
+export function ReportSettingsButton() {
+  return (
+    <Button type="button" variant="outline" disabled title="Coming soon">
+      <Settings className="h-4 w-4" aria-hidden />
+      Report Settings
+    </Button>
+  );
+}
+
 export function ReportsHub({
   schoolYears,
   grades,
@@ -262,18 +276,11 @@ export function ReportsHub({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Reports Hub</h2>
-          <p className="text-sm text-muted-foreground">
-            Generate, view and download reports for your classes and subjects.
-          </p>
-        </div>
-        <Button type="button" variant="outline" disabled title="Coming soon">
-          <Settings className="h-4 w-4" aria-hidden />
-          Report Settings
-        </Button>
-      </div>
+      {/* No heading here. The shell's own title block is the page's single
+          <h1> (spec a11y: one h1 per view), and both reports pages title it
+          "Reports Hub" with the Report Settings button in their `actions`
+          slot — rendering a second heading here put two stacked titles on the
+          page, which is what it used to do. */}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-2">

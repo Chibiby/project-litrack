@@ -4,7 +4,10 @@ import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { ReportsHub } from "@/components/reports/reports-hub";
+import {
+  ReportsHub,
+  ReportSettingsButton,
+} from "@/components/reports/reports-hub";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { teacherGradeScope } from "@/lib/teachers/scope";
 import { loadRecentReports } from "@/lib/reports/recent";
@@ -78,10 +81,11 @@ export default async function TeacherReportsPage() {
 
   return (
     <AppShell
-      title="Reports"
-      subtitle="Generate, view and download reports for your classes"
+      title="Reports Hub"
+      subtitle="Generate, view and download reports for your classes and subjects."
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      actions={<ReportSettingsButton />}
     >
       <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
         <TeacherReportBody
