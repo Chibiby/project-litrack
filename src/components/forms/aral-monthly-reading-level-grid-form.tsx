@@ -8,11 +8,12 @@ import {
   useMemo,
   useState,
   useTransition,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, MessageSquare, MoreVertical } from "lucide-react";
+import { Check, ChevronDown, MessageSquare, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -586,12 +587,19 @@ function ScaleHead({ title, sub }: { title: string; sub: string }) {
 }
 
 /**
- * A compact colour-coded band picker. The visible face is the short code, but the
- * control underneath is a real `<select>` — kept, rather than rebuilt as a custom
- * listbox, because it is what makes keyboard entry and the native mobile picker
- * work, and a teacher fills this grid a hundred cells at a time. The select is
- * transparent and layered over the badge so its options can carry the full DepEd
- * descriptor while the cell stays narrow enough for five scales to fit.
+ * A compact colour-coded band picker. The face is the short code so five scales
+ * fit one row; the list carries the full DepEd descriptor.
+ *
+ * This was a transparent native `<select>` layered over the badge. That rendered
+ * as the platform's own list — square, unthemed, ignoring the band tints entirely
+ * — which is what made this grid look unlike the rest of the app. It is now a
+ * popover listbox styled like the weekly-attendance picker.
+ *
+ * The native control's real advantage was keyboard entry, and a teacher fills
+ * this grid a hundred cells at a time, so that is reimplemented rather than lost:
+ * Up/Down move, Home/End jump, Enter/Space commit, Escape closes, and typing a
+ * letter jumps to the next option starting with it. `role="listbox"` with
+ * `aria-selected` on every option is what keeps a screen reader hearing a select.
  */
 function BandSelect({
   options,
@@ -606,34 +614,135 @@ function BandSelect({
   label: string;
   onChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
+  // "Not assessed" is a real entry in the list, not a placeholder, so clearing a
+  // cell is reachable by the same keys as setting one.
+  const entries: { value: string; code: string; label: string; tone: string }[] = [
+    { value: "", code: "—", label: "Not assessed", tone: TONE_EMPTY },
+    ...options,
+  ];
+  const selectedIndex = Math.max(
+    0,
+    entries.findIndex((e) => e.value === value)
+  );
+  const [active, setActive] = useState(selectedIndex);
+
+  // Reopening lands on the current value rather than wherever the last visit
+  // left the cursor.
+  useEffect(() => {
+    if (open) setActive(selectedIndex);
+  }, [open, selectedIndex]);
+
+  function commit(next: string) {
+    onChange(next);
+    setOpen(false);
+  }
+
+  function onKeyDown(e: ReactKeyboardEvent) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => {
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        return (i + step + entries.length) % entries.length;
+      });
+      return;
+    }
+    if (e.key === "Home") {
+      e.preventDefault();
+      setActive(0);
+      return;
+    }
+    if (e.key === "End") {
+      e.preventDefault();
+      setActive(entries.length - 1);
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      commit(entries[active]?.value ?? "");
+      return;
+    }
+    if (e.key.length === 1 && /[a-z0-9]/i.test(e.key)) {
+      // Typeahead over the code then the label, matching what a native select
+      // does with the option text. The search starts one past the cursor and
+      // wraps, so pressing the same letter twice steps through the matches.
+      const key = e.key.toLowerCase();
+      const from = active + 1;
+      const hit = entries
+        .map((_, i) => (from + i) % entries.length)
+        .find((i) => {
+          const entry = entries[i];
+          return (
+            entry.code.toLowerCase().startsWith(key) ||
+            entry.label.toLowerCase().startsWith(key)
+          );
+        });
+      if (hit !== undefined) setActive(hit);
+    }
+  }
+
   return (
-    <span
-      className={cn(
-        "relative flex h-8 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1",
-        selected ? selected.tone : TONE_EMPTY,
-        disabled && "opacity-60"
-      )}
-    >
-      <span aria-hidden className="tabular-nums">
-        {selected ? selected.code : "—"}
-      </span>
-      <ChevronDown aria-hidden className="size-3 shrink-0 opacity-60" />
-      <select
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
-        value={value}
-        disabled={disabled}
-        aria-label={label}
-        onChange={(e) => onChange(e.target.value)}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={label}
+          title={selected ? `${selected.code} — ${selected.label}` : "Not assessed"}
+          className={cn(
+            "flex h-8 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
+            selected ? selected.tone : TONE_EMPTY
+          )}
+        >
+          <span aria-hidden className="tabular-nums">
+            {selected ? selected.code : "—"}
+          </span>
+          <ChevronDown aria-hidden className="size-3 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      {/* Radix moves focus onto the content when it opens, so the key handler
+          sits here rather than on a list that would need focusing by hand. */}
+      <PopoverContent
+        align="start"
+        className="w-64 p-1"
+        onKeyDown={onKeyDown}
       >
-        <option value="">Not assessed</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.code} — {option.label}
-          </option>
-        ))}
-      </select>
-    </span>
+        <ul
+          role="listbox"
+          aria-label={label}
+          className="max-h-72 overflow-y-auto focus:outline-none"
+        >
+          {entries.map((entry, i) => (
+            <li
+              key={entry.value || "none"}
+              role="option"
+              aria-selected={entry.value === value}
+              onClick={() => commit(entry.value)}
+              onMouseEnter={() => setActive(i)}
+              className={cn(
+                "flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm",
+                i === active && "bg-accent"
+              )}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-6 min-w-[2rem] shrink-0 items-center justify-center rounded-full border px-1 text-[11px] font-bold tabular-nums",
+                  entry.tone
+                )}
+              >
+                {entry.code}
+              </span>
+              <span className="min-w-0 flex-1">{entry.label}</span>
+              {entry.value === value && (
+                <Check aria-hidden className="size-4 shrink-0 opacity-70" />
+              )}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 

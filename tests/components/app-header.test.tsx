@@ -55,7 +55,7 @@ describe("AppHeader", () => {
   it("renders search, notifications and the theme toggle", () => {
     pathname.value = "/teacher";
     renderHeader();
-    expect(screen.getByRole("searchbox")).not.toBeNull();
+    expect(screen.getByRole("combobox")).not.toBeNull();
     expect(screen.getByRole("button", { name: /notifications/i })).not.toBeNull();
     expect(screen.getByRole("button", { name: /switch to (dark|light) mode/i })).not.toBeNull();
   });
@@ -73,7 +73,7 @@ describe("AppHeader", () => {
     // box, so it is removed rather than repointed.
     pathname.value = "/teacher/aral";
     renderHeader(vi.fn(), { isAralVolunteer: true });
-    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.getByRole("button", { name: /notifications/i })).not.toBeNull();
     expect(
       screen.getByRole("button", { name: /switch to (dark|light) mode/i })
@@ -92,7 +92,7 @@ describe("AppHeader", () => {
     renderHeader(vi.fn(), { isAralVolunteer: true });
     expect(screen.getByText("Learners")).not.toBeNull();
     // The header carries no nav links, so the inert row's absence here is
-    // expected — the searchbox is the only volunteer-conditional control.
-    expect(screen.queryByRole("searchbox")).toBeNull();
+    // expected — the search combobox is the only volunteer-conditional control.
+    expect(screen.queryByRole("combobox")).toBeNull();
   });
 });

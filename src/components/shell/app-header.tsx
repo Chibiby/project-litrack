@@ -21,10 +21,16 @@ const SEARCH_HREF: Record<UserRole, string> = {
   TEACHER: "/teacher/learners",
 };
 
+/**
+ * What each role can actually match, named honestly. The box searches records
+ * and pages now, and a placeholder that says "Search learners" on a field that
+ * also finds teachers, sections and pages under-sells it — while one that says
+ * "everything" over-sells it, since `globalSearch` scopes results by role.
+ */
 const SEARCH_PLACEHOLDER: Record<UserRole, string> = {
-  SUPER_ADMIN: "Search schools...",
-  SCHOOL_HEAD: "Search teachers...",
-  TEACHER: "Search learners...",
+  SUPER_ADMIN: "Search schools, learners, pages…",
+  SCHOOL_HEAD: "Search learners, teachers, pages…",
+  TEACHER: "Search your learners and pages…",
 };
 
 /**
@@ -68,6 +74,22 @@ export function AppHeader({
   );
   const title = resolvePageTitle(navPath, navGroups);
 
+  // The pages the header search can jump to are exactly the rows this role's nav
+  // renders — derived from it rather than listed again, so a nav item that is
+  // hidden or made inert for a role can never be reachable through search.
+  const searchPages = useMemo(
+    () =>
+      navGroups.flatMap((group) =>
+        group.items
+          // `soon` and `unavailable` are the two inert states, and every other
+          // resolver skips them too — a row that cannot be clicked in the rail
+          // must not become clickable through search.
+          .filter((item) => !item.soon && !item.unavailable)
+          .map((item) => ({ label: item.label, href: item.href }))
+      ),
+    [navGroups]
+  );
+
   return (
     <header className="sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header">
       <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
@@ -105,6 +127,7 @@ export function AppHeader({
           <HeaderSearch
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
+            pages={searchPages}
             className="hidden w-full max-w-xs sm:block"
           />
         )}
