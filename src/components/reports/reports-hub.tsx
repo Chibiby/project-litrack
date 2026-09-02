@@ -36,6 +36,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { generateReport, deleteReport } from "@/lib/actions/reports";
 import {
@@ -366,31 +371,14 @@ export function ReportsHub({
           </Field>
 
           <Field label="Date Range">
-            <div className="flex h-10 items-center gap-1 rounded-lg border border-input bg-background px-2">
-              <CalendarDays
-                aria-hidden
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-              />
-              <input
-                type="date"
-                value={from}
-                max={to || undefined}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-label="Date range start"
-                className="w-full bg-transparent text-sm outline-none"
-              />
-              <span aria-hidden className="text-muted-foreground">
-                –
-              </span>
-              <input
-                type="date"
-                value={to}
-                min={from || undefined}
-                onChange={(e) => setTo(e.target.value)}
-                aria-label="Date range end"
-                className="w-full bg-transparent text-sm outline-none"
-              />
-            </div>
+            <DateRangeFilter
+              from={from}
+              to={to}
+              onChange={(nextFrom, nextTo) => {
+                setFrom(nextFrom);
+                setTo(nextTo);
+              }}
+            />
           </Field>
 
           <Field label="Report Format">
@@ -673,6 +661,147 @@ export function ReportsHub({
       </div>
     </div>
   );
+}
+
+/**
+ * Date range as a popover, not two `<input type="date">` side by side.
+ *
+ * Two native date inputs in one filter cell cannot both fit: each renders its
+ * own `mm/dd/yyyy` placeholder plus a picker icon, so at this column width the
+ * second one is clipped mid-placeholder and neither can be read or clicked
+ * reliably. Behind a trigger, each field gets a full row and a label, and the
+ * presets cover the ranges a teacher actually asks for — which is what the
+ * cramped version was really being used to approximate.
+ */
+function DateRangeFilter({
+  from,
+  to,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const label =
+    from && to
+      ? `${prettyDate(from)} – ${prettyDate(to)}`
+      : from
+        ? `From ${prettyDate(from)}`
+        : to
+          ? `Until ${prettyDate(to)}`
+          : "All dates";
+
+  function preset(kind: "week" | "month" | "term" | "clear") {
+    if (kind === "clear") {
+      onChange("", "");
+      setOpen(false);
+      return;
+    }
+    const today = new Date();
+    if (kind === "week") {
+      const monday = mondayOf(today);
+      const sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      onChange(localDateKey(monday), localDateKey(sunday));
+    } else if (kind === "month") {
+      onChange(
+        localDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
+        localDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0))
+      );
+    } else {
+      // Last 90 days — a school term in round numbers, without needing the
+      // term calendar this filter has no access to.
+      const start = new Date(today);
+      start.setDate(start.getDate() - 89);
+      onChange(localDateKey(start), localDateKey(today));
+    }
+    setOpen(false);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-background px-3 text-left text-sm"
+        >
+          <CalendarDays
+            aria-hidden
+            className="h-4 w-4 shrink-0 text-muted-foreground"
+          />
+          <span
+            className={cn(
+              "flex-1 truncate",
+              !from && !to && "text-muted-foreground"
+            )}
+          >
+            {label}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 space-y-3 p-3">
+        <div className="space-y-1">
+          <label
+            htmlFor="report-range-from"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            From
+          </label>
+          <input
+            id="report-range-from"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => onChange(e.target.value, to)}
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label
+            htmlFor="report-range-to"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            To
+          </label>
+          <input
+            id="report-range-to"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => onChange(from, e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+          <Button type="button" variant="outline" size="sm" onClick={() => preset("week")}>
+            This week
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => preset("month")}>
+            This month
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => preset("term")}>
+            Last 90 days
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => preset("clear")}>
+            Clear
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** `2026-09-02` -> `Sep 2, 2026`, parsed locally so it never shifts a day. */
+function prettyDate(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  const MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
 function Field({

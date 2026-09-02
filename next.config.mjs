@@ -11,6 +11,18 @@ const nextConfig = {
    * next-env.d.ts` after a scratch build to drop the churn.
    */
   distDir: process.env.NEXT_BUILD_DIST_DIR || ".next",
+  /**
+   * Left for Node to require at runtime instead of being bundled into the
+   * server chunk.
+   *
+   * `pdfkit` reads its font metrics and its sRGB ICC profile from files inside
+   * its own package, resolved relative to `__dirname`. Bundled, that path no
+   * longer exists and every PDF fails at draw time with an ENOENT the user
+   * sees as "Could not generate the report" — while Excel, which needs no data
+   * files, keeps working. Externalising it also keeps `fontkit`'s own binary
+   * data intact. Verified: the same code renders a valid PDF under plain Node.
+   */
+  serverExternalPackages: ["pdfkit"],
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
