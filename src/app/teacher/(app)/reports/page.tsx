@@ -4,9 +4,10 @@ import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { OnDemandReportPanel } from "@/components/reports/on-demand-report-panel";
+import { ReportsHub } from "@/components/reports/reports-hub";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { teacherGradeScope } from "@/lib/teachers/scope";
+import { loadRecentReports } from "@/lib/reports/recent";
 import { TableSectionSkeleton } from "@/components/loading";
 
 export const dynamic = "force-dynamic";
@@ -26,34 +27,41 @@ async function TeacherReportBody({
     ? { schoolId, deletedAt: null, ...teacherGradeScope(teacherId) }
     : { schoolId, deletedAt: null };
 
-  // Filters only — full learner dump loads on demand via OnDemandReportPanel.
-  const [grades, sections] = await Promise.all([
+  // Filters and history only. No learner rows load here — every report is
+  // generated on demand, so opening this page never dumps a roster.
+  const [grades, sections, schoolYears, recent] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: gradeWhere,
       select: { id: true, type: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.section.findMany({
-      where: {
-        schoolId,
-        deletedAt: null,
-        gradeLevel: gradeWhere,
-      },
+      where: { schoolId, deletedAt: null, gradeLevel: gradeWhere },
       select: { id: true, name: true, gradeLevelId: true },
       orderBy: { name: "asc" },
     }),
+    prisma.schoolYear.findMany({
+      where: { schoolId },
+      select: { id: true, label: true },
+      orderBy: { startDate: "desc" },
+    }),
+    loadRecentReports({ schoolId, createdById: teacherId }),
   ]);
 
   return (
-    <OnDemandReportPanel
-      role="TEACHER"
-      schoolId={schoolId}
+    <ReportsHub
+      schoolYears={schoolYears.map((y) => ({ id: y.id, label: y.label }))}
       grades={grades.map((g) => ({
         id: g.id,
         label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
       }))}
-      sections={sections}
-      subtitle="Teacher assigned grades"
+      sections={sections.map((s) => ({
+        id: s.id,
+        label: s.name,
+        gradeLevelId: s.gradeLevelId,
+      }))}
+      recent={recent}
+      canDelete
     />
   );
 }
@@ -71,7 +79,7 @@ export default async function TeacherReportsPage() {
   return (
     <AppShell
       title="Reports"
-      subtitle="Excel export and printable learner summary"
+      subtitle="Generate, view and download reports for your classes"
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
     >

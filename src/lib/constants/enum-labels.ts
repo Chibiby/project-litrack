@@ -397,3 +397,24 @@ export const FURTHER_ASSESSMENT_LABELS = {
 export function toOptions<T extends Record<string, string>>(labels: T) {
   return Object.entries(labels).map(([value, label]) => ({ value, label }));
 }
+
+export const TERM_PERIOD_LABELS = {
+  FIRST: "First Term",
+  SECOND: "Second Term",
+  THIRD: "Third Term",
+} as const;
+
+/** Reports Hub: what a generated report covers, and the file it produced. */
+export const REPORT_KIND_LABELS = {
+  ATTENDANCE: "Attendance",
+  READING_LEVEL: "Reading Level",
+  TERM_GRADES: "Grades",
+  TEACHER_SUMMARY: "Teacher Summary",
+  CLASS_ROSTER: "Class Roster",
+  CUSTOM: "Custom",
+} as const;
+
+export const REPORT_FORMAT_LABELS = {
+  EXCEL: "Excel",
+  PDF: "PDF",
+} as const;

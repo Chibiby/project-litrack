@@ -83,6 +83,10 @@ export const AUDIT_ACTIONS = {
   IMPORT_LEARNERS: "IMPORT_LEARNERS",
   EXPORT_LEARNERS_EXCEL: "EXPORT_LEARNERS_EXCEL",
   EXPORT_PRINTABLE_REPORT: "EXPORT_PRINTABLE_REPORT",
+  /** A Reports Hub report generated. Row counts and filter ids only. */
+  REPORT_GENERATE: "REPORT_GENERATE",
+  /** A Reports Hub history row removed. The file was never stored. */
+  REPORT_DELETE: "REPORT_DELETE",
   ADMIN_PROFILE_UPDATE: "ADMIN_PROFILE_UPDATE",
   ADMIN_SCHOOL_VIEW: "ADMIN_SCHOOL_VIEW",
 } as const;

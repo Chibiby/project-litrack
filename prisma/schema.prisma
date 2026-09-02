@@ -409,6 +409,7 @@ model School {
   enrollments    Enrollment[]
   announcements  Announcement[]
   notifications  Notification[]
+  reports        Report[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -474,6 +475,7 @@ model User {
   teacherInvites         TeacherInvite[]      @relation("TeacherInviteUser")
   notifications          Notification[]       @relation("NotificationRecipient")
   notificationsCaused    Notification[]       @relation("NotificationActor")
+  reports                Report[]             @relation("ReportCreator")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1002,4 +1004,51 @@ model AuditLog {
   /// purpose: PostgreSQL scans a b-tree backwards at equal cost, so a `sort: Desc`
   /// modifier would buy nothing and would change the generated index definition.
   @@index([timestamp])
+}
+
+/// What a generated report covers. Mirrors the cards on the Reports Hub, and is
+/// what the Recent Reports table groups and re-generates by.
+enum ReportKind {
+  ATTENDANCE
+  READING_LEVEL
+  TERM_GRADES
+  TEACHER_SUMMARY
+  CLASS_ROSTER
+  CUSTOM
+}
+
+enum ReportFormat {
+  EXCEL
+  PDF
+}
+
+/// One generated report, kept so the Reports Hub can list history.
+///
+/// The FILE is deliberately not stored: it is regenerated from `filters` on
+/// demand, so nothing here holds learner PII at rest and there is no blob store
+/// to keep in step with a learner who is later archived or transferred.
+/// `name` and `scopeLabel` are denormalised for exactly that reason — a section
+/// renamed or soft-deleted after the fact must not blank out a history row.
+model Report {
+  id          String       @id @default(uuid())
+  schoolId    String
+  createdById String
+  kind        ReportKind
+  format      ReportFormat
+  /// Shown verbatim in the Recent Reports table.
+  name        String
+  /// "Grade 5 - Section A", "All Classes" — the row's Grade / Section cell.
+  scopeLabel  String?
+  /// The filter set this report was generated with, replayed by Re-generate.
+  filters     Json
+  createdAt   DateTime     @default(now())
+  deletedAt   DateTime?
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("ReportCreator", fields: [createdById], references: [id])
+
+  /// The Recent Reports query: one school, one author, newest first.
+  @@index([schoolId, createdById, createdAt])
+  /// FK-enforcement lookup side (implicit `Restrict`), matching the R6 #3/#5 rule.
+  @@index([createdById])
 }
