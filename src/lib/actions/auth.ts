@@ -60,8 +60,27 @@ function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
-function mapSupabaseAuthError(message: string | undefined, fallback: string): string {
+/**
+ * Turns a Supabase auth failure into something safe to show, and — just as
+ * importantly — logs the one it was given.
+ *
+ * Every branch here used to collapse to a generic sentence with nothing
+ * written anywhere, so "Failed to send code. Please try again." was a dead end:
+ * it could equally mean signups are switched off for the project, the SMTP
+ * sender is misconfigured, or the address was rejected, and no one could tell
+ * which. `scope` names the caller so the server log says where it came from.
+ *
+ * The email is not logged. The message Supabase returns can be, because it
+ * describes the project's own configuration rather than the person signing in.
+ */
+function mapSupabaseAuthError(
+  message: string | undefined,
+  fallback: string,
+  scope = "auth"
+): string {
   const msg = (message ?? "").toLowerCase();
+  console.error(`[${scope}] supabase auth error:`, message ?? "(no message)");
+
   if (
     msg.includes("rate") ||
     msg.includes("too many") ||
@@ -69,6 +88,21 @@ function mapSupabaseAuthError(message: string | undefined, fallback: string): st
     msg.includes("after")
   ) {
     return "Too many attempts. Please try again later.";
+  }
+  // Supabase returns this when "Allow new users to sign up" is off for the
+  // project. Nothing the person typed can fix it, so say so rather than
+  // inviting them to retry forever.
+  if (msg.includes("signup") && msg.includes("not allowed")) {
+    return "New account sign-ups are currently disabled. Please contact your school head.";
+  }
+  // "Error sending magic link email" / "Error sending confirmation email" —
+  // the project's SMTP sender failed or is over quota. Also nothing the person
+  // can act on, but it is genuinely worth retrying.
+  if (msg.includes("error sending") || msg.includes("smtp")) {
+    return "We could not send the email right now. Please try again in a few minutes, or contact your school head if it keeps failing.";
+  }
+  if (msg.includes("invalid") && msg.includes("email")) {
+    return "That email address was rejected. Please check it and try again.";
   }
   return fallback;
 }
@@ -318,7 +352,11 @@ export async function requestTeacherRegisterOtp(
   if (error) {
     return {
       ok: false,
-      error: mapSupabaseAuthError(error.message, "Failed to send code. Please try again."),
+      error: mapSupabaseAuthError(
+        error.message,
+        "Failed to send code. Please try again.",
+        "requestTeacherRegisterOtp"
+      ),
     };
   }
 
@@ -567,7 +605,8 @@ export async function verifyTeacherRegisterOtp(
         ok: false,
         error: mapSupabaseAuthError(
           passwordError.message,
-          "Failed to set password. Please try again."
+          "Failed to set password. Please try again.",
+          "verifyTeacherRegisterOtp"
         ),
       };
     }
