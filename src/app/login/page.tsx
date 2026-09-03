@@ -1,5 +1,6 @@
 import { listSchoolsWithTeacherStatus } from "@/lib/actions/school";
 import { LoginForm } from "@/components/forms/login-form";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import Image from "next/image";
 
 /**
@@ -38,6 +39,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-background p-4">
+      {/* Pre-auth screens carry no app header, so the theme switch lives here —
+          otherwise dark mode is only reachable after signing in. */}
+      <div className="flex justify-end">
+        <ThemeToggle />
+      </div>
       <div className="flex flex-1 flex-col items-center justify-center">
         <div className="w-full max-w-md space-y-6">
           <div className="space-y-2 text-center">
