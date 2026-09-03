@@ -317,3 +317,51 @@
     opacity: 0 !important;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Developer credit — Apache Spark.
+
+   Anchored to the bottom of the overlay rather than the centred column, so it
+   never shifts when the shelf and status label retire during the ARAL reveal.
+   It fades in after the stage and then stays put for the whole splash: it is a
+   footnote, not a beat in the sequence. Colour is the Apache Spark "soft"
+   token (#7C7568), the palette's own secondary type colour, held at 0.72
+   opacity so it reads as an attribution line and never competes with ARAL na!.
+   ------------------------------------------------------------------------- */
+.credit {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(18px, 4vh, 34px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #7c7568;
+  opacity: 0;
+  animation: pls-credit-in 0.5s ease-out 0.55s forwards;
+}
+
+.creditMark {
+  display: block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+}
+
+@keyframes pls-credit-in {
+  to {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit {
+    animation: none !important;
+    opacity: 0.72 !important;
+  }
+}

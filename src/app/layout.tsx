@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Archivo, IBM_Plex_Mono, Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { SparkIntro } from "@/components/brand/spark-intro";
+import { SparkIntroScript } from "@/components/brand/spark-intro-script";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import "./globals.css";
@@ -10,6 +12,29 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
+});
+
+/**
+ * Apache Spark brand faces, used only by the first-load intro overlay
+ * (`spark-preloader.js` reads these two variables). `preload: false` because
+ * the intro plays on the entry routes once per tab: preloading them from every
+ * page in the app would spend a request on the ~99% of navigations that never
+ * draw the lockup. They are still self-hosted and swap in on the play.
+ */
+const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-archivo",
+  display: "swap",
+  preload: false,
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -37,10 +62,17 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // Brand font variables sit on <html>, not <body>: the Spark intro overlay
+    // is appended outside React's tree and would not inherit them otherwise.
+    <html
+      lang="en"
+      className={`${archivo.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <meta name="impeccable-direction" content={DIRECTION_CONTRACT} />
         <ThemeScript />
+        <SparkIntroScript />
       </head>
       <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
         <ThemeProvider>
@@ -51,6 +83,7 @@ export default function RootLayout({
             Skip to main content
           </a>
           {children}
+          <SparkIntro />
           <Toaster richColors position="top-right" />
         </ThemeProvider>
         {/* Inert until the project is linked to Vercel with Speed Insights enabled. */}

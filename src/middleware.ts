@@ -74,7 +74,11 @@ export const config = {
      * Match all request paths except:
      * - _next/static, _next/image
      * - favicon, public assets
+     * - /brand/** — static brand files served from public/. The extension list
+     *   below covers images only, so the Apache Spark preloader (.js) would
+     *   otherwise be treated as a page and redirected to /login for anonymous
+     *   visitors — which is exactly who sees the first-load intro.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|brand/|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)",
   ],
 };
