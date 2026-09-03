@@ -35,3 +35,17 @@ export function schoolName(schoolId: string): string {
 export function schoolTeachers(schoolId: string): string {
   return `school-teachers:${schoolId}`;
 }
+
+/**
+ * The division admin's support inbox.
+ *
+ * Global rather than school-scoped, unlike every tenant tag above: the inbox is
+ * a deliberately cross-tenant queue, the same shape as the Super Admin audit
+ * view. A ticket from any school busts it.
+ */
+export const supportInbox = "support-inbox";
+
+/** One person's own tickets, as the assistant panel lists them. */
+export function userSupportTickets(userId: string): string {
+  return `support-tickets:${userId}`;
+}

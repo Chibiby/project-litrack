@@ -418,3 +418,36 @@ export const REPORT_FORMAT_LABELS = {
   EXCEL: "Excel",
   PDF: "PDF",
 } as const;
+
+export const SUPPORT_TICKET_CATEGORY_LABELS = {
+  UNLOCK_REQUEST: "Request access",
+  SYSTEM_ASSISTANCE: "System assistance",
+  BUG_REPORT: "Something is broken",
+  ACCOUNT_ACCESS: "Account access",
+  OTHER: "Other",
+} as const;
+
+export const SUPPORT_TICKET_STATUS_LABELS = {
+  OPEN: "Open",
+  IN_PROGRESS: "In progress",
+  RESOLVED: "Resolved",
+  DECLINED: "Declined",
+} as const;
+
+export const UNLOCK_SCOPE_LABELS = {
+  ARAL_WEEKLY_ATTENDANCE: "Weekly ARAL attendance",
+  TERM_GRADES: "Term grade sheet",
+} as const;
+
+/**
+ * `UserRole`, as a person is named in the UI.
+ *
+ * "Division admin" rather than "Super admin": that is what the role is called to
+ * the schools it serves, and it is the phrase the assistant and the support
+ * inbox both use when they say who answered a request.
+ */
+export const USER_ROLE_LABELS = {
+  SUPER_ADMIN: "Division admin",
+  SCHOOL_HEAD: "School Head",
+  TEACHER: "Teacher",
+} as const;

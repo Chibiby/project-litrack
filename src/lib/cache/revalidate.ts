@@ -118,3 +118,15 @@ export function revalidateLearnerScoped(opts: {
     }
   }
 }
+
+/**
+ * A support ticket changed state.
+ *
+ * Busts the admin inbox and the requester's own list. Takes the requester id
+ * rather than deriving it, because a resolve is performed by the admin and the
+ * list that goes stale belongs to somebody else.
+ */
+export function revalidateSupportTicket(requesterId: string) {
+  revalidateTag(tags.supportInbox);
+  revalidateTag(tags.userSupportTickets(requesterId));
+}

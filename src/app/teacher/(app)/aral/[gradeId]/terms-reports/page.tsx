@@ -43,6 +43,7 @@ import {
   type TermPeriodValue,
   type TermWindow,
 } from "@/lib/terms/windows";
+import { listActiveUnlockKeys } from "@/lib/unlock/grants";
 import {
   TERM_SHEET_NO_ADVISORY_CARD,
   TERM_SHEET_VOLUNTEER_CARD,
@@ -212,11 +213,21 @@ export default async function AralGradeTermsReportsPage({
   const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey));
   const activeTerm = resolveActiveTerm(windows, sp.term, todayKey);
   const activeWindow = windows.find((w) => w.term === activeTerm) ?? windows[0];
+  // The lock is computed, and a grant reopens one term for one teacher. The
+  // server action re-checks grants when a save arrives; the sheet has to see
+  // the same answer or it would claim a term is locked that `saveTermGrades`
+  // would accept (and the teacher could never start typing into it).
+  const unlockedTerms = isSuperAdmin
+    ? new Set<string>()
+    : await listActiveUnlockKeys(user.id, "TERM_GRADES");
+  const isEncodingClosed = (w: TermWindow) =>
+    isTermLocked(w, todayKey) && !unlockedTerms.has(w.term);
+
   const terms = windows.map((w) => ({
     term: w.term,
     label: w.label,
     rangeLabel: w.rangeLabel,
-    locked: isTermLocked(w, todayKey),
+    locked: isEncodingClosed(w),
   }));
 
   const basePath = `/teacher/aral/${grade.id}/terms-reports`;
@@ -230,7 +241,7 @@ export default async function AralGradeTermsReportsPage({
 
   // Locked terms and admin views are both read-only: viewing and export
   // survive the lock, only encoding stops.
-  const readOnly = isSuperAdmin || isTermLocked(activeWindow, todayKey);
+  const readOnly = isSuperAdmin || isEncodingClosed(activeWindow);
 
   // Same cross-link treatment the two sibling ARAL pages give each other: the
   // section filter rides along so a round trip does not silently widen the

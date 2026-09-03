@@ -87,6 +87,19 @@ export const AUDIT_ACTIONS = {
   REPORT_GENERATE: "REPORT_GENERATE",
   /** A Reports Hub history row removed. The file was never stored. */
   REPORT_DELETE: "REPORT_DELETE",
+  /** A support ticket raised from the assistant. Ids and category only, never the body. */
+  SUPPORT_TICKET_SUBMIT: "SUPPORT_TICKET_SUBMIT",
+  SUPPORT_TICKET_RESOLVE: "SUPPORT_TICKET_RESOLVE",
+  SUPPORT_TICKET_DECLINE: "SUPPORT_TICKET_DECLINE",
+  /**
+   * Temporary write access into a closed editing window. Metadata carries the
+   * scope, the target period and the expiry: the facts an auditor needs to say
+   * who could write what, and when it closed again.
+   */
+  UNLOCK_GRANT_ISSUE: "UNLOCK_GRANT_ISSUE",
+  UNLOCK_GRANT_REVOKE: "UNLOCK_GRANT_REVOKE",
+  /** A save that only succeeded because an unlock grant was in force. */
+  UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
   ADMIN_PROFILE_UPDATE: "ADMIN_PROFILE_UPDATE",
   ADMIN_SCHOOL_VIEW: "ADMIN_SCHOOL_VIEW",
 } as const;

@@ -19,6 +19,7 @@ import {
   schoolToday,
 } from "@/lib/date-keys";
 import { attendanceDeadline, formatLongDate } from "@/lib/week-range";
+import { findActiveUnlock } from "@/lib/unlock/grants";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
@@ -143,12 +144,26 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   // The rule the grid's banner states, enforced here rather than trusted from
   // the client. Both read the same helper so the date a teacher is shown is the
   // date that actually closes the week.
+  //
+  // A live `UnlockGrant` is the one thing that reopens a closed week, and only
+  // for the person it names. The grant is consulted *after* the deadline test,
+  // never instead of it: the overwhelmingly common save is inside the window and
+  // must not pay a query to learn what the date already says.
   const deadline = attendanceDeadline(weekStart);
+  let usedGrantId: string | null = null;
   if (schoolToday() > deadline) {
-    return {
-      ok: false,
-      error: `This week is locked. Editing closed on ${formatLongDate(deadline)}.`,
-    };
+    const grant = await findActiveUnlock(
+      user.id,
+      "ARAL_WEEKLY_ATTENDANCE",
+      parsed.data.weekStart
+    );
+    if (!grant) {
+      return {
+        ok: false,
+        error: `This week is locked. Editing closed on ${formatLongDate(deadline)}.`,
+      };
+    }
+    usedGrantId = grant.id;
   }
 
   // ARAL attendance: an ARAL-only teacher (no advisory section) reaches this
@@ -368,6 +383,26 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
       learnerIds,
     },
   });
+
+  // A second row, only when the save got in through a grant. Kept separate from
+  // the save row so "which edits happened inside a reopened window" is one
+  // action to filter on rather than a metadata flag to search for.
+  if (usedGrantId) {
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.UNLOCK_GRANT_USED,
+      resource: "UnlockGrant",
+      resourceId: usedGrantId,
+      metadata: {
+        scope: "ARAL_WEEKLY_ATTENDANCE",
+        targetKey: parsed.data.weekStart,
+        gradeLevelId: grade.id,
+        upserted,
+        cleared,
+      },
+    });
+  }
 
   revalidatePath(`/teacher/aral/${grade.id}/attendance`);
   revalidatePath("/teacher/aral");

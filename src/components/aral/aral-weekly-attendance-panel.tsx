@@ -53,10 +53,18 @@ function normalizeWeekKey(value: string): string {
  * Whether a week has passed its editing deadline. Date arithmetic, not stored
  * state — nothing has to run to lock a week, and the server action applies the
  * same rule, so a stale tab cannot save into a closed week.
+ *
+ * One extra input: the unlock grants this teacher holds for weekly attendance.
+ * `saveAralWeeklyAttendance` consults `findActiveUnlock` before refusing a
+ * closed week, so the panel must see the same set or it would render a granted
+ * week as read-only and the teacher could never start typing the save the
+ * server would accept.
  */
-function lockInfo(weekKey: string) {
+function lockInfo(weekKey: string, unlockedWeeks: string[]) {
   const deadline = attendanceDeadline(parseLocalDateKey(weekKey));
-  return { deadline, locked: schoolToday() > deadline };
+  const pastDeadline = schoolToday() > deadline;
+  const granted = pastDeadline && unlockedWeeks.includes(weekKey);
+  return { deadline, granted, locked: pastDeadline && !granted };
 }
 
 type Props = {
@@ -72,6 +80,8 @@ type Props = {
   initialExisting: WeeklyAttendanceGridExisting[];
   initialHolidayKeys: string[];
   readOnly?: boolean;
+  /** Week keys (Mondays, `YYYY-MM-DD`) this teacher may still edit past the deadline. */
+  unlockedWeeks?: string[];
 };
 
 export function AralWeeklyAttendancePanel({
@@ -87,6 +97,7 @@ export function AralWeeklyAttendancePanel({
   initialExisting,
   initialHolidayKeys,
   readOnly,
+  unlockedWeeks = [],
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,8 +119,8 @@ export function AralWeeklyAttendancePanel({
   // The banner follows the week the teacher asked for; the grid follows the week
   // whose rows have arrived. While a fetch is in flight those differ, and the
   // "Loading week…" overlay is what says so.
-  const picked = lockInfo(pickerWeek);
-  const gridLocked = lockInfo(loadedWeek).locked;
+  const picked = lockInfo(pickerWeek, unlockedWeeks);
+  const gridLocked = lockInfo(loadedWeek, unlockedWeeks).locked;
   const actionsLocked = Boolean(readOnly || loading || savePending);
 
   const sharedParams = {
@@ -194,16 +205,28 @@ export function AralWeeklyAttendancePanel({
               <span
                 className={cn(
                   "mt-1 size-2.5 shrink-0 rounded-full",
-                  picked.locked ? "bg-muted-foreground" : "bg-emerald-500"
+                  picked.granted
+                    ? "bg-violet-500"
+                    : picked.locked
+                      ? "bg-muted-foreground"
+                      : "bg-emerald-500"
                 )}
                 aria-hidden
               />
             }
-            title={picked.locked ? "Week locked" : "Week open"}
+            title={
+              picked.granted
+                ? "Week reopened"
+                : picked.locked
+                  ? "Week locked"
+                  : "Week open"
+            }
             body={
-              picked.locked
-                ? "This week is past its deadline and can no longer be edited."
-                : "Attendance entry and editing are currently available."
+              picked.granted
+                ? "Past its deadline, but an unlock grant from your division admin reopened it. Editing is available while the grant is active."
+                : picked.locked
+                  ? "This week is past its deadline and can no longer be edited."
+                  : "Attendance entry and editing are currently available."
             }
           />
           <BannerItem

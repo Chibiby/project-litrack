@@ -355,6 +355,10 @@ enum NotificationType {
   /// A teacher was designated as the ARAL tutor for one or more learners by
   /// somebody else.
   ARAL_ASSIGNED
+  /// A support ticket was raised. Recipients are the Super Admins.
+  SUPPORT_TICKET_SUBMITTED
+  /// A support ticket the recipient raised was resolved or declined.
+  SUPPORT_TICKET_RESOLVED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -410,6 +414,8 @@ model School {
   announcements  Announcement[]
   notifications  Notification[]
   reports        Report[]
+  supportTickets SupportTicket[]
+  unlockGrants   UnlockGrant[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -476,6 +482,11 @@ model User {
   notifications          Notification[]       @relation("NotificationRecipient")
   notificationsCaused    Notification[]       @relation("NotificationActor")
   reports                Report[]             @relation("ReportCreator")
+  supportTickets         SupportTicket[]      @relation("SupportTicketRequester")
+  supportTicketsResolved SupportTicket[]      @relation("SupportTicketResolver")
+  unlockGrants           UnlockGrant[]        @relation("UnlockGrantUser")
+  unlockGrantsIssued     UnlockGrant[]        @relation("UnlockGrantGranter")
+  unlockGrantsRevoked    UnlockGrant[]        @relation("UnlockGrantRevoker")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -967,12 +978,17 @@ model Notification {
   /// One row per action, not per learner — enrolling twelve learners at once
   /// notifies the tutor once.
   learnerIds  String[]
+  /// Set on the `SUPPORT_TICKET_*` types instead of `learnerIds`, which is
+  /// learner-specific by design. `SetNull` so deleting a ticket leaves the
+  /// notification readable.
+  ticketId    String?
   readAt      DateTime?
   createdAt   DateTime         @default(now())
 
-  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  recipient User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User?  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  recipient User           @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User?          @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  ticket    SupportTicket? @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
 
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
@@ -980,6 +996,8 @@ model Notification {
   /// R6 #5. Lookup side of this FK's `SetNull` action — removing an account must
   /// find every notification it caused and null the pointer.
   @@index([actorId])
+  /// Same rule for the ticket pointer's `SetNull`.
+  @@index([ticketId])
 }
 
 model AuditLog {
@@ -1051,4 +1069,140 @@ model Report {
   @@index([schoolId, createdById, createdAt])
   /// FK-enforcement lookup side (implicit `Restrict`), matching the R6 #3/#5 rule.
   @@index([createdById])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Support assistant: tickets to the division admin, and the unlock grants a
+// resolved ticket can produce.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// What a ticket is asking for. `UNLOCK_REQUEST` is the only category that may
+/// carry `requestedScope` / `requestedTargetKey` and the only one an admin can
+/// resolve by issuing an `UnlockGrant`.
+enum SupportTicketCategory {
+  UNLOCK_REQUEST
+  SYSTEM_ASSISTANCE
+  BUG_REPORT
+  ACCOUNT_ACCESS
+  OTHER
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  DECLINED
+}
+
+/// The editing windows a grant can reopen. One value per enforced lock in the
+/// app — adding a value here without adding its check at the lock site produces
+/// a grant that silently does nothing, so the two must move together.
+///
+/// `ARAL_WEEKLY_ATTENDANCE` is enforced in `saveAralWeeklyAttendance`
+/// (`src/lib/actions/attendance.ts`); `TERM_GRADES` in `saveTermGrades`
+/// (`src/lib/actions/term-grades.ts`).
+enum UnlockScope {
+  ARAL_WEEKLY_ATTENDANCE
+  TERM_GRADES
+}
+
+/// One request for help raised from the floating assistant.
+///
+/// `subject` and `body` are free text typed by a teacher or school head. They are
+/// rendered as escaped plain text and are NEVER copied into `AuditLog.metadata`:
+/// a person describing a problem with their class will name learners, and audit
+/// metadata is the one place that must stay free of learner PII.
+model SupportTicket {
+  id          String                @id @default(uuid())
+  schoolId    String
+  requesterId String
+  category    SupportTicketCategory
+  status      SupportTicketStatus   @default(OPEN)
+  subject     String
+  body        String
+  /// Pathname the assistant was opened from, e.g. `/teacher/aral/<id>/attendance`.
+  /// A path only — never a full URL with a query string, which could carry ids.
+  pageUrl     String?
+
+  /// Set only when `category = UNLOCK_REQUEST`. The pair says which window to
+  /// reopen; `requestedTargetKey` is a Monday `YYYY-MM-DD` for
+  /// `ARAL_WEEKLY_ATTENDANCE` and a `TermPeriod` name for `TERM_GRADES`.
+  requestedScope     UnlockScope?
+  requestedTargetKey String?
+
+  /// Resolution. `resolutionNote` is the single reply a requester gets — this is
+  /// deliberately not a threaded conversation.
+  resolverId     String?
+  resolutionNote String?
+  resolvedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  requester     User           @relation("SupportTicketRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  /// Nullable + `SetNull` so removing an admin account leaves the ticket's
+  /// history readable rather than deleting it.
+  resolver      User?          @relation("SupportTicketResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+  grant         UnlockGrant?
+  notifications Notification[] @relation("NotificationTicket")
+
+  /// The admin inbox read: open tickets first, newest first.
+  @@index([status, createdAt])
+  /// One school's tickets — the school-scoped list a requester sees.
+  @@index([schoolId, createdAt])
+  /// "My requests" in the assistant panel.
+  @@index([requesterId, createdAt])
+  /// R6 #5. Lookup side of this FK's `SetNull` action.
+  @@index([resolverId])
+}
+
+/// Permission for one user to write inside one already-closed editing window.
+///
+/// Deliberately narrow: a grant names a single user, a single scope and a single
+/// target period, and it expires. There is no school-wide or open-ended form,
+/// because the failure mode of this table is a lock left quietly open.
+///
+/// The lock sites treat any error resolving a grant as "no grant" — the window
+/// stays closed. A grant only ever widens access, never narrows it.
+model UnlockGrant {
+  id        String      @id @default(uuid())
+  schoolId  String
+  /// Who may now write. Not the school — see the model comment.
+  userId    String
+  scope     UnlockScope
+  /// Monday `YYYY-MM-DD` for `ARAL_WEEKLY_ATTENDANCE`, a `TermPeriod` name for
+  /// `TERM_GRADES`. A bare string rather than two nullable typed columns because
+  /// the lock sites already key their windows by exactly these strings.
+  targetKey String
+
+  grantedById String
+  /// The ticket this grant answers, when it came from one. Nullable so an admin
+  /// can also grant directly. `@unique` keeps one ticket from issuing two grants.
+  ticketId    String? @unique
+
+  /// Required. A grant that never expires is a lock that was removed, not reopened.
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  revokedById String?
+
+  createdAt DateTime @default(now())
+
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user      User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User           @relation("UnlockGrantGranter", fields: [grantedById], references: [id])
+  revokedBy User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  ticket    SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  /// One grant row per window per person. A re-grant updates this row rather
+  /// than stacking a second one, so "is it open?" never depends on row order.
+  @@unique([userId, scope, targetKey])
+  /// The hot read, on every save into a closed window: this user, this scope,
+  /// still in date.
+  @@index([userId, scope, expiresAt])
+  /// The admin list of live grants for one school.
+  @@index([schoolId, expiresAt])
+  /// R6 #3/#5. FK lookup sides.
+  @@index([grantedById])
+  @@index([revokedById])
 }

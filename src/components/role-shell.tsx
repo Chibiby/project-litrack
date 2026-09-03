@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import { AppSidebar } from "./app-sidebar";
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
@@ -107,6 +108,10 @@ export function RoleShell({
               {children}
             </div>
           </div>
+
+          {/* Outside the offset wrapper: the widget is fixed to the viewport, so
+              it must not sit inside a node whose margin animates with the rail. */}
+          <AssistantWidget role={role} userName={userName} />
         </div>
       </NavPathProvider>
     </RoleShellContext.Provider>

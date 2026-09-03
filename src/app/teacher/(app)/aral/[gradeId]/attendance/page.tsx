@@ -28,6 +28,7 @@ import {
 } from "@/lib/date-keys";
 import { formatWeekRange } from "@/lib/week-range";
 import { getMonday } from "@/lib/utils";
+import { listActiveUnlockKeys } from "@/lib/unlock/grants";
 import { BookOpen, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -269,6 +270,13 @@ async function AralWeeklyAttendanceGrid({
     notes: a.notes,
   }));
 
+  // The panel is a client component, so the grant set has to travel as props —
+  // the panel computes the lock itself with `lockInfo`, and it must see the
+  // same set the server consults or a granted week renders read-only.
+  const unlockedWeeks = isSuperAdmin
+    ? []
+    : [...(await listActiveUnlockKeys(user.id, "ARAL_WEEKLY_ATTENDANCE"))];
+
   return (
     <AralWeeklyAttendancePanel
       key={`${list.section}:${sp.schoolId ?? ""}`}
@@ -284,6 +292,7 @@ async function AralWeeklyAttendanceGrid({
       initialExisting={existing}
       initialHolidayKeys={holidays.map((h) => formatLocalDateKey(h.date))}
       readOnly={isSuperAdmin}
+      unlockedWeeks={unlockedWeeks}
     />
   );
 }

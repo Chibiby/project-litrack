@@ -21,6 +21,7 @@ import {
 } from "@/lib/teachers/advisory";
 import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
 import { generalAverage } from "@/lib/terms/average";
+import { findActiveUnlock } from "@/lib/unlock/grants";
 import {
   getTermWindows,
   isTermLocked,
@@ -136,11 +137,20 @@ export async function saveTermGrades(
   // Re-derived server-side: the grid disables its inputs once a term closes, but
   // the client is not the enforcement point. `schoolToday()`, never `new Date()`,
   // or every term locks a day early between midnight and 08:00 Manila.
+  //
+  // A live `UnlockGrant` naming this term reopens it for this teacher alone.
+  // Consulted only once the date says the term is closed, so an in-window save
+  // still costs no extra query.
+  let usedGrantId: string | null = null;
   if (isTermLocked(window, formatLocalDateKey(schoolToday()))) {
-    return {
-      ok: false,
-      error: `${window.label} is closed. Its months have passed, so grades can no longer be changed.`,
-    };
+    const grant = await findActiveUnlock(user.id, "TERM_GRADES", parsed.data.term);
+    if (!grant) {
+      return {
+        ok: false,
+        error: `${window.label} is closed. Its months have passed, so grades can no longer be changed.`,
+      };
+    }
+    usedGrantId = grant.id;
   }
 
   const learnerIds = [...new Set(parsed.data.entries.map((e) => e.learnerId))];
@@ -274,6 +284,26 @@ export async function saveTermGrades(
       learnerIds,
     },
   });
+
+  // Only when the save got in through a grant — a closed term that was written
+  // to is exactly what an auditor comes looking for.
+  if (usedGrantId) {
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.UNLOCK_GRANT_USED,
+      resource: "UnlockGrant",
+      resourceId: usedGrantId,
+      metadata: {
+        scope: "TERM_GRADES",
+        targetKey: parsed.data.term,
+        gradeLevelId: advisory.gradeLevelId,
+        sectionId: advisory.sectionId,
+        saved: toSave.length,
+        cleared: toClear.length,
+      },
+    });
+  }
 
   revalidatePath(`/teacher/aral/${advisory.gradeLevelId}/terms-reports`);
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
