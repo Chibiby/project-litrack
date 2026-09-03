@@ -1,7 +1,7 @@
 # Support assistant — design
 
 **Date:** 2026-09-03
-**Status:** implemented; migration authored but **not applied**
+**Status:** implemented, deployed, and migrated 2026-09-03
 
 ## The problem
 
@@ -243,11 +243,55 @@ test here can claim:
 - No new role. No change to how deadlines themselves are configured.
 - No LLM.
 
-## Applying the migration
+## The migration, as applied
 
-`prisma/migrations/20260903000001_support_assistant/` is authored and validated
-offline. Per `docs/migrations.md` it has **not** been applied to any remote
-database; a human applies it using `docs/migrate-checklist.md`. It is additive —
-three `CREATE TYPE`, two `CREATE TABLE`, one nullable `ADD COLUMN` on
-`Notification`, and the indexes above. Nothing is dropped or rewritten, so it is
-safe to apply ahead of the deploy.
+`prisma/migrations/20260903000001_support_assistant/` was applied to Supabase on
+2026-09-03 with `prisma migrate deploy`, on the owner's explicit instruction.
+It is additive — three `CREATE TYPE`, two `ALTER TYPE ... ADD VALUE`, one
+nullable `ADD COLUMN` on `Notification`, two `CREATE TABLE`, eleven indexes and
+nine foreign keys. Nothing dropped, nothing rewritten, no backfill, so it was
+safe to apply while serving. Neither new enum value is consumed by a later
+statement in the same transaction, which is what makes `ALTER TYPE ... ADD VALUE`
+legal inside Prisma's wrapping transaction on PG 12+.
+
+Verified afterwards: both `SUPPORT_TICKET_*` values present on
+`NotificationType`, both tables queryable and empty.
+
+`prisma/rls-policies.sql` was then re-run, as the checklist requires whenever a
+migration adds a table.
+
+### What auditing that turned up
+
+Adding the two tables to `rls-policies.sql` exposed a gap in the file itself:
+`Report`, from the previous day's migration, had never been added. Two of the
+three additions were therefore fixing an existing omission rather than
+completing this feature.
+
+The reason the file's own header gives for why that matters is **not accurate in
+this project**. It says Supabase grants `anon` privileges on new public-schema
+tables, so an un-enabled table is readable through PostgREST. Checked directly
+against `information_schema.role_table_grants`: only `User` carries an
+`anon`/`authenticated` SELECT grant, and RLS is on there with no SELECT policy
+for `anon`, so it returns nothing. No table in the database has RLS off *and* a
+grant. The gap was a missing layer, not an open door.
+
+Both halves still have to be right, because they are set by different tools in
+different places and a table with RLS off is one stray grant away from readable.
+`tests/unit/rls-coverage.test.ts` now fails if a model is missing from the file,
+which is the cheap half of the invariant. The privilege half is not something a
+unit test can see.
+
+### Unrelated drift found in the same pass
+
+Four tables exist in the production `public` schema that appear in no migration,
+no `schema.prisma` model, and nowhere in `src/`: `MasterSyncConfig`,
+`SchoolSyncLink`, `SyncInbox`, `SyncOutbox` — a Google-Sheets sync subsystem,
+created out of band. `SyncOutbox` holds four rows; the rest are empty.
+`MasterSyncConfig.masterApiKey` is a plaintext key column.
+
+They are not a security exposure (RLS off, but no `anon` grant either). They are
+schema drift, and that has a concrete cost: Prisma has no record of them, so
+`prisma migrate dev` will report drift and offer a reset. Left as found —
+deciding whether that subsystem is real or abandoned is the owner's call, and
+they are deliberately *not* added to `rls-policies.sql`, since the coverage test
+asserts that file names only tables the schema defines.

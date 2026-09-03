@@ -35,6 +35,15 @@ ALTER TABLE "ReadingLevelRecord"   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "TermGrade"            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Notification"         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLog"             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Report"               ENABLE ROW LEVEL SECURITY;
+
+-- Support assistant. `SupportTicket` is the most sensitive table added since
+-- `Learner`: `subject` and `body` are free text typed by a teacher describing a
+-- problem with their class, so they name learners, and the table spans every
+-- school. Deny-all (RLS on, no policies) is the whole policy — every read goes
+-- through Prisma on the service role, which bypasses RLS.
+ALTER TABLE "SupportTicket"        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UnlockGrant"          ENABLE ROW LEVEL SECURITY;
 
 -- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
 -- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
