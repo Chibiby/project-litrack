@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   schoolLoginSchema,
   teacherLoginSchema,
-  requestTeacherRegisterOtpSchema,
-  verifyTeacherRegisterOtpSchema,
+  teacherRegisterSchema,
   setPasswordSchema,
   changePasswordSchema,
   strongPassword,
@@ -120,12 +119,12 @@ const validRegisterBase = {
   confirmPassword: "password1",
 };
 
-describe("requestTeacherRegisterOtpSchema", () => {
+describe("teacherRegisterSchema", () => {
   it("requires names, strong password, and matching confirm", () => {
-    expect(requestTeacherRegisterOtpSchema.safeParse(validRegisterBase).success).toBe(true);
+    expect(teacherRegisterSchema.safeParse(validRegisterBase).success).toBe(true);
 
     expect(
-      requestTeacherRegisterOtpSchema.safeParse({
+      teacherRegisterSchema.safeParse({
         ...validRegisterBase,
         firstName: "",
         lastName: "",
@@ -133,59 +132,27 @@ describe("requestTeacherRegisterOtpSchema", () => {
     ).toBe(false);
 
     expect(
-      requestTeacherRegisterOtpSchema.safeParse({
+      teacherRegisterSchema.safeParse({
         ...validRegisterBase,
         confirmPassword: "password2",
       }).success
     ).toBe(false);
 
     expect(
-      requestTeacherRegisterOtpSchema.safeParse({
+      teacherRegisterSchema.safeParse({
         ...validRegisterBase,
         password: "short",
         confirmPassword: "short",
       }).success
     ).toBe(false);
   });
-});
 
-describe("verifyTeacherRegisterOtpSchema", () => {
-  it("requires names, matching passwords, and a 6-digit code", () => {
-    expect(
-      verifyTeacherRegisterOtpSchema.safeParse({
-        ...validRegisterBase,
-        code: "123456",
-      }).success
-    ).toBe(true);
-
-    expect(
-      verifyTeacherRegisterOtpSchema.safeParse({
-        ...validRegisterBase,
-        code: "12345",
-      }).success
-    ).toBe(false);
-
-    expect(
-      verifyTeacherRegisterOtpSchema.safeParse({
-        ...validRegisterBase,
-        code: "abcdef",
-      }).success
-    ).toBe(false);
-
-    expect(
-      verifyTeacherRegisterOtpSchema.safeParse({
-        ...validRegisterBase,
-        firstName: "",
-        code: "123456",
-      }).success
-    ).toBe(false);
-
-    expect(
-      verifyTeacherRegisterOtpSchema.safeParse({
-        ...validRegisterBase,
-        confirmPassword: "password2",
-        code: "123456",
-      }).success
-    ).toBe(false);
+  it("needs no verification code — School Head approval is the gate", () => {
+    expect(teacherRegisterSchema.safeParse({ ...validRegisterBase, code: "123456" }).success).toBe(
+      true
+    );
+    expect(teacherRegisterSchema.safeParse({ ...validRegisterBase, schoolId: "" }).success).toBe(
+      false
+    );
   });
 });

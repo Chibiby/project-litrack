@@ -5,8 +5,7 @@ import { LoginForm } from "@/components/forms/login-form";
 vi.mock("@/lib/actions/auth", () => ({
   loginSchoolHead: vi.fn(),
   loginTeacher: vi.fn(),
-  requestTeacherRegisterOtp: vi.fn(),
-  verifyTeacherRegisterOtp: vi.fn(),
+  registerTeacher: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 

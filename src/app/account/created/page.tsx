@@ -73,7 +73,7 @@ export default async function AccountCreatedPage() {
               Your teacher account was created successfully and needs School Head approval at{" "}
               {school?.name ?? "your school"} before you can use LITRACK. Contact your School Head
               if this takes longer than expected. After approval, sign in with your email and
-              password — no verification code needed.
+              password.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

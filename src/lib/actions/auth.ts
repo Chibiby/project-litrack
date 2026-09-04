@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
@@ -11,19 +10,14 @@ import {
   schoolLoginSchema,
   adminLoginSchema,
   teacherLoginSchema,
-  requestTeacherRegisterOtpSchema,
-  verifyTeacherRegisterOtpSchema,
+  teacherRegisterSchema,
   setPasswordSchema,
   changePasswordSchema,
   changeEmailSchema,
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
-import {
-  getSupabasePublicEnv,
-  isSupabaseConfigured,
-  SUPABASE_NOT_CONFIGURED_MESSAGE,
-} from "@/lib/supabase/env";
+import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
@@ -44,7 +38,7 @@ import {
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
-const OTP_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
+const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
@@ -292,77 +286,6 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   redirect(pending ? "/pending-approval" : "/teacher");
 }
 
-/**
- * Request a 6-digit email OTP for teacher account creation only.
- * Never redirects — always returns a result for the login form.
- */
-export async function requestTeacherRegisterOtp(
-  formData: FormData
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
-
-  const parsed = requestTeacherRegisterOtpSchema.safeParse({
-    schoolId: formData.get("schoolId"),
-    email: formData.get("email"),
-    firstName: formData.get("firstName") || undefined,
-    middleName: formData.get("middleName") || undefined,
-    lastName: formData.get("lastName") || undefined,
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const email = parsed.data.email.toLowerCase().trim();
-  const { schoolId } = parsed.data;
-
-  const rate = await checkRateLimit(`otp:teacher:${schoolId}:${email}`, OTP_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const school = await assertActiveSchool(schoolId);
-  if ("ok" in school && school.ok === false) return school;
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && !existing.deletedAt) {
-    return { ok: false, error: registerConflictError(existing, schoolId) };
-  }
-
-  // Use a non-cookie client so signInWithOtp does not write a PKCE code-verifier
-  // cookie (SSR client would remount /login and wipe teacherStep OTP UI state).
-  const env = getSupabasePublicEnv();
-  if (!env.ok) {
-    return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
-  }
-
-  const supabase = createClient(env.url, env.anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      flowType: "implicit",
-    },
-  });
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true },
-  });
-  if (error) {
-    return {
-      ok: false,
-      error: mapSupabaseAuthError(
-        error.message,
-        "Failed to send code. Please try again.",
-        "requestTeacherRegisterOtp"
-      ),
-    };
-  }
-
-  return { ok: true };
-}
-
 type TeacherRegisterNames = {
   firstName: string;
   middleName?: string;
@@ -381,15 +304,11 @@ type TeacherRegisterResult =
 /** Success page for a teacher awaiting School Head approval. */
 const REGISTER_PENDING_PATH = "/account/created";
 
-/** Serialize concurrent teacher-register verifies per email (OTP is single-use). */
-const teacherRegisterVerifyInflight = new Map<string, Promise<unknown>>();
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const REGISTER_SIGN_IN_MESSAGE =
+  "Your account was created. Please sign in with your email and password.";
 
 /**
- * Finish teacher self-register after auth is established (OTP verify or recovery).
+ * Finish teacher self-register once the Supabase session exists.
  * Returns the page the client should navigate to on success.
  */
 async function finishTeacherRegister(
@@ -410,9 +329,9 @@ async function finishTeacherRegister(
   });
 
   if (!result.ok) {
-    // Auth is already proven (OTP verify or password). If PENDING exists,
-    // never toast failure / signOut — a peer create or post-create glitch
-    // already succeeded for this email+school.
+    // Auth is already proven. If PENDING exists, never toast failure / signOut
+    // — a peer create or post-create glitch already succeeded for this
+    // email+school.
     const existing = await prisma.user.findUnique({
       where: { email: params.email },
       select: {
@@ -432,7 +351,7 @@ async function finishTeacherRegister(
             data: { authId: params.authId },
           });
         } catch (err) {
-          console.error("[verifyTeacherRegisterOtp] authId link after pending recover:", err);
+          console.error("[registerTeacher] authId link after pending recover:", err);
         }
       }
       return { ok: true, redirectTo: REGISTER_PENDING_PATH };
@@ -442,7 +361,7 @@ async function finishTeacherRegister(
       try {
         await supabase.auth.signOut();
       } catch (err) {
-        console.error("[verifyTeacherRegisterOtp] signOut failed:", err);
+        console.error("[registerTeacher] signOut failed:", err);
       }
     }
     return { ok: false, error: result.error };
@@ -454,88 +373,89 @@ async function finishTeacherRegister(
   };
 }
 
-async function resolveTeacherRegisterAuthId(
+/**
+ * Create the Supabase auth user for a self-registering teacher with the email
+ * already confirmed: account creation no longer proves the address with a
+ * one-time code — School Head approval is the gate, and email is kept only for
+ * password recovery.
+ *
+ * An auth user can already exist without a LITRACK row (the Prisma conflict
+ * check above ran first): that is an abandoned earlier attempt, so adopt it
+ * when the same password signs in rather than dead-ending the teacher.
+ */
+async function createOrAdoptTeacherAuthUser(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  email: string,
-  password: string
-): Promise<string | null> {
-  const {
-    data: { user: sessionUser },
-  } = await supabase.auth.getUser();
+  params: { email: string; password: string; schoolId: string }
+): Promise<{ ok: true; authId: string } | { ok: false; error: string }> {
+  const { email, password, schoolId } = params;
 
-  if (sessionUser?.email?.toLowerCase() === email) {
-    return sessionUser.id;
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch (err) {
+    console.error("[registerTeacher] admin client unavailable:", err);
+    return {
+      ok: false,
+      error: "Account creation is temporarily unavailable. Please contact your School Head.",
+    };
+  }
+
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    app_metadata: { role: "TEACHER", schoolId },
+  });
+  if (!error && data.user) {
+    return { ok: true, authId: data.user.id };
+  }
+
+  const message = (error?.message ?? "").toLowerCase();
+  const alreadyRegistered =
+    message.includes("already registered") ||
+    message.includes("already been registered") ||
+    message.includes("already exists");
+
+  if (!alreadyRegistered) {
+    return {
+      ok: false,
+      error: mapSupabaseAuthError(
+        error?.message,
+        "Could not create your account. Please try again.",
+        "registerTeacher"
+      ),
+    };
   }
 
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
-  if (!signInError && signInData.user) {
-    return signInData.user.id;
+  if (signInError || !signInData.user) {
+    return {
+      ok: false,
+      error:
+        "That email already has an account. Sign in instead, or use Forgot password to reset it.",
+    };
   }
-  return null;
+  return { ok: true, authId: signInData.user.id };
 }
 
 /**
- * When OTP verify fails, recover if a prior successful submit already set the
- * password / session and created (or can create) the PENDING teacher row.
+ * Teacher self-registration in a single step: names, email, password.
+ *
+ * There is no verification code. The account is created PENDING and the School
+ * Head approves it before the teacher can use LITRACK; email is used only for
+ * password recovery. Returns the destination on success so the client navigates
+ * after the session cookies land, or an error message on failure.
  */
-async function recoverTeacherRegisterAfterConsumedOtp(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  params: {
-    email: string;
-    schoolId: string;
-    password: string;
-    names: TeacherRegisterNames;
-  }
-): Promise<TeacherRegisterResult> {
-  const { email, schoolId, password, names } = params;
-
-  let authId = await resolveTeacherRegisterAuthId(supabase, email, password);
-
-  // Peer may have created PENDING but password cookies are still settling.
-  if (!authId) {
-    const pending = await prisma.user.findFirst({
-      where: {
-        email,
-        schoolId,
-        role: "TEACHER",
-        approvalStatus: "PENDING",
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (pending) {
-      for (let attempt = 0; attempt < 3 && !authId; attempt++) {
-        await sleep(250 * (attempt + 1));
-        authId = await resolveTeacherRegisterAuthId(supabase, email, password);
-      }
-    }
-  }
-
-  if (!authId) {
-    return { ok: false, error: "Invalid or expired code." };
-  }
-
-  return finishTeacherRegister(supabase, { authId, email, schoolId, names });
-}
-
-/**
- * Verify teacher registration OTP, set password, create pending teacher row.
- * Returns the destination on success so the client navigates after the session
- * cookies land, or an error message on failure.
- */
-export async function verifyTeacherRegisterOtp(
-  formData: FormData
-): Promise<TeacherRegisterResult> {
+export async function registerTeacher(formData: FormData): Promise<TeacherRegisterResult> {
   const missing = requireSupabaseConfigured();
   if (missing) return missing;
 
-  const parsed = verifyTeacherRegisterOtpSchema.safeParse({
+  const parsed = teacherRegisterSchema.safeParse({
     schoolId: formData.get("schoolId"),
     email: formData.get("email"),
-    code: formData.get("code"),
     firstName: formData.get("firstName") || undefined,
     middleName: formData.get("middleName") || undefined,
     lastName: formData.get("lastName") || undefined,
@@ -547,86 +467,43 @@ export async function verifyTeacherRegisterOtp(
   }
 
   const email = parsed.data.email.toLowerCase().trim();
-  const { schoolId, code, password } = parsed.data;
+  const { schoolId, password } = parsed.data;
   const names: TeacherRegisterNames = {
     firstName: parsed.data.firstName.trim(),
     middleName: parsed.data.middleName?.trim() || undefined,
     lastName: parsed.data.lastName.trim(),
   };
 
-  const rate = await checkRateLimit(`otp:verify:${schoolId}:${email}`, OTP_RATE);
+  const rate = await checkRateLimit(`register:teacher:${schoolId}:${email}`, REGISTER_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const school = await assertActiveSchool(schoolId);
   if ("ok" in school && school.ok === false) return school;
 
-  const inflightKey = `${schoolId}:${email}`;
-  const peer = teacherRegisterVerifyInflight.get(inflightKey);
-  if (peer) {
-    await peer.then(
-      () => undefined,
-      () => undefined
-    );
-    const supabase = await createSupabaseServerClient();
-    return recoverTeacherRegisterAfterConsumedOtp(supabase, {
-      email,
-      schoolId,
-      password,
-      names,
-    });
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && !existing.deletedAt) {
+    return { ok: false, error: registerConflictError(existing, schoolId) };
   }
 
-  const run = (async (): Promise<TeacherRegisterResult> => {
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "email",
-    });
-    if (error || !data.user) {
-      // OTP is single-use: a concurrent/retry submit often fails here after the
-      // first submit already created the PENDING teacher — recover instead of toasting.
-      return recoverTeacherRegisterAfterConsumedOtp(supabase, {
-        email,
-        schoolId,
-        password,
-        names,
-      });
-    }
+  const supabase = await createSupabaseServerClient();
+  const auth = await createOrAdoptTeacherAuthUser(supabase, { email, password, schoolId });
+  if (!auth.ok) return auth;
 
-    const { error: passwordError } = await supabase.auth.updateUser({ password });
-    if (passwordError) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.error("[verifyTeacherRegisterOtp] signOut after password fail:", err);
-      }
-      return {
-        ok: false,
-        error: mapSupabaseAuthError(
-          passwordError.message,
-          "Failed to set password. Please try again.",
-          "verifyTeacherRegisterOtp"
-        ),
-      };
-    }
-
-    return finishTeacherRegister(supabase, {
-      authId: data.user.id,
-      email,
-      schoolId,
-      names,
-    });
-  })();
-
-  teacherRegisterVerifyInflight.set(inflightKey, run);
-  try {
-    return await run;
-  } finally {
-    if (teacherRegisterVerifyInflight.get(inflightKey) === run) {
-      teacherRegisterVerifyInflight.delete(inflightKey);
+  // Sign in so the browser holds a session for /account/created. If this fails
+  // the auth user exists but no LITRACK row does yet — signing in and creating
+  // the account again recovers it through the adopt path above.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session || session.user.id !== auth.authId) {
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      console.error("[registerTeacher] sign-in after create failed:", signInError.message);
+      return { ok: false, error: REGISTER_SIGN_IN_MESSAGE };
     }
   }
+
+  return finishTeacherRegister(supabase, { authId: auth.authId, email, schoolId, names });
 }
 
 export async function loginAdmin(formData: FormData): Promise<ActionResult> {

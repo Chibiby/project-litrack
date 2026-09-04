@@ -12,12 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import {
-  loginSchoolHead,
-  loginTeacher,
-  requestTeacherRegisterOtp,
-  verifyTeacherRegisterOtp,
-} from "@/lib/actions/auth";
+import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
@@ -30,7 +25,6 @@ import {
 
 type Screen = "select-role" | "school-head" | "teacher";
 type TeacherIntent = "login" | "register";
-type TeacherStep = "credentials" | "otp";
 
 type SchoolWithStatus = { id: string; name: string; district: string | null; teachersOpen: boolean };
 
@@ -75,27 +69,18 @@ export function LoginForm({
   );
 
   const [teacherIntent, setTeacherIntent] = useState<TeacherIntent>("login");
-  const [teacherStep, setTeacherStep] = useState<TeacherStep>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [code, setCode] = useState("");
-  const [resendSeconds, setResendSeconds] = useState(0);
-  /** Sync lock so double Enter/click cannot start two OTP verifies before `pending` re-renders. */
-  const verifyRegisterLock = useRef(false);
+  /** Sync lock so double Enter/click cannot start two registrations before `pending` re-renders. */
+  const registerLock = useRef(false);
 
   useEffect(() => {
     if (loginError) toast.error(loginError);
   }, [loginError]);
-
-  useEffect(() => {
-    if (resendSeconds <= 0) return;
-    const id = window.setTimeout(() => setResendSeconds((s) => s - 1), 1000);
-    return () => window.clearTimeout(id);
-  }, [resendSeconds]);
 
   const handleSchoolChange = (value: string) => {
     setSchoolId(value);
@@ -115,15 +100,12 @@ export function LoginForm({
 
   const resetTeacherFlow = () => {
     setTeacherIntent("login");
-    setTeacherStep("credentials");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
     setFirstName("");
     setMiddleName("");
     setLastName("");
-    setCode("");
-    setResendSeconds(0);
   };
 
   const goBackToSchoolSelect = () => {
@@ -133,14 +115,11 @@ export function LoginForm({
 
   const switchTeacherIntent = (intent: TeacherIntent) => {
     setTeacherIntent(intent);
-    setTeacherStep("credentials");
     setPassword("");
     setConfirmPassword("");
-    setCode("");
-    setResendSeconds(0);
   };
 
-  const buildRegisterFormData = (includeCode = false) => {
+  const buildRegisterFormData = () => {
     const formData = new FormData();
     formData.set("schoolId", schoolId);
     formData.set("email", email.trim());
@@ -149,7 +128,6 @@ export function LoginForm({
     formData.set("lastName", lastName.trim());
     formData.set("password", password);
     formData.set("confirmPassword", confirmPassword);
-    if (includeCode) formData.set("code", code.trim());
     return formData;
   };
 
@@ -179,7 +157,9 @@ export function LoginForm({
     });
   };
 
-  const handleRequestRegisterOtp = () => {
+  const handleRegisterTeacher = () => {
+    if (pending || registerLock.current) return;
+
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -191,27 +171,13 @@ export function LoginForm({
       return;
     }
 
-    startTransition(async () => {
-      const res = await requestTeacherRegisterOtp(buildRegisterFormData());
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      setTeacherStep("otp");
-      setCode("");
-      setResendSeconds(60);
-    });
-  };
-
-  const handleVerifyRegisterOtp = () => {
-    if (pending || verifyRegisterLock.current) return;
-    verifyRegisterLock.current = true;
+    registerLock.current = true;
     startTransition(async () => {
       try {
-        const res = await verifyTeacherRegisterOtp(buildRegisterFormData(true));
+        const res = await registerTeacher(buildRegisterFormData());
         if (!res.ok) {
           toast.error(res.error);
-          verifyRegisterLock.current = false;
+          registerLock.current = false;
           return;
         }
         // Approved accounts land in the app shell (splash); pending accounts get
@@ -226,24 +192,10 @@ export function LoginForm({
         // Lock stays held — the page is navigating away.
         router.replace(res.redirectTo);
       } catch (err) {
-        console.error("[login-form] teacher register verify failed:", err);
-        verifyRegisterLock.current = false;
+        console.error("[login-form] teacher register failed:", err);
+        registerLock.current = false;
         toast.error("Could not create your account. Please try again.");
       }
-    });
-  };
-
-  const handleResendCode = () => {
-    if (resendSeconds > 0) return;
-
-    startTransition(async () => {
-      const res = await requestTeacherRegisterOtp(buildRegisterFormData());
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      setResendSeconds(60);
-      toast.success("Code resent");
     });
   };
 
@@ -400,35 +352,33 @@ export function LoginForm({
             </h2>
             {teacherIntent === "register" ? (
               <p className="text-xs text-muted-foreground">
-                New teachers set a password and verify email with a one-time code. After creation,
-                sign in with email and password only — no code needed for ongoing login.
+                Set your password now — no verification code needed. Your School Head approves the
+                account before you can sign in.
               </p>
             ) : null}
 
-            {teacherStep !== "otp" ? (
-              <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={teacherIntent === "login" ? "default" : "ghost"}
-                  className="w-full"
-                  disabled={pending}
-                  onClick={() => switchTeacherIntent("login")}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={teacherIntent === "register" ? "default" : "ghost"}
-                  className="w-full"
-                  disabled={pending}
-                  onClick={() => switchTeacherIntent("register")}
-                >
-                  Create account
-                </Button>
-              </div>
-            ) : null}
+            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={teacherIntent === "login" ? "default" : "ghost"}
+                className="w-full"
+                disabled={pending}
+                onClick={() => switchTeacherIntent("login")}
+              >
+                Sign in
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={teacherIntent === "register" ? "default" : "ghost"}
+                className="w-full"
+                disabled={pending}
+                onClick={() => switchTeacherIntent("register")}
+              >
+                Create account
+              </Button>
+            </div>
 
             {teacherIntent === "login" ? (
               <form
@@ -479,12 +429,12 @@ export function LoginForm({
                   </Link>
                 </p>
               </form>
-            ) : teacherStep === "credentials" ? (
+            ) : (
               <form
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleRequestRegisterOtp();
+                  handleRegisterTeacher();
                 }}
               >
                 <div className="space-y-2">
@@ -568,79 +518,10 @@ export function LoginForm({
                   type="submit"
                   className="w-full"
                   loading={pending}
-                  loadingText="Sending…"
-                >
-                  Send verification code
-                </Button>
-              </form>
-            ) : (
-              <form
-                className="space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleVerifyRegisterOtp();
-                }}
-              >
-                <p className="text-sm text-muted-foreground">
-                  Enter the 6-digit code sent to{" "}
-                  <span className="font-medium text-foreground">{email}</span>. This
-                  code is for account creation and email verification only.
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor="code">Verification code</Label>
-                  <Input
-                    id="code"
-                    name="code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    pattern="[0-9]{6}"
-                    required
-                    autoFocus
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    disabled={pending}
-                    className="tracking-[0.3em] text-center text-lg"
-                    placeholder="••••••"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={code.length !== 6}
-                  loading={pending}
                   loadingText="Creating account…"
                 >
                   Create account
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 disabled:no-underline"
-                    disabled={pending || resendSeconds > 0}
-                    onClick={handleResendCode}
-                  >
-                    {resendSeconds > 0
-                      ? `Resend code in ${resendSeconds}s`
-                      : "Resend code"}
-                  </Button>
-                  {" · "}
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0"
-                    disabled={pending}
-                    onClick={() => {
-                      setTeacherStep("credentials");
-                      setCode("");
-                    }}
-                  >
-                    Edit details
-                  </Button>
-                </p>
               </form>
             )}
           </div>

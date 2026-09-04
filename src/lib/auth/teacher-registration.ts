@@ -100,7 +100,7 @@ async function linkAuthIdIfNeeded(user: User, authId: string): Promise<User> {
 }
 
 /**
- * After email OTP verify: create/link the Prisma TEACHER user and
+ * Once the Supabase session exists: create/link the Prisma TEACHER user and
  * decide pending vs approved vs rejected. Callers handle redirects / sign-out.
  */
 export async function completeTeacherAuthAfterVerify(
@@ -198,7 +198,7 @@ export async function completeTeacherAuthAfterVerify(
   if (intent === "register") {
     // Race after create or register with an existing email.
     // PENDING at this school → fall through to login rules (idempotent).
-    // Otherwise same conflict messages as requestTeacherRegisterOtp.
+    // Otherwise same conflict messages as registerTeacher.
     if (!isPendingTeacherAtSchool(existing, schoolId)) {
       return {
         ok: false,

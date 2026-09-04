@@ -33,34 +33,16 @@ const teacherRegisterNames = {
 };
 
 /**
- * Request email OTP for teacher account creation only.
- * Password is validated up front so the UI can fail before sending a code.
+ * Teacher self-registration — one step: names, email, password.
+ * No email verification code: the account is created PENDING and the School
+ * Head approves it before the teacher can use LITRACK. Email is only used for
+ * password recovery afterwards.
  */
-export const requestTeacherRegisterOtpSchema = z
+export const teacherRegisterSchema = z
   .object({
     schoolId: nonEmpty("Please select a school"),
     email,
     ...teacherRegisterNames,
-    password: strongPassword,
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-
-/**
- * Verify teacher registration OTP and set the account password.
- */
-export const verifyTeacherRegisterOtpSchema = z
-  .object({
-    schoolId: nonEmpty("Please select a school"),
-    email,
-    ...teacherRegisterNames,
-    code: z
-      .string()
-      .trim()
-      .regex(/^\d{6}$/, "Enter the 6-digit code"),
     password: strongPassword,
     confirmPassword: z.string(),
   })
@@ -112,8 +94,7 @@ export const changeEmailSchema = z
 export type SchoolLoginInput = z.infer<typeof schoolLoginSchema>;
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 export type TeacherLoginInput = z.infer<typeof teacherLoginSchema>;
-export type RequestTeacherRegisterOtpInput = z.infer<typeof requestTeacherRegisterOtpSchema>;
-export type VerifyTeacherRegisterOtpInput = z.infer<typeof verifyTeacherRegisterOtpSchema>;
+export type TeacherRegisterInput = z.infer<typeof teacherRegisterSchema>;
 export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
