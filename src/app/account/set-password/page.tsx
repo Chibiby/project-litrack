@@ -21,8 +21,8 @@ export default async function SetPasswordPage() {
           />
           <h1 className="text-2xl font-bold tracking-tight">Set your password</h1>
           <p className="text-sm text-muted-foreground">
-            Choose a private password before continuing. This replaces your one-time activation
-            credential.
+            Choose a private password to replace the credential you signed in with. Recommended, but
+            you can skip this and do it later from Settings → Security.
           </p>
         </div>
         <PasswordForm mode="set" />

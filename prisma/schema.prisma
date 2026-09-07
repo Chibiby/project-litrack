@@ -450,6 +450,17 @@ model User {
   fullName           String
   isActive           Boolean                @default(false)
   mustChangePassword Boolean                @default(false)
+  /// True while the account's live Supabase password IS the school's
+  /// `schoolIdCode` — set at school creation and by the Super Admin
+  /// "reset to default" action, cleared the moment the password becomes
+  /// anything else (user-chosen, or a random activation credential).
+  ///
+  /// This flag is what lets the Super Admin console display a working sign-in
+  /// credential without ever storing a plaintext password: the only credential
+  /// it can show is one the system itself chose and already has on record
+  /// (`School.schoolIdCode`). A user's own password is a bcrypt hash inside
+  /// Supabase Auth and is never readable — by design.
+  passwordIsSchoolId Boolean                @default(false)
   // Profile completion flags
   profileCompleted   Boolean                @default(false)
   // Teacher self-registration approval (null for non-teacher roles)

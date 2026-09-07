@@ -629,7 +629,7 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { mustChangePassword: false },
+    data: { mustChangePassword: false, passwordIsSchoolId: false },
   });
 
   await writeAudit({
@@ -639,6 +639,42 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
     resource: "User",
     resourceId: user.id,
     metadata: { reason: "set_password" },
+  });
+
+  redirect(roleHomePath(user.role));
+}
+
+/**
+ * Dismiss the first-login password prompt and keep the current credential.
+ *
+ * The prompt is a nudge, not a gate: a School Head who has just been handed
+ * their School ID should be able to get into the app and come back to this
+ * later. Only `mustChangePassword` is cleared — `passwordIsSchoolId` is left
+ * exactly as it was, because skipping means the password did NOT change, and
+ * lying about that would make the Super Admin console show a credential that
+ * does not work.
+ *
+ * The account's password is unchanged and may still be the School ID, which is
+ * public. `/account/password` remains available from Settings → Security, and
+ * a Super Admin can always reset the account back to the School ID.
+ */
+export async function skipPasswordChange(): Promise<ActionResult> {
+  const user = await requireUser(undefined, true, { allowMustChangePassword: true });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { mustChangePassword: false },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+    resource: "User",
+    resourceId: user.id,
+    // No password changed here. The reason string is what separates this row
+    // from a real change when someone audits the account later.
+    metadata: { reason: "set_password_skipped", changed: false },
   });
 
   redirect(roleHomePath(user.role));
@@ -677,7 +713,7 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { mustChangePassword: false },
+    data: { mustChangePassword: false, passwordIsSchoolId: false },
   });
 
   await writeAudit({
@@ -864,7 +900,7 @@ export async function completePasswordReset(formData: FormData): Promise<ActionR
   if (appUser) {
     await prisma.user.update({
       where: { id: appUser.id },
-      data: { mustChangePassword: false },
+      data: { mustChangePassword: false, passwordIsSchoolId: false },
     });
     await writeAudit({
       userId: appUser.id,

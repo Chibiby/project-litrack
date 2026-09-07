@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
+import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
+import { readImpersonationTicket } from "@/lib/auth/impersonation";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +16,14 @@ export default async function SchoolHeadAppLayout({
 }) {
   const user = await requireUser("SCHOOL_HEAD");
 
+  // Read before the profiling gate below: an impersonating admin must be able
+  // to reach "Return to admin" even on a school whose head never profiled —
+  // which is exactly the kind of stuck account they came here to look at.
+  const impersonation = await readImpersonationTicket();
+  const impersonating = impersonation?.targetUserId === user.id;
+
   // Only gate real school heads — SUPER_ADMIN may view without profiling.
-  if (user.role === "SCHOOL_HEAD" && !user.profileCompleted) {
+  if (user.role === "SCHOOL_HEAD" && !user.profileCompleted && !impersonating) {
     redirect(SCHOOL_HEAD_ROUTES.profiling);
   }
 
@@ -34,7 +42,11 @@ export default async function SchoolHeadAppLayout({
 
   return (
     <>
-      <PostLoginSplash role="school-head" />
+      {impersonating ? (
+        <ImpersonationBanner accountName={`${userName} · ${schoolName ?? "school"}`} />
+      ) : (
+        <PostLoginSplash role="school-head" />
+      )}
       <RoleShell
         role={user.role}
         userName={userName}

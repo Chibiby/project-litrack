@@ -89,6 +89,10 @@ export async function createSchool(
         fullName: createdSchool.name,
         isActive: true,
         mustChangePassword: true,
+        // The password set just above IS `schoolIdCode`. Recording that is what
+        // lets the Super Admin console show a working credential later without
+        // anyone storing a plaintext password.
+        passwordIsSchoolId: true,
         profileCompleted: false,
       },
     });
@@ -157,7 +161,10 @@ export async function regenerateSchoolHeadCredential(
 
   await prisma.user.update({
     where: { id: shUser.id },
-    data: { mustChangePassword: true, isActive: true },
+    // The new password is a random one-time credential, not the School ID, and
+    // it is deliberately never stored — so the account's credential is no
+    // longer one the Super Admin console can display.
+    data: { mustChangePassword: true, isActive: true, passwordIsSchoolId: false },
   });
 
   await writeAudit({

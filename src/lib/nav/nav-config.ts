@@ -5,6 +5,7 @@ import {
   CalendarRange,
   FileBarChart,
   FileText,
+  KeyRound,
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
@@ -98,6 +99,7 @@ export function getNavGroups(
           items: [
             { id: "admin-dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard },
             { id: "admin-schools", label: "Schools", href: "/admin/schools", icon: School },
+            { id: "admin-school-accounts", label: "School accounts", href: "/admin/school-accounts", icon: KeyRound },
             { id: "admin-transfers", label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
             { id: "admin-school-years", label: "School years", href: "/admin/school-years", icon: CalendarRange },
             { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },

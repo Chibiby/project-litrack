@@ -23,6 +23,19 @@ export const AUDIT_ACTIONS = {
   SCHOOL_DELETE: "SCHOOL_DELETE",
   SCHOOL_SET_ACTIVE: "SCHOOL_SET_ACTIVE",
   SCHOOL_HEAD_CREDENTIAL_REGENERATED: "SCHOOL_HEAD_CREDENTIAL_REGENERATED",
+  /**
+   * Super Admin put a School Head's password back to the school's School ID so
+   * they could sign in and diagnose the account. The School ID is already on
+   * the School row, so this logs ids only — same rule as every other action.
+   */
+  SCHOOL_HEAD_PASSWORD_RESET_DEFAULT: "SCHOOL_HEAD_PASSWORD_RESET_DEFAULT",
+  /**
+   * Super Admin took over a School Head session without touching its password.
+   * Both ends are logged so the audit trail can always answer "was this the
+   * School Head or the admin?" for any write in between.
+   */
+  IMPERSONATION_START: "IMPERSONATION_START",
+  IMPERSONATION_END: "IMPERSONATION_END",
   SCHOOL_HEAD_PROFILE_SAVE: "SCHOOL_HEAD_PROFILE_SAVE",
   GRADE_LEVEL_CREATE: "GRADE_LEVEL_CREATE",
   SCHOOL_YEAR_CREATE: "SCHOOL_YEAR_CREATE",

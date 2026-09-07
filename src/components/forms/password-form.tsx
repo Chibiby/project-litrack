@@ -20,7 +20,12 @@ import {
   type SetPasswordInput,
   type ChangePasswordInput,
 } from "@/lib/validators/auth.schema";
-import { setPasswordAction, changePasswordAction, completePasswordReset } from "@/lib/actions/auth";
+import {
+  setPasswordAction,
+  changePasswordAction,
+  completePasswordReset,
+  skipPasswordChange,
+} from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
 
 type Mode = "set" | "change" | "reset";
@@ -248,8 +253,49 @@ function PasswordFormSetOrReset({
           >
             Save password
           </Button>
+          {mode === "set" ? <SkipForNowButton disabled={pending} /> : null}
         </AppForm>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Only on `set` — the first-login nudge. `reset` is reached from a recovery
+ * link, where the whole point of the visit is choosing a new password, and
+ * `change` is voluntary and already dismissable by navigating away.
+ *
+ * Runs its own transition rather than sharing the form's `pending`, so the
+ * spinner lands on the button that was actually clicked. It stays outside
+ * `AppForm`'s submit path entirely (`type="button"`), so the empty password
+ * fields never get validated on the way out.
+ */
+function SkipForNowButton({ disabled }: { disabled: boolean }) {
+  const [skipping, startSkip] = useTransition();
+
+  return (
+    <div className="space-y-2 pt-1">
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full"
+        disabled={disabled}
+        loading={skipping}
+        loadingText="Skipping…"
+        onClick={() => {
+          startSkip(async () => {
+            const res = await skipPasswordChange();
+            // Success redirects, so only a failure ever returns here.
+            if (res && !res.ok) toast.error(res.error);
+          });
+        }}
+      >
+        Skip for now
+      </Button>
+      <p className="text-center text-xs text-muted-foreground">
+        You will keep signing in with your current credential. You can change it
+        any time from Settings → Security.
+      </p>
+    </div>
   );
 }

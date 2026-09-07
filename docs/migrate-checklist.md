@@ -26,6 +26,14 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260823000001_add_perf_indexes` — **see the carve-out in (b1) before applying this one to
   production.** It is 12 additive `CREATE INDEX` statements and nothing else; production takes
   `prisma/concurrent-indexes.sql` instead of letting `migrate deploy` run it.
+- `20260902000001_add_report_history`
+- `20260903000001_support_assistant`
+- `20260907000001_password_is_school_id` — one additive `BOOLEAN NOT NULL DEFAULT false` column on
+  `User`, deliberately not backfilled. Adds no table, so `prisma/rls-policies.sql` does not need
+  re-running. Existing School Head rows land on `false`, which the Super Admin school-accounts
+  console reads as "custom password — reset to sign in"; that is always true and always
+  recoverable in one click. The comment at the top of the migration explains why a backfill would
+  be worse than none.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
