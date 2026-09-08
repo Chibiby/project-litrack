@@ -1,11 +1,15 @@
 /**
  * Apache Spark mark — pure geometry, inlined.
  *
- * The shipped asset (`public/brand/apache-spark/apache-spark-mark.svg`) is the
- * same four lines and four vertex squares, but it carries a ~8 KB C2PA
- * manifest and would cost a request wherever it appears at 12px. The mark-only
- * SVGs need no font, so inlining is lossless. Brand palette: ink #14181C
- * outline, accent #9E5430 inner diamond — never recoloured outside those.
+ * The shipped asset (`public/Apache Spark Brand Animation/brand/svg/
+ * apache-spark-mark.svg`) is the same four lines and four vertex squares, but
+ * it carries a ~8 KB C2PA manifest and would cost a request wherever it
+ * appears at 12px. The mark-only SVGs need no font, so inlining is lossless.
+ * One deliberate divergence from the kit: strokes and vertex squares are
+ * scaled up (12/18 vs the kit's 7/12) because this renders at 12px, where the
+ * kit's weights fall under half a device pixel and vanish.
+ * Brand palette: ink #14181C outline, accent #9E5430 inner diamond — never
+ * recoloured outside those.
  */
 export type ApacheSparkMarkProps = {
   className?: string;
