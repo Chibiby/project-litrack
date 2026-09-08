@@ -257,8 +257,10 @@ export function FormTextField<T extends FieldValues>({
   description,
   type = "text",
   autoComplete,
+  autoCapitalize,
   inputMode,
   placeholder,
+  maxLength,
   min,
   max,
   step,
@@ -270,8 +272,10 @@ export function FormTextField<T extends FieldValues>({
   description?: string;
   type?: string;
   autoComplete?: string;
+  autoCapitalize?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   placeholder?: string;
+  maxLength?: number;
   min?: number;
   max?: number;
   step?: number | string;
@@ -289,8 +293,10 @@ export function FormTextField<T extends FieldValues>({
               value={field.value ?? ""}
               type={type}
               autoComplete={autoComplete}
+              autoCapitalize={autoCapitalize}
               inputMode={inputMode}
               placeholder={placeholder}
+              maxLength={maxLength}
               min={min}
               max={max}
               step={step}

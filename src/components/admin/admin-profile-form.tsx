@@ -45,6 +45,9 @@ export function AdminProfileForm({
               name="firstName"
               defaultValue={firstName}
               required
+              maxLength={100}
+              autoComplete="given-name"
+              autoCapitalize="words"
               disabled={pending}
             />
           </div>
@@ -54,6 +57,9 @@ export function AdminProfileForm({
               id="middleName"
               name="middleName"
               defaultValue={middleName ?? ""}
+              maxLength={100}
+              autoComplete="additional-name"
+              autoCapitalize="words"
               disabled={pending}
             />
           </div>
@@ -64,6 +70,9 @@ export function AdminProfileForm({
               name="lastName"
               defaultValue={lastName}
               required
+              maxLength={100}
+              autoComplete="family-name"
+              autoCapitalize="words"
               disabled={pending}
             />
           </div>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nonEmpty } from "./common";
+import { formatOptionalLabel } from "@/lib/names";
 
 /**
  * The School ID doubles as the School Head's first-time Supabase password, so the
@@ -14,21 +15,25 @@ export const schoolIdCodeSchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/, "Only letters, digits, underscore and dash");
 
-const optionalShort = z
-  .union([z.string(), z.undefined(), z.null()])
-  .transform((v) => {
-    if (v == null) return undefined;
-    const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed.slice(0, 100) : undefined;
-  });
+/**
+ * Same rules as the admin form's fields in ./school.schema.ts: whitespace is
+ * canonicalised, case is left alone, and an over-long value is rejected with a
+ * row error rather than silently truncated mid-import.
+ */
+function optionalLabel(max: number, label: string) {
+  return z
+    .union([z.string(), z.undefined(), z.null()])
+    .transform((v) => (v == null ? undefined : formatOptionalLabel(String(v))))
+    .pipe(
+      z.union([
+        z.string().max(max, `${label} must be ${max} characters or fewer`),
+        z.undefined(),
+      ])
+    );
+}
 
-const optionalLong = z
-  .union([z.string(), z.undefined(), z.null()])
-  .transform((v) => {
-    if (v == null) return undefined;
-    const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed.slice(0, 500) : undefined;
-  });
+const optionalShort = optionalLabel(100, "This field");
+const optionalLong = optionalLabel(500, "Address");
 
 export const schoolRosterRowSchema = z.object({
   schoolIdCode: schoolIdCodeSchema,

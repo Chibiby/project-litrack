@@ -355,6 +355,53 @@ Also verify: login pages load; public `/api/schools/list` returns id+name only; 
 
 ---
 
+## (f) Data-uniformity backfill  —  Sep 2026
+
+Two migrations, applied in order, with a read-only check between them.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260908000003_normalize_existing_data` | Data only. Title-cases learner, user and invite names; rebuilds `fullName`; folds phone numbers to `09XXXXXXXXX`; collapses stray whitespace in school and section labels. Creates two permanent SQL functions the report below reuses. | No. Adds no constraint. |
+| 2 | `20260908000004_case_insensitive_name_uniqueness` | Replaces three exact-match unique indexes with case-folded ones (school name, real-school `schoolIdCode`, section name per grade). | **Yes** — it aborts if case-variant duplicates still exist. |
+
+### Steps
+
+1. **Back up first.** These rewrite name columns across every tenant.
+2. Apply migration 1:
+   ```powershell
+   npx prisma migrate deploy   # uses DIRECT_URL (port 5432), not the pooler
+   ```
+   Stop here if `migrate deploy` would also pick up migration 2 — apply them in
+   separate passes, or run migration 1 with `psql -f` and mark it applied.
+3. Run the read-only pre-flight and read sections 1-3:
+   ```powershell
+   psql "$env:DIRECT_URL" -f prisma/reports/data-uniformity-preflight.sql
+   ```
+   - Sections 1, 2 and 3 must return **zero rows**. Anything they list is a
+     genuine duplicate a human has to merge or rename first — the app cannot
+     pick a winner between two real schools.
+   - Section 4 lists case-variant account emails. These are **not** auto-fixed:
+     `User.email` is dual-written with Supabase Auth, so rewriting one side
+     alone breaks sign-in. Resolve them through `docs/runbook.md`.
+   - Sections 5 and 6 should show 0 rows changing, confirming migration 1 took.
+   - Section 7 lists over-long address/region/division/district values. They are
+     left as-is, but the next School Head who edits that row will be asked to
+     shorten it, because those fields now reject overflow instead of silently
+     truncating it.
+4. Once sections 1-3 are clean, apply migration 2.
+5. Smoke test: add a learner as `juan dela cruz` and confirm the roster shows
+   **Juan Dela Cruz**; try creating a section whose name differs from an
+   existing one only by case and confirm it is refused.
+
+### Rollback
+
+Migration 1 is not reversible — the original casing is not kept anywhere, which
+is why step 1 is a backup. Migration 2 reverses by dropping the three folded
+indexes and recreating the originals (`School_name_key`,
+`School_schoolIdCode_real_key` on the bare column, `Section_gradeLevelId_name_key`).
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

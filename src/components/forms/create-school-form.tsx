@@ -79,7 +79,7 @@ export function CreateSchoolForm() {
         >
           <div className="space-y-2">
             <Label htmlFor="name">School name *</Label>
-            <Input id="name" name="name" required />
+            <Input id="name" name="name" required maxLength={200} autoCapitalize="words" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="schoolIdCode">School ID *</Label>
@@ -89,6 +89,10 @@ export function CreateSchoolForm() {
               required
               pattern="[A-Za-z0-9_\-]+"
               minLength={6}
+              maxLength={64}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
             />
             <p className="text-xs text-muted-foreground">
               The school&apos;s DepEd identifier, and the School Head&apos;s first-time password —
@@ -98,19 +102,25 @@ export function CreateSchoolForm() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="region">Region</Label>
-              <Input id="region" name="region" />
+              <Input id="region" name="region" maxLength={100} autoCapitalize="words" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="division">Division</Label>
-              <Input id="division" name="division" />
+              <Input id="division" name="division" maxLength={100} autoCapitalize="words" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="district">District</Label>
-              <Input id="district" name="district" />
+              <Input id="district" name="district" maxLength={100} autoCapitalize="words" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
-              <Input id="address" name="address" />
+              <Input
+                id="address"
+                name="address"
+                maxLength={500}
+                autoComplete="street-address"
+                autoCapitalize="words"
+              />
             </div>
           </div>
           <div className="flex gap-2 pt-2">

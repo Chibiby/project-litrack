@@ -1,21 +1,30 @@
 import { z } from "zod";
 import { nonEmpty } from "./common";
+import { formatOptionalLabel } from "@/lib/names";
 
-const optionalField = z
-  .union([z.string(), z.undefined(), z.null()])
-  .transform((v) => {
-    if (v == null) return undefined;
-    const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed.slice(0, 500) : undefined;
-  });
+/**
+ * Optional place/organisation text (address, region, division, district).
+ *
+ * Letter case is left exactly as typed — "Region XI" and "Sample Central ES"
+ * both break under title-casing — but internal whitespace is collapsed so the
+ * same value cannot be stored two ways. Overflow is now an error: these used to
+ * `.slice()` silently, which cut a long address mid-word with nothing shown to
+ * the person who typed it.
+ */
+function optionalLabel(max: number, label: string) {
+  return z
+    .union([z.string(), z.undefined(), z.null()])
+    .transform((v) => (v == null ? undefined : formatOptionalLabel(String(v))))
+    .pipe(
+      z.union([
+        z.string().max(max, `${label} must be ${max} characters or fewer`),
+        z.undefined(),
+      ])
+    );
+}
 
-const optionalShort = z
-  .union([z.string(), z.undefined(), z.null()])
-  .transform((v) => {
-    if (v == null) return undefined;
-    const trimmed = String(v).trim();
-    return trimmed.length > 0 ? trimmed.slice(0, 100) : undefined;
-  });
+const optionalField = optionalLabel(500, "Address");
+const optionalShort = optionalLabel(100, "This field");
 
 export const createSchoolSchema = z.object({
   name: nonEmpty("School name required").max(200),

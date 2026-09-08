@@ -392,7 +392,12 @@ enum LearningArea {
 
 model School {
   id           String    @id @default(uuid())
-  name         String    @unique
+  /// Unique case-insensitively, via the SQL-only functional index
+  /// `School_name_folded_key` on `lower(btrim(name))`. Prisma's schema language
+  /// cannot express a functional unique — the same reason `schoolIdCode` below
+  /// and `Enrollment`'s one-ACTIVE-row index live in SQL. Preserve it when
+  /// editing School migrations. Stored casing is whatever the admin typed.
+  name         String
   /// The six-digit DepEd School ID, and the School Head's first-login password.
   ///
   /// Unique among REAL schools only. The uniqueness is a partial index living in
@@ -686,7 +691,10 @@ model Section {
   enrollments    Enrollment[]
   teacherInvites TeacherInvite[]
 
-  @@unique([gradeLevelId, name])
+  /// One name per grade, case-insensitively and among live sections only, via
+  /// the SQL-only partial functional index `Section_gradeLevelId_name_folded_key`.
+  /// Archived rows are excluded so `createSection` can revive one instead of
+  /// being blocked by it. Preserve it when editing Section migrations.
   @@index([schoolId, deletedAt])
 }
 

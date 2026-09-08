@@ -57,7 +57,15 @@ export function CreateSectionForm({
       </div>
       <div className="space-y-2">
         <Label htmlFor="name">Section name</Label>
-        <Input id="name" name="name" placeholder="e.g. Mabini" required disabled={pending} />
+        <Input
+          id="name"
+          name="name"
+          placeholder="e.g. Mabini"
+          required
+          maxLength={100}
+          autoCapitalize="words"
+          disabled={pending}
+        />
       </div>
       <Button type="submit" loading={pending} loadingText="Saving…">
         Add section
@@ -120,6 +128,8 @@ export function SectionRowActions({
           name="name"
           defaultValue={name}
           className="h-8 w-36"
+          maxLength={100}
+          autoCapitalize="words"
           disabled={isPending}
           aria-label="Section name"
         />
@@ -281,6 +291,8 @@ export function GradeSectionsPanel({
                 name="name"
                 placeholder="e.g. Mabini"
                 required
+                maxLength={100}
+                autoCapitalize="words"
                 disabled={pending}
                 className="h-8"
               />

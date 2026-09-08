@@ -445,6 +445,8 @@ export function LoginForm({
                     required
                     autoFocus
                     autoComplete="given-name"
+                    autoCapitalize="words"
+                    maxLength={100}
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     disabled={pending}
@@ -456,6 +458,8 @@ export function LoginForm({
                     id="middleName"
                     name="middleName"
                     autoComplete="additional-name"
+                    autoCapitalize="words"
+                    maxLength={100}
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
                     disabled={pending}
@@ -468,6 +472,8 @@ export function LoginForm({
                     name="lastName"
                     required
                     autoComplete="family-name"
+                    autoCapitalize="words"
+                    maxLength={100}
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     disabled={pending}

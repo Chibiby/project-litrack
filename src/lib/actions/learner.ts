@@ -16,6 +16,11 @@ import {
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import {
+  formatPersonName,
+  formatOptionalPersonName,
+  buildFullName,
+} from "@/lib/names";
+import {
   revalidateLearnerScoped,
   revalidateSchoolHeadTeachers,
 } from "@/lib/cache/revalidate";
@@ -85,9 +90,7 @@ function formToObj(formData: FormData): Record<string, unknown> {
   return obj;
 }
 
-function buildFullName(firstName: string, middleName: string | undefined, lastName: string): string {
-  return [firstName, middleName, lastName].filter(Boolean).join(" ");
-}
+// buildFullName now lives in @/lib/names alongside the casing rules that produce its parts.
 
 export async function createLearner(
   formData: FormData
@@ -119,9 +122,11 @@ export async function createLearner(
     return { ok: false, error: "You are not assigned to this grade level" };
   }
 
-  const firstName = parsed.data.firstName.trim();
-  const lastName = parsed.data.lastName.trim();
-  const middleName = parsed.data.middleName?.trim() || undefined;
+  // Canonical casing is applied before the duplicate probe and before the write, so
+  // a hand-typed "juan dela cruz" and an imported "JUAN DELA CRUZ" land as one value.
+  const firstName = formatPersonName(parsed.data.firstName);
+  const lastName = formatPersonName(parsed.data.lastName);
+  const middleName = formatOptionalPersonName(parsed.data.middleName);
 
   if (!parsed.data.confirmDuplicate) {
     const candidates = await prisma.learner.findMany({
@@ -253,9 +258,9 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   // ignored rather than trusted.
   const sectionId = learner.sectionId;
 
-  const firstName = parsed.data.firstName.trim();
-  const lastName = parsed.data.lastName.trim();
-  const middleName = parsed.data.middleName?.trim() || undefined;
+  const firstName = formatPersonName(parsed.data.firstName);
+  const lastName = formatPersonName(parsed.data.lastName);
+  const middleName = formatOptionalPersonName(parsed.data.middleName);
   const fullName = buildFullName(firstName, middleName, lastName);
 
   // Form only manages 4Ps; preserve any existing IPS flag (no longer offered in UI).

@@ -21,10 +21,8 @@ import {
   learnerImportRowSchema,
   type LearnerImportRow,
 } from "@/lib/validators/learner-import.schema";
-import {
-  learnerDuplicateKey,
-  normalizePersonName,
-} from "@/lib/learners/normalize";
+import { learnerDuplicateKey } from "@/lib/learners/normalize";
+import { formatPersonName } from "@/lib/names";
 
 /** Canonical CSV headers (Section A + B + optional section + isAralLearner). */
 export const LEARNER_CSV_HEADERS = [
@@ -345,11 +343,13 @@ export function resolveSectionIdByName(
 }
 
 /** Title-case after normalize (simple word capitalise). */
+/**
+ * Kept as a named export because the import wizard and its tests refer to it,
+ * but the rules now live in one place shared with every manual entry form.
+ * @see formatPersonName
+ */
 export function titleCaseName(name: string): string {
-  return normalizePersonName(name)
-    .split(" ")
-    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
-    .join(" ");
+  return formatPersonName(name);
 }
 
 export function summarizeImportResults(results: ImportRowResult[]): {

@@ -41,10 +41,14 @@ export async function createSection(formData: FormData): Promise<ActionResult> {
   if (!grade) return { ok: false, error: "Grade level not found" };
 
   try {
+    // Case-insensitive: "Mabini", "MABINI" and "mabini" are one section, not three.
+    // The revive path in school-head.ts already folded case; this one did not, and
+    // CSV import resolves section names case-insensitively — so duplicates created
+    // here silently captured whichever row the importer happened to hit first.
     const existing = await prisma.section.findFirst({
       where: {
         gradeLevelId: parsed.data.gradeLevelId,
-        name: parsed.data.name,
+        name: { equals: parsed.data.name, mode: "insensitive" },
       },
     });
 
@@ -107,6 +111,22 @@ export async function updateSection(formData: FormData): Promise<ActionResult> {
     },
   });
   if (!section) return { ok: false, error: "Section not found" };
+
+  // Rename had no uniqueness check at all, so "A" could be renamed onto an existing
+  // "B" in the same grade. Same case-insensitive rule as create; the section's own
+  // row is excluded so re-saving an unchanged name is not reported as a clash.
+  const clash = await prisma.section.findFirst({
+    where: {
+      gradeLevelId: section.gradeLevelId,
+      deletedAt: null,
+      id: { not: section.id },
+      name: { equals: parsed.data.name, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (clash) {
+    return { ok: false, error: "A section with this name already exists in this grade" };
+  }
 
   try {
     await prisma.section.update({

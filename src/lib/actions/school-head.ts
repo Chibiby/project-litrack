@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { GradeLevelType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  formatPersonName,
+  formatOptionalPersonName,
+  buildFullName,
+} from "@/lib/names";
 import { requireUser, requireSchoolUser } from "@/lib/auth/session";
 import { schoolHeadProfileSchema } from "@/lib/validators/profile.schema";
 import {
@@ -226,14 +231,16 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   }
 
   const {
-    firstName,
-    lastName,
+    firstName: firstRaw,
+    lastName: lastRaw,
     middleName: middleRaw,
     contactEmail: _contactEmail,
     ...profileData
   } = parsed.data;
-  const middleName = middleRaw?.trim() ? middleRaw.trim() : null;
-  const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+  const firstName = formatPersonName(firstRaw);
+  const lastName = formatPersonName(lastRaw);
+  const middleName = formatOptionalPersonName(middleRaw) ?? null;
+  const fullName = buildFullName(firstName, middleName, lastName);
   const schoolId = user.schoolId;
 
   // Leave contactEmail untouched — no longer collected in the profiling UI.

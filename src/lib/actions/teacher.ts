@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import {
+  formatPersonName,
+  formatOptionalPersonName,
+  buildFullName,
+} from "@/lib/names";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -62,15 +67,17 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   }
 
   const {
-    firstName,
-    lastName,
+    firstName: firstRaw,
+    lastName: lastRaw,
     middleName: middleRaw,
     contactEmail: _contactEmail,
     sectionId,
     ...profileFields
   } = parsed.data;
-  const middleName = middleRaw?.trim() ? middleRaw.trim() : null;
-  const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ");
+  const firstName = formatPersonName(firstRaw);
+  const lastName = formatPersonName(lastRaw);
+  const middleName = formatOptionalPersonName(middleRaw) ?? null;
+  const fullName = buildFullName(firstName, middleName, lastName);
 
   // Prisma skips `undefined` on update — normalize optionals to null so clears persist
   // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).

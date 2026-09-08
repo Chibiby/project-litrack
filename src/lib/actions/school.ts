@@ -50,10 +50,20 @@ export async function createSchool(
   // ID is only unique among real ones — the demo tenant is exempt by a partial
   // index — so checking it globally would let the demo school block an admin
   // from creating the real school that legitimately owns that ID.
+  // Both probes are case-insensitive. Exact matching let "Sample Central ES" and
+  // "SAMPLE CENTRAL ES" coexist, and — worse — let School IDs 123ABC and 123abc
+  // both exist, which matters because the ID doubles as the Head's first password.
+  // The stored casing is still whatever the admin typed; only the check is folded.
   const [nameTaken, codeTaken] = await Promise.all([
-    prisma.school.findFirst({ where: { name: parsed.data.name }, select: { id: true } }),
     prisma.school.findFirst({
-      where: { schoolIdCode: parsed.data.schoolIdCode, isDemo: false },
+      where: { name: { equals: parsed.data.name, mode: "insensitive" } },
+      select: { id: true },
+    }),
+    prisma.school.findFirst({
+      where: {
+        schoolIdCode: { equals: parsed.data.schoolIdCode, mode: "insensitive" },
+        isDemo: false,
+      },
       select: { id: true },
     }),
   ]);

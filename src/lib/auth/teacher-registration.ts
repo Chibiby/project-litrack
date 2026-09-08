@@ -1,5 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import {
+  formatPersonName,
+  formatOptionalPersonName,
+  buildFullName,
+} from "@/lib/names";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
@@ -44,9 +49,7 @@ export type CompleteTeacherAuthResult =
   | { ok: true; outcome: "pending" | "approved" }
   | { ok: false; error: string; signOut: boolean };
 
-function buildFullName(firstName: string, middleName: string | undefined, lastName: string): string {
-  return [firstName, middleName, lastName].filter(Boolean).join(" ");
-}
+// buildFullName and the casing rules that feed it live in @/lib/names.
 
 function prismaErrorCode(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
@@ -117,9 +120,9 @@ export async function completeTeacherAuthAfterVerify(
       return { ok: false, error: "First and last name are required.", signOut: true };
     }
 
-    const firstName = names.firstName.trim();
-    const middleName = names.middleName?.trim() || undefined;
-    const lastName = names.lastName.trim();
+    const firstName = formatPersonName(names.firstName);
+    const middleName = formatOptionalPersonName(names.middleName);
+    const lastName = formatPersonName(names.lastName);
     const fullName = buildFullName(firstName, middleName, lastName);
 
     let created: User | null = null;

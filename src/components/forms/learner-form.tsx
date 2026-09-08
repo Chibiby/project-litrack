@@ -346,6 +346,9 @@ export function LearnerForm({
               id="firstName"
               name="firstName"
               required
+              maxLength={80}
+              autoComplete="given-name"
+              autoCapitalize="words"
               defaultValue={defaultValues?.firstName ?? ""}
             />
           </div>
@@ -354,6 +357,9 @@ export function LearnerForm({
             <Input
               id="middleName"
               name="middleName"
+              maxLength={80}
+              autoComplete="additional-name"
+              autoCapitalize="words"
               defaultValue={defaultValues?.middleName ?? ""}
             />
           </div>
@@ -363,6 +369,9 @@ export function LearnerForm({
               id="lastName"
               name="lastName"
               required
+              maxLength={80}
+              autoComplete="family-name"
+              autoCapitalize="words"
               defaultValue={defaultValues?.lastName ?? ""}
             />
           </div>

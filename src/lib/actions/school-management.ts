@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import {
+  formatPersonName,
+  formatOptionalPersonName,
+  buildFullName,
+} from "@/lib/names";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import {
   updateSchoolInfoSchema,
@@ -117,19 +122,14 @@ export async function updateAdminProfile(formData: FormData): Promise<ActionResu
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const middleName = parsed.data.middleName ?? null;
-  const fullName = [parsed.data.firstName, middleName, parsed.data.lastName]
-    .filter(Boolean)
-    .join(" ");
+  const firstName = formatPersonName(parsed.data.firstName);
+  const lastName = formatPersonName(parsed.data.lastName);
+  const middleName = formatOptionalPersonName(parsed.data.middleName) ?? null;
+  const fullName = buildFullName(firstName, middleName, lastName);
 
   await prisma.user.update({
     where: { id: admin.id },
-    data: {
-      firstName: parsed.data.firstName,
-      middleName,
-      lastName: parsed.data.lastName,
-      fullName,
-    },
+    data: { firstName, middleName, lastName, fullName },
   });
 
   await writeAudit({

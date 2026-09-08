@@ -448,11 +448,17 @@ export function SchoolHeadProfileForm({
                 name="firstName"
                 label="First name"
                 required
+                maxLength={100}
+                autoComplete="given-name"
+                autoCapitalize="words"
               />
               <FormTextField
                 control={form.control}
                 name="middleName"
                 label="Middle name"
+                maxLength={100}
+                autoComplete="additional-name"
+                autoCapitalize="words"
                 description="Optional"
               />
               <FormTextField
@@ -460,6 +466,9 @@ export function SchoolHeadProfileForm({
                 name="lastName"
                 label="Last name"
                 required
+                maxLength={100}
+                autoComplete="family-name"
+                autoCapitalize="words"
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
