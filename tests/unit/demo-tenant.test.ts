@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   DEMO_DISTRICT_NAME,
+  DEMO_EMAIL_CODE,
   DEMO_ENABLED_KEY,
   DEMO_SCHOOL_ID_CODE,
   DEMO_SCHOOL_NAME,
@@ -19,7 +22,7 @@ import {
   type SchoolOption,
 } from "@/lib/login/district-filter";
 import { SNAPSHOT_MODELS } from "@/lib/db/schema-order";
-import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { isSyntheticEmail, schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 
 describe("demo tenant constants", () => {
   // These strings are read aloud and shown on screen in the training video.
@@ -44,8 +47,18 @@ describe("demo tenant constants", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("derives a usable synthetic School Head email from the School ID", () => {
-    expect(schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE)).toMatch(/^sh@123456\./);
+  it("gives the demo School Head an address that cannot collide with a real school's", () => {
+    // The demo may share School ID 123456 with a real school, but not a login
+    // address: User.email is unique and Supabase Auth rejects duplicates. A demo
+    // email derived from the bare School ID would collide the moment both exist.
+    const demo = schoolHeadSyntheticEmail(DEMO_EMAIL_CODE);
+    const real = schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE);
+    expect(demo).not.toBe(real);
+    expect(demo).toMatch(/^sh@demo-123456\./);
+  });
+
+  it("keeps the demo School Head's address synthetic, so email recovery stays barred", () => {
+    expect(isSyntheticEmail(schoolHeadSyntheticEmail(DEMO_EMAIL_CODE))).toBe(true);
   });
 });
 
@@ -132,6 +145,42 @@ describe("SystemSetting in the backup order", () => {
 
   it("is not operational, so clearing operational data leaves the switch alone", () => {
     expect(entry?.operational).toBe(false);
+  });
+});
+
+describe("schoolIdCode uniqueness is partial, not global", () => {
+  const PRISMA = path.resolve(__dirname, "../../prisma");
+  const schema = readFileSync(path.join(PRISMA, "schema.prisma"), "utf8");
+
+  it("carries no @unique on schoolIdCode in the Prisma schema", () => {
+    // Prisma cannot express a filtered unique, so re-adding `@unique` here would
+    // silently re-impose the global constraint on the next migrate and block the
+    // demo tenant from sharing a real school's School ID.
+    const schoolModel = schema.slice(
+      schema.indexOf("model School {"),
+      schema.indexOf("model SystemSetting {")
+    );
+    const line = schoolModel
+      .split("\n")
+      .find((l) => /^\s*schoolIdCode\s+String/.test(l));
+    expect(line).toBeDefined();
+    expect(line).not.toMatch(/@unique/);
+  });
+
+  it("declares the partial unique index in SQL, scoped to real schools", () => {
+    const sql = readFileSync(
+      path.join(
+        PRISMA,
+        "migrations/20260908000002_demo_school_id_exempt_from_unique/migration.sql"
+      ),
+      "utf8"
+    );
+    expect(sql).toMatch(/DROP INDEX IF EXISTS "School_schoolIdCode_key"/);
+    // The WHERE clause is the whole point: without it this is just the old
+    // global constraint under a new name.
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX IF NOT EXISTS "School_schoolIdCode_real_key"[\s\S]*WHERE "isDemo" = false/
+    );
   });
 });
 

@@ -46,10 +46,20 @@ export async function createSchool(
   });
   if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
 
-  const exists = await prisma.school.findFirst({
-    where: { OR: [{ name: parsed.data.name }, { schoolIdCode: parsed.data.schoolIdCode }] },
-  });
-  if (exists) return { ok: false, error: "School name or School ID already exists" };
+  // Name is globally unique, so it is checked against every school. The School
+  // ID is only unique among real ones — the demo tenant is exempt by a partial
+  // index — so checking it globally would let the demo school block an admin
+  // from creating the real school that legitimately owns that ID.
+  const [nameTaken, codeTaken] = await Promise.all([
+    prisma.school.findFirst({ where: { name: parsed.data.name }, select: { id: true } }),
+    prisma.school.findFirst({
+      where: { schoolIdCode: parsed.data.schoolIdCode, isDemo: false },
+      select: { id: true },
+    }),
+  ]);
+  if (nameTaken || codeTaken) {
+    return { ok: false, error: "School name or School ID already exists" };
+  }
 
   // The School ID is the single, universal first-time credential — the same rule the
   // roster import follows. `mustChangePassword: true` below forces replacement at first login.

@@ -24,6 +24,23 @@ export const DEMO_SCHOOL_NAME = "[demo school]";
  */
 export const DEMO_SCHOOL_ID_CODE = "123456";
 
+/**
+ * What the demo School Head's synthetic email is derived from, instead of the
+ * School ID.
+ *
+ * The demo is allowed to share `123456` with a real school, but a login address
+ * cannot be shared: `User.email` is unique and Supabase Auth rejects a duplicate
+ * outright. `schoolHeadSyntheticEmail` builds `sh@<code>.<domain>`, so deriving
+ * the demo's address from the bare School ID would collide with the real
+ * school's School Head the moment both exist. Prefixing keeps it distinct —
+ * `sh@demo-123456.<domain>` — while staying a synthetic address, so the demo
+ * account is correctly barred from email password recovery like every other one.
+ *
+ * This is invisible during the recording: the login page asks for a district and
+ * a school, never an email.
+ */
+export const DEMO_EMAIL_CODE = `demo-${DEMO_SCHOOL_ID_CODE}`;
+
 export const DEMO_REGION = "[demo region]";
 export const DEMO_DIVISION = "[demo division]";
 export const DEMO_ADDRESS = "[demo address]";

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import {
+  DEMO_EMAIL_CODE,
   DEMO_ADDRESS,
   DEMO_DISTRICT_NAME,
   DEMO_DIVISION,
@@ -47,7 +48,7 @@ export async function demoStatus(): Promise<DemoStatus> {
     schoolIdCode: school?.schoolIdCode ?? DEMO_SCHOOL_ID_CODE,
     districtName: DEMO_DISTRICT_NAME,
     schoolName: DEMO_SCHOOL_NAME,
-    schoolHeadEmail: school ? schoolHeadSyntheticEmail(school.schoolIdCode) : null,
+    schoolHeadEmail: school ? schoolHeadSyntheticEmail(DEMO_EMAIL_CODE) : null,
     createdAt: school?.createdAt ?? null,
   };
 }
@@ -97,26 +98,29 @@ export async function provisionDemoTenant(createdById: string): Promise<Provisio
       ok: true,
       schoolId: existing.id,
       initialPassword: existing.schoolIdCode,
-      schoolHeadEmail: schoolHeadSyntheticEmail(existing.schoolIdCode),
+      schoolHeadEmail: schoolHeadSyntheticEmail(DEMO_EMAIL_CODE),
     };
   }
 
-  // A real school already holding "123456" or the demo name is the one case this
-  // cannot resolve on its own — both columns are @unique and the real school wins.
-  const clash = await prisma.school.findFirst({
-    where: {
-      OR: [{ name: DEMO_SCHOOL_NAME }, { schoolIdCode: DEMO_SCHOOL_ID_CODE }],
-    },
+  // A real school sharing the School ID is fine and expected — the unique index
+  // on `schoolIdCode` is partial (`WHERE "isDemo" = false`), so the demo is
+  // exempt. `name` is still globally unique, and that one cannot be worked
+  // around here: the real school owns the name and renaming it is the admin's
+  // call, not this function's.
+  const nameClash = await prisma.school.findFirst({
+    where: { name: DEMO_SCHOOL_NAME },
     select: { id: true, name: true },
   });
-  if (clash) {
+  if (nameClash) {
     return {
       ok: false,
-      error: `A real school ("${clash.name}") already uses the demo name or School ID ${DEMO_SCHOOL_ID_CODE}. Rename or remove it first.`,
+      error: `Another school is already named "${DEMO_SCHOOL_NAME}". Rename it first.`,
     };
   }
 
-  const syntheticEmail = schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE);
+  // Derived from DEMO_EMAIL_CODE, not the School ID: the ID may be shared with a
+  // real school, and a login address may not be. See DEMO_EMAIL_CODE.
+  const syntheticEmail = schoolHeadSyntheticEmail(DEMO_EMAIL_CODE);
   const supabaseAdmin = createSupabaseAdminClient();
 
   // A previous demo tenant that was reset leaves no auth user behind, but a

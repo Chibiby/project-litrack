@@ -393,7 +393,19 @@ enum LearningArea {
 model School {
   id           String    @id @default(uuid())
   name         String    @unique
-  schoolIdCode String    @unique // password used for login
+  /// The six-digit DepEd School ID, and the School Head's first-login password.
+  ///
+  /// Unique among REAL schools only. The uniqueness is a partial index living in
+  /// SQL (`School_schoolIdCode_real_key ... WHERE "isDemo" = false`), because
+  /// Prisma's schema language cannot express a filtered unique — the same reason
+  /// `Enrollment`'s one-ACTIVE-row-per-learner index is SQL-only. Preserve it
+  /// when editing School migrations.
+  ///
+  /// The demo tenant is deliberately exempt so it can carry 123456 even when a
+  /// real school already does. Nothing resolves a school BY this column — login
+  /// takes a school UUID and every other reader is a `contains` search — so a
+  /// shared value cannot misroute anyone.
+  schoolIdCode String
   address      String?
   region       String?
   division     String?
