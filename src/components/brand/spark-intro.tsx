@@ -30,7 +30,7 @@ function removeCover(): void {
  *
  * The decision was already made in `SparkIntroScript` before first paint —
  * this only acts on it. That split matters: the cover has to exist during head
- * parse, but the 13 KB animation is not worth blocking the login form on, so
+ * parse, but the 15 KB animation is not worth blocking the login form on, so
  * it loads normally and slides in under the cover it inherits.
  *
  * `spark-preloader.js` ships from the brand kit and is loaded verbatim (only

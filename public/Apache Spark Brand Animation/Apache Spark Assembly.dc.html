@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #F2EFE8; color: #14181C; }
+  a { color: #9E5430; text-decoration: none; }
+  a:hover { color: #14181C; }
+</style>
+<script>window.OM_SCENES = '[{"name":"Locate","dur":1,"desc":"Construction guides sweep across the sheet, the grid resolves and a crosshair lands on the origin","nat":0.9},{"name":"Draft","dur":1.15,"desc":"The diamond mark is drafted edge by edge, then the inner figure, its vertices and the dimension annotation"},{"name":"Set","dur":1.45,"desc":"The mark rises into the lockup, the APACHE SPARK wordmark wipes on left to right and the descriptor sets beneath the rule","nat":1.05},{"name":"Hold","dur":0.8,"desc":"The construction lines clear away and the finished lockup holds alone on clean paper","nat":1.2},{"name":"Print","dur":1.1,"desc":"A press sweep crosses the sheet, the drafted ink lifts away and the page holds before clearing for the loop","nat":0.9}]';</script>
+<script>window.OM_PLAYBACK = '{"mode":"loop"}';</script>
+<script>window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#9E5430",
+  "marginNotes": true,
+  "revealSite": true,
+  "motionEditor": true
+}/*EDITMODE-END*/;</script>
+</helmet>
+<x-import component-from-global-scope="SparkAssembly" from="./animations-v3.jsx ./tweaks-panel.jsx ./spark-assembly.jsx" hint-size="100%,100%"></x-import>
+</x-dc>
+</body>
+</html>

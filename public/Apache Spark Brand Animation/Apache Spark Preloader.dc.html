@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #DDD8CC; color: #14181C; }
+  a { color: #9E5430; text-decoration: none; }
+  a:hover { color: #14181C; }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; padding: 44px clamp(20px, 4vw, 56px) 80px; font-family: 'IBM Plex Mono', ui-monospace, monospace; display: flex; flex-direction: column; gap: 34px;">
+
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px;">
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 11px; letter-spacing: 0.28em; color: #7C7568;">APACHE SPARK — SITE PRELOADER</div>
+      <div style="font-family: 'Archivo', sans-serif; font-size: clamp(22px, 3vw, 32px); font-weight: 600; letter-spacing: -0.01em;">One intro, every screen</div>
+      <div style="font-size: 12px; line-height: 1.7; color: #7C7568; max-width: 62ch;">The same draft-and-print sequence, running live at three real viewport widths. Guides span the viewport and the lockup scales in vmin, so nothing is letterboxed or cropped.</div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button type="button" onClick="{{ replay }}" style="padding: 13px 20px; border: 2px solid #14181C; background: #14181C; color: #F2EFE8; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.2em; cursor: pointer;" style-hover="background: #9E5430; border-color: #9E5430;">REPLAY ALL</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start;">
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.22em; color: #7C7568;"><span>DESKTOP</span><span>1440 × 900</span></div>
+      <div style="width: 720px; height: 450px; border: 1px solid rgba(20,24,28,.28); background: #F2EFE8; overflow: hidden;">
+        <iframe ref="{{ f1 }}" src="./spark-site.html" title="Preloader on desktop" style="width: 1440px; height: 900px; border: 0; transform: scale(0.5); transform-origin: 0 0;"></iframe>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.22em; color: #7C7568;"><span>TABLET</span><span>834 × 1112</span></div>
+      <div style="width: 375px; height: 500px; border: 1px solid rgba(20,24,28,.28); background: #F2EFE8; overflow: hidden;">
+        <iframe ref="{{ f2 }}" src="./spark-site.html" title="Preloader on tablet" style="width: 834px; height: 1112px; border: 0; transform: scale(0.4496); transform-origin: 0 0;"></iframe>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.22em; color: #7C7568;"><span>PHONE</span><span>390 × 844</span></div>
+      <div style="width: 253px; height: 548px; border: 1px solid rgba(20,24,28,.28); background: #F2EFE8; overflow: hidden;">
+        <iframe ref="{{ f3 }}" src="./spark-site.html" title="Preloader on phone" style="width: 390px; height: 844px; border: 0; transform: scale(0.649); transform-origin: 0 0;"></iframe>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 28px; padding-top: 8px; border-top: 1px solid rgba(20,24,28,.2);">
+    <div style="flex: 1 1 340px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-size: 10px; letter-spacing: 0.22em; color: #7C7568;">DROP IT IN</div>
+      <pre style="margin: 0; padding: 18px; background: #14181C; color: #E4DFD3; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.75; overflow-x: auto;">&lt;!-- last thing before &lt;/body&gt; --&gt;
+&lt;script src="spark-preloader.js"
+        data-once="session"&gt;&lt;/script&gt;</pre>
+      <div style="font-size: 11px; line-height: 1.8; color: #7C7568;">Plays once per tab with <code style="color: #14181C;">data-once="session"</code>; drop that attribute to play on every load, or add <code style="color: #14181C;">data-auto="off"</code> and call <code style="color: #14181C;">SparkPreloader.play()</code> yourself.</div>
+    </div>
+    <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-size: 10px; letter-spacing: 0.22em; color: #7C7568;">BUILT IN</div>
+      <div style="display: flex; flex-direction: column; gap: 9px; font-size: 11px; line-height: 1.7; color: #7C7568;">
+        <div><b style="color: #14181C;">Holds on the logo.</b> Draws the sequence, then rests on the finished lockup for at least 1.1s before printing away — and keeps holding it until the page has loaded.</div>
+        <div><b style="color: #14181C;">Click or any key skips it</b> straight to the reveal.</div>
+        <div>Scroll is locked while it plays and restored on reveal.</div>
+        <div>Honours <code style="color: #14181C;">prefers-reduced-motion</code>: holds the finished lockup, then reveals.</div>
+        <div>Re-measures on resize and orientation change.</div>
+        <div>No dependencies, no fonts required to run, ~8&nbsp;KB.</div>
+        <div><code style="color: #14181C;">SparkPreloader.done</code> resolves when the page is revealed.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.frames = [React.createRef(), React.createRef(), React.createRef()];
+  }
+  componentDidMount() {
+    /* offscreen iframes get no animation frames, so start each panel when it
+       scrolls into view — otherwise the lower panels sit at t=0 */
+    this.io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        this.io.unobserve(e.target);
+        const w = e.target.contentWindow;
+        if (w) w.postMessage("spark:replay", "*");
+      });
+    }, { threshold: 0.35 });
+    this.frames.forEach((r) => { if (r.current) this.io.observe(r.current); });
+  }
+  componentWillUnmount() { if (this.io) this.io.disconnect(); }
+  replay = () => {
+    this.frames.forEach((r) => {
+      const w = r.current && r.current.contentWindow;
+      if (w) w.postMessage("spark:replay", "*");
+    });
+  };
+  renderVals() {
+    return {
+      replay: this.replay,
+      f1: this.frames[0], f2: this.frames[1], f3: this.frames[2],
+    };
+  }
+}
+</script>
+</body>
+</html>

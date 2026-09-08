@@ -1,16 +1,12 @@
-/* Apache Spark — drop-in site preloader. Vendored from the brand kit at
-   public/Apache Spark Brand Animation/brand/web/. Only change from the
-   original: SANS/MONO resolve the app's next/font variables first, so the
-   lockup renders in real Archivo and IBM Plex Mono instead of the fallbacks.
-   Re-apply that edit if this file is refreshed from the kit.
+/* Apache Spark — drop-in site preloader.
    Responsive by construction: guides span the viewport, the lockup scales in vmin.
    Usage:  <script src="spark-preloader.js" data-once="session"></script>
    API:    SparkPreloader.play()   replay on demand
            SparkPreloader.done     promise resolved when the page is revealed */
 (function () {
   var INK = "#14181C", PAPER = "#F2EFE8", ACCENT = "#9E5430", SOFT = "#7C7568";
-  var SANS = "var(--font-archivo, Archivo), 'Helvetica Neue', Helvetica, Arial, sans-serif";
-  var MONO = "var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, monospace";
+  var SANS = "Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif";
+  var MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
   var TAGS = ["SOFTWARE", "SYSTEMS", "NETWORKS", "INFRASTRUCTURE"];
   var TOTAL = 3.0, LOCATE = 0.0, DRAFT = 0.62, SET = 1.42, PRINT = 2.5, MIN_HOLD = 1.1, HOLD_CAP = 4.0;
 
