@@ -10,6 +10,7 @@ import { generateActivationCredential } from "@/lib/auth/credentials";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedQuery } from "@/lib/cache/unstable";
+import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
 import { schoolsList } from "@/lib/cache/tags";
 import {
   revalidateSchoolDashboard,
@@ -202,12 +203,20 @@ export async function listSchoolsPublic() {
  * Teachers unlock when an active, profiled School Head exists and
  * the school has at least one grade level (teachers self-register).
  * Cached ~60s under `schools-list`; bust via `revalidateSchoolsList()`.
+ *
+ * The demo tenant is filtered out unless demo mode is on. This is the query
+ * behind the login page's District and School dropdowns, so it is the surface
+ * the switch most visibly controls — and the one where a stray "[demo school]"
+ * in front of real teachers would do the most damage. `setDemoMode` busts the
+ * `schools-list` tag, so the switch takes effect on the next load rather than
+ * after the 60-second TTL.
  */
 export async function listSchoolsWithTeacherStatus() {
+  const demoEnabled = await isDemoEnabled();
   return cachedQuery(
     async () => {
       const schools = await prisma.school.findMany({
-        where: { isActive: true, deletedAt: null },
+        where: { isActive: true, deletedAt: null, ...demoSchoolFilter(demoEnabled) },
         select: {
           id: true,
           name: true,
@@ -238,7 +247,10 @@ export async function listSchoolsWithTeacherStatus() {
       }));
     },
     {
-      keyParts: ["schools-with-teacher-status"],
+      // `demo` is part of the key, not just of the closure: two different
+      // school lists exist and an `unstable_cache` entry keyed without it would
+      // serve the wrong one for up to the TTL after the switch is flipped.
+      keyParts: ["schools-with-teacher-status", `demo:${demoEnabled}`],
       tags: [schoolsList],
       revalidate: 60,
     }

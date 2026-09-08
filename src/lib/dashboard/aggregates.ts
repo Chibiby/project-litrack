@@ -11,6 +11,7 @@ import { formatLocalDateKey } from "@/lib/date-keys";
 import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
 import {
   adminDashboard,
   schoolsList,
@@ -41,7 +42,21 @@ function labelProfile(key: string): string {
 
 // ─── Admin section fetchers ─────────────────────────────────────────────────
 
+/**
+ * System-wide counts for the Super Admin dashboard.
+ *
+ * The demo tenant is excluded while demo mode is off, so the figures an admin
+ * reports upward count real schools, real teachers and real learners. Every
+ * count is filtered, not only the school ones — a demo School Head inflating
+ * `schoolHeadCount` is the same untruth in a smaller font.
+ */
 export async function getAdminMetricCounts() {
+  const demoEnabled = await isDemoEnabled();
+  const schoolScope = demoSchoolFilter(demoEnabled);
+  // Users and learners reach the flag through their school. No count below
+  // includes SUPER_ADMIN, the one role with a null `schoolId`, so filtering
+  // through the relation cannot drop a row that should have been counted.
+  const viaSchool = demoEnabled ? {} : ({ school: { isDemo: false } } as const);
   return cachedQuery(
     async () => {
       const [
@@ -54,18 +69,21 @@ export async function getAdminMetricCounts() {
         aralCount,
         pendingTeacherApprovals,
       ] = await Promise.all([
-        prisma.school.count({ where: { deletedAt: null } }),
-        prisma.school.count({ where: { deletedAt: null, isActive: true } }),
-        prisma.school.count({ where: { deletedAt: null, isActive: false } }),
-        prisma.user.count({ where: { role: "SCHOOL_HEAD", deletedAt: null } }),
-        prisma.user.count({ where: { role: "TEACHER", deletedAt: null, isActive: true } }),
-        prisma.learner.count({ where: { deletedAt: null } }),
-        prisma.learner.count({ where: { deletedAt: null, isAralLearner: true } }),
+        prisma.school.count({ where: { deletedAt: null, ...schoolScope } }),
+        prisma.school.count({ where: { deletedAt: null, isActive: true, ...schoolScope } }),
+        prisma.school.count({ where: { deletedAt: null, isActive: false, ...schoolScope } }),
+        prisma.user.count({ where: { role: "SCHOOL_HEAD", deletedAt: null, ...viaSchool } }),
+        prisma.user.count({
+          where: { role: "TEACHER", deletedAt: null, isActive: true, ...viaSchool },
+        }),
+        prisma.learner.count({ where: { deletedAt: null, ...viaSchool } }),
+        prisma.learner.count({ where: { deletedAt: null, isAralLearner: true, ...viaSchool } }),
         prisma.user.count({
           where: {
             role: "TEACHER",
             approvalStatus: "PENDING",
             deletedAt: null,
+            ...viaSchool,
           },
         }),
       ]);
@@ -82,7 +100,7 @@ export async function getAdminMetricCounts() {
       };
     },
     {
-      keyParts: ["admin-metric-counts"],
+      keyParts: ["admin-metric-counts", `demo:${demoEnabled}`],
       tags: [adminDashboard],
       profile: "aggregate",
     }
@@ -90,6 +108,8 @@ export async function getAdminMetricCounts() {
 }
 
 export async function getAdminActivitySeries() {
+  const demoEnabled = await isDemoEnabled();
+  const schoolScope = demoSchoolFilter(demoEnabled);
   return cachedQuery(
     async () => {
       const since7 = daysAgo(6);
@@ -102,8 +122,8 @@ export async function getAdminActivitySeries() {
           GROUP BY 1
           ORDER BY 1 ASC
         `,
-        prisma.school.count({ where: { deletedAt: null, isActive: true } }),
-        prisma.school.count({ where: { deletedAt: null, isActive: false } }),
+        prisma.school.count({ where: { deletedAt: null, isActive: true, ...schoolScope } }),
+        prisma.school.count({ where: { deletedAt: null, isActive: false, ...schoolScope } }),
       ]);
 
       const countByKey = new Map(
@@ -137,6 +157,7 @@ export async function getAdminActivitySeries() {
     {
       keyParts: [
         "admin-activity-series-v2",
+        `demo:${demoEnabled}`,
         // The 7-day window above is `daysAgo(6)`; this is derived from the same
         // helper, so the key can never name a different day than the window it
         // caches. Admin-scoped read — no tenant discriminator exists to carry.
@@ -149,16 +170,18 @@ export async function getAdminActivitySeries() {
 }
 
 export async function getAdminRecentSchools() {
+  const demoEnabled = await isDemoEnabled();
+  const schoolScope = demoSchoolFilter(demoEnabled);
   return cachedQuery(
     async () =>
       prisma.school.findMany({
-        where: { deletedAt: null },
+        where: { deletedAt: null, ...schoolScope },
         orderBy: { createdAt: "desc" },
         take: 5,
         select: { id: true, name: true, schoolIdCode: true, isActive: true },
       }),
     {
-      keyParts: ["admin-recent-schools"],
+      keyParts: ["admin-recent-schools", `demo:${demoEnabled}`],
       tags: [adminDashboard, schoolsList],
       profile: "aggregate",
     }

@@ -45,6 +45,12 @@ export type SchoolRow = {
   isActive: boolean;
   users: number;
   learners: number;
+  /**
+   * The training tenant. Kept in this admin table even while demo mode hides it
+   * from the login page and the dashboard counts — an admin has to be able to
+   * see and manage the school whose visibility they are switching.
+   */
+  isDemo: boolean;
 };
 
 export type SchoolsTableList = {
@@ -327,6 +333,14 @@ export function SchoolsTable({
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{school.name}</span>
+                      {school.isDemo ? (
+                        <span
+                          className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+                          title="Training data. Hidden from the login page while demo mode is off."
+                        >
+                          Demo
+                        </span>
+                      ) : null}
                       <Link
                         href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
                         prefetch={true}

@@ -135,6 +135,16 @@ export const AUDIT_ACTIONS = {
   DB_RESET_OPERATIONAL: "DB_RESET_OPERATIONAL",
   DB_RESET_SCHOOL_ACCOUNTS: "DB_RESET_SCHOOL_ACCOUNTS",
   DB_REMOVE_TEACHER_ACCOUNTS: "DB_REMOVE_TEACHER_ACCOUNTS",
+
+  /**
+   * The training/demo tenant. `DEMO_MODE_SET` records the visibility switch,
+   * which is reversible and touches no rows. `DEMO_RESET` is the destructive
+   * one — it hard-deletes the demo school — so it logs the per-model row counts
+   * it removed, the same rule the database console follows.
+   */
+  DEMO_MODE_SET: "DEMO_MODE_SET",
+  DEMO_PROVISION: "DEMO_PROVISION",
+  DEMO_RESET: "DEMO_RESET",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

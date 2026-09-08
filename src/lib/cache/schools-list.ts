@@ -85,6 +85,7 @@ export function getSchoolsListPage(
             region: true,
             division: true,
             isActive: true,
+            isDemo: true,
             _count: { select: { users: true, learners: true } },
           },
         }),

@@ -43,6 +43,12 @@ export type SnapshotModel = {
 export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // Structure: the tenant and the shape of a school year.
   { model: "School", delegate: "school", operational: false },
+  // Global operator switches. No foreign key in either direction, so its
+  // position is unconstrained — it sits here only because `School` first and
+  // `AuditLog` last are asserted by the ordering test, and the switches are
+  // conceptually part of the system's structure. Non-operational: "clear
+  // operational data" must not quietly reset demo mode to its default.
+  { model: "SystemSetting", delegate: "systemSetting", operational: false },
   { model: "SchoolYear", delegate: "schoolYear", operational: false },
   { model: "GradeLevel", delegate: "gradeLevel", operational: false },
   { model: "Section", delegate: "section", operational: false },

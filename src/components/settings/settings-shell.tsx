@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KeyRound, UserCircle } from "lucide-react";
+import { KeyRound, MonitorPlay, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SettingsRoleBase = "/admin" | "/school-head" | "/teacher";
@@ -12,6 +12,12 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
   const items = [
     { label: "Profile", href: `${roleBase}/settings/profile`, icon: UserCircle },
     { label: "Security", href: `${roleBase}/settings/security`, icon: KeyRound },
+    // Demo mode is a system-wide switch, so it belongs to the Super Admin alone.
+    // The route itself is guarded by `requireUser("SUPER_ADMIN")`; hiding the
+    // link here is only so the other two roles are not shown a dead end.
+    ...(roleBase === "/admin"
+      ? ([{ label: "Demo mode", href: "/admin/settings/demo", icon: MonitorPlay }] as const)
+      : []),
   ] as const;
 
   return (
@@ -74,9 +80,19 @@ export function SettingsShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isSecurity = pathname.includes("/settings/security");
-  const title = isSecurity ? "Security" : "Profile";
-  const subtitle = isSecurity ? securitySubtitle : profileSubtitle;
+  const segment = pathname.includes("/settings/security")
+    ? "security"
+    : pathname.includes("/settings/demo")
+      ? "demo"
+      : "profile";
+  const title =
+    segment === "security" ? "Security" : segment === "demo" ? "Demo mode" : "Profile";
+  const subtitle =
+    segment === "security"
+      ? securitySubtitle
+      : segment === "demo"
+        ? "Show or hide the training school used in the ARAL video"
+        : profileSubtitle;
 
   return (
     // Matches AppShell's content gutters (header is full-bleed, outside this panel).

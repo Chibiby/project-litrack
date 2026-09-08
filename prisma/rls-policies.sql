@@ -45,6 +45,12 @@ ALTER TABLE "Report"               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "SupportTicket"        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UnlockGrant"          ENABLE ROW LEVEL SECURITY;
 
+-- Global operator switches (currently the demo-mode flag). It carries no learner
+-- data, but it is the table that decides what the public login page shows, so a
+-- writable path to it from PostgREST would let an outsider unhide the demo
+-- tenant. Deny-all, same as everything else here.
+ALTER TABLE "SystemSetting"        ENABLE ROW LEVEL SECURITY;
+
 -- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
 -- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
 -- never reaches it -- but it holds real teacher-to-grade assignments and Supabase grants
