@@ -442,6 +442,16 @@ model User {
   id                 String                 @id @default(uuid())
   authId             String                 @unique // Supabase auth.users.id
   email              String                 @unique
+  /// Login handle for the Super Admin console (`/admin/login`), which signs in
+  /// by username rather than email. Nullable because School Heads sign in with
+  /// school + password and teachers with school + email, so neither has one.
+  /// Unique so two accounts can never claim the same handle.
+  ///
+  /// This is a login handle ONLY. `email` remains the account's identity for
+  /// Supabase Auth and for password recovery: `loginAdmin` resolves
+  /// username -> row -> `email` and hands that address to Supabase, and the
+  /// forgot-password flow never reads this column.
+  username           String?                @unique
   role               UserRole
   schoolId           String?
   firstName          String

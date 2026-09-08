@@ -35,7 +35,7 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
   const [pending, startTransition] = useTransition();
   const form = useAppForm<AdminLoginInput>({
     schema: adminLoginSchema,
-    defaultValues: { email: "", password: "" },
+    defaultValues: { username: "", password: "" },
   });
 
   return (
@@ -67,14 +67,20 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
         >
           <FormField
             control={form.control}
-            name="email"
+            name="username"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>Email</FormLabel>
+                <FormLabel required>Username</FormLabel>
                 <FormControl>
                   <Input
-                    type="email"
-                    autoComplete="email"
+                    type="text"
+                    autoComplete="username"
+                    // The handle is stored lower-case and the schema folds case
+                    // anyway; switching these off just stops phone keyboards
+                    // from capitalising the first letter as it is typed.
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoFocus
                     disabled={disabled || pending}
                     {...field}

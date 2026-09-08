@@ -16,6 +16,7 @@
     "db:cleanup-passwordless-teachers": "tsx scripts/cleanup-passwordless-teachers.ts",
     "db:import-schools": "tsx scripts/import-schools.ts",
     "db:delete-schools": "tsx scripts/delete-schools.ts",
+    "db:set-super-admin": "tsx scripts/set-super-admin-credentials.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

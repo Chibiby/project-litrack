@@ -272,11 +272,45 @@ SELECT column_name FROM information_schema.columns
 WHERE table_name IN ('TeacherProfile', 'SchoolHeadProfile')
   AND column_name = 'contactEmail';
 
+-- Super Admin username login (20260908000001_user_username).
+-- Expect exactly one non-null row, and it is the account you will sign in as.
+SELECT id, email, username FROM "User" WHERE "username" IS NOT NULL;
+
 -- Migration history
 SELECT migration_name, finished_at FROM "_prisma_migrations" ORDER BY finished_at;
 ```
 
 Confirm app build on Vercel already ran `prisma generate` for the matching schema.
+
+---
+
+## (c1) Set the Super Admin username (after `20260908000001_user_username`)
+
+`/admin/login` signs in with **username + password**, not email. The migration
+backfills `username = 'admin'` onto the oldest active Super Admin, so in most
+cases nothing more is needed — the `SELECT` in (c) confirms it landed.
+
+The email on that row is unchanged and stays the account's identity: it is what
+Supabase Auth authenticates against and what **Forgot password** mails. The
+username never enters the recovery path.
+
+To change either credential — the username lives in Postgres but the password
+lives in Supabase Auth, so one command covers both:
+
+```powershell
+npm run db:set-super-admin                                              # dry run: report only
+npm run db:set-super-admin -- --username admin --password <pw> --commit
+npm run db:set-super-admin -- --email <recovery@address> --commit       # fix the recovery address
+```
+
+Needs `DIRECT_URL` (or `DATABASE_URL`), `NEXT_PUBLIC_SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY`; it reads `.env.local` if the shell has not exported
+them. Dry run is the default and prints which account it picked.
+
+> **Password length.** Supabase enforces a minimum (6 characters by default), so
+> a short password like `admin` is rejected until you lower it in
+> Supabase Dashboard → Authentication → Policies. The script reports this
+> explicitly rather than failing opaquely.
 
 ---
 
@@ -298,7 +332,7 @@ Audit action: `SCHOOL_HEAD_CREDENTIAL_REGENERATED` (no secrets in audit metadata
 
 | Role | Checks |
 |------|--------|
-| Super Admin | `/admin/login` → schools list → regenerate credential UI → `/admin/transfers` loads |
+| Super Admin | `/admin/login` with **username** + password → schools list → regenerate credential UI → `/admin/transfers` loads. Also check **Forgot password** still mails the account's email. |
 | School Head | Activation / login → set password if prompted → profiling (account email read-only + optional contact email) → school years / grades |
 | Teacher | Invite accept or login → profiling (same email pattern) → grade learners |
 | Cross-school | SA transfers one test learner between two schools; enrollment history shows TRANSFERRED → ACTIVE when target has active year |
