@@ -506,28 +506,72 @@ export async function registerTeacher(formData: FormData): Promise<TeacherRegist
   return finishTeacherRegister(supabase, { authId: auth.authId, email, schoolId, names });
 }
 
+/**
+ * Super Admin login: username + password.
+ *
+ * The console signs in by handle rather than by email, but Supabase Auth only
+ * authenticates on an address — so the handle is resolved against
+ * `User.username` here and the row's `email` is what actually reaches Supabase.
+ * Password recovery is unaffected and still runs entirely off that email.
+ */
 export async function loginAdmin(formData: FormData): Promise<ActionResult> {
   const missing = requireSupabaseConfigured();
   if (missing) return missing;
 
   const parsed = adminLoginSchema.safeParse({
-    email: formData.get("email"),
+    username: formData.get("username"),
     password: formData.get("password"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const rate = await checkRateLimit(`login:admin:${parsed.data.email.toLowerCase()}`, LOGIN_RATE);
+  const { username, password } = parsed.data;
+
+  const rate = await checkRateLimit(`login:admin:${username}`, LOGIN_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
-    if (error || !data.user) {
+    // Supabase Auth authenticates on an email address, so the handle has to be
+    // resolved to one before we can hand anything to `signInWithPassword`.
+    //
+    // Scoping the lookup to an active, non-deleted SUPER_ADMIN is the point of
+    // doing it here rather than after sign-in: a handle that once belonged to a
+    // revoked or lower-privileged account never reaches Supabase at all, so a
+    // stale username cannot be used to probe for a live password.
+    const account = await prisma.user.findFirst({
+      where: {
+        username,
+        role: "SUPER_ADMIN",
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true, email: true },
+    });
+    if (!account) {
       await writeAudit({
         action: AUDIT_ACTIONS.LOGIN_DENIED,
         resource: "User",
+        // The username itself is deliberately not logged — an audit row for a
+        // failed attempt would otherwise record whatever a stranger typed.
+        metadata: { role: "SUPER_ADMIN", reason: "unknown_username" },
+      });
+      // Identical to the wrong-password message below, so the field cannot be
+      // used to enumerate which handles exist.
+      return { ok: false, error: "Incorrect credentials" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: account.email,
+      password,
+    });
+    if (error || !data.user) {
+      await writeAudit({
+        userId: account.id,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: account.id,
         metadata: { role: "SUPER_ADMIN", reason: "incorrect_credentials" },
       });
       return { ok: false, error: "Incorrect credentials" };

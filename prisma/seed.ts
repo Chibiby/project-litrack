@@ -7,6 +7,11 @@
  *  - NEXT_PUBLIC_SUPABASE_URL
  *  - SEED_SUPER_ADMIN_EMAIL
  *  - SEED_SUPER_ADMIN_PASSWORD
+ *
+ * Optional:
+ *  - SEED_SUPER_ADMIN_USERNAME (defaults to "admin") — the handle typed at
+ *    /admin/login. The email above stays the account's identity and is what
+ *    password recovery mails; the username is only a lookup handle.
  */
 import { PrismaClient, UserRole } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
@@ -16,6 +21,7 @@ const prisma = new PrismaClient();
 async function main() {
   const email = process.env.SEED_SUPER_ADMIN_EMAIL;
   const password = process.env.SEED_SUPER_ADMIN_PASSWORD;
+  const username = (process.env.SEED_SUPER_ADMIN_USERNAME || "admin").trim().toLowerCase();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -34,7 +40,16 @@ async function main() {
     where: { email, role: UserRole.SUPER_ADMIN },
   });
   if (existing) {
-    console.log(`✓ Super admin already exists: ${email}`);
+    // A deployment seeded before usernames existed has a NULL handle, which
+    // leaves no way to sign in at /admin/login. Fill it in rather than bailing
+    // out — that is the whole reason this branch does more than log.
+    if (!existing.username) {
+      await prisma.user.update({ where: { id: existing.id }, data: { username } });
+      console.log(`✓ Super admin already exists: ${email}`);
+      console.log(`  Username backfilled: ${username}`);
+    } else {
+      console.log(`✓ Super admin already exists: ${email} (username: ${existing.username})`);
+    }
     return;
   }
 
@@ -65,6 +80,7 @@ async function main() {
     data: {
       authId,
       email,
+      username,
       role: UserRole.SUPER_ADMIN,
       firstName: "Super",
       lastName: "Admin",
@@ -76,6 +92,7 @@ async function main() {
 
   console.log(`✓ Super admin created: ${email}`);
   console.log(`  Login at: /admin/login`);
+  console.log(`  Username: ${username}`);
   console.log(`  Password: (the one you set in SEED_SUPER_ADMIN_PASSWORD)`);
 }
 

@@ -14,8 +14,27 @@ export const schoolLoginSchema = z.object({
   password: nonEmpty("Password required"),
 });
 
+/**
+ * Super Admin login handle.
+ *
+ * Trimmed and lower-cased before the length checks run, so "Admin", " admin "
+ * and "ADMIN" all resolve to the one row: `User.username` stores the canonical
+ * lower-case form, and every lookup goes through this schema first.
+ */
+export const adminUsername = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, "Username required")
+  .max(64, "Username is too long");
+
+/**
+ * Super Admin sign-in. Username, not email — Supabase Auth still needs an
+ * address, so `loginAdmin` resolves this handle to the account's stored email
+ * server-side. Password recovery continues to use that email, never this.
+ */
 export const adminLoginSchema = z.object({
-  email,
+  username: adminUsername,
   password: nonEmpty("Password required"),
 });
 

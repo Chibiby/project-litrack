@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminLoginSchema,
   schoolLoginSchema,
   teacherLoginSchema,
   teacherRegisterSchema,
@@ -153,6 +154,29 @@ describe("teacherRegisterSchema", () => {
     );
     expect(teacherRegisterSchema.safeParse({ ...validRegisterBase, schoolId: "" }).success).toBe(
       false
+    );
+  });
+});
+
+describe("adminLoginSchema", () => {
+  it("canonicalises the username to the lower-case form stored on the row", () => {
+    const parsed = adminLoginSchema.safeParse({ username: "  ADMIN  ", password: "s3cret" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.username).toBe("admin");
+  });
+
+  it("rejects a username that is empty or only whitespace", () => {
+    expect(adminLoginSchema.safeParse({ username: "", password: "s3cret" }).success).toBe(false);
+    expect(adminLoginSchema.safeParse({ username: "   ", password: "s3cret" }).success).toBe(false);
+  });
+
+  it("requires a password", () => {
+    expect(adminLoginSchema.safeParse({ username: "admin", password: "" }).success).toBe(false);
+  });
+
+  it("accepts a handle that is not an email address", () => {
+    expect(adminLoginSchema.safeParse({ username: "admin", password: "s3cret" }).success).toBe(
+      true
     );
   });
 });
