@@ -363,6 +363,14 @@ Two migrations, applied in order, with a read-only check between them.
 |---|------|--------------|--------------|
 | 1 | `20260908000003_normalize_existing_data` | Data only. Title-cases learner, user and invite names; rebuilds `fullName`; folds phone numbers to `09XXXXXXXXX`; collapses stray whitespace in school and section labels. Creates two permanent SQL functions the report below reuses. | No. Adds no constraint. |
 | 2 | `20260908000004_case_insensitive_name_uniqueness` | Replaces three exact-match unique indexes with case-folded ones (school name, real-school `schoolIdCode`, section name per grade). | **Yes** — it aborts if case-variant duplicates still exist. |
+| 3 | `20260908000005_fix_apostrophe_name_casing` | Corrects `litrack_format_person_name()` and re-runs the name backfill. Migration 1 leaned on `initcap()`, which capitalises after a hyphen but **not** after an apostrophe on this server, so it stored `ObrienOBrien`. The function now walks the token character by character and matches `capitalizeParts()` exactly. | No. |
+
+
+> **Status:** all three applied to production on 8 Sep 2026 and verified with
+> `npx tsx scripts/data-uniformity-parity.ts`, which reported full parity
+> between the SQL function, `formatPersonName()` and all 366 stored rows.
+> 12 rows were rewritten. Sections 1-4 of the pre-flight were clean, so nothing
+> had to be merged by hand.
 
 ### Steps
 
