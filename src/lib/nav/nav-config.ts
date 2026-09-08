@@ -3,6 +3,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarRange,
+  Database,
   FileBarChart,
   FileText,
   KeyRound,
@@ -104,6 +105,7 @@ export function getNavGroups(
             { id: "admin-school-years", label: "School years", href: "/admin/school-years", icon: CalendarRange },
             { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },
             { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
+            { id: "admin-database", label: "Database", href: "/admin/database", icon: Database },
           ],
         },
       ];

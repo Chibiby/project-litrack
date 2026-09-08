@@ -115,6 +115,26 @@ export const AUDIT_ACTIONS = {
   UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
   ADMIN_PROFILE_UPDATE: "ADMIN_PROFILE_UPDATE",
   ADMIN_SCHOOL_VIEW: "ADMIN_SCHOOL_VIEW",
+
+  /**
+   * Database console. These are the highest-consequence actions in the app —
+   * a restore or a reset rewrites every tenant at once — so each one logs the
+   * row counts it moved and the backup it came from. Never the data itself: a
+   * snapshot is the entire learner roster, and audit metadata is read back in
+   * two UIs.
+   *
+   * `DB_BACKUP_CREATE` covers both the scheduled job and the manual button;
+   * the `trigger` field in metadata separates them.
+   */
+  DB_BACKUP_CREATE: "DB_BACKUP_CREATE",
+  DB_BACKUP_DELETE: "DB_BACKUP_DELETE",
+  DB_BACKUP_DOWNLOAD: "DB_BACKUP_DOWNLOAD",
+  DB_RESTORE: "DB_RESTORE",
+  DB_RESTORE_UPLOAD: "DB_RESTORE_UPLOAD",
+  DB_ROLLBACK: "DB_ROLLBACK",
+  DB_RESET_OPERATIONAL: "DB_RESET_OPERATIONAL",
+  DB_RESET_SCHOOL_ACCOUNTS: "DB_RESET_SCHOOL_ACCOUNTS",
+  DB_REMOVE_TEACHER_ACCOUNTS: "DB_REMOVE_TEACHER_ACCOUNTS",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
