@@ -298,10 +298,15 @@ To change either credential — the username lives in Postgres but the password
 lives in Supabase Auth, so one command covers both:
 
 ```powershell
-npm run db:set-super-admin                                              # dry run: report only
-npm run db:set-super-admin -- --username admin --password <pw> --commit
-npm run db:set-super-admin -- --email <recovery@address> --commit       # fix the recovery address
+npx tsx scripts/set-super-admin-credentials.ts                                   # dry run: report only
+npx tsx scripts/set-super-admin-credentials.ts --username admin --password <pw> --commit
+npx tsx scripts/set-super-admin-credentials.ts --email <recovery@address> --commit
 ```
+
+> Call `tsx` directly rather than `npm run db:set-super-admin -- <flags>`. On
+> Windows PowerShell npm drops the flags after `--` without warning, and because
+> the script is dry-run by default the result looks like a successful no-op
+> rather than an error. The `npm run` alias is fine for the bare dry run.
 
 Needs `DIRECT_URL` (or `DATABASE_URL`), `NEXT_PUBLIC_SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY`; it reads `.env.local` if the shell has not exported
@@ -311,6 +316,15 @@ them. Dry run is the default and prints which account it picked.
 > a short password like `admin` is rejected until you lower it in
 > Supabase Dashboard → Authentication → Policies. The script reports this
 > explicitly rather than failing opaquely.
+
+> **The recovery address must not already belong to another account.** Supabase
+> Auth allows one user per email and `User.email` is `@unique`, so an address
+> already held by a teacher or School Head cannot be moved onto the Super Admin —
+> Supabase returns a bare "Error updating user". Nor would forcing it help:
+> `forgotPassword` calls `resetPasswordForEmail(email)`, which Supabase resolves
+> to whichever single auth user owns the address, so the reset link would be
+> issued for *that* account rather than the Super Admin. Use a distinct address;
+> a plus-alias (`you+admin@gmail.com`) delivers to the same inbox and is enough.
 
 ---
 
