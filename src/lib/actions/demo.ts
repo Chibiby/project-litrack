@@ -1,4 +1,45 @@
-"use server";
+"use server";export async function resetDemoData(formData: FormData): Promise<
+  ActionResult<{ count: number; initialPassword: string }>
+> {
+  const admin = await requireUser("SUPER_ADMIN");
+
+  const parsed = resetDemoSchema.safeParse({ confirm: formData.get("confirm") });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const before = await prisma.school.findMany({
+    where: { isDemo: true },
+    select: { id: true },
+  });
+
+  let result;
+  try {
+    result = await resetDemoTenant(admin.id);
+  } catch (err) {
+    console.error("[demo] reset failed:", err);
+    return { ok: false, error: "Could not reset the demo data. Check the server logs." };
+  }
+  if (!result.ok) return result;
+
+  await writeAudit({
+    userId: admin.id,
+    schoolId: null,
+    action: AUDIT_ACTIONS.DEMO_RESET,
+    resource: "School",
+    resourceId: null,
+    metadata: {
+      removedSchoolIds: before.map((s) => s.id),
+      createdSchoolIds: result.schools.map((s) => s.schoolId),
+    },
+  });
+
+  revalidateDemoSurfaces();
+  return {
+    ok: true,
+    data: { count: result.schools.length, initialPassword: result.initialPassword },
+  };
+}
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -79,7 +120,7 @@ export async function setDemoMode(formData: FormData): Promise<ActionResult> {
  * Prisma, exactly as with `createSchool`.
  */
 export async function createDemoData(): Promise<
-  ActionResult<{ schoolId: string; initialPassword: string; schoolHeadEmail: string }>
+  ActionResult<{ count: number; initialPassword: string }>
 > {
   const admin = await requireUser("SUPER_ADMIN");
 
@@ -94,72 +135,21 @@ export async function createDemoData(): Promise<
 
   await writeAudit({
     userId: admin.id,
-    schoolId: result.schoolId,
+    // The demo set spans several schools, so no single one owns this row.
+    schoolId: null,
     action: AUDIT_ACTIONS.DEMO_PROVISION,
     resource: "School",
-    // No password in metadata — it is the School ID, already on the School row.
-    resourceId: result.schoolId,
-    metadata: { schoolId: result.schoolId },
+    resourceId: null,
+    // Ids and a count only. No password: it is the School ID, already on each
+    // School row, and audit metadata is read back in two UIs.
+    metadata: { schoolIds: result.schools.map((s) => s.schoolId), count: result.schools.length },
   });
 
   revalidateDemoSurfaces();
   return {
     ok: true,
-    data: {
-      schoolId: result.schoolId,
-      initialPassword: result.initialPassword,
-      schoolHeadEmail: result.schoolHeadEmail,
-    },
+    data: { count: result.schools.length, initialPassword: result.initialPassword },
   };
 }
 
-/**
- * Super Admin: throw the demo tenant away and build a clean one.
- *
- * Destructive and not undoable, which is why it is confirmation-gated on both
- * ends. It can only ever reach a school whose `isDemo` is true; the id is looked
- * up server-side from that flag and never accepted from the form.
- */
-export async function resetDemoData(formData: FormData): Promise<
-  ActionResult<{ schoolId: string; initialPassword: string; schoolHeadEmail: string }>
-> {
-  const admin = await requireUser("SUPER_ADMIN");
 
-  const parsed = resetDemoSchema.safeParse({ confirm: formData.get("confirm") });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const before = await prisma.school.findFirst({
-    where: { isDemo: true },
-    select: { id: true },
-  });
-
-  let result;
-  try {
-    result = await resetDemoTenant(admin.id);
-  } catch (err) {
-    console.error("[demo] reset failed:", err);
-    return { ok: false, error: "Could not reset the demo data. Check the server logs." };
-  }
-  if (!result.ok) return result;
-
-  await writeAudit({
-    userId: admin.id,
-    schoolId: result.schoolId,
-    action: AUDIT_ACTIONS.DEMO_RESET,
-    resource: "School",
-    resourceId: result.schoolId,
-    metadata: { removedSchoolId: before?.id ?? null, createdSchoolId: result.schoolId },
-  });
-
-  revalidateDemoSurfaces();
-  return {
-    ok: true,
-    data: {
-      schoolId: result.schoolId,
-      initialPassword: result.initialPassword,
-      schoolHeadEmail: result.schoolHeadEmail,
-    },
-  };
-}

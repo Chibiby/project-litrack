@@ -20,11 +20,11 @@ export default async function AdminDemoSettingsPage() {
     <DemoSettings
       data={{
         enabled,
-        exists: status.exists,
+        complete: status.complete,
+        any: status.any,
         districtName: status.districtName,
-        schoolName: status.schoolName,
         schoolIdCode: status.schoolIdCode,
-        schoolHeadEmail: status.schoolHeadEmail,
+        schools: status.schools.map((s) => ({ name: s.name, exists: s.exists })),
       }}
     />
   );

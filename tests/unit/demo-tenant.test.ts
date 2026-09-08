@@ -3,10 +3,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   DEMO_DISTRICT_NAME,
-  DEMO_EMAIL_CODE,
   DEMO_ENABLED_KEY,
+  DEMO_SCHOOLS,
   DEMO_SCHOOL_ID_CODE,
-  DEMO_SCHOOL_NAME,
 } from "@/lib/demo/constants";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import {
@@ -27,38 +26,58 @@ import { isSyntheticEmail, schoolHeadSyntheticEmail } from "@/lib/auth/synthetic
 describe("demo tenant constants", () => {
   // These strings are read aloud and shown on screen in the training video.
   // Anything that changes them silently desynchronises the recording from the app.
-  it("names the district and school exactly as the training script does", () => {
+  it("names the district exactly as the training script does", () => {
     expect(DEMO_DISTRICT_NAME).toBe("[demo district]");
-    expect(DEMO_SCHOOL_NAME).toBe("[demo school]");
+  });
+
+  it("provides three schools, named exactly as the training script does", () => {
+    expect(DEMO_SCHOOLS.map((s) => s.name)).toEqual([
+      "[demo school 1]",
+      "[demo school 2]",
+      "[demo school 3]",
+    ]);
   });
 
   it("uses 123456 as the School ID", () => {
     expect(DEMO_SCHOOL_ID_CODE).toBe("123456");
   });
 
-  it("keeps a School ID the real create-school form would also accept", () => {
+  it("gives every demo school the same School ID, so there is one password on camera", () => {
+    // Possible only because the unique index on School.schoolIdCode is partial
+    // (WHERE "isDemo" = false). If that ever reverts to a global unique, the
+    // second school fails to insert.
+    expect(DEMO_SCHOOLS).toHaveLength(3);
+    expect(new Set(DEMO_SCHOOLS.map(() => DEMO_SCHOOL_ID_CODE)).size).toBe(1);
+  });
+
+  it("keeps names and School IDs the real create-school form would also accept", () => {
     // The demo must not be a special case: the video teaches the ordinary rule
-    // that first-login password === School ID, so the demo's ID has to satisfy
-    // the same validator every real school's does.
-    const parsed = createSchoolSchema.safeParse({
-      name: DEMO_SCHOOL_NAME,
-      schoolIdCode: DEMO_SCHOOL_ID_CODE,
-    });
-    expect(parsed.success).toBe(true);
+    // that first-login password === School ID, so each demo school has to
+    // satisfy the same validator every real school's does.
+    for (const school of DEMO_SCHOOLS) {
+      const parsed = createSchoolSchema.safeParse({
+        name: school.name,
+        schoolIdCode: DEMO_SCHOOL_ID_CODE,
+      });
+      expect(parsed.success, `${school.name} rejected by createSchoolSchema`).toBe(true);
+    }
   });
 
-  it("gives the demo School Head an address that cannot collide with a real school's", () => {
-    // The demo may share School ID 123456 with a real school, but not a login
-    // address: User.email is unique and Supabase Auth rejects duplicates. A demo
-    // email derived from the bare School ID would collide the moment both exist.
-    const demo = schoolHeadSyntheticEmail(DEMO_EMAIL_CODE);
-    const real = schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE);
-    expect(demo).not.toBe(real);
-    expect(demo).toMatch(/^sh@demo-123456\./);
+  it("gives each demo School Head an address that collides with nothing", () => {
+    // Two ways a bare-School-ID address would collide: a real school already
+    // owns 123456 and its head is already sh@123456.<domain>, and all three demo
+    // schools share the ID so they would clash with each other. User.email is
+    // unique and Supabase Auth rejects duplicates outright.
+    const emails = DEMO_SCHOOLS.map((s) => schoolHeadSyntheticEmail(s.emailCode));
+    expect(new Set(emails).size).toBe(DEMO_SCHOOLS.length);
+    expect(emails).not.toContain(schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE));
+    expect(emails[0]).toMatch(/^sh@demo-1-123456\./);
   });
 
-  it("keeps the demo School Head's address synthetic, so email recovery stays barred", () => {
-    expect(isSyntheticEmail(schoolHeadSyntheticEmail(DEMO_EMAIL_CODE))).toBe(true);
+  it("keeps every demo School Head address synthetic, so email recovery stays barred", () => {
+    for (const school of DEMO_SCHOOLS) {
+      expect(isSyntheticEmail(schoolHeadSyntheticEmail(school.emailCode))).toBe(true);
+    }
   });
 });
 
@@ -118,12 +137,17 @@ describe("demo district on the login page", () => {
     teachersOpen: true,
   });
 
-  it("appears as its own district once the demo school is in the list", () => {
-    const schools = [opt("Real ES", "District I"), opt(DEMO_SCHOOL_NAME, DEMO_DISTRICT_NAME)];
+  it("groups all three demo schools under the one demo district", () => {
+    // This is what the recording shows: pick the district, and the School
+    // dropdown narrows to a real list to scroll rather than a single entry.
+    const schools = [
+      opt("Real ES", "District I"),
+      ...DEMO_SCHOOLS.map((s) => opt(s.name, DEMO_DISTRICT_NAME)),
+    ];
     expect(deriveDistricts(schools)).toContain(DEMO_DISTRICT_NAME);
-    expect(schoolsInDistrict(schools, DEMO_DISTRICT_NAME).map((s) => s.name)).toEqual([
-      DEMO_SCHOOL_NAME,
-    ]);
+    expect(schoolsInDistrict(schools, DEMO_DISTRICT_NAME).map((s) => s.name)).toEqual(
+      DEMO_SCHOOLS.map((s) => s.name)
+    );
   });
 
   it("leaves no trace in the district list once the school is filtered out", () => {

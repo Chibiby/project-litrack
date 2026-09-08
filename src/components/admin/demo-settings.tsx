@@ -13,11 +13,14 @@ import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 
 export type DemoSettingsData = {
   enabled: boolean;
-  exists: boolean;
+  /** Every demo school exists. */
+  complete: boolean;
+  /** At least one does — a partly built set still needs the create button. */
+  any: boolean;
   districtName: string;
-  schoolName: string;
+  /** Shared by all demo schools; also each School Head first-login password. */
   schoolIdCode: string;
-  schoolHeadEmail: string | null;
+  schools: { name: string; exists: boolean }[];
 };
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -93,7 +96,9 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
         setError(res.error);
         return;
       }
-      setNotice("Demo data created. The School Head signs in with the School ID below.");
+      setNotice(
+        `Demo data ready — ${res.data?.count ?? 0} schools. Each School Head signs in with the School ID below.`
+      );
       router.refresh();
     });
   }
@@ -137,12 +142,13 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
           <div className="flex items-start justify-between gap-6">
             <div className="space-y-1">
               <p className="text-sm text-foreground">
-                Show the training district and school on the login page
+                Show the training district and schools on the login page
               </p>
               <p className="text-sm text-muted-foreground">
-                While this is off, {data.districtName} and {data.schoolName} are hidden from the
-                District and School dropdowns and left out of every dashboard count. Nothing is
-                deleted — switch it back on and the demo returns exactly as it was.
+                While this is off, {data.districtName} and its {data.schools.length} schools are
+                hidden from the District and School dropdowns and left out of every dashboard
+                count. Nothing is deleted — switch it back on and the demo returns exactly as it
+                was.
               </p>
             </div>
             <Switch
@@ -154,10 +160,11 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
             />
           </div>
 
-          {enabled && !data.exists ? (
+          {enabled && !data.complete ? (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              Demo mode is on, but the demo data has not been created yet. Nothing extra appears on
-              the login page until you create it below.
+              {data.any
+                ? "Demo mode is on, but some demo schools are missing. Create the rest below."
+                : "Demo mode is on, but the demo data has not been created yet. Nothing extra appears on the login page until you create it below."}
             </p>
           ) : null}
         </CardContent>
@@ -168,35 +175,62 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
           <CardTitle>Demo data</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {data.exists ? (
+          {data.any ? (
             <>
               <div className="space-y-2">
                 <Field label="District" value={data.districtName} />
-                <Field label="School" value={data.schoolName} />
+                {data.schools.map((school) => (
+                  <div
+                    key={school.name}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        School
+                      </p>
+                      <p className="truncate font-mono text-sm text-foreground">{school.name}</p>
+                    </div>
+                    {school.exists ? (
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                        Ready
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Not created
+                      </span>
+                    )}
+                  </div>
+                ))}
                 <Field label="School ID / first-login password" value={data.schoolIdCode} />
               </div>
               <p className="text-sm text-muted-foreground">
-                The School Head signs in by picking the district and school on the login page, then
-                using the School ID as the password — the same first-login rule every real school
-                follows, which is what the training video demonstrates.
+                All {data.schools.length} share the same School ID, so there is one password to
+                remember on camera. Each School Head signs in by picking the district and their
+                school on the login page, then using the School ID as the password — the same
+                first-login rule every real school follows, which is what the training video
+                demonstrates.
               </p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No demo data yet. Creating it adds one district, one school with School ID{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">{data.schoolIdCode}</code>, and
-              its School Head account. Grades, sections, teachers and learners are then added live
-              during the recording, which is the point of the walkthrough.
+              No demo data yet. Creating it adds one district and {data.schools.length} schools —{" "}
+              {data.schools.map((s) => s.name).join(", ")} — each with School ID{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">{data.schoolIdCode}</code> and
+              its own School Head account. Grades, sections, teachers and learners are then added
+              live during the recording, which is the point of the walkthrough.
             </p>
           )}
 
           <div className="flex flex-wrap gap-2">
-            {!data.exists ? (
+            {/* Both buttons show while the set is partly built: create finishes
+                the missing schools, reset starts the whole set over. */}
+            {!data.complete ? (
               <Button type="button" onClick={create} disabled={pending}>
                 {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
-                Create demo data
+                {data.any ? "Create missing demo schools" : "Create demo data"}
               </Button>
-            ) : (
+            ) : null}
+            {data.any ? (
               <Button
                 type="button"
                 variant="outline"
@@ -206,7 +240,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
                 Reset demo data
               </Button>
-            )}
+            ) : null}
           </div>
 
           {resetOpen ? (
@@ -214,9 +248,9 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
               <p className="flex items-start gap-2 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>
-                  This permanently deletes the demo school and everything recorded under it —
-                  grades, sections, teacher accounts and learners — then rebuilds it empty. It
-                  cannot be undone, and it touches no other school.
+                  This permanently deletes all {data.schools.length} demo schools and everything
+                  recorded under them — grades, sections, teacher accounts and learners — then
+                  rebuilds the set empty. It cannot be undone, and it touches no real school.
                 </span>
               </p>
               <div className="space-y-1.5">
