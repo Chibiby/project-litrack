@@ -22,6 +22,7 @@ import {
   learnerImportRowSchema,
   type LearnerImportRow,
 } from "@/lib/validators/learner-import.schema";
+import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 import { teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 
@@ -267,8 +268,7 @@ export async function commitLearnerImport(input: {
     fullName: buildFullName(data.firstName, data.middleName, data.lastName),
     age: data.age,
     gender: data.gender,
-    ethnicity: data.ethnicity ?? null,
-    ethnicityOther: data.ethnicity === "OTHER" ? (data.ethnicityOther ?? null) : null,
+    ...ethnicityColumns(data),
     englishReadingProfile: data.englishReadingProfile,
     englishFrustrationSubtypes: data.englishFrustrationSubtypes,
     filipinoReadingProfile: data.filipinoReadingProfile,

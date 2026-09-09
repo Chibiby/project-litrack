@@ -327,6 +327,8 @@ export function LearnerProfileModal({
                 nutritionalStatus: learner.nutritionalStatus,
                 ethnicity: learner.ethnicity,
                 ethnicityOther: learner.ethnicityOther,
+                secondaryEthnicity: learner.secondaryEthnicity,
+                secondaryEthnicityOther: learner.secondaryEthnicityOther,
                 englishReadingProfile: learner.englishReadingProfile,
                 englishFrustrationSubtypes: learner.englishFrustrationSubtypes,
                 filipinoReadingProfile: learner.filipinoReadingProfile,

@@ -16,7 +16,7 @@ import {
   PARENT_EDUCATION_LABELS,
   TRANSFER_LABELS,
   TRANSPORTATION_LABELS,
-  formatEthnicity,
+  formatEthnicities,
 } from "@/lib/constants/enum-labels";
 import type { LearnerProfileData } from "@/lib/learners/profile";
 import {
@@ -105,7 +105,12 @@ export function ProfilePanel({ learner }: { learner: LearnerProfileData }) {
             {learner.age} years old
           </RailRow>
           <RailRow icon={Globe} label="Ethnicity">
-            {formatEthnicity(learner.ethnicity, learner.ethnicityOther)}
+            {formatEthnicities(
+              learner.ethnicity,
+              learner.ethnicityOther,
+              learner.secondaryEthnicity,
+              learner.secondaryEthnicityOther
+            )}
           </RailRow>
           <RailRow icon={Bus} label="Goes to school by">
             {labelOf(TRANSPORTATION_LABELS, learner.modeOfTransportation)}

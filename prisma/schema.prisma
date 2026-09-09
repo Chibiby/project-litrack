@@ -508,9 +508,9 @@ model SchoolYear {
 }
 
 model User {
-  id                 String                 @id @default(uuid())
-  authId             String                 @unique // Supabase auth.users.id
-  email              String                 @unique
+  id                        String                 @id @default(uuid())
+  authId                    String                 @unique // Supabase auth.users.id
+  email                     String                 @unique
   /// Login handle for the Super Admin console (`/admin/login`), which signs in
   /// by username rather than email. Nullable because School Heads sign in with
   /// school + password and teachers with school + email, so neither has one.
@@ -520,15 +520,15 @@ model User {
   /// Supabase Auth and for password recovery: `loginAdmin` resolves
   /// username -> row -> `email` and hands that address to Supabase, and the
   /// forgot-password flow never reads this column.
-  username           String?                @unique
-  role               UserRole
-  schoolId           String?
-  firstName          String
-  middleName         String?
-  lastName           String
-  fullName           String
-  isActive           Boolean                @default(false)
-  mustChangePassword Boolean                @default(false)
+  username                  String?                @unique
+  role                      UserRole
+  schoolId                  String?
+  firstName                 String
+  middleName                String?
+  lastName                  String
+  fullName                  String
+  isActive                  Boolean                @default(false)
+  mustChangePassword        Boolean                @default(false)
   /// True while the account's live Supabase password IS the school's
   /// `schoolIdCode` — set at school creation and by the Super Admin
   /// "reset to default" action, cleared the moment the password becomes
@@ -539,20 +539,31 @@ model User {
   /// it can show is one the system itself chose and already has on record
   /// (`School.schoolIdCode`). A user's own password is a bcrypt hash inside
   /// Supabase Auth and is never readable — by design.
-  passwordIsSchoolId Boolean                @default(false)
+  passwordIsSchoolId        Boolean                @default(false)
   // Profile completion flags
-  profileCompleted   Boolean                @default(false)
+  profileCompleted          Boolean                @default(false)
+  /// Ticked the "I am a Non-DepEd ARAL Volunteer" box during self-registration.
+  ///
+  /// The declaration has to land somewhere before `TeacherProfile` exists: that
+  /// row is only written when profiling is submitted, and its required columns
+  /// make a stub impossible. So the intent is held here and read once, to seed
+  /// and lock `TeacherProfile.designation` in the profiling wizard.
+  ///
+  /// NOT the authority on who is a volunteer — `TeacherProfile.designation` is
+  /// (see `isAralVolunteerDesignation`). This only records what the person said
+  /// at sign-up, which Settings -> Profile can later contradict.
+  registeredAsAralVolunteer Boolean                @default(false)
   // Teacher self-registration approval (null for non-teacher roles)
-  approvalStatus     TeacherApprovalStatus?
-  approvedAt         DateTime?
-  approvedById       String?
-  rejectedAt         DateTime?
+  approvalStatus            TeacherApprovalStatus?
+  approvedAt                DateTime?
+  approvedById              String?
+  rejectedAt                DateTime?
   /// Advisory assignment: 0 or 1 section per teacher. Grade is DERIVED from the
   /// section, never stored here. @unique enforces one adviser per section.
-  advisorySectionId  String?                @unique
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  deletedAt          DateTime?
+  advisorySectionId         String?                @unique
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  deletedAt                 DateTime?
 
   school                 School?              @relation(fields: [schoolId], references: [id])
   schoolHeadProfile      SchoolHeadProfile?
@@ -619,11 +630,20 @@ model TeacherProfile {
   userId String @unique
 
   // I. Respondent Information
-  contactNumber  String?
+  /// Ethnicity, same option set and same two-slot rule as `Learner`. Nullable
+  /// because every profile completed before the question existed has none.
+  ethnicity               Ethnicity?
+  /// Free text only when ethnicity = OTHER.
+  ethnicityOther          String?
+  /// Second ethnicity — see the note on `Learner.secondaryEthnicity`.
+  secondaryEthnicity      Ethnicity?
+  /// Free text only when secondaryEthnicity = OTHER.
+  secondaryEthnicityOther String?
+  contactNumber           String?
   /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
-  contactEmail   String?
-  designation    String?
-  position       TeacherPosition?
+  contactEmail            String?
+  designation             String?
+  position                TeacherPosition?
   /// DepEd plantilla or not. Nullable because every profile completed before this
   /// field existed never answered the question, and a default would make those
   /// rows claim an answer nobody gave.
@@ -632,7 +652,7 @@ model TeacherProfile {
   /// person choosing can see who they are picking. It must never narrow the list
   /// of eligible tutors — a non-DepEd teacher is a valid ARAL tutor, which is the
   /// whole reason the field exists.
-  employmentType EmploymentType?
+  employmentType          EmploymentType?
 
   // II. Professional Background
   educationalAttainment  EducationalAttainment
@@ -816,9 +836,19 @@ model Learner {
   nutritionalStatus NutritionalStatus?
 
   // Nullable: learners rostered before ethnicity was collected have none.
-  ethnicity      Ethnicity?
+  ethnicity               Ethnicity?
   // Free text only when ethnicity = OTHER.
-  ethnicityOther String?
+  ethnicityOther          String?
+  /// Second ethnicity, for someone of mixed heritage. Optional, and only
+  /// meaningful when `ethnicity` is set — the form offers it behind an
+  /// "Add another" button and refuses to repeat the first value.
+  ///
+  /// Two named columns rather than an `Ethnicity[]`: the cap really is two, and
+  /// an array would make every existing read, CSV column and report rewrite
+  /// itself to say the same thing.
+  secondaryEthnicity      Ethnicity?
+  /// Free text only when secondaryEthnicity = OTHER.
+  secondaryEthnicityOther String?
 
   englishReadingProfile       ReadingProfile
   englishFrustrationSubtypes  FrustrationSubtype[]

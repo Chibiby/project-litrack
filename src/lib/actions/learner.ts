@@ -13,6 +13,7 @@ import {
   enrollLearnersToAralSchema,
   enrollRosterLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
+import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import {
@@ -54,20 +55,6 @@ function sectionBData(data: {
     previousTransfers: data.previousTransfers ?? null,
     transferDetails:
       data.previousTransfers === "MULTIPLE" ? (data.transferDetails?.trim() || null) : null,
-  };
-}
-
-/** Normalize ethnicity for Prisma (clear free text unless OTHER). */
-function ethnicityData(data: {
-  ethnicity?:
-    | "BISAYA" | "ILONGGO" | "BLAAN" | "TAGAKAOLO" | "TBOLI" | "BADJAO" | "MARANAO"
-    | "TAUSOG" | "MAGUINDANAON" | "ILOCANO" | "TAGALOG" | "FOREIGN" | "OTHER";
-  ethnicityOther?: string;
-}) {
-  return {
-    ethnicity: data.ethnicity ?? null,
-    ethnicityOther:
-      data.ethnicity === "OTHER" ? (data.ethnicityOther?.trim() || null) : null,
   };
 }
 
@@ -176,7 +163,7 @@ export async function createLearner(
         age: parsed.data.age,
         gender: parsed.data.gender,
         nutritionalStatus: parsed.data.nutritionalStatus,
-        ...ethnicityData(parsed.data),
+        ...ethnicityColumns(parsed.data),
         englishReadingProfile: parsed.data.englishReadingProfile,
         englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
         filipinoReadingProfile: parsed.data.filipinoReadingProfile,
@@ -289,7 +276,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
         governmentBenefits,
         parentEducation: parsed.data.parentEducation,
-        ...ethnicityData(parsed.data),
+        ...ethnicityColumns(parsed.data),
         ...sectionBData(parsed.data),
       },
     });

@@ -122,6 +122,8 @@ function makeLearner(
     nutritionalStatus: "NORMAL",
     ethnicity: null,
     ethnicityOther: null,
+    secondaryEthnicity: null,
+    secondaryEthnicityOther: null,
     englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
     filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
     englishFrustrationSubtypes: [],

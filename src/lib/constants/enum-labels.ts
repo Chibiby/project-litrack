@@ -302,6 +302,23 @@ export function formatEthnicity(
   return ETHNICITY_LABELS[ethnicity as keyof typeof ETHNICITY_LABELS] ?? ethnicity;
 }
 
+/**
+ * Both ethnicity slots on one line, e.g. "Bisaya · Ilonggo". A person with one
+ * ethnicity reads exactly as before; a person with none gets the fallback.
+ */
+export function formatEthnicities(
+  ethnicity: string | null | undefined,
+  ethnicityOther: string | null | undefined,
+  secondaryEthnicity: string | null | undefined,
+  secondaryEthnicityOther: string | null | undefined,
+  fallback = "—"
+): string {
+  if (!ethnicity) return fallback;
+  const first = formatEthnicity(ethnicity, ethnicityOther, fallback);
+  if (!secondaryEthnicity) return first;
+  return first + " · " + formatEthnicity(secondaryEthnicity, secondaryEthnicityOther, fallback);
+}
+
 export const PARENT_EDUCATION_LABELS = {
   NO_FORMAL: "No formal Education",
   ELEMENTARY_LEVEL: "Elementary Level",

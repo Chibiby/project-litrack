@@ -624,3 +624,82 @@ describe("teacherProfileSchema", () => {
     }
   });
 });
+
+describe("teacherProfileSchema — ethnicity", () => {
+  it("accepts a profile that answers neither slot", () => {
+    // Every profile completed before the question existed answered neither.
+    // Re-saving one of those must not be blocked by a question nobody saw.
+    const parsed = teacherProfileSchema.safeParse(teacherBase);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.ethnicity).toBeUndefined();
+      expect(parsed.data.secondaryEthnicity).toBeUndefined();
+    }
+  });
+
+  it("carries both slots through", () => {
+    const parsed = teacherProfileSchema.safeParse({
+      ...teacherBase,
+      ethnicity: "BISAYA",
+      secondaryEthnicity: "ILONGGO",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.ethnicity).toBe("BISAYA");
+      expect(parsed.data.secondaryEthnicity).toBe("ILONGGO");
+    }
+  });
+
+  it("requires the specify line for whichever slot says Others", () => {
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, ethnicity: "OTHER" }).success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        ethnicity: "OTHER",
+        ethnicityOther: "Subanen",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        ethnicity: "BISAYA",
+        secondaryEthnicity: "OTHER",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a second ethnicity with no first, and a second that repeats the first", () => {
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, secondaryEthnicity: "ILONGGO" })
+        .success,
+    ).toBe(false);
+
+    expect(
+      teacherProfileSchema.safeParse({
+        ...teacherBase,
+        ethnicity: "BISAYA",
+        secondaryEthnicity: "BISAYA",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("does not ask School Heads the question at all", () => {
+    // The fields live on the teacher schema, not on the shared base, so a
+    // School Head payload carrying them has them stripped rather than saved.
+    const parsed = schoolHeadProfileSchema.safeParse({
+      ...shBase,
+      position: "PRINCIPAL_I",
+      ethnicity: "BISAYA",
+      secondaryEthnicity: "ILONGGO",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).not.toHaveProperty("ethnicity");
+      expect(parsed.data).not.toHaveProperty("secondaryEthnicity");
+    }
+  });
+});

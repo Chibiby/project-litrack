@@ -55,6 +55,8 @@ const learnerExportSelect = {
   nutritionalStatus: true,
   ethnicity: true,
   ethnicityOther: true,
+  secondaryEthnicity: true,
+  secondaryEthnicityOther: true,
   isAralLearner: true,
   modeOfTransportation: true,
   distanceHomeToSchool: true,
@@ -147,6 +149,9 @@ async function buildLearnersWorkbook(
     { header: "Gender", key: "gender", width: 10 },
     { header: "Nutritional status", key: "nutrition", width: 18 },
     { header: "Ethnicity", key: "ethnicity", width: 16 },
+    // Its own column rather than one cell holding both, so the sheet stays
+    // sortable and filterable on each answer.
+    { header: "Second ethnicity", key: "secondaryEthnicity", width: 16 },
     { header: "Grade", key: "grade", width: 12 },
     { header: "Section", key: "section", width: 12 },
     { header: "English profile", key: "english", width: 28 },
@@ -169,6 +174,9 @@ async function buildLearnersWorkbook(
         ? NUTRITIONAL_STATUS_LABELS[l.nutritionalStatus]
         : "",
       ethnicity: formatEthnicity(l.ethnicity, l.ethnicityOther, ""),
+      secondaryEthnicity: l.secondaryEthnicity
+        ? formatEthnicity(l.secondaryEthnicity, l.secondaryEthnicityOther, "")
+        : "",
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
       english: labelReadingProfile(

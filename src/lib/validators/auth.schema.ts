@@ -62,6 +62,17 @@ export const teacherRegisterSchema = z
     schoolId: nonEmpty("Please select a school"),
     email,
     ...teacherRegisterNames,
+    /**
+     * Ticked "I am a Non-DepEd ARAL Volunteer" on the create-account form.
+     *
+     * Optional with a false default because it is a checkbox: an unticked box
+     * sends no form field at all, and that absence must read as "no", never as
+     * a validation failure.
+     *
+     * Self-declared and unverified — it only seeds and locks the designation in
+     * the profiling wizard. School Head approval is still what grants access.
+     */
+    isAralVolunteer: z.boolean().default(false),
     password: strongPassword,
     confirmPassword: z.string(),
   })

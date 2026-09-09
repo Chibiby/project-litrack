@@ -2,6 +2,7 @@ import { requireSchoolUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,12 @@ export default async function TeacherProfilingPage() {
       </div>
       <TeacherProfileForm
         gradeLevels={gradeLevels}
+        /*
+          What they said at sign-up. The wizard uses it to seed and lock
+          Designation; the saved profile still outranks it, so re-opening
+          profiling after a correction in Settings shows the corrected value.
+        */
+        registeredAsAralVolunteer={user.registeredAsAralVolunteer}
         defaultValues={{
           firstName: user.firstName,
           middleName: user.middleName ?? "",
@@ -54,6 +61,12 @@ export default async function TeacherProfilingPage() {
           accountEmailIsSynthetic: isSyntheticEmail(user.email),
           sectionId: user.advisorySectionId,
           ...(profile ?? {}),
+          // After the spread, and reading through it: a saved profile carries
+          // `designation: null` until it is answered, which would otherwise
+          // overwrite the seed with nothing.
+          designation:
+            profile?.designation ??
+            (user.registeredAsAralVolunteer ? ARAL_VOLUNTEER_DESIGNATION : null),
         }}
       />
     </div>

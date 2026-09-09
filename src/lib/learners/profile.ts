@@ -74,6 +74,8 @@ export type LearnerProfileData = {
   nutritionalStatus: string | null;
   ethnicity: string | null;
   ethnicityOther: string | null;
+  secondaryEthnicity: string | null;
+  secondaryEthnicityOther: string | null;
   englishReadingProfile: string;
   filipinoReadingProfile: string;
   englishFrustrationSubtypes: string[];

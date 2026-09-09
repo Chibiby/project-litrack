@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { email, nonEmpty } from "./common";
+import { ethnicityFields, refineEthnicityPair } from "./ethnicity";
 import { optionalPhPhone } from "./phone";
 
 const READING_TRAININGS = ["ARAL", "TEACHING_READING", "ELLN", "TEACEP", "NONE"] as const;
@@ -318,6 +319,10 @@ export const teacherProfileSchema = baseProfile
   .extend({
     designation: nonEmpty("Designation is required").max(100),
     position: optionalTeacherPosition,
+    // Section I, asked of teachers only. Optional in both slots: every profile
+    // completed before the question existed answered neither, and re-saving
+    // such a profile must not be blocked by a question nobody was shown.
+    ...ethnicityFields,
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
     yearsInService: teacherYearsInServiceSchema,
@@ -325,6 +330,7 @@ export const teacherProfileSchema = baseProfile
   .superRefine((data, ctx) => {
     refineProfileConditionals(data, ctx);
     refineTeacherDesignationPosition(data, ctx);
+    refineEthnicityPair(data, ctx);
     // An ARAL Volunteer holds no classroom assignment at all: they advise no
     // section and they are not attached to a grade. Every other designation
     // describes a classroom teaching role, so both stay required there.

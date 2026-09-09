@@ -148,6 +148,23 @@ describe("teacherRegisterSchema", () => {
     ).toBe(false);
   });
 
+  it("defaults isAralVolunteer to false when the box is left unticked", () => {
+    // An unticked checkbox posts no field at all. Absence must read as "no",
+    // never as a validation failure that blocks the registration.
+    const parsed = teacherRegisterSchema.safeParse(validRegisterBase);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.isAralVolunteer).toBe(false);
+  });
+
+  it("carries a ticked isAralVolunteer through", () => {
+    const parsed = teacherRegisterSchema.safeParse({
+      ...validRegisterBase,
+      isAralVolunteer: true,
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.isAralVolunteer).toBe(true);
+  });
+
   it("needs no verification code — School Head approval is the gate", () => {
     expect(teacherRegisterSchema.safeParse({ ...validRegisterBase, code: "123456" }).success).toBe(
       true

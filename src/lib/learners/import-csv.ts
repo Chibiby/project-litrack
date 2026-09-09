@@ -33,6 +33,8 @@ export const LEARNER_CSV_HEADERS = [
   "gender",
   "ethnicity",
   "ethnicityOther",
+  "secondaryEthnicity",
+  "secondaryEthnicityOther",
   "section",
   "englishReadingProfile",
   "englishFrustrationSubtypes",
@@ -72,6 +74,10 @@ export function learnerCsvTemplate(gradeType?: string | null): string {
     "10",
     "FEMALE",
     "BISAYA",
+    "",
+    // secondaryEthnicity / secondaryEthnicityOther: optional, blank in the
+    // example so nobody reads the second slot as something they must fill.
+    "",
     "",
     "",
     profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
@@ -179,6 +185,8 @@ export function mapCsvRowToImportCandidate(
   const transferDetailsRaw = String(row.transferDetails ?? "").trim();
   const ethnicityRaw = String(row.ethnicity ?? "").trim();
   const ethnicityOtherRaw = String(row.ethnicityOther ?? "").trim();
+  const secondaryEthnicityRaw = String(row.secondaryEthnicity ?? "").trim();
+  const secondaryEthnicityOtherRaw = String(row.secondaryEthnicityOther ?? "").trim();
 
   return {
     firstName,
@@ -190,6 +198,15 @@ export function mapCsvRowToImportCandidate(
       ? {
           ethnicity: resolveEnumValue(row.ethnicity, ETHNICITY_LOOKUP) ?? ethnicityRaw,
           ...(ethnicityOtherRaw ? { ethnicityOther: ethnicityOtherRaw } : {}),
+        }
+      : {}),
+    ...(secondaryEthnicityRaw
+      ? {
+          secondaryEthnicity:
+            resolveEnumValue(row.secondaryEthnicity, ETHNICITY_LOOKUP) ?? secondaryEthnicityRaw,
+          ...(secondaryEthnicityOtherRaw
+            ? { secondaryEthnicityOther: secondaryEthnicityOtherRaw }
+            : {}),
         }
       : {}),
     englishReadingProfile:

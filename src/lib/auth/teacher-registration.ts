@@ -43,6 +43,16 @@ export type CompleteTeacherAuthParams = {
   intent: TeacherAuthIntent;
   /** Required for register when creating a new user; ignored when falling through to login. */
   names?: TeacherNameParts;
+  /**
+   * Ticked "I am a Non-DepEd ARAL Volunteer" on the create-account form.
+   *
+   * Only ever written on a fresh create. An existing row falling through to the
+   * login path keeps whatever it already holds: this is a claim made once at
+   * sign-up, and re-asserting it from a later attempt would let a second
+   * registration silently rewrite a designation the person has since corrected
+   * in Settings.
+   */
+  isAralVolunteer?: boolean;
 };
 
 export type CompleteTeacherAuthResult =
@@ -141,6 +151,7 @@ export async function completeTeacherAuthAfterVerify(
           approvalStatus: "PENDING" satisfies TeacherApprovalStatus,
           mustChangePassword: false,
           profileCompleted: false,
+          registeredAsAralVolunteer: params.isAralVolunteer === true,
         },
       });
     } catch (err) {
@@ -166,7 +177,12 @@ export async function completeTeacherAuthAfterVerify(
         action: AUDIT_ACTIONS.TEACHER_REGISTER,
         resource: "User",
         resourceId: created.id,
-        metadata: { schoolId, email, method: "self_register" },
+        metadata: {
+          schoolId,
+          email,
+          method: "self_register",
+          isAralVolunteer: params.isAralVolunteer === true,
+        },
       });
 
       // Pending-approval counts on school + admin dashboards. Never let cache

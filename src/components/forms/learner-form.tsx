@@ -81,6 +81,8 @@ export type LearnerFormDefaults = {
   nutritionalStatus?: string | null;
   ethnicity?: string | null;
   ethnicityOther?: string | null;
+  secondaryEthnicity?: string | null;
+  secondaryEthnicityOther?: string | null;
   englishReadingProfile?: string;
   englishFrustrationSubtypes?: string[];
   filipinoReadingProfile?: string;
@@ -140,10 +142,14 @@ export const LEARNER_FORM_SECTIONS: readonly FormSectionDef[] = [
     key: "identity",
     title: "Identity & placement",
     hint: "Name, age, gender, nutritional status, and where this learner sits",
-    requiredFields: (values: FormValues) =>
-      values.ethnicity === "OTHER"
-        ? ["firstName", "lastName", "age", "gender", "nutritionalStatus", "ethnicityOther"]
-        : ["firstName", "lastName", "age", "gender", "nutritionalStatus"],
+    requiredFields: (values: FormValues) => {
+      const fields = ["firstName", "lastName", "age", "gender", "nutritionalStatus"];
+      // Choosing Others mounts a field that then has to be filled, in either
+      // slot, so the progress bar has to count it the moment it appears.
+      if (values.ethnicity === "OTHER") fields.push("ethnicityOther");
+      if (values.secondaryEthnicity === "OTHER") fields.push("secondaryEthnicityOther");
+      return fields;
+    },
   },
   {
     key: "reading",
@@ -195,6 +201,41 @@ export function LearnerForm({
   const [ethnicityOther, setEthnicityOther] = useState(
     defaultValues?.ethnicityOther ?? ""
   );
+  // A second ethnicity, for a learner of mixed heritage. Hidden behind a button
+  // rather than shown as an empty select, so the common single answer stays a
+  // one-line question. An edit of a learner who has two opens with it showing.
+  const [showSecondEthnicity, setShowSecondEthnicity] = useState(
+    Boolean(defaultValues?.secondaryEthnicity)
+  );
+  const [secondaryEthnicity, setSecondaryEthnicity] = useState(
+    defaultValues?.secondaryEthnicity ?? ""
+  );
+  const [secondaryEthnicityOther, setSecondaryEthnicityOther] = useState(
+    defaultValues?.secondaryEthnicityOther ?? ""
+  );
+
+  /** Clearing the first answer takes the second with it — it cannot stand alone. */
+  function changeEthnicity(next: string) {
+    setEthnicity(next);
+    if (next === "") {
+      setShowSecondEthnicity(false);
+      setSecondaryEthnicity("");
+      setSecondaryEthnicityOther("");
+      return;
+    }
+    // The second may not repeat the first, so a collision clears the second
+    // rather than letting the server reject the save.
+    if (next !== "OTHER" && next === secondaryEthnicity) {
+      setSecondaryEthnicity("");
+      setSecondaryEthnicityOther("");
+    }
+  }
+
+  function removeSecondEthnicity() {
+    setShowSecondEthnicity(false);
+    setSecondaryEthnicity("");
+    setSecondaryEthnicityOther("");
+  }
   const [values, setValues] = useState<FormValues>({});
   const [openSection, setOpenSection] = useState(LEARNER_FORM_SECTIONS[0].key);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -235,6 +276,8 @@ export function LearnerForm({
   }, [
     refreshValues,
     ethnicity,
+    secondaryEthnicity,
+    showSecondEthnicity,
     previousTransfers,
     englishProfile,
     filipinoProfile,
@@ -294,6 +337,9 @@ export function LearnerForm({
     if (ethnicity !== "OTHER") {
       fd.delete("ethnicityOther");
     }
+    if (secondaryEthnicity !== "OTHER") {
+      fd.delete("secondaryEthnicityOther");
+    }
 
     startTransition(async () => {
       if (isEdit) {
@@ -322,6 +368,7 @@ export function LearnerForm({
         setPreviousTransfers("");
         setEthnicity("");
         setEthnicityOther("");
+        removeSecondEthnicity();
         setOpenSection(LEARNER_FORM_SECTIONS[0].key);
         refreshValues();
         router.refresh();
@@ -420,7 +467,7 @@ export function LearnerForm({
             id="ethnicity"
             name="ethnicity"
             value={ethnicity}
-            onChange={(e) => setEthnicity(e.target.value)}
+            onChange={(e) => changeEthnicity(e.target.value)}
             className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
           >
             <option value="">Not specified</option>
@@ -441,6 +488,65 @@ export function LearnerForm({
                 value={ethnicityOther}
                 onChange={(e) => setEthnicityOther(e.target.value)}
               />
+            </div>
+          ) : null}
+
+          {ethnicity && !showSecondEthnicity ? (
+            <button
+              type="button"
+              onClick={() => setShowSecondEthnicity(true)}
+              className="mt-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              + Add another ethnicity
+            </button>
+          ) : null}
+
+          {ethnicity && showSecondEthnicity ? (
+            <div className="mt-3 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="secondaryEthnicity">Second ethnicity (optional)</Label>
+                <button
+                  type="button"
+                  onClick={removeSecondEthnicity}
+                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+              <select
+                id="secondaryEthnicity"
+                name="secondaryEthnicity"
+                value={secondaryEthnicity}
+                onChange={(e) => setSecondaryEthnicity(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Not specified</option>
+                {toOptions(ETHNICITY_LABELS)
+                  /*
+                    The first answer is dropped from this list so the two can
+                    never be the same. "Others" survives the filter: someone of
+                    mixed heritage may have to write both halves in by hand.
+                  */
+                  .filter((o) => o.value !== ethnicity || o.value === "OTHER")
+                  .map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+              </select>
+              {secondaryEthnicity === "OTHER" ? (
+                <div className="mt-3 space-y-1">
+                  <Label htmlFor="secondaryEthnicityOther">Please specify *</Label>
+                  <Input
+                    id="secondaryEthnicityOther"
+                    name="secondaryEthnicityOther"
+                    required
+                    maxLength={80}
+                    value={secondaryEthnicityOther}
+                    onChange={(e) => setSecondaryEthnicityOther(e.target.value)}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -4,12 +4,20 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { toast } from "sonner";
-import { AlertCircle, X } from "lucide-react";
+import { AlertCircle, Lock, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppForm, useAppForm, markFormClean } from "@/components/forms/app-form";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { ProfileWizardChrome, type WizardStepDef } from "@/components/forms/profiling/wizard-chrome";
+import {
+  TEACHER_PROFILING_STEPS,
+  isLastTeacherStep,
+  nextTeacherStep,
+  previousTeacherStep,
+  visiblePositionOf,
+  visibleTeacherSteps,
+} from "@/lib/teachers/profiling-steps";
 import {
   FormCheckboxChips,
   FormOptionPills,
@@ -26,6 +34,8 @@ import {
   READING_TRAINING_LABELS,
   ENGLISH_TRAINING_LABELS,
   GRADE_LEVEL_LABELS,
+  ETHNICITY_LABELS,
+  formatEthnicities,
   toOptions,
 } from "@/lib/constants/enum-labels";
 import {
@@ -47,6 +57,10 @@ const teacherWizardFormSchema = z.object({
   middleName: z.string(),
   lastName: z.string(),
   contactNumber: z.string(),
+  ethnicity: z.string().optional(),
+  ethnicityOther: z.string(),
+  secondaryEthnicity: z.string().optional(),
+  secondaryEthnicityOther: z.string(),
   designationKind: z.enum([
     "Teacher",
     "Master Teacher",
@@ -70,13 +84,13 @@ const teacherWizardFormSchema = z.object({
   highestTrainingLevel: z.string(),
 });
 
-const TEACHER_STEPS: WizardStepDef[] = [
-  { id: "respondent", shortLabel: "Respondent", title: "Respondent Information" },
-  { id: "professional", shortLabel: "Background", title: "Professional Background" },
-  { id: "assignment", shortLabel: "Assignment", title: "Teaching Assignment" },
-  { id: "training", shortLabel: "Training", title: "Training & Professional Development" },
-  { id: "review", shortLabel: "Review", title: "Review & Submit" },
-];
+/**
+ * Canonical step list. `step`, `STEP_FIELDS` and `stepOfField` are all indexes
+ * into THIS array for everyone — a volunteer's wizard hides the Teaching
+ * Assignment step but never renumbers the rest. The walk and the rail come from
+ * `@/lib/teachers/profiling-steps`.
+ */
+const TEACHER_STEPS: WizardStepDef[] = [...TEACHER_PROFILING_STEPS];
 
 const DESIGNATION_KIND_OPTIONS = [
   { value: "Teacher", label: "Teacher" },
@@ -92,6 +106,10 @@ type Defaults = Partial<{
   accountEmail: string;
   accountEmailIsSynthetic: boolean;
   contactNumber: string | null;
+  ethnicity: string | null;
+  ethnicityOther: string | null;
+  secondaryEthnicity: string | null;
+  secondaryEthnicityOther: string | null;
   designation: string | null;
   position: string | null;
   educationalAttainment: string;
@@ -121,6 +139,10 @@ type TeacherFormValues = {
   middleName: string;
   lastName: string;
   contactNumber: string;
+  ethnicity: string | undefined;
+  ethnicityOther: string;
+  secondaryEthnicity: string | undefined;
+  secondaryEthnicityOther: string;
   designationKind:
     | "Teacher"
     | "Master Teacher"
@@ -183,6 +205,21 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
     middleName: values.middleName.trim() || undefined,
     lastName: values.lastName.trim(),
     contactNumber: values.contactNumber.trim() || undefined,
+    /*
+      Two slots, and the second only carries meaning next to the first: with no
+      first answer there is nothing for a second to be second to, so both are
+      dropped together. Each free-text line is sent only while its own slot
+      says Others, which is also how a slot changed away from Others gets its
+      stale specify line cleared rather than saved.
+    */
+    ethnicity: values.ethnicity || undefined,
+    ethnicityOther:
+      values.ethnicity === "OTHER" ? values.ethnicityOther.trim() || undefined : undefined,
+    secondaryEthnicity: values.ethnicity ? values.secondaryEthnicity || undefined : undefined,
+    secondaryEthnicityOther:
+      values.ethnicity && values.secondaryEthnicity === "OTHER"
+        ? values.secondaryEthnicityOther.trim() || undefined
+        : undefined,
     designation,
     educationalAttainment: values.educationalAttainment || undefined,
     fieldOfSpecialization: values.fieldOfSpecialization || undefined,
@@ -217,6 +254,10 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
     "middleName",
     "lastName",
     "contactNumber",
+    "ethnicity",
+    "ethnicityOther",
+    "secondaryEthnicity",
+    "secondaryEthnicityOther",
     "designationKind",
     "designationOther",
     "position",
@@ -253,6 +294,10 @@ const FIELD_LABELS: Partial<Record<keyof TeacherFormValues, string>> = {
   middleName: "Middle name",
   lastName: "Last name",
   contactNumber: "Contact number",
+  ethnicity: "Ethnicity",
+  ethnicityOther: "Specify ethnicity",
+  secondaryEthnicity: "Second ethnicity",
+  secondaryEthnicityOther: "Specify second ethnicity",
   designationKind: "Designation",
   designationOther: "Specify designation",
   position: "Position",
@@ -299,10 +344,21 @@ export function TeacherProfileForm({
   defaultValues,
   presentation = "wizard",
   gradeLevels,
+  registeredAsAralVolunteer = false,
 }: {
   defaultValues: Defaults;
   /** `wizard` = onboarding steps; `edit` = flat settings profile (no Review). */
   presentation?: "wizard" | "edit";
+  /**
+   * They ticked "I am a Non-DepEd ARAL Volunteer" when they registered
+   * (`User.registeredAsAralVolunteer`).
+   *
+   * In the wizard this locks Designation to that value and drops the Teaching
+   * Assignment step — a volunteer advises no section. The flat edit view
+   * ignores it entirely, which is the escape hatch: a mis-tick is corrected in
+   * Settings -> Profile, where Designation is an ordinary editable field.
+   */
+  registeredAsAralVolunteer?: boolean;
   /** Active grades + their sections, for the grade→section cascade in Step 3. */
   gradeLevels: {
     id: string;
@@ -320,6 +376,24 @@ export function TeacherProfileForm({
    */
   const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = presentation === "edit";
+  /**
+   * Volunteer rules apply to the onboarding wizard only. In `edit` the whole
+   * form is on one page and every field stays editable, so locking there would
+   * remove the only way to undo a mis-ticked box at registration.
+   */
+  const volunteerWizard = !isEdit && registeredAsAralVolunteer;
+  /** The rail: every step for a teacher, all but Teaching Assignment for a volunteer. */
+  const wizardSteps = useMemo(
+    () => visibleTeacherSteps(volunteerWizard) as WizardStepDef[],
+    [volunteerWizard]
+  );
+  /**
+   * Card heading numeral for a canonical step, counted over the steps this
+   * person actually sees — so a volunteer reads I, II, III, IV rather than
+   * I, II, IV, V with a hole where Teaching Assignment used to be.
+   */
+  const stepNumeral = (canonicalStep: number) =>
+    ["I", "II", "III", "IV", "V"][visiblePositionOf(canonicalStep, volunteerWizard)];
   const initialDesig = resolveDesignationKind(defaultValues.designation);
   // Tracks whether the user has explicitly toggled the years-in-service
   // Yes/No pills in this session, so switching designation to the ARAL
@@ -335,18 +409,31 @@ export function TeacherProfileForm({
       middleName: defaultValues.middleName ?? "",
       lastName: defaultValues.lastName ?? "",
       contactNumber: defaultValues.contactNumber ?? "",
+      ethnicity: defaultValues.ethnicity ?? undefined,
+      ethnicityOther: defaultValues.ethnicityOther ?? "",
+      secondaryEthnicity: defaultValues.secondaryEthnicity ?? undefined,
+      secondaryEthnicityOther: defaultValues.secondaryEthnicityOther ?? "",
       designationKind: initialDesig.kind,
       designationOther: initialDesig.other,
       position: defaultValues.position ?? undefined,
       educationalAttainment: defaultValues.educationalAttainment ?? "",
-      fieldOfSpecialization: defaultValues.fieldOfSpecialization ?? "",
+      // The N/A presets for a volunteer normally come from the Designation
+      // pills' onValueChange. A locked designation is never "changed", so that
+      // handler never runs and the seeding has to happen here instead.
+      fieldOfSpecialization:
+        defaultValues.fieldOfSpecialization ?? (volunteerWizard ? "NA" : ""),
       specializationOther: defaultValues.specializationOther ?? "",
       yearsInService:
         defaultValues.yearsInService === null ||
         defaultValues.yearsInService === undefined
           ? ""
           : String(defaultValues.yearsInService),
-      yearsInServiceApplicable: resolveYearsInServiceApplicable(defaultValues),
+      yearsInServiceApplicable: volunteerWizard
+        ? // Same reason as fieldOfSpecialization above: N/A is the volunteer
+          // default, unless a saved profile already carries a number.
+          resolveYearsInServiceApplicable(defaultValues) &&
+          defaultValues.yearsInService !== undefined
+        : resolveYearsInServiceApplicable(defaultValues),
       currentGradeAssignment: defaultValues.currentGradeAssignment ?? undefined,
       sectionId: defaultValues.sectionId ?? undefined,
       hasReadingTraining: defaultValues.hasReadingTraining,
@@ -358,6 +445,8 @@ export function TeacherProfileForm({
   });
 
   const designationKind = form.watch("designationKind");
+  const ethnicity = form.watch("ethnicity");
+  const secondaryEthnicity = form.watch("secondaryEthnicity");
   const specialization = form.watch("fieldOfSpecialization");
   const yearsInServiceApplicable = form.watch("yearsInServiceApplicable");
   const hasReading = form.watch("hasReadingTraining");
@@ -369,6 +458,50 @@ export function TeacherProfileForm({
   // section, so both fields go optional together — one flag, because there is
   // no designation where one applies and the other does not.
   const assignmentRequired = designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+
+  /*
+    A second ethnicity is opt-in, so the field is not on screen until someone
+    asks for it — but a profile that already carries one opens with it shown,
+    otherwise editing would look like the answer had been lost.
+  */
+  const [showSecondEthnicity, setShowSecondEthnicity] = useState(
+    Boolean(defaultValues.secondaryEthnicity)
+  );
+
+  function removeSecondEthnicity() {
+    setShowSecondEthnicity(false);
+    form.setValue("secondaryEthnicity", undefined);
+    form.setValue("secondaryEthnicityOther", "");
+  }
+
+  /**
+   * Runs after the first select has already written its own value. Everything
+   * here is about the wreckage a change can leave behind: a specify line for a
+   * slot that no longer says Others, and a second ethnicity that has either
+   * lost the answer it was second to or become a duplicate of the new one.
+   */
+  function changeEthnicity(next: string) {
+    if (next !== "OTHER") form.setValue("ethnicityOther", "");
+    if (!next) {
+      removeSecondEthnicity();
+      return;
+    }
+    if (next !== "OTHER" && form.getValues("secondaryEthnicity") === next) {
+      form.setValue("secondaryEthnicity", undefined);
+      form.setValue("secondaryEthnicityOther", "");
+    }
+  }
+
+  /*
+    The first answer is dropped from the second list so the two can never be
+    the same. "Others" survives the filter: someone of mixed heritage may have
+    to write both halves in by hand, and those two lines are not duplicates.
+  */
+  const secondEthnicityOptions = useMemo(
+    () =>
+      toOptions(ETHNICITY_LABELS).filter((o) => o.value !== ethnicity || o.value === "OTHER"),
+    [ethnicity]
+  );
 
   const gradeOptions = useMemo(
     () =>
@@ -469,6 +602,18 @@ export function TeacherProfileForm({
       }
       if (v.contactNumber.trim() && !isValidPhPhone(v.contactNumber)) {
         form.setError("contactNumber", { message: PH_PHONE_HINT });
+        ok = false;
+      }
+      // Ethnicity itself is optional in both slots. Only the free-text line is
+      // ever required, and only for the slot that asked for it.
+      if (v.ethnicity === "OTHER" && !v.ethnicityOther.trim()) {
+        form.setError("ethnicityOther", { message: "Please specify the ethnicity" });
+        ok = false;
+      }
+      if (v.ethnicity && v.secondaryEthnicity === "OTHER" && !v.secondaryEthnicityOther.trim()) {
+        form.setError("secondaryEthnicityOther", {
+          message: "Please specify the second ethnicity",
+        });
         ok = false;
       }
     }
@@ -642,7 +787,12 @@ export function TeacherProfileForm({
     let ok = true;
     ok = (await validateStep(0, { clear: false })) && ok;
     ok = (await validateStep(1, { clear: false })) && ok;
-    ok = (await validateStep(2, { clear: false })) && ok;
+    // Step 2 is Teaching Assignment. A volunteer never sees it, and its own
+    // rules already exempt the designation — running it here would only be
+    // wasted work, but skipping it keeps the two paths honest about that.
+    if (!volunteerWizard) {
+      ok = (await validateStep(2, { clear: false })) && ok;
+    }
     ok = (await validateStep(3, { clear: false })) && ok;
     if (!ok) return;
     await submitProfile(() => router.refresh());
@@ -650,10 +800,10 @@ export function TeacherProfileForm({
 
   async function handleContinue() {
     setSaveError(null);
-    if (step < TEACHER_STEPS.length - 1) {
+    if (!isLastTeacherStep(step, volunteerWizard)) {
       const ok = await validateStep(step);
       if (!ok) return;
-      setStep((s) => s + 1);
+      setStep((s) => nextTeacherStep(s, volunteerWizard));
       return;
     }
     // Review → submit
@@ -718,7 +868,7 @@ export function TeacherProfileForm({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {isEdit ? "Account" : "I. Respondent Information"}
+              {isEdit ? "Account" : `${stepNumeral(0)}. Respondent Information`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -767,6 +917,86 @@ export function TeacherProfileForm({
                 description="Optional. PH number, e.g. 09171234567 or +639171234567."
               />
             </div>
+            <div className="space-y-3 md:max-w-sm">
+              <FormSelectField
+                control={form.control}
+                name="ethnicity"
+                label="Ethnicity"
+                description="Optional."
+                options={toOptions(ETHNICITY_LABELS)}
+                allowEmpty
+                emptyLabel="Not specified"
+                onValueChange={changeEthnicity}
+              />
+              {ethnicity === "OTHER" ? (
+                <FormTextField
+                  control={form.control}
+                  name="ethnicityOther"
+                  label="Please specify"
+                  required
+                  maxLength={80}
+                />
+              ) : null}
+              {ethnicity && !showSecondEthnicity ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSecondEthnicity(true)}
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  + Add another ethnicity
+                </button>
+              ) : null}
+              {ethnicity && showSecondEthnicity ? (
+                <div className="space-y-3">
+                  <FormSelectField
+                    control={form.control}
+                    name="secondaryEthnicity"
+                    label="Second ethnicity"
+                    description="Optional."
+                    options={secondEthnicityOptions}
+                    allowEmpty
+                    emptyLabel="Not specified"
+                  />
+                  {secondaryEthnicity === "OTHER" ? (
+                    <FormTextField
+                      control={form.control}
+                      name="secondaryEthnicityOther"
+                      label="Please specify"
+                      required
+                      maxLength={80}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={removeSecondEthnicity}
+                    className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                  >
+                    Remove second ethnicity
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            {volunteerWizard ? (
+              /*
+                Locked, not hidden: the person has to see what they registered
+                as, and read the one line telling them where to change it. The
+                value itself is already in form state (seeded by the page from
+                `User.registeredAsAralVolunteer`), so nothing is submitted from
+                this block — it only renders that state.
+              */
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Designation</p>
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <span className="text-sm font-medium">{ARAL_VOLUNTEER_DESIGNATION}</span>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <span className="sr-only">This field cannot be changed here.</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  From the box you ticked when you created this account. If that was a
+                  mistake, change it later under Settings → Profile.
+                </p>
+              </div>
+            ) : (
             <FormOptionPills
               control={form.control}
               name="designationKind"
@@ -804,6 +1034,7 @@ export function TeacherProfileForm({
                 }
               }}
             />
+            )}
             {designationKind === "__OTHER__" ? (
               <FormTextField
                 control={form.control}
@@ -840,7 +1071,7 @@ export function TeacherProfileForm({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {isEdit ? "Professional background" : "II. Professional Background"}
+              {isEdit ? "Professional background" : `${stepNumeral(1)}. Professional Background`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -900,7 +1131,7 @@ export function TeacherProfileForm({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {isEdit ? "Teaching assignment" : "III. Teaching Assignment"}
+              {isEdit ? "Teaching assignment" : `${stepNumeral(2)}. Teaching Assignment`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -959,7 +1190,7 @@ export function TeacherProfileForm({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {isEdit ? "Training" : "IV. Training & Professional Development"}
+              {isEdit ? "Training" : `${stepNumeral(3)}. Training & Professional Development`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -1015,7 +1246,7 @@ export function TeacherProfileForm({
       {!isEdit && step === 4 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">V. Review & Submit</CardTitle>
+            <CardTitle className="text-base">{stepNumeral(4)}. Review & Submit</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <ReviewBlock
@@ -1030,6 +1261,15 @@ export function TeacherProfileForm({
                 ],
                 ["Email address", defaultValues.accountEmail ?? "—"],
                 ["Contact number", values.contactNumber || "—"],
+                [
+                  "Ethnicity",
+                  formatEthnicities(
+                    values.ethnicity,
+                    values.ethnicityOther,
+                    values.secondaryEthnicity,
+                    values.secondaryEthnicityOther
+                  ),
+                ],
                 [
                   "Designation",
                   values.designationKind === "__OTHER__"
@@ -1069,6 +1309,9 @@ export function TeacherProfileForm({
                 ],
               ]}
             />
+            {/* No step to review, and its Edit button would jump to a step the
+                volunteer's Continue walk skips. */}
+            {volunteerWizard ? null : (
             <ReviewBlock
               title="Teaching Assignment"
               onEdit={() => setStep(2)}
@@ -1087,6 +1330,7 @@ export function TeacherProfileForm({
                 ],
               ]}
             />
+            )}
             <ReviewBlock
               title="Training & Professional Development"
               onEdit={() => setStep(3)}
@@ -1147,10 +1391,10 @@ export function TeacherProfileForm({
         </div>
       ) : (
         <ProfileWizardChrome
-          steps={TEACHER_STEPS}
-          currentStep={step}
+          steps={wizardSteps}
+          currentStep={visiblePositionOf(step, volunteerWizard)}
           pending={pending}
-          onBack={() => setStep((s) => Math.max(0, s - 1))}
+          onBack={() => setStep((s) => previousTeacherStep(s, volunteerWizard))}
           onContinue={() => void handleContinue()}
         >
           {sections}

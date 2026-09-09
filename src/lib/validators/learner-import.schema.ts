@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nonEmpty } from "./common";
+import { ethnicityFields, refineEthnicityPair } from "./ethnicity";
 
 const READING_PROFILE = [
   "NON_DECODER_LOW_EMERGENT",
@@ -26,11 +27,6 @@ const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
 const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
 const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
 
-const ETHNICITY = [
-  "BISAYA", "ILONGGO", "BLAAN", "TAGAKAOLO", "TBOLI", "BADJAO", "MARANAO",
-  "TAUSOG", "MAGUINDANAON", "ILOCANO", "TAGALOG", "FOREIGN", "OTHER",
-] as const;
-
 const optionalMiddleName = z
   .string()
   .trim()
@@ -51,40 +47,6 @@ const optionalTransferDetails = z
   .max(500)
   .optional()
   .or(z.literal("").transform(() => undefined));
-
-const optionalEthnicityOther = z
-  .string()
-  .trim()
-  .max(80)
-  .optional()
-  .or(z.literal("").transform(() => undefined));
-
-function refineEthnicityOther(
-  data: {
-    ethnicity?: (typeof ETHNICITY)[number];
-    ethnicityOther?: string;
-  },
-  ctx: z.RefinementCtx
-) {
-  if (data.ethnicity === "OTHER" && !data.ethnicityOther?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Specify ethnicity when Others is selected",
-      path: ["ethnicityOther"],
-    });
-  }
-  if (
-    data.ethnicity != null &&
-    data.ethnicity !== "OTHER" &&
-    data.ethnicityOther?.trim()
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Ethnicity details are only allowed when Others is selected",
-      path: ["ethnicityOther"],
-    });
-  }
-}
 
 function refineFrustrationSubtypes(
   data: {
@@ -154,8 +116,8 @@ export const learnerImportRowSchema = z
     lastName: nonEmpty("Last name required").max(80),
     age: z.coerce.number().int().min(3).max(25),
     gender: z.enum(["MALE", "FEMALE"]),
-    ethnicity: optionalEnum(ETHNICITY),
-    ethnicityOther: optionalEthnicityOther,
+    // Both slots. A file may name one ethnicity, two, or none at all.
+    ...ethnicityFields,
     englishReadingProfile: z.enum(READING_PROFILE),
     englishFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),
     filipinoReadingProfile: z.enum(READING_PROFILE),
@@ -180,7 +142,7 @@ export const learnerImportRowSchema = z
   .superRefine((data, ctx) => {
     refineFrustrationSubtypes(data, ctx);
     refineSectionBTransfers(data, ctx);
-    refineEthnicityOther(data, ctx);
+    refineEthnicityPair(data, ctx, { variant: "import" });
   });
 
 export type LearnerImportRow = z.infer<typeof learnerImportRowSchema>;

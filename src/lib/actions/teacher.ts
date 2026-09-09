@@ -10,6 +10,7 @@ import {
 } from "@/lib/names";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
+import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
@@ -88,6 +89,9 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
     position: parsed.data.position ?? null,
     yearsInService: parsed.data.yearsInService ?? null,
+    // Same reason: an ethnicity removed in Settings has to be written as null,
+    // and each free-text line has to be cleared when its slot is not Others.
+    ...ethnicityColumns(parsed.data),
   };
 
   try {

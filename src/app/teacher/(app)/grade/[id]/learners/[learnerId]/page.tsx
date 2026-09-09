@@ -19,7 +19,7 @@ import { EmptyState } from "@/components/dashboard";
 import {
   GRADE_LEVEL_LABELS,
   GENDER_LABELS,
-  ETHNICITY_LABELS,
+  formatEthnicities,
   NUTRITIONAL_STATUS_LABELS,
   PARENT_EDUCATION_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
@@ -101,6 +101,8 @@ export default async function LearnerDetailPage({
       nutritionalStatus: true,
       ethnicity: true,
       ethnicityOther: true,
+      secondaryEthnicity: true,
+      secondaryEthnicityOther: true,
       gradeLevelId: true,
       isAralLearner: true,
       archivedAt: true,
@@ -262,11 +264,12 @@ export default async function LearnerDetailPage({
             <div>
               <p className="text-muted-foreground">Ethnicity</p>
               <p className="font-medium">
-                {learner.ethnicity
-                  ? learner.ethnicity === "OTHER"
-                    ? (learner.ethnicityOther ?? ETHNICITY_LABELS.OTHER)
-                    : ETHNICITY_LABELS[learner.ethnicity]
-                  : "—"}
+                {formatEthnicities(
+                  learner.ethnicity,
+                  learner.ethnicityOther,
+                  learner.secondaryEthnicity,
+                  learner.secondaryEthnicityOther
+                )}
               </p>
             </div>
             <div>

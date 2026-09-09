@@ -318,6 +318,7 @@ async function finishTeacherRegister(
     email: string;
     schoolId: string;
     names: TeacherRegisterNames;
+    isAralVolunteer: boolean;
   }
 ): Promise<TeacherRegisterResult> {
   const result = await completeTeacherAuthAfterVerify({
@@ -326,6 +327,7 @@ async function finishTeacherRegister(
     schoolId: params.schoolId,
     intent: "register",
     names: params.names,
+    isAralVolunteer: params.isAralVolunteer,
   });
 
   if (!result.ok) {
@@ -459,6 +461,9 @@ export async function registerTeacher(formData: FormData): Promise<TeacherRegist
     firstName: formData.get("firstName") || undefined,
     middleName: formData.get("middleName") || undefined,
     lastName: formData.get("lastName") || undefined,
+    // Unticked checkboxes send nothing, so absence is `false` — and the string
+    // "false" must be false too, since the client posts the flag explicitly.
+    isAralVolunteer: formData.get("isAralVolunteer") === "true",
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -503,7 +508,13 @@ export async function registerTeacher(formData: FormData): Promise<TeacherRegist
     }
   }
 
-  return finishTeacherRegister(supabase, { authId: auth.authId, email, schoolId, names });
+  return finishTeacherRegister(supabase, {
+    authId: auth.authId,
+    email,
+    schoolId,
+    names,
+    isAralVolunteer: parsed.data.isAralVolunteer,
+  });
 }
 
 /**
