@@ -1,4 +1,5 @@
-import { addDays, parseLocalDateKey } from "@/lib/date-keys";
+import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { getMonday } from "@/lib/utils";
 
 /**
  * Week labels and the attendance editing deadline, in one place so the banner a
@@ -57,4 +58,43 @@ export function formatWeekRange(weekStartKey: string): string {
     return `${startLabel}, ${start.getFullYear()} – ${endLabel}, ${end.getFullYear()}`;
   }
   return `${startLabel} – ${endLabel}, ${end.getFullYear()}`;
+}
+
+/** `Week of September 7 – September 13, 2026` — the week picker's option text. */
+export function formatWeekOption(weekStartKey: string): string {
+  return `Week of ${formatWeekRange(weekStartKey)}`;
+}
+
+/** Past weeks the week picker offers alongside the current one (about six months). */
+export const WEEK_PICKER_HISTORY = 26;
+
+/**
+ * Mondays for the week picker, newest first: `anchorKey`'s week and the `count`
+ * weeks before it.
+ *
+ * `includeKey` is appended when it falls outside that span. The prev/next
+ * buttons can still walk into a week the list does not offer — a future week,
+ * or one older than the history — and a `<Select>` whose value is not one of
+ * its items renders an empty trigger, so the week on screen always has to be in
+ * the list even when nothing else would have put it there.
+ */
+export function weekPickerKeys(
+  anchorKey: string,
+  count = WEEK_PICKER_HISTORY,
+  includeKey?: string
+): string[] {
+  const anchor = getMonday(parseLocalDateKey(anchorKey));
+  const keys: string[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    keys.push(formatLocalDateKey(addDays(anchor, -7 * i)));
+  }
+  if (includeKey) {
+    const normalized = formatLocalDateKey(getMonday(parseLocalDateKey(includeKey)));
+    if (!keys.includes(normalized)) {
+      keys.push(normalized);
+      // `YYYY-MM-DD` sorts lexicographically, so plain string order is date order.
+      keys.sort().reverse();
+    }
+  }
+  return keys;
 }

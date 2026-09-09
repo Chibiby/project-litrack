@@ -88,3 +88,35 @@ export function daysLeftInMonth(monthKey: string): number {
   const today = schoolToday();
   return Math.round((end.getTime() - today.getTime()) / 86_400_000);
 }
+
+/** Past months the month picker offers alongside the current one (two school years). */
+export const MONTH_PICKER_HISTORY = 24;
+
+/**
+ * Month keys for the month picker, newest first: `anchorKey`'s month and the
+ * `count` months before it.
+ *
+ * `includeKey` is appended when it falls outside that span — the prev/next
+ * buttons can walk into a future month, or one older than the history, and a
+ * `<Select>` whose value matches no item renders an empty trigger.
+ */
+export function monthPickerKeys(
+  anchorKey: string,
+  count = MONTH_PICKER_HISTORY,
+  includeKey?: string
+): string[] {
+  const anchor = monthStartOf(parseLocalDateKey(anchorKey));
+  const keys: string[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    keys.push(formatMonthKey(addMonths(anchor, -i)));
+  }
+  if (includeKey) {
+    const normalized = formatMonthKey(parseLocalDateKey(includeKey));
+    if (!keys.includes(normalized)) {
+      keys.push(normalized);
+      // `YYYY-MM-DD` sorts lexicographically, so plain string order is date order.
+      keys.sort().reverse();
+    }
+  }
+  return keys;
+}

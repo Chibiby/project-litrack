@@ -35,6 +35,8 @@ import {
   formatMonthEndLongDate,
   formatMonthKey,
   formatMonthLabel,
+  MONTH_PICKER_HISTORY,
+  monthPickerKeys,
 } from "@/lib/month-range";
 import {
   LEARNER_LIST_DEFAULT_PAGE_SIZE,
@@ -271,6 +273,14 @@ export function AralMonthlyReadingLevelPanel({
   const busy = loading || savePending;
   const canSave = !readOnly && learners.length > 0;
 
+  // Months the picker offers: this month back through the history, newest first,
+  // plus whatever month is on screen if prev/next walked outside that span.
+  const monthOptions = monthPickerKeys(
+    currentMonthKey(),
+    MONTH_PICKER_HISTORY,
+    pickerMonth
+  ).map((key) => ({ value: key, label: formatMonthLabel(key) }));
+
   return (
     <>
       <section
@@ -344,10 +354,10 @@ export function AralMonthlyReadingLevelPanel({
         <AralDateNav
           value={pickerMonth}
           onNavigate={navigateTo}
-          label="Jump to month"
+          label="Select Month"
           prevLabel="Previous month"
           nextLabel="Next month"
-          rangeLabel={formatMonthLabel(pickerMonth)}
+          options={monthOptions}
           snapToMonth
           pending={loading}
           filter={

@@ -44,12 +44,12 @@ export type AralGridBanner = "items" | "progress" | "chips" | "none";
 /**
  * Which control bar sits above the grid.
  *
- * `week-nav` and `month-nav` are both `AralDateNav`, but they are not the same
- * row: the weekly sheet passes `navLabels`, so prev/next are wide labelled
- * buttons, and it puts the Filter popover in `actions` on the right. The monthly
- * sheet leaves `navLabels` off — prev/next are square icon buttons — and keeps
- * Filter on the left in `filter`, followed by its facet selects. One shared
- * variant drew the monthly row with 130px navigation buttons it does not have.
+ * `week-nav` and `month-nav` are both `AralDateNav`, and both now open with a
+ * square icon button and a period dropdown, but they are not the same row: the
+ * weekly sheet puts the Filter popover in `actions` on the right, while the
+ * monthly sheet keeps Filter on the left in `filter`, followed by its facet
+ * selects. One shared variant drew the monthly row with wide labelled
+ * navigation buttons it does not have.
  */
 export type AralGridHeader = "week-nav" | "month-nav" | "toolbar";
 
@@ -208,10 +208,10 @@ export function AralGridSkeleton({
         <div className={CARD_HEADER} data-slot="aral-grid-header">
           {header === "week-nav" ? (
             <>
-              {/* Labelled prev/next, the week-range picker between them. */}
-              <Skeleton className="h-9 w-[150px] rounded-lg" />
-              <Skeleton className="h-9 w-[282px] max-w-full rounded-md" />
-              <Skeleton className="h-9 w-[130px] rounded-lg" />
+              {/* Icon-only prev/next, the week dropdown between them. */}
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <Skeleton className="h-9 w-full max-w-full rounded-lg sm:w-[19rem]" />
+              <Skeleton className="h-9 w-9 rounded-lg" />
               <div className="ml-auto flex items-center gap-2">
                 <Skeleton className="h-9 w-[92px] rounded-lg" />
                 <Skeleton className="h-9 w-[205px] rounded-lg" />

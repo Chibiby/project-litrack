@@ -28,7 +28,9 @@ import {
   ATTENDANCE_EDIT_GRACE_DAYS,
   attendanceDeadline,
   formatLongDate,
-  formatWeekRange,
+  formatWeekOption,
+  WEEK_PICKER_HISTORY,
+  weekPickerKeys,
 } from "@/lib/week-range";
 import { getMonday, cn } from "@/lib/utils";
 import type { LearnerListSectionFilter } from "@/lib/learners/pagination";
@@ -193,6 +195,14 @@ export function AralWeeklyAttendancePanel({
   const deadlineLabel = formatLongDate(picked.deadline);
   const canSave = !readOnly && !picked.locked && learners.length > 0;
 
+  // Weeks the picker offers: this week back through the history, newest first,
+  // plus whatever week is on screen if the prev/next buttons walked outside it.
+  const weekOptions = weekPickerKeys(
+    formatLocalDateKey(getMonday(schoolToday())),
+    WEEK_PICKER_HISTORY,
+    pickerWeek
+  ).map((key) => ({ value: key, label: formatWeekOption(key) }));
+
   return (
     <>
       <section
@@ -246,11 +256,10 @@ export function AralWeeklyAttendancePanel({
         <AralDateNav
           value={pickerWeek}
           onNavigate={navigateTo}
-          label="Jump to week"
+          label="Select Week"
           prevLabel="Previous Week"
           nextLabel="Next Week"
-          rangeLabel={formatWeekRange(pickerWeek)}
-          navLabels
+          options={weekOptions}
           snapToMonday
           pending={loading}
           actions={
