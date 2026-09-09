@@ -127,9 +127,10 @@ export function AralDateNav({
       <SelectTrigger
         aria-label={label}
         className={cn(
-          // Fills the row on a phone; on wider screens it is held at a width the
-          // longest label fits, so the box does not resize as weeks change.
-          "h-9 w-auto min-w-0 flex-1 gap-2 bg-background text-sm font-medium sm:flex-none",
+          // A phone gives it the whole row, at a 44px touch height. Wider screens
+          // hold it at a width the longest label fits, so the box does not resize
+          // as the teacher moves between periods.
+          "h-11 w-full gap-2 bg-background text-sm font-medium sm:h-9 sm:w-auto",
           snapToMonth ? "sm:min-w-[13rem]" : "sm:min-w-[21rem]"
         )}
       >
@@ -162,6 +163,16 @@ export function AralDateNav({
       </label>
     ));
 
+  // A bare chevron is a 36px target that says nothing about what it steps. On a
+  // phone, where the buttons get their own row and there is width to spend, they
+  // carry their label at a 44px height; from `sm` up they collapse back to the
+  // icon-only square the desktop row was drawn around, unless `navLabels` asks
+  // for the text at every width.
+  const stepButtonClass = "h-11 w-full sm:h-9 sm:w-auto";
+
+  /** Whether the period sits between the step buttons (every current caller). */
+  const leadsWithPrev = rangeLabel != null || options != null;
+
   const prevButton = (
     <Button
       type="button"
@@ -169,10 +180,11 @@ export function AralDateNav({
       variant="outline"
       aria-label={prevLabel}
       title={prevLabel}
+      className={stepButtonClass}
       onClick={() => onNavigate(prevValue)}
     >
       <ChevronLeft className="h-4 w-4" />
-      {navLabels ? prevLabel : null}
+      {navLabels ? prevLabel : <span className="sm:hidden">{prevLabel}</span>}
     </Button>
   );
 
@@ -183,9 +195,10 @@ export function AralDateNav({
       variant="outline"
       aria-label={nextLabel}
       title={nextLabel}
+      className={stepButtonClass}
       onClick={() => onNavigate(nextValue)}
     >
-      {navLabels ? nextLabel : null}
+      {navLabels ? nextLabel : <span className="sm:hidden">{nextLabel}</span>}
       <ChevronRight className="h-4 w-4" />
     </Button>
   );
@@ -195,22 +208,41 @@ export function AralDateNav({
       className="flex flex-wrap items-center gap-3 border-b border-border/60 p-4"
       aria-busy={pending || undefined}
     >
-      {rangeLabel != null || options != null ? (
-        <>
-          {prevButton}
+      {/*
+        Three groups, and on a phone each owns a full row: the period, then the
+        filters, then the actions. `sm:contents` dissolves every wrapper from the
+        `sm` breakpoint up, so the desktop row is the same single line of flex
+        children it has always been — the wrappers exist only for the narrow
+        composition. Left as one wrapping row, a phone squeezed the period
+        dropdown to "Se…" to make space for a facet select beside it.
+      */}
+      <div className="grid w-full grid-cols-2 items-center gap-2 sm:contents">
+        {leadsWithPrev ? prevButton : null}
+        {/*
+          `order-first` lifts the period above the buttons on a phone without
+          moving it in the DOM, so the desktop row keeps its authored order once
+          the wrappers dissolve. `order` does not apply to a `display: contents`
+          box, so it costs the wide layout nothing.
+        */}
+        <div
+          className={cn("col-span-2 sm:contents", leadsWithPrev && "order-first")}
+        >
           {picker}
-          {nextButton}
-        </>
-      ) : (
-        <>
-          {picker}
-          {prevButton}
-          {nextButton}
-        </>
+        </div>
+        {leadsWithPrev ? null : prevButton}
+        {nextButton}
+      </div>
+      {filter != null && (
+        <div className="grid w-full grid-cols-2 gap-2 sm:contents">{filter}</div>
       )}
-      {filter}
       {actions != null && (
-        <div className="ml-auto flex items-center gap-2">{actions}</div>
+        // Two columns on a phone, matching the rows above, so Save is a real
+        // target rather than a 53px afterthought. Deliberately not full-bleed:
+        // the assistant button floats over the bottom-right of the viewport,
+        // and anything pinned to the right edge scrolls underneath it.
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-nowrap">
+          {actions}
+        </div>
       )}
     </div>
   );

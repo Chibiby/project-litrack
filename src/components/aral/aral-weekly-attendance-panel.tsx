@@ -257,8 +257,8 @@ export function AralWeeklyAttendancePanel({
           value={pickerWeek}
           onNavigate={navigateTo}
           label="Select Week"
-          prevLabel="Previous Week"
-          nextLabel="Next Week"
+          prevLabel="Previous week"
+          nextLabel="Next week"
           options={weekOptions}
           snapToMonday
           pending={loading}
@@ -288,6 +288,7 @@ export function AralWeeklyAttendancePanel({
                     disabled={actionsLocked}
                     loading={savePending}
                     loadingText="Saving…"
+                    className="h-11 sm:h-9"
                   >
                     <Save className="h-4 w-4" aria-hidden />
                     Save

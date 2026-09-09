@@ -208,29 +208,40 @@ export function AralGridSkeleton({
         <div className={CARD_HEADER} data-slot="aral-grid-header">
           {header === "week-nav" ? (
             <>
-              {/* Icon-only prev/next, the week dropdown between them. */}
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <Skeleton className="h-9 w-full max-w-full rounded-lg sm:w-[19rem]" />
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <div className="ml-auto flex items-center gap-2">
-                <Skeleton className="h-9 w-[92px] rounded-lg" />
-                <Skeleton className="h-9 w-[205px] rounded-lg" />
+              {/* Period dropdown, then the two step buttons — a phone stacks
+                  them the way `AralDateNav` does, so nothing shifts on hydrate. */}
+              <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-9" />
+                {/* `sm:order-none` because at `sm` the wrapper is `contents` and
+                    this becomes a flex item of the row, where `order-first`
+                    would jump it ahead of the step button. */}
+                <Skeleton className="order-first col-span-2 h-11 w-full rounded-lg sm:order-none sm:h-9 sm:w-[21rem]" />
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-9" />
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+                <Skeleton className="h-11 w-[92px] rounded-lg sm:h-9" />
+                <Skeleton className="h-11 w-[130px] rounded-lg sm:h-10" />
+                <Skeleton className="h-11 w-[76px] rounded-lg sm:h-9" />
               </div>
             </>
           ) : null}
 
           {header === "month-nav" ? (
             <>
-              {/* Icon-only prev/next — this nav omits `navLabels`. */}
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <Skeleton className="h-9 w-[205px] max-w-full rounded-md" />
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <Skeleton className="h-9 w-[92px] rounded-lg" />
-              {/* Section and Gender facets; Section only when the grade has any. */}
-              <Skeleton className="h-9 w-[150px] rounded-lg" />
-              <Skeleton className="h-9 w-[150px] rounded-lg" />
-              <div className="ml-auto flex items-center gap-2">
-                <Skeleton className="h-9 w-[180px] rounded-lg" />
+              <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-9" />
+                <Skeleton className="order-first col-span-2 h-11 w-full rounded-lg sm:order-none sm:h-9 sm:w-[13rem]" />
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-9" />
+              </div>
+              {/* Filter, then the Section and Gender facets; Section only when
+                  the grade has any. */}
+              <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-[92px]" />
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-[150px]" />
+                <Skeleton className="h-11 w-full rounded-lg sm:h-9 sm:w-[150px]" />
+              </div>
+              <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+                <Skeleton className="h-11 w-[92px] rounded-lg sm:h-9 sm:w-[180px]" />
               </div>
             </>
           ) : null}

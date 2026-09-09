@@ -414,7 +414,7 @@ export function AralMonthlyReadingLevelPanel({
                 disabled={busy}
                 loading={savePending}
                 loadingText="Saving…"
-                className="bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400"
+                className="h-11 bg-violet-600 text-white hover:bg-violet-700 sm:h-9 dark:bg-violet-500 dark:hover:bg-violet-400"
               >
                 <Save className="h-4 w-4" aria-hidden />
                 Save
@@ -542,7 +542,7 @@ function FacetSelect({
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
-        className="h-9 w-auto min-w-[8rem] gap-1.5"
+        className="h-11 w-auto min-w-[8rem] gap-1.5 sm:h-9"
         aria-label={`Filter by ${name.toLowerCase()}`}
       >
         <span className="text-muted-foreground">{name}</span>

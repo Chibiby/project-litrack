@@ -867,7 +867,12 @@ export function BulkAttendanceActions({
       }}
     >
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className="h-11 sm:h-10"
+        >
           Bulk Actions
         </Button>
       </PopoverTrigger>

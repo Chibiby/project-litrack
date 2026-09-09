@@ -121,7 +121,10 @@ export function AralFilterPopover({
           type="button"
           variant="outline"
           size="sm"
-          className="relative"
+          // 44px on touch, back to the row's 36px from `sm` up. Width stays
+          // intrinsic: in the monthly sheet's mobile filter grid the cell
+          // stretches it, and in the weekly sheet's action row it should not.
+          className="relative h-11 sm:h-9"
           aria-label="Filter by grade and section"
         >
           <Filter className="h-4 w-4" aria-hidden />
