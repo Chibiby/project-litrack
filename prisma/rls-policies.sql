@@ -51,6 +51,14 @@ ALTER TABLE "UnlockGrant"          ENABLE ROW LEVEL SECURITY;
 -- tenant. Deny-all, same as everything else here.
 ALTER TABLE "SystemSetting"        ENABLE ROW LEVEL SECURITY;
 
+-- Chat. These hold free text one member of staff wrote for another, which is
+-- the most directly readable content in the database — not a code or an id, but
+-- sentences about named children. Deny-all, like everything else.
+ALTER TABLE "ChatChannel"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ChatMessage"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ChatMention"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ChatRead"             ENABLE ROW LEVEL SECURITY;
+
 -- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
 -- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
 -- never reaches it -- but it holds real teacher-to-grade assignments and Supabase grants

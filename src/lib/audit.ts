@@ -109,6 +109,13 @@ export const AUDIT_ACTIONS = {
    * is this costing and how often is it used", not "what did they ask".
    */
   ASSISTANT_AI_QUERY: "ASSISTANT_AI_QUERY",
+  /**
+   * A chat message was posted. The channel id, its kind and a mention count —
+   * never the body, which is a person's own words to a colleague.
+   */
+  CHAT_MESSAGE_SEND: "CHAT_MESSAGE_SEND",
+  /** A Super Admin opened a school's staff-room channel. Deduped like ADMIN_SCHOOL_VIEW. */
+  CHAT_ADMIN_VIEW: "CHAT_ADMIN_VIEW",
   /** A support ticket raised from the assistant. Ids and category only, never the body. */
   SUPPORT_TICKET_SUBMIT: "SUPPORT_TICKET_SUBMIT",
   SUPPORT_TICKET_RESOLVE: "SUPPORT_TICKET_RESOLVE",

@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { AssistantTicketForm } from "@/components/assistant/assistant-ticket-form";
 import { answerQuery, detectSmallTalk, type HelpMatch } from "@/lib/help/search";
 import { askAssistant } from "@/lib/actions/assistant";
+import { ChatThread } from "@/components/chat/chat-thread";
+import { getMyChatUnread } from "@/lib/actions/chat";
 import { fetchMyTickets, type MySupportTicket } from "@/lib/actions/support";
 import {
   SUPPORT_TICKET_STATUS_LABELS,
@@ -125,7 +127,10 @@ export function AssistantPanel({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<"chat" | "ticket">("chat");
+  /** Which room is on screen. The assistant is the default deliberately. */
+  const [view, setView] = useState<"assistant" | "school" | "admin">("assistant");
   const [recent, setRecent] = useState<MySupportTicket[] | null>(null);
+  const [unread, setUnread] = useState({ school: false, admin: false });
   const inputRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -225,9 +230,24 @@ export function AssistantPanel({
     };
   }, []);
 
+  // Which rooms have something waiting. Refreshed when the panel opens and when
+  // the reader leaves a room, which is when the answer can have changed.
   useEffect(() => {
-    if (active && mode === "chat") inputRef.current?.focus();
-  }, [active, mode]);
+    if (!canEscalate) return;
+    let cancelled = false;
+    void getMyChatUnread()
+      .then((result) => {
+        if (!cancelled && result.ok && result.data) setUnread(result.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canEscalate, view]);
+
+  useEffect(() => {
+    if (active && mode === "chat" && view === "assistant") inputRef.current?.focus();
+  }, [active, mode, view]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -278,7 +298,62 @@ export function AssistantPanel({
         </Button>
       </header>
 
-      {mode === "ticket" ? (
+      {/*
+        Three rooms behind one button. The assistant is first and is what opens,
+        because it is the one that answers immediately and at any hour; the other
+        two need another person to be awake. A Super Admin holds no school of
+        their own, so they get the assistant alone and read school chat from
+        their own admin pages instead.
+      */}
+      {canEscalate && mode !== "ticket" && (
+        <div
+          role="tablist"
+          aria-label="Assistant sections"
+          className="flex gap-1 border-b px-2 py-1.5"
+        >
+          {(
+            [
+              { id: "assistant", label: "Assistant", unread: false },
+              { id: "school", label: "School chat", unread: unread.school },
+              { id: "admin", label: "Ask admin", unread: unread.admin },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              type="button"
+              aria-selected={view === tab.id}
+              onClick={() => setView(tab.id)}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-colors",
+                view === tab.id
+                  ? "bg-violet-soft text-violet-soft-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {tab.label}
+              {tab.unread && view !== tab.id && (
+                <span
+                  className="size-1.5 rounded-full bg-violet"
+                  aria-label="Unread messages"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mode !== "ticket" && view === "school" ? (
+        <ChatThread
+          kind="SCHOOL"
+          emptyHint="This is your school's staff room. Everyone at your school can read it. Type @ to mention a colleague or a division admin."
+        />
+      ) : mode !== "ticket" && view === "admin" ? (
+        <ChatThread
+          kind="ADMIN_DIRECT"
+          emptyHint="A private line to the division admins. Only you and the admin team can read this thread — ask anything about the system here."
+        />
+      ) : mode === "ticket" ? (
         <div className="flex-1 overflow-y-auto p-4">
           <AssistantTicketForm
             pageUrl={pageUrl}

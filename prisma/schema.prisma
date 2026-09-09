@@ -392,6 +392,11 @@ enum NotificationType {
   SUPPORT_TICKET_SUBMITTED
   /// A support ticket the recipient raised was resolved or declined.
   SUPPORT_TICKET_RESOLVED
+  /// The recipient was @mentioned in a chat channel.
+  CHAT_MENTION
+  /// A school member opened or added to their private line to the admin team.
+  /// Recipients are the Super Admins.
+  CHAT_DIRECT_MESSAGE
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -473,6 +478,7 @@ model School {
   reports        Report[]
   supportTickets SupportTicket[]
   unlockGrants   UnlockGrant[]
+  chatChannels   ChatChannel[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -583,6 +589,10 @@ model User {
   notifications          Notification[]       @relation("NotificationRecipient")
   notificationsCaused    Notification[]       @relation("NotificationActor")
   reports                Report[]             @relation("ReportCreator")
+  chatChannels           ChatChannel[]        @relation("ChatChannelMember")
+  chatMessages           ChatMessage[]        @relation("ChatMessageAuthor")
+  chatMentions           ChatMention[]        @relation("ChatMentionUser")
+  chatReads              ChatRead[]           @relation("ChatReadUser")
   supportTickets         SupportTicket[]      @relation("SupportTicketRequester")
   supportTicketsResolved SupportTicket[]      @relation("SupportTicketResolver")
   unlockGrants           UnlockGrant[]        @relation("UnlockGrantUser")
@@ -1111,6 +1121,9 @@ model Notification {
   /// learner-specific by design. `SetNull` so deleting a ticket leaves the
   /// notification readable.
   ticketId    String?
+  /// Set on the `CHAT_*` types. `SetNull` so deleting a channel leaves the
+  /// notification readable rather than removing the recipient's history.
+  channelId   String?
   readAt      DateTime?
   createdAt   DateTime         @default(now())
 
@@ -1118,6 +1131,7 @@ model Notification {
   recipient User           @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   actor     User?          @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
   ticket    SupportTicket? @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
+  channel   ChatChannel?   @relation("NotificationChatChannel", fields: [channelId], references: [id], onDelete: SetNull)
 
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
@@ -1334,4 +1348,95 @@ model UnlockGrant {
   /// R6 #3/#5. FK lookup sides.
   @@index([grantedById])
   @@index([revokedById])
+}
+
+/// Who a chat channel is between.
+///
+/// `SCHOOL` is the staff room: every active member of one school, plus any
+/// division admin who visits. `ADMIN_DIRECT` is one member's private line to the
+/// admin team — not to a named admin, because there are several and any of them
+/// should be able to answer. Which one did is visible from the message's author.
+enum ChatChannelKind {
+  SCHOOL
+  ADMIN_DIRECT
+}
+
+/// A conversation. One `SCHOOL` row per school and one `ADMIN_DIRECT` row per
+/// member, both enforced by partial unique indexes in SQL — Prisma's schema
+/// language cannot express a uniqueness that applies to only some rows, and
+/// without them a double-submit creates a second channel and splits a
+/// conversation in half. See the migration.
+model ChatChannel {
+  id       String          @id @default(uuid())
+  schoolId String
+  kind     ChatChannelKind
+  /// `ADMIN_DIRECT` only: the school-side person who owns the thread. Null on a
+  /// `SCHOOL` row, which belongs to everyone in the school.
+  memberId String?
+
+  /// Denormalised from the newest message, so the channel list can order and
+  /// preview without loading messages. Written in the same transaction as the
+  /// message it describes.
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  member        User?          @relation("ChatChannelMember", fields: [memberId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+  reads         ChatRead[]
+  notifications Notification[] @relation("NotificationChatChannel")
+
+  /// The channel list: a school's threads, most recently active first.
+  @@index([schoolId, kind, lastMessageAt])
+  @@index([memberId])
+}
+
+/// One message. Soft-deleted like everything else here, so a removed message
+/// leaves the thread readable rather than renumbering it.
+model ChatMessage {
+  id        String    @id @default(uuid())
+  channelId String
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  channel  ChatChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author   User          @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  mentions ChatMention[]
+
+  /// The transcript read: one channel, oldest to newest.
+  @@index([channelId, createdAt])
+  @@index([authorId])
+}
+
+/// A resolved @mention. Stored rather than re-parsed on read: the body keeps the
+/// text the author typed, and a renamed or deactivated account must not silently
+/// stop being mentioned in a message that already named them.
+model ChatMention {
+  id        String @id @default(uuid())
+  messageId String
+  userId    String
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation("ChatMentionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+/// How far one person has read one channel.
+///
+/// A timestamp rather than a per-message row: unread is "newer than this", which
+/// is one comparison and does not grow with the transcript.
+model ChatRead {
+  channelId  String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User        @relation("ChatReadUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([userId])
 }

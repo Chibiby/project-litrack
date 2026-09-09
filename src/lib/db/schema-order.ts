@@ -73,6 +73,13 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // After SupportTicket — UnlockGrant.ticketId and Notification.ticketId both
   // point at it.
   { model: "UnlockGrant", delegate: "unlockGrant", operational: true },
+  // The chat tables come before Notification, which points at ChatChannel, and
+  // after User and School, which they point at. Within themselves the order is
+  // the obvious one: a channel holds messages, a message holds mentions.
+  { model: "ChatChannel", delegate: "chatChannel", operational: true },
+  { model: "ChatMessage", delegate: "chatMessage", operational: true },
+  { model: "ChatMention", delegate: "chatMention", operational: true },
+  { model: "ChatRead", delegate: "chatRead", operational: true },
   { model: "Notification", delegate: "notification", operational: true },
   { model: "AuditLog", delegate: "auditLog", operational: true },
 ];

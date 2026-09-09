@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { geminiConfigured } from "@/lib/assistant/gemini";
+import { getChatNotifications } from "@/lib/chat/notifications";
 
 // Force dynamic so Next doesn't try to statically prerender these auth-gated
 // pages at build time, when Supabase/DATABASE_URL env may not be reachable.
@@ -26,6 +27,7 @@ export default async function AdminLayout({
         role={user.role}
         userName={user.fullName || user.email}
         aiEnabled={geminiConfigured()}
+        notifications={await getChatNotifications(user)}
       >
         {children}
       </RoleShell>
