@@ -17,11 +17,20 @@ const buttonVariants = cva(
         ghost: "hover:bg-muted hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // Every size carries a 44px floor below `sm` and its authored height from
+      // `sm` up. A phone is touched, not clicked: 36px is under the WCAG 2.5.5
+      // target size and it shows — the ARAL toolbars were the visible case, but
+      // the same 36px button is in every table row, dialog and filter bar in the
+      // app. Putting the floor here rather than per component keeps one rule in
+      // one place, and desktop and tablet render exactly as they did.
+      //
+      // A component that sets its own `h-*` still wins: `cn` merges className
+      // last, so an explicitly sized button is unaffected.
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-lg px-3",
+        default: "h-11 px-4 py-2 sm:h-10",
+        sm: "h-11 rounded-lg px-3 sm:h-9",
         lg: "h-11 rounded-lg px-8",
-        icon: "h-10 w-10",
+        icon: "size-11 sm:size-10",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

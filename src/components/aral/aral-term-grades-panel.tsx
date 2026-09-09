@@ -279,12 +279,15 @@ export function AralTermGradesPanel({
                 }
               }}
               placeholder="Search learner…"
-              className="h-9 pl-9"
+              className="h-11 pl-9 sm:h-9"
               aria-label="Search learners by name"
             />
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          {/* Two columns on a phone, matching the week and month sheets: the
+              assistant button floats over the bottom-right of the viewport, and
+              an action pinned to the right edge scrolls underneath it. */}
+          <div className="grid w-full grid-cols-2 items-center gap-2 sm:ml-auto sm:flex sm:w-auto">
             <Button
               type="button"
               size="sm"
@@ -303,7 +306,10 @@ export function AralTermGradesPanel({
                 onClick={() => formRef.current?.save()}
                 loading={savePending}
                 loadingText="Saving…"
-                className="bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400"
+                // `order-first` on a phone only: in the two-column row the
+                // second cell's right edge sits under the floating assistant
+                // button, and the primary action is the one that must not.
+                className="order-first bg-violet-600 text-white hover:bg-violet-700 sm:order-none dark:bg-violet-500 dark:hover:bg-violet-400"
               >
                 <Save className="h-4 w-4" aria-hidden />
                 Save Grades
