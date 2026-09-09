@@ -24,3 +24,13 @@ prisma/migrations/dev.db*
 
 # Impeccable design review captures (local evidence, not source)
 .impeccable/review/
+
+# Per-machine agent tooling, not project source. `.claude/agents/` and the one
+# committed skill are shared and stay tracked; everything else under here is
+# whatever this particular machine happens to have installed, and `worktrees/`
+# holds live git worktrees that must never be committed at all.
+.claude/worktrees/
+.claude/skills/*
+!.claude/skills/orchestrator/
+.agents/
+skills-lock.json
