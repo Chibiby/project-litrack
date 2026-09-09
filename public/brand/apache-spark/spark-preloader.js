@@ -2,7 +2,10 @@
    public/Apache Spark Brand Animation/brand/web/. Only change from the
    original: SANS/MONO resolve the app's next/font variables first, so the
    lockup renders in real Archivo and IBM Plex Mono instead of the fallbacks.
-   Re-apply that edit if this file is refreshed from the kit.
+   Second local change: the timeline advances on clamped frame deltas rather
+   than the wall clock, so a main thread blocked by hydration or a slow route
+   cannot fast-forward (visibly cut short) the draw.
+   Re-apply both edits if this file is refreshed from the kit.
    Responsive by construction: guides span the viewport, the lockup scales in vmin.
    Usage:  <script src="spark-preloader.js" data-once="session"></script>
    API:    SparkPreloader.play()   replay on demand
@@ -13,6 +16,13 @@
   var MONO = "var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, monospace";
   var TAGS = ["SOFTWARE", "SYSTEMS", "NETWORKS", "INFRASTRUCTURE"];
   var TOTAL = 3.0, LOCATE = 0.0, DRAFT = 0.62, SET = 1.42, PRINT = 2.5, MIN_HOLD = 1.1, HOLD_CAP = 4.0;
+  /* Longest slice of wall time one frame may add to the timeline. The page
+     loading behind the overlay blocks the main thread in bursts; without this
+     clamp the next frame reads a large elapsed time and jumps the draw ahead. */
+  var MAX_FRAME_MS = 100;
+  /* Hard ceiling on wall time under the overlay. Higher than the old
+     (TOTAL + HOLD_CAP) budget because a clamped timeline can outlast it. */
+  var MAX_WALL_MS = (TOTAL + HOLD_CAP) * 1000 + 6000;
 
   var eOutQuart = function (t) { return 1 - Math.pow(1 - t, 4); };
   var eOutCubic = function (t) { return 1 - Math.pow(1 - t, 3); };
@@ -177,10 +187,13 @@
 
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var resolve, done = new Promise(function (r) { resolve = r; });
-    /* wall clock + hard guard: a throttled or backgrounded tab must never be
-       left under the overlay waiting for animation frames that don't come */
-    var t0 = (window.performance && performance.now ? performance.now() : Date.now());
-    var guard = setTimeout(finish, (TOTAL + HOLD_CAP) * 1000 + 1500);
+    /* hard guard: a throttled or backgrounded tab must never be left under the
+       overlay waiting for animation frames that don't come */
+    function nowMs() {
+      return window.performance && performance.now ? performance.now() : Date.now();
+    }
+    var t0 = nowMs();
+    var guard = setTimeout(finish, MAX_WALL_MS);
 
     function finish() {
       if (!P.root.isConnected) return;
@@ -253,40 +266,45 @@
     /* The sequence always runs 0 → PRINT, so the lockup is fully drawn and
        readable before anything lifts. At PRINT it HOLDS on that finished frame
        until the page has loaded (or HOLD_CAP passes), then prints and reveals.
-       A click or keypress ends the hold early; it can never truncate the draw. */
+       A click or keypress ends the hold early; it can never truncate the draw.
+
+       `clock` is animation time, accumulated from per-frame deltas clamped to
+       MAX_FRAME_MS — not wall time. That is the point: while the page hydrates
+       behind the overlay the main thread stalls for hundreds of milliseconds at
+       a stretch, and a wall-clock timeline resumed several keyframes further on,
+       so the draw appeared to cut short. Clamped deltas spend stalled time on
+       nothing, so every stage of the draw still renders. */
     var pageReady = (document.readyState === "complete");
-    var holdMs = 0, heldBefore = 0, holdStart = null;
+    var clock = 0, held = 0, last = t0;
     if (!pageReady) {
       window.addEventListener("load", function () { pageReady = true; });
     }
     function skip() {
-      if (holdStart !== null) { pageReady = true; heldBefore = MIN_HOLD * 1000; }
+      if (clock >= PRINT * 1000) { pageReady = true; held = MIN_HOLD * 1000; }
     }
     P.root.addEventListener("pointerdown", skip);
     window.addEventListener("keydown", skip);
 
     function tick() {
-      var now = (window.performance && performance.now ? performance.now() : Date.now());
-      /* holdMs is frozen time: it grows only while we're waiting at PRINT,
-         so the clock resumes exactly where it paused once the page is ready */
-      var t = (now - t0 - holdMs) / 1000;
+      var now = nowMs();
+      var dt = now - last;
+      last = now;
+      if (!(dt > 0)) dt = 0;
+      if (dt > MAX_FRAME_MS) dt = MAX_FRAME_MS;
 
-      if (t >= PRINT && (!pageReady || heldBefore + (holdStart === null ? 0 : now - holdStart) < MIN_HOLD * 1000)) {
-        if (holdStart === null) holdStart = now;
-        if (now - holdStart >= HOLD_CAP * 1000) pageReady = true;
-        else {
-          holdMs = heldBefore + (now - holdStart);
-          frame(PRINT);
-          requestAnimationFrame(tick);
-          return;
-        }
-      }
-      if (holdStart !== null) {
-        holdMs = heldBefore + (now - holdStart);
-        heldBefore = holdMs;
-        holdStart = null;
+      /* Hold on the finished frame: waiting time goes to `held`, never to
+         `clock`, so the print resumes exactly where the draw paused. */
+      if (clock + dt >= PRINT * 1000 && (!pageReady || held < MIN_HOLD * 1000)) {
+        held += clock + dt - PRINT * 1000;
+        clock = PRINT * 1000;
+        if (held >= HOLD_CAP * 1000) pageReady = true;
+        frame(PRINT);
+        requestAnimationFrame(tick);
+        return;
       }
 
+      clock += dt;
+      var t = clock / 1000;
       frame(Math.min(t, TOTAL));
       if (t < TOTAL) requestAnimationFrame(tick);
       else finish();
