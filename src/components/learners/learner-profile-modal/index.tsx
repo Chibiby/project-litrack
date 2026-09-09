@@ -324,6 +324,7 @@ export function LearnerProfileModal({
                 lastName: learner.lastName,
                 age: learner.age,
                 gender: learner.gender,
+                nutritionalStatus: learner.nutritionalStatus,
                 ethnicity: learner.ethnicity,
                 ethnicityOther: learner.ethnicityOther,
                 englishReadingProfile: learner.englishReadingProfile,

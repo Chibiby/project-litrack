@@ -21,6 +21,8 @@ const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
 const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
 const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
 
+const NUTRITIONAL_STATUS = ["SEVERELY_WASTED", "WASTED", "NORMAL", "OBESE"] as const;
+
 const ETHNICITY = [
   "BISAYA", "ILONGGO", "BLAAN", "TAGAKAOLO", "TBOLI", "BADJAO", "MARANAO",
   "TAUSOG", "MAGUINDANAON", "ILOCANO", "TAGALOG", "FOREIGN", "OTHER",
@@ -158,6 +160,12 @@ const sectionAFields = {
   lastName: nonEmpty("Last name required").max(80),
   age: z.coerce.number().int().min(3).max(25),
   gender: z.enum(["MALE", "FEMALE"]),
+  // Required here, nullable in the database: learners rostered before this field
+  // existed — and every CSV import, which does not collect it — have none, and
+  // an edit of such a learner asks the teacher to fill it in.
+  nutritionalStatus: z.enum(NUTRITIONAL_STATUS, {
+    errorMap: () => ({ message: "Nutritional status required" }),
+  }),
   ethnicity: optionalEnum(ETHNICITY),
   ethnicityOther: optionalEthnicityOther,
   englishReadingProfile: z.enum(READING_PROFILE),

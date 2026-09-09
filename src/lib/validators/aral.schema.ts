@@ -17,6 +17,33 @@ export const aralProfileSchema = z
       "OTHER",
     ]),
     absenteeismOtherReason: optionalText(500),
+    // Which reasons apply, alongside how often and the free-text specify field.
+    // Optional: profiles saved before this list existed hold none, and a teacher
+    // editing one is not forced to invent a reason to save the rest of the form.
+    absenteeismReasons: z
+      .array(
+        z.enum([
+          "FAMILY_EMERGENCY",
+          "FINANCIAL_DIFFICULTIES",
+          "LACK_OF_TRANSPORTATION",
+          "DISTANCE_FROM_SCHOOL",
+          "HOUSEHOLD_CHORES",
+          "CARING_FOR_FAMILY",
+          "BAD_WEATHER",
+          "ACADEMIC_DIFFICULTIES",
+          "LACK_OF_INTEREST",
+          "BULLYING",
+          "SCHOOL_CONCERNS",
+          "GADGET_SOCIAL_MEDIA",
+          "LIVELIHOOD_WORK",
+          "FAMILY_RELOCATION",
+          "SAFETY_CONCERNS",
+          "MEDICAL_APPOINTMENTS",
+          "COMPETITIONS_ACTIVITIES",
+          "LACK_OF_SUPPLIES",
+        ])
+      )
+      .default([]),
     letterRecognition: z.enum(["ALL_EASY", "CONFUSES_SIMILAR", "STRUGGLES_RECALL", "NA"]),
     letterSoundCorrespondence: z.enum(["ACCURATE", "INCONSISTENT", "UNABLE", "NA"]),
     wordRecognition: z.enum([

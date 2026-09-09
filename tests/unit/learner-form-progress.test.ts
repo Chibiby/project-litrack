@@ -42,6 +42,7 @@ const COMPLETE: FormValues = {
   lastName: "Santos",
   age: "10",
   gender: "FEMALE",
+  nutritionalStatus: "NORMAL",
   englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
   filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
   parentEducation: "COLLEGE_GRADUATE",
@@ -52,6 +53,7 @@ const IDENTITY_FILLED: FormValues = {
   lastName: "Santos",
   age: "10",
   gender: "FEMALE",
+  nutritionalStatus: "NORMAL",
 };
 
 const sectionByKey = (key: string) => {
@@ -96,12 +98,12 @@ describe("LEARNER_FORM_SECTIONS", () => {
 describe("formProgress — the completion bar", () => {
   it("counts required fields, not sections", () => {
     const empty = formProgress(LEARNER_FORM_SECTIONS, {});
-    expect(empty).toMatchObject({ filled: 0, total: 7, percent: 0 });
+    expect(empty).toMatchObject({ filled: 0, total: 8, percent: 0 });
 
-    // Four of seven names, in one of four sections. By section this would read
-    // 25%; by field it reads 57%, which is what the teacher has actually done.
+    // Five of eight names, in one of four sections. By section this would read
+    // 25%; by field it reads 63%, which is what the teacher has actually done.
     const partial = formProgress(LEARNER_FORM_SECTIONS, IDENTITY_FILLED);
-    expect(partial).toMatchObject({ filled: 4, total: 7, percent: 57 });
+    expect(partial).toMatchObject({ filled: 5, total: 8, percent: 63 });
     expect(partial.incomplete.map((s) => s.key)).toEqual([
       "reading",
       "household",
@@ -110,7 +112,7 @@ describe("formProgress — the completion bar", () => {
 
   it("is complete exactly when the server's requirements are met", () => {
     const done = formProgress(LEARNER_FORM_SECTIONS, COMPLETE);
-    expect(done).toMatchObject({ filled: 7, total: 7, percent: 100 });
+    expect(done).toMatchObject({ filled: 8, total: 8, percent: 100 });
     expect(done.complete).toBe(true);
     expect(done.incomplete).toEqual([]);
   });
@@ -134,7 +136,7 @@ describe("formProgress — the completion bar", () => {
     expect(after.filled).toBe(before.filled);
     expect(after.total).toBe(before.total + 1);
     expect(after.percent).toBeLessThan(before.percent);
-    expect(after.percent).toBe(50);
+    expect(after.percent).toBe(56);
     expect(after.incomplete.map((s) => s.key)).toContain("identity");
 
     const specified = formProgress(LEARNER_FORM_SECTIONS, {
@@ -154,7 +156,7 @@ describe("formProgress — the completion bar", () => {
 
     expect(done.complete).toBe(true);
     expect(transferring.complete).toBe(false);
-    expect(transferring).toMatchObject({ filled: 7, total: 8, percent: 88 });
+    expect(transferring).toMatchObject({ filled: 8, total: 9, percent: 89 });
     expect(transferring.incomplete.map((s) => s.key)).toEqual(["background"]);
 
     expect(
@@ -171,7 +173,7 @@ describe("sectionProgress — the per-section tick", () => {
   it("ticks a section only once every name it requires is filled", () => {
     const identity = sectionByKey("identity");
     expect(sectionProgress(identity, {})).toMatchObject({
-      required: 4,
+      required: 5,
       filled: 0,
       complete: false,
       optional: false,
@@ -180,6 +182,7 @@ describe("sectionProgress — the per-section tick", () => {
       "lastName",
       "age",
       "gender",
+      "nutritionalStatus",
     ]);
     expect(sectionProgress(identity, IDENTITY_FILLED).complete).toBe(true);
   });

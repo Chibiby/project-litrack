@@ -267,6 +267,14 @@ export const GOV_BENEFIT_LABELS = {
   IPS: "IPs",
 } as const;
 
+/** DepEd nutritional status bands recorded on the learner's initial profile. */
+export const NUTRITIONAL_STATUS_LABELS = {
+  SEVERELY_WASTED: "Severely Wasted",
+  WASTED: "Wasted",
+  NORMAL: "Normal",
+  OBESE: "Obese",
+} as const;
+
 export const ETHNICITY_LABELS = {
   BISAYA: "Bisaya",
   ILONGGO: "Ilonggo",
@@ -328,6 +336,35 @@ export const ABSENTEEISM_LABELS = {
   MORE_THAN_FIVE_PER_MONTH: "More than 5 days per month",
   WEEKLY: "Consistently absent every week",
   OTHER: "Other (specify reason)",
+} as const;
+
+/**
+ * Why a learner misses school. One list, two consumers: the ARAL profile's
+ * Reasons of Absenteeism checkboxes, and the weekly attendance grid's per-day
+ * reason picker — which stores the LABEL, not the key, in `Attendance.notes`.
+ * Renaming a label therefore changes how already-stored notes read back: the
+ * grid falls back to "Other" for a note it no longer recognises, keeping the
+ * text but losing the label. Add values freely; rename with that in mind.
+ */
+export const ABSENTEEISM_REASON_LABELS = {
+  FAMILY_EMERGENCY: "Family emergency",
+  FINANCIAL_DIFFICULTIES: "Financial difficulties",
+  LACK_OF_TRANSPORTATION: "Lack of transportation/fare",
+  DISTANCE_FROM_SCHOOL: "Distance from school",
+  HOUSEHOLD_CHORES: "Household chores/responsibilities",
+  CARING_FOR_FAMILY: "Caring for siblings or family members",
+  BAD_WEATHER: "Bad weather or natural disasters",
+  ACADEMIC_DIFFICULTIES: "Academic difficulties",
+  LACK_OF_INTEREST: "Lack of interest or motivation",
+  BULLYING: "Bullying or peer-related concerns",
+  SCHOOL_CONCERNS: "School-related concerns",
+  GADGET_SOCIAL_MEDIA: "Gadget/social media use",
+  LIVELIHOOD_WORK: "Participation in livelihood/work",
+  FAMILY_RELOCATION: "Family relocation",
+  SAFETY_CONCERNS: "Safety or protection concerns",
+  MEDICAL_APPOINTMENTS: "Medical/dental appointments",
+  COMPETITIONS_ACTIVITIES: "Participation in competitions or other activities",
+  LACK_OF_SUPPLIES: "Lack of school supplies/learning materials",
 } as const;
 
 export const LETTER_RECOGNITION_LABELS = {

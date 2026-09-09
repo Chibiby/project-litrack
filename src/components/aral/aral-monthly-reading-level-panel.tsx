@@ -407,7 +407,7 @@ export function AralMonthlyReadingLevelPanel({
                 className="bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400"
               >
                 <Save className="h-4 w-4" aria-hidden />
-                Save reading levels
+                Save
               </Button>
             ) : null
           }

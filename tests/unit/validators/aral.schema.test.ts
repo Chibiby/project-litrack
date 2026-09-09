@@ -24,6 +24,36 @@ describe("aralProfileSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("takes the Reasons of Absenteeism multi-select alongside the free text", () => {
+    const withReasons = aralProfileSchema.safeParse({
+      ...validFull,
+      absenteeismReasons: ["FAMILY_EMERGENCY", "BAD_WEATHER"],
+    });
+    expect(withReasons.success).toBe(true);
+    if (withReasons.success) {
+      expect(withReasons.data.absenteeismReasons).toEqual([
+        "FAMILY_EMERGENCY",
+        "BAD_WEATHER",
+      ]);
+      // The list is a companion to the free text, not a replacement: a payload
+      // carrying both keeps both.
+      expect(withReasons.data.absenteeismOtherReason).toBe("Illness");
+    }
+  });
+
+  it("defaults the reasons to an empty list and rejects an unknown one", () => {
+    const none = aralProfileSchema.safeParse(validFull);
+    expect(none.success).toBe(true);
+    if (none.success) expect(none.data.absenteeismReasons).toEqual([]);
+
+    expect(
+      aralProfileSchema.safeParse({
+        ...validFull,
+        absenteeismReasons: ["OVERSLEPT"],
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects invalid values for each required enum", () => {
     const cases: Array<{ field: string; value: string }> = [
       { field: "absenteeismFrequency", value: "DAILY" },

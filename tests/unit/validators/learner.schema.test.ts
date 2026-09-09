@@ -19,6 +19,7 @@ const validBase = {
   lastName: "Santos",
   age: 10,
   gender: "FEMALE" as const,
+  nutritionalStatus: "NORMAL" as const,
   englishReadingProfile: "INSTRUCTIONAL_DEVELOPING" as const,
   filipinoReadingProfile: "INDEPENDENT_GRADE_READY" as const,
   parentEducation: "SECONDARY_GRADUATE" as const,
@@ -98,6 +99,24 @@ describe("learnerCreateSchema", () => {
     expect(learnerCreateSchema.safeParse({ ...validBase, age: 26 }).success).toBe(
       false
     );
+  });
+
+  it("requires a nutritional status, and only one of the four bands", () => {
+    const { nutritionalStatus: _omitted, ...withoutStatus } = validBase;
+    expect(learnerCreateSchema.safeParse(withoutStatus).success).toBe(false);
+
+    expect(
+      learnerCreateSchema.safeParse({ ...validBase, nutritionalStatus: "THIN" })
+        .success
+    ).toBe(false);
+
+    for (const band of ["SEVERELY_WASTED", "WASTED", "NORMAL", "OBESE"]) {
+      expect(
+        learnerCreateSchema.safeParse({ ...validBase, nutritionalStatus: band })
+          .success,
+        band
+      ).toBe(true);
+    }
   });
 
   it("rejects invalid gender", () => {
@@ -248,6 +267,7 @@ describe("learnerUpdateSchema", () => {
     lastName: "Santos",
     age: 10,
     gender: "FEMALE" as const,
+    nutritionalStatus: "NORMAL" as const,
     englishReadingProfile: "INSTRUCTIONAL_DEVELOPING" as const,
     filipinoReadingProfile: "INDEPENDENT_GRADE_READY" as const,
     parentEducation: "SECONDARY_GRADUATE" as const,

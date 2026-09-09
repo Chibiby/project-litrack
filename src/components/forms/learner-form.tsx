@@ -34,6 +34,7 @@ import {
   DISTANCE_LABELS,
   TRANSFER_LABELS,
   ETHNICITY_LABELS,
+  NUTRITIONAL_STATUS_LABELS,
   isEarlyGradeReadingBand,
   readingProfileLabelsForGradeType,
   toOptions,
@@ -77,6 +78,7 @@ export type LearnerFormDefaults = {
   lastName?: string;
   age?: number;
   gender?: string;
+  nutritionalStatus?: string | null;
   ethnicity?: string | null;
   ethnicityOther?: string | null;
   englishReadingProfile?: string;
@@ -137,11 +139,11 @@ export const LEARNER_FORM_SECTIONS: readonly FormSectionDef[] = [
   {
     key: "identity",
     title: "Identity & placement",
-    hint: "Name, age, gender, and where this learner sits",
+    hint: "Name, age, gender, nutritional status, and where this learner sits",
     requiredFields: (values: FormValues) =>
       values.ethnicity === "OTHER"
-        ? ["firstName", "lastName", "age", "gender", "ethnicityOther"]
-        : ["firstName", "lastName", "age", "gender"],
+        ? ["firstName", "lastName", "age", "gender", "nutritionalStatus", "ethnicityOther"]
+        : ["firstName", "lastName", "age", "gender", "nutritionalStatus"],
   },
   {
     key: "reading",
@@ -401,6 +403,15 @@ export function LearnerForm({
               defaultValue={defaultValues?.gender}
             />
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Nutritional Status *</p>
+          <FieldRadioGroup
+            name="nutritionalStatus"
+            options={toOptions(NUTRITIONAL_STATUS_LABELS)}
+            defaultValue={defaultValues?.nutritionalStatus ?? undefined}
+          />
         </div>
 
         <div className="space-y-1">

@@ -20,6 +20,7 @@ import {
   GRADE_LEVEL_LABELS,
   GENDER_LABELS,
   ETHNICITY_LABELS,
+  NUTRITIONAL_STATUS_LABELS,
   PARENT_EDUCATION_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
   TRANSPORTATION_LABELS,
@@ -27,6 +28,7 @@ import {
   TRANSFER_LABELS,
   ATTENDANCE_STATUS_LABELS,
   ABSENTEEISM_LABELS,
+  ABSENTEEISM_REASON_LABELS,
   LETTER_RECOGNITION_LABELS,
   LETTER_SOUND_LABELS,
   WORD_RECOGNITION_LABELS,
@@ -96,6 +98,7 @@ export default async function LearnerDetailPage({
       fullName: true,
       age: true,
       gender: true,
+      nutritionalStatus: true,
       ethnicity: true,
       ethnicityOther: true,
       gradeLevelId: true,
@@ -155,6 +158,7 @@ export default async function LearnerDetailPage({
         select: {
           absenteeismFrequency: true,
           absenteeismOtherReason: true,
+          absenteeismReasons: true,
           letterRecognition: true,
           letterSoundCorrespondence: true,
           wordRecognition: true,
@@ -245,6 +249,14 @@ export default async function LearnerDetailPage({
               <p className="text-muted-foreground">Age / Gender</p>
               <p className="font-medium">
                 {learner.age} · {GENDER_LABELS[learner.gender]}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Nutritional status</p>
+              <p className="font-medium">
+                {learner.nutritionalStatus
+                  ? NUTRITIONAL_STATUS_LABELS[learner.nutritionalStatus]
+                  : "—"}
               </p>
             </div>
             <div>
@@ -424,6 +436,18 @@ export default async function LearnerDetailPage({
                             {profile.absenteeismOtherReason}
                           </p>
                         )}
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">
+                          Reasons of absenteeism
+                        </p>
+                        <p className="font-medium">
+                          {profile.absenteeismReasons.length > 0
+                            ? profile.absenteeismReasons
+                                .map((r) => ABSENTEEISM_REASON_LABELS[r])
+                                .join("; ")
+                            : "—"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Letter recognition</p>

@@ -12,6 +12,7 @@ import {
   GENDER_LABELS,
   GOV_BENEFIT_LABELS,
   GRADE_LEVEL_LABELS,
+  NUTRITIONAL_STATUS_LABELS,
   PARENT_EDUCATION_LABELS,
   TRANSFER_LABELS,
   TRANSPORTATION_LABELS,
@@ -136,6 +137,9 @@ export function ProfilePanel({ learner }: { learner: LearnerProfileData }) {
               {labelOf(GENDER_LABELS, learner.gender)}
             </Field>
             <Field label="Age">{learner.age}</Field>
+            <Field label="Nutritional status">
+              {labelOf(NUTRITIONAL_STATUS_LABELS, learner.nutritionalStatus)}
+            </Field>
             <Field label="Parent's education">
               {labelOf(PARENT_EDUCATION_LABELS, learner.parentEducation)}
             </Field>

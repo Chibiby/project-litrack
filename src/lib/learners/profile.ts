@@ -49,6 +49,7 @@ export type ProfileReadingLevel = {
 export type ProfileAralProfile = {
   absenteeismFrequency: string | null;
   absenteeismOtherReason: string | null;
+  absenteeismReasons: string[];
   letterRecognition: string | null;
   letterSoundCorrespondence: string | null;
   wordRecognition: string | null;
@@ -70,6 +71,7 @@ export type LearnerProfileData = {
   lastName: string;
   age: number;
   gender: string;
+  nutritionalStatus: string | null;
   ethnicity: string | null;
   ethnicityOther: string | null;
   englishReadingProfile: string;

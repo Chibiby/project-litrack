@@ -67,6 +67,16 @@ enum Gender {
   FEMALE
 }
 
+/// Section A. Nullable on Learner: rows created before this was collected have
+/// no value, and a default would make them claim an answer nobody gave. New
+/// creates and updates are required to supply one, enforced in Zod only.
+enum NutritionalStatus {
+  SEVERELY_WASTED
+  WASTED
+  NORMAL
+  OBESE
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -278,6 +288,29 @@ enum AbsenteeismFrequency {
   MORE_THAN_FIVE_PER_MONTH
   WEEKLY
   OTHER
+}
+
+/// Structured companion to AbsenteeismFrequency. It does not replace
+/// absenteeismOtherReason, which stays the free-text field.
+enum AbsenteeismReason {
+  FAMILY_EMERGENCY
+  FINANCIAL_DIFFICULTIES
+  LACK_OF_TRANSPORTATION
+  DISTANCE_FROM_SCHOOL
+  HOUSEHOLD_CHORES
+  CARING_FOR_FAMILY
+  BAD_WEATHER
+  ACADEMIC_DIFFICULTIES
+  LACK_OF_INTEREST
+  BULLYING
+  SCHOOL_CONCERNS
+  GADGET_SOCIAL_MEDIA
+  LIVELIHOOD_WORK
+  FAMILY_RELOCATION
+  SAFETY_CONCERNS
+  MEDICAL_APPOINTMENTS
+  COMPETITIONS_ACTIVITIES
+  LACK_OF_SUPPLIES
 }
 
 enum LetterRecognition {
@@ -778,6 +811,10 @@ model Learner {
   age        Int
   gender     Gender
 
+  // Nullable: learners rostered before nutritional status was collected have
+  // none. Required on create/update in Zod, not in the database.
+  nutritionalStatus NutritionalStatus?
+
   // Nullable: learners rostered before ethnicity was collected have none.
   ethnicity      Ethnicity?
   // Free text only when ethnicity = OTHER.
@@ -909,6 +946,8 @@ model AralProfile {
   // C. Reading Behavior
   absenteeismFrequency      AbsenteeismFrequency
   absenteeismOtherReason    String?
+  /// Multi-select. Profiles written before this existed read back as [].
+  absenteeismReasons        AbsenteeismReason[]
   letterRecognition         LetterRecognition
   letterSoundCorrespondence LetterSoundCorrespondence
   wordRecognition           WordRecognition

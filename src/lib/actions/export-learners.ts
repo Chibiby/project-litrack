@@ -7,6 +7,8 @@ import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   GRADE_LEVEL_LABELS,
   GENDER_LABELS,
+  NUTRITIONAL_STATUS_LABELS,
+  ABSENTEEISM_REASON_LABELS,
   PARENT_EDUCATION_LABELS,
   GOV_BENEFIT_LABELS,
   labelReadingProfile,
@@ -50,6 +52,7 @@ const learnerExportSelect = {
   filipinoReadingProfile: true,
   governmentBenefits: true,
   parentEducation: true,
+  nutritionalStatus: true,
   ethnicity: true,
   ethnicityOther: true,
   isAralLearner: true,
@@ -61,6 +64,7 @@ const learnerExportSelect = {
   aralProfile: {
     select: {
       absenteeismFrequency: true,
+      absenteeismReasons: true,
     },
   },
 } as const;
@@ -141,6 +145,7 @@ async function buildLearnersWorkbook(
     { header: "Last name", key: "lastName", width: 14 },
     { header: "Age", key: "age", width: 8 },
     { header: "Gender", key: "gender", width: 10 },
+    { header: "Nutritional status", key: "nutrition", width: 18 },
     { header: "Ethnicity", key: "ethnicity", width: 16 },
     { header: "Grade", key: "grade", width: 12 },
     { header: "Section", key: "section", width: 12 },
@@ -160,6 +165,9 @@ async function buildLearnersWorkbook(
       lastName: l.lastName,
       age: l.age,
       gender: GENDER_LABELS[l.gender as keyof typeof GENDER_LABELS] ?? l.gender,
+      nutrition: l.nutritionalStatus
+        ? NUTRITIONAL_STATUS_LABELS[l.nutritionalStatus]
+        : "",
       ethnicity: formatEthnicity(l.ethnicity, l.ethnicityOther, ""),
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
@@ -190,6 +198,7 @@ async function buildLearnersWorkbook(
     { header: "Distance", key: "distance", width: 16 },
     { header: "Transfers", key: "transfers", width: 16 },
     { header: "Absenteeism", key: "absenteeism", width: 22 },
+    { header: "Reasons", key: "reasons", width: 40 },
     { header: "Has ARAL profile", key: "hasProfile", width: 14 },
   ];
   aralSheet.getRow(1).font = { bold: true };
@@ -203,6 +212,9 @@ async function buildLearnersWorkbook(
       distance: l.distanceHomeToSchool ?? "",
       transfers: l.previousTransfers ?? "",
       absenteeism: l.aralProfile?.absenteeismFrequency ?? "",
+      reasons: (l.aralProfile?.absenteeismReasons ?? [])
+        .map((r) => ABSENTEEISM_REASON_LABELS[r])
+        .join("; "),
       hasProfile: l.aralProfile ? "Yes" : "No",
     });
   }

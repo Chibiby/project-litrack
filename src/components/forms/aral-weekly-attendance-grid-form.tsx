@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ABSENTEEISM_REASON_LABELS } from "@/lib/constants/enum-labels";
 import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import { cn } from "@/lib/utils";
 import { saveAralWeeklyAttendance } from "@/lib/actions/attendance";
@@ -54,6 +55,16 @@ const WEEKDAYS_LONG = [
   "Friday",
   "Saturday",
 ];
+/**
+ * School days per week. The grid starts on Monday and runs Monday–Friday:
+ * Saturday and Sunday are never school days, so their columns only ever
+ * rendered as locked "No class" cells and cost the teacher horizontal room.
+ * The week is still keyed and saved by its Monday, and a legacy weekend row
+ * from an earlier build is left untouched rather than deleted — no cell for it
+ * travels in a save.
+ */
+const WEEK_COLUMNS = 5;
+
 const MONTHS_SHORT = [
   "Jan",
   "Feb",
@@ -122,12 +133,13 @@ function statusTakesReason(status: CellStatus): boolean {
   return status === "ABSENT" || status === "EXCUSED";
 }
 
-const REASON_OPTIONS = [
-  "Sick / Illness",
-  "Family emergency",
-  "Personal reason",
-  "No reason given",
-] as const;
+/**
+ * The per-day reason list, shared with the ARAL profile's Reasons of
+ * Absenteeism so a teacher meets the same wording in both places. The LABEL is
+ * what lands in `Attendance.notes`; `parseNote` matches on it, so a note
+ * written under an older list reads back under "Other" with its text intact.
+ */
+const REASON_OPTIONS: readonly string[] = Object.values(ABSENTEEISM_REASON_LABELS);
 
 /** The picker's free-text escape hatch; never stored as the literal label. */
 const REASON_OTHER = "Other — Please specify";
@@ -226,7 +238,7 @@ function isCellStatus(value: string): value is Exclude<CellStatus, ""> {
 function buildDays(weekStartKey: string, holidayKeys: string[]): Day[] {
   const holidays = new Set(holidayKeys);
   const start = parseLocalDateKey(weekStartKey);
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: WEEK_COLUMNS }, (_, i) => {
     const date = addDays(start, i);
     const key = formatLocalDateKey(date);
     const dow = date.getDay();

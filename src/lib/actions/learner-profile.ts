@@ -81,6 +81,7 @@ export async function getLearnerProfile(
       lastName: true,
       age: true,
       gender: true,
+      nutritionalStatus: true,
       ethnicity: true,
       ethnicityOther: true,
       englishReadingProfile: true,
@@ -145,6 +146,7 @@ export async function getLearnerProfile(
         select: {
           absenteeismFrequency: true,
           absenteeismOtherReason: true,
+          absenteeismReasons: true,
           letterRecognition: true,
           letterSoundCorrespondence: true,
           wordRecognition: true,
@@ -173,6 +175,7 @@ export async function getLearnerProfile(
       lastName: learner.lastName,
       age: learner.age,
       gender: learner.gender,
+      nutritionalStatus: learner.nutritionalStatus,
       ethnicity: learner.ethnicity,
       ethnicityOther: learner.ethnicityOther,
       englishReadingProfile: learner.englishReadingProfile,
@@ -225,6 +228,7 @@ export async function getLearnerProfile(
         ? {
             absenteeismFrequency: learner.aralProfile.absenteeismFrequency,
             absenteeismOtherReason: learner.aralProfile.absenteeismOtherReason,
+            absenteeismReasons: learner.aralProfile.absenteeismReasons,
             letterRecognition: learner.aralProfile.letterRecognition,
             letterSoundCorrespondence:
               learner.aralProfile.letterSoundCorrespondence,

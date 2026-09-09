@@ -281,7 +281,7 @@ export function AralWeeklyAttendancePanel({
                     loadingText="Saving…"
                   >
                     <Save className="h-4 w-4" aria-hidden />
-                    Save Weekly Attendance
+                    Save
                   </Button>
                 </>
               ) : null}

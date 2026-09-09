@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
   ABSENTEEISM_LABELS,
+  ABSENTEEISM_REASON_LABELS,
   LETTER_RECOGNITION_LABELS,
   LETTER_SOUND_LABELS,
   WORD_RECOGNITION_LABELS,
@@ -28,6 +29,7 @@ import { saveAralProfile } from "@/lib/actions/aral";
 type Defaults = Partial<{
   absenteeismFrequency: string;
   absenteeismOtherReason: string | null;
+  absenteeismReasons: string[];
   letterRecognition: string;
   letterSoundCorrespondence: string;
   wordRecognition: string;
@@ -79,6 +81,14 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
           <div>
             <p className="text-sm font-medium mb-2">Frequency of Absenteeism *</p>
             <FieldRadioGroup name="absenteeismFrequency" options={toOptions(ABSENTEEISM_LABELS)} defaultValue={defaultValues.absenteeismFrequency} />
+            <div className="mt-4">
+              <p className="text-sm font-medium mb-2">Reasons of Absenteeism</p>
+              <FieldCheckboxList
+                name="absenteeismReasons"
+                options={toOptions(ABSENTEEISM_REASON_LABELS)}
+                defaultValues={defaultValues.absenteeismReasons ?? []}
+              />
+            </div>
             <div className="mt-3 space-y-1">
               <Label htmlFor="absenteeismOtherReason">Specify reason *</Label>
               <Input

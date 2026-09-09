@@ -119,6 +119,7 @@ function makeLearner(
     lastName: "Santos",
     age: 10,
     gender: "FEMALE",
+    nutritionalStatus: "NORMAL",
     ethnicity: null,
     ethnicityOther: null,
     englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
