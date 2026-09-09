@@ -34,6 +34,20 @@ Committed migrations (apply in order via `migrate deploy`):
   console reads as "custom password — reset to sign in"; that is always true and always
   recoverable in one click. The comment at the top of the migration explains why a backfill would
   be worse than none.
+- `20260908000001_demo_environment`
+- `20260908000002_demo_school_id_exempt_from_unique`
+- `20260909000001_registered_as_aral_volunteer` — one additive
+  `BOOLEAN NOT NULL DEFAULT false` column on `User`, recording what a teacher ticked at
+  sign-up. Metadata-only on PostgreSQL 11+, so no table rewrite and no lock worth planning
+  around. Adds no table, so `prisma/rls-policies.sql` does not need re-running. Every existing
+  account lands on `false`, which is the truth: nobody had been asked yet.
+- `20260910000001_nutritional_status_and_absenteeism_reasons`
+- `20260910000002_ethnicity_second_slot` — six additive nullable columns, two on `Learner`
+  and four on `TeacherProfile` (teachers are asked about ethnicity for the first time here).
+  No backfill and no index by design: nothing reads a second ethnicity in bulk, and a profile
+  finished before the question existed is meant to hold `NULL`, not a guess. Adds no table, so
+  `prisma/rls-policies.sql` does not need re-running. Applied to production on 2026-09-10
+  together with `20260909000001`.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
