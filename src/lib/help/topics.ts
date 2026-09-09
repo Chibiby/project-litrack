@@ -129,8 +129,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       "check",
     ],
     body: [
-      "Open Weekly Attendance, pick the week with the arrows at the top, then set each learner's mark for each day. Only the cells you change are saved, so an untouched day keeps whatever it already had.",
-      "Days flagged as holidays are skipped automatically and do not count against a learner's rate.",
+      "Open Weekly Attendance, choose the week from the dropdown at the top, then set each learner's mark for each day and press Save. Only the cells you change are saved, so an untouched day keeps whatever it already had.",
+      "The grid covers Monday to Friday. Days flagged as holidays are skipped automatically and do not count against a learner's rate.",
     ],
     roles: ["TEACHER"],
     routes: ["/teacher/aral"],
@@ -154,6 +154,29 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
     routes: ["/teacher", "/school-head"],
     action: { label: "Open Reports", href: "/teacher/reports" },
+  },
+
+  {
+    id: "attendance-absence-reasons",
+    title: "Why is a learner absent, and how do I record the reason?",
+    keywords: [
+      "absent",
+      "absence",
+      "absenteeism",
+      "reason",
+      "reasons",
+      "why absent",
+      "sick",
+      "illness",
+      "truancy",
+      "not attending",
+    ],
+    body: [
+      "In the weekly grid, marking a learner Absent lets you pick a reason for that day from the standard list — family emergency, financial difficulties, lack of transportation, distance from school, household chores, caring for siblings, bad weather, academic difficulties, and the rest.",
+      "The same list appears in the learner's ARAL profile under Reasons of Absenteeism, where you can tick every reason that applies to them overall, alongside Frequency of Absenteeism. The per-day reason answers \"why this day\"; the profile answers \"why this learner\".",
+    ],
+    roles: ["TEACHER"],
+    routes: ["/teacher/aral"],
   },
 
   // ── Reading level ─────────────────────────────────────────────────────────
@@ -180,7 +203,107 @@ export const HELP_TOPICS: HelpTopic[] = [
     routes: ["/teacher/aral"],
   },
 
+  // ── The programme itself ──────────────────────────────────────────────────
+  {
+    id: "aral-what-is",
+    title: "What is ARAL?",
+    keywords: [
+      "aral",
+      "program",
+      "programme",
+      "remediation",
+      "intervention",
+      "deped",
+      "literacy",
+      "what is aral",
+    ],
+    body: [
+      "ARAL is the DepEd reading remediation programme this app tracks. A learner in it is marked as an ARAL learner, gets an ARAL profile, has attendance recorded weekly, and has a reading level assessed monthly.",
+      "Everything under the ARAL Program heading in the sidebar — Weekly Attendance, Monthly Reading Level — is for those learners. Learners not in ARAL still appear in your roster and reports.",
+    ],
+  },
+  {
+    id: "aral-enroll",
+    title: "How do I enroll a learner into ARAL?",
+    keywords: [
+      "enroll",
+      "enrol",
+      "enrolment",
+      "enrollment",
+      "add to aral",
+      "join",
+      "designate",
+      "tutor",
+    ],
+    body: [
+      "Open Weekly Attendance for the grade and use Enroll to ARAL. Pick the learners from your roster and the ARAL tutor they are assigned to.",
+      "Enrolling is what puts a learner into the weekly attendance grid and the monthly reading level sheet. Their ARAL tutor does not have to be their adviser.",
+    ],
+    roles: ["TEACHER"],
+    routes: ["/teacher/aral"],
+  },
+
   // ── Learners ──────────────────────────────────────────────────────────────
+  {
+    id: "learner-add",
+    title: "How do I add a new learner?",
+    keywords: [
+      "add",
+      "new",
+      "create",
+      "register",
+      "enter",
+      "encode",
+      "new learner",
+      "add learner",
+    ],
+    body: [
+      "Open Learners and use Add learner. The form asks for the learner's name, birthdate, gender, ethnicity and nutritional status, then their grade level and section.",
+      "To add a whole class at once, open the grade and use Import learners to upload a CSV instead of typing each one.",
+    ],
+    routes: ["/teacher/learners"],
+    action: { label: "Open Learners", href: "/teacher/learners" },
+  },
+  {
+    id: "learner-import",
+    title: "Can I import learners from a spreadsheet?",
+    keywords: [
+      "import",
+      "csv",
+      "excel",
+      "spreadsheet",
+      "upload",
+      "bulk",
+      "batch",
+      "template",
+    ],
+    body: [
+      "Yes. Open the grade level and choose Import learners. Download the template first — the importer matches your file against those column names, previews what it will create, and tells you which rows it cannot read before anything is saved.",
+      "Nothing is written until you confirm the preview, so a wrong file costs you nothing but a second upload.",
+    ],
+    routes: ["/teacher/grade"],
+  },
+  {
+    id: "learner-nutritional-status",
+    title: "What is Nutritional Status on the learner form?",
+    keywords: [
+      "nutritional",
+      "nutrition",
+      "status",
+      "wasted",
+      "severely wasted",
+      "obese",
+      "normal",
+      "weight",
+      "bmi",
+      "health",
+    ],
+    body: [
+      "It is part of Section A of the learner's profile, and it takes one of four values: Severely Wasted, Wasted, Normal, or Obese.",
+      "It is required when you add a learner and when you edit one. Learners rostered before the field existed, and any learner brought in by CSV import, have it blank — that is not an error, and filling it in is done from the learner's profile.",
+    ],
+    routes: ["/teacher/learners"],
+  },
   {
     id: "learner-find",
     title: "How do I find or update a learner?",
@@ -272,6 +395,67 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
 
   // ── Account ───────────────────────────────────────────────────────────────
+  {
+    id: "account-profile",
+    title: "How do I edit my own profile?",
+    keywords: [
+      "my profile",
+      "my details",
+      "my account",
+      "my name",
+      "my information",
+      "settings",
+      "contact number",
+      "edit profile",
+    ],
+    body: [
+      "Open your account menu at the bottom of the sidebar and go to Settings, then Profile. Your name, contact details and teaching assignment live there.",
+      "This is your own account. To edit a learner's details, open that learner from Learners instead.",
+    ],
+    action: { label: "Open my profile", href: "/teacher/settings/profile" },
+  },
+  {
+    id: "account-sign-in-out",
+    title: "How do I sign in and out?",
+    keywords: [
+      "log",
+      "logout",
+      "log out",
+      "logging out",
+      "signout",
+      "sign out",
+      "signin",
+      "sign in",
+      "login",
+      "exit",
+      "leave",
+    ],
+    body: [
+      "Sign out from the account menu at the bottom of the sidebar. On a shared computer, sign out rather than just closing the tab.",
+      "Teachers and school heads sign in at the main login page; division admins sign in at the separate admin login. If your account is new, it stays pending until your school head approves it.",
+    ],
+  },
+  {
+    id: "who-to-ask",
+    title: "Who do I ask — my school head or the division admin?",
+    keywords: [
+      "who",
+      "contact",
+      "ask",
+      "help",
+      "school head",
+      "principal",
+      "division admin",
+      "admin",
+      "permission",
+      "announcement",
+      "support",
+    ],
+    body: [
+      "Your school head runs your school: approving teacher accounts, creating grade levels and sections, opening the school year, posting announcements, and recording learner transfers.",
+      "The division admin handles the system itself: reopening a locked attendance week or closed term, and anything your school head cannot change. Send those through Request Access here and they arrive in the admin's support inbox.",
+    ],
+  },
   {
     id: "account-password",
     title: "How do I change my password?",

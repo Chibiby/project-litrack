@@ -17,8 +17,7 @@ import type { UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssistantTicketForm } from "@/components/assistant/assistant-ticket-form";
-import { answerQuery, findTopic, type HelpMatch } from "@/lib/help/search";
-import { getQuickActions, type QuickAction } from "@/lib/help/quick-actions";
+import { answerQuery, detectSmallTalk, type HelpMatch } from "@/lib/help/search";
 import { fetchMyTickets, type MySupportTicket } from "@/lib/actions/support";
 import {
   SUPPORT_TICKET_STATUS_LABELS,
@@ -124,7 +123,6 @@ export function AssistantPanel({
   // whole escalation path is hidden for them rather than offered and refused.
   const canEscalate = role !== "SUPER_ADMIN";
   const firstName = userName.trim().split(/\s+/)[0] || "there";
-  const actions = getQuickActions(role);
   const pageUrl = pathname && PAGE_PATH_RE.test(pathname) ? pathname : undefined;
 
   // Typed to the bot shape rather than `Omit<Entry, "id">`: omitting a key from
@@ -137,35 +135,37 @@ export function AssistantPanel({
     (question: string) => {
       const trimmed = question.trim();
       if (!trimmed) return;
-      const matches = answerQuery(trimmed, { role, pathname: pathname ?? undefined });
+
+      // A greeting is answered as a greeting. `answerQuery` deliberately
+      // returns nothing for one, and rendering that as "I could not find an
+      // answer" would send somebody to the ticket form for saying hello.
+      const smallTalk = detectSmallTalk(trimmed);
+      const reply: Omit<Extract<Entry, { kind: "bot" }>, "id"> = smallTalk
+        ? {
+            kind: "bot",
+            text:
+              smallTalk === "greeting"
+                ? `Hello ${firstName}. Ask me how anything in LITRACK works — attendance, reading levels, learners, reports — and I will point you at the answer and the page that does it.`
+                : "Anytime. Ask me anything else about LITRACK whenever you need it.",
+            matches: [],
+          }
+        : {
+            kind: "bot",
+            matches: answerQuery(trimmed, {
+              role,
+              pathname: pathname ?? undefined,
+            }),
+          };
+
       setEntries((current) => [
         ...current,
         { id: nextId(), kind: "user", text: trimmed },
-        { id: nextId(), kind: "bot", matches },
+        { ...reply, id: nextId() },
       ]);
       setDraft("");
     },
-    [pathname, role]
+    [firstName, pathname, role]
   );
-
-  function openTopic(action: QuickAction) {
-    if (action.kind === "ticket") {
-      setMode("ticket");
-      return;
-    }
-    const topic = action.topicId
-      ? findTopic(action.topicId, { role, pathname: pathname ?? undefined })
-      : null;
-    setEntries((current) => [
-      ...current,
-      { id: nextId(), kind: "user", text: action.label },
-      {
-        id: nextId(),
-        kind: "bot",
-        matches: topic ? [{ topic, score: 99 }] : [],
-      },
-    ]);
-  }
 
   // Loaded once, when the panel first mounts — which is the first time somebody
   // opens it, never on a page load nobody asked a question on.
@@ -275,35 +275,6 @@ export function AssistantPanel({
                     Ask me how anything in LITRACK works. What I cannot answer, I
                     can pass to the division admin.
                   </p>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Quick actions
-                  </p>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {actions.map((action) => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        onClick={() => openTopic(action)}
-                        className="flex flex-col items-center gap-1.5 rounded-xl border bg-background p-2.5 text-center transition-colors hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            "flex size-9 items-center justify-center rounded-lg",
-                            action.tint
-                          )}
-                          aria-hidden
-                        >
-                          <action.icon className="size-4" />
-                        </span>
-                        <span className="text-[11px] font-medium leading-tight">
-                          {action.label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {canEscalate && (

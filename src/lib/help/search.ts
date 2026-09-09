@@ -88,6 +88,97 @@ export function tokenize(value: string): string[] {
     .filter((word) => word.length > 1 && !STOP_WORDS.has(word));
 }
 
+/** Every word of a text, stop words kept — the unit title and body match on. */
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+type TopicIndex = {
+  titleWords: Set<string>;
+  bodyWords: Set<string>;
+  title: string;
+  keywords: string[];
+};
+
+/**
+ * Whole-word indexes, built once.
+ *
+ * Title and body used to be matched with `String.includes`, which matches
+ * inside words: "app" hit "approval", so "the app is slow" was answered with
+ * "My account says it is waiting for approval". Words, not substrings.
+ */
+const TOPIC_INDEX = new Map<string, TopicIndex>();
+
+function indexOf(topic: HelpTopic): TopicIndex {
+  let entry = TOPIC_INDEX.get(topic.id);
+  if (!entry) {
+    entry = {
+      title: topic.title.toLowerCase(),
+      titleWords: new Set(words(topic.title)),
+      bodyWords: new Set(words(topic.body.join(" "))),
+      keywords: topic.keywords.map((k) => k.toLowerCase()),
+    };
+    TOPIC_INDEX.set(topic.id, entry);
+  }
+  return entry;
+}
+
+/**
+ * Openers that are not questions about the app.
+ *
+ * Matched only as the whole message: "hi" is a greeting, "hi how do I mark
+ * attendance" is a question. Without this, "hi" scored three unrelated topics —
+ * including "A learner left. Do I delete them?" — and "hello" scored nothing at
+ * all, which sent people to the ticket form to say hello.
+ */
+const GREETINGS = new Set([
+  "hi",
+  "hii",
+  "hey",
+  "hello",
+  "helo",
+  "yo",
+  "good morning",
+  "good afternoon",
+  "good evening",
+  "good day",
+  "kumusta",
+  "kamusta",
+  "musta",
+]);
+
+const THANKS = new Set([
+  "thanks",
+  "thank you",
+  "thankyou",
+  "thank u",
+  "thx",
+  "ty",
+  "salamat",
+  "maraming salamat",
+  "ok thanks",
+  "okay thanks",
+]);
+
+export type SmallTalk = "greeting" | "thanks";
+
+/** `"greeting"`, `"thanks"`, or null when the message is a real question. */
+export function detectSmallTalk(query: string): SmallTalk | null {
+  const normalized = query
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!normalized) return null;
+  if (GREETINGS.has(normalized)) return "greeting";
+  if (THANKS.has(normalized)) return "thanks";
+  return null;
+}
+
 function isVisibleTo(topic: HelpTopic, role?: UserRole): boolean {
   if (!topic.roles || topic.roles.length === 0) return true;
   // Super Admin sees every role's pages by impersonation, so it sees every
@@ -114,38 +205,57 @@ function scoreTopic(
   topic: HelpTopic,
   tokens: string[],
   normalizedQuery: string,
-  context: HelpContext
+  context: HelpContext,
+  phraseOnly: boolean
 ): number {
-  const title = topic.title.toLowerCase();
-  const body = topic.body.join(" ").toLowerCase();
-  const keywords = topic.keywords.map((k) => k.toLowerCase());
+  const { title, titleWords, bodyWords, keywords } = indexOf(topic);
 
-  let score = 0;
+  /** Title and keyword hits — the person used this topic's own vocabulary. */
+  let strong = 0;
+  /** Body hits. Corroborating only; see the floor below. */
+  let weak = 0;
 
-  if (normalizedQuery.length > 2 && title.includes(normalizedQuery)) {
-    score += 12;
+  // Skipped on the phrase-only path: a query of nothing but stop words ("how do
+  // i") is a substring of half the titles here, and would answer at random.
+  if (!phraseOnly && normalizedQuery.length > 2 && title.includes(normalizedQuery)) {
+    strong += 12;
   }
   if (normalizedQuery.length > 2 && keywords.some((k) => k === normalizedQuery)) {
-    score += 10;
+    strong += 10;
   }
 
   for (const token of tokens) {
     if (keywords.some((k) => k === token)) {
-      score += 4;
-    } else if (keywords.some((k) => k.includes(token))) {
-      score += 2;
+      strong += 4;
+    } else if (
+      // Both directions, so "learners" reaches the keyword "learner" and vice
+      // versa. Length-guarded on both sides: without it "add" matched
+      // "address" and "log" matched "login".
+      token.length >= 4 &&
+      keywords.some(
+        (k) => k.length >= 4 && (k.includes(token) || token.includes(k))
+      )
+    ) {
+      strong += 2;
     }
-    if (title.includes(token)) score += 3;
-    if (body.includes(token)) score += 1;
+    if (titleWords.has(token)) strong += 3;
+    if (bodyWords.has(token)) weak += 1;
   }
+
+  // The floor that keeps the assistant honest. Every topic's prose mentions
+  // "school", "learner", "report" or "week" somewhere, so three incidental body
+  // words used to clear MIN_SCORE and answer confidently: "who is my school
+  // head" was answered with "A learner left. Do I delete them?". Body text
+  // corroborates a title or keyword hit; on its own it is not evidence.
+  if (strong === 0) return Math.min(weak, MIN_SCORE - 1);
+
+  let score = strong + weak;
 
   // A tie between a general topic and one about the page in view goes to the
   // page in view. Small on purpose: a boost large enough to promote an
   // irrelevant topic would make the assistant answer the wrong question
   // confidently just because of where it was opened.
-  if (score > 0 && matchesRoute(topic, context.pathname)) {
-    score += 2;
-  }
+  if (matchesRoute(topic, context.pathname)) score += 2;
 
   return score;
 }
@@ -162,18 +272,36 @@ export function answerQuery(
   context: HelpContext = {},
   limit = 3
 ): HelpMatch[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  const tokens = tokenize(query);
-  if (tokens.length === 0) return [];
+  // Small talk is answered by the panel in words, not with topics. Returning
+  // matches for "hi" is how the assistant used to open with three unrelated
+  // articles.
+  if (detectSmallTalk(query)) return [];
 
-  return HELP_TOPICS.filter((topic) => isVisibleTo(topic, context.role))
+  const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, " ");
+  const tokens = tokenize(query);
+
+  // A question can be entirely stop words and still be a real question:
+  // "what can you do" tokenizes to nothing, which used to mean the topic named
+  // "What can this assistant do?" could never answer it. On this path only an
+  // exact keyword match counts, which is narrow enough not to guess.
+  const phraseOnly = tokens.length === 0;
+  if (phraseOnly && normalizedQuery.length < 3) return [];
+
+  const ranked = HELP_TOPICS.filter((topic) => isVisibleTo(topic, context.role))
     .map((topic) => ({
       topic,
-      score: scoreTopic(topic, tokens, normalizedQuery, context),
+      score: scoreTopic(topic, tokens, normalizedQuery, context, phraseOnly),
     }))
     .filter((match) => match.score >= MIN_SCORE)
-    .sort((a, b) => b.score - a.score || a.topic.id.localeCompare(b.topic.id))
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score || a.topic.id.localeCompare(b.topic.id));
+
+  if (ranked.length === 0) return [];
+
+  // Runners-up have to be in the same league as the winner. "how do i change
+  // reading level" answered correctly and then offered "How do I change my
+  // password?" underneath, which makes a right answer look like a guess.
+  const [best] = ranked;
+  return ranked.filter((match) => match.score * 2 >= best.score).slice(0, limit);
 }
 
 /**

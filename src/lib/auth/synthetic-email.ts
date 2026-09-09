@@ -40,7 +40,11 @@ export function usernameFromTeacherEmail(email: string): string | null {
 export function isSyntheticEmail(email: string): boolean {
   const lower = email.toLowerCase();
   if (lower.endsWith(`@${TEACHER_EMAIL_DOMAIN}`)) return true;
-  // School Head: sh@<code>.<domain>
-  if (lower.startsWith("sh@") && lower.endsWith(`.${DOMAIN.toLowerCase()}`)) return true;
+  const domain = DOMAIN.toLowerCase();
+  // Anything at the synthetic domain, not just `sh@<code>.<domain>`: division
+  // admin accounts are provisioned at `<username>@<domain>` and no mailbox
+  // exists there either. The narrower `sh@` check told those accounts they
+  // could recover by email, and the mail went nowhere.
+  if (lower.endsWith(`@${domain}`) || lower.endsWith(`.${domain}`)) return true;
   return false;
 }
