@@ -6,6 +6,7 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { readImpersonationTicket } from "@/lib/auth/impersonation";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { geminiConfigured } from "@/lib/assistant/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function SchoolHeadAppLayout({
         role={user.role}
         userName={userName}
         schoolName={schoolName}
+        aiEnabled={geminiConfigured()}
       >
         {children}
       </RoleShell>

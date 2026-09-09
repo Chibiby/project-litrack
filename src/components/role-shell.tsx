@@ -38,6 +38,14 @@ interface RoleShellProps {
    */
   advisoryGradeLevelId?: string | null;
   notifications?: ShellNotification[];
+  /**
+   * Whether a model backend is configured, read from server env by the layout.
+   *
+   * Drives one thing: whether the assistant tells people their question is sent
+   * to Google. With no key nothing is sent, and saying otherwise would be a
+   * false privacy notice — which is worse than none.
+   */
+  aiEnabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -57,6 +65,7 @@ export function RoleShell({
   isAralVolunteer,
   advisoryGradeLevelId,
   notifications,
+  aiEnabled,
   children,
 }: RoleShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
@@ -111,7 +120,7 @@ export function RoleShell({
 
           {/* Outside the offset wrapper: the widget is fixed to the viewport, so
               it must not sit inside a node whose margin animates with the rail. */}
-          <AssistantWidget role={role} userName={userName} />
+          <AssistantWidget role={role} userName={userName} aiEnabled={aiEnabled} />
         </div>
       </NavPathProvider>
     </RoleShellContext.Provider>

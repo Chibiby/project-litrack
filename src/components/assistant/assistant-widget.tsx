@@ -27,9 +27,11 @@ type Props = {
   role: UserRole;
   /** Used for the greeting only. First name is taken from it client-side. */
   userName: string;
+  /** Whether the panel should disclose that answers are sent to Google. */
+  aiEnabled?: boolean;
 };
 
-export function AssistantWidget({ role, userName }: Props) {
+export function AssistantWidget({ role, userName, aiEnabled }: Props) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
@@ -71,6 +73,7 @@ export function AssistantWidget({ role, userName }: Props) {
             key={sessionKey}
             role={role}
             userName={userName}
+            aiEnabled={aiEnabled}
             active={open}
             onMinimize={minimize}
             onClose={close}

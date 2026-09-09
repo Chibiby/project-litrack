@@ -100,6 +100,15 @@ export const AUDIT_ACTIONS = {
   REPORT_GENERATE: "REPORT_GENERATE",
   /** A Reports Hub history row removed. The file was never stored. */
   REPORT_DELETE: "REPORT_DELETE",
+  /**
+   * A question answered by the model backend rather than the offline index.
+   *
+   * Token counts and the number of help topics quoted — never the question and
+   * never the answer. Both can name a learner, and an audit log is the last
+   * place learner names should accumulate. This row exists to answer "how much
+   * is this costing and how often is it used", not "what did they ask".
+   */
+  ASSISTANT_AI_QUERY: "ASSISTANT_AI_QUERY",
   /** A support ticket raised from the assistant. Ids and category only, never the body. */
   SUPPORT_TICKET_SUBMIT: "SUPPORT_TICKET_SUBMIT",
   SUPPORT_TICKET_RESOLVE: "SUPPORT_TICKET_RESOLVE",

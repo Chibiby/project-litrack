@@ -11,6 +11,14 @@ import { z } from "zod";
 
 const DEFAULT_SYNTHETIC_EMAIL_DOMAIN = "litrack.local";
 
+/**
+ * A lite model, and pinned rather than tracking `gemini-flash-latest`: the
+ * assistant is grounded by a prompt whose behaviour was checked against one
+ * model, and a silent upgrade underneath it would change answers nobody
+ * re-read. Gemini 2.5 Flash is not an option: Google refuses it to new keys.
+ */
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
+
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1).optional(),
@@ -21,6 +29,12 @@ const serverEnvSchema = z.object({
   RESEND_FROM_EMAIL: z.string().min(1).optional(),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   SYNTHETIC_EMAIL_DOMAIN: z.string().min(1).optional().default(DEFAULT_SYNTHETIC_EMAIL_DOMAIN),
+  // Optional on purpose. With no key the assistant answers from its curated
+  // index exactly as it did before Gemini existed, so a missing or spent
+  // credential degrades the answer rather than breaking the panel — and CI
+  // builds with placeholder env without needing a real one.
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).optional().default(DEFAULT_GEMINI_MODEL),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -39,6 +53,8 @@ function readEnvInput(): Record<string, string | undefined> {
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL || undefined,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,
     SYNTHETIC_EMAIL_DOMAIN: process.env.SYNTHETIC_EMAIL_DOMAIN || undefined,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || undefined,
+    GEMINI_MODEL: process.env.GEMINI_MODEL || undefined,
   };
 }
 

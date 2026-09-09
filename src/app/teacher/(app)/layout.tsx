@@ -7,6 +7,7 @@ import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
+import { geminiConfigured } from "@/lib/assistant/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,7 @@ export default async function TeacherAppLayout({
         roleLabel={roleLabel}
         isAralVolunteer={isAralVolunteer}
         advisoryGradeLevelId={advisoryGradeLevelId}
+        aiEnabled={geminiConfigured()}
       >
         {children}
       </RoleShell>
