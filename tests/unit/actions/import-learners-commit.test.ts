@@ -221,3 +221,55 @@ describe("commitLearnerImport — failure and refusal", () => {
     expect(JSON.stringify(metadata)).not.toContain("Learner0");
   });
 });
+
+/**
+ * §11 of the ten concerns made this load-bearing. ARAL pages scope on
+ * `aralTeacherId` alone now (`aralLearnerScope`) rather than on "adviser OR
+ * tutor", so an imported ARAL learner with no `aralTeacherId` would be visible
+ * to nobody — not even the teacher who had just imported them. Before the
+ * narrowing, the importer's own advisory pointer happened to cover for the
+ * missing designation; it no longer does.
+ *
+ * The rule is `toggleAralEnrollment`'s: whoever enrolled them. The CSV carries
+ * no tutor column to say otherwise.
+ */
+describe("commitLearnerImport — ARAL designation", () => {
+  it("designates the importing teacher as the tutor for an ARAL row", async () => {
+    const [row] = rows(1);
+    await commitLearnerImport({
+      gradeLevelId: GRADE_ID,
+      rows: [{ ...row, isAralLearner: true }],
+    });
+
+    const written = createManyAndReturn.mock.calls[0][0].data[0];
+    expect(written.isAralLearner).toBe(true);
+    expect(written.aralTeacherId).toBe(TEACHER_ID);
+    expect(written.aralEnrolledAt).toBeInstanceOf(Date);
+  });
+
+  it("leaves a non-ARAL row with no tutor and no enrolment date", async () => {
+    // `aralTeacherId` must never point at a learner who is not in the
+    // programme: on the old wide predicate it granted access on its own.
+    await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: rows(1) });
+
+    const written = createManyAndReturn.mock.calls[0][0].data[0];
+    expect(written.isAralLearner).toBe(false);
+    expect(written.aralTeacherId).toBeNull();
+    expect(written.aralEnrolledAt).toBeNull();
+  });
+
+  it("designates per row, not per import", async () => {
+    const [a, b, c] = rows(3);
+    await commitLearnerImport({
+      gradeLevelId: GRADE_ID,
+      rows: [{ ...a, isAralLearner: true }, b, { ...c, isAralLearner: true }],
+    });
+
+    const written = createManyAndReturn.mock.calls[0][0].data;
+    expect(written.map((r) => r.aralTeacherId)).toEqual([
+      TEACHER_ID,
+      null,
+      TEACHER_ID,
+    ]);
+  });
+});
