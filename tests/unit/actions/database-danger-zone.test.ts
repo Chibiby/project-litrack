@@ -16,6 +16,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * - **The audit row says which of those two happened**, because "was this
  *   undoable?" is the first question anyone asks afterwards.
  *
+ * The second property is the school scope: an action may be pointed at one
+ * school, and the id it is pointed at is re-read from the database rather than
+ * trusted, so a stale picker cannot aim an irreversible operation at the wrong
+ * tenant or, by being dropped, at every tenant.
+ *
  * Mocked at the module boundary like the other action tests here: the blob
  * store, the snapshot writer and Supabase are all out of scope.
  */
@@ -46,6 +51,17 @@ const resetAllSchoolHeadPasswords = vi.fn();
 vi.mock("@/lib/db/account-reset", () => ({
   removeAllTeacherAccounts: (...a: unknown[]) => removeAllTeacherAccounts(...a),
   resetAllSchoolHeadPasswords: (...a: unknown[]) => resetAllSchoolHeadPasswords(...a),
+}));
+
+const schoolFindFirst = vi.fn();
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    school: {
+      get findFirst() {
+        return schoolFindFirst;
+      },
+    },
+  },
 }));
 
 const requireUser = vi.fn();
@@ -84,11 +100,13 @@ const {
 } = await import("@/lib/actions/database");
 
 const ADMIN = { id: "admin-1", schoolId: null, role: "SUPER_ADMIN" };
+const SCHOOL = { id: "6b1d0c4a-8e2f-4a7b-9c3d-1e5f7a9b0c2d", name: "Camarin Elementary School" };
 
-function form(confirm: string, ack?: string): FormData {
+function form(confirm: string, ack?: string, schoolId?: string): FormData {
   const fd = new FormData();
   fd.set("confirm", confirm);
   if (ack !== undefined) fd.set("ackNoBackup", ack);
+  if (schoolId !== undefined) fd.set("schoolId", schoolId);
   return fd;
 }
 
@@ -105,6 +123,7 @@ beforeEach(() => {
   createSnapshot.mockResolvedValue({ meta: { totalRows: 0 } });
   saveBackup.mockResolvedValue({ stamp: "2026-09-10T00:00:00.000Z", pathname: "p", size: 1 });
   clearOperationalData.mockResolvedValue({ Learner: 12 });
+  schoolFindFirst.mockResolvedValue(SCHOOL);
   resetAllSchoolHeadPasswords.mockResolvedValue({ processed: 3, failed: [] });
   removeAllTeacherAccounts.mockResolvedValue({ processed: 8, failed: [] });
 });
@@ -200,5 +219,98 @@ describe("Danger zone with a backup store connected", () => {
 
     expect(res.ok).toBe(false);
     expect(clearOperationalData).not.toHaveBeenCalled();
+  });
+});
+
+describe("scoping a Danger-zone action to one school", () => {
+  beforeEach(() => {
+    isBackupStoreConfigured.mockReturnValue(true);
+  });
+
+  it("clears only the named school, looked up rather than trusted", async () => {
+    const res = await resetOperationalData(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    expect(res.ok).toBe(true);
+    expect(schoolFindFirst).toHaveBeenCalledWith({
+      where: { id: SCHOOL.id, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    expect(clearOperationalData).toHaveBeenCalledWith(SCHOOL.id);
+    expect(lastAudit()).toMatchObject({
+      schoolId: SCHOOL.id,
+      resourceId: SCHOOL.id,
+      metadata: { scope: "school", schoolName: SCHOOL.name },
+    });
+  });
+
+  it("clears every school when no school is named", async () => {
+    const res = await resetOperationalData(form(CONFIRM_PHRASES.resetOperational));
+
+    expect(res.ok).toBe(true);
+    expect(schoolFindFirst).not.toHaveBeenCalled();
+    expect(clearOperationalData).toHaveBeenCalledWith(null);
+    expect(lastAudit()).toMatchObject({ metadata: { scope: "all-schools" } });
+  });
+
+  it("treats an empty school field as every school rather than as an error", async () => {
+    const res = await resetOperationalData(form(CONFIRM_PHRASES.resetOperational, undefined, "   "));
+
+    expect(res.ok).toBe(true);
+    expect(clearOperationalData).toHaveBeenCalledWith(null);
+  });
+
+  it("refuses a school that is archived or gone, and changes nothing", async () => {
+    schoolFindFirst.mockResolvedValue(null);
+
+    const res = await resetOperationalData(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    expect(res).toEqual({ ok: false, error: "That school no longer exists." });
+    expect(clearOperationalData).not.toHaveBeenCalled();
+    expect(saveBackup).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id that is not an id, without touching the database", async () => {
+    const res = await resetOperationalData(form(CONFIRM_PHRASES.resetOperational, undefined, "../../etc"));
+
+    expect(res.ok).toBe(false);
+    expect(schoolFindFirst).not.toHaveBeenCalled();
+    expect(clearOperationalData).not.toHaveBeenCalled();
+  });
+
+  it("resolves the school before taking the safety snapshot", async () => {
+    schoolFindFirst.mockResolvedValue(null);
+
+    await resetOperationalData(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    // A refused target must not leave a safety point behind that "Undo last
+    // operation" would then offer for an operation that never happened.
+    expect(createSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("scopes the school-account reset", async () => {
+    const res = await resetAllSchoolAccounts(
+      form(CONFIRM_PHRASES.resetSchoolAccounts, undefined, SCHOOL.id)
+    );
+
+    expect(res.ok).toBe(true);
+    expect(resetAllSchoolHeadPasswords).toHaveBeenCalledWith(SCHOOL.id);
+    expect(lastAudit()).toMatchObject({ schoolId: SCHOOL.id, metadata: { scope: "school" } });
+  });
+
+  it("scopes teacher removal", async () => {
+    const res = await removeAllTeachers(form(CONFIRM_PHRASES.removeTeachers, undefined, SCHOOL.id));
+
+    expect(res.ok).toBe(true);
+    expect(removeAllTeacherAccounts).toHaveBeenCalledWith(SCHOOL.id);
+    expect(lastAudit()).toMatchObject({ schoolId: SCHOOL.id, metadata: { scope: "school" } });
+  });
+
+  it("still refuses a scoped run with no backup store and no acknowledgement", async () => {
+    isBackupStoreConfigured.mockReturnValue(false);
+
+    const res = await removeAllTeachers(form(CONFIRM_PHRASES.removeTeachers, undefined, SCHOOL.id));
+
+    expect(res.ok).toBe(false);
+    expect(removeAllTeacherAccounts).not.toHaveBeenCalled();
   });
 });

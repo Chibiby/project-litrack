@@ -160,3 +160,54 @@ describe("operational subset", () => {
     expect(order.indexOf("Notification")).toBeLessThan(order.indexOf("SupportTicket"));
   });
 });
+
+/**
+ * A school-scoped clear filters every table itself rather than relying on
+ * cascades, so each operational model needs a route to `schoolId`. A missing or
+ * misspelled one is the silent-failure shape again: the wrong route throws at
+ * runtime, but a *missing* one would empty that table for every school.
+ */
+describe("school scoping", () => {
+  const SCHOOL_ID = "5c3b1f2e-0d4a-4c6b-9f1e-7a2b3c4d5e6f";
+
+  /**
+   * Walk a scope's `where` against the DMMF: every key is a real field, every
+   * relation hop lands on a real model, and every leaf is `schoolId` carrying
+   * the id it was given.
+   */
+  function assertScopeResolves(model: string, where: Record<string, unknown>, path: string[] = []) {
+    const dm = Prisma.dmmf.datamodel.models.find((m) => m.name === model);
+    expect(dm, `${model} is not a Prisma model`).toBeDefined();
+
+    for (const [key, value] of Object.entries(where)) {
+      const field = dm!.fields.find((f) => f.name === key);
+      const where_ = [...path, `${model}.${key}`].join(" → ");
+      expect(field, `${where_} does not exist`).toBeDefined();
+
+      if (field!.kind === "object") {
+        assertScopeResolves(field!.type, value as Record<string, unknown>, [...path, `${model}.${key}`]);
+      } else {
+        expect(key, `${where_} should be the schoolId leaf`).toBe("schoolId");
+        expect(value, `${where_} should carry the given id`).toBe(SCHOOL_ID);
+      }
+    }
+  }
+
+  it("gives every operational model a way to reach one school", () => {
+    for (const { model, schoolScope } of OPERATIONAL_DELETE_ORDER) {
+      expect(schoolScope, `${model} has no schoolScope`).toBeTypeOf("function");
+    }
+  });
+
+  it("resolves every scope to a real relation path ending at schoolId", () => {
+    for (const { model, schoolScope } of OPERATIONAL_DELETE_ORDER) {
+      assertScopeResolves(model, schoolScope!(SCHOOL_ID));
+    }
+  });
+
+  it("leaves the structural models unscoped, because a clear never touches them", () => {
+    for (const entry of SNAPSHOT_MODELS.filter((m) => !m.operational)) {
+      expect(entry.schoolScope, `${entry.model} is structural and needs no scope`).toBeUndefined();
+    }
+  });
+});

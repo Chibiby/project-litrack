@@ -8,7 +8,7 @@ import {
   listBackups,
 } from "@/lib/db/backup-store";
 import { currentCounts } from "@/lib/db/snapshot";
-import { accountCounts } from "@/lib/db/account-reset";
+import { accountCounts, accountCountsBySchool } from "@/lib/db/account-reset";
 import { EXCLUDED_TABLES } from "@/lib/db/schema-order";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +24,18 @@ export default async function DatabasePage() {
 
   const storeReady = isBackupStoreConfigured();
 
-  const [counts, accounts, backups, safety] = await Promise.all([
+  const [counts, accounts, schools, backups, safety] = await Promise.all([
     currentCounts().catch((err) => {
       console.error("[DatabasePage] counts failed:", err);
       return {} as Record<string, number>;
     }),
     accountCounts().catch(() => ({ schoolHeads: 0, teachers: 0 })),
+    // An empty list only costs the Danger zone its school picker, so a failure
+    // here must not take the whole page down with it.
+    accountCountsBySchool().catch((err) => {
+      console.error("[DatabasePage] per-school account counts failed:", err);
+      return [];
+    }),
     storeReady
       ? listBackups().catch((err) => {
           console.error("[DatabasePage] listing backups failed:", err);
@@ -45,6 +51,7 @@ export default async function DatabasePage() {
     counts,
     totalRows: Object.values(counts).reduce((a, b) => a + b, 0),
     accounts,
+    schools,
     backups: backups.map((b) => ({
       kind: b.kind,
       pathname: b.pathname,

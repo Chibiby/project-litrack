@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -35,9 +36,11 @@ import { removeAllTeacherAccounts, resetAllSchoolHeadPasswords } from "@/lib/db/
  * three Danger-zone actions accept an explicit per-run acknowledgement
  * (`CONFIRM_PHRASES.noBackupAck`) instead of a snapshot.
  *
- * These actions are Super-Admin-only and cross every tenant at once, which
- * makes them the one place in the app where `requireUser("SUPER_ADMIN")` is
- * load-bearing on its own rather than backed by a school-scoped query.
+ * These actions are Super-Admin-only and, unscoped, cross every tenant at
+ * once — which makes them the one place in the app where
+ * `requireUser("SUPER_ADMIN")` is load-bearing on its own rather than backed by
+ * a school-scoped query. The three Danger-zone actions also accept a
+ * `schoolId` that narrows them to one school; see `resolveTarget`.
  */
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -116,6 +119,45 @@ async function safetyFor(
     return { ok: false, error: BACKUP_STORE_SETUP_MESSAGE };
   }
   return { ok: true, stamp: null };
+}
+
+/**
+ * Which school a Danger-zone action applies to.
+ *
+ * An empty `schoolId` means every school, which is what these three have always
+ * done. A named school is looked up here rather than trusted from the client:
+ * the picker in the console is a convenience, and a stale or edited value must
+ * not be able to point an irreversible operation at the wrong tenant — or, by
+ * being silently dropped, at all of them.
+ *
+ * The safety snapshot stays whole-database either way. It is the undo point,
+ * and restoring more than was touched is correct; restoring less is not.
+ */
+async function resolveTarget(
+  formData: FormData
+): Promise<{ ok: true; schoolId: string | null; name: string | null } | { ok: false; error: string }> {
+  const raw = formData.get("schoolId");
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!value) return { ok: true, schoolId: null, name: null };
+
+  const parsed = z.string().uuid().safeParse(value);
+  if (!parsed.success) return { ok: false, error: "That school could not be identified." };
+
+  const school = await prisma.school.findFirst({
+    where: { id: parsed.data, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (!school) return { ok: false, error: "That school no longer exists." };
+
+  return { ok: true, schoolId: school.id, name: school.name };
+}
+
+/** Audit fields shared by the three Danger-zone actions. */
+function scopeMetadata(target: { schoolId: string | null; name: string | null }) {
+  return {
+    scope: target.schoolId ? ("school" as const) : ("all-schools" as const),
+    schoolName: target.name ?? undefined,
+  };
 }
 
 function totalOf(counts: SnapshotCounts): number {
@@ -309,17 +351,23 @@ export async function resetOperationalData(formData: FormData): Promise<ActionRe
   const rate = await checkRateLimit(`db:reset:${admin.id}`, DESTRUCTIVE_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
+  const target = await resolveTarget(formData);
+  if (!target.ok) return target;
+
   try {
     const safety = await safetyFor("clear operational data", formData);
     if (!safety.ok) return safety;
 
-    const removed = await clearOperationalData();
+    const removed = await clearOperationalData(target.schoolId);
 
     await writeAudit({
       userId: admin.id,
+      schoolId: target.schoolId ?? undefined,
       action: AUDIT_ACTIONS.DB_RESET_OPERATIONAL,
       resource: "Database",
+      resourceId: target.schoolId ?? undefined,
       metadata: {
+        ...scopeMetadata(target),
         rowsRemoved: totalOf(removed),
         safetyStamp: safety.stamp,
         reversible: safety.stamp !== null,
@@ -345,17 +393,22 @@ export async function resetAllSchoolAccounts(formData: FormData): Promise<Action
   const rate = await checkRateLimit(`db:reset-accounts:${admin.id}`, DESTRUCTIVE_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
+  const target = await resolveTarget(formData);
+  if (!target.ok) return target;
+
   try {
     const safety = await safetyFor("reset school accounts", formData);
     if (!safety.ok) return safety;
 
-    const result = await resetAllSchoolHeadPasswords();
+    const result = await resetAllSchoolHeadPasswords(target.schoolId);
 
     await writeAudit({
       userId: admin.id,
+      schoolId: target.schoolId ?? undefined,
       action: AUDIT_ACTIONS.DB_RESET_SCHOOL_ACCOUNTS,
       resource: "User",
       metadata: {
+        ...scopeMetadata(target),
         processed: result.processed,
         failed: result.failed.length,
         safetyStamp: safety.stamp,
@@ -383,17 +436,22 @@ export async function removeAllTeachers(formData: FormData): Promise<ActionResul
   const rate = await checkRateLimit(`db:remove-teachers:${admin.id}`, DESTRUCTIVE_RATE);
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
+  const target = await resolveTarget(formData);
+  if (!target.ok) return target;
+
   try {
     const safety = await safetyFor("remove teacher accounts", formData);
     if (!safety.ok) return safety;
 
-    const result = await removeAllTeacherAccounts();
+    const result = await removeAllTeacherAccounts(target.schoolId);
 
     await writeAudit({
       userId: admin.id,
+      schoolId: target.schoolId ?? undefined,
       action: AUDIT_ACTIONS.DB_REMOVE_TEACHER_ACCOUNTS,
       resource: "User",
       metadata: {
+        ...scopeMetadata(target),
         processed: result.processed,
         failed: result.failed.length,
         safetyStamp: safety.stamp,

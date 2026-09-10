@@ -25,6 +25,22 @@
  *    and the wrong one.
  */
 
+/**
+ * A Prisma `where` that narrows one operational model to a single school.
+ *
+ * Every operational model carries one, because "clear this school's data"
+ * cannot lean on `ON DELETE CASCADE`: the cascade fires from a parent row the
+ * same operation is deleting, so the per-table counts would come back wrong and
+ * the result would depend on delete order rather than on the filter. Models
+ * with their own `schoolId` column filter on it; the rest walk the relation
+ * that owns them, which is why several of these are nested.
+ */
+export type SchoolScope = (schoolId: string) => Record<string, unknown>;
+
+const bySchoolId: SchoolScope = (schoolId) => ({ schoolId });
+const byLearner: SchoolScope = (schoolId) => ({ learner: { schoolId } });
+const byChannel: SchoolScope = (schoolId) => ({ channel: { schoolId } });
+
 /** Prisma model name → the client delegate key (camelCase). */
 export type SnapshotModel = {
   /** Prisma model name as it appears in `schema.prisma` and the DMMF. */
@@ -38,6 +54,12 @@ export type SnapshotModel = {
    * and people while losing its learners and their records.
    */
   operational: boolean;
+  /**
+   * How to narrow this table to one school. Required on every operational
+   * model — a school-scoped clear refuses rather than guessing — and absent on
+   * the structural ones, which a clear never touches.
+   */
+  schoolScope?: SchoolScope;
 };
 
 export const SNAPSHOT_MODELS: SnapshotModel[] = [
@@ -60,28 +82,41 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   { model: "TeacherInvite", delegate: "teacherInvite", operational: false },
 
   // Operational: learners and everything recorded about them.
-  { model: "Learner", delegate: "learner", operational: true },
-  { model: "Enrollment", delegate: "enrollment", operational: true },
-  { model: "AralProfile", delegate: "aralProfile", operational: true },
-  { model: "Attendance", delegate: "attendance", operational: true },
-  { model: "AttendanceDayMeta", delegate: "attendanceDayMeta", operational: true },
-  { model: "ReadingLevelRecord", delegate: "readingLevelRecord", operational: true },
-  { model: "TermGrade", delegate: "termGrade", operational: true },
-  { model: "Announcement", delegate: "announcement", operational: true },
-  { model: "Report", delegate: "report", operational: true },
-  { model: "SupportTicket", delegate: "supportTicket", operational: true },
+  { model: "Learner", delegate: "learner", operational: true, schoolScope: bySchoolId },
+  { model: "Enrollment", delegate: "enrollment", operational: true, schoolScope: bySchoolId },
+  { model: "AralProfile", delegate: "aralProfile", operational: true, schoolScope: byLearner },
+  { model: "Attendance", delegate: "attendance", operational: true, schoolScope: byLearner },
+  {
+    model: "AttendanceDayMeta",
+    delegate: "attendanceDayMeta",
+    operational: true,
+    schoolScope: (schoolId) => ({ gradeLevel: { schoolId } }),
+  },
+  { model: "ReadingLevelRecord", delegate: "readingLevelRecord", operational: true, schoolScope: byLearner },
+  { model: "TermGrade", delegate: "termGrade", operational: true, schoolScope: byLearner },
+  { model: "Announcement", delegate: "announcement", operational: true, schoolScope: bySchoolId },
+  { model: "Report", delegate: "report", operational: true, schoolScope: bySchoolId },
+  { model: "SupportTicket", delegate: "supportTicket", operational: true, schoolScope: bySchoolId },
   // After SupportTicket — UnlockGrant.ticketId and Notification.ticketId both
   // point at it.
-  { model: "UnlockGrant", delegate: "unlockGrant", operational: true },
+  { model: "UnlockGrant", delegate: "unlockGrant", operational: true, schoolScope: bySchoolId },
   // The chat tables come before Notification, which points at ChatChannel, and
   // after User and School, which they point at. Within themselves the order is
   // the obvious one: a channel holds messages, a message holds mentions.
-  { model: "ChatChannel", delegate: "chatChannel", operational: true },
-  { model: "ChatMessage", delegate: "chatMessage", operational: true },
-  { model: "ChatMention", delegate: "chatMention", operational: true },
-  { model: "ChatRead", delegate: "chatRead", operational: true },
-  { model: "Notification", delegate: "notification", operational: true },
-  { model: "AuditLog", delegate: "auditLog", operational: true },
+  { model: "ChatChannel", delegate: "chatChannel", operational: true, schoolScope: bySchoolId },
+  { model: "ChatMessage", delegate: "chatMessage", operational: true, schoolScope: byChannel },
+  {
+    model: "ChatMention",
+    delegate: "chatMention",
+    operational: true,
+    schoolScope: (schoolId) => ({ message: { channel: { schoolId } } }),
+  },
+  { model: "ChatRead", delegate: "chatRead", operational: true, schoolScope: byChannel },
+  { model: "Notification", delegate: "notification", operational: true, schoolScope: bySchoolId },
+  // `AuditLog.schoolId` is a plain nullable column, not a relation (see the
+  // note at the top). A school-scoped clear takes that school's trail and
+  // leaves the system-wide rows, whose `schoolId` is null, standing.
+  { model: "AuditLog", delegate: "auditLog", operational: true, schoolScope: bySchoolId },
 ];
 
 /**

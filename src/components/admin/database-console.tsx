@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table,
   TableBody,
@@ -45,6 +46,14 @@ export type BackupRow = {
   uploadedAt: string;
 };
 
+/** One row of the Danger zone's school picker, with the numbers it relabels. */
+export type SchoolOption = {
+  id: string;
+  name: string;
+  schoolHeads: number;
+  teachers: number;
+};
+
 export type ConsoleData = {
   storeReady: boolean;
   storeMessage: string;
@@ -53,6 +62,7 @@ export type ConsoleData = {
   counts: Record<string, number>;
   totalRows: number;
   accounts: { schoolHeads: number; teachers: number };
+  schools: SchoolOption[];
 };
 
 function formatBytes(n: number): string {
@@ -198,6 +208,27 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   const [restoring, startRestore] = useTransition();
   const [uploadConfirm, setUploadConfirm] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /** "" is every school — the Danger zone's original and still-default reach. */
+  const [targetSchoolId, setTargetSchoolId] = useState("");
+  const targetSchool = data.schools.find((s) => s.id === targetSchoolId) ?? null;
+
+  /**
+   * The numbers the two account buttons name. A picked school reports its own;
+   * with none picked they stay the whole-system totals the page loaded with.
+   */
+  const scopedAccounts = targetSchool
+    ? { schoolHeads: targetSchool.schoolHeads, teachers: targetSchool.teachers }
+    : data.accounts;
+
+  const schoolOptions = [
+    { value: "", label: "All schools" },
+    ...data.schools.map((s) => ({
+      value: s.id,
+      label: s.name,
+      hint: `${s.schoolHeads} head${s.schoolHeads === 1 ? "" : "s"}, ${s.teachers} teacher${s.teachers === 1 ? "" : "s"}`,
+    })),
+  ];
 
   /** Backing up, restoring and undoing all need the store; the Danger zone does not. */
   const disabled = !data.storeReady;
@@ -489,22 +520,51 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               Danger zone
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
+              {targetSchool
+                ? `Scoped to ${targetSchool.name}. Every other school is left alone.`
+                : "Each of these affects every school at once."}{" "}
               {data.storeReady
-                ? "Each of these affects every school at once. All three save a safety point first, so “Undo last operation” above can put things back."
-                : "Each of these affects every school at once. With no backup storage connected there is no safety point to save, so nothing here can be undone — each action asks you to confirm that before it runs."}
+                ? "All three save a safety point first, so “Undo last operation” above can put things back — and that safety point covers the whole database, not just the school picked here."
+                : "With no backup storage connected there is no safety point to save, so nothing here can be undone — each action asks you to confirm that before it runs."}
+            </p>
+          </div>
+
+          <div className="space-y-1.5 rounded-lg border border-border/70 bg-muted/40 p-3">
+            <label className="text-sm font-medium" htmlFor="danger-scope">
+              Applies to
+            </label>
+            <SearchableSelect
+              id="danger-scope"
+              options={schoolOptions}
+              value={targetSchoolId}
+              onValueChange={setTargetSchoolId}
+              placeholder="All schools"
+              searchPlaceholder="Search schools…"
+              emptyMessage="No school matches that."
+            />
+            <p className="text-xs text-muted-foreground">
+              {targetSchool
+                ? "Only this school's records and accounts are touched."
+                : `Every school at once — all ${data.schools.length.toLocaleString()} of them.`}
             </p>
           </div>
 
           <DangerAction
+            key={`clear-${targetSchoolId}`}
             phrase={CONFIRM_PHRASES.resetOperational}
             label="Clear data"
-            title="Clear operational data"
-            description="Deletes every learner, enrolment, attendance record, reading level, term grade, report, ticket and notification. Keeps schools, school years, grade levels, sections and all accounts."
+            title={
+              targetSchool
+                ? `Clear ${targetSchool.name}'s operational data`
+                : "Clear operational data"
+            }
+            description={`Deletes every learner, enrolment, attendance record, reading level, term grade, report, ticket and notification${targetSchool ? " belonging to this school" : ""}. Keeps schools, school years, grade levels, sections and all accounts.`}
             icon={<Trash2 className="h-4 w-4" aria-hidden />}
             noBackup={!data.storeReady}
             onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => resetOperationalData(fd),
@@ -518,15 +578,21 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
           />
 
           <DangerAction
+            key={`accounts-${targetSchoolId}`}
             phrase={CONFIRM_PHRASES.resetSchoolAccounts}
             label="Reset accounts"
-            title={`Reset all ${data.accounts.schoolHeads} school accounts to default`}
+            title={
+              targetSchool
+                ? `Reset ${targetSchool.name}'s ${scopedAccounts.schoolHeads} school account${scopedAccounts.schoolHeads === 1 ? "" : "s"} to default`
+                : `Reset all ${scopedAccounts.schoolHeads} school accounts to default`
+            }
             description="Sets every School Head's password back to their own School ID. Any password they chose themselves stops working immediately."
             icon={<RotateCcw className="h-4 w-4" aria-hidden />}
             noBackup={!data.storeReady}
             onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => resetAllSchoolAccounts(fd),
@@ -539,15 +605,21 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
           />
 
           <DangerAction
+            key={`teachers-${targetSchoolId}`}
             phrase={CONFIRM_PHRASES.removeTeachers}
             label="Remove teachers"
-            title={`Remove all ${data.accounts.teachers} teacher accounts`}
+            title={
+              targetSchool
+                ? `Remove ${targetSchool.name}'s ${scopedAccounts.teachers} teacher account${scopedAccounts.teachers === 1 ? "" : "s"}`
+                : `Remove all ${scopedAccounts.teachers} teacher accounts`
+            }
             description="Deletes every teacher's login and hides them from the app. The records they entered stay attached to their name so history still reads, and their email is freed so they can register again."
             icon={<Trash2 className="h-4 w-4" aria-hidden />}
             noBackup={!data.storeReady}
             onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => removeAllTeachers(fd),

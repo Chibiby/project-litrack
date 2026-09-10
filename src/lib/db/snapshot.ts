@@ -277,14 +277,26 @@ export async function restoreSnapshot(snapshot: Snapshot): Promise<SnapshotCount
  *
  * The join table survives: teacher-to-grade assignments are structure, not
  * records, and a school that loses them has to be rebuilt by hand.
+ *
+ * With `schoolId` given, only that school's rows go. Each table is filtered by
+ * its own `schoolScope` rather than left to `ON DELETE CASCADE`, so the counts
+ * returned are the rows this call actually deleted and no other school is
+ * touched even by a table that reaches its school through three relations.
  */
-export async function clearOperationalData(): Promise<SnapshotCounts> {
+export async function clearOperationalData(schoolId?: string | null): Promise<SnapshotCounts> {
   const removed: SnapshotCounts = {};
 
   await prisma.$transaction(
     async (tx) => {
-      for (const { model, delegate } of OPERATIONAL_DELETE_ORDER) {
-        const { count } = await delegateFor(tx, delegate).deleteMany({});
+      for (const { model, delegate, schoolScope } of OPERATIONAL_DELETE_ORDER) {
+        if (schoolId && !schoolScope) {
+          // Unreachable while the schema-order test holds: it asserts every
+          // operational model carries a scope. Refusing beats silently
+          // emptying this table for every school.
+          throw new Error(`No school scope for operational model "${model}"`);
+        }
+        const where = schoolId ? schoolScope!(schoolId) : {};
+        const { count } = await delegateFor(tx, delegate).deleteMany({ where });
         removed[model] = count;
       }
     },

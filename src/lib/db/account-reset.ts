@@ -42,12 +42,19 @@ function reasonOf(err: unknown): string {
  *
  * `mustChangePassword` is cleared, not set — after a bulk reset every head
  * should be able to sign straight in, and the first-login prompt is optional.
+ *
+ * With `schoolId` given, only that school's head is reset.
  */
-export async function resetAllSchoolHeadPasswords(): Promise<BulkResult> {
+export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Promise<BulkResult> {
   const supabaseAdmin = createSupabaseAdminClient();
 
   const heads = await prisma.user.findMany({
-    where: { role: "SCHOOL_HEAD", deletedAt: null, school: { deletedAt: null } },
+    where: {
+      role: "SCHOOL_HEAD",
+      deletedAt: null,
+      school: { deletedAt: null },
+      ...(schoolId ? { schoolId } : {}),
+    },
     select: {
       id: true,
       authId: true,
@@ -107,12 +114,14 @@ function tombstoneEmail(userId: string): string {
  * session and every list filters the row out, and the login email is
  * tombstoned so the same teacher can register again from scratch. The Prisma
  * row survives only to keep "who recorded this" answerable.
+ *
+ * With `schoolId` given, only that school's teachers are removed.
  */
-export async function removeAllTeacherAccounts(): Promise<BulkResult> {
+export async function removeAllTeacherAccounts(schoolId?: string | null): Promise<BulkResult> {
   const supabaseAdmin = createSupabaseAdminClient();
 
   const teachers = await prisma.user.findMany({
-    where: { role: "TEACHER", deletedAt: null },
+    where: { role: "TEACHER", deletedAt: null, ...(schoolId ? { schoolId } : {}) },
     select: { id: true, authId: true, fullName: true, email: true },
   });
 
@@ -157,4 +166,47 @@ export async function accountCounts(): Promise<{ schoolHeads: number; teachers: 
     prisma.user.count({ where: { role: "TEACHER", deletedAt: null } }),
   ]);
   return { schoolHeads, teachers };
+}
+
+/**
+ * The same two numbers per school, so the console can relabel its buttons the
+ * moment a school is picked without a round trip.
+ *
+ * One `groupBy` rather than a count per school: at 300-odd schools the second
+ * shape is 600 queries on a page that already reads every table's row count.
+ * Schools with neither a head nor a teacher still belong in the list — they are
+ * exactly the ones an admin is most likely to be clearing — so the counts are
+ * merged onto the school list rather than derived from it.
+ */
+export async function accountCountsBySchool(): Promise<
+  { id: string; name: string; schoolHeads: number; teachers: number }[]
+> {
+  const [schools, grouped] = await Promise.all([
+    prisma.school.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.groupBy({
+      by: ["schoolId", "role"],
+      where: { deletedAt: null, role: { in: ["SCHOOL_HEAD", "TEACHER"] }, schoolId: { not: null } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const tally = new Map<string, { schoolHeads: number; teachers: number }>();
+  for (const row of grouped) {
+    if (!row.schoolId) continue;
+    const entry = tally.get(row.schoolId) ?? { schoolHeads: 0, teachers: 0 };
+    if (row.role === "SCHOOL_HEAD") entry.schoolHeads = row._count._all;
+    else entry.teachers = row._count._all;
+    tally.set(row.schoolId, entry);
+  }
+
+  return schools.map((school) => ({
+    id: school.id,
+    name: school.name,
+    schoolHeads: tally.get(school.id)?.schoolHeads ?? 0,
+    teachers: tally.get(school.id)?.teachers ?? 0,
+  }));
 }
