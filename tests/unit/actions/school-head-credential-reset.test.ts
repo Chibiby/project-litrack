@@ -102,6 +102,17 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
     expect(JSON.stringify(entry.metadata)).not.toContain(SCHOOL_ID_CODE);
   });
 
+  it("gives an extension school the same default password as its mother school", async () => {
+    // Naidas T. Opong ES (Banlas Extension) is stored as 130554-2 and signs in
+    // with the bare 130554, same as Naidas T. Opong ES itself.
+    prismaMock.school.findFirst.mockResolvedValueOnce({ id: SCHOOL_ID, schoolIdCode: "130554-2" });
+
+    const res = await regenerateSchoolHeadCredential(form());
+
+    expect(res).toEqual({ ok: true, data: { password: "130554" } });
+    expect(updateUserById.mock.calls[0][1]).toMatchObject({ password: "130554" });
+  });
+
   it("changes nothing locally when Supabase refuses the update", async () => {
     updateUserById.mockResolvedValueOnce({ error: { message: "boom" } });
 
