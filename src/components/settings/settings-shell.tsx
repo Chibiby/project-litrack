@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KeyRound, MonitorPlay, UserCircle } from "lucide-react";
+import { KeyRound, Lock, MonitorPlay, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SettingsRoleBase = "/admin" | "/school-head" | "/teacher";
@@ -12,11 +12,15 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
   const items = [
     { label: "Profile", href: `${roleBase}/settings/profile`, icon: UserCircle },
     { label: "Security", href: `${roleBase}/settings/security`, icon: KeyRound },
-    // Demo mode is a system-wide switch, so it belongs to the Super Admin alone.
-    // The route itself is guarded by `requireUser("SUPER_ADMIN")`; hiding the
-    // link here is only so the other two roles are not shown a dead end.
+    // Both of these are system-wide switches, so they belong to the Super Admin
+    // alone. The routes themselves are guarded by `requireUser("SUPER_ADMIN")`;
+    // hiding the links here is only so the other two roles are not shown a dead
+    // end.
     ...(roleBase === "/admin"
-      ? ([{ label: "Demo mode", href: "/admin/settings/demo", icon: MonitorPlay }] as const)
+      ? ([
+          { label: "Demo mode", href: "/admin/settings/demo", icon: MonitorPlay },
+          { label: "Submissions", href: "/admin/settings/submissions", icon: Lock },
+        ] as const)
       : []),
   ] as const;
 

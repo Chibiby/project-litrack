@@ -319,6 +319,20 @@ vi.mock("@/lib/cache/revalidate", () => ({
     revalidateLearnerScoped(...(args as [])),
 }));
 
+/**
+ * Submission locking, ON for this suite.
+ *
+ * This file's subject is the term deadline, so it runs in the regime where
+ * deadlines are enforced. Mocked rather than left to the real reader, which
+ * would reach `prisma.systemSetting` — absent from the Prisma mock above — and
+ * degrade to "off", quietly turning every locked-term assertion here into a
+ * test of the unlocked path. The switched-off case has its own test below.
+ */
+const isSubmissionLockingEnabled = vi.fn(async () => true);
+vi.mock("@/lib/settings/system-settings", () => ({
+  isSubmissionLockingEnabled: () => isSubmissionLockingEnabled(),
+}));
+
 // Imported after the mock factories above are registered.
 const { saveTermGrades } = await import("@/lib/actions/term-grades");
 
@@ -555,6 +569,20 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
     expect(res.ok).toBe(false);
     expectNoWrites();
     expect(learnerFindMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * §3: the programme-wide switch. With deadlines off, the same closed term the
+   * first case refuses is accepted — from the same teacher, with no grant
+   * anywhere. This is the pair that proves the switch reaches this action, and
+   * it fails if `canWriteWindow` is ever bypassed here.
+   */
+  it("accepts that same closed term when deadlines are switched off", async () => {
+    isSubmissionLockingEnabled.mockResolvedValueOnce(false);
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
   });
 });
 

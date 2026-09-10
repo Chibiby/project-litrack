@@ -19,7 +19,7 @@ import {
   schoolToday,
 } from "@/lib/date-keys";
 import { attendanceDeadline, formatLongDate } from "@/lib/week-range";
-import { findActiveUnlock } from "@/lib/unlock/grants";
+import { canWriteWindow } from "@/lib/unlock/grants";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
@@ -148,25 +148,29 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   // the client. Both read the same helper so the date a teacher is shown is the
   // date that actually closes the week.
   //
-  // A live `UnlockGrant` is the one thing that reopens a closed week, and only
-  // for the person it names. The grant is consulted *after* the deadline test,
-  // never instead of it: the overwhelmingly common save is inside the window and
-  // must not pay a query to learn what the date already says.
+  // Past the deadline, two things can still open the week: submission locking
+  // being switched off programme-wide, or a live `UnlockGrant` naming this
+  // person and this week. `canWriteWindow` answers both, and is consulted
+  // *after* the deadline test, never instead of it: the overwhelmingly common
+  // save is inside the window and must not pay a query to learn what the date
+  // already says.
   const deadline = attendanceDeadline(weekStart);
   let usedGrantId: string | null = null;
   if (schoolToday() > deadline) {
-    const grant = await findActiveUnlock(
+    const verdict = await canWriteWindow(
       user.id,
       "ARAL_WEEKLY_ATTENDANCE",
       parsed.data.weekStart
     );
-    if (!grant) {
+    if (!verdict.writable) {
       return {
         ok: false,
         error: `This week is locked. Editing closed on ${formatLongDate(deadline)}.`,
       };
     }
-    usedGrantId = grant.id;
+    // Null when locking is off — the audit row then records a save past the
+    // deadline that no grant paid for, which is exactly what happened.
+    usedGrantId = verdict.grantId;
   }
 
   // ARAL attendance: an ARAL-only teacher (no advisory section) reaches this

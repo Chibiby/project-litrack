@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { DEMO_ENABLED_KEY } from "@/lib/demo/constants";
+import { SUBMISSION_LOCKING_KEY } from "@/lib/unlock/constants";
 
 /**
  * Read one global switch. Returns `null` when the row does not exist, which is
@@ -50,6 +51,34 @@ export async function writeSetting(key: string, value: string): Promise<void> {
  */
 export const isDemoEnabled = cache(async (): Promise<boolean> => {
   return (await readSetting(DEMO_ENABLED_KEY)) === "true";
+});
+
+/**
+ * Are the deadlines on ARAL weekly attendance and term grades being enforced?
+ *
+ * Defaults to **off**, which is the opposite direction from `isDemoEnabled` and
+ * deliberately so. The programme asked for everything writable while the rollout
+ * settles, so a database with no `submissions.locking` row ships with every
+ * window open and no `UnlockGrant` lookup on any save path.
+ *
+ * `readSetting` degrades a failure to `null`, and `null` here means "off". That
+ * is this module's rule — a settings hiccup must never become a 500 — pointed in
+ * the direction that leaves teachers able to work rather than locked out of a
+ * week they are in the middle of encoding.
+ *
+ * Individual grants are untouched while this is off. They are not consulted, and
+ * they start mattering again the instant it is switched on.
+ *
+ * Global rather than per-school: the request was one decision about the
+ * programme's rollout. A per-school variant can be added later without moving
+ * what this establishes.
+ *
+ * `cache()` for the same reason as `isDemoEnabled` — a page that checks several
+ * windows pays one query — and deliberately not an `unstable_cache` entry, so
+ * the switch is never stuck behind a second TTL.
+ */
+export const isSubmissionLockingEnabled = cache(async (): Promise<boolean> => {
+  return (await readSetting(SUBMISSION_LOCKING_KEY)) === "true";
 });
 
 /**

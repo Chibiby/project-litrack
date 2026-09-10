@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import type { UnlockScope } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 
 /**
  * Reads for `UnlockGrant` — the permission that lets one person write inside one
@@ -116,4 +117,65 @@ export async function listActiveUnlockKeys(
     console.error("[unlock] grant list failed:", err);
     return new Set();
   }
+}
+
+/**
+ * "The date says this window is closed — may this user write into it anyway?"
+ *
+ * The single question the two save paths ask, and the only place they should ask
+ * it. Call it AFTER the deadline test, never instead of one: an in-window save
+ * is the overwhelmingly common case and must not pay for a settings read or a
+ * grant lookup to learn what the date already said.
+ *
+ * When submission locking is switched off this returns writable **without
+ * touching `UnlockGrant` at all** — no query, no grant, nothing to revoke. When
+ * it is on, the behaviour is exactly what it has always been: one live grant for
+ * this user, this scope and this target, or a refusal.
+ *
+ * `grantId` is non-null only when a grant is what opened the window, so the
+ * caller's audit row still distinguishes "written under a grant" from "written
+ * because nothing was locked".
+ */
+export type WindowWriteVerdict =
+  | { writable: true; grantId: string | null }
+  | { writable: false; grantId: null };
+
+export async function canWriteWindow(
+  userId: string,
+  scope: UnlockScope,
+  targetKey: UnlockTargetKey
+): Promise<WindowWriteVerdict> {
+  if (!(await isSubmissionLockingEnabled())) {
+    return { writable: true, grantId: null };
+  }
+  const grant = await findActiveUnlock(userId, scope, targetKey);
+  return grant
+    ? { writable: true, grantId: grant.id }
+    : { writable: false, grantId: null };
+}
+
+/**
+ * The same question for a page that renders several windows at once.
+ *
+ * `lockingEnabled: false` means nothing is locked and `unlockedKeys` is empty —
+ * empty because no grant was read, not because the user holds none. A caller
+ * must branch on the flag first; treating the empty set as "everything locked"
+ * would invert the switch on exactly the surfaces it exists to open.
+ */
+export type UnlockState = {
+  lockingEnabled: boolean;
+  unlockedKeys: Set<string>;
+};
+
+export async function readUnlockState(
+  userId: string,
+  scope: UnlockScope
+): Promise<UnlockState> {
+  if (!(await isSubmissionLockingEnabled())) {
+    return { lockingEnabled: false, unlockedKeys: new Set() };
+  }
+  return {
+    lockingEnabled: true,
+    unlockedKeys: await listActiveUnlockKeys(userId, scope),
+  };
 }

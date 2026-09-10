@@ -43,7 +43,7 @@ import {
   type TermPeriodValue,
   type TermWindow,
 } from "@/lib/terms/windows";
-import { listActiveUnlockKeys } from "@/lib/unlock/grants";
+import { readUnlockState } from "@/lib/unlock/grants";
 import {
   TERM_SHEET_NO_ADVISORY_CARD,
   TERM_SHEET_VOLUNTEER_CARD,
@@ -217,11 +217,17 @@ export default async function AralGradeTermsReportsPage({
   // server action re-checks grants when a save arrives; the sheet has to see
   // the same answer or it would claim a term is locked that `saveTermGrades`
   // would accept (and the teacher could never start typing into it).
-  const unlockedTerms = isSuperAdmin
-    ? new Set<string>()
-    : await listActiveUnlockKeys(user.id, "TERM_GRADES");
+  //
+  // Locking switched off programme-wide reopens every term for everyone, which
+  // is why the flag is checked before the set: an empty `unlockedKeys` means no
+  // grant was read, not that the teacher holds none.
+  const unlock = isSuperAdmin
+    ? { lockingEnabled: true, unlockedKeys: new Set<string>() }
+    : await readUnlockState(user.id, "TERM_GRADES");
   const isEncodingClosed = (w: TermWindow) =>
-    isTermLocked(w, todayKey) && !unlockedTerms.has(w.term);
+    unlock.lockingEnabled &&
+    isTermLocked(w, todayKey) &&
+    !unlock.unlockedKeys.has(w.term);
 
   const terms = windows.map((w) => ({
     term: w.term,

@@ -267,11 +267,24 @@ vi.mock("@/lib/cache/revalidate", () => ({
 }));
 
 // `attendanceDeadline` locks a week some days after it ends, so the fake clock has
-// to sit inside the editable window for this week.
+// to sit inside the editable window for this week. Mutable rather than fixed, so
+// the two §3 cases below can move the deadline into the past.
+let deadline = new Date(2099, 0, 1);
 vi.mock("@/lib/week-range", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, attendanceDeadline: () => new Date(2099, 0, 1) };
+  return { ...actual, attendanceDeadline: () => deadline };
 });
+
+/**
+ * Submission locking, ON by default here for the same reason the term-grades
+ * suite pins it: the real reader would reach `prisma.systemSetting`, which the
+ * Prisma mock above does not define, and degrade to "off" — turning the locked
+ * case below into a second test of the unlocked path.
+ */
+const isSubmissionLockingEnabled = vi.fn(async () => true);
+vi.mock("@/lib/settings/system-settings", () => ({
+  isSubmissionLockingEnabled: () => isSubmissionLockingEnabled(),
+}));
 
 const { saveAralWeeklyAttendance } = await import("@/lib/actions/attendance");
 
@@ -297,6 +310,39 @@ beforeEach(() => {
   learnerIds = ["learner-a", "learner-b", "learner-c"];
   rawCalls = [];
   dropOneReturnedRow = false;
+  deadline = new Date(2099, 0, 1);
+  isSubmissionLockingEnabled.mockResolvedValue(true);
+});
+
+/**
+ * §3 of the ten concerns, at this write path.
+ *
+ * The pair is the point: the SAME past-deadline week, from the same teacher,
+ * with no grant anywhere, refused in one regime and accepted in the other. It
+ * fails if `canWriteWindow` is ever bypassed here, in either direction.
+ */
+describe("saveAralWeeklyAttendance — the submission-locking switch", () => {
+  it("refuses a week past its deadline while deadlines are enforced", async () => {
+    deadline = new Date(2000, 0, 1);
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: WEEK_START, status: "PRESENT" }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res).toMatchObject({ error: expect.stringContaining("locked") });
+  });
+
+  it("accepts that same week when deadlines are switched off", async () => {
+    deadline = new Date(2000, 0, 1);
+    isSubmissionLockingEnabled.mockResolvedValue(false);
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: WEEK_START, status: "PRESENT" }],
+    });
+
+    expect(res.ok).toBe(true);
+  });
 });
 
 describe("saveAralWeeklyAttendance — the RETURNING count guard", () => {

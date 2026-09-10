@@ -62,9 +62,16 @@ function normalizeWeekKey(value: string): string {
  * week as read-only and the teacher could never start typing the save the
  * server would accept.
  */
-function lockInfo(weekKey: string, unlockedWeeks: string[]) {
+function lockInfo(
+  weekKey: string,
+  unlockedWeeks: string[],
+  lockingEnabled: boolean
+) {
   const deadline = attendanceDeadline(parseLocalDateKey(weekKey));
-  const pastDeadline = schoolToday() > deadline;
+  // The deadline is still computed and still shown when locking is on. With the
+  // switch off it is not a lock at all, so nothing past it is closed and no
+  // grant is needed — a grant would be meaningless where nothing is refused.
+  const pastDeadline = lockingEnabled && schoolToday() > deadline;
   const granted = pastDeadline && unlockedWeeks.includes(weekKey);
   return { deadline, granted, locked: pastDeadline && !granted };
 }
@@ -84,6 +91,15 @@ type Props = {
   readOnly?: boolean;
   /** Week keys (Mondays, `YYYY-MM-DD`) this teacher may still edit past the deadline. */
   unlockedWeeks?: string[];
+  /**
+   * Whether deadlines are being enforced at all (`submissions.locking`).
+   *
+   * A separate flag rather than a wider `unlockedWeeks`, because week keys
+   * cannot be enumerated — "every week is open" is not expressible as a list.
+   * Defaults to true so a caller that has not been taught about the switch keeps
+   * the pre-switch behaviour rather than silently unlocking everything.
+   */
+  lockingEnabled?: boolean;
 };
 
 export function AralWeeklyAttendancePanel({
@@ -100,6 +116,7 @@ export function AralWeeklyAttendancePanel({
   initialHolidayKeys,
   readOnly,
   unlockedWeeks = [],
+  lockingEnabled = true,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -121,8 +138,8 @@ export function AralWeeklyAttendancePanel({
   // The banner follows the week the teacher asked for; the grid follows the week
   // whose rows have arrived. While a fetch is in flight those differ, and the
   // "Loading week…" overlay is what says so.
-  const picked = lockInfo(pickerWeek, unlockedWeeks);
-  const gridLocked = lockInfo(loadedWeek, unlockedWeeks).locked;
+  const picked = lockInfo(pickerWeek, unlockedWeeks, lockingEnabled);
+  const gridLocked = lockInfo(loadedWeek, unlockedWeeks, lockingEnabled).locked;
   const actionsLocked = Boolean(readOnly || loading || savePending);
 
   const sharedParams = {
@@ -239,16 +256,32 @@ export function AralWeeklyAttendancePanel({
                   : "Attendance entry and editing are currently available."
             }
           />
-          <BannerItem
-            icon={<CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden />}
-            title="Editing deadline"
-            body={`${deadlineLabel} (${ATTENDANCE_EDIT_GRACE_DAYS} days after the week ends)`}
-          />
-          <BannerItem
-            icon={<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />}
-            title="Auto-lock"
-            body="After the deadline, this week locks itself."
-          />
+          {/*
+            With locking switched off the deadline is not a deadline, so the two
+            panels that explain it are replaced rather than left to state a rule
+            nothing enforces. Nothing is more confusing than a banner counting
+            down to a lock that will never happen.
+          */}
+          {lockingEnabled ? (
+            <>
+              <BannerItem
+                icon={<CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden />}
+                title="Editing deadline"
+                body={`${deadlineLabel} (${ATTENDANCE_EDIT_GRACE_DAYS} days after the week ends)`}
+              />
+              <BannerItem
+                icon={<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />}
+                title="Auto-lock"
+                body="After the deadline, this week locks itself."
+              />
+            </>
+          ) : (
+            <BannerItem
+              icon={<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />}
+              title="No editing deadline"
+              body="Weekly attendance is open for the whole programme right now. Any week can be edited."
+            />
+          )}
         </div>
       </section>
 
@@ -335,12 +368,20 @@ export function AralWeeklyAttendancePanel({
         <InfoCard
           icon={<CalendarDays className="size-4" aria-hidden />}
           title="About weekly attendance"
-          body="Record each learner's attendance for every school day in the selected week, then save. You can keep editing until the deadline."
+          body={
+            lockingEnabled
+              ? "Record each learner's attendance for every school day in the selected week, then save. You can keep editing until the deadline."
+              : "Record each learner's attendance for every school day in the selected week, then save. You can keep editing any week."
+          }
         />
         <InfoCard
           icon={<Lock className="size-4" aria-hidden />}
-          title="Auto-lock after deadline"
-          body={`After ${deadlineLabel}, this week's attendance locks and can no longer be edited.`}
+          title={lockingEnabled ? "Auto-lock after deadline" : "No auto-lock"}
+          body={
+            lockingEnabled
+              ? `After ${deadlineLabel}, this week's attendance locks and can no longer be edited.`
+              : "Editing deadlines are switched off for the programme. Your division admin can switch them back on."
+          }
         />
       </div>
     </>

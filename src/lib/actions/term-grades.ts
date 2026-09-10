@@ -21,7 +21,7 @@ import {
 } from "@/lib/teachers/advisory";
 import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
 import { generalAverage } from "@/lib/terms/average";
-import { findActiveUnlock } from "@/lib/unlock/grants";
+import { canWriteWindow } from "@/lib/unlock/grants";
 import {
   getTermWindows,
   isTermLocked,
@@ -138,19 +138,21 @@ export async function saveTermGrades(
   // the client is not the enforcement point. `schoolToday()`, never `new Date()`,
   // or every term locks a day early between midnight and 08:00 Manila.
   //
-  // A live `UnlockGrant` naming this term reopens it for this teacher alone.
-  // Consulted only once the date says the term is closed, so an in-window save
-  // still costs no extra query.
+  // Once the date says the term is closed, `canWriteWindow` decides: submission
+  // locking switched off programme-wide reopens every term, and a live
+  // `UnlockGrant` naming this term reopens it for this teacher alone. Consulted
+  // only after the date test, so an in-window save still costs no extra query.
   let usedGrantId: string | null = null;
   if (isTermLocked(window, formatLocalDateKey(schoolToday()))) {
-    const grant = await findActiveUnlock(user.id, "TERM_GRADES", parsed.data.term);
-    if (!grant) {
+    const verdict = await canWriteWindow(user.id, "TERM_GRADES", parsed.data.term);
+    if (!verdict.writable) {
       return {
         ok: false,
         error: `${window.label} is closed. Its months have passed, so grades can no longer be changed.`,
       };
     }
-    usedGrantId = grant.id;
+    // Null when locking is off; see the same note in `saveAralWeeklyAttendance`.
+    usedGrantId = verdict.grantId;
   }
 
   const learnerIds = [...new Set(parsed.data.entries.map((e) => e.learnerId))];

@@ -182,6 +182,14 @@ export const AUDIT_ACTIONS = {
   DEMO_MODE_SET: "DEMO_MODE_SET",
   DEMO_PROVISION: "DEMO_PROVISION",
   DEMO_RESET: "DEMO_RESET",
+
+  /**
+   * Whether submission deadlines are being enforced at all
+   * (`submissions.locking`). One row per flip, and the reason it is audited at
+   * all: while this is off, a save past a deadline records no grant, so this is
+   * the only thing that explains why the window was open.
+   */
+  SUBMISSION_LOCKING_SET: "SUBMISSION_LOCKING_SET",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
