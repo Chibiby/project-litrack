@@ -64,6 +64,10 @@ Committed migrations (apply in order via `migrate deploy`):
   an admin would read it out to a school. `tests/unit/db/password-is-school-id-backfill.test.ts`
   guards the classification rule.
 
+  Applied to production on 2026-09-10: 208 heads flagged, 124 left false, 4 already true
+  (212 of 336 flagged after). The rows it would flip were snapshotted by id before
+  applying; reverting is `UPDATE "User" SET "passwordIsSchoolId" = false` over those ids.
+
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
 `npx prisma migrate status` first.
