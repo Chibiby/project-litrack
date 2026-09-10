@@ -12,7 +12,12 @@ import {
   isSyntheticEmail,
   TEACHER_EMAIL_DOMAIN,
 } from "@/lib/auth/synthetic-email";
-import { parseAppMetadataRole, roleHomePath, enforceRolePrefix } from "@/lib/auth/roles";
+import {
+  parseAppMetadataRole,
+  roleHomePath,
+  enforceRolePrefix,
+  authedLoginRedirect,
+} from "@/lib/auth/roles";
 import {
   DECLINED_REGISTRATION_MESSAGE,
   DEACTIVATED_TEACHER_MESSAGE,
@@ -94,6 +99,28 @@ describe("roles + middleware gate", () => {
     // Pending teacher self-register success page must not be role-blocked.
     expect(enforceRolePrefix("/account/created", "TEACHER").ok).toBe(true);
     expect(enforceRolePrefix("/account/created", null).ok).toBe(true);
+  });
+
+  it("bounces a signed-in visitor who loads a login page to their home", () => {
+    expect(authedLoginRedirect("GET", "/login", "SCHOOL_HEAD")).toBe("/school-head");
+    expect(authedLoginRedirect("HEAD", "/login", "TEACHER")).toBe("/teacher");
+    expect(authedLoginRedirect("GET", "/admin/login", "SUPER_ADMIN")).toBe("/admin");
+  });
+
+  it("never redirects a POST to a login page — that is a Server Action mid-sign-in", () => {
+    // The browser has just stored the session; finishSchoolHeadLogin /
+    // finishTeacherLogin then POST to /login. Redirecting that request sends
+    // the action to /school-head, where Next cannot find it, and the sign-in
+    // Supabase already accepted is thrown away.
+    expect(authedLoginRedirect("POST", "/login", "SCHOOL_HEAD")).toBeNull();
+    expect(authedLoginRedirect("POST", "/login", "TEACHER")).toBeNull();
+    expect(authedLoginRedirect("POST", "/admin/login", "SUPER_ADMIN")).toBeNull();
+  });
+
+  it("leaves legacy role-less sessions and other paths alone", () => {
+    expect(authedLoginRedirect("GET", "/login", null)).toBeNull();
+    expect(authedLoginRedirect("GET", "/school-head", "SCHOOL_HEAD")).toBeNull();
+    expect(authedLoginRedirect("GET", "/forgot-password", "TEACHER")).toBeNull();
   });
 });
 

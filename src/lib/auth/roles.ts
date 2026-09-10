@@ -48,6 +48,29 @@ export function parseAppMetadataRole(value: unknown): AppRole | null {
 }
 
 /**
+ * Where middleware should send an already-signed-in visitor off a login page,
+ * or null to let the request through.
+ *
+ * Only a page load (GET/HEAD) is a visit. A POST to `/login` is a Server Action,
+ * and the browser sign-in depends on one reaching it: the browser stores the new
+ * session, then `finishSchoolHeadLogin` / `finishTeacherLogin` POST to `/login`
+ * carrying those cookies. Redirecting that POST forwards the action to the role
+ * home, where Next cannot find it — so every account whose JWT carries a role
+ * had its correct password accepted by Supabase and then thrown away. Legacy
+ * role-less accounts passed, which is why only a handful of heads got in.
+ */
+export function authedLoginRedirect(
+  method: string,
+  pathname: string,
+  role: AppRole | null
+): string | null {
+  if (!role) return null;
+  if (pathname !== "/login" && pathname !== "/admin/login") return null;
+  if (method !== "GET" && method !== "HEAD") return null;
+  return roleHomePath(role);
+}
+
+/**
  * Defense-in-depth path prefix checks using JWT app_metadata.role.
  * Legacy accounts without app_metadata.role pass through (requireUser is authoritative).
  */

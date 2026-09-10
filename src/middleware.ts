@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { enforceRolePrefix, roleHomePath } from "@/lib/auth/roles";
+import { authedLoginRedirect, enforceRolePrefix } from "@/lib/auth/roles";
 
 function isPublicPath(pathname: string) {
   return (
@@ -44,9 +44,11 @@ export async function middleware(request: NextRequest) {
 
   const { supabaseResponse, user } = await updateSession(request);
 
-  // Already authenticated users with a known JWT role visiting login → role home
-  if (user?.role && (pathname === "/login" || pathname === "/admin/login")) {
-    return NextResponse.redirect(new URL(roleHomePath(user.role), request.url));
+  // Already authenticated users with a known JWT role *loading* a login page →
+  // role home. Server Action POSTs to /login must pass; see authedLoginRedirect.
+  const loginBounce = authedLoginRedirect(request.method, pathname, user?.role ?? null);
+  if (loginBounce) {
+    return NextResponse.redirect(new URL(loginBounce, request.url));
   }
 
   if (isPublicPath(pathname)) {
