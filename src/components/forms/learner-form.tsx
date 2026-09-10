@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type FormEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -311,6 +312,19 @@ export function LearnerForm({
       invalid.focus();
       form.reportValidity();
     });
+  }
+
+  /**
+   * `onSubmit`, not `<form action>`. React 19 resets a form after every action
+   * it runs — failures included — which wiped everything typed whenever the
+   * server refused a save or warned of a duplicate. The controlled selects kept
+   * their state while the DOM snapped back to "Not specified", so "Create
+   * anyway" posted an empty ethnicity the teacher never chose. The success path
+   * clears the form itself below; nothing else should.
+   */
+  function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    handleSubmit(new FormData(event.currentTarget));
   }
 
   function handleSubmit(fd: FormData) {
@@ -700,7 +714,7 @@ export function LearnerForm({
   return (
     <form
       ref={formRef}
-      action={handleSubmit}
+      onSubmit={handleFormSubmit}
       onInput={refreshValues}
       className="flex min-h-0 flex-1 flex-col"
     >
