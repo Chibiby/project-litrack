@@ -27,18 +27,52 @@ import {
 } from "@/lib/constants/enum-labels";
 import {
   schoolHeadProfileSchema,
+  SH_OTHER_POSITIONS,
+  SH_PRINCIPAL_POSITIONS,
   YEARS_IN_SERVICE_MIN,
   YEARS_IN_SERVICE_MAX,
   type SchoolHeadProfileInput,
 } from "@/lib/validators/profile.schema";
 import { PROFILING_GRADE_LEVEL_TYPES } from "@/lib/validators/grade-level.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
+import { isValidEmail } from "@/lib/validators/common";
 import { saveSchoolHeadProfile } from "@/lib/actions/school-head";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
-/** Default School Head position when none is stored yet (read-only in UI). */
+/**
+ * Position preselected when a profile has none stored yet.
+ *
+ * The picker is editable, so this is only the opening guess for a brand-new
+ * profile — most school heads are Principal I, and offering the common answer
+ * costs a head who is something else a single click.
+ */
 export const SH_DEFAULT_POSITION = "PRINCIPAL_I" as const;
+
+/**
+ * The position picker: Principal ranks first, the rest under their own heading.
+ *
+ * A school head with a plantilla item holds one of the four Principal ranks, so
+ * those lead. The Head Teacher and Teacher-in-Charge ranks below them are how a
+ * small school without a Principal item is actually led, so they stay
+ * selectable rather than hidden. Built at module scope because the list is static.
+ */
+const SH_POSITION_GROUPS = [
+  {
+    label: "Principal",
+    options: SH_PRINCIPAL_POSITIONS.map((value) => ({
+      value,
+      label: SCHOOL_HEAD_POSITION_LABELS[value] ?? value,
+    })),
+  },
+  {
+    label: "Other school head ranks",
+    options: SH_OTHER_POSITIONS.map((value) => ({
+      value,
+      label: SCHOOL_HEAD_POSITION_LABELS[value] ?? value,
+    })),
+  },
+];
 
 const SECTIONS_PER_GRADE_MIN = 1;
 const SECTIONS_PER_GRADE_MAX = 26;
@@ -60,6 +94,7 @@ const shWizardFormSchema = z.object({
   firstName: z.string(),
   middleName: z.string(),
   lastName: z.string(),
+  contactEmail: z.string(),
   contactNumber: z.string(),
   designation: z.literal("School Head"),
   position: z.string(),
@@ -86,8 +121,11 @@ type Defaults = {
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  /** Login identity from `User.email`; shown read-only, never edited here. */
   accountEmail?: string;
   accountEmailIsSynthetic?: boolean;
+  /** Survey contact address from `SchoolHeadProfile.contactEmail` — editable. */
+  contactEmail?: string | null;
   contactNumber?: string | null;
   designation?: string | null;
   position?: string;
@@ -120,6 +158,7 @@ function buildPayload(values: SHFormValues): Record<string, unknown> {
     firstName: values.firstName.trim(),
     middleName: values.middleName.trim() || undefined,
     lastName: values.lastName.trim(),
+    contactEmail: values.contactEmail.trim() || undefined,
     contactNumber: values.contactNumber.trim() || undefined,
     designation: "School Head",
     position: values.position || SH_DEFAULT_POSITION,
@@ -176,7 +215,9 @@ export function SchoolHeadProfileForm({
   const [step, setStep] = useState(0);
   const isEdit = presentation === "edit";
 
-  const lockedPosition =
+  // A stored position that is not a known enum value falls back, rather than
+  // seeding the select with something it cannot render a label for.
+  const initialPosition =
     defaultValues.position && defaultValues.position in SCHOOL_HEAD_POSITION_LABELS
       ? defaultValues.position
       : SH_DEFAULT_POSITION;
@@ -192,9 +233,10 @@ export function SchoolHeadProfileForm({
       firstName: defaultValues.firstName ?? "",
       middleName: defaultValues.middleName ?? "",
       lastName: defaultValues.lastName ?? "",
+      contactEmail: defaultValues.contactEmail ?? "",
       contactNumber: defaultValues.contactNumber ?? "",
       designation: "School Head",
-      position: lockedPosition,
+      position: initialPosition,
       educationalAttainment: defaultValues.educationalAttainment ?? "",
       fieldOfSpecialization: defaultValues.fieldOfSpecialization ?? "",
       specializationOther: defaultValues.specializationOther ?? "",
@@ -251,8 +293,16 @@ export function SchoolHeadProfileForm({
         form.setError("lastName", { message: "Last name is required" });
         ok = false;
       }
+      if (v.contactEmail.trim() && !isValidEmail(v.contactEmail)) {
+        form.setError("contactEmail", { message: "Enter a valid email address" });
+        ok = false;
+      }
       if (v.contactNumber.trim() && !isValidPhPhone(v.contactNumber)) {
         form.setError("contactNumber", { message: PH_PHONE_HINT });
+        ok = false;
+      }
+      if (!v.position) {
+        form.setError("position", { message: "Position is required" });
         ok = false;
       }
     }
@@ -472,10 +522,15 @@ export function SchoolHeadProfileForm({
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <ReadOnlyField
+              <FormTextField
+                control={form.control}
+                name="contactEmail"
                 label="Email address"
-                value={defaultValues.accountEmail ?? ""}
-                hint={accountHint}
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                maxLength={255}
+                description="Optional. Where the school can reach you — not your sign-in."
               />
               <FormTextField
                 control={form.control}
@@ -491,12 +546,22 @@ export function SchoolHeadProfileForm({
                 value="School Head"
                 hint="Fixed for school head accounts."
               />
-              <ReadOnlyField
+              <FormSelectField
+                control={form.control}
+                name="position"
                 label="Position"
-                value={labelOf(SCHOOL_HEAD_POSITION_LABELS, lockedPosition)}
-                hint="Default school head position for this profile."
+                required
+                groups={SH_POSITION_GROUPS}
+                description="Your plantilla rank. Principal ranks are listed first."
               />
             </div>
+            {defaultValues.accountEmail ? (
+              <ReadOnlyField
+                label="Sign-in identity"
+                value={defaultValues.accountEmail}
+                hint={accountHint}
+              />
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -663,7 +728,7 @@ export function SchoolHeadProfileForm({
                     .filter(Boolean)
                     .join(" ") || "—",
                 ],
-                ["Email address", defaultValues.accountEmail ?? "—"],
+                ["Email address", values.contactEmail || "—"],
                 ["Contact number", values.contactNumber || "—"],
                 ["Designation", "School Head"],
                 ["Position", labelOf(SCHOOL_HEAD_POSITION_LABELS, values.position)],

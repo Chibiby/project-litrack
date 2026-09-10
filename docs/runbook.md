@@ -26,6 +26,21 @@ If the teacher already activated, use password reset (real email) or Super Admin
 - Real email accounts: `/forgot-password` → Resend link (requires `RESEND_*` configured).
 - Synthetic emails: recovery email will not reach a mailbox — regenerate SH credential or re-invite teacher / set password via supported admin flows.
 
+A School Head does not have to stay in that second bucket. While they can still
+sign in, **Settings → Security → change email** swaps the synthetic `sh@…`
+address for a real one (`changeEmailAction` re-verifies the current password,
+refuses an address another account already holds, and updates Supabase Auth and
+Prisma together, rolling Auth back if the local write fails). After that the
+account is a real-email account and `/forgot-password` reaches them — so this is
+worth doing *before* a lockout rather than after one. It also moves that head to
+the server-side grant path described below, which spends the deployment IP
+budget rather than the browser’s.
+
+The **Email address** field on Settings → Profile is a different thing: the
+survey contact address on `SchoolHeadProfile.contactEmail` (P-I4), shown beside
+the read-only *Sign-in identity*. Editing it changes nothing about login, and
+clearing it removes the stored address.
+
 ## "The password is right and it still won't log in"
 
 Before resetting anything, check whether Supabase Auth — not the password — is

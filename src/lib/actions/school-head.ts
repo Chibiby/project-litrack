@@ -234,7 +234,7 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
     firstName: firstRaw,
     lastName: lastRaw,
     middleName: middleRaw,
-    contactEmail: _contactEmail,
+    contactEmail: contactEmailRaw,
     ...profileData
   } = parsed.data;
   const firstName = formatPersonName(firstRaw);
@@ -243,7 +243,13 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   const fullName = buildFullName(firstName, middleName, lastName);
   const schoolId = user.schoolId;
 
-  // Leave contactEmail untouched — no longer collected in the profiling UI.
+  // The field is optional, and the schema turns a blank one into `undefined` —
+  // which Prisma reads as "leave this column alone". A head who deletes their
+  // contact email and saves means to remove it, so an absent value is written as
+  // an explicit null. This is the survey address (P-I4) only; the Supabase login
+  // identity on `User.email` is never touched here.
+  const contactEmail = contactEmailRaw ?? null;
+
   // Save profile first (short pooled queries), then bootstrap grades/sections
   // outside any interactive transaction. PgBouncer transaction-mode pooler
   // drops long interactive txns mid-flight ("Transaction not found").
@@ -254,8 +260,8 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
     });
     await prisma.schoolHeadProfile.upsert({
       where: { userId: user.id },
-      create: { userId: user.id, ...profileData },
-      update: { ...profileData },
+      create: { userId: user.id, ...profileData, contactEmail },
+      update: { ...profileData, contactEmail },
     });
   } catch (err) {
     console.error("[saveSchoolHeadProfile] profile save failed:", err);

@@ -76,6 +76,35 @@ const SH_POSITION = [
   "PRINCIPAL_I", "PRINCIPAL_II", "PRINCIPAL_III", "PRINCIPAL_IV", "TECHVOC_AD",
 ] as const;
 
+/**
+ * The four Principal ranks, offered first in the School Head position picker.
+ *
+ * Presentation only — `schoolHeadProfileSchema` still accepts every value in
+ * `SH_POSITION`. A head with a plantilla item holds one of these four, so they
+ * lead the list; in one flat list of seventeen, Principal I sat below five
+ * Teacher-in-Charge ranks.
+ */
+export const SH_PRINCIPAL_POSITIONS = [
+  "PRINCIPAL_I",
+  "PRINCIPAL_II",
+  "PRINCIPAL_III",
+  "PRINCIPAL_IV",
+] as const;
+
+/**
+ * Every other rank a school head can hold, in enum order.
+ *
+ * Small DepEd schools are commonly led by a Head Teacher or a designated
+ * Teacher-in-Charge rather than a Principal, so these stay selectable — under
+ * their own heading, below the Principal group.
+ */
+export const SH_OTHER_POSITIONS = SH_POSITION.filter(
+  (position) => !(SH_PRINCIPAL_POSITIONS as readonly string[]).includes(position)
+) as readonly Exclude<
+  (typeof SH_POSITION)[number],
+  (typeof SH_PRINCIPAL_POSITIONS)[number]
+>[];
+
 const TEACHER_POSITION = [
   "TEACHER_I", "TEACHER_II", "TEACHER_III", "TEACHER_IV", "TEACHER_V", "TEACHER_VI", "TEACHER_VII",
   "MASTER_TEACHER_I", "MASTER_TEACHER_II", "MASTER_TEACHER_III", "MASTER_TEACHER_IV",
@@ -291,7 +320,7 @@ const profileNames = z.object({
 
 const baseProfile = z.object({
   contactNumber: optionalPhPhone,
-  /** Legacy DB field — optional; not collected in current profiling UI. */
+  /** Survey contact address (P-I4). Distinct from the `User.email` login identity. */
   contactEmail: optionalContactEmail,
   educationalAttainment: z.enum(EDUCATIONAL_ATTAINMENT),
   fieldOfSpecialization: z.enum(SPECIALIZATION),

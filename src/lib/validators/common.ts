@@ -12,4 +12,16 @@ export const email = z
   .toLowerCase()
   .min(1, "Email is required")
   .email("Enter a valid email address");
+/**
+ * Whether a raw input would pass `email`.
+ *
+ * For per-step wizard checks, which validate one page's fields before advancing
+ * and so cannot run the whole profile schema. Delegating to `email` rather than
+ * re-writing the pattern is the point: a step that accepted an address the
+ * schema then rejected would fail at submit, several steps later.
+ */
+export function isValidEmail(raw: string): boolean {
+  return email.safeParse(raw).success;
+}
+
 export const optionalString = z.string().trim().optional().or(z.literal("").transform(() => undefined));

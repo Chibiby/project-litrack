@@ -63,9 +63,9 @@ Each requirement maps to: Prisma model/enum · migration · validation schema ·
 | P-I1 | Name (Optional) | Free text, explicitly optional | VERIFIED — SH form edits user name; Teacher name from invite; designation optional |
 | P-I2 | Designation | Teacher; Master Teacher; School Head; Others (Specify ___) | VERIFIED — UI radio + Others specify → designation string (no schema migration); stored on profile |
 | P-I3 | Contact Number | Free text/phone | VERIFIED — contactNumber optionalText |
-| P-I4 | Email Address | Email format | VERIFIED — login `User.email` shown read-only on Teacher/SH profiling forms; optional survey `contactEmail` on TeacherProfile/SchoolHeadProfile (Zod email); offline migration `20260806000003_profile_contact_email`; save via saveTeacherProfile/saveSchoolHeadProfile; synthetic login emails never overwritten; unit tests |
+| P-I4 | Email Address | Email format | VERIFIED — survey `contactEmail` is the editable "Email address" field on the School Head form (both the profiling wizard and settings), persisted by `saveSchoolHeadProfile`; clearing it writes NULL rather than leaving the old value. The `User.email` login identity stays read-only beside it as "Sign-in identity" and is never overwritten — synthetic `sh@<schoolIdCode>` addresses included. Teacher form still shows login email read-only with optional `contactEmail`. Zod `email` on both; offline migration `20260806000003_profile_contact_email`; unit + component tests |
 | P-I5 | Position (Teachers) | Teacher I–VII; Master Teacher I–IV (shown for teacher-type designations) | VERIFIED — TEACHER_POSITION enum + TeacherProfileForm |
-| P-I6 | Position (School Head) | Teacher I–V (TIC); Head Teacher I–VII; Principal I–IV; TECHVOC Ad (shown for School Head) | VERIFIED — SH_POSITION + SchoolHeadProfileForm |
+| P-I6 | Position (School Head) | Teacher I–V (TIC); Head Teacher I–VII; Principal I–IV; TECHVOC Ad (shown for School Head) | VERIFIED — SH_POSITION + a grouped select on SchoolHeadProfileForm: Principal I–IV under a "Principal" heading, the remaining ranks under "Other school head ranks" (`SH_PRINCIPAL_POSITIONS` / `SH_OTHER_POSITIONS`). Editable on both the profiling wizard and settings; every enum value stays selectable so a Head Teacher or Teacher-in-Charge leading a small school can record their actual rank. Unit + component tests |
 
 ### 2.II Professional Background
 | ID | Requirement | Details | Status |
@@ -109,7 +109,7 @@ Authentication/accounts (AUTH-*), Super Admin management (SA-*), School Head man
 ## Discovery summary (repo audit, Aug 6 2026)
 
 - Survey rows L-A*..P-IV* and W-2/W-5/W-6/W-8 upgraded to **VERIFIED** after field-by-field DOCX check, Zod conditional refinements, UI gating, and unit tests (Wave 3 V2).
-- **P-I4 VERIFIED:** account email read-only + `contactEmail` on TeacherProfile/SchoolHeadProfile (migration `20260806000003`); synthetic login emails preserved.
+- **P-I4 VERIFIED:** `contactEmail` on TeacherProfile/SchoolHeadProfile (migration `20260806000003`); the login `User.email` is read-only on both forms and synthetic addresses are preserved. School Heads now edit `contactEmail` directly — the survey address is the one a school can actually be reached at, where the synthetic login address is not.
 - Cross-school learner transfer (Super Admin): `transferLearnerCrossSchool` + `/admin/transfers`; audit `LEARNER_TRANSFER_CROSS_SCHOOL`.
 - DB3: role dashboards use real Prisma aggregates + Recharts; empty states with CTAs.
 - IO3: CSV learner import (grade-scoped wizard, Zod, valid-rows commit); Excel + printable reports for Teacher/School Head; export/import audits. Tenant isolation enforced.

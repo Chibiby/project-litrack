@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -22,6 +24,16 @@ import {
 import type { Control, FieldPath, FieldValues } from "react-hook-form";
 
 type Option = { value: string; label: string; disabled?: boolean };
+
+/**
+ * A headed run of options inside one select.
+ *
+ * For lists where the choices are not peers — the four Principal ranks a school
+ * head normally holds, versus the Head Teacher and Teacher-in-Charge ranks that
+ * only apply to a small school without a plantilla Principal. A heading keeps
+ * the common answers at the top without hiding the rest behind a second control.
+ */
+export type OptionGroup = { label: string; options: Option[] };
 
 /** Segmented / pill single-select (login-form pattern). */
 export function FormOptionPills<T extends FieldValues>({
@@ -310,11 +322,19 @@ export function FormTextField<T extends FieldValues>({
   );
 }
 
+/**
+ * Single-select bound to a form field.
+ *
+ * Pass `options` for a flat list or `groups` for headed sections; `groups` wins
+ * when both are given. Everything else — the empty choice, the placeholder, the
+ * validation message — behaves the same either way.
+ */
 export function FormSelectField<T extends FieldValues>({
   control,
   name,
   label,
   options,
+  groups,
   required,
   description,
   placeholder = "Select…",
@@ -325,7 +345,8 @@ export function FormSelectField<T extends FieldValues>({
   control: Control<T>;
   name: FieldPath<T>;
   label: string;
-  options: Option[];
+  options?: Option[];
+  groups?: OptionGroup[];
   required?: boolean;
   description?: string;
   placeholder?: string;
@@ -358,11 +379,22 @@ export function FormSelectField<T extends FieldValues>({
               {allowEmpty ? (
                 <SelectItem value="__empty__">{emptyLabel}</SelectItem>
               ) : null}
-              {options.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
-                  {opt.label}
-                </SelectItem>
-              ))}
+              {groups
+                ? groups.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.options.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))
+                : (options ?? []).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
             </SelectContent>
           </Select>
           <FormMessage />
