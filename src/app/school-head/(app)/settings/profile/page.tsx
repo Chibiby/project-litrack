@@ -1,6 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { SchoolHeadProfileForm } from "@/components/forms/sh-profile-form";
 import { getSchoolStructureDefaults } from "@/lib/school-structure-defaults";
 
@@ -20,8 +19,6 @@ export default async function SchoolHeadSettingsProfilePage() {
         firstName: user.firstName,
         middleName: user.middleName ?? "",
         lastName: user.lastName,
-        accountEmail: user.email,
-        accountEmailIsSynthetic: isSyntheticEmail(user.email),
         ...(profile ?? {}),
         gradeTypes: structure.gradeTypes,
         sectionsPerGrade: structure.sectionsPerGrade,

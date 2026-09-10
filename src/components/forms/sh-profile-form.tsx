@@ -121,10 +121,14 @@ type Defaults = {
   firstName?: string;
   middleName?: string;
   lastName?: string;
-  /** Login identity from `User.email`; shown read-only, never edited here. */
-  accountEmail?: string;
-  accountEmailIsSynthetic?: boolean;
-  /** Survey contact address from `SchoolHeadProfile.contactEmail` — editable. */
+  /**
+   * Survey contact address from `SchoolHeadProfile.contactEmail` — editable.
+   *
+   * The login identity on `User.email` is deliberately not a prop. For most heads
+   * it is a synthetic `sh@<schoolIdCode>` address that only the system uses —
+   * they sign in with their School ID — so showing it only invited confusion
+   * with this field. Not passing it also keeps it out of the client payload.
+   */
   contactEmail?: string | null;
   contactNumber?: string | null;
   designation?: string | null;
@@ -473,10 +477,6 @@ export function SchoolHeadProfileForm({
     });
   }
 
-  const accountHint = defaultValues.accountEmailIsSynthetic
-    ? "Synthetic login identity — not used for email recovery."
-    : undefined;
-
   const gradeLabelsSummary =
     values.gradeTypes
       .map((t) => GRADE_LEVEL_LABELS[t] ?? t)
@@ -555,13 +555,6 @@ export function SchoolHeadProfileForm({
                 description="Your plantilla rank. Principal ranks are listed first."
               />
             </div>
-            {defaultValues.accountEmail ? (
-              <ReadOnlyField
-                label="Sign-in identity"
-                value={defaultValues.accountEmail}
-                hint={accountHint}
-              />
-            ) : null}
           </CardContent>
         </Card>
       ) : null}

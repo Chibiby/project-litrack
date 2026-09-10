@@ -50,8 +50,6 @@ const { SchoolHeadProfileForm } = await import("@/components/forms/sh-profile-fo
 const COMPLETE = {
   firstName: "Maria",
   lastName: "Santos",
-  accountEmail: "sh@ABC123.litrack.local",
-  accountEmailIsSynthetic: true,
   contactEmail: "head@school.deped.gov.ph",
   position: "PRINCIPAL_II",
   educationalAttainment: "BACHELORS",
@@ -103,15 +101,17 @@ describe("School Head profile — contact email", () => {
     expect(submittedPayload().contactEmail).toBe("new.head@school.deped.gov.ph");
   });
 
-  // The login identity is a separate thing, and for a School Head it is usually
-  // synthetic. It stays on screen so the head can quote it to an administrator,
-  // but it is not what this field edits.
-  it("keeps the sign-in identity visible and read-only", () => {
-    render(<SchoolHeadProfileForm presentation="edit" defaultValues={COMPLETE} />);
+  // The login identity is usually a synthetic sh@<schoolIdCode> address that
+  // only the system uses — heads sign in with their School ID. It is not shown,
+  // and the form ignores it even if a caller passes one in.
+  it("never shows the sign-in identity", () => {
+    const withLogin = { ...COMPLETE, accountEmail: "sh@ABC123.litrack.local" };
+    render(<SchoolHeadProfileForm presentation="edit" defaultValues={withLogin} />);
 
-    const signIn = screen.getByDisplayValue("sh@ABC123.litrack.local") as HTMLInputElement;
-    expect(signIn.readOnly).toBe(true);
-    expect(screen.getByText(/synthetic login identity/i)).toBeTruthy();
+    expect(screen.queryByDisplayValue("sh@ABC123.litrack.local")).toBeNull();
+    expect(screen.queryByText("sh@ABC123.litrack.local")).toBeNull();
+    expect(screen.queryByText(/sign-in identity/i)).toBeNull();
+    expect(screen.queryByText(/synthetic login identity/i)).toBeNull();
   });
 
   it("refuses a malformed address without sending it", async () => {
@@ -188,8 +188,6 @@ describe("School Head profiling wizard — a head with no profile yet", () => {
         defaultValues={{
           firstName: "",
           lastName: "",
-          accountEmail: "sh@ABC123.litrack.local",
-          accountEmailIsSynthetic: true,
         }}
       />
     );
@@ -207,7 +205,7 @@ describe("School Head profiling wizard — a head with no profile yet", () => {
   it("blocks the step on a malformed address instead of failing at submit", async () => {
     render(
       <SchoolHeadProfileForm
-        defaultValues={{ firstName: "Maria", lastName: "Santos", accountEmail: "sh@x.local" }}
+        defaultValues={{ firstName: "Maria", lastName: "Santos" }}
       />
     );
 
@@ -224,7 +222,7 @@ describe("School Head profiling wizard — a head with no profile yet", () => {
   it("advances past the step when the address is simply left blank", async () => {
     render(
       <SchoolHeadProfileForm
-        defaultValues={{ firstName: "Maria", lastName: "Santos", accountEmail: "sh@x.local" }}
+        defaultValues={{ firstName: "Maria", lastName: "Santos" }}
       />
     );
 
