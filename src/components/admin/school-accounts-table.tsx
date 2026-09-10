@@ -79,11 +79,11 @@ function PasswordCell({ row }: { row: SchoolAccountRow }) {
         className="rounded bg-muted px-2 py-1 font-mono text-sm tabular-nums"
         aria-label={
           revealed
-            ? `Password for ${row.schoolName}: ${row.schoolIdCode}`
+            ? `Password for ${row.schoolName}: ${row.defaultPassword}`
             : `Password for ${row.schoolName} is hidden`
         }
       >
-        {revealed ? row.schoolIdCode : "•".repeat(Math.max(6, row.schoolIdCode.length))}
+        {revealed ? row.defaultPassword : "•".repeat(Math.max(6, row.defaultPassword.length))}
       </code>
       <Button
         type="button"
@@ -106,7 +106,7 @@ function PasswordCell({ row }: { row: SchoolAccountRow }) {
           aria-label={`Copy password for ${row.schoolName}`}
           title={copied ? "Copied" : "Copy"}
           onClick={async () => {
-            await navigator.clipboard.writeText(row.schoolIdCode);
+            await navigator.clipboard.writeText(row.defaultPassword);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
           }}
@@ -137,7 +137,7 @@ function RowActions({ row }: { row: SchoolAccountRow }) {
     <div className="flex flex-wrap justify-end gap-1">
       <ConfirmAction
         title="Reset this password to the School ID?"
-        description={`${row.schoolName}'s School Head will sign in with ${row.schoolIdCode} until they choose a new password. Any password they set before this stops working immediately.`}
+        description={`${row.schoolName}'s School Head will sign in with ${row.defaultPassword} until they choose a new password. Any password they set before this stops working immediately.`}
         confirmLabel="Reset password"
         trigger={
           <Button

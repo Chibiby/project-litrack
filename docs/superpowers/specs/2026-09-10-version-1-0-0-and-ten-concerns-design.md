@@ -273,30 +273,57 @@ rendering as assignments on the teachers page.
 
 ## 8 · Naidas T. Opong (Litos Extension), school ID 130554
 
-An extension shares its mother school's DepEd ID. Today
-`School_schoolIdCode_real_key` — a partial unique on `schoolIdCode WHERE isDemo
-= false` — forbids that.
+*Revised 2026-09-10 during implementation. The first version of this section
+proposed relaxing `School_schoolIdCode_real_key` to a partial unique on
+`(lower(btrim(name)), schoolIdCode)`. It would not have worked, for two reasons
+the index change does not touch:*
 
-Replace it with a partial unique on `(lower(btrim(name)), schoolIdCode) WHERE
-isDemo = false`. Two schools may share `130554` as long as their names differ,
-which keeps a guard against genuine accidental duplicates. The `lower(btrim())`
-shape matches `School_name_folded_key`, so the two indexes agree on what "the
-same name" means. `isDemo = false` is preserved — the demo tenant stays exempt
-for the reason the schema already documents.
+1. *`createSchool` refuses a duplicate code in the app layer
+   (`src/lib/actions/school.ts`, the case-insensitive `codeTaken` probe) before
+   it ever reaches the database.*
+2. *The School Head's Supabase login email is built from the stored code —
+   `sh@<schoolIdCode>.<domain>` (`schoolHeadSyntheticEmail`). The mother
+   school's head already holds `sh@130554.…`, so `createUser` fails "already
+   registered".*
 
-Safe because nothing resolves a school *by* this column: login takes a school
-UUID, every other reader is a `contains` search. The schema comment at
-`School.schoolIdCode` says so, and it stays true.
+**Follow the convention the roster import already established.** An extension
+shares its mother school's DepEd ID, but its *stored* code carries a `-N` suffix:
+Naidas T. Opong ES is `130554`, Naidas T. Opong ES (Banlas Extension) is
+`130554-2` (`assignSchoolCredentials`, `src/lib/import/school-credentials.ts`).
+The Litos Extension is `130554-3`. No migration; the stored code stays unique
+and so does the login email built from it.
 
-⚠️ **Stated plainly:** `schoolIdCode` doubles as the School Head's first-login
-password. Two heads sharing `130554` therefore start on the same default
-credential until they change it. The risk exists today for a single school; this
-widens it to two. `mustChangePassword` still forces the change at first login,
-and `passwordIsSchoolId` still tracks the state. Accepted knowingly.
+**One default password for the whole group — the bare `130554`.** Decided by
+the project owner: a school and its extensions start on the same credential.
+The import already set it that way, but three other paths used the stored code
+instead, so an extension head could be handed `130554-2` by one screen and need
+`130554` at sign-in. `defaultSchoolHeadPassword` (`src/lib/auth/school-head-password.ts`)
+inverts the import's suffix — only after a six-digit base, so a code an admin
+typed with a dash of its own is left whole — and is now the single source for
+every path that sets or shows the default:
 
-The extension itself is then created through the existing admin flow. No
-hand-written INSERT.
+- `createSchool` (initial password; the email stays on the stored code)
+- `regenerateSchoolHeadCredential` (key icon on /admin/schools)
+- `resetSchoolHeadPasswordToDefault` (Reset in the school-accounts console)
+- `resetAllSchoolHeadPasswords` (database console bulk reset)
+- the console row, as `SchoolAccountRow.defaultPassword` — `schoolIdCode` is
+  still what the School ID column shows
 
+A test pins the helper as the exact inverse of `assignSchoolCredentials` over
+the real collision groups, so the two rules cannot drift apart.
+
+Safe because nothing resolves a school *by* its code or its password: sign-in
+takes the selected school's UUID. The schema comment at `School.schoolIdCode`
+says so, and it stays true.
+
+⚠️ **Stated plainly:** heads of a school and its extensions start on the same
+default credential until they change it. `mustChangePassword` still forces the
+change at first login, and `passwordIsSchoolId` still tracks the state.
+Accepted knowingly.
+
+A Super Admin creates the extension through the existing admin form — name
+`Naidas T. Opong ES (Litos Extension)`, School ID `130554-3`. No hand-written
+INSERT; the form's own duplicate check refuses if `130554-3` is taken.
 ---
 
 ## 9 · School Head email

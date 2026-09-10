@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedQuery } from "@/lib/cache/unstable";
@@ -72,7 +73,9 @@ export async function createSchool(
 
   // The School ID is the single, universal first-time credential — the same rule the
   // roster import follows. `mustChangePassword: true` below forces replacement at first login.
-  const initialPassword = parsed.data.schoolIdCode;
+  // An extension entered as `130554-3` starts on the bare `130554`, like its mother school;
+  // the email below stays on the stored code, which is what keeps it unique.
+  const initialPassword = defaultSchoolHeadPassword(parsed.data.schoolIdCode);
   const supabaseAdmin = createSupabaseAdminClient();
   const syntheticEmail = schoolHeadSyntheticEmail(parsed.data.schoolIdCode);
 
@@ -109,7 +112,7 @@ export async function createSchool(
         fullName: createdSchool.name,
         isActive: true,
         mustChangePassword: true,
-        // The password set just above IS `schoolIdCode`. Recording that is what
+        // The password set just above IS the School ID. Recording that is what
         // lets the Super Admin console show a working credential later without
         // anyone storing a plaintext password.
         passwordIsSchoolId: true,
@@ -184,7 +187,7 @@ export async function regenerateSchoolHeadCredential(
   });
   if (!shUser) return { ok: false, error: "School Head account not found" };
 
-  const password = school.schoolIdCode;
+  const password = defaultSchoolHeadPassword(school.schoolIdCode);
   const supabaseAdmin = createSupabaseAdminClient();
   const { error } = await supabaseAdmin.auth.admin.updateUserById(shUser.authId, {
     password,

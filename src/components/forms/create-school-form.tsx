@@ -98,6 +98,11 @@ export function CreateSchoolForm() {
               The school&apos;s DepEd identifier, and the School Head&apos;s first-time password —
               they change it at first sign-in. Letters, digits, underscore, dash. Min 6 characters.
             </p>
+            <p className="text-xs text-muted-foreground">
+              Extension school: add the next free <span className="font-mono">-2</span>,{" "}
+              <span className="font-mono">-3</span>… to the mother school&apos;s ID (e.g.{" "}
+              <span className="font-mono">130554-3</span>). Its head still starts on the plain ID.
+            </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">

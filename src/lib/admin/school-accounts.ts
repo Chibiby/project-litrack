@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 
 /**
  * Super Admin school-account console data.
@@ -18,6 +19,12 @@ export type SchoolAccountRow = {
   schoolId: string;
   schoolName: string;
   schoolIdCode: string;
+  /**
+   * What the head signs in with while `passwordIsSchoolId` holds: the bare DepEd
+   * School ID. Differs from `schoolIdCode` only for an extension school, whose
+   * stored code carries a `-N` suffix (see `defaultSchoolHeadPassword`).
+   */
+  defaultPassword: string;
   schoolIsActive: boolean;
   region: string | null;
   division: string | null;
@@ -28,7 +35,7 @@ export type SchoolAccountRow = {
     fullName: string;
     isActive: boolean;
     /**
-     * True when the live password is `schoolIdCode`, i.e. the one case where
+     * True when the live password is `defaultPassword`, i.e. the one case where
      * the console can display a credential that actually works. False means
      * user-chosen or a random one-time credential — unreadable either way.
      */
@@ -125,6 +132,7 @@ export async function getSchoolAccountsPage(
         schoolId: school.id,
         schoolName: school.name,
         schoolIdCode: school.schoolIdCode,
+        defaultPassword: defaultSchoolHeadPassword(school.schoolIdCode),
         schoolIsActive: school.isActive,
         region: school.region,
         division: school.division,

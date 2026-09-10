@@ -1129,7 +1129,7 @@ Remaining, in the order they should be planned — dependencies first:
 7. **§12 · Ethnicity export round-trip + 44px selects** — two independent defects, one plan. Self-contained.
 8. **§10 · School Head position dropdown** — UI only, the enum already has 17 values. Self-contained and small.
 9. **§9 · School Head email** — contact email form plus confirming `changeEmailAction` end-to-end. Self-contained.
-10. **§8 · Naidas T. Opong (Litos Extension)** — one migration replacing a partial unique index, then the school is created through the existing admin flow. Carries the accepted shared-default-password risk documented in the spec; worth its own approval moment.
+10. **§8 · Naidas T. Opong (Litos Extension)** — *done, no migration.* The spec's original index change could not work (app-level duplicate check, and the School Head login email is built from the stored code). Revised to the import's existing `-N` suffix convention plus `defaultSchoolHeadPassword`, so a school and its extensions share one default password. The school itself is created by a Super Admin in the admin form as `130554-3`.
 
 ---
 

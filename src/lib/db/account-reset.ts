@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TEACHER_EMAIL_DOMAIN } from "@/lib/auth/synthetic-email";
+import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 
 /**
  * Bulk account operations for the database console.
@@ -74,7 +75,7 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
     }
     try {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(head.authId, {
-        password: head.school.schoolIdCode,
+        password: defaultSchoolHeadPassword(head.school.schoolIdCode),
         app_metadata: { role: "SCHOOL_HEAD", schoolId: head.school.id },
       });
       if (error) throw new Error(error.message);

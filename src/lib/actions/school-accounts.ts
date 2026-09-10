@@ -9,6 +9,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { revalidateSchoolsList } from "@/lib/cache/revalidate";
+import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import {
   clearImpersonationCookie,
   readImpersonationTicket,
@@ -80,9 +81,10 @@ export async function resetSchoolHeadPasswordToDefault(
   const head = await findSchoolHead(school.id);
   if (!head) return { ok: false, error: "School Head account not found" };
 
+  const password = defaultSchoolHeadPassword(school.schoolIdCode);
   const supabaseAdmin = createSupabaseAdminClient();
   const { error } = await supabaseAdmin.auth.admin.updateUserById(head.authId, {
-    password: school.schoolIdCode,
+    password,
     app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
   });
   if (error) return { ok: false, error: "Failed to reset password" };
@@ -109,7 +111,7 @@ export async function resetSchoolHeadPasswordToDefault(
   revalidateSchoolsList();
   // The School ID is not a secret — it is printed on the schools table and on
   // this console's own row — so returning it here reveals nothing new.
-  return { ok: true, data: { password: school.schoolIdCode } };
+  return { ok: true, data: { password } };
 }
 
 /**

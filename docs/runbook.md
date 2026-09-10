@@ -16,6 +16,28 @@ The key icon used to issue a random one-time credential instead. Heads kept typi
 ID into accounts that no longer accepted it (Salimama IS, 2026-09-10), so it was changed to match.
 Rows written before then say `SCHOOL_HEAD_CREDENTIAL_REGENERATED`.
 
+**Extension schools** sign in with the mother school's plain ID — `130554`, not `130554-2` — and
+every reset path now sets that. Before this was fixed, Reset set the suffixed code, so an extension
+head who was reset before then may still be on `130554-2`. If the plain ID is refused, press Reset
+once more; it will then be the plain ID.
+
+## Add an extension school
+
+An extension shares its mother school's DepEd School ID, but the stored School ID must be unique
+(it builds the School Head's login email). So it takes the next free `-N` suffix, the same rule the
+roster import uses.
+
+1. Find the group on `/admin/schools` by searching the mother school's ID, e.g. `130554` —
+   Naidas T. Opong ES is `130554`, its Banlas Extension `130554-2`.
+2. Super Admin → `/admin/schools` → Create school. Name it after the mother school with the
+   extension in brackets, e.g. `Naidas T. Opong ES (Litos Extension)`; School ID is the next
+   free suffix, e.g. `130554-3`.
+3. The success screen shows the initial password. It is the **plain** ID (`130554`) — every
+   school in the group starts on it, and the School Head types it after picking their own
+   school. `mustChangePassword` is forced.
+
+If the form says the School ID already exists, that suffix is taken — use the next one.
+
 ## Teacher invite: resend / revoke
 
 **Resend:** School Head → Teachers → resend invite. Regenerates credential/token; previous link invalidated as designed. Email sent when invite has a real address; otherwise show on-screen credential.
