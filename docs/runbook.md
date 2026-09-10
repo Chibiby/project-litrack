@@ -2,16 +2,19 @@
 
 Operational procedures for admins. Does not replace training or legal advice.
 
-## Regenerate School Head activation credential
+## Reset a School Head's password to the School ID
 
-**When:** SH lost credential / locked out / synthetic email cannot receive reset mail.
+**When:** SH forgot the password they chose / locked out / synthetic email cannot receive reset mail.
 
-1. Super Admin → `/admin/schools` → select school → regenerate credential action.
-2. Copy the one-time credential shown (displayed once).
-3. Deliver out-of-band (secure channel). SH logs in → forced password change.
-4. Confirm audit: `SCHOOL_HEAD_CREDENTIAL_REGENERATED`.
+1. Super Admin → `/admin/schools` → key icon on the school's row (or `/admin/school-accounts`
+   → Reset to School ID — the two do the same thing).
+2. Tell the School Head to sign in with their **School ID**. It works immediately; there is no
+   forced password change, and they can set a private password later from Settings → Security.
+3. Confirm audit: `SCHOOL_HEAD_PASSWORD_RESET_DEFAULT`.
 
-Never store the plaintext credential in tickets or chat logs long-term.
+The key icon used to issue a random one-time credential instead. Heads kept typing their School
+ID into accounts that no longer accepted it (Salimama IS, 2026-09-10), so it was changed to match.
+Rows written before then say `SCHOOL_HEAD_CREDENTIAL_REGENERATED`.
 
 ## Teacher invite: resend / revoke
 

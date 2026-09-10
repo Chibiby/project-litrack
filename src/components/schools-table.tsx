@@ -104,13 +104,13 @@ function RegenButton({
       size="icon"
       className="h-9 w-10"
       loading={pending}
-      loadingText="Regenerating credential…"
-      title="Regenerate School Head activation credential"
-      aria-label={`Regenerate activation credential for ${schoolName}`}
+      loadingText="Resetting password…"
+      title="Reset School Head password to the School ID"
+      aria-label={`Reset School Head password to the School ID for ${schoolName}`}
       onClick={() => {
         if (
           !window.confirm(
-            `Regenerate activation credential for ${schoolName}? The School Head must use the new credential and change their password.`
+            `Reset the School Head password for ${schoolName} back to its School ID? Any password the School Head chose will stop working.`
           )
         ) {
           return;
@@ -123,8 +123,8 @@ function RegenButton({
             toast.error(res.error);
             return;
           }
-          if (res.data?.activationCredential) {
-            onCredential(res.data.activationCredential);
+          if (res.data?.password) {
+            onCredential(res.data.password);
           }
         });
       }}
@@ -216,9 +216,10 @@ export function SchoolsTable({
             <div className="flex items-start gap-2 text-amber-950">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="font-semibold">New activation credential (shown once)</p>
+                <p className="font-semibold">Password reset to the School ID</p>
                 <p className="text-sm text-amber-900/90">
-                  Copy and share securely with the School Head. It will not be shown again.
+                  The School Head can sign in now with their School ID below, and choose a private
+                  password afterwards.
                 </p>
               </div>
             </div>

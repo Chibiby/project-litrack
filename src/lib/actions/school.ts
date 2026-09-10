@@ -6,7 +6,6 @@ import { requireUser } from "@/lib/auth/session";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
-import { generateActivationCredential } from "@/lib/auth/credentials";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedQuery } from "@/lib/cache/unstable";
@@ -140,12 +139,21 @@ export async function createSchool(
 }
 
 /**
- * Super Admin: issue a new one-time School Head activation credential.
- * Returns the credential once; never stores or audits the plaintext.
+ * Super Admin: put a School Head's password back to the school's School ID.
+ *
+ * This used to issue a random one-time credential, shown to the admin once. It
+ * reached the school — if at all — by being read out, and heads went on typing
+ * the School ID they already knew into an account that no longer accepted it:
+ * Salimama IS logged over a hundred failed sign-ins after one regeneration on
+ * 2026-09-10. The School ID is the credential every head is told to use, the one
+ * `createSchool` and the roster import issue, and the one
+ * `resetSchoolHeadPasswordToDefault` restores — so this now does the same.
+ *
+ * The School ID is printed on the schools table, so returning it reveals nothing.
  */
 export async function regenerateSchoolHeadCredential(
   formData: FormData
-): Promise<ActionResult<{ activationCredential: string }>> {
+): Promise<ActionResult<{ password: string }>> {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = z.object({ schoolId: z.string().uuid() }).safeParse({
@@ -169,37 +177,45 @@ export async function regenerateSchoolHeadCredential(
       deletedAt: null,
     },
     select: { id: true, authId: true },
+    // Must pick the same row the sign-in does (`findSchoolHead` in ./login and
+    // `loginSchoolHead` in ./auth). Unordered, a school with two head rows could
+    // have its password reset on an account nobody signs in to.
+    orderBy: { createdAt: "asc" },
   });
   if (!shUser) return { ok: false, error: "School Head account not found" };
 
-  const activationCredential = generateActivationCredential();
+  const password = school.schoolIdCode;
   const supabaseAdmin = createSupabaseAdminClient();
   const { error } = await supabaseAdmin.auth.admin.updateUserById(shUser.authId, {
-    password: activationCredential,
+    password,
     app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
   });
-  if (error) return { ok: false, error: "Failed to regenerate credential" };
+  if (error) return { ok: false, error: "Failed to reset password" };
 
   await prisma.user.update({
     where: { id: shUser.id },
-    // The new password is a random one-time credential, not the School ID, and
-    // it is deliberately never stored — so the account's credential is no
-    // longer one the Super Admin console can display.
-    data: { mustChangePassword: true, isActive: true, passwordIsSchoolId: false },
+    // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
+    // on the very next sign-in, with no forced interstitial, and the console can
+    // show it because the live password is once again the School ID.
+    data: { mustChangePassword: false, isActive: true, passwordIsSchoolId: true },
   });
 
+  // Recorded as a reset-to-default, not a regeneration: the audit trail is how
+  // `passwordIsSchoolId` is replayed (see the 20260910000004 backfill), and a
+  // REGENERATED row would say the School ID stopped working when it just started.
   await writeAudit({
     userId: admin.id,
     schoolId: school.id,
-    action: AUDIT_ACTIONS.SCHOOL_HEAD_CREDENTIAL_REGENERATED,
+    action: AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_RESET_DEFAULT,
     resource: "User",
     resourceId: shUser.id,
-    metadata: { schoolId: school.id },
+    metadata: { schoolId: school.id, via: "schools_table" },
   });
 
   revalidatePath("/admin/schools");
+  revalidatePath("/admin/school-accounts");
   revalidateSchoolsList();
-  return { ok: true, data: { activationCredential } };
+  return { ok: true, data: { password } };
 }
 
 /** Active schools (id + name). Cached ~60s under `schools-list`. */

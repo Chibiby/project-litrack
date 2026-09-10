@@ -87,12 +87,12 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
       </div>
 
       <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <p className="font-medium">After deploying migrations, regenerate School Head credentials</p>
+        <p className="font-medium">School Head can&apos;t sign in?</p>
         <p className="mt-1 text-amber-900/90">
-          Schools created before the auth overhaul may still rely on School-ID-era passwords. Use the
-          key icon on each row to regenerate a one-time activation credential, then have the School
-          Head sign in and set a private password. See{" "}
-          <code className="rounded bg-amber-100 px-1 text-xs">docs/migrate-checklist.md</code>.
+          Use the key icon on the school&apos;s row to put the School Head&apos;s password back to
+          their School ID. They sign in with the School ID straight away and can choose a private
+          password afterwards. See{" "}
+          <code className="rounded bg-amber-100 px-1 text-xs">docs/runbook.md</code>.
         </p>
       </div>
 
