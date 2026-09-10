@@ -118,12 +118,54 @@ function tombstoneEmail(userId: string): string {
  * With `schoolId` given, only that school's teachers are removed.
  */
 export async function removeAllTeacherAccounts(schoolId?: string | null): Promise<BulkResult> {
-  const supabaseAdmin = createSupabaseAdminClient();
-
   const teachers = await prisma.user.findMany({
     where: { role: "TEACHER", deletedAt: null, ...(schoolId ? { schoolId } : {}) },
-    select: { id: true, authId: true, fullName: true, email: true },
+    select: TEACHER_REMOVAL_FIELDS,
   });
+  return removeTeacherRows(teachers);
+}
+
+/**
+ * Remove a named set of teachers from one school.
+ *
+ * `schoolId` is part of the query rather than something the caller is trusted
+ * to have checked. The admin school page does check it, and returns a generic
+ * "Not found" when an id belongs elsewhere; this is the second lock, so a bug
+ * up there cannot turn into a cross-tenant deletion down here.
+ */
+export async function removeTeacherAccountsByIds(
+  schoolId: string,
+  ids: string[]
+): Promise<BulkResult> {
+  if (ids.length === 0) return { processed: 0, failed: [] };
+
+  const teachers = await prisma.user.findMany({
+    where: { id: { in: ids }, schoolId, role: "TEACHER", deletedAt: null },
+    select: TEACHER_REMOVAL_FIELDS,
+  });
+  return removeTeacherRows(teachers);
+}
+
+/** Everything `removeTeacherRows` needs, and nothing else. */
+const TEACHER_REMOVAL_FIELDS = {
+  id: true,
+  authId: true,
+  fullName: true,
+  email: true,
+} as const;
+
+type TeacherRow = { id: string; authId: string; fullName: string; email: string };
+
+/**
+ * The removal itself, over whichever teachers the caller selected.
+ *
+ * Split out so "every teacher" and "these four teachers" cannot drift apart:
+ * the tombstoning, the Supabase deletion and the `advisorySectionId` clear all
+ * have to happen together, and a second copy of this loop would eventually
+ * forget one of them.
+ */
+async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
+  const supabaseAdmin = createSupabaseAdminClient();
 
   const failed: BulkResult["failed"] = [];
   let processed = 0;

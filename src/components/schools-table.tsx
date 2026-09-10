@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -332,7 +332,13 @@ export function SchoolsTable({
                 <TableRow key={school.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{school.name}</span>
+                      <Link
+                        href={`/admin/schools/${school.id}`}
+                        prefetch={false}
+                        className="font-medium underline-offset-4 hover:underline"
+                      >
+                        {school.name}
+                      </Link>
                       {school.isDemo ? (
                         <span
                           className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
@@ -383,6 +389,16 @@ export function SchoolsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-1">
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`View ${school.name}`}
+                      >
+                        <Link href={`/admin/schools/${school.id}`} prefetch={false}>
+                          <Eye className="h-4 w-4" aria-hidden />
+                        </Link>
+                      </Button>
                       <SchoolActiveToggle
                         schoolId={school.id}
                         isActive={school.isActive}
