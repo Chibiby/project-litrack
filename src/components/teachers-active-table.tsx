@@ -24,6 +24,8 @@ import {
   setTeacherActive,
 } from "@/lib/actions/school-head";
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
+import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
+import { X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
   listOptimisticReducer,
@@ -51,18 +53,18 @@ export type ActiveTeacherRow = {
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
   aralLearnerCount: number;
   /**
-   * The teacher's advisory section (grade derived from it), or `null` when they
-   * have none. `sectionId` is what the School Head's picker binds to; the two
-   * names are for display.
+   * The sections this teacher advises, grade derived from each, ordered by grade
+   * then name. Empty when they advise none — one shape rather than a nullable
+   * list, so nothing has to handle both. Archived sections are already gone.
    *
-   * A teacher sets this themselves in profiling, and a School Head can change it
+   * A teacher sets their first themselves in profiling, and a School Head can change it
    * here afterwards — see `setTeacherAdvisorySection`.
    */
-  assignment: {
+  assignments: {
     sectionId: string;
     gradeName: string;
     sectionName: string;
-  } | null;
+  }[];
 };
 
 /**
@@ -102,23 +104,28 @@ export type DeclinedTeacherRow = {
  */
 function AdvisoryCell({
   row,
-  value,
+  held,
   options,
   saving,
   disabled,
   onChange,
 }: {
   row: ActiveTeacherRow;
-  value: string | null;
+  /** Section ids this teacher advises, optimistic overrides already applied. */
+  held: string[];
   options: AdvisoryGradeOption[];
   saving: boolean;
   disabled: boolean;
-  onChange: (row: ActiveTeacherRow, sectionId: string | null) => void;
+  onChange: (
+    row: ActiveTeacherRow,
+    sectionId: string,
+    op: "add" | "remove"
+  ) => void;
 }) {
-  const selectId = `advisory-${row.id}`;
+  const selectId = `advisory-add-${row.id}`;
 
   // No grade has a section, so there is nothing to offer. Saying so beats a
-  // dropdown whose only entry is "Unassigned".
+  // dropdown with nothing in it.
   if (options.length === 0) {
     return (
       <TableCell className="text-sm text-muted-foreground">
@@ -127,32 +134,84 @@ function AdvisoryCell({
     );
   }
 
+  // Names for the chips, including one just added optimistically — the row this
+  // component was given still describes the server state until the refresh
+  // lands, so the label has to come from the option list instead.
+  const labelById = new Map<string, string>();
+  for (const grade of options) {
+    for (const section of grade.sections) {
+      labelById.set(section.id, `${grade.gradeLabel} · ${section.name}`);
+    }
+  }
+
+  const atCap = held.length >= MAX_ADVISORY_SECTIONS;
+
   return (
     <TableCell>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {held.map((sectionId) => (
+          <span
+            key={sectionId}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-2 pr-1 text-xs"
+          >
+            {labelById.get(sectionId) ?? "Section"}
+            {/*
+              Sized down from the primitive's 44px floor, the same carve-out
+              3b62b17 left for dense controls: `cn` merges className last, so a
+              component that sets its own height wins. A chip inside a table row
+              cannot carry a 44px hit area without the row swallowing the table.
+            */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0 rounded-full p-0 text-muted-foreground hover:text-destructive sm:size-5"
+              disabled={disabled}
+              aria-label={`Remove ${labelById.get(sectionId) ?? "section"} from ${row.fullName}`}
+              onClick={() => onChange(row, sectionId, "remove")}
+            >
+              <X className="size-3" aria-hidden />
+            </Button>
+          </span>
+        ))}
+        {held.length === 0 ? (
+          <span className="text-sm text-muted-foreground">Unassigned</span>
+        ) : null}
+      </div>
+
       <Label htmlFor={selectId} className="sr-only">
-        Advisory section for {row.fullName}
+        Add an advisory section for {row.fullName}
       </Label>
       <select
         id={selectId}
-        className="h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm"
-        value={value ?? ""}
-        disabled={disabled}
-        onChange={(e) =>
-          onChange(row, e.target.value === "" ? null : e.target.value)
-        }
+        className="mt-1.5 h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50"
+        value=""
+        disabled={disabled || atCap}
+        onChange={(e) => {
+          if (e.target.value) onChange(row, e.target.value, "add");
+        }}
       >
-        <option value="">Unassigned</option>
+        <option value="">
+          {atCap
+            ? `At the limit of ${MAX_ADVISORY_SECTIONS}`
+            : held.length > 0
+              ? "Add another section…"
+              : "Assign a section…"}
+        </option>
         {options.map((grade) => (
           <optgroup key={grade.gradeLabel} label={grade.gradeLabel}>
-            {grade.sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {/* Named, not hidden: the server refuses an occupied section, so
-                    the option has to say whose it is or the refusal is a riddle. */}
-                {s.adviserId && s.adviserId !== row.id
-                  ? `${s.name} — ${s.adviserName || "taken"}`
-                  : s.name}
-              </option>
-            ))}
+            {grade.sections
+              // Already theirs: the chip above is how it comes off again.
+              .filter((s) => !held.includes(s.id))
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {/* Named, not hidden: the server refuses an occupied section, so
+                      the option has to say whose it is or the refusal is a riddle. */}
+                  {s.adviserId && s.adviserId !== row.id
+                    ? `${s.name} — ${s.adviserName || "taken"}`
+                    : s.name}
+                </option>
+              ))}
           </optgroup>
         ))}
       </select>
@@ -298,9 +357,13 @@ function TeachersManagedTable({
     (state: ActiveTeacherRow[], op: ListOptimisticOp<ActiveTeacherRow>) =>
       listOptimisticReducer(state, op)
   );
-  /** Row-local advisory picks, so a select reflects the change before the refresh. */
+  /**
+   * Row-local advisory sets, so the chips reflect a change before the refresh.
+   * The whole list per row rather than one id: adding a second section leaves
+   * the first in place, and a rollback has to restore both.
+   */
   const [advisoryOverrides, setAdvisoryOverrides] = useState<
-    Record<string, string | null>
+    Record<string, string[]>
   >({});
   const [savingAdvisoryId, setSavingAdvisoryId] = useState<string | null>(null);
 
@@ -320,39 +383,49 @@ function TeachersManagedTable({
     setAdvisoryOverrides({});
   }, [rows]);
 
-  const advisoryValueFor = (row: ActiveTeacherRow): string | null =>
+  const advisoryIdsFor = (row: ActiveTeacherRow): string[] =>
     row.id in advisoryOverrides
       ? advisoryOverrides[row.id]
-      : row.assignment?.sectionId ?? null;
+      : row.assignments.map((a) => a.sectionId);
 
   const onChangeAdvisory = (
     row: ActiveTeacherRow,
-    sectionId: string | null
+    sectionId: string,
+    op: "add" | "remove"
   ) => {
-    const previous = advisoryValueFor(row);
-    if (previous === sectionId) return;
+    const previous = advisoryIdsFor(row);
+    const next =
+      op === "add"
+        ? previous.includes(sectionId)
+          ? previous
+          : [...previous, sectionId]
+        : previous.filter((id) => id !== sectionId);
+    if (next.length === previous.length && op === "add") return;
 
-    setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: sectionId }));
+    setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: next }));
     setSavingAdvisoryId(row.id);
 
     const fd = new FormData();
     fd.set("teacherId", row.id);
-    // Empty string clears the advisory — the action maps "" to null.
-    fd.set("sectionId", sectionId ?? "");
+    fd.set("sectionId", sectionId);
+    fd.set("op", op);
 
     startRowTransition(async () => {
       const res = await setTeacherAdvisorySection(fd);
       setSavingAdvisoryId(null);
       if (!res.ok) {
-        // Roll back, so the select never shows an advisory that did not stick.
+        // Roll back, so the chips never show an advisory that did not stick —
+        // the cap and the occupied-section refusal both land here.
         setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: previous }));
         toast.error(res.error);
         return;
       }
       toast.success(
-        sectionId
-          ? `Advisory updated for ${row.fullName}`
-          : `${row.fullName} is now unassigned`
+        op === "add"
+          ? `Advisory added for ${row.fullName}`
+          : next.length === 0
+            ? `${row.fullName} is now unassigned`
+            : `Advisory removed for ${row.fullName}`
       );
       router.refresh();
     });
@@ -490,7 +563,7 @@ function TeachersManagedTable({
                   {editableAdvisory ? (
                     <AdvisoryCell
                       row={row}
-                      value={advisoryValueFor(row)}
+                      held={advisoryIdsFor(row)}
                       options={editableAdvisory}
                       saving={savingAdvisoryId === row.id}
                       disabled={savingAdvisoryId === row.id || rowBusy !== null}
@@ -498,8 +571,10 @@ function TeachersManagedTable({
                     />
                   ) : (
                     <TableCell className="text-sm">
-                      {row.assignment ? (
-                        `${row.assignment.gradeName} · ${row.assignment.sectionName}`
+                      {row.assignments.length > 0 ? (
+                        row.assignments
+                          .map((a) => `${a.gradeName} · ${a.sectionName}`)
+                          .join(", ")
                       ) : (
                         <span className="text-muted-foreground">Unassigned</span>
                       )}

@@ -493,6 +493,71 @@ reassign it through the ARAL picker rather than by SQL.
 
 ---
 
+## (h) Multi-advisory, Wave A  —  Sep 2026
+
+`20260911000001_section_adviser_pointer`. Apply it in the same deploy as the
+multi-advisory code. Between the two, the app reads a column that does not exist
+yet and every advisory reads as empty.
+
+### What it does
+
+Moves the advisory pointer from `User.advisorySectionId` to `Section.adviserId`,
+so one teacher can advise up to three sections while a section still has exactly
+one adviser.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260911000001_section_adviser_pointer` | Adds `Section.adviserId` (nullable, **not** unique) with its foreign key and a plain index; backfills it from `User.advisorySectionId`; then drops the old `User_advisorySectionId_fkey`. | No. Additive plus one constraint drop. No data is removed. |
+
+Three things worth knowing before you run it:
+
+- **The index is deliberately not unique.** The approved design said to add one.
+  Following that would have re-imposed one-section-per-teacher on the other side
+  of the relation and made the cap of three unreachable. One adviser per section
+  is guaranteed by the column itself — a Section row holds one value.
+- **The old foreign key is dropped**, because keeping both directions makes
+  `User` and `Section` a cycle that no single restore order satisfies.
+  `User.advisorySectionId` keeps its column and unique index and becomes a plain
+  nullable column, the shape `School.createdById` already has. It is still
+  dual-written and read by nothing.
+- **Wave B is a separate, later change** that drops `User.advisorySectionId`
+  outright. Do not run it in the same deploy — the point of two waves is that
+  this one can be confirmed in production first.
+
+### Steps
+
+1. Back up (step **a**).
+2. Apply:
+   ```powershell
+   npx prisma migrate deploy   # DIRECT_URL (port 5432), never the pooler
+   ```
+3. Confirm the backfill moved every advisory across. This must return **0 rows**;
+   anything it lists is a teacher whose advisory did not survive the move:
+   ```powershell
+   psql "$env:DIRECT_URL" -c "SELECT u.\"id\", u.\"fullName\", u.\"advisorySectionId\" FROM \"User\" u WHERE u.\"advisorySectionId\" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM \"Section\" s WHERE s.\"id\" = u.\"advisorySectionId\" AND s.\"adviserId\" = u.\"id\");"
+   ```
+4. Smoke test: on the School Head teachers page, confirm each teacher's chips
+   match what the page showed before. Add a second section to one teacher and
+   confirm it appears; try a fourth and confirm it is refused by name. Then sign
+   in as that teacher and confirm both sections' learners are reachable.
+
+### Rollback
+
+The column and index can be dropped and the old foreign key recreated, but only
+while no teacher advises more than one section — a second advisory has nowhere to
+go in the old shape. Check first:
+
+```sql
+SELECT "adviserId", count(*) FROM "Section"
+WHERE "adviserId" IS NOT NULL AND "deletedAt" IS NULL
+GROUP BY "adviserId" HAVING count(*) > 1;
+```
+
+Empty means a rollback is safe, because `User.advisorySectionId` was dual-written
+throughout and still holds the first of each teacher's sections.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

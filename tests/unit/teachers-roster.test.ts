@@ -16,10 +16,14 @@ import {
  * reader already guards it: both transfer pages and `teacherAdvisoryGradeScope`
  * all filter `deletedAt: null`.
  *
- * Prisma has no `where` inside a `select` for a to-one relation, so the filter
- * cannot live in the select the way the `_count`s' does. It lives in
- * `toManagedRow` instead, which is the single place every roster route maps
- * through — one rule, applied once, rather than at each call site.
+ * Wave A of multi-advisory then turned the relation into a LIST, which does
+ * accept a `where` — so the filter moved out of `toManagedRow` and into the
+ * query, and the mapper's job shrank to shaping rows. The rule this file guards
+ * is unchanged; only the place it is enforced moved, and the last test says so.
+ *
+ * The rest of the file is the multi-advisory half: a teacher may hold up to
+ * three, `assignments` is a list rather than a nullable object, and empty is how
+ * "advises nothing" is spelled.
  */
 
 const BASE = {
@@ -28,50 +32,56 @@ const BASE = {
   email: "marivic@example.test",
   profileCompleted: true,
   approvedAt: new Date(2026, 5, 1),
-  advisorySection: null,
+  advisorySections: [],
   _count: { managedLearners: 12, aralLearners: 3 },
 } satisfies ManagedTeacher;
 
-function section(over: Partial<{ deletedAt: Date | null }> = {}) {
+function section(over: Partial<{ id: string; name: string }> = {}) {
   return {
     id: "section-sampaguita",
     name: "Sampaguita",
-    deletedAt: null,
     gradeLevel: { type: "G4" as const },
     ...over,
   };
 }
 
-describe("toManagedRow — archived advisory sections", () => {
-  it("reports a live advisory section as the assignment", () => {
-    const row = toManagedRow({ ...BASE, advisorySection: section() });
+describe("toManagedRow — advisory sections", () => {
+  it("reports a live advisory section as an assignment", () => {
+    const row = toManagedRow({ ...BASE, advisorySections: [section()] });
 
-    expect(row.assignment).toEqual({
-      sectionId: "section-sampaguita",
-      gradeName: "Grade 4",
-      sectionName: "Sampaguita",
-    });
+    expect(row.assignments).toEqual([
+      {
+        sectionId: "section-sampaguita",
+        gradeName: "Grade 4",
+        sectionName: "Sampaguita",
+      },
+    ]);
   });
 
-  /** The regression: this used to render as "Grade 4 · Sampaguita". */
-  it("reports a teacher whose only section is archived as unassigned", () => {
+  it("reports all three of a multi-advisory teacher, in query order", () => {
     const row = toManagedRow({
       ...BASE,
-      advisorySection: section({ deletedAt: new Date(2026, 8, 1) }),
+      advisorySections: [
+        section(),
+        section({ id: "section-rosal", name: "Rosal" }),
+        section({ id: "section-ilang", name: "Ilang-Ilang" }),
+      ],
     });
 
-    expect(row.assignment).toBeNull();
+    expect(row.assignments.map((a) => a.sectionName)).toEqual([
+      "Sampaguita",
+      "Rosal",
+      "Ilang-Ilang",
+    ]);
   });
 
-  it("reports a teacher with no section at all as unassigned", () => {
-    expect(toManagedRow(BASE).assignment).toBeNull();
+  it("reports a teacher with no live sections as unassigned", () => {
+    // Empty, never null: one shape, so no caller has to handle both.
+    expect(toManagedRow(BASE).assignments).toEqual([]);
   });
 
   it("keeps every other column, so the row is not otherwise disturbed", () => {
-    const row = toManagedRow({
-      ...BASE,
-      advisorySection: section({ deletedAt: new Date(2026, 8, 1) }),
-    });
+    const row = toManagedRow({ ...BASE, advisorySections: [section()] });
 
     expect(row).toMatchObject({
       id: "teacher-marivic",
@@ -81,42 +91,36 @@ describe("toManagedRow — archived advisory sections", () => {
     });
   });
 
-  it("selects the column the filter reads", () => {
-    // Dropping `deletedAt` from the select would make the check above silently
-    // pass on `undefined` for every teacher, restoring the bug.
-    const advisory = managedTeacherSelect.advisorySection;
+  /**
+   * §6 was fixed by filtering inside `toManagedRow`, because Prisma has no
+   * `where` inside a `select` for a to-one relation. `advisorySections` is a
+   * LIST relation, which does accept one, so the filter moved into the query and
+   * an archived section never reaches the mapper at all. The rule did not
+   * change; the place it is enforced did.
+   */
+  it("excludes archived sections in the query, not after it", () => {
+    const advisory = managedTeacherSelect.advisorySections;
     expect(advisory).toBeTruthy();
-    expect(
-      (advisory as { select: Record<string, unknown> }).select.deletedAt
-    ).toBe(true);
+    expect((advisory as { where: Record<string, unknown> }).where).toEqual({
+      deletedAt: null,
+    });
   });
 });
 
-/**
- * The same rule, on the two other surfaces that render an advisory label.
- *
- * §6 named the teachers page as "the one that was missed". It was not quite the
- * only one: global search's teacher subtitle and the admin school-detail teacher
- * list both read `advisorySection.name` with no soft-delete filter either. They
- * are display-only — neither grants access — but they told the same untruth, and
- * a School Head reading "Adviser · Sampaguita" in search while the teachers page
- * says Unassigned has no way to know which is right.
- *
- * A source check rather than a behavioural one: both live inside larger Prisma
- * reads whose harnesses would cost more than the assertion is worth, and the
- * failure mode being guarded is a dropped filter, which is visible in the text.
- */
+
 describe("the other advisory-label readers guard soft deletes too", () => {
   const SRC = path.resolve(__dirname, "../../src");
 
   it.each([
     ["lib/actions/global-search.ts", "the teacher search subtitle"],
     ["lib/admin/school-detail.ts", "the admin school-detail teacher list"],
-  ])("%s selects and checks deletedAt", (file) => {
+  ])("%s filters archived sections in the query", (file) => {
     const text = readFileSync(path.join(SRC, file), "utf8");
-    // Selected...
-    expect(text).toMatch(/advisorySection: \{ select: \{[^}]*deletedAt: true/);
-    // ...and actually consulted, not merely fetched.
-    expect(text).toMatch(/advisorySection\.deletedAt === null/);
+    // The filter moved INTO the query when the relation became a list, so the
+    // shape to look for changed with it. What is guarded has not: an archived
+    // section must not reach the label these files render.
+    expect(text).toMatch(/advisorySections: \{\s*where: \{ deletedAt: null \}/);
+    // And nothing consults the dying to-one pointer any more.
+    expect(text).not.toMatch(/\bt\.advisorySection\b/);
   });
 });

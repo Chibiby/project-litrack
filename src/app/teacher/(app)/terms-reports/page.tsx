@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/dashboard";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
-import { getAdvisoryPlacement } from "@/lib/teachers/advisory";
+import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
 import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
 import {
   TERM_SHEET_NO_ADVISORY_CARD,
@@ -73,11 +73,10 @@ export default async function TeacherTermsReportsResolverPage({
     );
   }
 
-  const advisory = await getAdvisoryPlacement({
-    id: user.id,
-    schoolId,
-    advisorySectionId: user.advisorySectionId,
-  });
+  // The resolver page redirects into the sheet for the teacher's advisory. With
+  // several it opens the first; the sheet itself is what a section picker
+  // belongs on, and that is not part of Wave A.
+  const [advisory] = await getAdvisoryPlacements({ id: user.id, schoolId });
   if (!advisory) {
     return (
       <AppShell title="End of Terms Reports" role={user.role} userName={userName}>

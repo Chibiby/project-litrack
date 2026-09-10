@@ -53,8 +53,10 @@ async function TransferBody({ view }: { view: SchoolHeadView }) {
           // One advisory section per teacher, so the grade a teacher can receive
           // learners into is derived from that section. `deletedAt` is selected
           // because Prisma cannot filter a to-one relation inside `select`.
-          advisorySection: {
-            select: { name: true, gradeLevelId: true, deletedAt: true },
+          advisorySections: {
+            where: { deletedAt: null },
+            select: { name: true, gradeLevelId: true },
+            orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
           },
         },
       }),
@@ -103,15 +105,19 @@ async function TransferBody({ view }: { view: SchoolHeadView }) {
               }))}
               sections={sections}
               teachers={teachers.map((t) => {
-                const advisory =
-                  t.advisorySection && t.advisorySection.deletedAt === null
-                    ? t.advisorySection
-                    : null;
+                // The transfer form still binds one grade per teacher, so the
+                // first advisory fills that field. The section NAMES are all
+                // listed rather than trimmed to the first: a School Head
+                // choosing a receiving teacher should see everything that
+                // teacher holds, even where the form can only act on one of
+                // them. Wave A moves the data; this picker is not part of it.
+                const [first] = t.advisorySections;
                 return {
                   id: t.id,
                   fullName: t.fullName,
-                  advisoryGradeId: advisory?.gradeLevelId ?? null,
-                  advisorySectionName: advisory?.name ?? null,
+                  advisoryGradeId: first?.gradeLevelId ?? null,
+                  advisorySectionName:
+                    t.advisorySections.map((s) => s.name).join(", ") || null,
                 };
               })}
             />

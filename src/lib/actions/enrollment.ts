@@ -166,7 +166,11 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
         schoolId: user.schoolId,
         role: "TEACHER",
         deletedAt: null,
-        advisorySection: { gradeLevelId: resolvedGradeLevelId, deletedAt: null },
+        // `some`, not the old to-one match: a receiving teacher qualifies if ANY
+        // of their live advisories is in the target grade.
+        advisorySections: {
+          some: { gradeLevelId: resolvedGradeLevelId, deletedAt: null },
+        },
       },
       select: { id: true },
     });
@@ -346,7 +350,11 @@ export async function transferLearnerCrossSchool(
       role: "TEACHER",
       deletedAt: null,
       isActive: true,
-      advisorySection: { gradeLevelId: targetGradeLevelId, deletedAt: null },
+      // Same rule as the same-school transfer above: any one live advisory in
+      // the target grade is enough.
+      advisorySections: {
+        some: { gradeLevelId: targetGradeLevelId, deletedAt: null },
+      },
     },
     select: { id: true },
   });

@@ -100,7 +100,7 @@ export async function globalSearch(input: { q: string }): Promise<SearchResult> 
     select: {
       id: true,
       fullName: true,
-      advisorySection: { select: { name: true, deletedAt: true } },
+      advisorySections: { where: { deletedAt: null }, select: { name: true } },
     },
     orderBy: { fullName: "asc" },
     take: PER_GROUP_TAKE,
@@ -111,10 +111,11 @@ export async function globalSearch(input: { q: string }): Promise<SearchResult> 
       id: t.id,
       kind: "teacher",
       title: t.fullName,
-      // An archived section is not an advisory — same rule as `toManagedRow`.
+      // Archived sections are excluded by the select. All live ones are listed:
+      // a result naming one of three classes would read as the whole answer.
       subtitle:
-        t.advisorySection && t.advisorySection.deletedAt === null
-          ? `Adviser · ${t.advisorySection.name}`
+        t.advisorySections.length > 0
+          ? `Adviser · ${t.advisorySections.map((s) => s.name).join(", ")}`
           : "Teacher",
       href: `/school-head/teachers?q=${encodeURIComponent(t.fullName)}`,
     });

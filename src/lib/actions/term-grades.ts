@@ -15,8 +15,8 @@ import {
 } from "@/lib/constants/enum-labels";
 import { nameSearchWhere, sectionIdWhere } from "@/lib/learners/pagination";
 import {
-  getAdvisoryPlacement,
-  NO_ADVISORY_MESSAGE,
+  getAdvisoryPlacements,
+  resolveAdvisoryTarget,
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
 import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
@@ -59,11 +59,15 @@ const NOT_IN_ADVISORY_MESSAGE =
  * decision through `deniesAdvisoryRoster` anyway keeps the one tested predicate
  * as the only place the designation rule lives.
  */
-async function requireAdvisoryForTermSheet(user: {
-  id: string;
-  schoolId: string;
-  advisorySectionId: string | null;
-}): Promise<{ ok: true; advisory: AdvisoryPlacement } | { ok: false; error: string }> {
+async function requireAdvisoryForTermSheet(
+  user: { id: string; schoolId: string },
+  /**
+   * Which advisory this sheet is for. Optional, because a teacher with exactly
+   * one — every teacher, until a School Head adds a second — needs to name
+   * nothing and behaves as they always did.
+   */
+  sectionId?: string | null
+): Promise<{ ok: true; advisory: AdvisoryPlacement } | { ok: false; error: string }> {
   // `findFirst` over `findUnique` so the tenant stays in the where clause even
   // though `userId` is unique — TeacherProfile carries no `schoolId` of its own.
   const profile = await prisma.teacherProfile.findFirst({
@@ -76,10 +80,11 @@ async function requireAdvisoryForTermSheet(user: {
     return { ok: false, error: DEPED_ONLY_MESSAGE };
   }
 
-  const advisory = await getAdvisoryPlacement(user);
-  if (!advisory) return { ok: false, error: NO_ADVISORY_MESSAGE };
+  const placements = await getAdvisoryPlacements(user);
+  const target = resolveAdvisoryTarget(placements, sectionId);
+  if (!target.ok) return { ok: false, error: target.error };
 
-  return { ok: true, advisory };
+  return { ok: true, advisory: target.placement };
 }
 
 /**
@@ -369,7 +374,6 @@ export async function exportTermGrades(
     const gate = await requireAdvisoryForTermSheet({
       id: user.id,
       schoolId: user.schoolId,
-      advisorySectionId: user.advisorySectionId,
     });
     if (!gate.ok) return gate;
     const { advisory } = gate;

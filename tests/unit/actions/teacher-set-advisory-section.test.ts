@@ -18,6 +18,8 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
  */
 
 const HEAD_ID = "head-1";
+import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
+
 const SCHOOL_ID = "school-1";
 const TEACHER_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_TEACHER_ID = "44444444-4444-4444-8444-444444444444";
@@ -43,12 +45,19 @@ type TxCalls = {
 
 let sections: SectionRow[];
 /** The row `prisma.user.findFirst` resolves for the targeted teacher, or null. */
-let teacherLookup: { id: string; advisorySectionId: string | null } | null;
+let teacherLookup: { id: string; advisorySections: { id: string }[] } | null;
 /** What `findUniqueOrThrow` reports inside the transaction. */
 let teacherRow: { advisorySectionId: string | null; taughtGrades: { id: string }[] };
 let calls: TxCalls;
 /** Set to make the advisory `user.update` reject, simulating a mid-flight race. */
 let userUpdateError: unknown = null;
+
+/** Live sections this teacher advises, straight off the fixture. */
+function advisoriesOf(teacherId: string): SectionRow[] {
+  return sections.filter(
+    (s) => s.adviser?.id === teacherId && s.deletedAt === null
+  );
+}
 
 function makeTx() {
   return {
@@ -72,16 +81,57 @@ function makeTx() {
     },
     section: {
       findMany: vi.fn(
-        async (args: { where: { id: { in: string[] }; schoolId: string } }) => {
-          const ids = args.where.id.in;
-          return sections
-            .filter(
-              (s) =>
-                ids.includes(s.id) &&
-                s.schoolId === args.where.schoolId &&
-                s.deletedAt === null
-            )
-            .map((s) => ({ id: s.id, gradeLevelId: s.gradeLevelId }));
+        async (args: {
+          where: {
+            id?: { in: string[] };
+            adviserId?: string;
+            schoolId: string;
+            deletedAt: null;
+          };
+        }) => {
+          const rows = sections.filter((s) => {
+            if (s.schoolId !== args.where.schoolId) return false;
+            if (s.deletedAt !== null) return false;
+            if (args.where.id && !args.where.id.in.includes(s.id)) return false;
+            if (args.where.adviserId && s.adviser?.id !== args.where.adviserId) {
+              return false;
+            }
+            return true;
+          });
+          return rows.map((s) => ({
+            id: s.id,
+            name: s.name,
+            gradeLevelId: s.gradeLevelId,
+          }));
+        }
+      ),
+      // Really moves the pointer, so the "read the set back" step inside
+      // `setTeacherAdvisory` sees what the write actually did. A fake that
+      // no-op'd here would let the cap and the dual-write assertions pass
+      // against a set that never changed.
+      updateMany: vi.fn(
+        async (args: {
+          where: { id?: string; adviserId?: string | null; schoolId: string };
+          data: { adviserId: string | null };
+        }) => {
+          let count = 0;
+          for (const s of sections) {
+            if (s.schoolId !== args.where.schoolId) continue;
+            if (args.where.id && s.id !== args.where.id) continue;
+            if (
+              args.where.adviserId !== undefined &&
+              (args.where.adviserId === null
+                ? s.adviser !== null
+                : s.adviser?.id !== args.where.adviserId)
+            ) {
+              continue;
+            }
+            s.adviser = args.data.adviserId
+              ? { id: args.data.adviserId, fullName: "Marivic Cruz" }
+              : null;
+            count += 1;
+          }
+          return { count };
         }
       ),
     },
@@ -199,7 +249,7 @@ beforeEach(() => {
       adviser: { id: OTHER_TEACHER_ID, fullName: "Marivic Santos" },
     },
   ];
-  teacherLookup = { id: TEACHER_ID, advisorySectionId: null };
+  teacherLookup = { id: TEACHER_ID, advisorySections: [] };
   teacherRow = { advisorySectionId: null, taughtGrades: [] };
   calls = { userUpdate: [], sectionDeleteMany: [], sectionCreateMany: [] };
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
@@ -239,7 +289,8 @@ describe("setTeacherAdvisorySection", () => {
         resourceId: TEACHER_ID,
         metadata: expect.objectContaining({
           teacherId: TEACHER_ID,
-          previousSectionId: null,
+          previousSectionIds: [],
+          op: "add",
           sectionId: SECTION_ID,
         }),
       })
@@ -262,7 +313,7 @@ describe("setTeacherAdvisorySection", () => {
   });
 
   it("clears an advisory when the School Head picks Unassigned", async () => {
-    teacherLookup = { id: TEACHER_ID, advisorySectionId: SECTION_ID };
+    teacherLookup = { id: TEACHER_ID, advisorySections: [{ id: SECTION_ID }] };
     teacherRow = { advisorySectionId: SECTION_ID, taughtGrades: [{ id: GRADE_ID }] };
 
     const result = await setTeacherAdvisorySection(buildFormData(TEACHER_ID, ""));
@@ -284,7 +335,8 @@ describe("setTeacherAdvisorySection", () => {
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          previousSectionId: SECTION_ID,
+          previousSectionIds: [SECTION_ID],
+          op: "clear",
           sectionId: null,
         }),
       })
@@ -299,7 +351,7 @@ describe("setTeacherAdvisorySection", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "Grade 3 · Rosal is advised by Marivic Santos. Set them to Unassigned first, then assign this section here.",
+        "Grade 3 · Rosal is advised by Marivic Santos. Remove it from them first, then add it here.",
     });
 
     // Refused before the transaction: the sitting adviser keeps their section.
@@ -321,12 +373,12 @@ describe("setTeacherAdvisorySection", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "Grade 3 · Rosal is advised by another teacher. Set them to Unassigned first, then assign this section here.",
+        "Grade 3 · Rosal is advised by another teacher. Remove it from them first, then add it here.",
     });
   });
 
   it("is a no-op when the teacher already advises the requested section", async () => {
-    teacherLookup = { id: TEACHER_ID, advisorySectionId: SECTION_ID };
+    teacherLookup = { id: TEACHER_ID, advisorySections: [{ id: SECTION_ID }] };
 
     const result = await setTeacherAdvisorySection(
       buildFormData(TEACHER_ID, SECTION_ID)
@@ -341,7 +393,7 @@ describe("setTeacherAdvisorySection", () => {
   it("does not treat the teacher's own section as occupied", async () => {
     // The teacher holds TAKEN_SECTION_ID; re-submitting a different field must not
     // trip the conflict branch against themselves.
-    teacherLookup = { id: TEACHER_ID, advisorySectionId: null };
+    teacherLookup = { id: TEACHER_ID, advisorySections: [] };
     sections = sections.map((s) =>
       s.id === TAKEN_SECTION_ID
         ? { ...s, adviser: { id: TEACHER_ID, fullName: "Self" } }
@@ -450,5 +502,152 @@ describe("setTeacherAdvisorySection", () => {
     expect(result).toEqual({ ok: false, error: "Invalid section" });
     expect(userFindFirst).not.toHaveBeenCalled();
     expect(transaction).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * §4 of the ten concerns: a teacher may advise up to three sections.
+ *
+ * The cap is enforced INSIDE the transaction, against the rows as they are
+ * there, and that placement is the point. A check in the action before the
+ * transaction opens would let two School Heads on two tabs each read "holds
+ * three... no, two" and each add one, landing a fourth between them. The action
+ * layer is where the NUMBER lives — moving it must not need a migration — but
+ * the transaction is where it is applied.
+ */
+describe("setTeacherAdvisorySection — the cap of three", () => {
+  const FOURTH_SECTION_ID = "55555555-5555-4555-8555-555555555555";
+
+  /** Give the teacher `count` live advisories, and offer one more free section. */
+  /** Real uuids: the action Zod-validates the posted id before anything else. */
+  const HELD_IDS = [
+    "66666666-6666-4666-8666-666666666666",
+    "77777777-7777-4777-8777-777777777777",
+    "88888888-8888-4888-8888-888888888888",
+  ];
+
+  function holding(count: number) {
+    sections = [];
+    for (let i = 0; i < count; i += 1) {
+      sections.push({
+        id: HELD_IDS[i],
+        name: `Section ${i}`,
+        gradeLevelId: GRADE_ID,
+        gradeType: "G3",
+        schoolId: SCHOOL_ID,
+        deletedAt: null,
+        adviser: { id: TEACHER_ID, fullName: "Marivic Cruz" },
+      });
+    }
+    sections.push({
+      id: FOURTH_SECTION_ID,
+      name: "One More",
+      gradeLevelId: GRADE_ID,
+      gradeType: "G3",
+      schoolId: SCHOOL_ID,
+      deletedAt: null,
+      adviser: null,
+    });
+    teacherLookup = {
+      id: TEACHER_ID,
+      advisorySections: sections
+        .filter((s) => s.adviser?.id === TEACHER_ID)
+        .map((s) => ({ id: s.id })),
+    };
+  }
+
+  function add(sectionId: string) {
+    const fd = new FormData();
+    fd.set("teacherId", TEACHER_ID);
+    fd.set("sectionId", sectionId);
+    fd.set("op", "add");
+    return setTeacherAdvisorySection(fd);
+  }
+
+  it("accepts a third", async () => {
+    holding(2);
+
+    expect(await add(FOURTH_SECTION_ID)).toEqual({ ok: true });
+    expect(
+      sections.find((s) => s.id === FOURTH_SECTION_ID)?.adviser?.id
+    ).toBe(TEACHER_ID);
+  });
+
+  it("refuses a fourth", async () => {
+    holding(3);
+
+    const result = await add(FOURTH_SECTION_ID);
+
+    expect(result.ok).toBe(false);
+    // The section is untouched: a refused add must not half-apply.
+    expect(sections.find((s) => s.id === FOURTH_SECTION_ID)?.adviser).toBeNull();
+  });
+
+  it("names the sections they already hold, so the head knows what to remove", async () => {
+    holding(3);
+
+    const result = await add(FOURTH_SECTION_ID);
+
+    if (result.ok) throw new Error("expected a refusal");
+    expect(result.error).toContain("Section 0");
+    expect(result.error).toContain("Section 1");
+    expect(result.error).toContain("Section 2");
+    expect(result.error).toContain(String(MAX_ADVISORY_SECTIONS));
+  });
+
+  it("does not count an archived section against the cap", async () => {
+    holding(3);
+    // Archiving a section frees its adviser (§7 relies on exactly this), so a
+    // teacher holding three of which one is archived may still take a third
+    // live one.
+    sections.find((s) => s.id === HELD_IDS[0])!.deletedAt = new Date(2026, 0, 1);
+
+    expect(await add(FOURTH_SECTION_ID)).toEqual({ ok: true });
+  });
+
+  it("is a no-op, not a refusal, when they already hold the section", async () => {
+    holding(3);
+
+    const fd = new FormData();
+    fd.set("teacherId", TEACHER_ID);
+    fd.set("sectionId", HELD_IDS[1]);
+    fd.set("op", "add");
+
+    // Re-adding one of the three must not read as "you are at the limit".
+    expect(await setTeacherAdvisorySection(fd)).toEqual({ ok: true });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("removes one, scoped to this teacher", async () => {
+    holding(3);
+
+    const fd = new FormData();
+    fd.set("teacherId", TEACHER_ID);
+    fd.set("sectionId", HELD_IDS[1]);
+    fd.set("op", "remove");
+
+    expect(await setTeacherAdvisorySection(fd)).toEqual({ ok: true });
+    expect(sections.find((s) => s.id === HELD_IDS[1])?.adviser).toBeNull();
+    // The other two are untouched.
+    expect(sections.find((s) => s.id === HELD_IDS[0])?.adviser?.id).toBe(TEACHER_ID);
+    expect(sections.find((s) => s.id === HELD_IDS[2])?.adviser?.id).toBe(TEACHER_ID);
+  });
+
+  it("frees room for another once one is removed", async () => {
+    holding(3);
+
+    const remove = new FormData();
+    remove.set("teacherId", TEACHER_ID);
+    remove.set("sectionId", HELD_IDS[1]);
+    remove.set("op", "remove");
+    await setTeacherAdvisorySection(remove);
+    teacherLookup = {
+      id: TEACHER_ID,
+      advisorySections: sections
+        .filter((s) => s.adviser?.id === TEACHER_ID)
+        .map((s) => ({ id: s.id })),
+    };
+
+    expect(await add(FOURTH_SECTION_ID)).toEqual({ ok: true });
   });
 });

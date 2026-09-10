@@ -103,10 +103,17 @@ describe("write and delete ordering", () => {
     expect(problems, problems.join("\n")).toEqual([]);
   });
 
-  it("puts User after Section, because User.advisorySectionId points at it", () => {
-    // Called out separately because it is the one pair that reads backwards to
-    // a human and is easy to "fix" into a bug.
-    expect(position("User")).toBeGreaterThan(position("Section"));
+  it("puts User before Section, because Section.adviserId points at it", () => {
+    // Called out separately because this pair has now pointed BOTH ways, and
+    // whichever way it points it is easy to "fix" into a bug.
+    //
+    // Before Wave A of multi-advisory the key ran User -> Section and this
+    // assertion was the other way round. Inverting it created a cycle for as
+    // long as both keys existed, so `20260911000001_section_adviser_pointer`
+    // dropped the old one and left `advisorySectionId` a plain column. The
+    // derived test above is what actually catches a regression here; this one
+    // states the intended direction so a reader does not have to infer it.
+    expect(position("User")).toBeLessThan(position("Section"));
   });
 
   it("puts School first and AuditLog last", () => {

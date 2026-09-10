@@ -137,6 +137,8 @@ type SectionRow = {
   gradeLevelId: string;
   gradeType: string;
   deletedAt: Date | null;
+  /** Who advises it, authoritative since Wave A of multi-advisory. */
+  adviserId: string | null;
 };
 
 type GradeRow = {
@@ -292,7 +294,35 @@ const cellFindMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
     .map((c) => ({ learnerId: c.learnerId, subject: c.subject, score: c.score }));
 });
 
-/** Backs the real `getAdvisoryPlacement`, tenant filter and soft delete included. */
+/**
+ * Backs the real `getAdvisoryPlacements`, tenant filter and soft delete
+ * included.
+ *
+ * A `findMany` on `Section.adviserId` since Wave A of multi-advisory, where it
+ * used to be a `findFirst` on the id the session carried. The session pointer is
+ * gone from that path entirely: which sections a teacher advises is now a
+ * property of the sections, not of the user row.
+ */
+const sectionFindMany = vi.fn(
+  async (args: {
+    where: { adviserId: string; schoolId: string; deletedAt: null };
+  }) =>
+    sections
+      .filter(
+        (s) =>
+          s.adviserId === args.where.adviserId &&
+          s.schoolId === args.where.schoolId &&
+          s.deletedAt === null
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        gradeLevelId: s.gradeLevelId,
+        gradeLevel: { type: s.gradeType },
+      }))
+);
+
+/** Still used by other reads in this file. */
 const sectionFindFirst = vi.fn(
   async (args: { where: { id: string; schoolId?: string; deletedAt?: Date | null } }) => {
     const found = sections.find((s) => {
@@ -365,6 +395,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     section: {
       findFirst: (...args: unknown[]) => sectionFindFirst(...(args as [never])),
+      findMany: (...args: unknown[]) => sectionFindMany(...(args as [never])),
     },
     gradeLevel: {
       findFirst: (...args: unknown[]) => gradeLevelFindFirst(...(args as [never])),
@@ -557,6 +588,7 @@ beforeEach(() => {
       gradeLevelId: GRADE_ID,
       gradeType: "G7",
       deletedAt: null,
+      adviserId: TEACHER_ID,
     },
   ];
   grades = [{ id: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null }];
@@ -730,6 +762,9 @@ describe("exportTermGrades — the teacher branch is pinned to the advisory sect
       gradeLevelId: GRADE_ID,
       gradeType: "G7",
       deletedAt: null,
+      // NOT this teacher's. The point of the case is a posted ?section= that
+      // names a section of the same grade the caller does not advise.
+      adviserId: null,
     });
     learners.push(
       learner({
@@ -897,7 +932,9 @@ describe("exportTermGrades — cross-tenant refusal", () => {
 
 describe("exportTermGrades — refusal: no advisory placement", () => {
   it("refuses a teacher with no advisory section", async () => {
-    session.advisorySectionId = null;
+    // Advising nothing is now a property of the SECTIONS, not of the session
+    // pointer: `getAdvisoryPlacements` asks which sections name this teacher.
+    for (const s of sections) s.adviserId = null;
 
     const res = await post();
 
@@ -987,6 +1024,7 @@ describe("exportTermGrades — the Super Admin branch", () => {
       gradeLevelId: GRADE_ID,
       gradeType: "G7",
       deletedAt: null,
+      adviserId: null,
     });
     learners.push(
       learner({
@@ -1226,7 +1264,9 @@ describe("exportTermGrades — the audit row", () => {
   });
 
   it("logs nothing when the export is refused", async () => {
-    session.advisorySectionId = null;
+    // Advising nothing is now a property of the SECTIONS, not of the session
+    // pointer: `getAdvisoryPlacements` asks which sections name this teacher.
+    for (const s of sections) s.adviserId = null;
 
     await post();
 

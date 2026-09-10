@@ -564,8 +564,23 @@ model User {
   approvedAt                DateTime?
   approvedById              String?
   rejectedAt                DateTime?
-  /// Advisory assignment: 0 or 1 section per teacher. Grade is DERIVED from the
-  /// section, never stored here. @unique enforces one adviser per section.
+  /// LEGACY advisory pointer. Wave A of the multi-advisory change moved the
+  /// authoritative assignment to `Section.adviserId`; this column is still
+  /// DUAL-WRITTEN (holding the first of a teacher's sections) and is READ BY
+  /// NOTHING for access. Wave B drops it, separately approved.
+  ///
+  /// It keeps its `@unique`: while it is written at all, two teachers must not
+  /// name the same section here. That index is no longer what limits a teacher
+  /// to one section — see `Section.adviserId` — it only stops the dying mirror
+  /// from recording something the authoritative column would refuse.
+  ///
+  /// It carries NO `@relation` any more, deliberately. Inverting the pointer put
+  /// a foreign key on `Section` pointing at `User`, and keeping one here pointing
+  /// back would make the two models a cycle that no single write order can
+  /// satisfy — `tests/unit/db/schema-order.test.ts` catches exactly that. So this
+  /// becomes a plain nullable column, the same shape `School.createdById` and
+  /// `AuditLog.userId` already have and for the same reason. Nothing reads it,
+  /// so a stale id after a section is deleted costs nothing; Wave B removes it.
   advisorySectionId         String?                @unique
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
@@ -574,7 +589,12 @@ model User {
   school                 School?              @relation(fields: [schoolId], references: [id])
   schoolHeadProfile      SchoolHeadProfile?
   teacherProfile         TeacherProfile?
-  advisorySection        Section?             @relation("SectionAdviser", fields: [advisorySectionId], references: [id], onDelete: SetNull)
+  /// Authoritative. The sections this teacher advises — up to three, and the cap
+  /// is enforced in `setTeacherAdvisory`, not in SQL, so the number can change
+  /// without a migration. Deliberately renamed from `advisorySection`: every
+  /// read site that assumed at most one now fails to compile rather than
+  /// silently rendering the first of several.
+  advisorySections       Section[]            @relation("SectionAdviser")
   taughtGrades           GradeLevel[]         @relation("TeacherGrades")
   taughtSections         TeacherSection[]
   managedLearners        Learner[]            @relation("TeacherLearners")
@@ -743,12 +763,21 @@ model Section {
   schoolId     String
   gradeLevelId String
   name         String
+  /// The teacher who advises this section, authoritative since Wave A of the
+  /// multi-advisory change.
+  ///
+  /// Deliberately NOT `@unique`. One adviser per section is guaranteed by the
+  /// column itself — a Section row holds one value — and a unique index here
+  /// would mean the opposite thing: no two sections could name the same
+  /// teacher, which is precisely the one-section-per-teacher limit this change
+  /// exists to remove. The cap of three lives in `setTeacherAdvisory`.
+  adviserId    String?
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
   school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   gradeLevel     GradeLevel       @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
-  adviser        User?            @relation("SectionAdviser")
+  adviser        User?            @relation("SectionAdviser", fields: [adviserId], references: [id], onDelete: SetNull)
   teachers       TeacherSection[]
   learners       Learner[]
   enrollments    Enrollment[]
@@ -759,6 +788,9 @@ model Section {
   /// Archived rows are excluded so `createSection` can revive one instead of
   /// being blocked by it. Preserve it when editing Section migrations.
   @@index([schoolId, deletedAt])
+  /// "Which sections does this teacher advise?" is now the hot question — every
+  /// scope predicate resolves a teacher's grades through it.
+  @@index([adviserId])
 }
 
 /// Explicit M2M: which sections a teacher is assigned to teach.

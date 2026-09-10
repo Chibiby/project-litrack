@@ -57,7 +57,10 @@ async function AdminTransferBody({
             // Derived from the one section the teacher advises, matching what
             // `transferLearnerCrossSchool` validates. `deletedAt` is selected
             // because Prisma cannot filter a to-one relation inside `select`.
-            advisorySection: { select: { gradeLevelId: true, deletedAt: true } },
+            advisorySections: {
+              where: { deletedAt: null },
+              select: { gradeLevelId: true },
+            },
           },
         })
       : Promise.resolve([]),
@@ -103,10 +106,12 @@ async function AdminTransferBody({
               teachers={teachers.map((t) => ({
                 id: t.id,
                 fullName: t.fullName,
-                gradeIds:
-                  t.advisorySection && t.advisorySection.deletedAt === null
-                    ? [t.advisorySection.gradeLevelId]
-                    : [],
+                // A teacher who advises three sections can receive a transfer
+                // into any of their grades, so this is a set now rather than a
+                // one-element list.
+                gradeIds: [
+                  ...new Set(t.advisorySections.map((s) => s.gradeLevelId)),
+                ],
               }))}
             />
           )}

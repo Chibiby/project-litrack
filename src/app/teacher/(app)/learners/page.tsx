@@ -28,7 +28,7 @@ import {
   teacherLearnerScope,
 } from "@/lib/teachers/scope";
 import {
-  getAdvisoryPlacement,
+  getAdvisoryPlacements,
   NO_ADVISORY_MESSAGE,
 } from "@/lib/teachers/advisory";
 import {
@@ -102,9 +102,13 @@ function learnerListWhere(opts: {
 async function LearnersAddControl({
   user,
 }: {
-  user: { id: string; schoolId: string; advisorySectionId: string | null };
+  user: { id: string; schoolId: string };
 }) {
-  const advisory = await getAdvisoryPlacement(user);
+  // The Add menu targets ONE section. A teacher with several advisories picks
+  // which in the form; this component opens on the first, which is what the
+  // menu was already doing implicitly when a teacher could only hold one.
+  const placements = await getAdvisoryPlacements(user);
+  const advisory = placements[0];
   if (!advisory) return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
 
   return (
@@ -320,11 +324,7 @@ export default async function TeacherLearnersPage({
         {!isSuperAdmin ? (
           <Suspense fallback={<Skeleton className="h-9 w-44" />}>
             <LearnersAddControl
-              user={{
-                id: user.id,
-                schoolId,
-                advisorySectionId: user.advisorySectionId,
-              }}
+              user={{ id: user.id, schoolId }}
             />
           </Suspense>
         ) : null}

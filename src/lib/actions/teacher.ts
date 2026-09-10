@@ -23,6 +23,8 @@ import { describeDbFailure } from "@/lib/db-errors";
 import {
   setTeacherAdvisory,
   isAdvisorySectionConflict,
+  AdvisoryCapError,
+  SectionTakenError,
   SECTION_TAKEN_ERROR,
 } from "@/lib/teachers/section-assignment";
 
@@ -105,10 +107,15 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
         where: { id: user.id },
         data: { firstName, middleName, lastName, fullName, profileCompleted: true },
       });
+      // Profiling still assigns ONE section: it is the teacher stating their own
+      // classroom during onboarding, not a School Head building a load. A second
+      // or third is added from the teachers table. Expressed as add/clear rather
+      // than the old replace, so finishing a profile cannot silently drop an
+      // advisory a School Head assigned while the teacher was still onboarding.
       await setTeacherAdvisory(tx, {
         teacherId: user.id,
-        sectionId: sectionId ?? null,
         schoolId: user.schoolId,
+        change: sectionId ? { op: "add", sectionId } : { op: "clear" },
       });
     });
   } catch (err) {
@@ -156,7 +163,10 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
 
 const setAdvisorySectionSchema = z.object({
   teacherId: z.string().uuid("Invalid teacher"),
-  /** `""` clears the advisory — the client sends it for the "Unassigned" option. */
+  /**
+   * `""` clears every advisory — what the "Unassigned" option still sends.
+   * With a section named, `op` decides whether it joins the set or leaves it.
+   */
   sectionId: z
     .string()
     .trim()
@@ -164,6 +174,12 @@ const setAdvisorySectionSchema = z.object({
     .refine((v) => v === null || z.string().uuid().safeParse(v).success, {
       message: "Invalid section",
     }),
+  /**
+   * The operation, because a teacher may now hold three sections and "assign"
+   * no longer means "replace". Defaults to `add` so an older client — a tab
+   * left open across the deploy — still assigns rather than silently clearing.
+   */
+  op: z.enum(["add", "remove"]).default("add"),
 });
 
 /**
@@ -175,12 +191,16 @@ const setAdvisorySectionSchema = z.object({
  * a mid-year section swap, a teacher who chose wrong, a section that was
  * soft-deleted out from under them.
  *
- * `User.advisorySectionId` is `@unique`, so a section has one adviser and taking
- * an occupied one is refused rather than granted. Refusing is the deliberate
- * choice: reassigning silently would strip the sitting adviser of the ability to
- * add learners to the only roster they can reach, without telling either of them.
- * So the error names the adviser and the School Head clears that teacher first,
- * which makes the loss explicit and puts it in the audit log as its own event.
+ * A section has one adviser — `Section.adviserId` is one column on one row — and
+ * taking an occupied one is refused rather than granted. Refusing is the
+ * deliberate choice: reassigning silently would strip the sitting adviser of a
+ * roster they can reach, without telling either of them. So the error names the
+ * adviser and the School Head removes it from that teacher first, which makes
+ * the loss explicit and puts it in the audit log as its own event.
+ *
+ * A teacher may hold up to `MAX_ADVISORY_SECTIONS` of them. The cap is checked
+ * inside the transaction rather than here, so two School Heads adding at once
+ * cannot both pass a check and land a fourth between them.
  */
 export async function setTeacherAdvisorySection(
   formData: FormData
@@ -190,11 +210,12 @@ export async function setTeacherAdvisorySection(
   const parsed = setAdvisorySectionSchema.safeParse({
     teacherId: formData.get("teacherId"),
     sectionId: formData.get("sectionId"),
+    op: formData.get("op") ?? undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
-  const { teacherId, sectionId } = parsed.data;
+  const { teacherId, sectionId, op } = parsed.data;
 
   const teacher = await prisma.user.findFirst({
     where: {
@@ -204,15 +225,24 @@ export async function setTeacherAdvisorySection(
       approvalStatus: "APPROVED",
       deletedAt: null,
     },
-    select: { id: true, advisorySectionId: true },
+    select: {
+      id: true,
+      advisorySections: { where: { deletedAt: null }, select: { id: true } },
+    },
   });
   if (!teacher) return { ok: false, error: "Teacher not found" };
 
-  // Nothing to do — and worth returning early so a stray re-submit does not
-  // write an audit row claiming a change that did not happen.
-  if (teacher.advisorySectionId === sectionId) return { ok: true };
+  const held = teacher.advisorySections.map((s) => s.id);
 
-  if (sectionId) {
+  // Nothing to do — and worth returning early so a stray re-submit does not
+  // write an audit row claiming a change that did not happen. Three shapes of
+  // no-op now: clearing nothing, adding one they already hold, removing one
+  // they do not.
+  if (!sectionId && held.length === 0) return { ok: true };
+  if (sectionId && op === "add" && held.includes(sectionId)) return { ok: true };
+  if (sectionId && op === "remove" && !held.includes(sectionId)) return { ok: true };
+
+  if (sectionId && op === "add") {
     // Resolve the section in THIS school and read its current adviser in the
     // same query, so the refusal below can name them. `setTeacherAdvisory`
     // would raise P2002 on its own, but a bare "that section is taken" leaves
@@ -233,7 +263,7 @@ export async function setTeacherAdvisorySection(
       const adviserName = section.adviser.fullName || "another teacher";
       return {
         ok: false,
-        error: `${gradeLabel} · ${section.name} is advised by ${adviserName}. Set them to Unassigned first, then assign this section here.`,
+        error: `${gradeLabel} · ${section.name} is advised by ${adviserName}. Remove it from them first, then add it here.`,
       };
     }
   }
@@ -242,13 +272,22 @@ export async function setTeacherAdvisorySection(
     await prisma.$transaction(async (tx) => {
       await setTeacherAdvisory(tx, {
         teacherId: teacher.id,
-        sectionId,
         schoolId: user.schoolId,
+        change: sectionId
+          ? op === "add"
+            ? { op: "add", sectionId }
+            : { op: "remove", sectionId }
+          : { op: "clear" },
       });
     });
   } catch (err) {
     console.error("[setTeacherAdvisorySection] failed:", err);
-    if (isAdvisorySectionConflict(err)) {
+    // The cap is checked inside the transaction, against the rows as they are
+    // there, so this is the only place it can be reported from.
+    if (err instanceof AdvisoryCapError) {
+      return { ok: false, error: err.message };
+    }
+    if (err instanceof SectionTakenError || isAdvisorySectionConflict(err)) {
       // The check above passed, so someone claimed the section in between —
       // the teacher's own profiling wizard, or a second School Head tab. There
       // is no name to offer for a race, so the generic message is the honest one.
@@ -273,7 +312,11 @@ export async function setTeacherAdvisorySection(
     metadata: {
       schoolId: user.schoolId,
       teacherId: teacher.id,
-      previousSectionId: teacher.advisorySectionId,
+      // The whole set before the change, not one pointer: with three possible
+      // advisories, "what did they hold before" is the only way to read an
+      // add or a remove back out of the log.
+      previousSectionIds: held,
+      op: sectionId ? op : "clear",
       sectionId,
     },
   });

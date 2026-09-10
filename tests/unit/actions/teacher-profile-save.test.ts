@@ -26,6 +26,8 @@ type SectionRow = {
   gradeLevelId: string;
   schoolId: string;
   deletedAt: Date | null;
+  /** Who advises it. Authoritative since Wave A of multi-advisory. */
+  adviserId: string | null;
 };
 
 type TxCalls = {
@@ -73,14 +75,45 @@ function makeTx() {
       }),
     },
     section: {
-      findMany: vi.fn(async (args: { where: { id: { in: string[] }; schoolId: string } }) => {
-        const ids = args.where.id.in;
-        return sections
-          .filter(
-            (s) => ids.includes(s.id) && s.schoolId === args.where.schoolId && s.deletedAt === null,
-          )
-          .map((s) => ({ id: s.id, gradeLevelId: s.gradeLevelId }));
-      }),
+      findMany: vi.fn(
+        async (args: {
+          where: { id?: { in: string[] }; adviserId?: string; schoolId: string };
+        }) =>
+          sections
+            .filter((s) => {
+              if (s.schoolId !== args.where.schoolId) return false;
+              if (s.deletedAt !== null) return false;
+              if (args.where.id && !args.where.id.in.includes(s.id)) return false;
+              if (args.where.adviserId && s.adviserId !== args.where.adviserId) {
+                return false;
+              }
+              return true;
+            })
+            .map((s) => ({ id: s.id, name: s.id, gradeLevelId: s.gradeLevelId })),
+      ),
+      // Really moves the pointer, so reading the set back inside
+      // `setTeacherAdvisory` sees what the write actually did.
+      updateMany: vi.fn(
+        async (args: {
+          where: { id?: string; adviserId?: string | null; schoolId: string };
+          data: { adviserId: string | null };
+        }) => {
+          let count = 0;
+          for (const s of sections) {
+            if (s.schoolId !== args.where.schoolId) continue;
+            if (args.where.id && s.id !== args.where.id) continue;
+            if (
+              args.where.adviserId !== undefined &&
+              s.adviserId !== args.where.adviserId
+            ) {
+              continue;
+            }
+            s.adviserId = args.data.adviserId;
+            count += 1;
+          }
+          return { count };
+        },
+      ),
     },
   };
 }
@@ -169,8 +202,20 @@ beforeEach(() => {
   // the no-leak assertions below only mean anything in production.
   vi.stubEnv("NODE_ENV", "production");
   sections = [
-    { id: SECTION_ID, gradeLevelId: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null },
-    { id: OTHER_SECTION_ID, gradeLevelId: GRADE_ID, schoolId: OTHER_SCHOOL_ID, deletedAt: null },
+    {
+      id: SECTION_ID,
+      gradeLevelId: GRADE_ID,
+      schoolId: SCHOOL_ID,
+      deletedAt: null,
+      adviserId: null,
+    },
+    {
+      id: OTHER_SECTION_ID,
+      gradeLevelId: GRADE_ID,
+      schoolId: OTHER_SCHOOL_ID,
+      deletedAt: null,
+      adviserId: null,
+    },
   ];
   teacherRow = { advisorySectionId: null, taughtGrades: [] };
   calls = {
@@ -211,9 +256,11 @@ describe("saveTeacherProfile", () => {
     expect(advisoryUpdate.data.advisorySectionId).toBe(SECTION_ID);
     expect(advisoryUpdate.data.taughtGrades).toEqual({ connect: [{ id: GRADE_ID }] });
 
-    // Legacy m2m mirror: stale rows dropped, advisory row inserted
+    // Legacy m2m mirror: stale rows dropped, advisory row inserted. `notIn` a
+    // set rather than `not` one id, because a teacher may now hold three and
+    // the mirror has to end up as exactly the live set.
     expect(calls.sectionDeleteMany[0]).toEqual({
-      where: { teacherId: TEACHER_ID, sectionId: { not: SECTION_ID } },
+      where: { teacherId: TEACHER_ID, sectionId: { notIn: [SECTION_ID] } },
     });
     expect(calls.sectionCreateMany[0]).toEqual({
       data: [{ teacherId: TEACHER_ID, sectionId: SECTION_ID }],

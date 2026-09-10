@@ -74,6 +74,8 @@ type SectionRow = {
   gradeLevelId: string;
   gradeType: string;
   deletedAt: Date | null;
+  /** Who advises it, authoritative since Wave A of multi-advisory. */
+  adviserId: string | null;
 };
 
 type SchoolYearRow = {
@@ -138,7 +140,35 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
     .map((l) => ({ id: l.id }));
 });
 
-/** Backs the real `getAdvisoryPlacement`, tenant filter and soft delete included. */
+/**
+ * Backs the real `getAdvisoryPlacements`, tenant filter and soft delete
+ * included.
+ *
+ * A `findMany` on `Section.adviserId` since Wave A of multi-advisory, where it
+ * used to be a `findFirst` on the id the session carried. The session pointer is
+ * gone from that path entirely: which sections a teacher advises is now a
+ * property of the sections, not of the user row.
+ */
+const sectionFindMany = vi.fn(
+  async (args: {
+    where: { adviserId: string; schoolId: string; deletedAt: null };
+  }) =>
+    sections
+      .filter(
+        (s) =>
+          s.adviserId === args.where.adviserId &&
+          s.schoolId === args.where.schoolId &&
+          s.deletedAt === null
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        gradeLevelId: s.gradeLevelId,
+        gradeLevel: { type: s.gradeType },
+      }))
+);
+
+/** Still used by other reads in this file. */
 const sectionFindFirst = vi.fn(
   async (args: { where: { id: string; schoolId: string; deletedAt: null } }) => {
     const found = sections.find(
@@ -274,6 +304,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     section: {
       findFirst: (...args: unknown[]) => sectionFindFirst(...(args as [never])),
+      findMany: (...args: unknown[]) => sectionFindMany(...(args as [never])),
     },
     teacherProfile: {
       findFirst: (...args: unknown[]) => teacherProfileFindFirst(...(args as [never])),
@@ -391,6 +422,7 @@ beforeEach(() => {
       gradeLevelId: GRADE_ID,
       gradeType: "G7",
       deletedAt: null,
+      adviserId: TEACHER_ID,
     },
   ];
   schoolYears = [
@@ -812,7 +844,9 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
 
 describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
   it("refuses a teacher with no advisory placement", async () => {
-    session.advisorySectionId = null;
+    // Advising nothing is now a property of the SECTIONS, not of the session
+    // pointer: `getAdvisoryPlacements` asks which sections name this teacher.
+    for (const s of sections) s.adviserId = null;
 
     const res = await post();
 

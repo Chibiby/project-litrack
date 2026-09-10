@@ -59,9 +59,10 @@ export type AralTutorOption = {
  * `revalidateSchoolTeachers`. Both halves of `advisoryLabel` are covered as a
  * result: who advises what, and what the section is called.
  *
- * Returns `AralTutorOption[]`, which holds no `Date`: `advisorySection.deletedAt`
- * is selected but collapsed to a truthiness check below and never escapes, so
- * nothing here can arrive back from the JSON round trip as a string with `Date`
+ * Returns `AralTutorOption[]`, which holds no `Date`: the archived-section
+ * filter now lives in the `where` on the list relation rather than in a
+ * `deletedAt` this function has to select, so no timestamp escapes at all and
+ * nothing can arrive back from the JSON round trip as a string with `Date`
  * methods called on it.
  */
 export async function listAralTutors(schoolId: string): Promise<AralTutorOption[]> {
@@ -76,22 +77,29 @@ export async function listAralTutors(schoolId: string): Promise<AralTutorOption[
           firstName: true,
           lastName: true,
           teacherProfile: { select: { employmentType: true } },
-          advisorySection: {
+          advisorySections: {
+            where: { deletedAt: null },
             select: {
               name: true,
-              deletedAt: true,
               gradeLevel: { select: { type: true } },
             },
+            orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
           },
         },
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       });
 
       return teachers.map((t) => {
+        // Every section they advise, not the first. The person choosing a tutor
+        // is picking a colleague, and "Grade 3 · Sampaguita" for a teacher who
+        // also holds two other classes tells them less than the full list.
         const advisory =
-          t.advisorySection && !t.advisorySection.deletedAt
-            ? `${GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ?? t.advisorySection.gradeLevel.type} · ${t.advisorySection.name}`
-            : null;
+          t.advisorySections
+            .map(
+              (s) =>
+                `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`
+            )
+            .join(", ") || null;
 
         return {
           id: t.id,

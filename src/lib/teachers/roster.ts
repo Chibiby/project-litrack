@@ -50,16 +50,20 @@ export const managedTeacherSelect = {
   email: true,
   profileCompleted: true,
   approvedAt: true,
-  // `deletedAt` is selected so `toManagedRow` can drop an archived section.
-  // Prisma has no `where` inside a `select` for a to-one relation — unlike the
-  // `_count`s below, which is why the two filters do not look alike.
-  advisorySection: {
+  // A LIST since Wave A of multi-advisory: a teacher may advise up to three.
+  //
+  // The archived-section filter (§6) now lives in the select itself, where it
+  // belongs — a list relation accepts a `where`, which the old to-one
+  // `advisorySection` did not, so `toManagedRow` no longer has to drop rows
+  // after the fact. Same rule, one query earlier.
+  advisorySections: {
+    where: { deletedAt: null },
     select: {
       id: true,
       name: true,
-      deletedAt: true,
       gradeLevel: { select: { type: true } },
     },
+    orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
   },
   _count: {
     select: {
@@ -82,25 +86,19 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,
     aralLearnerCount: t._count.aralLearners,
-    // A teacher sets this in profiling; the School Head can change it from the
-    // Active teachers table (see `setTeacherAdvisorySection`).
+    // A teacher sets their first in profiling; the School Head adds and removes
+    // from the Active teachers table (see `setTeacherAdvisorySection`).
     //
-    // An ARCHIVED section is not an assignment. Every other reader in the repo
-    // already says so — both transfer pages and `teacherAdvisoryGradeScope`
-    // filter `deletedAt: null` — and this page was the one that did not, so it
-    // alone showed a teacher advising a section that no longer exists. A
-    // teacher holding only archived sections reads as unassigned, which is what
-    // they are.
-    assignment:
-      t.advisorySection && t.advisorySection.deletedAt === null
-        ? {
-            sectionId: t.advisorySection.id,
-            gradeName:
-              GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ??
-              t.advisorySection.gradeLevel.type,
-            sectionName: t.advisorySection.name,
-          }
-        : null,
+    // Empty rather than null for "advises nothing" — one shape, so no caller has
+    // to handle both an absent list and an empty one. Archived sections are
+    // already excluded by the select above: a teacher holding only archived
+    // sections reads as unassigned, which is what they are.
+    assignments: t.advisorySections.map((section) => ({
+      sectionId: section.id,
+      gradeName:
+        GRADE_LEVEL_LABELS[section.gradeLevel.type] ?? section.gradeLevel.type,
+      sectionName: section.name,
+    })),
   };
 }
 

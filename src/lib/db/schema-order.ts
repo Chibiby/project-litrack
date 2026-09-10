@@ -20,9 +20,13 @@
  *    foreign keys but are plain nullable columns with no `@relation`. They
  *    impose no ordering, which is the only reason `School` can be first and
  *    `AuditLog` can be last.
- *  - `User.advisorySectionId` is a real foreign key to `Section`, so `User`
- *    must come after `Section` — not before it, which is the intuitive order
- *    and the wrong one.
+ *  - `User.advisorySectionId` USED to be a real foreign key to `Section`, which
+ *    forced `User` after `Section`. Wave A of multi-advisory inverted the
+ *    pointer — `Section.adviserId` now points at `User` — and dropped the old
+ *    key in the same migration, because keeping both would make the two models
+ *    a cycle that no single order can satisfy. `User` therefore comes FIRST
+ *    now, and `advisorySectionId` is a plain column imposing no ordering, the
+ *    same shape as the two above.
  */
 
 /**
@@ -73,9 +77,12 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   { model: "SystemSetting", delegate: "systemSetting", operational: false },
   { model: "SchoolYear", delegate: "schoolYear", operational: false },
   { model: "GradeLevel", delegate: "gradeLevel", operational: false },
-  { model: "Section", delegate: "section", operational: false },
-  // After Section — User.advisorySectionId points at it.
+  // Before Section — `Section.adviserId` points at User since Wave A of the
+  // multi-advisory change, and the old `User.advisorySectionId` foreign key was
+  // dropped in that same migration precisely so this pair has one valid order
+  // again. See the note above.
   { model: "User", delegate: "user", operational: false },
+  { model: "Section", delegate: "section", operational: false },
   { model: "SchoolHeadProfile", delegate: "schoolHeadProfile", operational: false },
   { model: "TeacherProfile", delegate: "teacherProfile", operational: false },
   { model: "TeacherSection", delegate: "teacherSection", operational: false },

@@ -32,8 +32,8 @@ import {
   teacherLearnerScope,
 } from "@/lib/teachers/scope";
 import {
-  getAdvisoryPlacement,
-  NO_ADVISORY_MESSAGE,
+  getAdvisoryPlacements,
+  resolveAdvisoryTarget,
 } from "@/lib/teachers/advisory";
 import { isEligibleAralTutor } from "@/lib/teachers/aral-tutor";
 import { notifyAralAssigned } from "@/lib/notifications";
@@ -97,8 +97,15 @@ export async function createLearner(
   // list while this action validated against the advisory-only one, so every
   // teacher who also tutored ARAL learners was offered a grade the action then
   // refused — and the modal could open pre-set to it.
-  const advisory = await getAdvisoryPlacement(user);
-  if (!advisory) return { ok: false, error: NO_ADVISORY_MESSAGE };
+  // With multi-advisory a teacher may hold up to three, so the section is named
+  // when there is more than one. `resolveAdvisoryTarget` owns that decision: one
+  // advisory behaves exactly as before and needs no section posted; several
+  // require a choice rather than silently taking the first, because a learner in
+  // the wrong class is invisible until somebody notices them there.
+  const placements = await getAdvisoryPlacements(user);
+  const target = resolveAdvisoryTarget(placements, parsed.data.sectionId);
+  if (!target.ok) return { ok: false, error: target.error };
+  const advisory = target.placement;
 
   // A stale client can still post the grade it was showing. Refuse rather than
   // quietly rerouting the learner into a grade the teacher never chose.
