@@ -16,7 +16,7 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
-import { teacherCanAccessLearner } from "@/lib/teachers/scope";
+import { teacherIsAralTutorFor } from "@/lib/teachers/scope";
 
 
 
@@ -104,7 +104,9 @@ export async function saveAralProfile(formData: FormData): Promise<ActionResult>
 
   }
 
-  if (!teacherCanAccessLearner(learner, user.id)) {
+  // The designated ARAL tutor, not merely the adviser: the ARAL profile is the
+  // programme's own intake record for this learner.
+  if (!teacherIsAralTutorFor(learner, user.id)) {
 
     return { ok: false, error: "Not found" };
 

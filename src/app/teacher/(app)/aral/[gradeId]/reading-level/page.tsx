@@ -11,7 +11,7 @@ import { AralReadingLevelSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
-import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 import { countMonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import {
   genderWhere,
@@ -183,7 +183,7 @@ async function AralMonthlyReadingLevelGrid({
     isAralLearner: true,
     deletedAt: null,
     archivedAt: null,
-    ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
+    ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
     ...sectionIdWhere(list.section),
     ...genderWhere(list.gender),
   };

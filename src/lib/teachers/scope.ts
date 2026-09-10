@@ -40,6 +40,45 @@ export function teacherLearnerScope(teacherId: string): Prisma.LearnerWhereInput
 }
 
 /**
+ * True when `teacherId` is the learner's DESIGNATED ARAL tutor. Advising them is
+ * not enough.
+ *
+ * The narrow counterpart to `teacherCanAccessLearner`, and the boolean half of
+ * `aralLearnerScope`. Use it on the ARAL write paths that load a learner by id
+ * and guard it in memory; use `teacherCanAccessLearner` everywhere else.
+ *
+ * A learner with no designated tutor matches nobody — the designation is an
+ * explicit act, and an adviser does not acquire it by default.
+ */
+export function teacherIsAralTutorFor(
+  learner: LearnerTeacherRefs,
+  teacherId: string
+): boolean {
+  return learner.aralTeacherId === teacherId;
+}
+
+/**
+ * `where` fragment for "learners this teacher is the DESIGNATED ARAL tutor for".
+ *
+ * ARAL pages and ARAL write paths only. `teacherLearnerScope` answers a different
+ * question — "may this teacher act on the learner at all" — and answering it on
+ * an ARAL page showed an adviser the ARAL records of learners in their class that
+ * somebody else is the designated tutor for.
+ *
+ * The two must stay separate. Narrowing `teacherLearnerScope` to this would close
+ * the advisory roster, the exports, global search and the dashboard aggregates to
+ * advisers, which is the opposite of what those 19 call sites want. Widening this
+ * one back re-opens the bug. Whichever predicate a call site takes, it is saying
+ * which of the two questions it is asking.
+ *
+ * Unlike `teacherLearnerScope` this owns no `OR` key, so it composes into any
+ * `where` without a caveat.
+ */
+export function aralLearnerScope(teacherId: string): Prisma.LearnerWhereInput {
+  return { aralTeacherId: teacherId };
+}
+
+/**
  * `where` fragment for "grade levels this teacher advises in".
  *
  * The grade is derived from the section they advise — `User.advisorySectionId` is

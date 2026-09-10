@@ -24,7 +24,7 @@ import { EnrollToAralDialog } from "@/components/aral/enroll-to-aral-dialog";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
-import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 import {
   listAralTutors,
   type AralTutorOption,
@@ -325,7 +325,7 @@ export default async function AralDashboard({
     isAralLearner: true,
     deletedAt: null,
     archivedAt: null,
-    ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
+    ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
     ...sectionIdWhere(section),
   };
   const aralCount = await prisma.learner.count({ where: aralWhere });

@@ -24,9 +24,9 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
-  teacherCanAccessLearner,
+  aralLearnerScope,
   teacherGradeScope,
-  teacherLearnerScope,
+  teacherIsAralTutorFor,
 } from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -60,7 +60,10 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (!teacherCanAccessLearner(learner, user.id)) {
+  // The designated ARAL tutor, not merely the adviser: attendance here is the
+  // ARAL programme's record, and the teacher running it for this learner is the
+  // one entitled to write it.
+  if (!teacherIsAralTutorFor(learner, user.id)) {
     return { ok: false, error: "Not found" };
   }
   if (!learner.isAralLearner) {
@@ -236,7 +239,10 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
       id: { in: learnerIds },
       schoolId: user.schoolId,
       gradeLevelId: grade.id,
-      ...teacherLearnerScope(user.id),
+      // The designated tutor only. An adviser is not entitled to encode the
+      // ARAL week for a learner somebody else runs the programme for, even
+      // though the learner sits in their class.
+      ...aralLearnerScope(user.id),
       deletedAt: null,
       isAralLearner: true,
     },

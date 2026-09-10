@@ -18,7 +18,7 @@ import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
 import { EmptyState } from "@/components/dashboard";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
-import { teacherLearnerScope } from "@/lib/teachers/scope";
+import { aralLearnerScope } from "@/lib/teachers/scope";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +45,7 @@ export default async function AttendancePage({
         id,
         schoolId: user.schoolId ?? undefined,
         deletedAt: null,
-        ...teacherLearnerScope(user.id),
+        ...aralLearnerScope(user.id),
       };
 
   const learner = await prisma.learner.findFirst({

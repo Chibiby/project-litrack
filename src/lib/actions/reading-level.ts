@@ -15,8 +15,8 @@ import { formatLocalDateKey } from "@/lib/date-keys";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
-  teacherCanAccessLearner,
-  teacherLearnerScope,
+  aralLearnerScope,
+  teacherIsAralTutorFor,
 } from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -60,7 +60,9 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
   } catch {
     return { ok: false, error: "Not found" };
   }
-  if (!teacherCanAccessLearner(learner, user.id)) {
+  // The designated ARAL tutor, not merely the adviser — same rule as the bulk
+  // path below and as `markAttendance`.
+  if (!teacherIsAralTutorFor(learner, user.id)) {
     return { ok: false, error: "Not found" };
   }
   if (!learner.isAralLearner) {
@@ -155,7 +157,9 @@ export async function bulkRecordMonthlyReadingLevel(
     where: {
       id: { in: learnerIds },
       schoolId: user.schoolId,
-      ...teacherLearnerScope(user.id),
+      // The designated tutor only — see `saveAralWeeklyAttendance`. Reading
+      // levels are the ARAL programme's own record of a learner's progress.
+      ...aralLearnerScope(user.id),
       deletedAt: null,
       isAralLearner: true,
     },

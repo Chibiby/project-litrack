@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  aralLearnerScope,
   deniesAdvisoryRoster,
   isAralVolunteerDesignation,
   teacherAdvisoryGradeScope,
   teacherCanAccessLearner,
   teacherGradeScope,
+  teacherIsAralTutorFor,
   teacherLearnerScope,
 } from "@/lib/teachers/scope";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
@@ -200,5 +202,84 @@ describe("deniesAdvisoryRoster", () => {
         isAralVolunteerDesignation(designation)
       );
     }
+  });
+});
+
+/**
+ * §11 of the ten concerns. `teacherLearnerScope` answers "may this teacher act
+ * on the learner" — adviser OR designated ARAL tutor — and every ARAL page used
+ * it. So an adviser saw the ARAL learners in their own class on their own ARAL
+ * pages even when somebody else was the designated tutor. That is the reported
+ * bug, and it is a real correctness bug: the ARAL programme's records were being
+ * shown to, and writable by, a teacher who is not running it for that learner.
+ *
+ * The fix is a SECOND, narrower predicate rather than a change to the first.
+ * Narrowing `teacherLearnerScope` would close the advisory roster to advisers —
+ * the opposite of what anyone wants, at 19 call sites.
+ *
+ * These tests are the guard for both halves: that the narrow predicate is narrow,
+ * and that the wide one stayed wide. They must fail if either is changed into the
+ * other.
+ */
+describe("aralLearnerScope", () => {
+  it("matches the designated ARAL tutor only — advising is not enough", () => {
+    expect(aralLearnerScope(TEACHER)).toEqual({ aralTeacherId: TEACHER });
+  });
+
+  it("does not look at the advisory pointer at all", () => {
+    expect(JSON.stringify(aralLearnerScope(TEACHER))).not.toContain('"teacherId"');
+  });
+
+  it("owns no OR key, so it composes into any where", () => {
+    // `teacherLearnerScope` owns `OR` and every call site has to know that.
+    // This one is a plain equality and carries no such caveat.
+    expect(aralLearnerScope(TEACHER)).not.toHaveProperty("OR");
+  });
+
+  it("is strictly narrower than teacherLearnerScope", () => {
+    const wide = teacherLearnerScope(TEACHER).OR ?? [];
+    expect(wide).toEqual(
+      expect.arrayContaining([aralLearnerScope(TEACHER) as never])
+    );
+    expect(wide).toHaveLength(2);
+  });
+
+  it("scopes to the given teacher only", () => {
+    expect(JSON.stringify(aralLearnerScope(TEACHER))).not.toContain(OTHER);
+  });
+});
+
+describe("teacherIsAralTutorFor", () => {
+  it("admits the designated tutor", () => {
+    expect(
+      teacherIsAralTutorFor({ teacherId: OTHER, aralTeacherId: TEACHER }, TEACHER)
+    ).toBe(true);
+  });
+
+  it("admits a tutor of a floating learner who has no adviser", () => {
+    expect(
+      teacherIsAralTutorFor({ teacherId: null, aralTeacherId: TEACHER }, TEACHER)
+    ).toBe(true);
+  });
+
+  /** The regression. `teacherCanAccessLearner` says yes here; this must say no. */
+  it("refuses the adviser when somebody else is the designated tutor", () => {
+    const learner = { teacherId: TEACHER, aralTeacherId: OTHER };
+    expect(teacherCanAccessLearner(learner, TEACHER)).toBe(true);
+    expect(teacherIsAralTutorFor(learner, TEACHER)).toBe(false);
+  });
+
+  it("refuses an adviser of a learner with no designated tutor at all", () => {
+    // Nobody is running ARAL for this learner yet. Advising them does not make
+    // the adviser the tutor by default — the designation is an explicit act.
+    expect(
+      teacherIsAralTutorFor({ teacherId: TEACHER, aralTeacherId: null }, TEACHER)
+    ).toBe(false);
+  });
+
+  it("denies when both pointers are null — null must never match", () => {
+    expect(
+      teacherIsAralTutorFor({ teacherId: null, aralTeacherId: null }, TEACHER)
+    ).toBe(false);
   });
 });

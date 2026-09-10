@@ -15,7 +15,7 @@ import {
   type MonthlyAssessmentProgress,
 } from "@/lib/aral/reading-level-progress";
 import { getMonday } from "@/lib/utils";
-import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -65,7 +65,7 @@ async function resolveGradeLearnerWhere(input: {
       isAralLearner: true,
       deletedAt: null,
       archivedAt: null,
-      ...(isSuperAdmin ? {} : teacherLearnerScope(user.id)),
+      ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
       ...sectionIdWhere(list.section),
       ...genderWhere(list.gender),
     },
