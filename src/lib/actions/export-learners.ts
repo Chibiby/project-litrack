@@ -12,13 +12,25 @@ import {
   PARENT_EDUCATION_LABELS,
   GOV_BENEFIT_LABELS,
   labelReadingProfile,
-  formatEthnicity,
+  ETHNICITY_LABELS,
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
+
+/**
+ * The enum's own label and nothing else — "Others" stays "Others", because the
+ * free text lives in its own column. `formatEthnicity` deliberately substitutes
+ * the free text for display; a spreadsheet column is not display.
+ */
+function labelEthnicityOnly(ethnicity: string | null | undefined): string {
+  if (!ethnicity) return "";
+  return (
+    ETHNICITY_LABELS[ethnicity as keyof typeof ETHNICITY_LABELS] ?? ethnicity
+  );
+}
 
 export type ExportLearnersFilter = {
   gradeLevelId?: string;
@@ -148,10 +160,21 @@ async function buildLearnersWorkbook(
     { header: "Age", key: "age", width: 8 },
     { header: "Gender", key: "gender", width: 10 },
     { header: "Nutritional status", key: "nutrition", width: 18 },
+    // Four columns, not two. The label column names the enum answer and the
+    // "specify" column beside it carries the free text. Folding the free text
+    // into the label — which this sheet used to do — erased the answer itself:
+    // an Others/"Manobo" learner exported as `Manobo`, which is not one of the
+    // thirteen and so resolves to nothing on the way back in.
     { header: "Ethnicity", key: "ethnicity", width: 16 },
+    { header: "Ethnicity (specify)", key: "ethnicityOther", width: 18 },
     // Its own column rather than one cell holding both, so the sheet stays
     // sortable and filterable on each answer.
     { header: "Second ethnicity", key: "secondaryEthnicity", width: 16 },
+    {
+      header: "Second ethnicity (specify)",
+      key: "secondaryEthnicityOther",
+      width: 18,
+    },
     { header: "Grade", key: "grade", width: 12 },
     { header: "Section", key: "section", width: 12 },
     { header: "English profile", key: "english", width: 28 },
@@ -173,10 +196,10 @@ async function buildLearnersWorkbook(
       nutrition: l.nutritionalStatus
         ? NUTRITIONAL_STATUS_LABELS[l.nutritionalStatus]
         : "",
-      ethnicity: formatEthnicity(l.ethnicity, l.ethnicityOther, ""),
-      secondaryEthnicity: l.secondaryEthnicity
-        ? formatEthnicity(l.secondaryEthnicity, l.secondaryEthnicityOther, "")
-        : "",
+      ethnicity: labelEthnicityOnly(l.ethnicity),
+      ethnicityOther: l.ethnicityOther ?? "",
+      secondaryEthnicity: labelEthnicityOnly(l.secondaryEthnicity),
+      secondaryEthnicityOther: l.secondaryEthnicityOther ?? "",
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
       english: labelReadingProfile(

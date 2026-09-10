@@ -482,7 +482,7 @@ export function LearnerForm({
             name="ethnicity"
             value={ethnicity}
             onChange={(e) => changeEthnicity(e.target.value)}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm sm:h-10"
           >
             <option value="">Not specified</option>
             {toOptions(ETHNICITY_LABELS).map((o) => (
@@ -532,7 +532,7 @@ export function LearnerForm({
                 name="secondaryEthnicity"
                 value={secondaryEthnicity}
                 onChange={(e) => setSecondaryEthnicity(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+                className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm sm:h-10"
               >
                 <option value="">Not specified</option>
                 {toOptions(ETHNICITY_LABELS)

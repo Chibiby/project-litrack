@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
+ * 20s, not the 5s default. The first test in this file pays for the dynamic
+ * `import("exceljs")` and the zip write; run alone it finishes in ~2s, but under
+ * a full `vitest run` the workers contend and it crosses 5s intermittently. The
+ * timeout is the flake, not the code — so it is raised here rather than made
+ * global, and only in the files that unzip a workbook.
+ */
+vi.setConfig({ testTimeout: 20_000 });
+
+/**
  * `generateReport` — the Reports Hub's one write path.
  *
  * What is contract here, and so asserted rather than assumed:
