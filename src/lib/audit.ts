@@ -40,6 +40,15 @@ export const AUDIT_ACTIONS = {
   GRADE_LEVEL_CREATE: "GRADE_LEVEL_CREATE",
   SCHOOL_YEAR_CREATE: "SCHOOL_YEAR_CREATE",
   SCHOOL_YEAR_SET_ACTIVE: "SCHOOL_YEAR_SET_ACTIVE",
+  /**
+   * A head corrected a year's label or date range. The metadata carries both the
+   * old and the new values because the row is overwritten in place: without the
+   * "from" side, a report that looks wrong six months later cannot be traced
+   * back to the day someone moved the range.
+   */
+  SCHOOL_YEAR_UPDATE: "SCHOOL_YEAR_UPDATE",
+  /** Only ever an empty year — see `deleteSchoolYear`. */
+  SCHOOL_YEAR_DELETE: "SCHOOL_YEAR_DELETE",
   SECTION_CREATE: "SECTION_CREATE",
   SECTION_UPDATE: "SECTION_UPDATE",
   SECTION_DELETE: "SECTION_DELETE",

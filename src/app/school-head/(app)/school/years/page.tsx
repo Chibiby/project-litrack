@@ -11,8 +11,9 @@ import { Callout } from "@/components/ui/callout";
 import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
-  CreateSchoolYearForm,
+  CreateSchoolYearDialog,
   SchoolYearsList,
+  type SchoolYearListItem,
 } from "@/components/school-head/school-year-forms";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,31 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
   const years = await prisma.schoolYear.findMany({
     where: { schoolId: view.schoolId },
     orderBy: { startDate: "desc" },
+    // Counts decide two things per row: whether the edit dialog warns that
+    // changing dates will not move existing records, and whether removal is
+    // offered at all. Cheap here (one grouped count per year) versus a second
+    // round trip from the client once the dialog is already open.
+    select: {
+      id: true,
+      label: true,
+      startDate: true,
+      endDate: true,
+      isActive: true,
+      _count: { select: { enrollments: true, termGrades: true } },
+    },
   });
 
-  const active = years.find((y) => y.isActive);
+  const items: SchoolYearListItem[] = years.map((y) => ({
+    id: y.id,
+    label: y.label,
+    startDate: y.startDate.toISOString().slice(0, 10),
+    endDate: y.endDate.toISOString().slice(0, 10),
+    isActive: y.isActive,
+    enrollmentCount: y._count.enrollments,
+    termGradeCount: y._count.termGrades,
+  }));
+
+  const active = items.find((y) => y.isActive);
 
   return (
     <SchoolHeadPage
@@ -42,6 +65,11 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
       view={view}
       tabs={SCHOOL_WORKSPACE_TABS}
       activeTab={SCHOOL_TABS.years}
+      actions={
+        view.isSuperAdminView ? null : (
+          <CreateSchoolYearDialog existingYears={items} />
+        )
+      }
       callout={
         active ? null : (
           <Callout title="No active school year">
@@ -50,44 +78,65 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
           </Callout>
         )
       }
-      contentClassName="grid gap-6 lg:grid-cols-2"
     >
-      {view.isSuperAdminView ? null : (
-        <Surface as="section">
-          <SurfaceHeader>
-            <h2 className="text-base font-semibold">Create school year</h2>
-          </SurfaceHeader>
-          <SurfaceBody>
-            <CreateSchoolYearForm />
-          </SurfaceBody>
-        </Surface>
-      )}
-
-      <Surface as="section" className={view.isSuperAdminView ? "lg:col-span-2" : undefined}>
+      <Surface as="section">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">Years</h2>
         </SurfaceHeader>
         <SurfaceBody>
-          {years.length === 0 ? (
+          {items.length === 0 ? (
             <EmptyState
               title="No school years yet"
-              description="Create a school year and mark one active to start enrolling learners."
+              description="Add a school year and mark one active to start enrolling learners."
               icon={CalendarRange}
             />
           ) : (
-            <SchoolYearsList
-              readOnly={view.isSuperAdminView}
-              years={years.map((y) => ({
-                id: y.id,
-                label: y.label,
-                startDate: y.startDate.toISOString().slice(0, 10),
-                endDate: y.endDate.toISOString().slice(0, 10),
-                isActive: y.isActive,
-              }))}
-            />
+            <SchoolYearsList readOnly={view.isSuperAdminView} years={items} />
           )}
         </SurfaceBody>
       </Surface>
+
+      {view.isSuperAdminView ? null : (
+        <Surface as="section">
+          <SurfaceHeader>
+            <h2 className="text-base font-semibold">Correcting a school year</h2>
+          </SurfaceHeader>
+          <SurfaceBody className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Mistakes here are fixable. <strong className="text-foreground">Edit</strong>{" "}
+              on any row opens the label and the date range for correction — use it
+              when a year was typed as the wrong span, or the division moved the
+              opening date after you had already set it up.
+            </p>
+            <ol className="ml-4 list-decimal space-y-1.5">
+              <li>Press Edit on the year you need to fix.</li>
+              <li>
+                Correct the label (YYYY-YYYY, consecutive years) or either date, then
+                Save changes.
+              </li>
+              <li>
+                The list and every report pick up the new details immediately. Nobody
+                is unenrolled and no grades move — enrolments are attached to the
+                year itself, not to its dates.
+              </li>
+            </ol>
+            <p>
+              Two things editing deliberately cannot do.{" "}
+              <strong className="text-foreground">It never changes which year is active</strong>{" "}
+              — that stays a separate Set active decision, so a typo fix cannot
+              quietly redirect where new learners are enrolled. And a year with
+              enrolments or grades behind it{" "}
+              <strong className="text-foreground">cannot be removed</strong>, only
+              corrected; the remove button appears only on a year that still has no
+              records, which is the duplicate you meant to undo.
+            </p>
+            <p>
+              Every correction is written to the audit log with its before and after
+              values, so a range that changed mid-year can always be traced.
+            </p>
+          </SurfaceBody>
+        </Surface>
+      )}
     </SchoolHeadPage>
   );
 }
