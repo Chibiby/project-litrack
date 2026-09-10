@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nonEmpty } from "@/lib/validators/common";
 
 export const GRADE_LEVEL_TYPES = [
   "KINDER",
@@ -49,6 +50,23 @@ export const CREATABLE_GRADE_LEVEL_TYPES = PROFILING_GRADE_LEVEL_TYPES;
 // accepted here even though it is a valid `GradeLevelType`.
 export const createGradeLevelSchema = z.object({
   type: z.enum(CREATABLE_GRADE_LEVEL_TYPES),
+});
+
+/**
+ * Archive / restore address a grade by id rather than by type.
+ *
+ * `createGradeLevel` takes a type because it may have nothing to point at yet.
+ * These two always do, and a type would be ambiguous the moment a school holds
+ * both a live and an archived row for it — which `@@unique([schoolId, type])`
+ * forbids today, but the id costs nothing and does not rely on that staying so.
+ *
+ * `nonEmpty` rather than `.uuid()`, matching `sectionIdSchema`: a malformed id
+ * simply matches no row, and the action already answers that with "not found".
+ * A second, differently-worded refusal for the same condition would tell a
+ * caller which ids are well-formed and tell a School Head nothing.
+ */
+export const gradeLevelIdSchema = z.object({
+  gradeLevelId: nonEmpty("Grade level required"),
 });
 
 /** Bootstrap fields from School Head profiling (not part of survey profile schema). */

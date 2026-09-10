@@ -32,11 +32,15 @@ async function GradeLevelsGrid({
   schoolId: string;
   isSuperAdminView: boolean;
 }) {
+  // Deactivated grades are read too, not filtered out: a grade that exists but
+  // is switched off is a different thing from one that was never created, and
+  // the page has to offer Restore for the first and Create for the second.
   const existing = await prisma.gradeLevel.findMany({
-    where: { schoolId, deletedAt: null },
+    where: { schoolId },
     select: {
       id: true,
       type: true,
+      deletedAt: true,
       _count: { select: { teachers: true, learners: true } },
       sections: {
         where: { deletedAt: null },
@@ -47,10 +51,16 @@ async function GradeLevelsGrid({
   });
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
-  const activeTypes = ALL_TYPES.filter((type) => existingMap.has(type));
+  const activeTypes = ALL_TYPES.filter(
+    (type) => existingMap.get(type)?.deletedAt === null
+  );
+  const archivedTypes = ALL_TYPES.filter((type) => existingMap.get(type)?.deletedAt);
   // FLOATING stays in ALL_TYPES so an existing floating grade still renders (with
   // its learner count), but it is never offered as something to create: it is
   // system-managed and appears only once a transfer puts a learner into it.
+  // A grade that exists and is merely deactivated is excluded too — it belongs
+  // under Restore, where its sections come back with it, rather than under
+  // Create, which would revive the grade alone and leave them behind.
   const inactiveTypes = ALL_TYPES.filter(
     (type) => !existingMap.has(type) && type !== "FLOATING"
   );
@@ -61,14 +71,24 @@ async function GradeLevelsGrid({
       id: grade.id,
       type,
       teacherCount: grade._count.teachers,
+      // Every learner row, soft-deleted ones included — this is the same
+      // unfiltered `_count` the page has always shown. `archiveGradeLevel` runs
+      // its own count and is the authority on whether a grade may be switched
+      // off; this number is a label, not a gate.
       learnerCount: grade._count.learners,
       sections: grade.sections,
     };
   });
 
+  const archived = archivedTypes.map((type) => {
+    const grade = existingMap.get(type)!;
+    return { id: grade.id, type };
+  });
+
   return (
     <GradeLevelsClient
       active={active}
+      archived={archived}
       inactiveTypes={[...inactiveTypes]}
       readOnly={isSuperAdminView}
     />

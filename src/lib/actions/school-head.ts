@@ -13,9 +13,11 @@ import { requireUser, requireSchoolUser } from "@/lib/auth/session";
 import { schoolHeadProfileSchema } from "@/lib/validators/profile.schema";
 import {
   createGradeLevelSchema,
+  gradeLevelIdSchema,
   schoolStructureSchema,
   type SchoolStructureInput,
 } from "@/lib/validators/grade-level.schema";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { lettersNeededToReachCount } from "@/lib/section-letters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
@@ -370,6 +372,238 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
   revalidateSchoolDashboard(user.schoolId);
   // Login "teachers open" depends on at least one grade level.
   revalidateSchoolsList();
+}
+
+/**
+ * Deactivate a grade that was set up by mistake.
+ *
+ * REFUSES WHILE ANY LEARNER REMAINS, reporting the count so the head moves them
+ * first. That refusal is the point of the whole feature: deactivating is for a
+ * mistake, and a mistake has nobody in it. Hiding a class of real learners
+ * behind a toggle — they would vanish from every roster, dashboard and report at
+ * once, with no record of where they went — is the failure this rule exists to
+ * prevent, and it is why `GRADE_LEVEL_ARCHIVE` can never mark such a moment.
+ *
+ * "Remains" means `deletedAt: null`, which includes ARCHIVED learners. An
+ * archived learner can be brought back, and bringing one back into a deactivated
+ * grade would put them somewhere nobody can see. Only a soft-deleted learner is
+ * gone in the sense that matters here.
+ *
+ * The grade's live sections go with it, stamped with the SAME `deletedAt` — that
+ * shared timestamp is what `restoreGradeLevel` reads to tell "archived with this
+ * grade" from "archived earlier, on purpose". A section a head deleted last term
+ * must not come back because the grade around it did.
+ *
+ * Advisers of those sections are freed, exactly as `deleteSection` frees them:
+ * the section is only soft-deleted, so the FK stays valid and the teacher would
+ * otherwise hold an advisory slot on a section nobody can see. That is
+ * deliberate and one-way — restore does not re-attach them.
+ */
+export async function archiveGradeLevel(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const parsed = gradeLevelIdSchema.safeParse({
+    // Coerced, not passed raw: a missing field is `null`, and Zod would answer
+    // "Expected string, received null" where the head needs "Grade level
+    // required". Same shape as `createNextLetterSection`.
+    gradeLevelId: String(formData.get("gradeLevelId") ?? ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const grade = await prisma.gradeLevel.findFirst({
+    where: { id: parsed.data.gradeLevelId, schoolId: user.schoolId, deletedAt: null },
+    select: { id: true, type: true },
+  });
+  if (!grade) return { ok: false, error: "Grade level not found" };
+
+  const learnerCount = await prisma.learner.count({
+    where: { gradeLevelId: grade.id, schoolId: user.schoolId, deletedAt: null },
+  });
+  if (learnerCount > 0) {
+    const label = GRADE_LEVEL_LABELS[grade.type] ?? grade.type;
+    return {
+      ok: false,
+      error:
+        `${label} still holds ${learnerCount} ${learnerCount === 1 ? "learner" : "learners"}. ` +
+        "Move or transfer them to another grade first.",
+    };
+  }
+
+  try {
+    const affectedTeacherIds = await prisma.$transaction(async (tx) => {
+      // One timestamp for the grade and every section going down with it. Two
+      // `new Date()` calls would differ by milliseconds and break the pairing
+      // restore depends on.
+      const archivedAt = new Date();
+
+      const sections = await tx.section.findMany({
+        where: { gradeLevelId: grade.id, deletedAt: null },
+        select: { id: true },
+      });
+      const sectionIds = sections.map((s) => s.id);
+
+      await tx.gradeLevel.update({
+        where: { id: grade.id },
+        data: { deletedAt: archivedAt },
+      });
+
+      if (sectionIds.length > 0) {
+        await tx.section.updateMany({
+          where: { id: { in: sectionIds } },
+          data: { deletedAt: archivedAt },
+        });
+      }
+
+      // Read the advisers before nulling the pointer — afterwards there is no
+      // way back to who they were, and their caches have to be busted below.
+      const advisers = sectionIds.length
+        ? await tx.user.findMany({
+            where: { advisorySectionId: { in: sectionIds } },
+            select: { id: true },
+          })
+        : [];
+      if (sectionIds.length > 0) {
+        await tx.user.updateMany({
+          where: { advisorySectionId: { in: sectionIds } },
+          data: { advisorySectionId: null },
+        });
+      }
+
+      const assigned = sectionIds.length
+        ? await tx.teacherSection.findMany({
+            where: { sectionId: { in: sectionIds } },
+            select: { teacherId: true },
+          })
+        : [];
+      if (sectionIds.length > 0) {
+        await tx.teacherSection.deleteMany({ where: { sectionId: { in: sectionIds } } });
+      }
+
+      // The legacy `taughtGrades` mirror. Nothing reads it for access any more
+      // (see `teacherGradeScope`), but leaving a link to a deactivated grade
+      // would make it disagree with the grade itself.
+      const linked = await tx.user.findMany({
+        where: { taughtGrades: { some: { id: grade.id } } },
+        select: { id: true },
+      });
+      for (const t of linked) {
+        await tx.user.update({
+          where: { id: t.id },
+          data: { taughtGrades: { disconnect: { id: grade.id } } },
+        });
+      }
+
+      return [
+        ...new Set([
+          ...advisers.map((a) => a.id),
+          ...assigned.map((a) => a.teacherId),
+          ...linked.map((t) => t.id),
+        ]),
+      ];
+    });
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.GRADE_LEVEL_ARCHIVE,
+      resource: "GradeLevel",
+      resourceId: grade.id,
+      metadata: {
+        schoolId: user.schoolId,
+        gradeLevelId: grade.id,
+        type: grade.type,
+        freedTeachers: affectedTeacherIds.length,
+      },
+    });
+
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+    revalidateSchoolHeadTeachers(user.schoolId);
+    revalidateSchoolDashboard(user.schoolId);
+    // Login "teachers open" depends on at least one grade level, same as create.
+    revalidateSchoolsList();
+    for (const teacherId of affectedTeacherIds) {
+      revalidateTeacherCaches(teacherId);
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[archiveGradeLevel]", err);
+    return { ok: false, error: "Failed to deactivate grade level" };
+  }
+}
+
+/**
+ * Bring back a deactivated grade, and with it the sections deactivated in the
+ * same act — mirroring what `bootstrapSchoolStructure` already does when it
+ * revives a soft-deleted grade.
+ *
+ * "In the same act" is the grade's own `deletedAt`, matched exactly. A section
+ * the head deleted separately carries a different timestamp and stays deleted,
+ * so restoring a grade cannot quietly undo an unrelated decision.
+ *
+ * Advisers are not restored. Archiving freed them and they may hold another
+ * section by now; `Section.adviserId` is unique, so re-attaching could collide
+ * with a live assignment. A head reassigns from the teachers table.
+ */
+export async function restoreGradeLevel(formData: FormData): Promise<ActionResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const parsed = gradeLevelIdSchema.safeParse({
+    // Coerced, not passed raw: a missing field is `null`, and Zod would answer
+    // "Expected string, received null" where the head needs "Grade level
+    // required". Same shape as `createNextLetterSection`.
+    gradeLevelId: String(formData.get("gradeLevelId") ?? ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const grade = await prisma.gradeLevel.findFirst({
+    where: {
+      id: parsed.data.gradeLevelId,
+      schoolId: user.schoolId,
+      deletedAt: { not: null },
+    },
+    select: { id: true, type: true, deletedAt: true },
+  });
+  if (!grade?.deletedAt) return { ok: false, error: "Grade level not found" };
+
+  try {
+    const restoredSections = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.section.updateMany({
+        where: { gradeLevelId: grade.id, deletedAt: grade.deletedAt },
+        data: { deletedAt: null },
+      });
+      await tx.gradeLevel.update({
+        where: { id: grade.id },
+        data: { deletedAt: null },
+      });
+      return count;
+    });
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.GRADE_LEVEL_RESTORE,
+      resource: "GradeLevel",
+      resourceId: grade.id,
+      metadata: {
+        schoolId: user.schoolId,
+        gradeLevelId: grade.id,
+        type: grade.type,
+        restoredSections,
+      },
+    });
+
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+    revalidateSchoolDashboard(user.schoolId);
+    revalidateSchoolsList();
+    return { ok: true };
+  } catch (err) {
+    console.error("[restoreGradeLevel]", err);
+    return { ok: false, error: "Failed to restore grade level" };
+  }
 }
 
 /**

@@ -38,6 +38,18 @@ export const AUDIT_ACTIONS = {
   IMPERSONATION_END: "IMPERSONATION_END",
   SCHOOL_HEAD_PROFILE_SAVE: "SCHOOL_HEAD_PROFILE_SAVE",
   GRADE_LEVEL_CREATE: "GRADE_LEVEL_CREATE",
+  /**
+   * A grade deactivated because it was set up by mistake. Only ever an EMPTY
+   * grade — `archiveGradeLevel` refuses while any learner remains — so this row
+   * can never mark the moment a class of learners was hidden.
+   */
+  GRADE_LEVEL_ARCHIVE: "GRADE_LEVEL_ARCHIVE",
+  /**
+   * The reverse, bringing back the sections archived in the same act. Advisers
+   * are NOT restored with them: archiving frees an adviser, and re-attaching
+   * someone to a section they may have moved on from is not this action's call.
+   */
+  GRADE_LEVEL_RESTORE: "GRADE_LEVEL_RESTORE",
   SCHOOL_YEAR_CREATE: "SCHOOL_YEAR_CREATE",
   SCHOOL_YEAR_SET_ACTIVE: "SCHOOL_YEAR_SET_ACTIVE",
   /**
