@@ -48,6 +48,21 @@ Committed migrations (apply in order via `migrate deploy`):
   finished before the question existed is meant to hold `NULL`, not a guess. Adds no table, so
   `prisma/rls-policies.sql` does not need re-running. Applied to production on 2026-09-10
   together with `20260909000001`.
+- `20260910000003_chat_channels`
+- `20260910000004_backfill_password_is_school_id` — data-only, no DDL. One `UPDATE` on
+  `User` setting `passwordIsSchoolId = true` for School Heads whose password is provably
+  still their School ID, which `scripts/import-schools.ts` never recorded. It only ever
+  sets the flag true, so it is idempotent and cannot revoke a credential the Super Admin
+  console is already showing. Expect roughly 209 of 336 live heads to change — the count
+  drifts as heads change their own passwords, so trust the predicate, not the number. It
+  reads `AuditLog` to classify, so apply it after anything that rewrites that table. Adds
+  no table, so `prisma/rls-policies.sql` does not need re-running.
+
+  The ~124 heads it deliberately skips are those whose most recent password write was their
+  own choice or a regenerated one-time credential. Those are the ones worth getting right:
+  flagging one would make the console print a School ID that does not open the account, and
+  an admin would read it out to a school. `tests/unit/db/password-is-school-id-backfill.test.ts`
+  guards the classification rule.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only

@@ -434,6 +434,14 @@ async function main(): Promise<void> {
               fullName: s.name,
               isActive: true,
               mustChangePassword: true,
+              // The password IS the School ID (see `schoolCredentials`), so say so.
+              // The Super Admin console reads this flag to decide whether it can
+              // show the credential or has to fall back to "custom password — reset
+              // to sign in". Leaving it at its `false` default told admins that 332
+              // imported accounts had unknown passwords, so the answer to "this
+              // school can't get in" was always a reset — of a password that was
+              // never unknown.
+              passwordIsSchoolId: true,
               profileCompleted: false,
             },
           });
