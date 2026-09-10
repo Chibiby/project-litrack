@@ -26,6 +26,41 @@ If the teacher already activated, use password reset (real email) or Super Admin
 - Real email accounts: `/forgot-password` → Resend link (requires `RESEND_*` configured).
 - Synthetic emails: recovery email will not reach a mailbox — regenerate SH credential or re-invite teacher / set password via supported admin flows.
 
+## "The password is right and it still won't log in"
+
+Before resetting anything, check whether Supabase Auth — not the password — is
+refusing. Its password grant is rate limited **per source IP**, ~30 requests per
+5 minutes on the default settings, and it answers `HTTP 429 over_request_rate_limit`.
+A reset cannot fix that, because the credential was never wrong.
+
+How to tell them apart:
+
+- `/admin/audit` → the `LOGIN_DENIED` row's `reason`. `rate_limited` means the
+  limiter; `incorrect_credentials` means the password. (Rows written before
+  2026-09-10 always say `incorrect_credentials` — that field could not
+  distinguish the two, which is what made this hard to diagnose.)
+- Several *different* schools failing inside the same few minutes is the
+  signature of a shared bucket, not of several forgotten passwords.
+- The server log carries the verbatim Supabase message (`supabase rate limit:`).
+
+What to do:
+
+1. Tell the school to stop retrying and wait ~5 minutes. Every retry re-arms the
+   window.
+2. Raise the limit: **Supabase Dashboard → Authentication → Rate Limits →
+   "Sign in / Sign up"**. The default of 30 per 5 min is sized for one person,
+   not for a division of ~330 schools logging in at the same time of morning.
+3. Set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` in Vercel if they
+   are unset. Without them LITRACK's own limiter degrades to a per-instance
+   window (it logs `[rate-limit] … not an effective limit` once), so a retry
+   loop is never stopped before it reaches Supabase.
+
+Sign-in itself is made **by the browser**, not by the server action, so each
+person spends their own IP budget rather than the deployment's — see
+`src/lib/actions/login.ts`. Two paths still grant server-side and therefore
+still share the Vercel egress budget: Super Admin login, and School Heads whose
+account uses a real email address instead of the synthetic `sh@…` one.
+
 ## Import / export ops notes
 
 - Teachers import CSV under `/teacher/grade/[id]/import` (valid rows commit).

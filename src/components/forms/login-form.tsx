@@ -14,6 +14,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
+import {
+  beginSchoolHeadLogin,
+  beginTeacherLogin,
+  finishSchoolHeadLogin,
+  finishTeacherLogin,
+  reportLoginFailure,
+} from "@/lib/actions/login";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
@@ -142,30 +151,81 @@ export function LoginForm({
     return formData;
   };
 
+  /**
+   * Send the person into the app once a session exists.
+   *
+   * The navigation is a `router.push`, not a server `redirect`, because the
+   * session cookies were written by the browser Supabase client — the next
+   * request has to be made by that same browser, after those cookies land.
+   */
+  const enterApp = (redirectTo: string) => {
+    markPostLoginSplash();
+    resetSidebarExpandedPreference();
+    router.push(redirectTo);
+    router.refresh();
+  };
+
   const handleTeacherLogin = () => {
+    startTransition(async () => {
+      const begin = await beginTeacherLogin(schoolId, email);
+      if (!begin.ok) {
+        toast.error(begin.error);
+        return;
+      }
+      // `beginTeacherLogin` never asks for the server fallback — the teacher
+      // supplied the address themselves — but the union allows it, so handle it.
+      if (begin.mode === "server") {
+        await serverSideTeacherLogin();
+        return;
+      }
+
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: begin.email,
+        password,
+      });
+      if (error) {
+        const limited = isAuthRateLimitError(error);
+        await reportLoginFailure({
+          schoolId,
+          role: "TEACHER",
+          email: begin.email,
+          reason: limited ? "rate_limited" : "incorrect_credentials",
+        });
+        toast.error(limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect email or password.");
+        return;
+      }
+
+      const finish = await finishTeacherLogin(schoolId);
+      if (!finish.ok) {
+        toast.error(finish.error);
+        return;
+      }
+      enterApp(finish.redirectTo);
+    });
+  };
+
+  /** Original server-side grant, kept as the fallback path. */
+  const serverSideTeacherLogin = async () => {
     const formData = new FormData();
     formData.set("schoolId", schoolId);
     formData.set("email", email.trim());
     formData.set("password", password);
-
-    startTransition(async () => {
-      try {
-        const res = await loginTeacher(formData);
-        if (res && !res.ok) {
-          toast.error(res.error);
-          return;
-        }
+    try {
+      const res = await loginTeacher(formData);
+      if (res && !res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      markPostLoginSplash();
+      resetSidebarExpandedPreference();
+    } catch (err) {
+      if (isRedirectError(err)) {
         markPostLoginSplash();
         resetSidebarExpandedPreference();
-      } catch (err) {
-        if (isRedirectError(err)) {
-          markPostLoginSplash();
-          resetSidebarExpandedPreference();
-          throw err;
-        }
-        throw err;
       }
-    });
+      throw err;
+    }
   };
 
   const handleRegisterTeacher = () => {
@@ -210,26 +270,76 @@ export function LoginForm({
     });
   };
 
+  /**
+   * School Head sign-in.
+   *
+   * The password grant is made by the browser rather than by the server action,
+   * so Supabase's per-IP rate limit meters each person separately instead of
+   * pooling every school in the deployment behind one Vercel egress address —
+   * see `@/lib/actions/login` for the full reasoning. Heads whose account uses a
+   * real email address (rather than the synthetic `sh@…` one) still go through
+   * the server action: the server will not hand a personal address to an
+   * unauthenticated page.
+   */
   const handleSchoolHeadSubmit = (formData: FormData) => {
+    const typedPassword = String(formData.get("password") ?? "");
     formData.set("schoolId", schoolId);
+
     startTransition(async () => {
-      try {
-        const res = await loginSchoolHead(formData);
-        if (res && !res.ok) {
-          toast.error(res.error);
-          return;
-        }
+      const begin = await beginSchoolHeadLogin(schoolId);
+      if (!begin.ok) {
+        toast.error(begin.error);
+        return;
+      }
+      if (begin.mode === "server") {
+        await serverSideSchoolHeadLogin(formData);
+        return;
+      }
+
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: begin.email,
+        password: typedPassword,
+      });
+      if (error) {
+        const limited = isAuthRateLimitError(error);
+        await reportLoginFailure({
+          schoolId,
+          role: "SCHOOL_HEAD",
+          reason: limited ? "rate_limited" : "incorrect_credentials",
+        });
+        toast.error(
+          limited ? AUTH_RATE_LIMITED_MESSAGE : "Login failed. Please contact your administrator."
+        );
+        return;
+      }
+
+      const finish = await finishSchoolHeadLogin(schoolId);
+      if (!finish.ok) {
+        toast.error(finish.error);
+        return;
+      }
+      enterApp(finish.redirectTo);
+    });
+  };
+
+  /** Original server-side grant, kept for accounts with a real email address. */
+  const serverSideSchoolHeadLogin = async (formData: FormData) => {
+    try {
+      const res = await loginSchoolHead(formData);
+      if (res && !res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      markPostLoginSplash();
+      resetSidebarExpandedPreference();
+    } catch (err) {
+      if (isRedirectError(err)) {
         markPostLoginSplash();
         resetSidebarExpandedPreference();
-      } catch (err) {
-        if (isRedirectError(err)) {
-          markPostLoginSplash();
-          resetSidebarExpandedPreference();
-          throw err;
-        }
-        throw err;
       }
-    });
+      throw err;
+    }
   };
 
   if (screen === "select-role") {

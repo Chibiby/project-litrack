@@ -17,6 +17,7 @@ import {
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -150,6 +151,11 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
       isActive: true,
     },
     select: { id: true, email: true, isActive: true },
+    // Must match `findSchoolHead` in ./school-accounts, which the Super Admin
+    // reset targets. Unordered, a school with two head rows could authenticate
+    // against one account while the admin resets the other — and the reset
+    // would look like it did nothing.
+    orderBy: { createdAt: "asc" },
   });
   if (!shUser) {
     return { ok: false, error: "Login failed. Please contact your administrator." };
@@ -161,15 +167,26 @@ export async function loginSchoolHead(formData: FormData): Promise<ActionResult>
     password: parsed.data.password,
   });
   if (error) {
+    const limited = isAuthRateLimitError(error);
+    if (limited) console.error("[loginSchoolHead] supabase rate limit:", error.message);
     await writeAudit({
       userId: shUser.id,
       schoolId: school.id,
       action: AUDIT_ACTIONS.LOGIN_DENIED,
       resource: "User",
       resourceId: shUser.id,
-      metadata: { role: "SCHOOL_HEAD", schoolId: school.id, reason: "incorrect_credentials" },
+      metadata: {
+        role: "SCHOOL_HEAD",
+        schoolId: school.id,
+        reason: limited ? "rate_limited" : "incorrect_credentials",
+      },
     });
-    return { ok: false, error: "Login failed. Please contact your administrator." };
+    return {
+      ok: false,
+      error: limited
+        ? AUTH_RATE_LIMITED_MESSAGE
+        : "Login failed. Please contact your administrator.",
+    };
   }
 
   await writeAudit({
@@ -252,15 +269,21 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    const limited = isAuthRateLimitError(error);
+    if (limited) console.error("[loginTeacher] supabase rate limit:", error.message);
     await writeAudit({
       userId: teacher.id,
       schoolId,
       action: AUDIT_ACTIONS.LOGIN_DENIED,
       resource: "User",
       resourceId: teacher.id,
-      metadata: { role: "TEACHER", schoolId, reason: "incorrect_credentials" },
+      metadata: {
+        role: "TEACHER",
+        schoolId,
+        reason: limited ? "rate_limited" : "incorrect_credentials",
+      },
     });
-    return { ok: false, error: "Incorrect email or password." };
+    return { ok: false, error: limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect email or password." };
   }
 
   await writeAudit({
@@ -578,14 +601,16 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
       password,
     });
     if (error || !data.user) {
+      const limited = isAuthRateLimitError(error);
+      if (limited) console.error("[loginAdmin] supabase rate limit:", error?.message);
       await writeAudit({
         userId: account.id,
         action: AUDIT_ACTIONS.LOGIN_DENIED,
         resource: "User",
         resourceId: account.id,
-        metadata: { role: "SUPER_ADMIN", reason: "incorrect_credentials" },
+        metadata: { role: "SUPER_ADMIN", reason: limited ? "rate_limited" : "incorrect_credentials" },
       });
-      return { ok: false, error: "Incorrect credentials" };
+      return { ok: false, error: limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect credentials" };
     }
 
     const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
@@ -680,7 +705,13 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return { ok: false, error: "Failed to update password. Please try again." };
+  if (error) {
+    if (isAuthRateLimitError(error)) {
+      console.error("[updatePassword] supabase rate limit:", error.message);
+      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    }
+    return { ok: false, error: "Failed to update password. Please try again." };
+  }
 
   await prisma.user.update({
     where: { id: user.id },
@@ -761,10 +792,24 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
     email: user.email,
     password: parsed.data.currentPassword,
   });
-  if (verifyErr) return { ok: false, error: "Current password is incorrect" };
+  if (verifyErr) {
+    // A 429 here means Supabase declined to check the password at all. Saying
+    // "incorrect" would send the person off to reset a password that is fine.
+    if (isAuthRateLimitError(verifyErr)) {
+      console.error("[changePassword] supabase rate limit:", verifyErr.message);
+      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    }
+    return { ok: false, error: "Current password is incorrect" };
+  }
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return { ok: false, error: "Failed to update password. Please try again." };
+  if (error) {
+    if (isAuthRateLimitError(error)) {
+      console.error("[updatePassword] supabase rate limit:", error.message);
+      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    }
+    return { ok: false, error: "Failed to update password. Please try again." };
+  }
 
   await prisma.user.update({
     where: { id: user.id },
@@ -815,7 +860,13 @@ export async function changeEmailAction(formData: FormData): Promise<ActionResul
     email: user.email,
     password: parsed.data.currentPassword,
   });
-  if (verifyErr) return { ok: false, error: "Current password is incorrect" };
+  if (verifyErr) {
+    if (isAuthRateLimitError(verifyErr)) {
+      console.error("[changeEmail] supabase rate limit:", verifyErr.message);
+      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    }
+    return { ok: false, error: "Current password is incorrect" };
+  }
 
   const taken = await prisma.user.findFirst({
     where: {
@@ -949,7 +1000,13 @@ export async function completePasswordReset(formData: FormData): Promise<ActionR
   if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return { ok: false, error: "Failed to update password. Please try again." };
+  if (error) {
+    if (isAuthRateLimitError(error)) {
+      console.error("[updatePassword] supabase rate limit:", error.message);
+      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    }
+    return { ok: false, error: "Failed to update password. Please try again." };
+  }
 
   const appUser = await prisma.user.findUnique({ where: { authId: authUser.id } });
   if (appUser) {

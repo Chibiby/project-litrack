@@ -133,5 +133,26 @@ export async function checkRateLimit(
   const shared = await redisCheck(key, options, now);
   if (shared) return shared;
 
+  warnDegradedOnce();
   return memoryCheck(key, options, now);
+}
+
+let warnedDegraded = false;
+
+/**
+ * Say once, in the server log, that the limiter is not actually limiting.
+ *
+ * The fallback is deliberately silent to callers — a limiter must never become
+ * a point of failure — but silence toward *operators* is how a production
+ * deployment ends up with no working rate limit and nobody aware of it. On
+ * Vercel each invocation may be a fresh instance, so the per-instance window
+ * lets a determined retry loop through almost unmetered, which is how a single
+ * user can exhaust Supabase Auth's own per-IP budget for everyone else.
+ */
+function warnDegradedOnce(): void {
+  if (warnedDegraded) return;
+  warnedDegraded = true;
+  console.warn(
+    "[rate-limit] UPSTASH_REDIS_REST_URL/_TOKEN unset or unreachable — falling back to a per-instance window. On serverless this is not an effective limit; see docs/runbook.md."
+  );
 }
