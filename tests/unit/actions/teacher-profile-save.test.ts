@@ -491,3 +491,54 @@ describe("saveTeacherProfile", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * §5: the floating DepEd teacher, at the write.
+ *
+ * `tests/unit/floating-teacher.test.ts` pins the schema half — that the
+ * declaration lifts the requirement and is distinct from the ARAL Volunteer's
+ * exemption. This is the half that can only be seen from the action: the flag
+ * reaches no column, and declaring it actually CLEARS whatever the teacher held.
+ */
+describe("saveTeacherProfile — declaring no advisory section", () => {
+  it("saves, and writes the flag to no column", async () => {
+    const result = await saveTeacherProfile(
+      buildFormData({
+        noAdvisorySection: "true",
+        sectionId: "",
+        currentGradeAssignment: "",
+      })
+    );
+
+    expect(result).toEqual({ ok: true });
+    const upsert = calls.profileUpsert[0] as { create: Record<string, unknown> };
+    // The whole design of §5 rests on this: a stored flag could disagree with
+    // the sections themselves, and then neither would be authoritative.
+    expect(upsert.create).not.toHaveProperty("noAdvisorySection");
+    expect(upsert.create.currentGradeAssignment).toBeNull();
+  });
+
+  it("clears an advisory the teacher already held", async () => {
+    // Somebody who had a section and now says they advise none. Leaving the
+    // section attached would have the app contradict what they just told it.
+    sections[0].adviserId = TEACHER_ID;
+
+    const result = await saveTeacherProfile(
+      buildFormData({
+        noAdvisorySection: "true",
+        sectionId: "",
+        currentGradeAssignment: "",
+      })
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(sections[0].adviserId).toBeNull();
+  });
+
+  it("still assigns the section when the declaration is absent", async () => {
+    // The ordinary path, unchanged. A new field must not alter what a form that
+    // does not send it does.
+    expect(await saveTeacherProfile(buildFormData())).toEqual({ ok: true });
+    expect(sections[0].adviserId).toBe(TEACHER_ID);
+  });
+});

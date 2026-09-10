@@ -2,7 +2,9 @@ import {
   getTeacherOverview,
   buildDashboardTasks,
 } from "@/lib/dashboard/teacher-overview";
+import Link from "next/link";
 import { Surface } from "@/components/ui/surface";
+import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { GradeLevelBarChart } from "@/components/dashboard/lazy-charts";
 import { GraduationCap, Sparkles, UserRoundCheck, Users } from "lucide-react";
@@ -98,6 +100,41 @@ export async function TeacherDashboardBody({
     name: GRADE_LEVEL_LABELS[g.name] ?? g.name,
     value: g.value,
   }));
+
+  // §5: a floating teacher — no advisory section, and no grade reached through
+  // an ARAL designation either. Every panel below would render a zero, a chart
+  // with no bars and a task list of things they cannot do, which reads as the
+  // dashboard being broken rather than as an accurate account of their
+  // situation.
+  //
+  // The greeting stays: it is the one part of this page that is still true, and
+  // dropping it would make a teacher who has just signed in wonder whether they
+  // signed in as themselves.
+  if (!isSuperAdmin && data.gradeCount === 0) {
+    return (
+      <>
+        <GreetingHeader
+          firstName={firstName}
+          todayKey={data.todayKey}
+          subtitle={subtitle}
+        />
+        <Surface as="section" className="px-5 py-10 text-center">
+          <h1 className="text-base font-semibold text-foreground">
+            {FLOATING_TEACHER_CARD.title}
+          </h1>
+          <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
+            {FLOATING_TEACHER_CARD.description}
+          </p>
+          <Link
+            href={FLOATING_TEACHER_CARD.actionHref}
+            className="mt-4 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {FLOATING_TEACHER_CARD.actionLabel}
+          </Link>
+        </Surface>
+      </>
+    );
+  }
 
   return (
     <>

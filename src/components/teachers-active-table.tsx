@@ -25,6 +25,7 @@ import {
 } from "@/lib/actions/school-head";
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
+import { FLOATING_CHIP_LABEL } from "@/lib/teachers/floating-copy";
 import { X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
@@ -175,7 +176,13 @@ function AdvisoryCell({
           </span>
         ))}
         {held.length === 0 ? (
-          <span className="text-sm text-muted-foreground">Unassigned</span>
+          // §5: a chip, not a blank. A teacher who advises nothing is FLOATING,
+          // which is a real state a School Head decides — clearing the last
+          // section sets it, adding one clears it. A blank cell read as missing
+          // data and left nobody sure whether an assignment had failed to save.
+          <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+            {FLOATING_CHIP_LABEL}
+          </span>
         ) : null}
       </div>
 
@@ -424,7 +431,7 @@ function TeachersManagedTable({
         op === "add"
           ? `Advisory added for ${row.fullName}`
           : next.length === 0
-            ? `${row.fullName} is now unassigned`
+            ? `${row.fullName} is now ${FLOATING_CHIP_LABEL.toLowerCase()}`
             : `Advisory removed for ${row.fullName}`
       );
       router.refresh();
@@ -576,7 +583,9 @@ function TeachersManagedTable({
                           .map((a) => `${a.gradeName} · ${a.sectionName}`)
                           .join(", ")
                       ) : (
-                        <span className="text-muted-foreground">Unassigned</span>
+                        <span className="text-muted-foreground">
+                          {FLOATING_CHIP_LABEL}
+                        </span>
                       )}
                     </TableCell>
                   )}

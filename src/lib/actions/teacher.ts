@@ -63,6 +63,15 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   const raw = formToObj(formData);
   raw.hasReadingTraining = raw.hasReadingTraining === true || raw.hasReadingTraining === "true" || raw.hasReadingTraining === "on";
   raw.hasEnglishTraining = raw.hasEnglishTraining === true || raw.hasEnglishTraining === "true" || raw.hasEnglishTraining === "on";
+  // §5. Coerced the same way, and only when present: the field is new, so a form
+  // that does not send it must fall through to the schema's `false` default
+  // rather than be read as a declaration.
+  if (raw.noAdvisorySection !== undefined) {
+    raw.noAdvisorySection =
+      raw.noAdvisorySection === true ||
+      raw.noAdvisorySection === "true" ||
+      raw.noAdvisorySection === "on";
+  }
 
   const parsed = teacherProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -75,6 +84,11 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     middleName: middleRaw,
     contactEmail: _contactEmail,
     sectionId,
+    // §5. A declared choice, never stored: floating IS zero live advisory
+    // sections. Pulled out of `profileFields` so it cannot reach
+    // `TeacherProfile`, which has no column for it and must not grow one — a
+    // stored flag could disagree with the sections themselves.
+    noAdvisorySection,
     ...profileFields
   } = parsed.data;
   const firstName = formatPersonName(firstRaw);
@@ -112,10 +126,18 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
       // or third is added from the teachers table. Expressed as add/clear rather
       // than the old replace, so finishing a profile cannot silently drop an
       // advisory a School Head assigned while the teacher was still onboarding.
+      // Declaring "no advisory section" CLEARS, rather than leaving whatever was
+      // there: a teacher who says they advise nothing and still shows as
+      // advising Grade 3 has been contradicted by the app. Submitting no section
+      // without declaring it — an ARAL Volunteer, or a re-save of a profile that
+      // never had one — also clears, which is what the old code did.
       await setTeacherAdvisory(tx, {
         teacherId: user.id,
         schoolId: user.schoolId,
-        change: sectionId ? { op: "add", sectionId } : { op: "clear" },
+        change:
+          sectionId && !noAdvisorySection
+            ? { op: "add", sectionId }
+            : { op: "clear" },
       });
     });
   } catch (err) {

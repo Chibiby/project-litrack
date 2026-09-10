@@ -31,6 +31,7 @@ import {
   getAdvisoryPlacements,
   NO_ADVISORY_MESSAGE,
 } from "@/lib/teachers/advisory";
+import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
 import {
   aralStatusWhere,
   genderWhere,
@@ -276,6 +277,28 @@ export default async function TeacherLearnersPage({
           actionHref="/teacher/aral"
           actionLabel="Go to ARAL Program"
         />
+      </AppShell>
+    );
+  }
+
+  // §5: a floating DepEd teacher — one who advises no section. `shellGrades` is
+  // the union `teacherGradeScope` resolves: grades they advise in, plus grades
+  // holding a learner they tutor for ARAL. Empty therefore means there is
+  // genuinely nothing this roster could list, which is exactly when a table
+  // reads as broken rather than as empty.
+  //
+  // Keyed on that union rather than on the advisory alone, deliberately: a
+  // floating teacher who DOES tutor ARAL learners still sees them here, because
+  // `teacherLearnerScope` reaches them. Refusing the page on "no advisory" would
+  // hide rows they are entitled to.
+  if (!isSuperAdmin && shellGrades.length === 0) {
+    return (
+      <AppShell
+        title="Learners"
+        role={user.role}
+        userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      >
+        <EmptyState {...FLOATING_TEACHER_CARD} />
       </AppShell>
     );
   }

@@ -77,6 +77,11 @@ const teacherWizardFormSchema = z.object({
   yearsInServiceApplicable: z.boolean(),
   currentGradeAssignment: z.string().optional(),
   sectionId: z.string().optional(),
+  /**
+   * Asked in the positive because a form should not make someone tick a box to
+   * say No. Sent to the server inverted, as `noAdvisorySection`.
+   */
+  hasAdvisorySection: z.boolean(),
   hasReadingTraining: z.boolean().optional(),
   readingTrainings: z.array(z.string()),
   hasEnglishTraining: z.boolean().optional(),
@@ -158,6 +163,7 @@ type TeacherFormValues = {
   yearsInServiceApplicable: boolean;
   currentGradeAssignment: string | undefined;
   sectionId: string | undefined;
+  hasAdvisorySection: boolean;
   hasReadingTraining: boolean | undefined;
   readingTrainings: string[];
   hasEnglishTraining: boolean | undefined;
@@ -226,8 +232,16 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
     yearsInService: values.yearsInServiceApplicable
       ? values.yearsInService || undefined
       : undefined,
-    currentGradeAssignment: values.currentGradeAssignment || undefined,
-    sectionId: values.sectionId || undefined,
+    // §5: a floating DepEd teacher declares they have none, which lifts the
+    // two requirements below. Never sent for an ARAL Volunteer, whose exemption
+    // comes from the designation and is a different fact about a different
+    // person — see the note on `noAdvisorySection` in profile.schema.ts.
+    noAdvisorySection:
+      designation !== ARAL_VOLUNTEER_DESIGNATION && !values.hasAdvisorySection,
+    currentGradeAssignment: values.hasAdvisorySection
+      ? values.currentGradeAssignment || undefined
+      : undefined,
+    sectionId: values.hasAdvisorySection ? values.sectionId || undefined : undefined,
     hasReadingTraining: values.hasReadingTraining,
     readingTrainings:
       values.hasReadingTraining === true ? values.readingTrainings : [],
@@ -269,7 +283,7 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
     "yearsInService",
     "yearsInServiceApplicable",
   ],
-  ["currentGradeAssignment", "sectionId"],
+  ["hasAdvisorySection", "currentGradeAssignment", "sectionId"],
   [
     "hasReadingTraining",
     "readingTrainings",
@@ -436,6 +450,12 @@ export function TeacherProfileForm({
         : resolveYearsInServiceApplicable(defaultValues),
       currentGradeAssignment: defaultValues.currentGradeAssignment ?? undefined,
       sectionId: defaultValues.sectionId ?? undefined,
+      // Opens on Yes for a new profile: advising a section is the ordinary case,
+      // and floating should be a choice somebody makes rather than the state a
+      // form starts in. An existing profile opens on what it actually holds.
+      hasAdvisorySection: defaultValues.sectionId
+        ? true
+        : !defaultValues.currentGradeAssignment,
       hasReadingTraining: defaultValues.hasReadingTraining,
       readingTrainings: defaultValues.readingTrainings ?? [],
       hasEnglishTraining: defaultValues.hasEnglishTraining,
@@ -457,7 +477,15 @@ export function TeacherProfileForm({
   // actual teaching role. The ARAL Volunteer holds neither a grade nor a
   // section, so both fields go optional together — one flag, because there is
   // no designation where one applies and the other does not.
-  const assignmentRequired = designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+  //
+  // §5 adds the second half: a DepEd teacher may also declare they have no
+  // advisory section yet. Same lifted requirement, a different fact — the
+  // volunteer never holds a classroom role, the floating teacher holds one and
+  // has no section for it — so the two conditions are written separately rather
+  // than folded into one predicate that would blur them.
+  const hasAdvisorySection = form.watch("hasAdvisorySection");
+  const assignmentRequired =
+    designationKind !== ARAL_VOLUNTEER_DESIGNATION && hasAdvisorySection !== false;
 
   /*
     A second ethnicity is opt-in, so the field is not on screen until someone
@@ -1142,6 +1170,42 @@ export function TeacherProfileForm({
                   : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}
               </div>
             ) : null}
+            {designationKind !== ARAL_VOLUNTEER_DESIGNATION ? (
+              <FormYesNoPills
+                control={form.control}
+                name="hasAdvisorySection"
+                label="Do you advise a classroom section?"
+                onValueChange={(next) => {
+                  // Clear rather than keep: a grade and section left behind
+                  // would be submitted the moment somebody flipped back, and
+                  // the server refuses a profile that both declares none and
+                  // names one.
+                  if (next === false) {
+                    form.setValue("currentGradeAssignment", undefined);
+                    form.setValue("sectionId", undefined);
+                  }
+                }}
+              />
+            ) : null}
+            {designationKind !== ARAL_VOLUNTEER_DESIGNATION &&
+            hasAdvisorySection !== false ? (
+              <p className="-mt-4 text-sm text-muted-foreground">
+                Answer No if your School Head has not assigned you one yet. You
+                can still be designated an ARAL tutor, and this can be changed
+                later.
+              </p>
+            ) : null}
+            {hasAdvisorySection === false &&
+            designationKind !== ARAL_VOLUNTEER_DESIGNATION ? (
+              <p className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                You will show as <strong>Floating</strong> on your School Head&apos;s
+                teachers list until a section is assigned to you. Your ARAL
+                learners, if you have any, are unaffected.
+              </p>
+            ) : null}
+            {designationKind === ARAL_VOLUNTEER_DESIGNATION ||
+            hasAdvisorySection !== false ? (
+            <>
             <FormSelectField
               control={form.control}
               name="currentGradeAssignment"
@@ -1182,6 +1246,8 @@ export function TeacherProfileForm({
               options={sectionOptions}
               placeholder={values.currentGradeAssignment ? "Select section" : "Select a grade first"}
             />
+            </>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

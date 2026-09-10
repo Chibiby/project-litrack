@@ -354,6 +354,22 @@ export const teacherProfileSchema = baseProfile
     ...ethnicityFields,
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
+    /**
+     * "I have no advisory section yet" — the floating DepEd teacher (§5).
+     *
+     * A declared choice, not a stored flag. Floating IS zero live advisory
+     * sections, derived from `Section.adviserId`, so nothing here is persisted;
+     * this boolean only lifts the two requirements below for a teacher who says
+     * the answer is none. A column would be able to disagree with the sections
+     * themselves, and then neither would be authoritative.
+     *
+     * Deliberately distinct from the ARAL Volunteer carve-out beside it. A
+     * volunteer holds no classroom role at all; a floating DepEd teacher holds
+     * one and simply has no section yet. Same lifted requirement, two different
+     * facts, and the interface should not make one of them wear the other's
+     * label to get past a form.
+     */
+    noAdvisorySection: z.boolean().default(false),
     yearsInService: teacherYearsInServiceSchema,
   })
   .superRefine((data, ctx) => {
@@ -365,6 +381,22 @@ export const teacherProfileSchema = baseProfile
     // describes a classroom teaching role, so both stay required there.
     // `undefined` on either field clears whatever the teacher held before.
     if (data.designation === ARAL_VOLUNTEER_DESIGNATION) return;
+    // A DepEd teacher who declares they have no advisory section yet. The
+    // section is genuinely unknown, so requiring one would leave them unable to
+    // finish profiling at all — which is the state §5 exists to end.
+    if (data.noAdvisorySection) {
+      // Declaring none and naming one at the same time is contradictory, and
+      // silently honouring either half would make the form lie about what was
+      // saved.
+      if (data.sectionId !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Clear the section, or untick “I have no advisory section yet”",
+          path: ["sectionId"],
+        });
+      }
+      return;
+    }
     if (data.currentGradeAssignment === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
