@@ -50,8 +50,16 @@ export const managedTeacherSelect = {
   email: true,
   profileCompleted: true,
   approvedAt: true,
+  // `deletedAt` is selected so `toManagedRow` can drop an archived section.
+  // Prisma has no `where` inside a `select` for a to-one relation — unlike the
+  // `_count`s below, which is why the two filters do not look alike.
   advisorySection: {
-    select: { id: true, name: true, gradeLevel: { select: { type: true } } },
+    select: {
+      id: true,
+      name: true,
+      deletedAt: true,
+      gradeLevel: { select: { type: true } },
+    },
   },
   _count: {
     select: {
@@ -76,15 +84,23 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     aralLearnerCount: t._count.aralLearners,
     // A teacher sets this in profiling; the School Head can change it from the
     // Active teachers table (see `setTeacherAdvisorySection`).
-    assignment: t.advisorySection
-      ? {
-          sectionId: t.advisorySection.id,
-          gradeName:
-            GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ??
-            t.advisorySection.gradeLevel.type,
-          sectionName: t.advisorySection.name,
-        }
-      : null,
+    //
+    // An ARCHIVED section is not an assignment. Every other reader in the repo
+    // already says so — both transfer pages and `teacherAdvisoryGradeScope`
+    // filter `deletedAt: null` — and this page was the one that did not, so it
+    // alone showed a teacher advising a section that no longer exists. A
+    // teacher holding only archived sections reads as unassigned, which is what
+    // they are.
+    assignment:
+      t.advisorySection && t.advisorySection.deletedAt === null
+        ? {
+            sectionId: t.advisorySection.id,
+            gradeName:
+              GRADE_LEVEL_LABELS[t.advisorySection.gradeLevel.type] ??
+              t.advisorySection.gradeLevel.type,
+            sectionName: t.advisorySection.name,
+          }
+        : null,
   };
 }
 

@@ -115,7 +115,7 @@ export async function getSchoolDetail(
         isActive: true,
         approvalStatus: true,
         createdAt: true,
-        advisorySection: { select: { name: true } },
+        advisorySection: { select: { name: true, deletedAt: true } },
       },
       orderBy: { fullName: "asc" },
     }),
@@ -154,7 +154,11 @@ export async function getSchoolDetail(
       email: t.email,
       isActive: t.isActive,
       approvalStatus: t.approvalStatus,
-      advisorySection: t.advisorySection?.name ?? null,
+      // An archived section is not an advisory — same rule as `toManagedRow`.
+      advisorySection:
+        t.advisorySection && t.advisorySection.deletedAt === null
+          ? t.advisorySection.name
+          : null,
       createdAt: t.createdAt.toISOString(),
     })),
     learners: learners.map((l) => ({
