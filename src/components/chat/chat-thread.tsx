@@ -86,15 +86,21 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint }: Props) {
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const channelIdRef = useRef<string | null>(null);
-  /** Newest message id already rendered, so a poll can tell "changed" cheaply. */
-  const latestRef = useRef<string | null>(null);
+  /**
+   * Newest message id already rendered, so a poll can tell "changed" cheaply.
+   * `undefined` means nothing has been rendered yet — distinct from `null`,
+   * which is an empty room. Conflating the two leaves a conversation with no
+   * messages stuck on "Opening the conversation…" forever, because its newest
+   * id matches the initial value and the first read never reaches state.
+   */
+  const latestRef = useRef<string | null | undefined>(undefined);
 
   const refresh = useCallback(async (channelId: string, markRead: boolean) => {
     const result = await readChannel({ channelId });
     if (!result.ok || !result.data) return;
 
     const newest = result.data.messages.at(-1)?.id ?? null;
-    if (newest === latestRef.current) return;
+    if (latestRef.current !== undefined && newest === latestRef.current) return;
     latestRef.current = newest;
     setChannel(result.data);
 
@@ -172,7 +178,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint }: Props) {
     setPickerQuery(null);
     // Force the next read to render: the poll skips when the newest id is
     // unchanged, and our own message changes it.
-    latestRef.current = null;
+    latestRef.current = undefined;
     await refresh(channelId, true);
   }
 

@@ -345,11 +345,17 @@ export function AssistantPanel({
 
       {mode !== "ticket" && view === "school" ? (
         <ChatThread
+          // Both tabs render a ChatThread in the same slot, so without a key
+          // React reuses one instance across the switch: the staff room's
+          // transcript would appear under "Ask admin", and a message sent
+          // before the new channel resolved would land in the old room.
+          key="school"
           kind="SCHOOL"
           emptyHint="This is your school's staff room. Everyone at your school can read it. Type @ to mention a colleague or a division admin."
         />
       ) : mode !== "ticket" && view === "admin" ? (
         <ChatThread
+          key="admin"
           kind="ADMIN_DIRECT"
           emptyHint="A private line to the division admins. Only you and the admin team can read this thread — ask anything about the system here."
         />
