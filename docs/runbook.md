@@ -42,6 +42,15 @@ How to tell them apart:
 - Several *different* schools failing inside the same few minutes is the
   signature of a shared bucket, not of several forgotten passwords.
 - The server log carries the verbatim Supabase message (`supabase rate limit:`).
+- Two read-only scripts read the same evidence without a dashboard login:
+
+  ```powershell
+  npm run diagnose:login -- salimama kawas         # account health: Prisma row vs Supabase auth user
+  npm run diagnose:login-trail -- salimama kawas   # the LOGIN_* trail, and who else failed in those minutes
+  ```
+
+  `diagnose:login` is the one that rules the account out: a head whose auth user is
+  present, confirmed, unbanned, and email-matched is not broken, so look at the limiter.
 
 What to do:
 
