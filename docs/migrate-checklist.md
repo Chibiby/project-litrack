@@ -443,6 +443,56 @@ indexes and recreating the originals (`School_name_key`,
 
 ---
 
+## (g) ARAL tutor designation backfill  —  Sep 2026
+
+`20260910000006_backfill_aral_tutor_designation`. **Apply this in the same
+deploy as the strict-ARAL-assignment change, not after it.** Between the two,
+some ARAL learners are visible to nobody.
+
+### Why it is needed
+
+ARAL pages used to scope on "adviser OR designated tutor". They now scope on the
+designation alone (`aralLearnerScope`), which is the fix for an adviser being
+able to see and encode the ARAL records of learners somebody else runs the
+programme for. The side effect is that `Learner.aralTeacherId` is the only way an
+ARAL learner is reachable, and the CSV importer never set it — so every ARAL
+learner imported from a sheet becomes invisible until this runs.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260910000006_backfill_aral_tutor_designation` | Data only. Sets `aralTeacherId = teacherId` for ARAL learners who have no tutor, where that adviser is an eligible tutor (same school, TEACHER, active, approved, not deleted). Fills NULLs only. | No. Adds no constraint, moves no existing designation. |
+
+### Steps
+
+1. Back up (step **a**), as for any data migration.
+2. Apply:
+   ```powershell
+   npx prisma migrate deploy   # DIRECT_URL (port 5432), never the pooler
+   ```
+3. List what is left for a person to decide — learners with no adviser, or whose
+   adviser is not an eligible tutor. The migration deliberately leaves these
+   alone rather than guessing a name:
+   ```powershell
+   psql "$env:DIRECT_URL" -c "SELECT s.\"name\" AS school, l.\"id\", l.\"fullName\", CASE WHEN l.\"teacherId\" IS NULL THEN 'no adviser' ELSE 'adviser not an eligible tutor' END AS reason FROM \"Learner\" l JOIN \"School\" s ON s.\"id\" = l.\"schoolId\" WHERE l.\"isAralLearner\" = true AND l.\"aralTeacherId\" IS NULL AND l.\"deletedAt\" IS NULL ORDER BY school, l.\"fullName\";"
+   ```
+   Hand that list to each School Head — the ARAL picker on the learner is where a
+   tutor gets designated. Note that a teacher whose `approvalStatus` is NULL
+   (pre-approval-column accounts) is not eligible, in the migration or in the
+   picker, so their learners appear here.
+4. Smoke test: sign in as a teacher who imported ARAL learners from a CSV and
+   confirm they appear on `/teacher/aral`. Then sign in as an adviser who is NOT
+   the designated tutor for a learner in their class and confirm that learner is
+   absent from the ARAL pages but still present on `/teacher/learners` — that
+   pair is the whole point of the change.
+
+### Rollback
+
+Reversible in principle but not worth it: the migration only fills NULLs, and
+clearing them again would restore the invisible state. If a designation is wrong,
+reassign it through the ARAL picker rather than by SQL.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

@@ -129,3 +129,56 @@ describe("ARAL surfaces use the narrow learner scope", () => {
     }
   });
 });
+
+/**
+ * The backfill migration hand-writes `aralTutorScope` in SQL, because a
+ * migration cannot call TypeScript. Two copies of one rule drift, so this reads
+ * both and checks they still say the same thing.
+ *
+ * It is a spelling check, not a semantic one — SQL and Prisma cannot be compared
+ * for meaning from here. It catches the failure that actually happens: a
+ * condition added to the scope and forgotten in the SQL.
+ */
+describe("the ARAL tutor backfill matches aralTutorScope", () => {
+  const MIGRATION = path.resolve(
+    __dirname,
+    "../../prisma/migrations/20260910000006_backfill_aral_tutor_designation/migration.sql"
+  );
+
+  it("names every condition the eligibility scope carries", () => {
+    const scope = readFileSync(
+      path.join(SRC, "lib/teachers/aral-tutor.ts"),
+      "utf8"
+    );
+    const body = scope
+      .split("export function aralTutorScope")[1]
+      ?.split("}")[0] ?? "";
+    expect(body).toBeTruthy();
+
+    const sql = readFileSync(MIGRATION, "utf8");
+    // Each key in the scope literal, and the value it is pinned to.
+    const expected: [string, RegExp][] = [
+      ["schoolId", /u\."schoolId" = l\."schoolId"/],
+      ["role", /u\."role" = 'TEACHER'/],
+      ["deletedAt", /u\."deletedAt" IS NULL/],
+      ["isActive", /u\."isActive" = true/],
+      ["approvalStatus", /u\."approvalStatus" = 'APPROVED'/],
+    ];
+    for (const [key, sqlForm] of expected) {
+      expect(body, `aralTutorScope no longer carries ${key}`).toContain(key);
+      expect(sql, `the migration lost the ${key} condition`).toMatch(sqlForm);
+    }
+    // A sixth condition would mean the SQL is now missing one. `[,:]`, not just
+    // `:` — `schoolId` is written shorthand.
+    const keys = body.match(/^\s{4}(\w+)[,:]/gm) ?? [];
+    expect(keys).toHaveLength(expected.length);
+  });
+
+  it("only ever fills a NULL designation, so re-running is a no-op", () => {
+    const sql = readFileSync(MIGRATION, "utf8");
+    expect(sql).toMatch(/"aralTeacherId" IS NULL/);
+    expect(sql).toMatch(/"isAralLearner" = true/);
+    // One column written, and it is this one.
+    expect(sql.match(/^SET /gm) ?? []).toHaveLength(1);
+  });
+});
