@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -75,6 +76,10 @@ function formatWhen(iso: string): string {
  * Every action behind this component rewrites or empties data across every
  * school at once, so the friction is the feature — and the same phrase is
  * re-checked server-side, because a disabled button is not a guard.
+ *
+ * With no backup store connected (`noBackup`) the action is still allowed, but
+ * behind a second tick saying so out loud: there will be no safety point and
+ * no undo. The tick is per-run — it resets the moment the panel closes.
  */
 function DangerAction({
   phrase,
@@ -82,7 +87,7 @@ function DangerAction({
   title,
   description,
   icon,
-  disabled,
+  noBackup,
   onRun,
 }: {
   phrase: string;
@@ -90,13 +95,15 @@ function DangerAction({
   title: string;
   description: string;
   icon: React.ReactNode;
-  disabled?: boolean;
-  onRun: (confirm: string) => Promise<void>;
+  noBackup?: boolean;
+  onRun: (confirm: string, ackNoBackup: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
+  const [acked, setAcked] = useState(false);
   const [pending, startTransition] = useTransition();
   const matches = typed.trim() === phrase;
+  const ready = matches && (!noBackup || acked);
 
   return (
     <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
@@ -113,7 +120,6 @@ function DangerAction({
             type="button"
             variant="outline"
             size="sm"
-            disabled={disabled}
             className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => setOpen(true)}
           >
@@ -124,6 +130,17 @@ function DangerAction({
 
       {open ? (
         <div className="mt-3 space-y-2 border-t border-destructive/20 pt-3">
+          {noBackup ? (
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+              <Checkbox
+                checked={acked}
+                onCheckedChange={(v) => setAcked(v === true)}
+                className="border-destructive data-[state=checked]:bg-destructive"
+                aria-label="Acknowledge that there is no backup and this cannot be undone"
+              />
+              <span>No backup is stored. This cannot be undone — I understand.</span>
+            </label>
+          ) : null}
           <label className="block text-sm font-medium" htmlFor={`confirm-${phrase}`}>
             Type <code className="rounded bg-muted px-1 font-mono">{phrase}</code> to confirm
           </label>
@@ -141,13 +158,14 @@ function DangerAction({
               type="button"
               variant="destructive"
               size="sm"
-              disabled={!matches}
+              disabled={!ready}
               loading={pending}
               loadingText="Running…"
               onClick={() => {
                 startTransition(async () => {
-                  await onRun(typed.trim());
+                  await onRun(typed.trim(), acked);
                   setTyped("");
+                  setAcked(false);
                   setOpen(false);
                 });
               }}
@@ -161,6 +179,7 @@ function DangerAction({
               disabled={pending}
               onClick={() => {
                 setTyped("");
+                setAcked(false);
                 setOpen(false);
               }}
             >
@@ -180,6 +199,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   const [uploadConfirm, setUploadConfirm] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+  /** Backing up, restoring and undoing all need the store; the Danger zone does not. */
   const disabled = !data.storeReady;
 
   /** Server actions here return a result; success messages differ, failures never redirect. */
@@ -205,8 +225,9 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               <p className="font-semibold">Backup storage is not connected</p>
               <p className="mt-1">{data.storeMessage}</p>
               <p className="mt-1">
-                Until then nothing on this page will run — every destructive action needs somewhere
-                to put the backup that makes it reversible.
+                Until then backing up, restoring and undoing cannot run. The Danger zone below
+                still can, but nothing it does will be reversible — each action asks you to say so
+                before it runs.
               </p>
             </div>
           </CardContent>
@@ -468,8 +489,9 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               Danger zone
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Each of these affects every school at once. All three save a safety point first, so
-              “Undo last operation” above can put things back.
+              {data.storeReady
+                ? "Each of these affects every school at once. All three save a safety point first, so “Undo last operation” above can put things back."
+                : "Each of these affects every school at once. With no backup storage connected there is no safety point to save, so nothing here can be undone — each action asks you to confirm that before it runs."}
             </p>
           </div>
 
@@ -479,10 +501,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             title="Clear operational data"
             description="Deletes every learner, enrolment, attendance record, reading level, term grade, report, ticket and notification. Keeps schools, school years, grade levels, sections and all accounts."
             icon={<Trash2 className="h-4 w-4" aria-hidden />}
-            disabled={disabled}
-            onRun={async (confirm) => {
+            noBackup={!data.storeReady}
+            onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => resetOperationalData(fd),
                 (payload) => {
@@ -500,10 +523,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             title={`Reset all ${data.accounts.schoolHeads} school accounts to default`}
             description="Sets every School Head's password back to their own School ID. Any password they chose themselves stops working immediately."
             icon={<RotateCcw className="h-4 w-4" aria-hidden />}
-            disabled={disabled}
-            onRun={async (confirm) => {
+            noBackup={!data.storeReady}
+            onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => resetAllSchoolAccounts(fd),
                 (payload) => {
@@ -520,10 +544,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             title={`Remove all ${data.accounts.teachers} teacher accounts`}
             description="Deletes every teacher's login and hides them from the app. The records they entered stay attached to their name so history still reads, and their email is freed so they can register again."
             icon={<Trash2 className="h-4 w-4" aria-hidden />}
-            disabled={disabled}
-            onRun={async (confirm) => {
+            noBackup={!data.storeReady}
+            onRun={async (confirm, ackNoBackup) => {
               const fd = new FormData();
               fd.set("confirm", confirm);
+              if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
               await settle(
                 () => removeAllTeachers(fd),
                 (payload) => {
