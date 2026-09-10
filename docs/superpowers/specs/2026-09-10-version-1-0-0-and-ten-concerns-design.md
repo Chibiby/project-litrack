@@ -347,7 +347,7 @@ ARAL page uses it. So an adviser sees the ARAL learners *in their own class* on
 their own ARAL pages even when somebody else is the designated tutor. That is the
 reported symptom.
 
-**`teacherLearnerScope` must not change.** It has 41 call sites and is correct
+**`teacherLearnerScope` must not change.** It has 19 invocation sites and is correct
 for almost all of them: the advisory roster, exports, global search, the
 assistant, dashboard aggregates. Narrowing it would close the advisory roster to
 advisers, which is the opposite of what anyone wants.
