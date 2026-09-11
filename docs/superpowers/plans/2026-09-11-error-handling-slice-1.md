@@ -3062,3 +3062,1201 @@ git commit -m "feat(auth): meter failed account lookups per address, not per ema
 ```
 
 ---
+### Task 11: Browser sign-in halves (`login.ts`) move onto the wrapper
+
+**Files:**
+- Create: `src/lib/auth/login-gates.ts`
+- Rewrite: `src/lib/actions/login.ts`
+- Test: `tests/unit/actions/login-begin.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 2, 5, 6, 8, 10
+- Produces:
+  - `assertSupabaseConfigured()`, `requireActiveSchool(schoolId) → Promise<{ id: string }>`, `LOGIN_RATE`
+  - `beginSchoolHeadLogin`, `finishSchoolHeadLogin`, `beginTeacherLogin`, `finishTeacherLogin`, `reportLoginFailure` — all wrapped, returning `… | ActionFailure`
+  - `type BeginLoginResult`, `type FinishLoginResult`
+
+- [ ] **Step 1: Write the failing test** `tests/unit/actions/login-begin.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The browser-side sign-in's server halves.
+ *
+ * What is worth pinning here is what the person is told and what it costs an
+ * attacker: a School Head with no account gets the real reason instead of
+ * "contact your administrator"; a wrong school gets "no teacher account";
+ * and the per-address throttle is charged only when a lookup fails, but refuses
+ * everything — including lookups that would have succeeded — once it is spent.
+ */
+
+const schoolFindUnique = vi.fn();
+const userFindUnique = vi.fn();
+const userFindFirst = vi.fn();
+const getUser = vi.fn();
+const signOut = vi.fn();
+const writeAudit = vi.fn();
+const checkRateLimit = vi.fn();
+const peekRateLimit = vi.fn();
+const reportError = vi.fn(() => "E-TESTREF3");
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    school: {
+      get findUnique() {
+        return schoolFindUnique;
+      },
+    },
+    user: {
+      get findUnique() {
+        return userFindUnique;
+      },
+      get findFirst() {
+        return userFindFirst;
+      },
+    },
+  },
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: async () => ({ auth: { getUser, signOut } }),
+}));
+vi.mock("@/lib/supabase/env", () => ({
+  isSupabaseConfigured: () => true,
+  SUPABASE_NOT_CONFIGURED_MESSAGE: "supabase env missing",
+}));
+vi.mock("@/lib/audit", () => ({
+  get writeAudit() {
+    return writeAudit;
+  },
+  AUDIT_ACTIONS: { LOGIN_SUCCESS: "LOGIN_SUCCESS", LOGIN_DENIED: "LOGIN_DENIED" },
+}));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() {
+    return checkRateLimit;
+  },
+  get peekRateLimit() {
+    return peekRateLimit;
+  },
+}));
+vi.mock("@/lib/errors/report", () => ({
+  get reportError() {
+    return reportError;
+  },
+}));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }),
+}));
+vi.mock("@/lib/auth/warm-routes", () => ({
+  warmSchoolHeadRoutes: vi.fn(),
+  warmTeacherRoutes: vi.fn(),
+}));
+vi.mock("@/lib/auth/synthetic-email", () => ({
+  isSyntheticEmail: (email: string) => email.startsWith("sh@"),
+}));
+
+import {
+  beginSchoolHeadLogin,
+  beginTeacherLogin,
+  finishSchoolHeadLogin,
+  finishTeacherLogin,
+  reportLoginFailure,
+} from "@/lib/actions/login";
+
+const SCHOOL = { id: "school-1", isActive: true, deletedAt: null };
+const HEAD = { id: "head-1", email: "sh@0001.litrack.local", schoolId: "school-1" };
+const TEACHER = {
+  id: "teacher-1",
+  role: "TEACHER" as const,
+  schoolId: "school-1",
+  isActive: true,
+  deletedAt: null,
+  approvalStatus: "APPROVED" as const,
+};
+
+const LOOKUP_KEY = "login:lookup-miss:ip:203.0.113.9";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  schoolFindUnique.mockResolvedValue(SCHOOL);
+  userFindFirst.mockResolvedValue(HEAD);
+  userFindUnique.mockResolvedValue(TEACHER);
+  reportError.mockReturnValue("E-TESTREF3");
+});
+
+describe("beginSchoolHeadLogin", () => {
+  it("hands the synthetic address to the browser", async () => {
+    await expect(beginSchoolHeadLogin("school-1")).resolves.toEqual({
+      ok: true,
+      mode: "browser",
+      email: "sh@0001.litrack.local",
+    });
+  });
+
+  it("keeps a real address on the server", async () => {
+    userFindFirst.mockResolvedValue({ ...HEAD, email: "head@deped.gov.ph" });
+    await expect(beginSchoolHeadLogin("school-1")).resolves.toEqual({ ok: true, mode: "server" });
+  });
+
+  it("says the school has no School Head account instead of blaming the password", async () => {
+    userFindFirst.mockResolvedValue(null);
+    const res = await beginSchoolHeadLogin("school-1");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_NO_SCHOOL_HEAD_ACCOUNT" });
+    expect((res as { error: string }).error).toMatch(/division office/i);
+    expect(reportError).toHaveBeenCalledTimes(1);
+  });
+
+  it("separates a school that is missing from one that is switched off", async () => {
+    schoolFindUnique.mockResolvedValue(null);
+    expect(await beginSchoolHeadLogin("school-x")).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    schoolFindUnique.mockResolvedValue({ ...SCHOOL, isActive: false });
+    expect(await beginSchoolHeadLogin("school-1")).toMatchObject({ ok: false, code: "AUTH_SCHOOL_INACTIVE" });
+  });
+
+  it("says how long to wait when the limiter refuses", async () => {
+    checkRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 4 * 60_000 });
+    const res = await beginSchoolHeadLogin("school-1");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_TOO_MANY_ATTEMPTS" });
+    expect((res as { error: string }).error).toBe("Too many attempts. Try again in 4 minutes.");
+  });
+
+  it("asks for a school before anything else", async () => {
+    expect(await beginSchoolHeadLogin("")).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(schoolFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("beginTeacherLogin", () => {
+  it("hands back the address the teacher typed", async () => {
+    await expect(beginTeacherLogin("school-1", " Teacher@School.edu ")).resolves.toEqual({
+      ok: true,
+      mode: "browser",
+      email: "teacher@school.edu",
+    });
+  });
+
+  it("does not charge the throttle for an account that exists", async () => {
+    await beginTeacherLogin("school-1", "teacher@school.edu");
+    expect(checkRateLimit).not.toHaveBeenCalledWith(LOOKUP_KEY, expect.anything());
+  });
+
+  it("charges the throttle when no account matches", async () => {
+    userFindUnique.mockResolvedValue(null);
+    const res = await beginTeacherLogin("school-1", "guess@school.edu");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_TEACHER_NOT_FOUND" });
+    expect(checkRateLimit).toHaveBeenCalledWith(LOOKUP_KEY, expect.any(Object));
+  });
+
+  it("treats a teacher from another school as no account here", async () => {
+    userFindUnique.mockResolvedValue({ ...TEACHER, schoolId: "school-2" });
+    expect(await beginTeacherLogin("school-1", "teacher@school.edu")).toMatchObject({
+      ok: false,
+      code: "AUTH_TEACHER_NOT_FOUND",
+    });
+  });
+
+  it("refuses every lookup once the address is over the limit — even a real one", async () => {
+    peekRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 60_000 });
+    const res = await beginTeacherLogin("school-1", "teacher@school.edu");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_TOO_MANY_ATTEMPTS" });
+    expect(userFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("explains a declined or deactivated account before a password is sent", async () => {
+    userFindUnique.mockResolvedValue({ ...TEACHER, approvalStatus: "REJECTED" });
+    expect(await beginTeacherLogin("school-1", "teacher@school.edu")).toMatchObject({
+      ok: false,
+      code: "AUTH_REGISTRATION_DECLINED",
+    });
+
+    userFindUnique.mockResolvedValue({ ...TEACHER, isActive: false });
+    const res = await beginTeacherLogin("school-1", "teacher@school.edu");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_ACCOUNT_DEACTIVATED" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "LOGIN_DENIED", metadata: expect.objectContaining({ reason: "deactivated" }) })
+    );
+  });
+});
+
+describe("finishTeacherLogin", () => {
+  it("admits an approved teacher and records the sign-in", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue(TEACHER);
+    await expect(finishTeacherLogin("school-1")).resolves.toEqual({ ok: true, redirectTo: "/teacher" });
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "LOGIN_SUCCESS" }));
+  });
+
+  it("sends a pending teacher to the waiting page", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({ ...TEACHER, approvalStatus: "PENDING", isActive: false });
+    await expect(finishTeacherLogin("school-1")).resolves.toEqual({ ok: true, redirectTo: "/pending-approval" });
+  });
+
+  it("signs out a session that does not belong to this school", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({ ...TEACHER, schoolId: "school-2" });
+    const res = await finishTeacherLogin("school-1");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_TEACHER_NOT_FOUND" });
+    expect(signOut).toHaveBeenCalled();
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "not_authorized", cause: "school_mismatch" }) })
+    );
+  });
+
+  it("calls a missing session what it is", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: { message: "no session" } });
+    expect(await finishTeacherLogin("school-1")).toMatchObject({ ok: false, code: "AUTH_SESSION_EXPIRED" });
+  });
+});
+
+describe("finishSchoolHeadLogin", () => {
+  it("admits the school's head", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-2" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "head-1",
+      role: "SCHOOL_HEAD",
+      schoolId: "school-1",
+      isActive: true,
+      deletedAt: null,
+    });
+    await expect(finishSchoolHeadLogin("school-1")).resolves.toEqual({ ok: true, redirectTo: "/school-head" });
+  });
+
+  it("refuses and signs out a deactivated head", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-2" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "head-1",
+      role: "SCHOOL_HEAD",
+      schoolId: "school-1",
+      isActive: false,
+      deletedAt: null,
+    });
+    expect(await finishSchoolHeadLogin("school-1")).toMatchObject({ ok: false, code: "AUTH_ACCOUNT_DISABLED" });
+    expect(signOut).toHaveBeenCalled();
+  });
+});
+
+describe("reportLoginFailure", () => {
+  it("normalizes a reason it does not recognize", async () => {
+    await reportLoginFailure({ schoolId: "school-1", role: "SCHOOL_HEAD", reason: "whatever-the-client-says" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "incorrect_credentials" }) })
+    );
+  });
+
+  it("keeps the new reasons the browser can now tell apart", async () => {
+    await reportLoginFailure({ schoolId: "school-1", role: "SCHOOL_HEAD", reason: "service_unreachable" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "service_unreachable" }) })
+    );
+  });
+
+  it("does not credit a teacher from another school to this one", async () => {
+    userFindUnique.mockResolvedValue({ id: "teacher-9", email: "t@x.edu", schoolId: "school-2" });
+    await reportLoginFailure({ schoolId: "school-1", role: "TEACHER", email: "t@x.edu", reason: "incorrect_credentials" });
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+  });
+
+  it("records a provider failure for admins, but never as a system alert", async () => {
+    await reportLoginFailure({ schoolId: "school-1", role: "TEACHER", reason: "provider_error" });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0][0]).toMatchObject({ severity: "security" });
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/actions/login-begin.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Create `src/lib/auth/login-gates.ts`**
+
+```ts
+import "server-only";
+import { prisma } from "@/lib/prisma";
+import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+
+/** Pre-flight checks shared by the server-side and browser-side sign-in halves. */
+
+export const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
+
+export function assertSupabaseConfigured(): void {
+  if (isSupabaseConfigured()) return;
+  // The variable names are admin detail; the person is told the server is not
+  // set up, which is all they can act on.
+  throw new AppError("CONFIG_MISSING", {
+    detail: SUPABASE_NOT_CONFIGURED_MESSAGE,
+    context: { reason: "supabase_env_missing" },
+  });
+}
+
+/**
+ * "Missing" and "switched off" are different problems for different people: one
+ * is a stale dropdown, the other is a division-office decision.
+ */
+export async function requireActiveSchool(schoolId: string): Promise<{ id: string }> {
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true, isActive: true, deletedAt: true },
+  });
+  if (!school || school.deletedAt) throw resourceNotFound("School");
+  if (!school.isActive) throw new AppError("AUTH_SCHOOL_INACTIVE", { context: { schoolId } });
+  return { id: school.id };
+}
+```
+
+- [ ] **Step 4: Rewrite `src/lib/actions/login.ts`**
+
+Keep the existing file header comment (the Supabase per-IP reasoning) verbatim; replace everything below it with:
+
+```ts
+import { headers } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { warmSchoolHeadRoutes, warmTeacherRoutes } from "@/lib/auth/warm-routes";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration-helpers";
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError, tooManyAttempts } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
+import type { ActionFailure } from "@/lib/errors/result";
+import { LOGIN_FAILURE_REASONS, type LoginFailureReason } from "@/lib/errors/supabase";
+import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
+import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
+import { clientIpFrom } from "@/lib/request-ip";
+
+/**
+ * Where the password grant should be made.
+ *
+ * `browser` carries the address to sign in with; `server` means the caller must
+ * use the server-side action instead.
+ */
+type BeginLoginSuccess = { ok: true; mode: "browser"; email: string } | { ok: true; mode: "server" };
+
+export type BeginLoginResult = BeginLoginSuccess | ActionFailure;
+export type FinishLoginResult = { ok: true; redirectTo: string } | ActionFailure;
+export type { LoginFailureReason };
+
+/** Attempts the browser may report per address, so the audit trail cannot be flooded. */
+const REPORT_RATE = { limit: 30, windowMs: 10 * 60 * 1000 } as const;
+
+function normalizeReason(reason: string): LoginFailureReason {
+  return (LOGIN_FAILURE_REASONS as readonly string[]).includes(reason)
+    ? (reason as LoginFailureReason)
+    : "incorrect_credentials";
+}
+
+/**
+ * School Head: resolve the school's sign-in address for the browser.
+ *
+ * The address is only handed out when it is synthetic (`sh@<schoolIdCode>.…`),
+ * which is derived from the School ID already printed on the public schools
+ * table. A head who has swapped in a real address gets `mode: "server"`: that
+ * address is personal data, and a login page that returns it on demand would be
+ * an enumeration endpoint for every School Head's real email.
+ */
+export const beginSchoolHeadLogin = action(
+  "beginSchoolHeadLogin",
+  async (schoolId: string): Promise<BeginLoginSuccess> => {
+    assertSupabaseConfigured();
+    if (!schoolId) throw fieldError("schoolId", "Please select a school");
+
+    const rate = await checkRateLimit(`login:school-head:${schoolId}`, LOGIN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+    const school = await requireActiveSchool(schoolId);
+
+    const head = await findSchoolHead(school.id);
+    if (!head) {
+      // Not a password problem, and never was: the school has no head account.
+      // Recorded because only an admin can fix it.
+      throw new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", {
+        detail: `School ${school.id} has no active School Head account`,
+        context: { schoolId: school.id, reason: "no_school_head" },
+      });
+    }
+
+    if (!isSyntheticEmail(head.email)) return { ok: true, mode: "server" };
+    return { ok: true, mode: "browser", email: head.email };
+  }
+);
+
+/**
+ * School Head: verify the session the browser just established, then admit it.
+ *
+ * Everything here is re-derived from cookies and Prisma. The `schoolId` the
+ * client passes is only used to confirm it agrees with the account that actually
+ * signed in — a mismatch signs the session straight back out.
+ */
+export const finishSchoolHeadLogin = action(
+  "finishSchoolHeadLogin",
+  async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw new AppError("AUTH_SESSION_EXPIRED", {
+        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { authId: data.user.id },
+      select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true },
+    });
+
+    const cause = schoolHeadDenial(user, schoolId);
+    if (cause) {
+      await supabase.auth.signOut();
+      await writeAudit({
+        userId: user?.id,
+        schoolId: user?.schoolId ?? schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: user?.id,
+        metadata: { role: "SCHOOL_HEAD", schoolId, reason: "not_authorized", cause },
+      });
+      throw new AppError(cause === "deleted" || cause === "inactive" ? "AUTH_ACCOUNT_DISABLED" : "AUTH_FORBIDDEN", {
+        params: { what: "this school" },
+        detail: `School Head sign-in refused: ${cause}`,
+        context: { schoolId, reason: cause },
+      });
+    }
+
+    await writeAudit({
+      userId: user!.id,
+      schoolId: user!.schoolId!,
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      resource: "User",
+      resourceId: user!.id,
+      metadata: { role: "SCHOOL_HEAD", schoolId: user!.schoolId, method: "browser_password" },
+    });
+
+    await warmSchoolHeadRoutes(user!.schoolId!);
+
+    return { ok: true, redirectTo: SCHOOL_HEAD_ROUTES.dashboard };
+  }
+);
+
+/**
+ * Teacher: run the pre-flight gates and hand the address back for the browser.
+ *
+ * Always `mode: "browser"` on success — the teacher supplied the address. The
+ * gates run before any password leaves the browser, so a declined or deactivated
+ * account gets its real explanation instead of a failed grant.
+ */
+export const beginTeacherLogin = action(
+  "beginTeacherLogin",
+  async (schoolId: string, rawEmail: string): Promise<BeginLoginSuccess> => {
+    assertSupabaseConfigured();
+    if (!schoolId) throw fieldError("schoolId", "Please select a school");
+
+    const email = rawEmail.trim().toLowerCase();
+    if (!email) throw fieldError("email", "Email is required");
+
+    const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+    // Before the lookup, so that once an address has spent its allowance every
+    // answer is the same and the endpoint stops being an oracle.
+    await assertLookupAllowed();
+    await requireActiveSchool(schoolId);
+
+    const teacher = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true, approvalStatus: true },
+    });
+
+    if (!teacher || teacher.deletedAt || teacher.role !== "TEACHER" || teacher.schoolId !== schoolId) {
+      await recordFailedLookup();
+      throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
+    }
+    if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
+    if (isDeactivatedTeacher(teacher)) {
+      await writeAudit({
+        userId: teacher.id,
+        schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: teacher.id,
+        metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
+      });
+      throw new AppError("AUTH_ACCOUNT_DEACTIVATED");
+    }
+
+    return { ok: true, mode: "browser", email };
+  }
+);
+
+/** Teacher counterpart to `finishSchoolHeadLogin`; see that function for the reasoning. */
+export const finishTeacherLogin = action(
+  "finishTeacherLogin",
+  async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw new AppError("AUTH_SESSION_EXPIRED", {
+        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { authId: data.user.id },
+      select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true, approvalStatus: true },
+    });
+
+    const cause = teacherDenial(user, schoolId);
+    if (cause) {
+      await supabase.auth.signOut();
+      await writeAudit({
+        userId: user?.id,
+        schoolId: user?.schoolId ?? schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: user?.id,
+        metadata: { role: "TEACHER", schoolId, reason: "not_authorized", cause },
+      });
+      throw new AppError(
+        cause === "declined"
+          ? "AUTH_REGISTRATION_DECLINED"
+          : cause === "deactivated"
+            ? "AUTH_ACCOUNT_DEACTIVATED"
+            : "AUTH_TEACHER_NOT_FOUND",
+        { detail: `Teacher sign-in refused: ${cause}`, context: { schoolId, reason: cause } }
+      );
+    }
+
+    await writeAudit({
+      userId: user!.id,
+      schoolId: user!.schoolId!,
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      resource: "User",
+      resourceId: user!.id,
+      metadata: { role: "TEACHER", schoolId: user!.schoolId, method: "browser_password" },
+    });
+
+    const pending = user!.approvalStatus === "PENDING";
+    if (!pending) {
+      await warmTeacherRoutes({ schoolId: user!.schoolId!, teacherId: user!.id, isSuperAdmin: false });
+    }
+
+    return { ok: true, redirectTo: pending ? "/pending-approval" : "/teacher" };
+  }
+);
+
+/**
+ * Record an attempt that failed at the browser's grant.
+ *
+ * The audit row is the only part of a failed browser sign-in the server would
+ * otherwise never see. Nothing here trusts the caller: the subject is resolved
+ * from the school and role, and `reason` is narrowed to the values the login
+ * form can legitimately report.
+ *
+ * A provider failure is recorded for admins at "security" severity rather than
+ * "system": the input comes from the browser, and a client-triggered alert is a
+ * way to flood an inbox.
+ */
+export const reportLoginFailure = action(
+  "reportLoginFailure",
+  async (input: {
+    schoolId: string;
+    role: "SCHOOL_HEAD" | "TEACHER";
+    reason: string;
+    email?: string;
+  }): Promise<{ ok: true }> => {
+    const reason = normalizeReason(input.reason);
+    if (!input.schoolId) return { ok: true };
+
+    const gate = await checkRateLimit(`login:report:${clientIpFrom(await headers())}`, REPORT_RATE);
+    if (!gate.ok) return { ok: true };
+
+    const subject =
+      input.role === "SCHOOL_HEAD"
+        ? await findSchoolHead(input.schoolId)
+        : input.email
+          ? await prisma.user.findUnique({
+              where: { email: input.email.trim().toLowerCase() },
+              select: { id: true, email: true, schoolId: true },
+            })
+          : null;
+
+    // A teacher row from another school must not be credited to this one.
+    const userId =
+      subject && (input.role === "SCHOOL_HEAD" || subject.schoolId === input.schoolId) ? subject.id : null;
+
+    await writeAudit({
+      userId,
+      schoolId: input.schoolId,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: userId,
+      metadata: { role: input.role, schoolId: input.schoolId, reason },
+    });
+
+    if (reason === "rate_limited" || reason === "provider_error") {
+      reportError(
+        new AppError(reason === "rate_limited" ? "AUTH_PROVIDER_RATE_LIMITED" : "AUTH_PROVIDER_ERROR", {
+          severity: "security",
+          detail: `Reported by the browser after a failed password grant (${input.role})`,
+          context: { schoolId: input.schoolId, reason },
+        }),
+        { route: "reportLoginFailure", userId, schoolId: input.schoolId }
+      );
+    }
+
+    return { ok: true };
+  }
+);
+
+type SchoolHeadRow = { id: string; role: string; schoolId: string | null; isActive: boolean; deletedAt: Date | null } | null;
+
+function schoolHeadDenial(user: SchoolHeadRow, schoolId: string): string | null {
+  if (!user) return "no_account";
+  if (user.deletedAt) return "deleted";
+  if (!user.isActive) return "inactive";
+  if (user.role !== "SCHOOL_HEAD") return "role_mismatch";
+  if (!user.schoolId || user.schoolId !== schoolId) return "school_mismatch";
+  return null;
+}
+
+type TeacherRow =
+  | { id: string; role: string; schoolId: string | null; isActive: boolean; deletedAt: Date | null; approvalStatus: string }
+  | null;
+
+function teacherDenial(user: TeacherRow, schoolId: string): string | null {
+  if (!user) return "no_account";
+  if (user.deletedAt) return "deleted";
+  if (user.role !== "TEACHER") return "role_mismatch";
+  if (!user.schoolId || user.schoolId !== schoolId) return "school_mismatch";
+  if (user.approvalStatus === "REJECTED") return "declined";
+  if (isDeactivatedTeacher(user as Parameters<typeof isDeactivatedTeacher>[0])) return "deactivated";
+  return null;
+}
+
+/**
+ * The school's School Head account.
+ *
+ * `orderBy createdAt asc` is not cosmetic. The Super Admin console's reset
+ * targets the oldest row, so an unordered lookup could authenticate against a
+ * different account than the one an admin just reset — and the reset would
+ * appear to do nothing. One head per school is not enforced in the schema, so
+ * the two lookups have to agree by construction.
+ */
+async function findSchoolHead(schoolId: string) {
+  return prisma.user.findFirst({
+    where: { schoolId, role: "SCHOOL_HEAD", deletedAt: null, isActive: true },
+    select: { id: true, email: true, schoolId: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+```
+
+- [ ] **Step 5: Run to verify it passes** — `npx vitest run tests/unit/actions/login-begin.test.ts && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/lib/auth/login-gates.ts src/lib/actions/login.ts tests/unit/actions/login-begin.test.ts
+git commit -m "feat(auth): browser sign-in halves say what actually failed"
+```
+
+---
+
+### Task 12: Server-side sign-in actions (`auth.ts`)
+
+**Files:**
+- Modify: `src/lib/actions/auth.ts` (`loginSchoolHead`, `loginTeacher`, `loginAdmin`; delete `requireSupabaseConfigured`, `assertActiveSchool`, `mapSupabaseAuthError`)
+- Test: `tests/unit/actions/admin-login.test.ts` (update), `tests/unit/actions/login-server.test.ts` (new)
+
+**Interfaces:**
+- Consumes: Tasks 2, 6, 10, 11
+- Produces: the three sign-in actions wrapped, each returning `ActionFailure` on failure
+
+- [ ] **Step 1: Update `tests/unit/actions/admin-login.test.ts`**
+
+Three edits only — the behaviour under test does not change:
+
+1. Add `unstable_rethrow` to the `next/navigation` mock, because the wrapper uses it to let redirects through:
+```ts
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    redirect(path);
+    // The real `redirect` throws to unwind the action; mirroring that keeps the
+    // code after it unreachable here too.
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) throw err;
+  },
+}));
+```
+2. Add the mocks the wrapper's dependencies need:
+```ts
+vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF4") }));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() {
+    return checkRateLimit;
+  },
+  peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
+}));
+```
+3. Update the two assertions that pinned the old strings, and make the wrong-password mock realistic:
+```ts
+  it("never reaches Supabase for an unknown handle", async () => {
+    userFindFirst.mockResolvedValue(null);
+
+    const result = await run(form("nobody", "s3cret"));
+
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      code: "AUTH_INCORRECT_CREDENTIALS",
+      error: "Incorrect username or password.",
+    });
+  });
+
+  it("gives an unknown handle and a wrong password the same message", async () => {
+    userFindFirst.mockResolvedValue(null);
+    const unknown = await run(form("nobody", "s3cret"));
+
+    vi.clearAllMocks();
+    checkRateLimit.mockResolvedValue({ ok: true });
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+    const wrongPassword = await run(form("admin", "wrong"));
+
+    expect(unknown).toEqual(wrongPassword);
+  });
+
+  it("rejects a blank username before hitting the database", async () => {
+    const result = await run(form("   ", "s3cret"));
+
+    expect(userFindFirst).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: "Username required" });
+  });
+```
+
+- [ ] **Step 2: Write `tests/unit/actions/login-server.test.ts`**
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The server-side sign-in fallback. The point of these cases is that the message
+ * now matches the cause: a School Head with a wrong password is told the
+ * password is wrong, instead of "Login failed. Please contact your
+ * administrator." — the sentence that sent schools to reset passwords that were
+ * fine.
+ */
+
+const schoolFindUnique = vi.fn();
+const userFindFirst = vi.fn();
+const userFindUnique = vi.fn();
+const userUpdate = vi.fn();
+const signInWithPassword = vi.fn();
+const writeAudit = vi.fn();
+const checkRateLimit = vi.fn();
+const peekRateLimit = vi.fn();
+const redirect = vi.fn();
+const reportError = vi.fn(() => "E-TESTREF5");
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    school: { get findUnique() { return schoolFindUnique; } },
+    user: {
+      get findFirst() { return userFindFirst; },
+      get findUnique() { return userFindUnique; },
+      get update() { return userUpdate; },
+    },
+  },
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: async () => ({ auth: { signInWithPassword, signOut: vi.fn(), getUser: vi.fn(), updateUser: vi.fn() } }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
+vi.mock("@/lib/supabase/env", () => ({ isSupabaseConfigured: () => true, SUPABASE_NOT_CONFIGURED_MESSAGE: "env missing" }));
+vi.mock("@/lib/audit", () => ({
+  get writeAudit() { return writeAudit; },
+  AUDIT_ACTIONS: { LOGIN_SUCCESS: "LOGIN_SUCCESS", LOGIN_DENIED: "LOGIN_DENIED", PASSWORD_CHANGE: "PASSWORD_CHANGE", EMAIL_CHANGE: "EMAIL_CHANGE", PASSWORD_RESET_REQUEST: "PASSWORD_RESET_REQUEST", TEACHER_REGISTER: "TEACHER_REGISTER" },
+}));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() { return checkRateLimit; },
+  get peekRateLimit() { return peekRateLimit; },
+}));
+vi.mock("@/lib/errors/report", () => ({ get reportError() { return reportError; } }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }) }));
+vi.mock("@/lib/auth/session", () => ({ requireUser: vi.fn(), roleHomePath: () => "/school-head", roleSecurityPath: () => "/school-head/settings" }));
+vi.mock("@/lib/auth/warm-routes", () => ({ warmAdminRoutes: vi.fn(), warmSchoolHeadRoutes: vi.fn(), warmTeacherRoutes: vi.fn() }));
+vi.mock("@/lib/auth/teacher-registration", () => ({ completeTeacherAuthAfterVerify: vi.fn() }));
+vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: () => true }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    redirect(path);
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) throw err;
+  },
+}));
+
+import { loginSchoolHead, loginTeacher } from "@/lib/actions/auth";
+
+function form(entries: Record<string, string>): FormData {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(entries)) fd.set(k, v);
+  return fd;
+}
+
+async function run(fn: () => Promise<unknown>) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) return { redirected: true };
+    throw err;
+  }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  schoolFindUnique.mockResolvedValue({ id: "school-1", isActive: true, deletedAt: null });
+  userFindFirst.mockResolvedValue({ id: "head-1", email: "sh@0001.litrack.local", isActive: true });
+  reportError.mockReturnValue("E-TESTREF5");
+});
+
+describe("loginSchoolHead", () => {
+  it("says the password is wrong when the password is wrong", async () => {
+    signInWithPassword.mockResolvedValue({
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+
+    const res = await run(() => loginSchoolHead(form({ schoolId: "school-1", password: "nope" })));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_INCORRECT_PASSWORD" });
+    expect((res as { error: string }).error).toBe("Incorrect password. Check it and try again.");
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "incorrect_credentials" }) })
+    );
+  });
+
+  it("never calls a rate limit a wrong password", async () => {
+    signInWithPassword.mockResolvedValue({ error: { status: 429, message: "Request rate limit reached" } });
+
+    const res = await run(() => loginSchoolHead(form({ schoolId: "school-1", password: "right" })));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_RATE_LIMITED" });
+    expect((res as { error: string }).error).toMatch(/no need to reset/i);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "rate_limited" }) })
+    );
+  });
+
+  it("treats an unreachable auth service as our problem, with a reference", async () => {
+    signInWithPassword.mockResolvedValue({ error: { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" } });
+
+    const res = await run(() => loginSchoolHead(form({ schoolId: "school-1", password: "right" })));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR", ref: "E-TESTREF5" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ reason: "provider_error" }) })
+    );
+  });
+
+  it("names a school with no School Head account", async () => {
+    userFindFirst.mockResolvedValue(null);
+    const res = await run(() => loginSchoolHead(form({ schoolId: "school-1", password: "x" })));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_NO_SCHOOL_HEAD_ACCOUNT" });
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("signs in and redirects when the password is right", async () => {
+    signInWithPassword.mockResolvedValue({ error: null });
+    const res = await run(() => loginSchoolHead(form({ schoolId: "school-1", password: "right" })));
+    expect(res).toEqual({ redirected: true });
+    expect(redirect).toHaveBeenCalledWith("/school-head");
+  });
+});
+
+describe("loginTeacher", () => {
+  it("charges the lookup throttle only when no account matches", async () => {
+    userFindUnique.mockResolvedValue(null);
+    const res = await run(() => loginTeacher(form({ schoolId: "school-1", email: "guess@school.edu", password: "x" })));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_TEACHER_NOT_FOUND" });
+    expect(checkRateLimit).toHaveBeenCalledWith("login:lookup-miss:ip:203.0.113.9", expect.any(Object));
+  });
+
+  it("says the password is wrong for a real account", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "teacher-1",
+      role: "TEACHER",
+      schoolId: "school-1",
+      isActive: true,
+      deletedAt: null,
+      approvalStatus: "APPROVED",
+    });
+    signInWithPassword.mockResolvedValue({ error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" } });
+
+    const res = await run(() => loginTeacher(form({ schoolId: "school-1", email: "t@school.edu", password: "nope" })));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_INCORRECT_PASSWORD" });
+  });
+});
+```
+
+- [ ] **Step 3: Run to verify they fail** — `npx vitest run tests/unit/actions/admin-login.test.ts tests/unit/actions/login-server.test.ts` — Expected: FAIL.
+
+- [ ] **Step 4: Rewrite the three sign-in actions in `src/lib/actions/auth.ts`**
+
+Remove `requireSupabaseConfigured`, `assertActiveSchool` and `mapSupabaseAuthError` entirely, and add these imports:
+```ts
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError, tooManyAttempts } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
+import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
+import { reportError } from "@/lib/errors/report";
+import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
+import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
+```
+(delete the local `type ActionResult`, `LOGIN_RATE` and `AUTH_RATE_LIMITED_MESSAGE`/`isAuthRateLimitError` imports where they become unused; keep `REGISTER_RATE`, `RECOVERY_RATE`, `PASSWORD_RATE`, `EMAIL_RATE`).
+
+```ts
+/**
+ * School Head login: school selection + password (activation credential or
+ * private password). Sign-in uses the SH account's stored Prisma email.
+ */
+export const loginSchoolHead = action("loginSchoolHead", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
+
+  const input = parseInput(schoolLoginSchema, {
+    schoolId: formData.get("schoolId"),
+    role: "SCHOOL_HEAD",
+    password: formData.get("password"),
+  });
+
+  const rate = await checkRateLimit(`login:school-head:${input.schoolId}`, LOGIN_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  const school = await requireActiveSchool(input.schoolId);
+
+  const shUser = await prisma.user.findFirst({
+    where: { role: "SCHOOL_HEAD", schoolId: school.id, deletedAt: null, isActive: true },
+    select: { id: true, email: true, isActive: true },
+    // Must match `findSchoolHead` in ./school-accounts, which the Super Admin
+    // reset targets. Unordered, a school with two head rows could authenticate
+    // against one account while the admin resets the other — and the reset would
+    // look like it did nothing.
+    orderBy: { createdAt: "asc" },
+  });
+  if (!shUser) {
+    throw new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", {
+      detail: `School ${school.id} has no active School Head account`,
+      context: { schoolId: school.id, reason: "no_school_head" },
+    });
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({ email: shUser.email, password: input.password });
+  if (error) {
+    const code = mapSupabaseAuthError(error, "server");
+    await writeAudit({
+      userId: shUser.id,
+      schoolId: school.id,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: shUser.id,
+      metadata: { role: "SCHOOL_HEAD", schoolId: school.id, reason: loginFailureReasonFor(code) },
+    });
+    throw new AppError(code, { cause: error, context: { schoolId: school.id } });
+  }
+
+  await writeAudit({
+    userId: shUser.id,
+    schoolId: school.id,
+    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+    resource: "User",
+    resourceId: shUser.id,
+    metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
+  });
+
+  await warmSchoolHeadRoutes(school.id);
+
+  redirect(SCHOOL_HEAD_ROUTES.dashboard);
+});
+
+/** Teacher login with email + password only (no OTP / codes). */
+export const loginTeacher = action("loginTeacher", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
+
+  const input = parseInput(teacherLoginSchema, {
+    schoolId: formData.get("schoolId"),
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+
+  const email = input.email.toLowerCase().trim();
+  const { schoolId, password } = input;
+
+  const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  await assertLookupAllowed();
+  await requireActiveSchool(schoolId);
+
+  const teacher = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true, approvalStatus: true },
+  });
+
+  if (!teacher || teacher.deletedAt || teacher.role !== "TEACHER" || teacher.schoolId !== schoolId) {
+    await recordFailedLookup();
+    throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
+  }
+  if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
+  if (isDeactivatedTeacher(teacher)) {
+    await writeAudit({
+      userId: teacher.id,
+      schoolId,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: teacher.id,
+      metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
+    });
+    throw new AppError("AUTH_ACCOUNT_DEACTIVATED");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    const code = mapSupabaseAuthError(error, "server");
+    await writeAudit({
+      userId: teacher.id,
+      schoolId,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: teacher.id,
+      metadata: { role: "TEACHER", schoolId, reason: loginFailureReasonFor(code) },
+    });
+    throw new AppError(code, { cause: error, context: { schoolId } });
+  }
+
+  await writeAudit({
+    userId: teacher.id,
+    schoolId,
+    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+    resource: "User",
+    resourceId: teacher.id,
+    metadata: { role: "TEACHER", schoolId, method: "password" },
+  });
+
+  // REJECTED / deactivated already returned above.
+  const pending = teacher.approvalStatus === "PENDING";
+  if (!pending) {
+    await warmTeacherRoutes({ schoolId, teacherId: teacher.id, isSuperAdmin: false });
+  }
+
+  redirect(pending ? "/pending-approval" : "/teacher");
+});
+```
+
+And `loginAdmin` — same body as today minus the `try/catch` that sniffed env strings (the wrapper classifies those now), with the refusals given codes:
+
+```ts
+export const loginAdmin = action("loginAdmin", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
+
+  const { username, password } = parseInput(adminLoginSchema, {
+    username: formData.get("username"),
+    password: formData.get("password"),
+  });
+
+  const rate = await checkRateLimit(`login:admin:${username}`, LOGIN_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  // Supabase Auth authenticates on an email address, so the handle has to be
+  // resolved to one first. Scoping the lookup to a live Super Admin is the point
+  // of doing it here: a handle left on a revoked or lower-privileged row never
+  // reaches Supabase, so a stale username cannot be used to probe for a live
+  // password.
+  const account = await prisma.user.findFirst({
+    where: { username, role: "SUPER_ADMIN", isActive: true, deletedAt: null },
+    select: { id: true, email: true },
+  });
+  if (!account) {
+    await writeAudit({
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      // The username itself is deliberately not logged — an audit row for a
+      // failed attempt would otherwise record whatever a stranger typed.
+      metadata: { role: "SUPER_ADMIN", reason: "unknown_username" },
+    });
+    // Identical to the wrong-password message below, so the field cannot be used
+    // to enumerate which handles exist. This is the one login where the generic
+    // message is deliberate: these are the highest-value accounts in the system.
+    throw new AppError("AUTH_INCORRECT_CREDENTIALS");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email: account.email, password });
+  if (error || !data.user) {
+    const mapped = error ? mapSupabaseAuthError(error, "server") : "AUTH_INCORRECT_PASSWORD";
+    await writeAudit({
+      userId: account.id,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: account.id,
+      metadata: { role: "SUPER_ADMIN", reason: loginFailureReasonFor(mapped) },
+    });
+    throw new AppError(mapped === "AUTH_INCORRECT_PASSWORD" ? "AUTH_INCORRECT_CREDENTIALS" : mapped, {
+      cause: error ?? undefined,
+    });
+  }
+
+  const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
+  if (!user || user.role !== "SUPER_ADMIN" || !user.isActive || user.deletedAt) {
+    await supabase.auth.signOut();
+    await writeAudit({
+      userId: user?.id,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: user?.id,
+      metadata: { role: user?.role ?? "UNKNOWN", reason: "not_authorized" },
+    });
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "the admin console" },
+      detail: `Signed in, but the account is not an active Super Admin (role ${user?.role ?? "none"})`,
+      context: { reason: "not_super_admin" },
+    });
+  }
+
+  await writeAudit({
+    userId: user.id,
+    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+    resource: "User",
+    resourceId: user.id,
+    metadata: { role: "SUPER_ADMIN" },
+  });
+
+  await warmAdminRoutes();
+
+  redirect("/admin");
+});
+```
+
+- [ ] **Step 5: Run to verify they pass** — `npx vitest run tests/unit/actions/admin-login.test.ts tests/unit/actions/login-server.test.ts && npm run typecheck` — Expected: PASS. (`auth.ts` still has its other actions unwrapped at this point; that is Tasks 13–14.)
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/lib/actions/auth.ts tests/unit/actions/admin-login.test.ts tests/unit/actions/login-server.test.ts
+git commit -m "fix(auth): a wrong School Head password says so, instead of blaming the administrator"
+```
+
+---
