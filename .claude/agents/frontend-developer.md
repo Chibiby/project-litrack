@@ -1,6 +1,7 @@
 ---
 name: frontend-developer
 description: Use for React/Next.js client-side work — pages, layouts, components, forms, Tailwind styling, shadcn/ui, charts, accessibility, loading/error states, and responsive UI. Invoke for any change under src/components/** or the presentational layer of src/app/**. Not for server actions, Prisma queries, or auth logic.
+model: sonnet
 tools: Read, Edit, Write, Glob, Grep, PowerShell, WebFetch, WebSearch
 ---
 

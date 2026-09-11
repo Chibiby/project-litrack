@@ -1,6 +1,7 @@
 ---
 name: qa-test-engineer
 description: Use to verify work — run typecheck, lint, unit tests, build, and Playwright e2e; write or extend Vitest/Playwright tests; reproduce bugs; and hunt regressions after an integration. Read-only on source: it reports defects rather than fixing app code, so it can run in parallel with the developers without edit conflicts.
+model: sonnet
 tools: Read, Write, Edit, Glob, Grep, PowerShell, WebFetch, WebSearch
 ---
 

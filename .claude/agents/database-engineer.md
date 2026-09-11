@@ -1,6 +1,7 @@
 ---
 name: database-engineer
 description: Use for Prisma schema changes, migration authoring, PostgreSQL/Supabase concerns, RLS policies, indexes, query performance, seed data, and data-integrity questions. This agent is the single serialized owner of prisma/** — route every schema change through it to avoid conflicting migrations.
+model: sonnet
 tools: Read, Edit, Write, Glob, Grep, PowerShell, WebFetch, WebSearch
 ---
 

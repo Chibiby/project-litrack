@@ -1,6 +1,7 @@
 ---
 name: backend-developer
 description: Use for Next.js server-side work — server actions in src/lib/actions, API routes, Zod validators, authentication and session handling, authorization and tenant isolation, audit logging, cache revalidation, rate limiting, and business logic. Not for schema/migration changes and not for UI.
+model: sonnet
 tools: Read, Edit, Write, Glob, Grep, PowerShell, WebFetch, WebSearch
 ---
 
