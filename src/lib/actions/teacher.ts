@@ -27,6 +27,8 @@ import {
   SectionTakenError,
   SECTION_TAKEN_ERROR,
 } from "@/lib/teachers/section-assignment";
+import { advisoryCapFor } from "@/lib/teachers/advisory-limits";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -63,15 +65,6 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   const raw = formToObj(formData);
   raw.hasReadingTraining = raw.hasReadingTraining === true || raw.hasReadingTraining === "true" || raw.hasReadingTraining === "on";
   raw.hasEnglishTraining = raw.hasEnglishTraining === true || raw.hasEnglishTraining === "true" || raw.hasEnglishTraining === "on";
-  // §5. Coerced the same way, and only when present: the field is new, so a form
-  // that does not send it must fall through to the schema's `false` default
-  // rather than be read as a declaration.
-  if (raw.noAdvisorySection !== undefined) {
-    raw.noAdvisorySection =
-      raw.noAdvisorySection === true ||
-      raw.noAdvisorySection === "true" ||
-      raw.noAdvisorySection === "on";
-  }
 
   const parsed = teacherProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -85,11 +78,8 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Intentionally destructuring contactEmail to exclude it from profileFields
     contactEmail: _contactEmail,
     sectionId,
-    // §5. A declared choice, never stored: floating IS zero live advisory
-    // sections. Pulled out of `profileFields` so it cannot reach
-    // `TeacherProfile`, which has no column for it and must not grow one — a
-    // stored flag could disagree with the sections themselves.
-    noAdvisorySection,
+    advisoryMode,
+    additionalSectionIds,
     ...profileFields
   } = parsed.data;
   const firstName = formatPersonName(firstRaw);
@@ -97,10 +87,23 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   const middleName = formatOptionalPersonName(middleRaw) ?? null;
   const fullName = buildFullName(firstName, middleName, lastName);
 
+  // Teacher once, then School Head only. The first save records what the
+  // teacher declared; every later save keeps what is stored, so Settings cannot
+  // be used to become multi-grade and take two more sections, or to drop a
+  // classroom by ticking Floating. `setTeacherAdvisorySetting` is the only
+  // route for changes after this.
+  const existing = await prisma.teacherProfile.findFirst({
+    where: { userId: user.id, user: { schoolId: user.schoolId } },
+    select: { designation: true, advisoryMode: true },
+  });
+  const isFirstSave = existing === null;
+
   // Prisma skips `undefined` on update — normalize optionals to null so clears persist
   // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).
   const profileData = {
     ...profileFields,
+    designation: isFirstSave ? parsed.data.designation : existing.designation,
+    advisoryMode: isFirstSave ? advisoryMode : existing.advisoryMode,
     contactNumber: parsed.data.contactNumber ?? null,
     specializationOther: parsed.data.specializationOther ?? null,
     currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
@@ -122,27 +125,27 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
         where: { id: user.id },
         data: { firstName, middleName, lastName, fullName, profileCompleted: true },
       });
-      // Profiling still assigns ONE section: it is the teacher stating their own
-      // classroom during onboarding, not a School Head building a load. A second
-      // or third is added from the teachers table. Expressed as add/clear rather
-      // than the old replace, so finishing a profile cannot silently drop an
-      // advisory a School Head assigned while the teacher was still onboarding.
-      // Declaring "no advisory section" CLEARS, rather than leaving whatever was
-      // there: a teacher who says they advise nothing and still shows as
-      // advising Grade 3 has been contradicted by the app. Submitting no section
-      // without declaring it — an ARAL Volunteer, or a re-save of a profile that
-      // never had one — also clears, which is what the old code did.
-      await setTeacherAdvisory(tx, {
-        teacherId: user.id,
-        schoolId: user.schoolId,
-        change:
-          sectionId && !noAdvisorySection
-            ? { op: "add", sectionId }
-            : { op: "clear" },
-      });
+      // Only on first save: assign the sections the teacher declared. On later
+      // saves, the School Head owns advisory assignment via setTeacherAdvisorySection.
+      if (isFirstSave) {
+        const volunteer = parsed.data.designation === ARAL_VOLUNTEER_DESIGNATION;
+        const wanted =
+          volunteer || advisoryMode === "FLOATING" || !sectionId
+            ? []
+            : [sectionId, ...(advisoryMode === "MULTI_GRADE" ? additionalSectionIds : [])];
+        if (wanted.length === 0) {
+          await setTeacherAdvisory(tx, { teacherId: user.id, schoolId: user.schoolId, change: { op: "clear" } });
+        }
+        for (const id of wanted) {
+          await setTeacherAdvisory(tx, { teacherId: user.id, schoolId: user.schoolId, change: { op: "add", sectionId: id } });
+        }
+      }
     });
   } catch (err) {
     console.error("[saveTeacherProfile] failed:", err);
+    if (err instanceof AdvisoryCapError) {
+      return { ok: false, error: err.message };
+    }
     if (isAdvisorySectionConflict(err)) {
       return { ok: false, error: SECTION_TAKEN_ERROR };
     }
@@ -170,6 +173,8 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
       userId: user.id,
       sectionId: sectionId ?? null,
       designation: parsed.data.designation,
+      advisoryMode: isFirstSave ? advisoryMode : existing.advisoryMode,
+      additionalSectionIds: isFirstSave ? additionalSectionIds : [],
     },
   });
 

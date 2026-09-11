@@ -19,6 +19,8 @@ const SCHOOL_ID = "school-1";
 const OTHER_SCHOOL_ID = "school-2";
 const SECTION_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_SECTION_ID = "22222222-2222-4222-8222-222222222222";
+const ADDITIONAL_SECTION_ID_1 = "33333333-3333-4333-8333-333333333333";
+const ADDITIONAL_SECTION_ID_2 = "44444444-4444-4444-8444-444444444444";
 const GRADE_ID = "grade-g3";
 
 type SectionRow = {
@@ -39,6 +41,8 @@ type TxCalls = {
 
 let sections: SectionRow[];
 let teacherRow: { advisorySectionId: string | null; taughtGrades: { id: string }[] };
+/** Existing teacher profile outside the transaction (for first-save check). */
+let existingTeacherProfile: { designation: string; advisoryMode: string } | null = null;
 let calls: TxCalls;
 /**
  * Set to make the advisory `user.update` reject, simulating another teacher
@@ -49,12 +53,24 @@ let calls: TxCalls;
 let userUpdateError: unknown = null;
 
 function makeTx() {
+  // Track what profile was upserted in this transaction for subsequent reads
+  let upsertedProfile: { designation: string; advisoryMode: string } | null = null;
+
   return {
     teacherProfile: {
-      upsert: vi.fn(async (args: unknown) => {
+      upsert: vi.fn(async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         calls.profileUpsert.push(args);
+        // Track the upserted profile so subsequent reads in the same tx see it
+        upsertedProfile = {
+          designation: String(args.create.designation ?? args.update.designation ?? "Teacher"),
+          advisoryMode: String(args.create.advisoryMode ?? args.update.advisoryMode ?? "DEFAULT"),
+        };
         return {};
       }),
+      findFirst: vi.fn(async () =>
+        // If profile was just upserted in this transaction, read returns that; otherwise the pre-existing one
+        upsertedProfile ?? existingTeacherProfile ?? { designation: "Teacher", advisoryMode: "DEFAULT" }
+      ),
     },
     user: {
       update: vi.fn(async (args: { data: Record<string, unknown> }) => {
@@ -122,10 +138,18 @@ const transaction = vi.fn(async (cb: (tx: ReturnType<typeof makeTx>) => Promise<
   cb(makeTx()),
 );
 
+const prismaTeacherProfileFindFirst = vi.fn(
+  async (args: { where: { userId: string; user: { schoolId: string } } }) =>
+    existingTeacherProfile
+);
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     get $transaction() {
       return transaction;
+    },
+    teacherProfile: {
+      findFirst: (...args: unknown[]) => prismaTeacherProfileFindFirst(...(args as [never])),
     },
   },
 }));
@@ -197,6 +221,7 @@ function buildFormData(overrides: Record<string, string | string[]> = {}): FormD
 beforeEach(() => {
   vi.clearAllMocks();
   userUpdateError = null;
+  existingTeacherProfile = null;
   // Failure messages are asserted as the *teacher* would see them. Outside
   // production `describeDbFailure` appends the raw error for the developer, so
   // the no-leak assertions below only mean anything in production.
@@ -213,6 +238,20 @@ beforeEach(() => {
       id: OTHER_SECTION_ID,
       gradeLevelId: GRADE_ID,
       schoolId: OTHER_SCHOOL_ID,
+      deletedAt: null,
+      adviserId: null,
+    },
+    {
+      id: ADDITIONAL_SECTION_ID_1,
+      gradeLevelId: GRADE_ID,
+      schoolId: SCHOOL_ID,
+      deletedAt: null,
+      adviserId: null,
+    },
+    {
+      id: ADDITIONAL_SECTION_ID_2,
+      gradeLevelId: GRADE_ID,
+      schoolId: SCHOOL_ID,
       deletedAt: null,
       adviserId: null,
     },
@@ -501,10 +540,10 @@ describe("saveTeacherProfile", () => {
  * reaches no column, and declaring it actually CLEARS whatever the teacher held.
  */
 describe("saveTeacherProfile — declaring no advisory section", () => {
-  it("saves, and writes the flag to no column", async () => {
+  it("saves FLOATING mode and clears any advisory", async () => {
     const result = await saveTeacherProfile(
       buildFormData({
-        noAdvisorySection: "true",
+        advisoryMode: "FLOATING",
         sectionId: "",
         currentGradeAssignment: "",
       })
@@ -512,20 +551,21 @@ describe("saveTeacherProfile — declaring no advisory section", () => {
 
     expect(result).toEqual({ ok: true });
     const upsert = calls.profileUpsert[0] as { create: Record<string, unknown> };
-    // The whole design of §5 rests on this: a stored flag could disagree with
-    // the sections themselves, and then neither would be authoritative.
-    expect(upsert.create).not.toHaveProperty("noAdvisorySection");
+    // The whole design of §5 rests on this: a stored advisory mode could disagree with
+    // the sections themselves, and then neither would be authoritative. But FLOATING
+    // IS stored, unlike the old noAdvisorySection flag.
+    expect(upsert.create.advisoryMode).toBe("FLOATING");
     expect(upsert.create.currentGradeAssignment).toBeNull();
   });
 
-  it("clears an advisory the teacher already held", async () => {
+  it("clears an advisory the teacher already held when set to FLOATING", async () => {
     // Somebody who had a section and now says they advise none. Leaving the
     // section attached would have the app contradict what they just told it.
     sections[0].adviserId = TEACHER_ID;
 
     const result = await saveTeacherProfile(
       buildFormData({
-        noAdvisorySection: "true",
+        advisoryMode: "FLOATING",
         sectionId: "",
         currentGradeAssignment: "",
       })
@@ -535,10 +575,142 @@ describe("saveTeacherProfile — declaring no advisory section", () => {
     expect(sections[0].adviserId).toBeNull();
   });
 
-  it("still assigns the section when the declaration is absent", async () => {
-    // The ordinary path, unchanged. A new field must not alter what a form that
-    // does not send it does.
+  it("still assigns the section when not FLOATING", async () => {
+    // The ordinary path, unchanged. DEFAULT mode requires a section.
     expect(await saveTeacherProfile(buildFormData())).toEqual({ ok: true });
     expect(sections[0].adviserId).toBe(TEACHER_ID);
+  });
+});
+
+/**
+ * §4: The transaction reads the cap, and profiling decides once. A teacher
+ * declares their advisory mode and additional sections on first save. On every
+ * later save, the School Head owns those fields, and the action ignores them.
+ */
+describe("saveTeacherProfile — first save vs later saves", () => {
+  it("first save with MULTI_GRADE adds both sections", async () => {
+    // existingTeacherProfile is null, so this is a first save.
+    const result = await saveTeacherProfile(
+      buildFormData({
+        advisoryMode: "MULTI_GRADE",
+        sectionId: SECTION_ID,
+        "additionalSectionIds[]": [ADDITIONAL_SECTION_ID_1],
+      })
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Profile upsert writes the mode.
+    const upsert = calls.profileUpsert[0] as { create: Record<string, unknown> };
+    expect(upsert.create.advisoryMode).toBe("MULTI_GRADE");
+
+    // Both sections are assigned via setTeacherAdvisory.
+    // advisorySectionId is a legacy pointer that only holds the FIRST advisory.
+    const advisoryUpdates = calls.userUpdate.filter(
+      (u: any) => "advisorySectionId" in u.data
+    ) as Array<{ data: { advisorySectionId: string | null; taughtGrades: unknown } }>;
+    expect(advisoryUpdates).toHaveLength(2);
+    // Both updates set advisorySectionId to the first section (it's a legacy single pointer)
+    expect(advisoryUpdates[0].data.advisorySectionId).toBe(SECTION_ID);
+    expect(advisoryUpdates[1].data.advisorySectionId).toBe(SECTION_ID);
+
+    // But the section create calls show both sections were assigned
+    expect(calls.sectionCreateMany).toHaveLength(2);
+    expect(calls.sectionCreateMany[0] as { data: unknown; skipDuplicates: boolean }).toEqual({
+      data: [{ teacherId: TEACHER_ID, sectionId: SECTION_ID }],
+      skipDuplicates: true,
+    });
+    expect(calls.sectionCreateMany[1] as { data: unknown; skipDuplicates: boolean }).toEqual({
+      data: [{ teacherId: TEACHER_ID, sectionId: SECTION_ID }, { teacherId: TEACHER_ID, sectionId: ADDITIONAL_SECTION_ID_1 }],
+      skipDuplicates: true,
+    });
+
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          advisoryMode: "MULTI_GRADE",
+          additionalSectionIds: [ADDITIONAL_SECTION_ID_1],
+        }),
+      })
+    );
+  });
+
+  it("first save with FLOATING clears advisories", async () => {
+    // existingTeacherProfile is null, so this is a first save.
+    // Teacher has an existing advisory that should be cleared
+    sections[0].adviserId = TEACHER_ID;
+    teacherRow = { advisorySectionId: SECTION_ID, taughtGrades: [{ id: GRADE_ID }] };
+
+    const result = await saveTeacherProfile(
+      buildFormData({
+        advisoryMode: "FLOATING",
+        sectionId: "",
+        currentGradeAssignment: "",
+      })
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Profile upsert writes FLOATING.
+    const upsert = calls.profileUpsert[0] as { create: Record<string, unknown> };
+    expect(upsert.create.advisoryMode).toBe("FLOATING");
+
+    // Advisory is cleared (op: "clear").
+    const advisoryUpdates = calls.userUpdate.filter(
+      (u: any) => "advisorySectionId" in u.data
+    ) as Array<{ data: { advisorySectionId: string | null; taughtGrades: unknown } }>;
+    expect(advisoryUpdates).toHaveLength(1);
+    expect(advisoryUpdates[0].data.advisorySectionId).toBeNull();
+    // Grades are disconnected
+    expect(advisoryUpdates[0].data.taughtGrades).toEqual({ disconnect: [{ id: GRADE_ID }] });
+
+    // Section is cleared
+    expect(sections[0].adviserId).toBeNull();
+
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          advisoryMode: "FLOATING",
+          additionalSectionIds: [],
+        }),
+      })
+    );
+  });
+
+  it("later save ignores submitted advisoryMode and uses the stored one", async () => {
+    // existingTeacherProfile is not null, so this is a later save.
+    existingTeacherProfile = { designation: "Teacher", advisoryMode: "DEFAULT" };
+
+    const result = await saveTeacherProfile(
+      buildFormData({
+        designation: "Master Teacher",
+        position: "MASTER_TEACHER_I",
+        advisoryMode: "MULTI_GRADE",
+        sectionId: ADDITIONAL_SECTION_ID_1,
+        "additionalSectionIds[]": [ADDITIONAL_SECTION_ID_2],
+      })
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Profile upsert writes the STORED designation and mode, not the submitted ones.
+    const upsert = calls.profileUpsert[0] as { create: Record<string, unknown>; update: Record<string, unknown> };
+    expect(upsert.create.designation).toBe("Teacher"); // stored value
+    expect(upsert.create.advisoryMode).toBe("DEFAULT"); // stored value
+    expect(upsert.update.designation).toBe("Teacher"); // stored value
+    expect(upsert.update.advisoryMode).toBe("DEFAULT"); // stored value
+
+    // setTeacherAdvisory is NOT called for later saves.
+    // Only the names/profileCompleted update should happen.
+    const advisoryUpdates = calls.userUpdate.filter(
+      (u: unknown) => u && typeof u === "object" && "data" in u && typeof u.data === "object" && u.data !== null && "advisorySectionId" in u.data
+    );
+    expect(advisoryUpdates).toHaveLength(0);
+
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          designation: "Master Teacher", // audit logs what was submitted, not what was saved
+          advisoryMode: "DEFAULT", // but stores what is actually persisted
+        }),
+      })
+    );
   });
 });

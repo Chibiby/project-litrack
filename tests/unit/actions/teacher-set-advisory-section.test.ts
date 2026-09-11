@@ -48,6 +48,8 @@ let sections: SectionRow[];
 let teacherLookup: { id: string; advisorySections: { id: string }[] } | null;
 /** What `findUniqueOrThrow` reports inside the transaction. */
 let teacherRow: { advisorySectionId: string | null; taughtGrades: { id: string }[] };
+/** The teacher's advisory profile (designation and mode) in the transaction. */
+let teacherProfile: { designation: string; advisoryMode: string } | null = null;
 let calls: TxCalls;
 /** Set to make the advisory `user.update` reject, simulating a mid-flight race. */
 let userUpdateError: unknown = null;
@@ -61,6 +63,9 @@ function advisoriesOf(teacherId: string): SectionRow[] {
 
 function makeTx() {
   return {
+    teacherProfile: {
+      findFirst: vi.fn(async () => teacherProfile ?? { designation: "Teacher", advisoryMode: "MULTI_GRADE" }),
+    },
     user: {
       update: vi.fn(async (args: { data: Record<string, unknown> }) => {
         calls.userUpdate.push(args);
@@ -229,6 +234,7 @@ function buildFormData(teacherId: string, sectionId: string): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   userUpdateError = null;
+  teacherProfile = null;
   sections = [
     {
       id: SECTION_ID,
@@ -649,5 +655,145 @@ describe("setTeacherAdvisorySection — the cap of three", () => {
     };
 
     expect(await add(FOURTH_SECTION_ID)).toEqual({ ok: true });
+  });
+});
+
+/**
+ * §3 of the ten concerns: advisory caps per mode. The cap is read from the
+ * teacher's profile inside the transaction, not from a global constant. A
+ * teacher set to DEFAULT may advise one; MULTI_GRADE advises up to three;
+ * FLOATING and volunteers advise zero.
+ */
+describe("setTeacherAdvisorySection — caps per advisory mode", () => {
+  const FOURTH_SECTION_ID = "55555555-5555-4555-8555-555555555555";
+  const HELD_IDS = [
+    "66666666-6666-4666-8666-666666666666",
+    "77777777-7777-4777-8777-777777777777",
+    "88888888-8888-4888-8888-888888888888",
+  ];
+
+  function holding(count: number) {
+    sections = [];
+    for (let i = 0; i < count; i += 1) {
+      sections.push({
+        id: HELD_IDS[i],
+        name: `Section ${i}`,
+        gradeLevelId: GRADE_ID,
+        gradeType: "G3",
+        schoolId: SCHOOL_ID,
+        deletedAt: null,
+        adviser: { id: TEACHER_ID, fullName: "Marivic Cruz" },
+      });
+    }
+    sections.push({
+      id: FOURTH_SECTION_ID,
+      name: "One More",
+      gradeLevelId: GRADE_ID,
+      gradeType: "G3",
+      schoolId: SCHOOL_ID,
+      deletedAt: null,
+      adviser: null,
+    });
+    teacherLookup = {
+      id: TEACHER_ID,
+      advisorySections: sections
+        .filter((s) => s.adviser?.id === TEACHER_ID)
+        .map((s) => ({ id: s.id })),
+    };
+  }
+
+  function add(sectionId: string) {
+    const fd = new FormData();
+    fd.set("teacherId", TEACHER_ID);
+    fd.set("sectionId", sectionId);
+    fd.set("op", "add");
+    return setTeacherAdvisorySection(fd);
+  }
+
+  it("DEFAULT teacher holding one section refuses a second", async () => {
+    holding(1);
+    teacherProfile = { designation: "Teacher", advisoryMode: "DEFAULT" };
+
+    const result = await add(FOURTH_SECTION_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/one section/i);
+    }
+    // Section is untouched.
+    expect(sections.find((s) => s.id === FOURTH_SECTION_ID)?.adviser).toBeNull();
+    expect(transaction).toHaveBeenCalled();
+  });
+
+  it("MULTI_GRADE teacher holding two accepts a third", async () => {
+    holding(2);
+    teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
+
+    const result = await add(FOURTH_SECTION_ID);
+
+    expect(result.ok).toBe(true);
+    expect(sections.find((s) => s.id === FOURTH_SECTION_ID)?.adviser?.id).toBe(TEACHER_ID);
+  });
+
+  it("MULTI_GRADE teacher holding three refuses a fourth", async () => {
+    holding(3);
+    teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
+
+    const result = await add(FOURTH_SECTION_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/up to 3/i);
+    }
+    // Section is untouched.
+    expect(sections.find((s) => s.id === FOURTH_SECTION_ID)?.adviser).toBeNull();
+  });
+
+  it("FLOATING teacher refuses to advise any section", async () => {
+    sections = [
+      {
+        id: SECTION_ID,
+        name: "Free Section",
+        gradeLevelId: GRADE_ID,
+        gradeType: "G3",
+        schoolId: SCHOOL_ID,
+        deletedAt: null,
+        adviser: null,
+      },
+    ];
+    teacherLookup = { id: TEACHER_ID, advisorySections: [] };
+    teacherProfile = { designation: "Teacher", advisoryMode: "FLOATING" };
+
+    const result = await add(SECTION_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/Floating teachers/i);
+    }
+    expect(transaction).toHaveBeenCalled();
+  });
+
+  it("Volunteer refuses to advise any section", async () => {
+    sections = [
+      {
+        id: SECTION_ID,
+        name: "Free Section",
+        gradeLevelId: GRADE_ID,
+        gradeType: "G3",
+        schoolId: SCHOOL_ID,
+        deletedAt: null,
+        adviser: null,
+      },
+    ];
+    teacherLookup = { id: TEACHER_ID, advisorySections: [] };
+    teacherProfile = { designation: "Non-DepEd ARAL Volunteer", advisoryMode: "DEFAULT" };
+
+    const result = await add(SECTION_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/Volunteers/i);
+    }
+    expect(transaction).toHaveBeenCalled();
   });
 });
