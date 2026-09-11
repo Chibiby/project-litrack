@@ -715,15 +715,29 @@ export function LearnerForm({
     <form
       ref={formRef}
       onSubmit={handleFormSubmit}
-      // `onChange`, not `onInput`. A browser fires `input` BEFORE `change` on a
-      // <select>, so a form-level `onInput` snapshot re-rendered the tree while
-      // the select's own state was still stale — React then re-applied the old
-      // controlled `value`, wiping the teacher's pick before `change` could read
-      // it. Every ethnicity choice snapped back to "Not specified". React's
-      // `onChange` still fires per keystroke for text inputs, so the progress
-      // bar keeps its live typing updates, and for a select it rides the same
-      // native `change` as the control's own handler — one batch, no stale render.
-      onChange={refreshValues}
+      // Each control is snapshotted on the event that is safe for it, because
+      // no single event is safe for both.
+      //
+      // A <select> must NOT be snapshotted on `input`. A browser fires `input`
+      // before `change`, so snapshotting there re-rendered the tree while the
+      // select's own state was still stale — React re-applied the old controlled
+      // `value`, wiping the pick, and the `change` handler then read back "".
+      // That is why every ethnicity choice snapped to "Not specified". On
+      // `change` the form rides the same native event as the control's own
+      // handler, so both state updates land in one batch and nothing re-renders
+      // in between.
+      //
+      // A text input must NOT wait for `change`, which only fires on blur — the
+      // completion bar has to follow typing, which is what `input` gives it.
+      //
+      // Splitting them this way also keeps it at exactly one snapshot per
+      // interaction rather than two.
+      onInput={(e) => {
+        if ((e.target as HTMLElement).tagName !== "SELECT") refreshValues();
+      }}
+      onChange={(e) => {
+        if ((e.target as HTMLElement).tagName === "SELECT") refreshValues();
+      }}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
