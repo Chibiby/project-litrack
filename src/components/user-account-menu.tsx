@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { ChevronDown, ChevronUp, Settings, UserCircle } from "lucide-react";
-import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,7 +17,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { logoutAction } from "@/lib/actions/auth";
 import {
   roleSettingsPath,
   roleSettingsProfilePath,
@@ -37,7 +35,10 @@ interface UserAccountMenuProps {
   collapsed?: boolean;
 }
 
-/** Sidebar identity trigger with Profile, Settings, and Sign out. */
+/**
+ * Sidebar identity trigger with Profile and Settings. No Sign out here — the
+ * sidebar renders its own Sign out button right under this trigger.
+ */
 export function UserAccountMenu({
   role,
   userName,
@@ -135,12 +136,6 @@ export function UserAccountMenu({
             Settings
           </PrefetchLink>
         </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <form action={logoutAction}>
-          <SignOutButton className="w-full justify-start px-2" />
-        </form>
       </DropdownMenuContent>
     </DropdownMenu>
   );

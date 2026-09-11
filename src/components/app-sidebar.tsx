@@ -25,6 +25,7 @@ import {
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { UserAccountMenu } from "@/components/user-account-menu";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ApacheSparkMark } from "@/components/brand/apache-spark-mark";
 import { logoutAction } from "@/lib/actions/auth";
 import { APP_VERSION } from "@/lib/releases";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
@@ -363,6 +364,37 @@ export function AppSidebar({
         </ScrollArea>
 
         <div className={cn("shrink-0 space-y-1 py-3", isCollapsed ? "px-1.5" : "px-3")}>
+          {/*
+            Above the account block, the quietest line in the rail: it answers
+            "which version am I on" and leads to what changed, and nobody needs
+            it on the way to anything else. The collapsed rail is icon-width, so
+            it keeps only the version rather than force the rail wider. The mark
+            swaps to the brand kit's paper colourway in dark mode — the ink one
+            vanishes on a dark rail.
+          */}
+          <Link
+            href="/releases"
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md py-1 text-[11px] text-muted-foreground/80 transition-colors hover:text-foreground",
+              isCollapsed ? "justify-center" : "px-3"
+            )}
+            title={`LITRACK v${APP_VERSION} — what's new`}
+          >
+            {isCollapsed ? (
+              `v${APP_VERSION}`
+            ) : (
+              <>
+                <ApacheSparkMark className="h-3.5 w-3.5 shrink-0 dark:hidden" />
+                <ApacheSparkMark
+                  className="hidden h-3.5 w-3.5 shrink-0 dark:block"
+                  ink="#F2EFE8"
+                  accent="#C97A4A"
+                />
+                <span>{`LITRACK v${APP_VERSION} by Apache Spark`}</span>
+              </>
+            )}
+          </Link>
           <UserAccountMenu
             role={accountRole}
             userName={userName}
@@ -381,28 +413,6 @@ export function AppSidebar({
               iconOnly={isCollapsed}
             />
           </form>
-          {/*
-            Below sign-out, the quietest line in the rail: it answers "which
-            version am I on" and leads to what changed, and nobody needs it on
-            the way to anything else. The collapsed rail is icon-width, so it
-            drops the product name rather than force the rail wider.
-          */}
-          <Link
-            href="/releases"
-            onClick={onNavigate}
-            className={cn(
-              "block rounded-md py-1 text-[11px] text-muted-foreground/80 transition-colors hover:text-foreground",
-              isCollapsed ? "text-center" : "px-3"
-            )}
-            title={`LITRACK ${APP_VERSION} — what's new`}
-          >
-            {isCollapsed ? APP_VERSION : `LITRACK ${APP_VERSION}`}
-          </Link>
-          {!isCollapsed && (
-            <p className="px-3 pb-1 text-[11px] text-muted-foreground/60">
-              Developed by Apache Spark
-            </p>
-          )}
         </div>
       </div>
     );

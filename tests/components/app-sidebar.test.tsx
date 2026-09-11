@@ -1,4 +1,4 @@
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pathname = vi.hoisted(() => ({ value: "/teacher" }));
@@ -37,6 +37,7 @@ vi.mock("@/components/nav-prefetcher", () => ({
 vi.mock("@/lib/actions/auth", () => ({ logoutAction: vi.fn() }));
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { APP_VERSION } from "@/lib/releases";
 
 afterEach(cleanup);
 afterEach(() => {
@@ -110,6 +111,35 @@ describe("AppSidebar — teacher", () => {
     // SignOutButton's visible label is "Sign out".
     expect(
       screen.getAllByRole("button", { name: /sign out|log ?out/i }).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("credits Apache Spark on the version line, above the account menu", () => {
+    renderTeacherSidebar();
+    const credit = screen.getAllByText(`LITRACK v${APP_VERSION} by Apache Spark`)[0];
+    const link = credit.closest("a");
+    expect(link?.getAttribute("href")).toBe("/releases");
+    // The mark rides in the same link, in both colourways (one hidden per theme).
+    expect(link?.querySelectorAll("svg")).toHaveLength(2);
+
+    const account = screen.getAllByRole("button", { name: "Account menu" })[0];
+    expect(
+      link!.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("leaves Sign out out of the account dropdown — the footer already has one", async () => {
+    renderTeacherSidebar();
+    fireEvent.keyDown(screen.getAllByRole("button", { name: "Account menu" })[0], {
+      key: "Enter",
+    });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Profile" })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeTruthy();
+    expect(within(menu).queryByText(/sign out/i)).toBeNull();
+    // The one that stays, outside the menu.
+    expect(
+      screen.getAllByRole("button", { name: /sign out/i, hidden: true }).length
     ).toBeGreaterThan(0);
   });
 
