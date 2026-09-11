@@ -351,10 +351,21 @@ must serialise through `database-engineer`.
   `submissions.locking` switch itself.
 - Per-grade or per-section deadlines. The unit is the school.
 
-## Open question for the reviewer
+## Resolved: Super Admin may set a deadline
 
-§5 gives Super Admin the ability to set a deadline while viewing a school under
-`?schoolId=`, which is a deliberate exception to the rule that admin school
-views are read-only. It is what "Super Admin can choose which school to unlock"
-requires. If that exception is unwanted, the alternative is that a Super Admin
-asks the head to do it, and the whole admin view stays read-only.
+**Approved 2026-09-11.** A Super Admin viewing a school under `?schoolId=` may
+set that school's term deadline, a deliberate exception to the otherwise
+read-only admin school view. This is what "Super Admin can choose which school
+to unlock" requires.
+
+The exception is narrow and must stay so:
+
+- A Super Admin may set `deadlineKey` — the reopen operation.
+- A Super Admin may **not** edit term months or reset a window to derived. Those
+  stay the head's, because they describe the school's own calendar.
+- Every such write is audited as `TERM_DEADLINE_SET` with the admin's own
+  `userId` and the target `schoolId`, on top of the `ADMIN_SCHOOL_VIEW` row
+  `resolveSchoolContext` already writes.
+
+So the read-only rule holds everywhere except one field, reached through one
+action, and the audit log names who used it.
