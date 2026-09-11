@@ -3,6 +3,7 @@ import {
   ARAL_VOLUNTEER_DESIGNATION,
   schoolHeadProfileSchema,
   teacherProfileSchema,
+  teacherProfileUpdateSchema,
 } from "@/lib/validators/profile.schema";
 
 const baseFields = {
@@ -751,5 +752,40 @@ describe("teacherProfileSchema — ethnicity", () => {
       expect(parsed.data).not.toHaveProperty("ethnicity");
       expect(parsed.data).not.toHaveProperty("secondaryEthnicity");
     }
+  });
+});
+
+describe("teacherProfileUpdateSchema — Settings saves (later saves)", () => {
+  it("accepts a DEFAULT teacher with no section or grade assignment", () => {
+    // This is the bug fix: a DEFAULT teacher whose Section was released by the School Head
+    // can now save their phone number in Settings. The update schema drops the advisory
+    // requirement so Settings-only changes (like phone number) work.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    const parsed = teacherProfileUpdateSchema.safeParse(noAdvisory);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.sectionId).toBeUndefined();
+      expect(parsed.data.currentGradeAssignment).toBeUndefined();
+    }
+  });
+
+  it("still refuses the same data in the CREATE schema", () => {
+    // The CREATE (first save) schema requires advisory assignment; the UPDATE
+    // schema does not. Regression guard on the two schemas.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    expect(teacherProfileSchema.safeParse(noAdvisory).success).toBe(false);
+    expect(teacherProfileUpdateSchema.safeParse(noAdvisory).success).toBe(true);
+  });
+
+  it("still validates designation/position pairing in the UPDATE schema", () => {
+    // The advisory fields are skipped, but the structural rules still apply:
+    // a Teacher must have a Teacher position.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    const invalid = teacherProfileUpdateSchema.safeParse({
+      ...noAdvisory,
+      designation: "Teacher",
+      position: "MASTER_TEACHER_I", // Wrong: Teacher role requires Teacher I-VII
+    });
+    expect(invalid.success).toBe(false);
   });
 });

@@ -9,7 +9,11 @@ import {
   buildFullName,
 } from "@/lib/names";
 import { requireSchoolUser } from "@/lib/auth/session";
-import { teacherProfileSchema } from "@/lib/validators/profile.schema";
+import {
+  teacherProfileSchema,
+  teacherProfileUpdateSchema,
+  ARAL_VOLUNTEER_DESIGNATION,
+} from "@/lib/validators/profile.schema";
 import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -28,7 +32,6 @@ import {
   SECTION_TAKEN_ERROR,
 } from "@/lib/teachers/section-assignment";
 import { advisoryCapFor } from "@/lib/teachers/advisory-limits";
-import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -62,11 +65,20 @@ function formToObj(formData: FormData): Record<string, unknown> {
 export async function saveTeacherProfile(formData: FormData): Promise<ActionResult> {
   const user = await requireSchoolUser("TEACHER");
 
+  // Teacher once, then School Head only. Read before parsing so we can use the right schema.
+  const existing = await prisma.teacherProfile.findFirst({
+    where: { userId: user.id, user: { schoolId: user.schoolId } },
+    select: { designation: true, advisoryMode: true },
+  });
+  const isFirstSave = existing === null;
+
   const raw = formToObj(formData);
   raw.hasReadingTraining = raw.hasReadingTraining === true || raw.hasReadingTraining === "true" || raw.hasReadingTraining === "on";
   raw.hasEnglishTraining = raw.hasEnglishTraining === true || raw.hasEnglishTraining === "true" || raw.hasEnglishTraining === "on";
 
-  const parsed = teacherProfileSchema.safeParse(raw);
+  // First save requires section+grade (advisory constraints); later saves allow Settings-only changes.
+  const schema = isFirstSave ? teacherProfileSchema : teacherProfileUpdateSchema;
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
@@ -87,22 +99,12 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   const middleName = formatOptionalPersonName(middleRaw) ?? null;
   const fullName = buildFullName(firstName, middleName, lastName);
 
-  // Teacher once, then School Head only. The first save records what the
-  // teacher declared; every later save keeps what is stored, so Settings cannot
-  // be used to become multi-grade and take two more sections, or to drop a
-  // classroom by ticking Floating. `setTeacherAdvisorySetting` is the only
-  // route for changes after this.
-  const existing = await prisma.teacherProfile.findFirst({
-    where: { userId: user.id, user: { schoolId: user.schoolId } },
-    select: { designation: true, advisoryMode: true },
-  });
-  const isFirstSave = existing === null;
-
   // Prisma skips `undefined` on update — normalize optionals to null so clears persist
   // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).
+  // On a later save, if the stored designation is null, keep the submitted one (don't write null).
   const profileData = {
     ...profileFields,
-    designation: isFirstSave ? parsed.data.designation : existing.designation,
+    designation: isFirstSave || existing.designation == null ? parsed.data.designation : existing.designation,
     advisoryMode: isFirstSave ? advisoryMode : existing.advisoryMode,
     contactNumber: parsed.data.contactNumber ?? null,
     specializationOther: parsed.data.specializationOther ?? null,

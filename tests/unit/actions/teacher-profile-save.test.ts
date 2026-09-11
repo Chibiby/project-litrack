@@ -42,7 +42,7 @@ type TxCalls = {
 let sections: SectionRow[];
 let teacherRow: { advisorySectionId: string | null; taughtGrades: { id: string }[] };
 /** Existing teacher profile outside the transaction (for first-save check). */
-let existingTeacherProfile: { designation: string; advisoryMode: string } | null = null;
+let existingTeacherProfile: { designation: string | null; advisoryMode: string } | null = null;
 let calls: TxCalls;
 /**
  * Set to make the advisory `user.update` reject, simulating another teacher
@@ -712,5 +712,51 @@ describe("saveTeacherProfile — first save vs later saves", () => {
         }),
       })
     );
+  });
+
+  it("allows a later save with no section or grade (Settings-only change)", async () => {
+    // Bug fix: a DEFAULT teacher released from their section can save Settings
+    existingTeacherProfile = { designation: "Teacher", advisoryMode: "DEFAULT" };
+
+    const result = await saveTeacherProfile(
+      buildFormData({
+        sectionId: "",
+        currentGradeAssignment: "",
+        contactNumber: "+63 9123456789",
+      })
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Profile is updated (contact number), stored designation/mode unchanged
+    const upsert = calls.profileUpsert[0] as { update: Record<string, unknown> };
+    expect(upsert.update.designation).toBe("Teacher");
+    expect(upsert.update.advisoryMode).toBe("DEFAULT");
+
+    // setTeacherAdvisory is not called on later saves
+    const advisoryUpdates = calls.userUpdate.filter(
+      (u: unknown) => u && typeof u === "object" && "data" in u && typeof u.data === "object" && u.data !== null && "advisorySectionId" in u.data
+    );
+    expect(advisoryUpdates).toHaveLength(0);
+  });
+
+  it("preserves submitted designation when stored designation is null", async () => {
+    // On a later save where the stored designation is null (legacy row predating
+    // the column), keep the submitted designation instead of writing null.
+    existingTeacherProfile = { designation: null, advisoryMode: "DEFAULT" };
+
+    const result = await saveTeacherProfile(
+      buildFormData({
+        designation: "Guidance Counselor",
+        sectionId: "",
+        currentGradeAssignment: "",
+        position: "",
+      })
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Profile writes the submitted designation, not null
+    const upsert = calls.profileUpsert[0] as { update: Record<string, unknown> };
+    expect(upsert.update.designation).toBe("Guidance Counselor");
+    expect(upsert.update.advisoryMode).toBe("DEFAULT");
   });
 });

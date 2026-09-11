@@ -343,7 +343,7 @@ export const schoolHeadProfileSchema = baseProfile
   .superRefine(refineProfileConditionals);
 
 /** Names update User on save; other fields persist on TeacherProfile. */
-export const teacherProfileSchema = baseProfile
+const teacherProfileObject = baseProfile
   .merge(profileNames)
   .extend({
     designation: nonEmpty("Designation is required").max(100),
@@ -366,56 +366,83 @@ export const teacherProfileSchema = baseProfile
       .max(2, "A multi-grade teacher advises at most 3 sections")
       .default([]),
     yearsInService: teacherYearsInServiceSchema,
-  })
-  .superRefine((data, ctx) => {
-    refineProfileConditionals(data, ctx);
-    refineTeacherDesignationPosition(data, ctx);
-    refineEthnicityPair(data, ctx);
+  });
 
-    const isVolunteer = data.designation === ARAL_VOLUNTEER_DESIGNATION;
-    const extras = data.additionalSectionIds;
+/**
+ * Validate advisory constraints: volunteers and floating teachers hold no section,
+ * DEFAULT and MULTI_GRADE teachers require a section and grade assignment.
+ * Used in the CREATE schema; UPDATE schema skips this to allow Settings-only changes.
+ */
+export function refineTeacherAdvisory(
+  data: {
+    designation: string;
+    advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE";
+    sectionId?: string;
+    additionalSectionIds: string[];
+    currentGradeAssignment?: string;
+  },
+  ctx: z.RefinementCtx
+): void {
+  const isVolunteer = data.designation === ARAL_VOLUNTEER_DESIGNATION;
+  const extras = data.additionalSectionIds;
 
-    if (isVolunteer || data.advisoryMode === "FLOATING") {
-      const message = isVolunteer
-        ? "Non-DepEd ARAL Volunteers don't advise a section"
-        : "Floating teachers don't advise a section. Clear it, or untick Floating teacher";
-      if (data.sectionId !== undefined) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["sectionId"] });
-      }
-      if (extras.length > 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["additionalSectionIds"] });
-      }
-      return;
+  if (isVolunteer || data.advisoryMode === "FLOATING") {
+    const message = isVolunteer
+      ? "Non-DepEd ARAL Volunteers don't advise a section"
+      : "Floating teachers don't advise a section. Clear it, or untick Floating teacher";
+    if (data.sectionId !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["sectionId"] });
     }
+    if (extras.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["additionalSectionIds"] });
+    }
+    return;
+  }
 
-    if (data.currentGradeAssignment === undefined) {
+  if (data.currentGradeAssignment === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a grade level",
+      path: ["currentGradeAssignment"],
+    });
+  }
+  if (data.sectionId === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a section", path: ["sectionId"] });
+  }
+  if (data.advisoryMode === "DEFAULT" && extras.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Tick Multi-grade advisory to add more than one section",
+      path: ["additionalSectionIds"],
+    });
+  }
+  if (data.advisoryMode === "MULTI_GRADE") {
+    const all = [data.sectionId, ...extras].filter((id): id is string => Boolean(id));
+    if (new Set(all).size !== all.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Select a grade level",
-        path: ["currentGradeAssignment"],
-      });
-    }
-    if (data.sectionId === undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a section", path: ["sectionId"] });
-    }
-    if (data.advisoryMode === "DEFAULT" && extras.length > 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Tick Multi-grade advisory to add more than one section",
+        message: "Pick each section only once",
         path: ["additionalSectionIds"],
       });
     }
-    if (data.advisoryMode === "MULTI_GRADE") {
-      const all = [data.sectionId, ...extras].filter((id): id is string => Boolean(id));
-      if (new Set(all).size !== all.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Pick each section only once",
-          path: ["additionalSectionIds"],
-        });
-      }
-    }
-  });
+  }
+}
+
+/** CREATE schema: teacher's first save, includes advisory constraints. */
+export const teacherProfileSchema = teacherProfileObject.superRefine((data, ctx) => {
+  refineProfileConditionals(data, ctx);
+  refineTeacherDesignationPosition(data, ctx);
+  refineEthnicityPair(data, ctx);
+  refineTeacherAdvisory(data, ctx);
+});
+
+/** UPDATE schema: teacher's later saves, skips advisory constraints so Settings-only changes work. */
+export const teacherProfileUpdateSchema = teacherProfileObject.superRefine((data, ctx) => {
+  refineProfileConditionals(data, ctx);
+  refineTeacherDesignationPosition(data, ctx);
+  refineEthnicityPair(data, ctx);
+});
 
 export type SchoolHeadProfileInput = z.infer<typeof schoolHeadProfileSchema>;
 export type TeacherProfileInput = z.infer<typeof teacherProfileSchema>;
+export type TeacherProfileUpdateInput = z.infer<typeof teacherProfileUpdateSchema>;
