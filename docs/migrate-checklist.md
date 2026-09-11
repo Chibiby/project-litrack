@@ -558,6 +558,47 @@ throughout and still holds the first of each teacher's sections.
 
 ---
 
+## (i) Release channel  —  Sep 2026
+
+`20260911000002_release_channel`. **Apply this BEFORE the release-channel code
+reaches production. This is not a same-deploy nicety — it is an outage if missed.**
+
+`getCurrentUser` loads the user with a bare `findUnique` and no `select`, so the
+generated client asks for every column the schema names. Once the code ships, every
+signed-in request selects `User.lastSeenReleaseVersion`; if the column is not there
+yet, every authenticated page fails with P2022. Applied first, it is invisible — the
+running code ignores a column it does not know about.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260911000002_release_channel` | Adds `User.lastSeenReleaseVersion` (nullable TEXT) and the `NotificationType.RELEASE_PUBLISHED` enum value. No backfill, no data movement. | No. Additive; both statements guarded by `IF NOT EXISTS`. |
+
+Not backfilled on purpose: every existing user has acknowledged nothing, and NULL
+says so. Setting it to the current version would mark the whole user base as having
+read notes they were never shown.
+
+### Steps
+
+1. Apply, from the branch that carries the file (`main` does not until it merges):
+   ```powershell
+   npx prisma migrate deploy   # DIRECT_URL (port 5432), never the pooler
+   ```
+2. Confirm:
+   ```powershell
+   npx prisma migrate status   # expect "Database schema is up to date!"
+   ```
+3. Deploy the code. Then sign in as a teacher: the 1.1.0 notes open once the login
+   splash clears. Close them any way — "Got it", ✕ or Escape — and reload: they do
+   not come back. The bell shows "What's new in LITRACK 1.1.0"; opening it clears it.
+
+### Rollback
+
+Drop the column (`ALTER TABLE "User" DROP COLUMN "lastSeenReleaseVersion"`) only
+after reverting the code — the reverse of the apply order, for the same reason.
+Postgres cannot drop an enum value; `RELEASE_PUBLISHED` is harmless left in place.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

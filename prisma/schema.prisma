@@ -397,6 +397,11 @@ enum NotificationType {
   /// A school member opened or added to their private line to the admin team.
   /// Recipients are the Super Admins.
   CHAT_DIRECT_MESSAGE
+  /// A release the recipient had not acknowledged was shown to them. Written
+  /// lazily by `announceRelease` when that user next arrives — never fanned out
+  /// to every row at release time. Its bell text is composed at read time in
+  /// `fetchReleaseAlert`, like the chat types above.
+  RELEASE_PUBLISHED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -582,6 +587,12 @@ model User {
   /// `AuditLog.userId` already have and for the same reason. Nothing reads it,
   /// so a stale id after a section is deleted costs nothing; Wave B removes it.
   advisorySectionId         String?                @unique
+  /// The release version this user acknowledged, or null for one who has
+  /// acknowledged none. A version string rather than a boolean or a timestamp on
+  /// purpose: it survives a rollback (someone who saw 1.1.0 and is then served
+  /// 1.0.9 is not re-interrupted) and it records WHICH release they saw, which a
+  /// boolean cannot. Written on acknowledgement, never on display.
+  lastSeenReleaseVersion    String?
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?
