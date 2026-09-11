@@ -10,7 +10,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * errors; recording those would bury real failures under every sign-in bounce.
  */
 
-const reportError = vi.fn(() => "E-IGNORED");
+// Parameters declared so the assertions below can index into `mock.calls`;
+// `vi.fn(() => …)` alone infers a zero-argument tuple.
+const reportError = vi.fn((..._args: unknown[]) => "E-IGNORED");
 vi.mock("@/lib/errors/report", () => ({
   get reportError() {
     return reportError;
