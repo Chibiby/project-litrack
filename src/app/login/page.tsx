@@ -1,4 +1,8 @@
 import { listSchoolsWithTeacherStatus } from "@/lib/actions/school";
+import { sessionEndCode } from "@/lib/auth/session-end";
+import { formatMessage, withReference } from "@/lib/errors/codes";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import { LoginForm } from "@/components/forms/login-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import Image from "next/image";
@@ -17,24 +21,31 @@ import Image from "next/image";
  */
 
 type LoginPageProps = {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ reason?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
-  const loginError =
-    typeof params.error === "string" && params.error.trim()
-      ? params.error.trim()
-      : undefined;
+  // An allow-listed token, never text from the URL: this page used to render
+  // `?error=<anything>` straight into a toast.
+  const endedCode = sessionEndCode(params.reason);
+  const loginError = endedCode ? formatMessage(endedCode) : undefined;
 
   let schools: Awaited<ReturnType<typeof listSchoolsWithTeacherStatus>> = [];
-  let configUnavailable = false;
+  let schoolsUnavailable: string | null = null;
 
   try {
     schools = await listSchoolsWithTeacherStatus();
-  } catch {
-    // DATABASE_URL missing or Prisma unavailable — still render login UI.
-    configUnavailable = true;
+  } catch (err) {
+    // An unreachable database and a missing DATABASE_URL are different problems
+    // with different fixes, and "no schools available" told the visitor neither.
+    // The variable names stay in the admin record; the person gets a reference.
+    const appError = classifyError(err, { verb: "load the school list" });
+    const ref = reportError(appError, { route: "/login", routeType: "render" });
+    schoolsUnavailable = withReference(
+      appError.message,
+      appError.severity === "system" ? ref : undefined
+    );
   }
 
   return (
@@ -58,10 +69,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">PROJECT LITRACK</h1>
             <p className="text-sm text-muted-foreground">School reading-profiling system</p>
           </div>
-          {configUnavailable ? (
-            <p className="text-center text-sm text-muted-foreground">
-              App is not fully configured. No schools available.
-            </p>
+          {schoolsUnavailable ? (
+            <p className="text-center text-sm text-muted-foreground">{schoolsUnavailable}</p>
           ) : null}
           <LoginForm schools={schools} loginError={loginError} />
           <p className="text-center text-xs text-muted-foreground">

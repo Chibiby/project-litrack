@@ -5,11 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { logoutAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DECLINED_REGISTRATION_MESSAGE,
-  DEACTIVATED_TEACHER_MESSAGE,
-  isDeactivatedTeacher,
-} from "@/lib/auth/teacher-registration";
+import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration";
+import { loginPath } from "@/lib/auth/session-end";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +26,12 @@ export default async function AccountCreatedPage() {
 
   if (user.approvalStatus === "REJECTED") {
     await signOut();
-    redirect(`/login?error=${encodeURIComponent(DECLINED_REGISTRATION_MESSAGE)}`);
+    redirect(loginPath("school", "declined"));
   }
 
   if (isDeactivatedTeacher(user)) {
     await signOut();
-    redirect(`/login?error=${encodeURIComponent(DEACTIVATED_TEACHER_MESSAGE)}`);
+    redirect(loginPath("school", "deactivated"));
   }
 
   if (user.approvalStatus === "APPROVED" && user.isActive) {

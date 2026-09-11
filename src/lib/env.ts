@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { AppError } from "@/lib/errors/app-error";
 
 /**
  * Server-side environment validation.
@@ -76,9 +77,13 @@ export function getServerEnv(): ServerEnv {
   const parsed = serverEnvSchema.safeParse(readEnvInput());
   if (!parsed.success) {
     const missing = missingVarNames(parsed.error.issues);
-    throw new Error(
-      `Missing or invalid environment variables: ${missing.join(", ")}`
-    );
+    // Names only, never values — and now carrying a code the handler can
+    // classify, so a misconfigured server tells the person "not set up yet"
+    // while the variable names go only to the admin record.
+    throw new AppError("CONFIG_MISSING", {
+      detail: `Missing or invalid environment variables: ${missing.join(", ")}`,
+      context: { reason: "env_missing" },
+    });
   }
 
   if (!parsed.data.SUPABASE_SERVICE_ROLE_KEY && !warnedMissingServiceRole) {

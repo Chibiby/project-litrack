@@ -1,31 +1,54 @@
 import { describe, expect, it } from "vitest";
+import { AppError } from "@/lib/errors/app-error";
 import { assertSameSchool } from "@/lib/auth/tenant";
 
-function tryAssert(userSchoolId: string, resourceSchoolId: string | null | undefined) {
+/**
+ * Cross-tenant leakage is the worst bug shippable here, and the defence is a
+ * refusal that reveals nothing: a learner in another school and a learner that
+ * never existed must be indistinguishable to the person asking. What separates
+ * them is the admin record, where a cross-tenant attempt is worth reviewing and
+ * a missing row is not.
+ */
+
+function caught(userSchoolId: string, resourceSchoolId: string | null | undefined, resource?: string) {
   try {
-    assertSameSchool(userSchoolId, resourceSchoolId);
-    return { ok: true as const };
+    assertSameSchool(userSchoolId, resourceSchoolId, resource);
+    return null;
   } catch (err) {
-    return {
-      ok: false as const,
-      message: err instanceof Error ? err.message : String(err),
-    };
+    if (!(err instanceof AppError)) throw err;
+    return err;
   }
 }
 
 describe("assertSameSchool", () => {
   it("passes when school ids match", () => {
-    expect(tryAssert("school-a", "school-a")).toEqual({ ok: true });
+    expect(caught("school-a", "school-a")).toBeNull();
   });
 
-  it("throws Not found on mismatch", () => {
-    const r = tryAssert("school-a", "school-b");
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toBe("Not found");
+  it("refuses another school's row and a missing one with the SAME message", () => {
+    const foreign = caught("school-a", "school-b");
+    const missing = caught("school-a", null);
+    expect(foreign?.code).toBe("NOT_FOUND");
+    expect(missing?.code).toBe("NOT_FOUND");
+    expect(foreign?.message).toBe(missing?.message);
+    expect(caught("school-a", undefined)?.code).toBe("NOT_FOUND");
   });
 
-  it("throws Not found when resource school is null/undefined", () => {
-    expect(tryAssert("school-a", null).ok).toBe(false);
-    expect(tryAssert("school-a", undefined).ok).toBe(false);
+  it("names the resource when asked, without leaking which case it was", () => {
+    const err = caught("school-a", "school-b", "Learner");
+    expect(err?.message).toBe("Learner not found. It may have been deleted or moved.");
+    expect(err?.message).not.toContain("school-b");
+  });
+
+  it("records a cross-tenant attempt as a security event, a missing row as ordinary", () => {
+    expect(caught("school-a", "school-b")?.severity).toBe("security");
+    expect(caught("school-a", "school-b")?.context.crossTenant).toBe(true);
+    expect(caught("school-a", null)?.severity).toBe("user");
+  });
+
+  it("keeps the other school's id for admins only", () => {
+    const err = caught("school-a", "school-b");
+    expect(err?.detail).toContain("school-b");
+    expect(err?.message).not.toContain("school-b");
   });
 });
