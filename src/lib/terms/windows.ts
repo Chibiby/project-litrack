@@ -30,6 +30,28 @@ export type TermWindow = {
   startKey: string;
   /** Local `YYYY-MM-DD` of the last day of the window's last month. */
   endKey: string;
+  /**
+   * Local `YYYY-MM-DD` of the last day grades may be encoded. Equals `endKey`
+   * for a derived window, and is the ONLY key `isTermLocked` consults, so a
+   * School Head can extend entry without moving the months the sheet displays.
+   */
+  deadlineKey: string;
+  /** True when a `TermWindowOverride` row supplied this window's dates. */
+  isOverridden: boolean;
+};
+
+/**
+ * The shape `getTermWindows` accepts for an override.
+ *
+ * Declared structurally rather than imported from `@prisma/client` so this
+ * module stays pure and dependency-free — a Prisma row satisfies it, and so does
+ * a literal in a test.
+ */
+export type TermWindowOverrideInput = {
+  term: TermPeriodValue;
+  startKey: string;
+  endKey: string;
+  deadlineKey: string;
 };
 
 const TERM_LABELS: Record<TermPeriodValue, string> = {
@@ -68,7 +90,10 @@ const MONTH_NAMES = [
  * `2026-07-31T16:00:00Z`; reading the UTC month would put Term 1 in July and
  * shift all three windows a month early.
  */
-export function getTermWindows(schoolYearStart: Date): TermWindow[] {
+export function getTermWindows(
+  schoolYearStart: Date,
+  overrides: TermWindowOverrideInput[] = []
+): TermWindow[] {
   const [year, month] = formatLocalDateKey(schoolYearStart)
     .slice(0, 7)
     .split("-")
@@ -76,21 +101,57 @@ export function getTermWindows(schoolYearStart: Date): TermWindow[] {
   const anchor = new Date(year, month - 1, 1);
 
   return TERM_PERIODS.map((term, index) => {
+    const override = overrides.find((o) => o.term === term);
+    if (override) {
+      return {
+        term,
+        label: TERM_LABELS[term],
+        rangeLabel: rangeLabelFor(override.startKey, override.endKey),
+        startKey: override.startKey,
+        endKey: override.endKey,
+        deadlineKey: override.deadlineKey,
+        isOverridden: true,
+      };
+    }
+
     const start = addMonths(anchor, index * 3);
     const end = monthEndDay(addMonths(anchor, index * 3 + 2));
+    const endKey = formatLocalDateKey(end);
     return {
       term,
       label: TERM_LABELS[term],
       rangeLabel: `${MONTH_NAMES[start.getMonth()]} - ${MONTH_NAMES[end.getMonth()]}`,
       startKey: formatLocalDateKey(start),
-      endKey: formatLocalDateKey(end),
+      endKey,
+      // A derived window's deadline IS its month end. Every lock behaves exactly
+      // as it did before this parameter existed until a head changes something.
+      deadlineKey: endKey,
+      isOverridden: false,
     };
   });
 }
 
 /**
- * A term is locked once its last day has passed — inclusive on the last day
- * itself, so a teacher encoding on October 31 is still open.
+ * "August - September" from two date keys.
+ *
+ * Reads the month off the KEY's own characters rather than constructing a
+ * `Date`, for the reason this module's header gives: a key is already local, and
+ * parsing it into a `Date` only to read `.getMonth()` reintroduces the timezone
+ * question the key exists to settle.
+ */
+function rangeLabelFor(startKey: string, endKey: string): string {
+  const startMonth = Number(startKey.slice(5, 7)) - 1;
+  const endMonth = Number(endKey.slice(5, 7)) - 1;
+  return `${MONTH_NAMES[startMonth]} - ${MONTH_NAMES[endMonth]}`;
+}
+
+/**
+ * A term is locked once its DEADLINE has passed — inclusive on the deadline
+ * itself, so a teacher encoding on the last day is still open.
+ *
+ * The deadline, not the months. For a derived window the two are the same day;
+ * for an extended one the months describe what the sheet is called and the
+ * deadline decides what may be written into it.
  *
  * `todayKey` must come from `formatLocalDateKey(schoolToday())`, never from a
  * bare `new Date()`: the server runs in UTC and the school in UTC+8, so between
@@ -101,7 +162,7 @@ export function getTermWindows(schoolYearStart: Date): TermWindow[] {
  * arithmetic entirely.
  */
 export function isTermLocked(window: TermWindow, todayKey: string): boolean {
-  return todayKey > window.endKey;
+  return todayKey > window.deadlineKey;
 }
 
 /** The window for a term string, or `null` when it names no term. */
@@ -110,4 +171,49 @@ export function resolveTermWindow(
   term: string
 ): TermWindow | null {
   return windows.find((w) => w.term === term) ?? null;
+}
+
+/**
+ * The rule set a School Head's edit must satisfy, or `null` when it does.
+ *
+ * Validated against the EFFECTIVE three windows — derived thirds with any
+ * overrides already applied — never against the stored rows alone. That is what
+ * makes sparse storage safe: a head who overrides only Term 2 is still checked
+ * against derived Terms 1 and 3, so a partial edit cannot open a gap.
+ *
+ * Returns a message naming the specific violation, because "invalid dates" gives
+ * a head no way to fix what they typed.
+ *
+ * Deadlines are deliberately exempt from the cross-term ordering rule: Term 1's
+ * deadline running past Term 2's start is the feature, not a violation.
+ */
+export function validateTermWindows(
+  windows: TermWindow[],
+  yearStartKey: string,
+  yearEndKey: string
+): string | null {
+  for (const w of windows) {
+    if (w.startKey > w.endKey) {
+      return `${w.label} ends before it starts.`;
+    }
+    if (w.deadlineKey < w.endKey) {
+      return `${w.label}'s deadline is before the term ends.`;
+    }
+    if (w.startKey < yearStartKey) {
+      return `${w.label} starts before the school year does.`;
+    }
+    if (w.endKey > yearEndKey) {
+      return `${w.label} ends after the school year does.`;
+    }
+  }
+
+  for (let i = 1; i < windows.length; i++) {
+    const previous = windows[i - 1];
+    const current = windows[i];
+    if (current.startKey <= previous.endKey) {
+      return `${current.label} starts before ${previous.label} ends.`;
+    }
+  }
+
+  return null;
 }
