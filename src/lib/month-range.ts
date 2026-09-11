@@ -1,4 +1,4 @@
-import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { addDays, formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 
 /**
  * Month labels and bounds for the ARAL reading-level cadence, in one place so
@@ -9,13 +9,11 @@ import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-k
  * on the server and hydrate in the browser, and the two do not always ship the
  * same ICU locale data. A mismatch would be a hydration error.
  *
- * A note on what these helpers do NOT mean: nothing in the schema stores a
- * "submitted" or "locked" state for reading levels, and
- * `src/lib/dashboard/teacher-overview.ts` deliberately refuses to imply one.
- * These helpers describe the program's monthly *cadence* — a due date a teacher
- * is working toward. Callers must not render a past month as read-only, because
- * no server rule enforces that and claiming otherwise would tell a teacher a
- * rule the system does not actually have.
+ * The reading-level deadline is enforced server-side in
+ * `bulkRecordMonthlyReadingLevel` (`src/lib/actions/reading-level.ts`), gated by
+ * a program-wide switch that currently defaults to unlocked. Callers here just
+ * compute the same date and its label so the banner a teacher reads and the
+ * rule the action enforces can never drift apart.
  */
 const MONTHS = [
   "January",
@@ -76,6 +74,24 @@ export function formatMonthLabel(monthKey: string): string {
 /** `August 31, 2026` — the last day of the month, spelled out. */
 export function formatMonthEndLongDate(monthKey: string): string {
   const d = monthEndDay(parseLocalDateKey(monthKey));
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/** Days a month stays editable after it ends, mirroring `ATTENDANCE_EDIT_GRACE_DAYS`. */
+export const READING_LEVEL_EDIT_GRACE_DAYS = 7;
+
+/**
+ * Last day a month's reading levels can still be saved: the month's last day
+ * plus the grace period, at local midnight. `bulkRecordMonthlyReadingLevel`
+ * rejects saves past this date once the program-wide lock switch is on.
+ */
+export function readingLevelDeadline(monthKey: string): Date {
+  return addDays(monthEndDay(parseLocalDateKey(monthKey)), READING_LEVEL_EDIT_GRACE_DAYS);
+}
+
+/** `September 7, 2026` — the reading-level deadline, spelled out like `formatLongDate`. */
+export function formatMonthDeadlineLongDate(monthKey: string): string {
+  const d = readingLevelDeadline(monthKey);
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 

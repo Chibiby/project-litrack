@@ -28,6 +28,7 @@ import {
   monthStartOf,
   nextMonthStart,
 } from "@/lib/month-range";
+import { readMonthlyReadingLevelLockState } from "@/lib/unlock/reading-level-window";
 import { CalendarCheck, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -289,6 +290,18 @@ async function AralMonthlyReadingLevelGrid({
     fullName: l.fullName,
   }));
 
+  // The panel is a client component, so the lock state has to travel as props
+  // — it renders the banner and gates the grid itself with the same rules
+  // `bulkRecordMonthlyReadingLevel` enforces, or a locked month could still look
+  // editable. Super Admin already renders the whole panel `readOnly`, so the
+  // lock state itself is never consulted for them and the query is skipped.
+  const lockState = isSuperAdmin
+    ? { lockingEnabled: true, programUnlockAll: true, unlockedMonths: [] as string[] }
+    : await readMonthlyReadingLevelLockState({
+        userId: user.id,
+        schoolId: user.schoolId,
+      });
+
   return (
     <AralMonthlyReadingLevelPanel
       // Remount when the filtered roster changes: the panel holds the record
@@ -312,6 +325,9 @@ async function AralMonthlyReadingLevelGrid({
       totalPages={pageCount}
       totalCount={totalCount}
       readOnly={isSuperAdmin}
+      lockingEnabled={lockState.lockingEnabled}
+      programUnlockAll={lockState.programUnlockAll}
+      unlockedMonths={lockState.unlockedMonths}
     />
   );
 }

@@ -233,7 +233,11 @@ export default async function AralGradeTermsReportsPage({
   // grant was read, not that the teacher holds none.
   const unlock = isSuperAdmin
     ? { lockingEnabled: true, unlockedKeys: new Set<string>() }
-    : await readUnlockState(user.id, "TERM_GRADES");
+    : await readUnlockState({
+        userId: user.id,
+        schoolId: user.schoolId,
+        scope: "TERM_GRADES",
+      });
   const isEncodingClosed = (w: TermWindow) =>
     unlock.lockingEnabled &&
     isTermLocked(w, todayKey) &&

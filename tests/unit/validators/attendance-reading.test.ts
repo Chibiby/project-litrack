@@ -343,17 +343,37 @@ describe("readingLevelMonthlyBulkSchema", () => {
     expect(res.data.entries[0]?.writingLevel).toBeUndefined();
   });
 
-  it("rejects entries missing WR or RC", () => {
+  it("accepts an entry missing WR or RC — the monthly sheet stores partial rows", () => {
+    // Deliberately the inverse of what this asserted before partial saves
+    // landed. A teacher who has assessed the two profiles but not yet the two
+    // levels must be able to keep that work; refusing the whole payload threw
+    // away every other row on the page. The single-record `readingLevelSchema`
+    // stays strict — see the case below.
+    const res = readingLevelMonthlyBulkSchema.safeParse({
+      monthStart: "2026-08-01",
+      entries: [
+        {
+          learnerId: "l1",
+          englishProfile: "INSTRUCTIONAL_DEVELOPING",
+          filipinoProfile: "INDEPENDENT_GRADE_READY",
+        },
+      ],
+    });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.entries[0]?.englishProfile).toBe("INSTRUCTIONAL_DEVELOPING");
+    expect(res.data.entries[0]?.wordRecognitionLevel).toBeUndefined();
+  });
+
+  it("still rejects a single-record save missing WR or RC", () => {
+    // The asymmetry is the point: one deliberate assessment with a blank field
+    // is a mistake, a bulk sheet with a blank field is a work in progress.
     expect(
-      readingLevelMonthlyBulkSchema.safeParse({
-        monthStart: "2026-08-01",
-        entries: [
-          {
-            learnerId: "l1",
-            englishProfile: "INSTRUCTIONAL_DEVELOPING",
-            filipinoProfile: "INDEPENDENT_GRADE_READY",
-          },
-        ],
+      readingLevelSchema.safeParse({
+        learnerId: "l1",
+        weekStart: "2026-08-03",
+        englishProfile: "INSTRUCTIONAL_DEVELOPING",
+        filipinoProfile: "INDEPENDENT_GRADE_READY",
       }).success,
     ).toBe(false);
   });

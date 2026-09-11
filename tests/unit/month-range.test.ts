@@ -3,12 +3,14 @@ import {
   addMonths,
   currentMonthKey,
   daysLeftInMonth,
+  formatMonthDeadlineLongDate,
   formatMonthEndLongDate,
   formatMonthKey,
   formatMonthLabel,
   monthEndDay,
   monthStartOf,
   nextMonthStart,
+  readingLevelDeadline,
 } from "@/lib/month-range";
 
 /**
@@ -103,5 +105,49 @@ describe("the school's current month", () => {
     expect(daysLeftInMonth("2026-08-01")).toBe(0);
     expect(daysLeftInMonth("2026-07-01")).toBe(-31);
     expect(daysLeftInMonth("2026-09-01")).toBe(30);
+  });
+});
+
+describe("the reading-level deadline", () => {
+  const originalTz = process.env.TZ;
+
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it("is the month's last day plus the grace period", () => {
+    const deadline = readingLevelDeadline("2026-08-01");
+    expect(deadline.getFullYear()).toBe(2026);
+    expect(deadline.getMonth()).toBe(8); // September
+    expect(deadline.getDate()).toBe(7);
+  });
+
+  it("rolls into March for a February month", () => {
+    const deadline = readingLevelDeadline("2026-02-01");
+    expect(deadline.getFullYear()).toBe(2026);
+    expect(deadline.getMonth()).toBe(2); // March
+    expect(deadline.getDate()).toBe(7);
+  });
+
+  it("rolls the year at the December/January boundary", () => {
+    const deadline = readingLevelDeadline("2026-12-01");
+    expect(deadline.getFullYear()).toBe(2027);
+    expect(deadline.getMonth()).toBe(0); // January
+    expect(deadline.getDate()).toBe(7);
+  });
+
+  it("stays on the intended local day when pinned to Asia/Manila, proving no UTC drift", () => {
+    process.env.TZ = "Asia/Manila";
+    const deadline = readingLevelDeadline("2026-08-01");
+    expect(deadline.getFullYear()).toBe(2026);
+    expect(deadline.getMonth()).toBe(8); // September
+    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getHours()).toBe(0);
+  });
+
+  it("spells the deadline out the same way the attendance deadline reads", () => {
+    expect(formatMonthDeadlineLongDate("2026-08-01")).toBe("September 7, 2026");
+    expect(formatMonthDeadlineLongDate("2026-12-01")).toBe("January 7, 2027");
+    expect(formatMonthDeadlineLongDate("2028-02-01")).toBe("March 7, 2028");
   });
 });

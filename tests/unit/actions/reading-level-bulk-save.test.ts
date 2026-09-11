@@ -129,12 +129,20 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
     }));
 });
 
+const learnerUpdate = vi.fn();
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     get $transaction() {
       return transaction;
     },
-    learner: { findMany: (...a: unknown[]) => learnerFindMany(...(a as [never])) },
+    learner: {
+      findMany: (...a: unknown[]) => learnerFindMany(...(a as [never])),
+      // Never called by this action — the intake fields `Learner.englishReadingProfile`
+      // / `filipinoReadingProfile` are owned by the learner form and CSV import, and
+      // a monthly reading-level save (upsert or clear) must never touch them.
+      update: (...a: unknown[]) => learnerUpdate(...(a as [never])),
+    },
   },
 }));
 
@@ -149,13 +157,45 @@ vi.mock("@/lib/auth/session", () => ({
 const writeAudit = vi.fn(async (_e: { metadata: Record<string, unknown> }) => {});
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...a: unknown[]) => writeAudit(...(a as [never])),
-  AUDIT_ACTIONS: { READING_LEVEL_BULK_RECORD: "READING_LEVEL_BULK_RECORD" },
+  AUDIT_ACTIONS: {
+    READING_LEVEL_BULK_RECORD: "READING_LEVEL_BULK_RECORD",
+    UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
+    UNLOCK_SCHOOL_GRANT_USED: "UNLOCK_SCHOOL_GRANT_USED",
+  },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateLearnerScoped: vi.fn(),
   revalidateTeacherDashboard: vi.fn(),
+}));
+
+type WindowVerdict = {
+  writable: boolean;
+  reason: "in-window" | "locking-off" | "program-unlocked" | "granted" | "locked";
+  deadline: Date;
+  grantId: string | null;
+  grantKind: "user" | "school" | null;
+};
+
+/**
+ * The deadline gate. Defaults to "in-window" so every pre-existing test below
+ * keeps exercising the write path without also depending on the real
+ * system clock — `resolveMonthlyReadingLevelWindow` itself is covered on its
+ * own terms in `tests/unit/unlock-reading-level-window.test.ts`.
+ */
+const resolveMonthlyReadingLevelWindow = vi.fn(
+  async (_arg?: unknown): Promise<WindowVerdict> => ({
+    writable: true,
+    reason: "in-window",
+    deadline: new Date(2026, 8, 7),
+    grantId: null,
+    grantKind: null,
+  })
+);
+vi.mock("@/lib/unlock/reading-level-window", () => ({
+  resolveMonthlyReadingLevelWindow: (...a: unknown[]) =>
+    resolveMonthlyReadingLevelWindow(a[0]),
 }));
 
 const { bulkRecordMonthlyReadingLevel } = await import("@/lib/actions/reading-level");
@@ -171,8 +211,12 @@ function entry(learnerId: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
-function post(entries: Record<string, unknown>[], monthStart = "2026-08-15") {
-  return bulkRecordMonthlyReadingLevel({ monthStart, entries });
+function post(
+  entries: Record<string, unknown>[],
+  monthStart = "2026-08-15",
+  clears: string[] = []
+) {
+  return bulkRecordMonthlyReadingLevel({ monthStart, entries, clears });
 }
 
 beforeEach(() => {
@@ -180,13 +224,20 @@ beforeEach(() => {
   learnerIds = ["learner-a", "learner-b"];
   rawCalls = [];
   dropOneReturnedRow = false;
+  resolveMonthlyReadingLevelWindow.mockResolvedValue({
+    writable: true,
+    reason: "in-window",
+    deadline: new Date(2026, 8, 7),
+    grantId: null,
+    grantKind: null,
+  });
 });
 
 describe("bulkRecordMonthlyReadingLevel — the month anchor", () => {
   it("normalizes any day in the month to the 1st and binds it as text", async () => {
     const res = await post([entry("learner-a")], "2026-08-15");
 
-    expect(res).toEqual({ ok: true, data: { upserted: 1 } });
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
     expect(rawCalls).toHaveLength(1);
     // The column is named `weekStart` but holds the MONTH anchor — one canonical
     // row per learner per month, reusing @@unique([learnerId, weekStart]).
@@ -211,7 +262,7 @@ describe("bulkRecordMonthlyReadingLevel — dedupe before ON CONFLICT", () => {
       entry("learner-a", { notes: "second, wins" }),
     ]);
 
-    expect(res).toEqual({ ok: true, data: { upserted: 1 } });
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
     expect(rawCalls).toHaveLength(1);
     expect(rawCalls[0].params).toContain("second, wins");
     expect(rawCalls[0].params).not.toContain("first");
@@ -230,7 +281,7 @@ describe("bulkRecordMonthlyReadingLevel — payload size", () => {
 
     const res = await post(learnerIds.map((id) => entry(id)));
 
-    expect(res).toEqual({ ok: true, data: { upserted: 200 } });
+    expect(res).toEqual({ ok: true, data: { upserted: 200, cleared: 0 } });
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(rawCalls).toHaveLength(2);
   });
@@ -319,5 +370,169 @@ describe("bulkRecordMonthlyReadingLevel — tenancy", () => {
     expect(res.ok).toBe(false);
     expect(queryRaw).not.toHaveBeenCalled();
     expect(transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — partial rows reach SQL as NULL", () => {
+  it("binds the fields a teacher has not filled in yet as NULL, not as a rejection", async () => {
+    // Only two of the six value fields are present. Under the old all-required
+    // `bulkEntryFields` this row would have been rejected by Zod before ever
+    // reaching the roster query or SQL — this is the regression the nullable
+    // `ReadingProfile` column and the partial schema exist to fix.
+    const res = await post([
+      {
+        learnerId: "learner-a",
+        englishProfile: "INSTRUCTIONAL_DEVELOPING",
+        filipinoProfile: "INDEPENDENT_GRADE_READY",
+      },
+    ]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+    expect(rawCalls).toHaveLength(1);
+    expect(rawCalls[0].sql).toContain("INSERT INTO");
+    // wordRecognitionLevel, readingComprehensionLevel, writingLevel, notes are
+    // all absent — four NULL binds, two of which (word recognition, reading
+    // comprehension) were REQUIRED enums before this change.
+    expect(rawCalls[0].params.filter((p) => p === null)).toHaveLength(4);
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — clears", () => {
+  it("deletes by month RANGE, not by the anchor", async () => {
+    const res = await post([], "2026-08-15", ["learner-a"]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 0, cleared: 1 } });
+    expect(rawCalls).toHaveLength(1);
+    expect(rawCalls[0].sql).toContain('DELETE FROM "ReadingLevelRecord"');
+    expect(rawCalls[0].sql).toContain('r."weekStart" >=');
+    expect(rawCalls[0].sql).toContain('r."weekStart" <');
+    // Same belt-and-braces the INSERT carries — a non-ARAL learner's stray row
+    // must not be reachable by this DELETE even though the upstream `findMany`
+    // already excludes non-ARAL learners from `clearIds`.
+    expect(rawCalls[0].sql).toContain('l."isAralLearner" = TRUE');
+    // A range's two bounds, not a single anchor equality — this is what lets a
+    // legacy 2026-08-10 row and the 2026-08-01 anchor both fall inside one
+    // DELETE, where an exact `= '2026-08-01'` would miss the legacy row and
+    // let it reappear on the next render.
+    expect(rawCalls[0].params).toContain("2026-08-01");
+    expect(rawCalls[0].params).toContain("2026-09-01");
+  });
+
+  it("skips the INSERT statement entirely on a clears-only save", async () => {
+    await post([], "2026-08-15", ["learner-a"]);
+
+    expect(rawCalls).toHaveLength(1);
+    expect(rawCalls[0].sql).not.toContain("INSERT INTO");
+  });
+
+  it("counts cleared as the returned row count, not the submitted id count", async () => {
+    // The fake JOIN silently drops one id, exactly as a soft-deleted or
+    // cross-tenant row would in Postgres. There is no RETURNING-count guard on
+    // the DELETE path (clearing an already-empty month is not an error), so
+    // `cleared` must reflect what was actually deleted.
+    dropOneReturnedRow = true;
+
+    const res = await post([], "2026-08-15", ["learner-a", "learner-b"]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 0, cleared: 1 } });
+  });
+
+  it("aborts the whole batch when a clear id is in another tenant", async () => {
+    const res = await post([], "2026-08-15", [CROSS_TENANT_LEARNER]);
+
+    expect(res.ok).toBe(false);
+    expect(queryRaw).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("never calls prisma.learner.update — intake profile fields are untouched", async () => {
+    await post([entry("learner-a")], "2026-08-15", []);
+    await post([], "2026-08-15", ["learner-b"]);
+
+    expect(learnerUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
+  it("refuses before any learner query when the window is locked", async () => {
+    resolveMonthlyReadingLevelWindow.mockResolvedValue({
+      writable: false,
+      reason: "locked",
+      deadline: new Date(2026, 8, 7),
+      grantId: null,
+      grantKind: null,
+    });
+
+    const res = await post([entry("learner-a")]);
+
+    expect(res.ok).toBe(false);
+    expect((res as { error: string }).error).toBe(
+      "This month is locked. Editing closed on September 7, 2026."
+    );
+    // The whole point of ordering the gate first: a refused save never reads
+    // the roster and never opens a transaction.
+    expect(learnerFindMany).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("succeeds through a school-wide grant and writes UNLOCK_SCHOOL_GRANT_USED against SchoolUnlockGrant", async () => {
+    // A school-wide grant lives in a DIFFERENT table (`SchoolUnlockGrant`) than
+    // a personal one (`UnlockGrant`). Joining its id against `UnlockGrant`
+    // would find nothing, so the second audit row must name the right table —
+    // both in `action` and in `resource` — not just carry `grantKind` in
+    // `metadata`.
+    resolveMonthlyReadingLevelWindow.mockResolvedValue({
+      writable: true,
+      reason: "granted",
+      deadline: new Date(2026, 8, 7),
+      grantId: "grant-99",
+      grantKind: "school",
+    });
+
+    const res = await post([entry("learner-a")]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    expect(writeAudit.mock.calls[0][0]).toMatchObject({
+      action: "READING_LEVEL_BULK_RECORD",
+      metadata: expect.objectContaining({ grantKind: "school" }),
+    });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_SCHOOL_GRANT_USED",
+      resource: "SchoolUnlockGrant",
+      resourceId: "grant-99",
+      metadata: expect.objectContaining({
+        scope: "MONTHLY_READING_LEVEL",
+        targetKey: "2026-08-01",
+        grantKind: "school",
+      }),
+    });
+  });
+
+  it("succeeds through a personal grant and still writes UNLOCK_GRANT_USED against UnlockGrant", async () => {
+    resolveMonthlyReadingLevelWindow.mockResolvedValue({
+      writable: true,
+      reason: "granted",
+      deadline: new Date(2026, 8, 7),
+      grantId: "grant-42",
+      grantKind: "user",
+    });
+
+    const res = await post([entry("learner-a")]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_GRANT_USED",
+      resource: "UnlockGrant",
+      resourceId: "grant-42",
+      metadata: expect.objectContaining({ grantKind: "user" }),
+    });
+  });
+
+  it("writes no second audit row when the save was in-window", async () => {
+    await post([entry("learner-a")]);
+
+    expect(writeAudit).toHaveBeenCalledTimes(1);
   });
 });

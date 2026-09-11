@@ -639,10 +639,14 @@ export default async function LearnerDetailPage({
                     <TableRow key={r.id}>
                       <TableCell>{formatWeekStart(r.weekStart)}</TableCell>
                       <TableCell className="text-xs">
-                        {readingLabels[r.englishProfile]}
+                        {r.englishProfile
+                          ? readingLabels[r.englishProfile]
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {readingLabels[r.filipinoProfile]}
+                        {r.filipinoProfile
+                          ? readingLabels[r.filipinoProfile]
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-xs">
                         {r.wordRecognitionLevel

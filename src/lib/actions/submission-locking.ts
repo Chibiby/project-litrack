@@ -5,7 +5,10 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { writeSetting } from "@/lib/settings/system-settings";
-import { SUBMISSION_LOCKING_KEY } from "@/lib/unlock/constants";
+import {
+  READING_LEVEL_UNLOCK_ALL_KEY,
+  SUBMISSION_LOCKING_KEY,
+} from "@/lib/unlock/constants";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -15,17 +18,19 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
  * control on the same settings page and the two must not disagree about what
  * "on" looks like.
  */
-const setSubmissionLockingSchema = z.object({
-  enabled: z
-    .union([
-      z.boolean(),
-      z.literal("true"),
-      z.literal("false"),
-      z.literal("on"),
-      z.literal("off"),
-    ])
-    .transform((v) => v === true || v === "true" || v === "on"),
-});
+const enabledFlag = z
+  .union([
+    z.boolean(),
+    z.literal("true"),
+    z.literal("false"),
+    z.literal("on"),
+    z.literal("off"),
+  ])
+  .transform((v) => v === true || v === "true" || v === "on");
+
+const setSubmissionLockingSchema = z.object({ enabled: enabledFlag });
+
+const setMonthlyReadingLevelUnlockSchema = z.object({ enabled: enabledFlag });
 
 /**
  * Super Admin: enforce submission deadlines, or don't.
@@ -70,6 +75,62 @@ export async function setSubmissionLocking(
     action: AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
     resource: "SystemSetting",
     resourceId: SUBMISSION_LOCKING_KEY,
+    metadata: { enabled: parsed.data.enabled },
+  });
+
+  revalidatePath("/admin/settings/submissions");
+  revalidatePath("/teacher/aral", "layout");
+  return { ok: true };
+}
+
+/**
+ * Super Admin: is the monthly reading level open to every teacher, or only
+ * inside its window?
+ *
+ * A second switch rather than a mode of the one above, because it answers a
+ * different question: `submissions.locking` decides whether deadlines are
+ * enforced at all, and this decides whether ONE of those deadlines applies to
+ * everybody. The programme ships with the reading level open, which is why the
+ * reader (`isMonthlyReadingLevelUnlockedForAll`) treats every value except the
+ * literal `"false"` — including a missing row and a failed read — as unlocked.
+ *
+ * That default is the reason `enabled: false` is written as the string
+ * `"false"` and nothing else: an empty value, a deleted row, or a "0" all read
+ * back as unlocked, so the closing half of this switch is the only one that
+ * depends on the exact bytes stored.
+ *
+ * Audited for the same reason as `setSubmissionLocking`: while this is on, a
+ * save into a closed month records no grant, so this row is the only thing that
+ * ever explains why the window was open.
+ */
+export async function setMonthlyReadingLevelUnlock(
+  formData: FormData
+): Promise<ActionResult> {
+  const admin = await requireUser("SUPER_ADMIN");
+
+  const parsed = setMonthlyReadingLevelUnlockSchema.safeParse({
+    enabled: formData.get("enabled"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  try {
+    await writeSetting(
+      READING_LEVEL_UNLOCK_ALL_KEY,
+      parsed.data.enabled ? "true" : "false"
+    );
+  } catch (err) {
+    console.error("[submissions] setMonthlyReadingLevelUnlock write failed:", err);
+    return { ok: false, error: "Could not save the setting. Please try again." };
+  }
+
+  await writeAudit({
+    userId: admin.id,
+    schoolId: null,
+    action: AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
+    resource: "SystemSetting",
+    resourceId: READING_LEVEL_UNLOCK_ALL_KEY,
     metadata: { enabled: parsed.data.enabled },
   });
 

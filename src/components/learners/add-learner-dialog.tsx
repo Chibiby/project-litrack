@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { LearnerFormPlacement } from "@/components/forms/learner-form";
+import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 import { Plus, UserRoundPlus } from "lucide-react";
 
 const LearnerForm = dynamic(
@@ -27,10 +27,9 @@ const LearnerForm = dynamic(
 );
 
 type Props = {
-  gradeLevelId: string;
-  gradeType: string;
-  /** The teacher's advisory, shown in the form instead of a grade/section picker. */
-  placement: LearnerFormPlacement;
+  /** Every section this teacher advises. One shows a static placement line in
+   * the form; several turn it into a required picker. */
+  placements: AdvisoryPlacement[];
   /** Lets the roster header square off the right edge for its split control. */
   triggerClassName?: string;
 };
@@ -45,12 +44,11 @@ type Props = {
  * Defers the heavy LearnerForm chunk until the teacher opens "Add learner".
  */
 export function AddLearnerDialog({
-  gradeLevelId,
-  gradeType,
-  placement,
+  placements,
   triggerClassName,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const single = placements.length === 1 ? placements[0] : undefined;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -72,17 +70,18 @@ export function AddLearnerDialog({
           <div className="min-w-0">
             <DialogTitle>Add new learner</DialogTitle>
             <DialogDescription className="mt-0.5">
-              Create a Section A + B profile for {placement.gradeLabel}
-              {placement.sectionName ? ` · ${placement.sectionName}` : ""}.
+              {single
+                ? `Create a Section A + B profile for ${single.gradeLabel}${
+                    single.sectionName ? ` · ${single.sectionName}` : ""
+                  }.`
+                : "Create a Section A + B profile, then choose which of your advisory sections this learner joins."}
             </DialogDescription>
           </div>
         </header>
 
         {open ? (
           <LearnerForm
-            gradeLevelId={gradeLevelId}
-            gradeType={gradeType}
-            placement={placement}
+            placements={placements}
             onCreated={() => setOpen(false)}
             onCancel={() => setOpen(false)}
           />

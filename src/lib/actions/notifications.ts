@@ -4,8 +4,11 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import {
   getUnreadAralAssignments,
+  getUnreadUnlockGrants,
   markNotificationsRead,
+  markUnlockAlertsRead,
   type AralAssignmentAlert,
+  type UnlockAlert,
 } from "@/lib/notifications";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -52,6 +55,47 @@ export async function dismissAralAssignmentAlerts(
   }
 
   const dismissed = await markNotificationsRead({
+    recipientId: user.id,
+    schoolId: user.schoolId,
+    ids: parsed.data.ids,
+  });
+  return { ok: true, data: { dismissed } };
+}
+
+/**
+ * The teacher's unread, still-live unlock alerts.
+ *
+ * Same call posture as `fetchAralAssignmentAlerts`: called client-side after
+ * the shell paints, never awaited in the teacher layout, and never an error
+ * for anyone who cannot hold a grant — a Super Admin impersonating a teacher
+ * has none of their own.
+ */
+export async function fetchUnlockAlerts(): Promise<UnlockAlert[]> {
+  const user = await requireUser("TEACHER");
+  if (user.role !== "TEACHER" || !user.schoolId) return [];
+
+  try {
+    return await getUnreadUnlockGrants({ id: user.id, schoolId: user.schoolId });
+  } catch (err) {
+    // A bell that cannot load must not break the page it sits on.
+    console.error("[notifications] unlock alert read failed:", err);
+    return [];
+  }
+}
+
+/** Mark the unlock alerts the teacher just saw as read. Scoped to them; ids are untrusted. */
+export async function dismissUnlockAlerts(
+  ids: string[]
+): Promise<ActionResult<{ dismissed: number }>> {
+  const user = await requireUser("TEACHER");
+  if (!user.schoolId) return { ok: false, error: "Not found" };
+
+  const parsed = dismissSchema.safeParse({ ids });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  const dismissed = await markUnlockAlertsRead({
     recipientId: user.id,
     schoolId: user.schoolId,
     ids: parsed.data.ids,

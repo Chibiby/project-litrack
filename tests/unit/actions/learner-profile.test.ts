@@ -294,6 +294,29 @@ describe("getLearnerProfile — serialisation", () => {
     expect(JSON.parse(JSON.stringify(res.data))).toEqual(res.data);
   });
 
+  it("passes through a partially-assessed reading level row without throwing", async () => {
+    rows[0].readingLevels = [
+      {
+        id: "rl-partial",
+        weekStart: new Date(2026, 2, 2, 7, 0),
+        englishProfile: null,
+        filipinoProfile: "INSTRUCTIONAL_DEVELOPING",
+        wordRecognitionLevel: null,
+        readingComprehensionLevel: null,
+        notes: null,
+      },
+    ];
+
+    const res = await getLearnerProfile("own-advisory");
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.readingLevels[0].englishProfile).toBeNull();
+    expect(res.data.readingLevels[0].filipinoProfile).toBe(
+      "INSTRUCTIONAL_DEVELOPING"
+    );
+    expect(JSON.parse(JSON.stringify(res.data))).toEqual(res.data);
+  });
+
   it("keeps null relations null rather than inventing labels", async () => {
     rows[0].section = null;
     rows[0].teacher = null;

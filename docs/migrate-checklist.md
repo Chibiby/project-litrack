@@ -76,6 +76,10 @@ Committed migrations (apply in order via `migrate deploy`):
   read-only pre-check. The row counts written into the migration's own comments are a
   snapshot taken while it was authored and drift daily; trust the predicate, not the number.
   Adds no table, so `prisma/rls-policies.sql` does not need re-running.
+- `20260911000011_reading_level_nullable_profiles` through
+  `20260911000015_notification_unlock_pointers` — partial reading-level rows, the
+  monthly reading-level lock, school-wide unlocks and unlock notifications. Five
+  additive files, no backfill. See section **(n)** below.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
@@ -815,6 +819,64 @@ Safe in either order:
 
 `DROP TABLE "ErrorEvent"` loses only rows this migration itself made possible —
 nothing else references the table.
+
+---
+
+## (n) Grid clear, partial reading levels, and unlocks  —  Sep 2026
+
+`20260911000011` through `20260911000015`. **Apply all five BEFORE the code
+deploys.** The generated client names the new `Notification` columns on every
+notification read and the new `SchoolUnlockGrant` table is in `SNAPSHOT_MODELS`,
+so code-first is P2022 on the teacher shell and a broken backup cron.
+
+Applied to production 2026-09-12 (from `feat/grid-unlock-clear-placement`),
+before the code was pushed. `migrate status` beforehand listed exactly these
+five as pending and nothing else; afterwards it reported up to date. Verified in
+the catalog: `SchoolUnlockGrant.relrowsecurity` is true, the
+`Notification_one_unlock_pointer` CHECK exists, both profile columns are
+nullable, and both enum values are present.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 11 | `reading_level_nullable_profiles` | `ReadingLevelRecord.englishProfile` / `filipinoProfile` → `DROP NOT NULL`, so a partly filled monthly row can be saved. | No. Loosening only; every existing row already has a value. |
+| 12 | `monthly_reading_level_unlock_scope` | `UnlockScope` += `MONTHLY_READING_LEVEL`. Alone in its file: Postgres forbids *using* a new enum value in the transaction that added it. | No. |
+| 13 | `unlock_granted_notification_type` | `NotificationType` += `UNLOCK_GRANTED`. Alone for the same reason. | No. |
+| 14 | `school_unlock_grant` | New table `SchoolUnlockGrant` (one unlock covering every teacher in a school for one window), unique `(schoolId, scope, targetKey)`, FK indexes, and `ENABLE ROW LEVEL SECURITY` **in the migration itself** — `prisma/rls-policies.sql` carries the same line but needs no separate run. | No. New table. |
+| 15 | `notification_unlock_pointers` | `Notification` += nullable `unlockGrantId` / `schoolUnlockGrantId` with indexes and `SET NULL` FKs, plus the SQL-only CHECK `Notification_one_unlock_pointer` (at most one pointer set). **Prisma cannot express that CHECK — preserve it when editing this table**, as with `Enrollment`'s partial unique index. | No. Existing rows get NULL/NULL, which satisfies the CHECK. |
+
+Why a table rather than a nullable `UnlockGrant.userId`: two NULLs never compare
+equal in Postgres, so a nullable `userId` would silently defeat
+`@@unique([userId, scope, targetKey])` and let two live school-wide grants exist
+for one window.
+
+### The reading-level lock ships inert
+
+The monthly reading-level deadline (last day of the month + 7) is enforced
+server-side from this deploy, but it is gated by the `SystemSetting`
+`submissions.readingLevelUnlockAll`, which reads a **missing row as ON**
+(unlocked). No row exists, so nothing is locked until a Super Admin turns the
+switch off on `/admin/settings/submissions`. No migration was needed for the
+setting — `SystemSetting` is untyped by design.
+
+### Smoke test
+
+1. As a teacher on the monthly reading-level sheet, fill only English for one
+   learner and save — it saves. Clear that row from its Actions menu and save —
+   the row is gone after reload.
+2. On the weekly attendance grid, press a row's Clear button and save.
+3. As Super Admin on `/admin/settings/submissions`, reopen a week for one teacher
+   for 1 day; that teacher sees the "reopened" modal on next sign-in. Revoke it.
+4. As a teacher advising two sections, Add learner shows a required
+   "Grade & section" picker.
+
+### Rollback
+
+Revert the code first. Then `DROP TABLE "SchoolUnlockGrant"` (after dropping
+migration 15's two columns and CHECK, which reference it). Re-tightening
+migration 11 with `SET NOT NULL` fails once any partial row has been saved —
+check `SELECT count(*) FROM "ReadingLevelRecord" WHERE "englishProfile" IS NULL
+OR "filipinoProfile" IS NULL` first. Postgres cannot drop an enum value;
+`MONTHLY_READING_LEVEL` and `UNLOCK_GRANTED` are harmless left in place.
 
 ---
 

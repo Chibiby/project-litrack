@@ -135,8 +135,8 @@ export async function fetchAralAttendanceForWeek(input: {
 
 export type AralReadingLevelRecord = {
   learnerId: string;
-  englishProfile: string;
-  filipinoProfile: string;
+  englishProfile: string | null;
+  filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
   writingLevel: string | null;

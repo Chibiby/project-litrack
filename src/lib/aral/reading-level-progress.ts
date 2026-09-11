@@ -9,6 +9,24 @@ export type MonthlyAssessmentProgress = {
 };
 
 /**
+ * Completeness predicate for a `ReadingLevelRecord`, shared by every "assessed"
+ * counter (the monthly grid progress bar, the admin dashboard aggregate, and the
+ * teacher overview). Mirrors `isRowComplete` in the monthly grid: all four
+ * required scales set. `englishProfile` and `filipinoProfile` became nullable so
+ * a partially-filled row can be saved — a row existing no longer implies either
+ * is set, so both must be checked explicitly alongside the two level columns.
+ * `writingLevel` and `notes` are excluded on purpose: both are nullable in the
+ * schema and optional in the grid, so they are not part of what "assessed"
+ * means. Define this once so the three call sites cannot drift.
+ */
+export const COMPLETE_ASSESSMENT_WHERE = {
+  englishProfile: { not: null },
+  filipinoProfile: { not: null },
+  wordRecognitionLevel: { not: null },
+  readingComprehensionLevel: { not: null },
+} satisfies Prisma.ReadingLevelRecordWhereInput;
+
+/**
  * Grade-wide monthly assessment progress for one filtered learner set.
  *
  * Lives here rather than in the page or the fetch action because both need the
@@ -16,12 +34,6 @@ export type MonthlyAssessmentProgress = {
  * `fetchAralReadingLevelForMonth` returns it again when the teacher steps to
  * another month without a full navigation. Two implementations of "assessed"
  * would eventually disagree and the bar would jump on navigation.
- *
- * "Complete" mirrors `isRowComplete` in the monthly grid: all four required
- * scales set. `englishProfile` and `filipinoProfile` are non-nullable columns, so
- * a row existing already implies both — the two nullable level columns are what
- * a half-filled row leaves out. Writing level is excluded on purpose; it is
- * optional in the grid and in the schema.
  *
  * The window is a range, not an equality on the month anchor, for the same
  * reason the fetch reads a range: rows written by the earlier weekly grid sit on
@@ -44,8 +56,7 @@ export async function countMonthlyAssessmentProgress(args: {
     prisma.readingLevelRecord.findMany({
       where: {
         weekStart: { gte: args.monthStart, lt: args.monthEnd },
-        wordRecognitionLevel: { not: null },
-        readingComprehensionLevel: { not: null },
+        ...COMPLETE_ASSESSMENT_WHERE,
         learner: args.learnerWhere,
       },
       select: { learnerId: true },

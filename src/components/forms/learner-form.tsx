@@ -16,6 +16,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
   FormProgressBar,
@@ -42,6 +49,7 @@ import {
 } from "@/lib/constants/enum-labels";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
+import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 
 /*
  * The learner form, in four collapsible sections with a completion bar.
@@ -55,17 +63,19 @@ import { invalidateNavWarm } from "@/components/nav-prefetcher";
  */
 
 /**
- * Where the learner sits — shown, never chosen.
+ * Where the learner sits.
  *
- * Add mode: the teacher's advisory section, which is the only place a new learner
- * can go. Edit mode: the learner's current placement. Moving a learner between
- * sections is the School Head's transfer flow, not a side effect of correcting a
- * spelling, so this is a line of text rather than a pair of selects.
+ * Add mode with one advisory: shown, never chosen — the teacher's only section is
+ * the only place a new learner can go. Add mode with several advisories: a
+ * required picker over exactly those sections, so the choice can never land
+ * outside them. Edit mode: the learner's current placement, always shown as a
+ * line of text — moving a learner between sections is the School Head's transfer
+ * flow, not a side effect of correcting a spelling.
  *
- * The selects it replaces were the bug: the grade list was built from every grade
- * the teacher touched (advisory *and* ARAL designations) while the server accepted
- * only the advisory one, so a teacher who also tutored ARAL learners was offered a
- * grade the save then refused.
+ * The free-form grade selects this replaces were the bug: the grade list was
+ * built from every grade the teacher touched (advisory *and* ARAL designations)
+ * while the server accepted only the advisory one, so a teacher who also tutored
+ * ARAL learners was offered a grade the save then refused.
  */
 export type LearnerFormPlacement = {
   gradeLabel: string;
@@ -99,9 +109,11 @@ export type LearnerFormDefaults = {
 type LearnerFormProps = {
   /**
    * The grade the learner belongs to. Submitted so the server can reject a stale
-   * client, not chosen here — see {@link LearnerFormPlacement}.
+   * client, not chosen here — see {@link LearnerFormPlacement}. Edit mode always
+   * passes this; create mode passes it only alongside a single-item
+   * {@link LearnerFormProps.placements} (or omits `placements` altogether).
    */
-  gradeLevelId: string;
+  gradeLevelId?: string;
   /** Drives the reading-band labels, which differ for the early grades. */
   gradeType?: string;
   /**
@@ -109,6 +121,14 @@ type LearnerFormProps = {
    * label, which is all a caller that cannot name the section has to show.
    */
   placement?: LearnerFormPlacement;
+  /**
+   * Create mode only: every section the teacher advises. One entry reproduces
+   * the old static line (and still posts its `sectionId`); more than one swaps
+   * the line for a required "Grade & section" picker limited to exactly these
+   * sections, and `gradeLevelId`/`gradeType`/`placement` above are ignored in
+   * favor of whichever placement is chosen.
+   */
+  placements?: AdvisoryPlacement[];
   mode?: "create" | "edit";
   defaultValues?: LearnerFormDefaults;
   submitLabel?: string;
@@ -179,6 +199,7 @@ export function LearnerForm({
   gradeLevelId,
   gradeType,
   placement,
+  placements,
   mode = "create",
   defaultValues,
   submitLabel,
@@ -245,7 +266,37 @@ export function LearnerForm({
   const label = submitLabel ?? (isEdit ? "Save changes" : "Add learner");
   const idPrefix = isEdit ? "learner-edit" : "learner-add";
 
-  const selectedGradeType = gradeType;
+  // Edit mode never picks a placement — `placements` is a create-mode-only prop.
+  const advisoryPlacements = isEdit ? [] : placements ?? [];
+  const singlePlacement =
+    advisoryPlacements.length === 1 ? advisoryPlacements[0] : undefined;
+  const isMultiAdvisory = advisoryPlacements.length > 1;
+
+  const [selectedSectionId, setSelectedSectionId] = useState("");
+  const [sectionError, setSectionError] = useState(false);
+  const chosenPlacement = isMultiAdvisory
+    ? advisoryPlacements.find((p) => p.sectionId === selectedSectionId)
+    : undefined;
+
+  const effectiveGradeLevelId =
+    singlePlacement?.gradeLevelId ?? chosenPlacement?.gradeLevelId ?? gradeLevelId;
+  const effectiveSectionId = singlePlacement?.sectionId ?? chosenPlacement?.sectionId;
+  const selectedGradeType =
+    singlePlacement?.gradeType ?? chosenPlacement?.gradeType ?? gradeType;
+  // Memoized because it is a fresh object literal on every render, and
+  // `gradeLabel` below depends on it — without this the label's useMemo would
+  // recompute on every keystroke in the form.
+  const activePlacement = singlePlacement ?? chosenPlacement;
+  const displayPlacement: LearnerFormPlacement | undefined = useMemo(
+    () =>
+      activePlacement
+        ? {
+            gradeLabel: activePlacement.gradeLabel,
+            sectionName: activePlacement.sectionName,
+          }
+        : placement,
+    [activePlacement, placement]
+  );
 
   const readingProfileOptions = useMemo(
     () => toOptions(readingProfileLabelsForGradeType(selectedGradeType)),
@@ -257,12 +308,12 @@ export function LearnerForm({
     : "If frustration:";
 
   const gradeLabel = useMemo(() => {
-    if (placement?.gradeLabel) return placement.gradeLabel;
+    if (displayPlacement?.gradeLabel) return displayPlacement.gradeLabel;
     if (selectedGradeType) {
       return GRADE_LEVEL_LABELS[selectedGradeType] ?? selectedGradeType;
     }
     return "—";
-  }, [placement, selectedGradeType]);
+  }, [displayPlacement, selectedGradeType]);
 
   const refreshValues = useCallback(() => {
     const form = formRef.current;
@@ -298,6 +349,19 @@ export function LearnerForm({
     if (!form) return;
     refreshValues();
 
+    // The picker is a Radix trigger, not a native form control, so constraint
+    // validation below never sees it — check it first, in the same "open the
+    // section, then focus" shape the native checks use below.
+    if (isMultiAdvisory && !selectedSectionId) {
+      event.preventDefault();
+      setSectionError(true);
+      setOpenSection(LEARNER_FORM_SECTIONS[0].key);
+      requestAnimationFrame(() => {
+        document.getElementById(`${idPrefix}-section-picker`)?.focus();
+      });
+      return;
+    }
+
     const invalid = Array.from(form.elements).find(
       (el) =>
         typeof (el as HTMLInputElement).checkValidity === "function" &&
@@ -330,7 +394,12 @@ export function LearnerForm({
   function handleSubmit(fd: FormData) {
     // Sent so the server can reject a stale client rather than silently rerouting
     // the learner; the placement itself is derived server-side from the advisory.
-    fd.set("gradeLevelId", gradeLevelId);
+    // `handleSubmitClick` refuses to reach here with an unset picker, so this is
+    // always defined by the time a create-mode submit lands.
+    if (effectiveGradeLevelId) fd.set("gradeLevelId", effectiveGradeLevelId);
+    // Explicit even for a single advisory — harmless, and it means the server
+    // never has to special-case "no section named" from "only one to choose".
+    if (effectiveSectionId) fd.set("sectionId", effectiveSectionId);
     if (isEdit && defaultValues?.id) {
       fd.set("id", defaultValues.id);
     }
@@ -382,6 +451,8 @@ export function LearnerForm({
         setPreviousTransfers("");
         setEthnicity("");
         setEthnicityOther("");
+        setSelectedSectionId("");
+        setSectionError(false);
         removeSecondEthnicity();
         setOpenSection(LEARNER_FORM_SECTIONS[0].key);
         refreshValues();
@@ -571,20 +642,68 @@ export function LearnerForm({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {isEdit ? "Placement" : "Joining"}
           </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {gradeLabel}
-            {placement?.sectionName ? (
-              <>
-                <span className="px-1.5 font-normal text-muted-foreground">·</span>
-                {placement.sectionName}
-              </>
-            ) : null}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isEdit
-              ? "Moving a learner between sections is a transfer — ask your School Head."
-              : "New learners join your advisory section."}
-          </p>
+          {isMultiAdvisory ? (
+            <div className="mt-2 space-y-1">
+              <Label htmlFor={`${idPrefix}-section-picker`}>
+                Grade & section *
+              </Label>
+              <Select
+                value={selectedSectionId}
+                onValueChange={(value) => {
+                  setSelectedSectionId(value);
+                  setSectionError(false);
+                }}
+              >
+                <SelectTrigger
+                  id={`${idPrefix}-section-picker`}
+                  aria-invalid={sectionError}
+                  aria-describedby={
+                    sectionError ? `${idPrefix}-section-error` : undefined
+                  }
+                >
+                  <SelectValue placeholder="Choose a grade & section" />
+                </SelectTrigger>
+                <SelectContent>
+                  {advisoryPlacements.map((p) => (
+                    <SelectItem key={p.sectionId} value={p.sectionId}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {sectionError ? (
+                <p
+                  id={`${idPrefix}-section-error`}
+                  role="alert"
+                  className="text-xs font-medium text-destructive"
+                >
+                  Choose which of your advisory sections this learner joins.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  You advise {advisoryPlacements.length} sections — pick where
+                  this learner joins.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {gradeLabel}
+                {displayPlacement?.sectionName ? (
+                  <>
+                    <span className="px-1.5 font-normal text-muted-foreground">·</span>
+                    {displayPlacement.sectionName}
+                  </>
+                ) : null}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {isEdit
+                  ? "Moving a learner between sections is a transfer — ask your School Head."
+                  : "New learners join your advisory section."}
+              </p>
+            </>
+          )}
         </div>
       </>
     ),

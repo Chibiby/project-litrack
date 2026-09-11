@@ -7,6 +7,7 @@ import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
+import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 
 export const dynamic = "force-dynamic";
@@ -115,6 +116,7 @@ export default async function TeacherAppLayout({
         teacher has no waiting designation, which is the usual case.
       */}
       <AralAssignmentAlerts />
+      <UnlockGrantAlerts />
     </>
   );
 }

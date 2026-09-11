@@ -109,22 +109,14 @@ async function LearnersAddControl({
   user: { id: string; schoolId: string };
 }) {
   // The Add menu targets ONE section. A teacher with several advisories picks
-  // which in the form; this component opens on the first, which is what the
-  // menu was already doing implicitly when a teacher could only hold one.
+  // which one in the form itself, via every placement passed down here; the
+  // import link (which cannot express a choice) still targets the first.
   const placements = await getAdvisoryPlacements(user);
-  const advisory = placements[0];
-  if (!advisory) return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
+  if (placements.length === 0) {
+    return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
+  }
 
-  return (
-    <LearnerAddMenu
-      gradeLevelId={advisory.gradeLevelId}
-      gradeType={advisory.gradeType}
-      placement={{
-        gradeLabel: advisory.gradeLabel,
-        sectionName: advisory.sectionName,
-      }}
-    />
-  );
+  return <LearnerAddMenu placements={placements} />;
 }
 
 async function LearnersBody({

@@ -498,6 +498,7 @@ export const SUPPORT_TICKET_STATUS_LABELS = {
 export const UNLOCK_SCOPE_LABELS = {
   ARAL_WEEKLY_ATTENDANCE: "Weekly ARAL attendance",
   TERM_GRADES: "Term grade sheet",
+  MONTHLY_READING_LEVEL: "Monthly reading level",
 } as const;
 
 /**

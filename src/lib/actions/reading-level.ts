@@ -11,22 +11,33 @@ import {
   readingLevelMonthlyBulkSchema,
 } from "@/lib/validators/reading-level.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { formatLocalDateKey } from "@/lib/date-keys";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
   aralLearnerScope,
   teacherIsAralTutorFor,
 } from "@/lib/teachers/scope";
+import {
+  formatMonthDeadlineLongDate,
+  formatMonthKey,
+  nextMonthStart,
+} from "@/lib/month-range";
+import { resolveMonthlyReadingLevelWindow } from "@/lib/unlock/reading-level-window";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-/** One `ReadingLevelRecord` row, already deduped on its conflict tuple. */
+/**
+ * One `ReadingLevelRecord` row, already deduped on its conflict tuple. The
+ * monthly bulk save may carry a partially-filled row, so every value field is
+ * nullable here — `englishProfile` / `filipinoProfile` are `ReadingProfile?`
+ * in the schema precisely so this can bind `null`.
+ */
 type RawReadingLevelRow = {
   id: string;
   learnerId: string;
-  englishProfile: string;
-  filipinoProfile: string;
+  englishProfile: string | null;
+  filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
   writingLevel: string | null;
@@ -48,6 +59,23 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+
+  // A Monday-keyed legacy write is still ABOUT that month and must obey the
+  // same lock the monthly grid does — same helper, same precedence, so the
+  // banner a teacher reads and the rule enforced here can never drift apart.
+  const monthKey = formatMonthKey(parsed.data.weekStart);
+  const window = await resolveMonthlyReadingLevelWindow({
+    userId: user.id,
+    schoolId: user.schoolId,
+    monthKey,
+    today: schoolToday(),
+  });
+  if (!window.writable) {
+    return {
+      ok: false,
+      error: `This month is locked. Editing closed on ${formatMonthDeadlineLongDate(monthKey)}.`,
+    };
   }
 
   const learner = await prisma.learner.findFirst({
@@ -142,7 +170,7 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
  */
 export async function bulkRecordMonthlyReadingLevel(
   input: unknown
-): Promise<ActionResult<{ upserted: number }>> {
+): Promise<ActionResult<{ upserted: number; cleared: number }>> {
   const user = await requireSchoolUser("TEACHER");
 
   const parsed = readingLevelMonthlyBulkSchema.safeParse(input);
@@ -151,7 +179,29 @@ export async function bulkRecordMonthlyReadingLevel(
   }
 
   const monthStart = parsed.data.monthStart;
-  const learnerIds = [...new Set(parsed.data.entries.map((e) => e.learnerId))];
+  const monthKey = formatLocalDateKey(monthStart);
+
+  // Deadline gate FIRST, before any learner query — a past-deadline save with
+  // no grant must be refused without ever touching the roster. `canWriteWindow`
+  // is consulted only when the date itself says the window is closed.
+  const window = await resolveMonthlyReadingLevelWindow({
+    userId: user.id,
+    schoolId: user.schoolId,
+    monthKey,
+    today: schoolToday(),
+  });
+  if (!window.writable) {
+    return {
+      ok: false,
+      error: `This month is locked. Editing closed on ${formatMonthDeadlineLongDate(monthKey)}.`,
+    };
+  }
+  const usedGrantId = window.grantId;
+  const usedGrantKind = window.grantKind;
+
+  const entryIds = parsed.data.entries.map((e) => e.learnerId);
+  const clearIds = parsed.data.clears;
+  const learnerIds = [...new Set([...entryIds, ...clearIds])];
 
   const learners = await prisma.learner.findMany({
     where: {
@@ -182,27 +232,31 @@ export async function bulkRecordMonthlyReadingLevel(
   // `weekStart` is the same `monthStart` for every row here, so it is keyed in
   // explicitly rather than assumed — the tuple is ([learnerId, weekStart]), and
   // this dedupes on the value about to be written, not on a variable name.
-  const monthKey = formatLocalDateKey(monthStart);
   const rowByTuple = new Map<string, RawReadingLevelRow>();
   for (const entry of parsed.data.entries) {
     rowByTuple.set(`${entry.learnerId}:${monthKey}`, {
       id: randomUUID(),
       learnerId: entry.learnerId,
-      englishProfile: entry.englishProfile,
-      filipinoProfile: entry.filipinoProfile,
-      wordRecognitionLevel: entry.wordRecognitionLevel,
-      readingComprehensionLevel: entry.readingComprehensionLevel,
-      // The grid posts full row state, so anything the teacher cleared has to be
-      // written as null rather than left alone.
+      // A partial row is the normal state on this grid: any field the teacher
+      // has not filled in yet is written as NULL rather than left alone, since
+      // this is an INSERT ... ON CONFLICT and there is no prior row value to
+      // preserve for a field the client omitted.
+      englishProfile: entry.englishProfile ?? null,
+      filipinoProfile: entry.filipinoProfile ?? null,
+      wordRecognitionLevel: entry.wordRecognitionLevel ?? null,
+      readingComprehensionLevel: entry.readingComprehensionLevel ?? null,
       writingLevel: entry.writingLevel ?? null,
       notes: entry.notes ?? null,
     });
   }
   const rows = [...rowByTuple.values()];
 
+  const nextMonth = nextMonthStart(monthStart);
   const now = new Date();
+  let cleared = 0;
   try {
     await prisma.$transaction(async (tx) => {
+      // 1. Upserts. Skipped entirely when the save is clears-only.
       for (const chunk of chunkRows(rows, BULK_CHUNK_ROWS)) {
         // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
         // and `@updatedAt` are CLIENT-side, and neither column has a database
@@ -213,6 +267,12 @@ export async function bulkRecordMonthlyReadingLevel(
         // casts in SQL. Binding the `Date` would re-serialize local midnight as a
         // UTC instant, which agrees with the intended day on Vercel (TZ=UTC) and
         // disagrees on a UTC+8 developer machine.
+        //
+        // Enums bind `::text::"Enum"`, never a bare `::"Enum"` — see the long
+        // comment in `attendance.ts` explaining the double cast. It applies here
+        // too, and now doubly matters: `englishProfile` / `filipinoProfile` may
+        // be a bound `null`, and the cast still has to resolve to the nullable
+        // `ReadingProfile` column type rather than an untyped parameter.
         const values = Prisma.join(
           chunk.map(
             (r) => Prisma.sql`(
@@ -275,6 +335,32 @@ export async function bulkRecordMonthlyReadingLevel(
           );
         }
       }
+
+      // 2. Clears, AFTER the upserts — same ordering rule as
+      //    `saveAralWeeklyAttendance`. Deleted by MONTH RANGE, not by the
+      //    anchor: `fetchAralReadingLevelForMonth` reads the whole month
+      //    because legacy rows sit on arbitrary Mondays, so deleting only the
+      //    anchor would let an old row reappear on the next render and the
+      //    teacher would see the clear silently undo itself. `cleared` is the
+      //    returned row count, never the submitted id count — clearing an
+      //    already-empty month is not an error.
+      for (const chunk of chunkRows(clearIds, BULK_CHUNK_ROWS)) {
+        const values = Prisma.join(chunk.map((id) => Prisma.sql`(${id}::text)`));
+        const deleted = await tx.$queryRaw<{ id: string }[]>`
+          DELETE FROM "ReadingLevelRecord" r
+          USING (VALUES ${values}) AS v ("learnerId"),
+                "Learner" l
+          WHERE r."learnerId" = v."learnerId"
+            AND r."weekStart" >= ${monthKey}::date
+            AND r."weekStart" < ${formatLocalDateKey(nextMonth)}::date
+            AND l."id" = r."learnerId"
+            AND l."schoolId" = ${user.schoolId}
+            AND l."deletedAt" IS NULL
+            AND l."isAralLearner" = TRUE
+          RETURNING r."id"
+        `;
+        cleared += deleted.length;
+      }
     }, BULK_TX_OPTIONS);
   } catch (err) {
     console.error("[bulkRecordMonthlyReadingLevel] transaction failed:", err);
@@ -291,12 +377,43 @@ export async function bulkRecordMonthlyReadingLevel(
     resourceId: gradeIds[0] ?? null,
     metadata: {
       schoolId: user.schoolId,
-      monthStart: formatLocalDateKey(monthStart),
+      monthStart: monthKey,
       upserted,
+      cleared,
       learnerIds,
       gradeLevelIds: gradeIds,
+      grantKind: usedGrantKind,
     },
   });
+
+  // A second row, only when the save got in through a grant. Kept separate
+  // from the save row so "which edits happened inside a reopened window" is
+  // one action to filter on, mirroring `saveAralWeeklyAttendance`.
+  //
+  // Which action and resource depends on WHICH table the grant came from — a
+  // school-wide grant is a `SchoolUnlockGrant` row, and joining its id against
+  // `UnlockGrant` finds nothing. `grantKind` also rides in `metadata` so the
+  // save row and this row agree on which table answered "may this person write".
+  if (usedGrantId) {
+    const isSchoolGrant = usedGrantKind === "school";
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: isSchoolGrant
+        ? AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_USED
+        : AUDIT_ACTIONS.UNLOCK_GRANT_USED,
+      resource: isSchoolGrant ? "SchoolUnlockGrant" : "UnlockGrant",
+      resourceId: usedGrantId,
+      metadata: {
+        scope: "MONTHLY_READING_LEVEL",
+        targetKey: monthKey,
+        gradeLevelIds: gradeIds,
+        upserted,
+        cleared,
+        grantKind: usedGrantKind,
+      },
+    });
+  }
 
   for (const gradeId of gradeIds) {
     revalidatePath(`/teacher/aral/${gradeId}/reading-level`);
@@ -317,5 +434,5 @@ export async function bulkRecordMonthlyReadingLevel(
     }
   }
 
-  return { ok: true, data: { upserted } };
+  return { ok: true, data: { upserted, cleared } };
 }

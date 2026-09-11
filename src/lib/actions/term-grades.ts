@@ -169,8 +169,14 @@ export async function saveTermGrades(
   // `UnlockGrant` naming this term reopens it for this teacher alone. Consulted
   // only after the date test, so an in-window save still costs no extra query.
   let usedGrantId: string | null = null;
+  let usedGrantKind: "user" | "school" | null = null;
   if (isTermLocked(window, formatLocalDateKey(schoolToday()))) {
-    const verdict = await canWriteWindow(user.id, "TERM_GRADES", parsed.data.term);
+    const verdict = await canWriteWindow({
+      userId: user.id,
+      schoolId: user.schoolId,
+      scope: "TERM_GRADES",
+      targetKey: parsed.data.term,
+    });
     if (!verdict.writable) {
       return {
         ok: false,
@@ -179,6 +185,7 @@ export async function saveTermGrades(
     }
     // Null when locking is off; see the same note in `saveAralWeeklyAttendance`.
     usedGrantId = verdict.grantId;
+    usedGrantKind = verdict.grantKind;
   }
 
   const learnerIds = [...new Set(parsed.data.entries.map((e) => e.learnerId))];
@@ -310,17 +317,26 @@ export async function saveTermGrades(
       saved: toSave.length,
       cleared: toClear.length,
       learnerIds,
+      grantKind: usedGrantKind,
     },
   });
 
   // Only when the save got in through a grant — a closed term that was written
   // to is exactly what an auditor comes looking for.
+  //
+  // Which action and resource depends on WHICH table the grant came from — a
+  // school-wide grant is a `SchoolUnlockGrant` row, and joining its id against
+  // `UnlockGrant` finds nothing. `grantKind` also rides in `metadata` so the
+  // save row and this row agree on which table answered "may this person write".
   if (usedGrantId) {
+    const isSchoolGrant = usedGrantKind === "school";
     await writeAudit({
       userId: user.id,
       schoolId: user.schoolId,
-      action: AUDIT_ACTIONS.UNLOCK_GRANT_USED,
-      resource: "UnlockGrant",
+      action: isSchoolGrant
+        ? AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_USED
+        : AUDIT_ACTIONS.UNLOCK_GRANT_USED,
+      resource: isSchoolGrant ? "SchoolUnlockGrant" : "UnlockGrant",
       resourceId: usedGrantId,
       metadata: {
         scope: "TERM_GRADES",
@@ -329,6 +345,7 @@ export async function saveTermGrades(
         sectionId: advisory.sectionId,
         saved: toSave.length,
         cleared: toClear.length,
+        grantKind: usedGrantKind,
       },
     });
   }

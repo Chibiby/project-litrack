@@ -413,6 +413,11 @@ enum NotificationType {
   /// to every row at release time. Its bell text is composed at read time in
   /// `fetchReleaseAlert`, like the chat types above.
   RELEASE_PUBLISHED
+  /// An `UnlockGrant` or `SchoolUnlockGrant` was issued to the recipient (or,
+  /// for a school-wide grant, to every teacher in the school). Its bell text
+  /// is composed at read time from the grant row `unlockGrantId` /
+  /// `schoolUnlockGrantId` points at, like the chat and release types above.
+  UNLOCK_GRANTED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -494,6 +499,7 @@ model School {
   reports             Report[]
   supportTickets      SupportTicket[]
   unlockGrants        UnlockGrant[]
+  schoolUnlockGrants  SchoolUnlockGrant[]
   chatChannels        ChatChannel[]
   termWindowOverrides TermWindowOverride[]
 
@@ -677,39 +683,41 @@ model User {
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?
 
-  school                 School?              @relation(fields: [schoolId], references: [id])
-  schoolHeadProfile      SchoolHeadProfile?
-  teacherProfile         TeacherProfile?
+  school                    School?              @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile         SchoolHeadProfile?
+  teacherProfile            TeacherProfile?
   /// Authoritative. The sections this teacher advises — up to three, and the cap
   /// is enforced in `setTeacherAdvisory`, not in SQL, so the number can change
   /// without a migration. Deliberately renamed from `advisorySection`: every
   /// read site that assumed at most one now fails to compile rather than
   /// silently rendering the first of several.
-  advisorySections       Section[]            @relation("SectionAdviser")
-  taughtGrades           GradeLevel[]         @relation("TeacherGrades")
-  taughtSections         TeacherSection[]
-  managedLearners        Learner[]            @relation("TeacherLearners")
-  aralLearners           Learner[]            @relation("AralTeacherLearners")
-  recordedAttendance     Attendance[]         @relation("AttendanceRecorder")
-  recordedReadingLevels  ReadingLevelRecord[] @relation("ReadingRecorder")
-  recordedTermGrades     TermGrade[]          @relation("TermGradeRecorder")
-  recordedAttendanceDays AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
-  teacherEnrollments     Enrollment[]         @relation("TeacherEnrollments")
-  announcements          Announcement[]
-  teacherInvites         TeacherInvite[]      @relation("TeacherInviteUser")
-  notifications          Notification[]       @relation("NotificationRecipient")
-  notificationsCaused    Notification[]       @relation("NotificationActor")
-  reports                Report[]             @relation("ReportCreator")
-  chatChannels           ChatChannel[]        @relation("ChatChannelMember")
-  chatMessages           ChatMessage[]        @relation("ChatMessageAuthor")
-  chatMentions           ChatMention[]        @relation("ChatMentionUser")
-  chatReads              ChatRead[]           @relation("ChatReadUser")
-  supportTickets         SupportTicket[]      @relation("SupportTicketRequester")
-  supportTicketsResolved SupportTicket[]      @relation("SupportTicketResolver")
-  unlockGrants           UnlockGrant[]        @relation("UnlockGrantUser")
-  unlockGrantsIssued     UnlockGrant[]        @relation("UnlockGrantGranter")
-  unlockGrantsRevoked    UnlockGrant[]        @relation("UnlockGrantRevoker")
-  termWindowOverridesSet TermWindowOverride[] @relation("TermWindowSetter")
+  advisorySections          Section[]            @relation("SectionAdviser")
+  taughtGrades              GradeLevel[]         @relation("TeacherGrades")
+  taughtSections            TeacherSection[]
+  managedLearners           Learner[]            @relation("TeacherLearners")
+  aralLearners              Learner[]            @relation("AralTeacherLearners")
+  recordedAttendance        Attendance[]         @relation("AttendanceRecorder")
+  recordedReadingLevels     ReadingLevelRecord[] @relation("ReadingRecorder")
+  recordedTermGrades        TermGrade[]          @relation("TermGradeRecorder")
+  recordedAttendanceDays    AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
+  teacherEnrollments        Enrollment[]         @relation("TeacherEnrollments")
+  announcements             Announcement[]
+  teacherInvites            TeacherInvite[]      @relation("TeacherInviteUser")
+  notifications             Notification[]       @relation("NotificationRecipient")
+  notificationsCaused       Notification[]       @relation("NotificationActor")
+  reports                   Report[]             @relation("ReportCreator")
+  chatChannels              ChatChannel[]        @relation("ChatChannelMember")
+  chatMessages              ChatMessage[]        @relation("ChatMessageAuthor")
+  chatMentions              ChatMention[]        @relation("ChatMentionUser")
+  chatReads                 ChatRead[]           @relation("ChatReadUser")
+  supportTickets            SupportTicket[]      @relation("SupportTicketRequester")
+  supportTicketsResolved    SupportTicket[]      @relation("SupportTicketResolver")
+  unlockGrants              UnlockGrant[]        @relation("UnlockGrantUser")
+  unlockGrantsIssued        UnlockGrant[]        @relation("UnlockGrantGranter")
+  unlockGrantsRevoked       UnlockGrant[]        @relation("UnlockGrantRevoker")
+  schoolUnlockGrantsIssued  SchoolUnlockGrant[]  @relation("SchoolUnlockGrantGranter")
+  schoolUnlockGrantsRevoked SchoolUnlockGrant[]  @relation("SchoolUnlockGrantRevoker")
+  termWindowOverridesSet    TermWindowOverride[] @relation("TermWindowSetter")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1183,8 +1191,14 @@ model ReadingLevelRecord {
   id                        String                           @id @default(uuid())
   learnerId                 String
   weekStart                 DateTime                         @db.Date // Anchor of the recorded assessment period. The live monthly writer stores the 1st of the month; older rows from the retired weekly grid hold a Monday.
-  englishProfile            ReadingProfile
-  filipinoProfile           ReadingProfile
+  /// Nullable: a partial monthly assessment (only one language scored so far)
+  /// is a legitimate row, not an error. Whether a row counts as COMPLETE for a
+  /// given month is a predicate, not a schema constraint — it lives in
+  /// `src/lib/aral/reading-level-progress.ts`, not here.
+  englishProfile            ReadingProfile?
+  /// See `englishProfile` — same nullability, same reason, same completeness
+  /// predicate in `src/lib/aral/reading-level-progress.ts`.
+  filipinoProfile           ReadingProfile?
   wordRecognitionLevel      WeeklyWordRecognitionLevel?
   readingComprehensionLevel WeeklyReadingComprehensionLevel?
   writingLevel              WeeklyWritingLevel?
@@ -1231,13 +1245,13 @@ model TermGrade {
 /// cannot carry "who did this to me" or "I have seen it". Both are required for an
 /// ARAL designation, so designations get a row.
 model Notification {
-  id          String           @id @default(uuid())
-  schoolId    String
-  recipientId String
+  id                  String           @id @default(uuid())
+  schoolId            String
+  recipientId         String
   /// Who caused it. Nullable so removing an account leaves the notification
   /// readable rather than deleting the recipient's history with it.
-  actorId     String?
-  type        NotificationType
+  actorId             String?
+  type                NotificationType
   /// Learner ids this notification is about. Ids only: the sentence the recipient
   /// reads is composed at read time from the current learner rows, so no learner
   /// PII is duplicated into this table and a renamed or removed learner cannot
@@ -1245,22 +1259,35 @@ model Notification {
   ///
   /// One row per action, not per learner — enrolling twelve learners at once
   /// notifies the tutor once.
-  learnerIds  String[]
+  learnerIds          String[]
   /// Set on the `SUPPORT_TICKET_*` types instead of `learnerIds`, which is
   /// learner-specific by design. `SetNull` so deleting a ticket leaves the
   /// notification readable.
-  ticketId    String?
+  ticketId            String?
   /// Set on the `CHAT_*` types. `SetNull` so deleting a channel leaves the
   /// notification readable rather than removing the recipient's history.
-  channelId   String?
-  readAt      DateTime?
-  createdAt   DateTime         @default(now())
+  channelId           String?
+  /// The personal `UnlockGrant` this notification is about, when the unlock
+  /// was issued to this recipient specifically. Mutually exclusive with
+  /// `schoolUnlockGrantId` — see the CHECK constraint below, which is
+  /// SQL-only: Prisma's schema language cannot express it, the same
+  /// situation as `Enrollment`'s one-ACTIVE-row-per-learner index. Preserve
+  /// it when editing this table's migrations.
+  unlockGrantId       String?
+  /// The `SchoolUnlockGrant` this notification is about, when the unlock
+  /// covered every teacher in the school. Mutually exclusive with
+  /// `unlockGrantId` — see the note above.
+  schoolUnlockGrantId String?
+  readAt              DateTime?
+  createdAt           DateTime         @default(now())
 
-  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  recipient User           @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User?          @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  ticket    SupportTicket? @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
-  channel   ChatChannel?   @relation("NotificationChatChannel", fields: [channelId], references: [id], onDelete: SetNull)
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  recipient         User               @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor             User?              @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  ticket            SupportTicket?     @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
+  channel           ChatChannel?       @relation("NotificationChatChannel", fields: [channelId], references: [id], onDelete: SetNull)
+  unlockGrant       UnlockGrant?       @relation("NotificationUnlockGrant", fields: [unlockGrantId], references: [id], onDelete: SetNull)
+  schoolUnlockGrant SchoolUnlockGrant? @relation("NotificationSchoolUnlockGrant", fields: [schoolUnlockGrantId], references: [id], onDelete: SetNull)
 
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
@@ -1270,6 +1297,9 @@ model Notification {
   @@index([actorId])
   /// Same rule for the ticket pointer's `SetNull`.
   @@index([ticketId])
+  /// Same rule for each unlock pointer's `SetNull`.
+  @@index([unlockGrantId])
+  @@index([schoolUnlockGrantId])
 }
 
 model AuditLog {
@@ -1376,6 +1406,10 @@ enum SupportTicketStatus {
 enum UnlockScope {
   ARAL_WEEKLY_ATTENDANCE
   TERM_GRADES
+  /// `targetKey` is a month anchor `YYYY-MM-01`, matching
+  /// `ReadingLevelRecord.weekStart`'s monthly convention. Lock site:
+  /// `bulkRecordMonthlyReadingLevel` in `src/lib/actions/reading-level.ts`.
+  MONTHLY_READING_LEVEL
 }
 
 /// One request for help raised from the floating assistant.
@@ -1460,11 +1494,12 @@ model UnlockGrant {
 
   createdAt DateTime @default(now())
 
-  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user      User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy User           @relation("UnlockGrantGranter", fields: [grantedById], references: [id])
-  revokedBy User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
-  ticket    SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user          User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User           @relation("UnlockGrantGranter", fields: [grantedById], references: [id])
+  revokedBy     User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  ticket        SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  notifications Notification[] @relation("NotificationUnlockGrant")
 
   /// One grant row per window per person. A re-grant updates this row rather
   /// than stacking a second one, so "is it open?" never depends on row order.
@@ -1475,6 +1510,54 @@ model UnlockGrant {
   /// The admin list of live grants for one school.
   @@index([schoolId, expiresAt])
   /// R6 #3/#5. FK lookup sides.
+  @@index([grantedById])
+  @@index([revokedById])
+}
+
+/// One unlock covering every teacher in a school for one window, rather than
+/// one person.
+///
+/// A DEDICATED TABLE, not a nullable `UnlockGrant.userId`. In Postgres two
+/// NULLs are never equal, so `@@unique([userId, scope, targetKey])` treats
+/// every NULL-userId row as distinct from every other one — a school-wide
+/// grant modeled that way would silently defeat the unique and let a second,
+/// third, or Nth live school-wide grant for the same window exist alongside
+/// the first, making "is it open?" depend on row order rather than on a
+/// single row of truth. Keeping the school-wide case in its own table, with
+/// its own all-NOT-NULL `(schoolId, scope, targetKey)` unique, avoids the
+/// NULL-collapse problem entirely instead of working around it.
+model SchoolUnlockGrant {
+  id        String      @id @default(uuid())
+  schoolId  String
+  scope     UnlockScope
+  /// Same convention as `UnlockGrant.targetKey` — a Monday `YYYY-MM-DD` for
+  /// `ARAL_WEEKLY_ATTENDANCE`, a `TermPeriod` name for `TERM_GRADES`, a month
+  /// anchor `YYYY-MM-01` for `MONTHLY_READING_LEVEL`.
+  targetKey String
+
+  grantedById String
+
+  /// Required. A grant that never expires is a lock that was removed, not
+  /// reopened — same rule as `UnlockGrant.expiresAt`.
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  revokedById String?
+
+  createdAt DateTime @default(now())
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grantedBy     User           @relation("SchoolUnlockGrantGranter", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy     User?          @relation("SchoolUnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  notifications Notification[] @relation("NotificationSchoolUnlockGrant")
+
+  /// One grant row per window per school. Same reasoning as `UnlockGrant`'s
+  /// own unique: a re-grant updates this row rather than stacking a second
+  /// one, so "is it open?" never depends on row order.
+  @@unique([schoolId, scope, targetKey])
+  /// The hot read, on every save into a closed window: this school, this
+  /// scope, still in date.
+  @@index([schoolId, scope, expiresAt])
+  /// R6. FK lookup sides.
   @@index([grantedById])
   @@index([revokedById])
 }

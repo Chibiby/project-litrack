@@ -2,7 +2,10 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { DEMO_ENABLED_KEY } from "@/lib/demo/constants";
-import { SUBMISSION_LOCKING_KEY } from "@/lib/unlock/constants";
+import {
+  READING_LEVEL_UNLOCK_ALL_KEY,
+  SUBMISSION_LOCKING_KEY,
+} from "@/lib/unlock/constants";
 
 /**
  * Read one global switch. Returns `null` when the row does not exist, which is
@@ -80,6 +83,33 @@ export const isDemoEnabled = cache(async (): Promise<boolean> => {
 export const isSubmissionLockingEnabled = cache(async (): Promise<boolean> => {
   return (await readSetting(SUBMISSION_LOCKING_KEY)) === "true";
 });
+
+/**
+ * Is the monthly reading level window unlocked for every teacher, programme-wide?
+ *
+ * Defaults to **ON** — the opposite direction from `isSubmissionLockingEnabled`
+ * and deliberately so. A database with no `submissions.readingLevelUnlockAll`
+ * row has never had reading level closed off, so "unknown" reads as "still
+ * open" rather than "just got locked".
+ *
+ * `readSetting` degrades a failure to `null`, and `null !== "false"` evaluates
+ * to `true` — on. That is load-bearing: a settings-table hiccup must leave
+ * every teacher able to record a reading level rather than silently locking the
+ * whole programme out of a monthly window the instant Postgres hiccups. (Verify
+ * this against `readSetting` above before changing either function — its
+ * contract is "throws degrade to `null`", not "throws degrade to a specific
+ * boolean", so each reader picks its own fail-open or fail-closed direction by
+ * how it compares the string.)
+ *
+ * `cache()` for the same reason as `isSubmissionLockingEnabled` — one query per
+ * render, not per window checked — and deliberately not `unstable_cache`, so the
+ * switch is never stuck behind a second TTL.
+ */
+export const isMonthlyReadingLevelUnlockedForAll = cache(
+  async (): Promise<boolean> => {
+    return (await readSetting(READING_LEVEL_UNLOCK_ALL_KEY)) !== "false";
+  }
+);
 
 /**
  * A Prisma `where` fragment that hides the demo tenant while demo mode is off.

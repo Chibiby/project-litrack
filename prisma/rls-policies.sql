@@ -44,6 +44,7 @@ ALTER TABLE "Report"               ENABLE ROW LEVEL SECURITY;
 -- through Prisma on the service role, which bypasses RLS.
 ALTER TABLE "SupportTicket"        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UnlockGrant"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SchoolUnlockGrant"    ENABLE ROW LEVEL SECURITY;
 
 -- Global operator switches (currently the demo-mode flag). It carries no learner
 -- data, but it is the table that decides what the public login page shows, so a

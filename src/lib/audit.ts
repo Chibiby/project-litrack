@@ -160,6 +160,20 @@ export const AUDIT_ACTIONS = {
   UNLOCK_GRANT_REVOKE: "UNLOCK_GRANT_REVOKE",
   /** A save that only succeeded because an unlock grant was in force. */
   UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
+  /**
+   * The same three facts for a `SchoolUnlockGrant` — one grant that reopens a
+   * window for every teacher in a school at once.
+   *
+   * Kept as their own actions rather than folded into the three above with a
+   * flag, because the question an auditor asks is different: a personal grant
+   * names one person who could write, and a school grant names a school. The
+   * metadata follows that split — ids, the scope, the target period, the expiry
+   * and a recipient COUNT. Never a teacher's name, never an email, never
+   * anything about a learner.
+   */
+  UNLOCK_SCHOOL_GRANT_ISSUE: "UNLOCK_SCHOOL_GRANT_ISSUE",
+  UNLOCK_SCHOOL_GRANT_REVOKE: "UNLOCK_SCHOOL_GRANT_REVOKE",
+  UNLOCK_SCHOOL_GRANT_USED: "UNLOCK_SCHOOL_GRANT_USED",
   ADMIN_PROFILE_UPDATE: "ADMIN_PROFILE_UPDATE",
   ADMIN_SCHOOL_VIEW: "ADMIN_SCHOOL_VIEW",
 
@@ -200,6 +214,15 @@ export const AUDIT_ACTIONS = {
    * the only thing that explains why the window was open.
    */
   SUBMISSION_LOCKING_SET: "SUBMISSION_LOCKING_SET",
+
+  /**
+   * The programme-wide "monthly reading level is open to everyone" switch
+   * (`submissions.readingLevelUnlockAll`). Audited for the same reason as
+   * `SUBMISSION_LOCKING_SET`: while it is on, a save into a closed month records
+   * no grant, so this row is the only thing that explains why the window was
+   * open.
+   */
+  READING_LEVEL_UNLOCK_ALL_SET: "READING_LEVEL_UNLOCK_ALL_SET",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

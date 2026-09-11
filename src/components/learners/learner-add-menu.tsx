@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AddLearnerDialog } from "@/components/learners/add-learner-dialog";
-import type { LearnerFormPlacement } from "@/components/forms/learner-form";
+import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 
 /**
  * The comp's split primary control: the button adds one learner, the chevron
@@ -18,20 +18,19 @@ import type { LearnerFormPlacement } from "@/components/forms/learner-form";
  * already lives at /teacher/grade/[id]/import.
  */
 export function LearnerAddMenu({
-  gradeLevelId,
-  gradeType,
-  placement,
+  placements,
 }: {
-  gradeLevelId: string;
-  gradeType: string;
-  placement: LearnerFormPlacement;
+  /** Every section this teacher advises. The dialog itself decides whether that
+   * is one (unchanged, static placement) or several (a required picker). */
+  placements: AdvisoryPlacement[];
 }) {
+  // Import cannot express "which advisory" the way the dialog's picker can, so
+  // it keeps targeting the first — unchanged from before multi-advisory.
+  const first = placements[0];
   return (
     <div className="flex w-full sm:w-auto">
       <AddLearnerDialog
-        gradeLevelId={gradeLevelId}
-        gradeType={gradeType}
-        placement={placement}
+        placements={placements}
         triggerClassName="rounded-r-none"
       />
       <DropdownMenu>
@@ -47,7 +46,7 @@ export function LearnerAddMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem asChild>
-            <Link href={`/teacher/grade/${gradeLevelId}/import`}>
+            <Link href={`/teacher/grade/${first.gradeLevelId}/import`}>
               <Upload className="h-4 w-4" aria-hidden />
               Import from file
             </Link>

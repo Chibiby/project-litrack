@@ -279,7 +279,11 @@ async function AralWeeklyAttendanceGrid({
   // panel has to be told the deadline is not being enforced at all.
   const unlock = isSuperAdmin
     ? { lockingEnabled: true, unlockedKeys: new Set<string>() }
-    : await readUnlockState(user.id, "ARAL_WEEKLY_ATTENDANCE");
+    : await readUnlockState({
+        userId: user.id,
+        schoolId: user.schoolId,
+        scope: "ARAL_WEEKLY_ATTENDANCE",
+      });
   const unlockedWeeks = [...unlock.unlockedKeys];
 
   return (

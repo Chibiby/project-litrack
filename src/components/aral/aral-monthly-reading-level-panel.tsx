@@ -28,15 +28,17 @@ import {
 import { LearnerListFooter } from "@/components/learners/learner-list-footer";
 import { fetchAralReadingLevelForMonth } from "@/lib/actions/aral-grid";
 import type { MonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
-import { parseLocalDateKey } from "@/lib/date-keys";
+import { parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import {
   currentMonthKey,
   daysLeftInMonth,
+  formatMonthDeadlineLongDate,
   formatMonthEndLongDate,
   formatMonthKey,
   formatMonthLabel,
   MONTH_PICKER_HISTORY,
   monthPickerKeys,
+  readingLevelDeadline,
 } from "@/lib/month-range";
 import {
   LEARNER_LIST_DEFAULT_PAGE_SIZE,
@@ -63,20 +65,53 @@ function normalizeMonthKey(value: string): string {
 }
 
 /**
- * The month's standing against the program's cadence.
+ * The month's standing against the program's cadence, and — once a month is
+ * past its grace window — whether the lock the banner describes is actually
+ * enforced.
  *
- * Read the wording carefully before changing it: nothing in the schema stores a
- * submitted or locked state for reading levels, and no server rule refuses a save
- * into a past month. So this describes a *due date*, matching the "Complete
- * Monthly Reading Level" task on the teacher dashboard — it never claims the
- * month is closed, because saying so would tell a teacher a rule the system does
- * not actually enforce.
+ * `bulkRecordMonthlyReadingLevel` (`src/lib/actions/reading-level.ts`) is what
+ * refuses a save past `readingLevelDeadline(monthKey)`. That refusal is gated by
+ * the program-wide "unlock all" switch (`programUnlockAll`, defaulting ON) and
+ * by any per-teacher or per-month unlock grant (`unlockedMonths`), read server
+ * side by `readMonthlyReadingLevelLockState`. This function mirrors that same
+ * precedence so the banner can never claim a rule the action does not enforce:
+ * while locking is off or the program switch is on, nothing here is locked at
+ * all, and the wording stays the original "due date" copy below.
  */
-function monthStatus(monthKey: string): {
+function monthStatus(
+  monthKey: string,
+  lockState: {
+    lockingEnabled: boolean;
+    programUnlockAll: boolean;
+    unlockedMonths: string[];
+  }
+): {
   label: string;
   pill: string;
   body: string;
+  locked: boolean;
 } {
+  const enforced = lockState.lockingEnabled && !lockState.programUnlockAll;
+  if (enforced && schoolToday() > readingLevelDeadline(monthKey)) {
+    if (lockState.unlockedMonths.includes(monthKey)) {
+      return {
+        label: "Reopened",
+        pill: "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-800/70 dark:bg-violet-950 dark:text-violet-200",
+        body: "Editing had closed for this month, but your division admin reopened it.",
+        locked: false,
+      };
+    }
+    return {
+      label: "Locked",
+      // Theme tokens, not literal slate: a neutral "closed" state has to follow
+      // the theme, and the weekly attendance panel renders its locked state the
+      // same way (`bg-muted-foreground`). `no-hardcoded-colors` enforces this.
+      pill: "border-border bg-muted text-muted-foreground",
+      body: `Editing closed on ${formatMonthDeadlineLongDate(monthKey)}.`,
+      locked: true,
+    };
+  }
+
   const monthEnd = formatMonthEndLongDate(monthKey);
   const current = currentMonthKey();
 
@@ -85,6 +120,7 @@ function monthStatus(monthKey: string): {
       label: "Past due",
       pill: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800/70 dark:bg-amber-950 dark:text-amber-200",
       body: `Was due ${monthEnd}. Still open for editing.`,
+      locked: false,
     };
   }
   if (monthKey > current) {
@@ -92,6 +128,7 @@ function monthStatus(monthKey: string): {
       label: "Upcoming",
       pill: "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800/70 dark:bg-sky-950 dark:text-sky-200",
       body: `Due ${monthEnd}. You can assess ahead.`,
+      locked: false,
     };
   }
 
@@ -103,6 +140,7 @@ function monthStatus(monthKey: string): {
       daysLeft <= 0
         ? `Due today, ${monthEnd}.`
         : `Due ${monthEnd} · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left.`,
+    locked: false,
   };
 }
 
@@ -128,6 +166,22 @@ type Props = {
   totalPages: number;
   totalCount: number;
   readOnly?: boolean;
+  /**
+   * Whether deadlines are being enforced at all (`submissions.locking`).
+   * Defaults to true so a caller that has not been taught about the switch
+   * keeps the pre-switch behaviour, mirroring the weekly attendance panel.
+   */
+  lockingEnabled?: boolean;
+  /**
+   * The program-wide "unlock all" switch for monthly reading levels.
+   * Defaults to true — the same direction as the server's
+   * `isMonthlyReadingLevelUnlockedForAll`, which reads a missing setting as
+   * unlocked. Defaulting it false would let a caller that forgot to pass it
+   * render a past month as "Locked" while the save action accepts it.
+   */
+  programUnlockAll?: boolean;
+  /** Month keys (`YYYY-MM-01`) this teacher may still edit past the deadline. */
+  unlockedMonths?: string[];
 };
 
 export function AralMonthlyReadingLevelPanel({
@@ -149,6 +203,9 @@ export function AralMonthlyReadingLevelPanel({
   totalPages,
   totalCount,
   readOnly,
+  lockingEnabled = true,
+  programUnlockAll = true,
+  unlockedMonths = [],
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -165,7 +222,13 @@ export function AralMonthlyReadingLevelPanel({
   const desiredMonthRef = useRef(initialMonthKey);
   const requestIdRef = useRef(0);
 
-  const status = monthStatus(pickerMonth);
+  const lockState = { lockingEnabled, programUnlockAll, unlockedMonths };
+  // The banner follows the month the teacher asked for; the grid follows the
+  // month whose rows have arrived — same split as the weekly attendance panel's
+  // `picked`/`gridLocked`, so the "Loading month…" overlay is what explains any
+  // gap between the two while a fetch is in flight.
+  const status = monthStatus(pickerMonth, lockState);
+  const gridLocked = monthStatus(loadedMonth, lockState).locked;
   const pending = progress.total - progress.completed;
   const percent =
     progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
@@ -271,7 +334,7 @@ export function AralMonthlyReadingLevelPanel({
   }
 
   const busy = loading || savePending;
-  const canSave = !readOnly && learners.length > 0;
+  const canSave = !readOnly && !status.locked && learners.length > 0;
 
   // Months the picker offers: this month back through the history, newest first,
   // plus whatever month is on screen if prev/next walked outside that span.
@@ -446,7 +509,7 @@ export function AralMonthlyReadingLevelPanel({
                   { schoolId }
                 )}`
               }
-              readOnly={readOnly || loading}
+              readOnly={readOnly || loading || gridLocked}
               onSavePendingChange={setSavePending}
             />
           </div>
@@ -473,7 +536,7 @@ export function AralMonthlyReadingLevelPanel({
         <InfoCard
           icon={<BookOpen className="size-4" aria-hidden />}
           title="About monthly reading levels"
-          body="Set English, Filipino, word recognition and reading comprehension for each learner, then save. Writing level and remarks are optional, and a row saves only once all four required levels are set."
+          body="Set English, Filipino, word recognition, reading comprehension, and writing level for each learner, then save. A row saves whatever values you've filled in — you don't have to complete every field at once — and clearing a row that had saved data removes it when you save."
         />
         <InfoCard
           icon={<ClipboardList className="size-4" aria-hidden />}
