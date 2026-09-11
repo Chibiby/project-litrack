@@ -471,19 +471,20 @@ model School {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  users          User[]
-  gradeLevels    GradeLevel[]
-  learners       Learner[]
-  schoolYears    SchoolYear[]
-  teacherInvites TeacherInvite[]
-  sections       Section[]
-  enrollments    Enrollment[]
-  announcements  Announcement[]
-  notifications  Notification[]
-  reports        Report[]
-  supportTickets SupportTicket[]
-  unlockGrants   UnlockGrant[]
-  chatChannels   ChatChannel[]
+  users               User[]
+  gradeLevels         GradeLevel[]
+  learners            Learner[]
+  schoolYears         SchoolYear[]
+  teacherInvites      TeacherInvite[]
+  sections            Section[]
+  enrollments         Enrollment[]
+  announcements       Announcement[]
+  notifications       Notification[]
+  reports             Report[]
+  supportTickets      SupportTicket[]
+  unlockGrants        UnlockGrant[]
+  chatChannels        ChatChannel[]
+  termWindowOverrides TermWindowOverride[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -510,12 +511,61 @@ model SchoolYear {
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  enrollments Enrollment[]
-  termGrades  TermGrade[]
+  school              School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollments         Enrollment[]
+  termGrades          TermGrade[]
+  termWindowOverrides TermWindowOverride[]
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
+}
+
+/// A School Head's edit to one term of one school year.
+///
+/// A row exists ONLY where a head has actually changed something. Every
+/// un-edited term stays derived by `getTermWindows`, which is why this needed no
+/// backfill: a school that never opens the terms page behaves exactly as it did
+/// before this table existed.
+model TermWindowOverride {
+  id           String     @id @default(uuid())
+  /// Denormalised from `schoolYear.schoolId` so tenant scoping is a direct
+  /// `where` clause like every other table here, rather than a join a caller
+  /// might forget. Kept honest by the action, which reads the year first.
+  schoolId     String
+  schoolYearId String
+  term         TermPeriod
+
+  /// Local `YYYY-MM-DD`. Deliberately String, not DateTime.
+  ///
+  /// `SchoolYear.startDate` is a bare timestamp, so a year starting August 1 in
+  /// Manila is stored as `2026-07-31T16:00:00Z` and reading its UTC month puts
+  /// Term 1 in July — the hazard `src/lib/terms/windows.ts:66` documents at
+  /// length. `TermWindow` already carries these as keys and `isTermLocked`
+  /// already compares them as strings, so storing keys keeps ONE representation
+  /// from column to comparison to screen, which no timezone can shift.
+  startKey String
+  endKey   String
+
+  /// Last day grades may still be encoded. Equals `endKey` when a head edits
+  /// only the months. Moving this is how a term is extended WITHOUT shifting the
+  /// next term's months — the case the feature exists for.
+  deadlineKey String
+
+  setById   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  setBy      User       @relation("TermWindowSetter", fields: [setById], references: [id])
+
+  /// One override per term per year. A re-edit updates this row rather than
+  /// stacking a second one, so "what is this term's window?" never depends on
+  /// row order — the same reasoning as `UnlockGrant`'s unique.
+  @@unique([schoolYearId, term])
+  @@index([schoolId])
+  /// R6. FK-enforcement lookup side (implicit `Restrict` on `setBy`).
+  @@index([setById])
 }
 
 model User {
@@ -629,6 +679,7 @@ model User {
   unlockGrants           UnlockGrant[]        @relation("UnlockGrantUser")
   unlockGrantsIssued     UnlockGrant[]        @relation("UnlockGrantGranter")
   unlockGrantsRevoked    UnlockGrant[]        @relation("UnlockGrantRevoker")
+  termWindowOverridesSet TermWindowOverride[] @relation("TermWindowSetter")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
