@@ -644,7 +644,11 @@ with (or right after) the deploy that ships `releaseTeacherAdvisory`: the code
 stops new removals from stranding a section, and this frees the ones stranded
 already.
 
-Not yet applied.
+Applied to production 2026-09-11 (from `worktree-removed-teachers`), before the
+code was pushed; `migrate status` reported it as the only pending migration. The
+preview found 15 sections in 10 schools still advised by removed teachers and no
+learners, active enrolments or legacy rows pointing at one — so it freed those
+15 sections and nothing else. Re-running the preview afterwards returned zero.
 
 | # | File | What it does | Can it fail? |
 |---|------|--------------|--------------|
