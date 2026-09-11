@@ -1039,7 +1039,7 @@ git commit -m "feat(errors): classify anything thrown, and read Supabase refusal
 
 **Files:**
 - Modify: `prisma/schema.prisma` (append the model), `prisma/rls-policies.sql` (enable list)
-- Create: `prisma/migrations/20260911000003_add_error_event/migration.sql`
+- Create: `prisma/migrations/20260911000006_add_error_event/migration.sql`
 - Test: `tests/unit/rls-coverage.test.ts` (existing, unchanged)
 
 **Interfaces:**
@@ -1085,9 +1085,9 @@ model ErrorEvent {
 - [ ] **Step 2: Author the migration offline**
 
 ```bash
-mkdir -p prisma/migrations/20260911000003_add_error_event
+mkdir -p prisma/migrations/20260911000006_add_error_event
 git show HEAD:prisma/schema.prisma > "<scratchpad>/schema.before.prisma"
-npx prisma migrate diff --from-schema-datamodel "<scratchpad>/schema.before.prisma" --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/20260911000003_add_error_event/migration.sql
+npx prisma migrate diff --from-schema-datamodel "<scratchpad>/schema.before.prisma" --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/20260911000006_add_error_event/migration.sql
 ```
 Expected: only `CREATE TABLE "ErrorEvent"` plus four `CREATE INDEX`. Prepend a header comment (additive, no backfill, safe to apply before or after the code deploy). Follow repo convention on whether create-table migrations also `ENABLE ROW LEVEL SECURITY` (check the most recent create-table migration).
 
@@ -1101,7 +1101,7 @@ Expected: all pass. Never run `migrate dev/deploy`, `db push`, or anything again
 - [ ] **Step 5: Commit**
 
 ```bash
-git add prisma/schema.prisma prisma/rls-policies.sql prisma/migrations/20260911000003_add_error_event
+git add prisma/schema.prisma prisma/rls-policies.sql prisma/migrations/20260911000006_add_error_event
 git commit -m "feat(db): an ErrorEvent table for failures admins need to see"
 ```
 

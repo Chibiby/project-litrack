@@ -68,6 +68,8 @@ Committed migrations (apply in order via `migrate deploy`):
   (212 of 336 flagged after). The rows it would flip were snapshotted by id before
   applying; reverting is `UPDATE "User" SET "passwordIsSchoolId" = false` over those ids.
 
+- `20260911000006_add_error_event` — one additive table (`ErrorEvent`) and four
+  indexes, no backfill. See section **(m)** below.
 - `20260911000010_teacher_advisory_mode` — one additive enum and one additive column on
   `TeacherProfile`, then two bounded data statements that move existing rows onto the new
   setting. **Apply it before the code deploys** — see **(l)**, which also carries the
@@ -690,9 +692,9 @@ code-first is P2022 on profiling and on the School Head's teachers page. Applied
 first, the column is simply invisible to the running code.
 
 Numbering: production holds up to `20260911000005_release_removed_teacher_advisories`;
-006-009 are left free for `feat/error-handling`, which still has to renumber its
-`ErrorEvent` table. Confirm 010 is still unclaimed with `npx prisma migrate status`
-before applying.
+006 is now claimed by `feat/error-handling`'s `20260911000006_add_error_event`
+(see section **(m)**); 007-009 remain free. Confirm 010 is still unclaimed with
+`npx prisma migrate status` before applying.
 
 | # | Statement | What it does | Can it fail? |
 |---|-----------|--------------|--------------|
@@ -760,6 +762,55 @@ released `adviserId` values are gone. Restore them from the rows saved in step 2
 (`UPDATE "Section" SET "adviserId" = <volunteer_id> WHERE id = <section_id>`, plus
 the matching `User.advisorySectionId` and `TeacherSection` rows), or from the
 step-(a) backup if that snapshot was not taken.
+
+---
+
+## (m) Error event log  —  Sep 2026
+
+`20260911000006_add_error_event`. Renumbered from `20260911000003_add_error_event`
+because production had already applied `20260911000003_term_window_override` by the
+time this branch was ready — see the "Numbering" note under **(l)**.
+
+### What it does
+
+One new table, `ErrorEvent`, and four indexes. Nothing existing is altered.
+
+| # | Statement | What it does | Can it fail? |
+|---|-----------|--------------|--------------|
+| 1 | `CREATE TABLE "ErrorEvent"` | New table recording one row per server-side failure worth a Super Admin's attention (`ref`, `code`, `severity`, `message`, `stack`, `route`, `routeType`, `method`, `userId`, `schoolId`, `context`, `createdAt`). No foreign keys — `userId`/`schoolId` are plain nullable text, same shape as `School.createdById` and `AuditLog.userId`, so a failure stays recordable even when the rows it concerns are broken or mid-rollback. | No. New table; nothing else touched. |
+| 2-5 | `CREATE INDEX` × 4 | `ErrorEvent_createdAt_idx`, `ErrorEvent_ref_idx`, `ErrorEvent_code_createdAt_idx`, `ErrorEvent_schoolId_createdAt_idx` — support the admin list, the retention purge, and lookups by ref/code/school. | No. |
+
+No backfill, because there is nothing to backfill: the table records events that
+happen after it exists, and an empty table is the truthful record of a history
+nobody was keeping yet.
+
+### Order vs the code deploy
+
+Safe in either order:
+
+- **Applied first**, the table simply sits empty until `src/lib/errors/report.ts`
+  ships — nothing reads it yet.
+- **Code deployed first**, `reportError` never throws on its own insert failure
+  (by design — a reporter that throws would replace the original error with its
+  own), so the app keeps serving. Errors in that window only reach the Vercel
+  function log; they are lost from `ErrorEvent`, which is the only reason to
+  prefer applying the migration first.
+
+### Steps
+
+1. Apply and confirm `npx prisma migrate status` reports up to date.
+2. **Run `prisma/rls-policies.sql` after this migration** — it adds a new table,
+   so RLS is off until the enable line runs:
+   `ALTER TABLE "ErrorEvent" ENABLE ROW LEVEL SECURITY;`. No policies are added
+   (deny-all is the point): reads go through Prisma on the service role, which
+   bypasses RLS, and the table is Super-Admin-only in the app.
+3. Deploy the code. Trigger a handled failure and confirm a row lands in
+   `/admin/errors`.
+
+### Rollback
+
+`DROP TABLE "ErrorEvent"` loses only rows this migration itself made possible —
+nothing else references the table.
 
 ---
 

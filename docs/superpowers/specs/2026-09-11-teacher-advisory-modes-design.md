@@ -204,9 +204,9 @@ same helpers that bust advisory changes. Hidden when the count is zero.
 
 ## 8. Migration `20260911000010_teacher_advisory_mode`
 
-Numbered 010 to leave 005–009 free: `feat/error-handling` must renumber its
-`20260911000003_add_error_event` (003 is taken in production) and will land in that gap.
-Checked against `_prisma_migrations` immediately before applying.
+Numbered 010 to leave 005–009 free: `feat/error-handling` renumbered its
+`ErrorEvent` migration to `20260911000006_add_error_event` (003 is taken in production)
+and lands in that gap. Checked against `_prisma_migrations` immediately before applying.
 
 Additive DDL, then two bounded data statements:
 
