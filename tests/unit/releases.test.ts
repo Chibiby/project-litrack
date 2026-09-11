@@ -6,7 +6,59 @@ import {
   RELEASES,
   compareVersions,
   latestRelease,
+  unseenReleases,
+  type Release,
 } from "@/lib/releases";
+
+const rel = (version: string, announce = true): Release => ({
+  version,
+  date: "2026-09-12",
+  title: `Release ${version}`,
+  announce,
+  fixes: ["A fix"],
+});
+
+describe("unseenReleases", () => {
+  const history = [
+    rel("1.0.10"),
+    rel("1.0.9"),
+    rel("1.0.8", false),
+    rel("1.0.7"),
+    rel("1.0.0"),
+  ];
+  const versions = (lastSeen: string | null) =>
+    unseenReleases(lastSeen, history).map((r) => r.version);
+
+  it("returns nothing to a user already on the current version", () => {
+    expect(versions("1.0.10")).toEqual([]);
+  });
+
+  it("returns every announcing release they skipped, newest first", () => {
+    // 1.0.8 does not announce, so it is not listed.
+    expect(versions("1.0.0")).toEqual(["1.0.10", "1.0.9", "1.0.7"]);
+  });
+
+  it("compares numerically, so 1.0.10 counts as newer than 1.0.9", () => {
+    expect(versions("1.0.9")).toEqual(["1.0.10"]);
+  });
+
+  it("returns only the current release to a user who has seen none", () => {
+    expect(versions(null)).toEqual(["1.0.10"]);
+  });
+
+  it("returns only the current release after a rollback or an unknown version", () => {
+    expect(versions("2.0.0")).toEqual(["1.0.10"]);
+    expect(versions("0.9.9")).toEqual(["1.0.10"]);
+  });
+
+  it("returns nothing when the current release does not announce", () => {
+    expect(unseenReleases(null, [rel("1.1.0", false), rel("1.0.0")])).toEqual([]);
+  });
+
+  it("reads the committed history by default", () => {
+    expect(unseenReleases(APP_VERSION)).toEqual([]);
+  });
+});
 
 describe("compareVersions", () => {
   it("orders by major, then minor, then patch", () => {

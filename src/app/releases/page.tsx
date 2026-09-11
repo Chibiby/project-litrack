@@ -38,11 +38,13 @@ export default async function ReleasesPage() {
 
         <ol className="mt-8 space-y-10">
           {RELEASES.map((release) => (
-            <li key={release.version}>
+            // `id` is the bell's link target: each release row there points at
+            // `/releases#v{version}`.
+            <li key={release.version} id={`v${release.version}`} className="scroll-mt-8">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className="text-lg font-medium text-foreground">{release.title}</h2>
                 <span className="text-xs tabular-nums text-muted-foreground">
-                  {release.version} · {release.date}
+                  v{release.version} · {release.date}
                 </span>
               </div>
               <ul className="mt-3 space-y-2 text-sm text-muted-foreground">

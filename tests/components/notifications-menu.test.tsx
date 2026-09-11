@@ -15,6 +15,7 @@ import {
   NotificationsMenu,
   type ShellNotification,
 } from "@/components/shell/notifications-menu";
+import { RELEASES } from "@/lib/releases";
 
 afterEach(cleanup);
 
@@ -63,5 +64,30 @@ describe("NotificationsMenu", () => {
     render(<NotificationsMenu notifications={[]} />);
     fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
     expect(await screen.findByText("You're all caught up.")).not.toBeNull();
+  });
+});
+
+describe("NotificationsMenu — release history", () => {
+  it("keeps the latest releases as history, each linking to its notes", async () => {
+    render(<NotificationsMenu notifications={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
+
+    const history = await screen.findByRole("list", { name: "Release history" });
+    const links = history.querySelectorAll("a");
+    expect(links.length).toBe(Math.min(5, RELEASES.length));
+    expect(links[0].textContent).toContain(
+      `LITRACK System updated to v${RELEASES[0].version}`
+    );
+    expect(links[0].getAttribute("href")).toBe(`/releases#v${RELEASES[0].version}`);
+    expect(screen.getByRole("link", { name: "All releases" }).getAttribute("href")).toBe(
+      "/releases"
+    );
+  });
+
+  it("does not count the history toward the unread badge", () => {
+    render(<NotificationsMenu notifications={[]} />);
+    expect(
+      screen.getByRole("button", { name: "Notifications, none unread" })
+    ).toBeTruthy();
   });
 });

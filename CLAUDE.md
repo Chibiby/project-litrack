@@ -43,6 +43,21 @@ Your job is to *author* migrations; a human applies them. Safe offline commands:
 
 Conventions: committed SQL under `prisma/migrations/`, named `YYYYMMDDNNNNNN_short_description`, baseline `0_init`. Additive first — nullable column → backfill migration → tighten (see `20260808190002_backfill_null_section_a`). `Enrollment`'s partial unique index (one `ACTIVE` row per learner) exists only in SQL because Prisma's schema language can't express it — preserve it when editing Enrollment migrations. Details in `docs/migrations.md`, apply checklist in `docs/migrate-checklist.md`.
 
+## The other hard rule: releases
+
+**Every push to main that changes `src/` or `prisma/` ships a release entry.** Push to main is a production deploy, and a deploy that reaches users unannounced is the failure this rule prevents. In the same push:
+
+1. Add an entry to the top of `RELEASES` in `src/lib/releases.ts` — `version`, `date` (local `YYYY-MM-DD`), one-line `title`, `announce: true`, and `fixes` written in the user's language, not the codebase's ("The ethnicity you pick no longer snaps back", not "fix select controlled value").
+2. Set the same version string in `package.json` and `package-lock.json` (both the top-level `version` and `packages."".version`). A test fails if `package.json` and `APP_VERSION` drift.
+
+Which number moves: the push holds only fixes → last number (1.6.0 → 1.6.1). The push holds any feature → middle number (1.6.0 → 1.7.0). First number → only when the project owner says so.
+
+`announce: true` is the default; it shows the "LITRACK System updated to vX.Y.Z" modal once per user, listing every version they have not acknowledged. Set `announce: false` only for a release nobody needs to be interrupted by — it still appears at `/releases` and in the bell's Updates list. One entry per push, not per commit: group the push's commits into one release.
+
+A `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/require-release-entry.mjs`) blocks the push when the entry is missing. It fails open, so it is a reminder, not the rule.
+
+Concurrent sessions: if `releases.ts` or `package.json` conflicts on merge, renumber your entry above whatever main now holds. Never reuse a version number.
+
 ## Architecture
 
 ### Request path

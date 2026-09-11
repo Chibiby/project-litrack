@@ -124,13 +124,6 @@ export function RoleShell({
               role={role}
               grades={grades}
               notifications={notifications}
-              // The bell's release row follows the modal: on only where the
-              // layout passed a stamp (so never while an admin impersonates a
-              // head), and never for a Super Admin, who holds no school and so
-              // can never have a row to fetch.
-              releaseAlerts={
-                lastSeenReleaseVersion !== undefined && role !== "SUPER_ADMIN"
-              }
               isAralVolunteer={isAralVolunteer}
               isFloating={isFloating}
               advisoryGradeLevelId={advisoryGradeLevelId}
