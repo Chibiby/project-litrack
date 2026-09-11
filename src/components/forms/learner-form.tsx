@@ -506,26 +506,28 @@ export function LearnerForm({
           ) : null}
 
           {ethnicity && !showSecondEthnicity ? (
-            <button
+            <Button
               type="button"
+              variant="link"
               onClick={() => setShowSecondEthnicity(true)}
-              className="mt-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              className="mt-2 h-auto p-0"
             >
               + Add another ethnicity
-            </button>
+            </Button>
           ) : null}
 
           {ethnicity && showSecondEthnicity ? (
             <div className="mt-3 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="secondaryEthnicity">Second ethnicity (optional)</Label>
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={removeSecondEthnicity}
-                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                  className="h-auto p-0 text-xs text-muted-foreground"
                 >
                   Remove
-                </button>
+                </Button>
               </div>
               <select
                 id="secondaryEthnicity"
