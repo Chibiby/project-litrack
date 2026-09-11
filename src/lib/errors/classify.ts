@@ -6,6 +6,7 @@
 import { ZodError } from "zod";
 import { isAuthError } from "@supabase/supabase-js";
 import { classifyDbFailure } from "@/lib/db-errors";
+import type { ErrorParams } from "./codes";
 import { AppError, type ErrorContext } from "./app-error";
 import { validationError } from "./validation";
 import { mapSupabaseAuthError } from "./supabase";
@@ -48,7 +49,7 @@ export function classifyError(err: unknown, options: ClassifyOptions = {}): AppE
   if (err instanceof AppError) return err;
   if (err instanceof ZodError) return validationError(err);
 
-  const params = options.verb ? { verb: options.verb } : {};
+  const params: ErrorParams = options.verb ? { verb: options.verb } : {};
   const name = prismaName(err);
   if (name) {
     const code = prop(err, "code");
