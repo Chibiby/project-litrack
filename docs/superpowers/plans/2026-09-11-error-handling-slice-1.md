@@ -4260,3 +4260,1860 @@ git commit -m "fix(auth): a wrong School Head password says so, instead of blami
 ```
 
 ---
+### Task 13: Password and email changes say what Supabase refused
+
+**Files:**
+- Modify: `src/lib/actions/auth.ts` (`setPasswordAction`, `skipPasswordChange`, `changePasswordAction`, `changeEmailAction`, `requestPasswordReset`, `completePasswordReset`, `logoutAction`)
+- Test: `tests/unit/actions/account-security.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 2, 6, 12
+- Produces: the six account actions wrapped, each returning `{ ok: true } | ActionFailure` (the two that redirect keep redirecting)
+
+- [ ] **Step 1: Write the failing test** `tests/unit/actions/account-security.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * Changing a password or an email.
+ *
+ * Every failure here used to read "Failed to update password. Please try again."
+ * — advice that is wrong for three of the four real causes: a reused password, a
+ * password the project's policy rejects, and a rate limit all fail again on the
+ * next try. The cases below pin the specific answer to each.
+ *
+ * The email change has one failure that is not the user's problem at all: the
+ * address changed in Supabase but the rollback ALSO failed, so the two systems
+ * now disagree. That is the only one that pages an admin.
+ */
+
+const userUpdate = vi.fn();
+const userFindUnique = vi.fn();
+const userFindFirst = vi.fn();
+const signInWithPassword = vi.fn();
+const updateUser = vi.fn();
+const getUser = vi.fn();
+const resetPasswordForEmail = vi.fn();
+const updateUserById = vi.fn();
+const writeAudit = vi.fn();
+const checkRateLimit = vi.fn();
+const requireUser = vi.fn();
+const reportError = vi.fn(() => "E-TESTREF6");
+const redirect = vi.fn();
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      get update() { return userUpdate; },
+      get findUnique() { return userFindUnique; },
+      get findFirst() { return userFindFirst; },
+    },
+    school: { findUnique: vi.fn() },
+  },
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: async () => ({
+    auth: { signInWithPassword, updateUser, getUser, resetPasswordForEmail, signOut: vi.fn() },
+  }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createSupabaseAdminClient: () => ({ auth: { admin: { updateUserById } } }),
+}));
+vi.mock("@/lib/supabase/env", () => ({ isSupabaseConfigured: () => true, SUPABASE_NOT_CONFIGURED_MESSAGE: "env missing" }));
+vi.mock("@/lib/audit", () => ({
+  get writeAudit() { return writeAudit; },
+  AUDIT_ACTIONS: { PASSWORD_CHANGE: "PASSWORD_CHANGE", EMAIL_CHANGE: "EMAIL_CHANGE", PASSWORD_RESET_REQUEST: "PASSWORD_RESET_REQUEST", LOGOUT: "LOGOUT", LOGIN_DENIED: "LOGIN_DENIED", LOGIN_SUCCESS: "LOGIN_SUCCESS" },
+}));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() { return checkRateLimit; },
+  peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
+}));
+vi.mock("@/lib/errors/report", () => ({ get reportError() { return reportError; } }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/lib/auth/session", () => ({
+  get requireUser() { return requireUser; },
+  roleHomePath: () => "/teacher",
+  roleSecurityPath: () => "/teacher/settings",
+}));
+vi.mock("@/lib/auth/warm-routes", () => ({ warmAdminRoutes: vi.fn(), warmSchoolHeadRoutes: vi.fn(), warmTeacherRoutes: vi.fn() }));
+vi.mock("@/lib/auth/teacher-registration", () => ({ completeTeacherAuthAfterVerify: vi.fn() }));
+vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: (e: string) => e.endsWith(".litrack.local") }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    redirect(path);
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) throw err;
+  },
+}));
+
+import {
+  changeEmailAction,
+  changePasswordAction,
+  completePasswordReset,
+  requestPasswordReset,
+  setPasswordAction,
+} from "@/lib/actions/auth";
+
+const USER = {
+  id: "user-1",
+  authId: "auth-1",
+  email: "teacher@school.edu",
+  role: "TEACHER" as const,
+  schoolId: "school-1",
+};
+
+function form(entries: Record<string, string>): FormData {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(entries)) fd.set(k, v);
+  return fd;
+}
+
+async function run(fn: () => Promise<unknown>) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) return { redirected: true };
+    throw err;
+  }
+}
+
+const GOOD = { currentPassword: "current-pass", password: "N3wStrongPass", confirmPassword: "N3wStrongPass" };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  requireUser.mockResolvedValue(USER);
+  signInWithPassword.mockResolvedValue({ error: null });
+  updateUser.mockResolvedValue({ error: null });
+  userUpdate.mockResolvedValue(USER);
+  reportError.mockReturnValue("E-TESTREF6");
+});
+
+describe("changePasswordAction", () => {
+  it("names a reused password instead of telling the person to try again", async () => {
+    updateUser.mockResolvedValue({ error: { status: 422, code: "same_password", message: "New password should be different from the old password." } });
+    const res = await run(() => changePasswordAction(form(GOOD)));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PASSWORD_SAME" });
+    expect((res as { error: string }).error).toBe("Your new password must be different from your current one.");
+  });
+
+  it("names a password the policy rejects", async () => {
+    updateUser.mockResolvedValue({ error: { status: 422, code: "weak_password", message: "Password should contain at least one character of each" } });
+    expect(await run(() => changePasswordAction(form(GOOD)))).toMatchObject({ ok: false, code: "AUTH_PASSWORD_WEAK" });
+  });
+
+  it("keeps saying the current password is wrong when it is", async () => {
+    signInWithPassword.mockResolvedValue({ error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" } });
+    const res = await run(() => changePasswordAction(form(GOOD)));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_CURRENT_PASSWORD_INCORRECT" });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("never calls a rate limit a wrong password — the reason resets were wasted", async () => {
+    signInWithPassword.mockResolvedValue({ error: { status: 429, message: "Request rate limit reached" } });
+    const res = await run(() => changePasswordAction(form(GOOD)));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_RATE_LIMITED" });
+  });
+
+  it("clears the first-login flags once the password really changed", async () => {
+    await run(() => changePasswordAction(form(GOOD)));
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { mustChangePassword: false, passwordIsSchoolId: false } })
+    );
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "PASSWORD_CHANGE" }));
+  });
+});
+
+describe("setPasswordAction", () => {
+  it("redirects home when the password is saved", async () => {
+    expect(await run(() => setPasswordAction(form({ password: "N3wStrongPass", confirmPassword: "N3wStrongPass" })))).toEqual({ redirected: true });
+    expect(redirect).toHaveBeenCalledWith("/teacher");
+  });
+
+  it("reports a provider outage with a reference instead of 'try again'", async () => {
+    updateUser.mockResolvedValue({ error: { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" } });
+    const res = await run(() => setPasswordAction(form({ password: "N3wStrongPass", confirmPassword: "N3wStrongPass" })));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR", ref: "E-TESTREF6" });
+  });
+});
+
+describe("completePasswordReset", () => {
+  it("says the link expired rather than blaming the password", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
+    expect(await run(() => completePasswordReset(form({ password: "N3wStrongPass", confirmPassword: "N3wStrongPass" })))).toMatchObject({
+      ok: false,
+      code: "AUTH_RESET_LINK_EXPIRED",
+    });
+  });
+});
+
+describe("changeEmailAction", () => {
+  const EMAIL_FORM = { newEmail: "new@school.edu", confirmEmail: "new@school.edu", currentPassword: "current-pass" };
+
+  beforeEach(() => {
+    userFindFirst.mockResolvedValue(null);
+    updateUserById.mockResolvedValue({ error: null });
+  });
+
+  it("refuses an address that is already in use", async () => {
+    userFindFirst.mockResolvedValue({ id: "other" });
+    expect(await run(() => changeEmailAction(form(EMAIL_FORM)))).toMatchObject({ ok: false, code: "AUTH_EMAIL_IN_USE" });
+  });
+
+  it("refuses the address the account already has", async () => {
+    expect(await run(() => changeEmailAction(form({ ...EMAIL_FORM, newEmail: "teacher@school.edu", confirmEmail: "teacher@school.edu" })))).toMatchObject({
+      ok: false,
+      code: "AUTH_EMAIL_UNCHANGED",
+    });
+  });
+
+  it("rolls the address back when our own write fails, and says so plainly", async () => {
+    userUpdate.mockRejectedValue(Object.assign(new Error("pool timeout"), { name: "PrismaClientKnownRequestError", code: "P2024" }));
+    const res = await run(() => changeEmailAction(form(EMAIL_FORM)));
+    expect(updateUserById).toHaveBeenCalledTimes(2); // change, then rollback
+    expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
+  });
+
+  it("pages an admin when the rollback fails too and the two systems disagree", async () => {
+    userUpdate.mockRejectedValue(new Error("write failed"));
+    updateUserById.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: "rollback failed" } });
+    const res = await run(() => changeEmailAction(form(EMAIL_FORM)));
+    expect(res).toMatchObject({ ok: false, code: "AUTH_EMAIL_PARTIAL_UPDATE", ref: "E-TESTREF6" });
+    expect(reportError.mock.calls.at(-1)?.[0]).toMatchObject({ severity: "system" });
+  });
+});
+
+describe("requestPasswordReset", () => {
+  it("answers the same whether or not the account exists", async () => {
+    userFindUnique.mockResolvedValue(null);
+    const unknown = await run(() => requestPasswordReset(form({ email: "nobody@school.edu" })));
+    userFindUnique.mockResolvedValue({ id: "user-1", schoolId: "school-1", isActive: true, deletedAt: null });
+    resetPasswordForEmail.mockResolvedValue({ error: null });
+    const known = await run(() => requestPasswordReset(form({ email: "teacher@school.edu" })));
+    expect(unknown).toEqual({ ok: true });
+    expect(known).toEqual({ ok: true });
+  });
+
+  it("records a failed send that the person is deliberately not told about", async () => {
+    userFindUnique.mockResolvedValue({ id: "user-1", schoolId: "school-1", isActive: true, deletedAt: null });
+    resetPasswordForEmail.mockResolvedValue({ error: { message: "Error sending recovery email" } });
+    expect(await run(() => requestPasswordReset(form({ email: "teacher@school.edu" })))).toEqual({ ok: true });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0][0]).toMatchObject({ code: "AUTH_EMAIL_SEND_FAILED" });
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/actions/account-security.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Rewrite the six account actions in `src/lib/actions/auth.ts`**
+
+Each becomes `export const X = action("X", async (…) => …)`. The changed logic, in full:
+
+```ts
+/** Forced first-login / activation password change (current session). */
+export const setPasswordAction = action("setPasswordAction", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
+
+  const user = await requireUser(undefined, true, { allowMustChangePassword: true });
+
+  const rate = await checkRateLimit(`password:set:${user.id}`, PASSWORD_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  const input = parseInput(setPasswordSchema, {
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.updateUser({ password: input.password });
+  // A reused or policy-rejected password fails again on the next attempt, so
+  // "please try again" was advice that could not work.
+  if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { mustChangePassword: false, passwordIsSchoolId: false },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+    resource: "User",
+    resourceId: user.id,
+    metadata: { reason: "set_password" },
+  });
+
+  redirect(roleHomePath(user.role));
+});
+```
+
+`skipPasswordChange` keeps its body verbatim (including the comment about `passwordIsSchoolId`), wrapped as `action("skipPasswordChange", …)`.
+
+```ts
+/** Voluntary password change — requires verifying the current password first. */
+export const changePasswordAction = action("changePasswordAction", async (formData: FormData): Promise<{ ok: true }> => {
+  assertSupabaseConfigured();
+
+  const user = await requireUser();
+
+  const rate = await checkRateLimit(`password:change:${user.id}`, PASSWORD_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  const input = parseInput(changePasswordSchema, {
+    currentPassword: formData.get("currentPassword"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  const supabase = await createSupabaseServerClient();
+  const { error: verifyErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: input.currentPassword,
+  });
+  if (verifyErr) {
+    // A 429 here means Supabase declined to check the password at all. Saying
+    // "incorrect" would send the person off to reset a password that is fine.
+    const code = mapSupabaseAuthError(verifyErr, "server");
+    throw new AppError(code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code, { cause: verifyErr });
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: input.password });
+  if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { mustChangePassword: false, passwordIsSchoolId: false },
+  });
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+    resource: "User",
+    resourceId: user.id,
+    metadata: { reason: "change_password" },
+  });
+
+  return { ok: true };
+});
+```
+
+```ts
+/** Change account email — re-auth with current password, then dual-write Auth + Prisma. */
+export const changeEmailAction = action("changeEmailAction", async (formData: FormData): Promise<{ ok: true }> => {
+  assertSupabaseConfigured();
+
+  const user = await requireUser();
+
+  const rate = await checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  const input = parseInput(changeEmailSchema, {
+    newEmail: formData.get("newEmail"),
+    confirmEmail: formData.get("confirmEmail"),
+    currentPassword: formData.get("currentPassword"),
+  });
+
+  const newEmail = input.newEmail.trim().toLowerCase();
+  if (newEmail === user.email.trim().toLowerCase()) throw new AppError("AUTH_EMAIL_UNCHANGED");
+
+  const supabase = await createSupabaseServerClient();
+  const { error: verifyErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: input.currentPassword,
+  });
+  if (verifyErr) {
+    const code = mapSupabaseAuthError(verifyErr, "server");
+    throw new AppError(code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code, { cause: verifyErr });
+  }
+
+  const taken = await prisma.user.findFirst({
+    where: { email: newEmail, deletedAt: null, NOT: { id: user.id } },
+    select: { id: true },
+  });
+  if (taken) throw new AppError("AUTH_EMAIL_IN_USE");
+
+  const previousWasSynthetic = isSyntheticEmail(user.email);
+  const oldEmail = user.email;
+
+  // Throws CONFIG_MISSING when the service-role key is absent; the wrapper turns
+  // that into "not set up yet" plus a reference, instead of the old
+  // "temporarily unavailable" that no one could act on.
+  const admin = createSupabaseAdminClient();
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(user.authId, {
+    email: newEmail,
+    email_confirm: true,
+  });
+  if (authErr) throw new AppError(mapSupabaseAuthError(authErr, "server"), { cause: authErr });
+
+  try {
+    await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
+  } catch (dbErr) {
+    // Put the address back, or the person signs in with an address LITRACK does
+    // not know. If even that fails the two systems disagree and only an admin
+    // can fix it — the one failure in this action that pages someone.
+    const { error: rollbackErr } = await admin.auth.admin.updateUserById(user.authId, {
+      email: oldEmail,
+      email_confirm: true,
+    });
+    if (rollbackErr) {
+      throw new AppError("AUTH_EMAIL_PARTIAL_UPDATE", {
+        cause: dbErr,
+        detail: `Auth email changed to the new address but the LITRACK row still holds the old one, and the rollback failed: ${rollbackErr.message}`,
+        context: { reason: "email_rollback_failed" },
+      });
+    }
+    throw dbErr;
+  }
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.EMAIL_CHANGE,
+    resource: "User",
+    resourceId: user.id,
+    metadata: { previousWasSynthetic },
+  });
+
+  revalidatePath(roleSecurityPath(user.role));
+
+  return { ok: true };
+}, { verb: "save your new email" });
+```
+
+```ts
+/**
+ * Email recovery for accounts with a real (non-synthetic) email.
+ * Always returns the same success message (no account enumeration).
+ */
+export const requestPasswordReset = action("requestPasswordReset", async (formData: FormData): Promise<{ ok: true }> => {
+  assertSupabaseConfigured();
+
+  const input = parseInput(forgotPasswordSchema, { email: formData.get("email") });
+
+  const email = input.email.toLowerCase();
+  const rate = await checkRateLimit(`password:forgot:${email}`, RECOVERY_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  // Do not reveal whether the account exists. Skip reset for synthetic emails.
+  if (!isSyntheticEmail(email)) {
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, schoolId: true, isActive: true, deletedAt: true },
+    });
+    if (existing && existing.isActive && !existing.deletedAt) {
+      const supabase = await createSupabaseServerClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${appUrl()}/auth/reset`,
+      });
+      if (error) {
+        // The person must still see "sent" — telling them it failed would tell a
+        // stranger the account exists. But a mail sender that has stopped
+        // working is invisible to everyone otherwise, so it is recorded here.
+        reportError(
+          new AppError("AUTH_EMAIL_SEND_FAILED", {
+            cause: error,
+            detail: `resetPasswordForEmail failed: ${error.message}`,
+            context: { reason: "reset_email_failed", schoolId: existing.schoolId },
+          }),
+          { route: "requestPasswordReset", userId: existing.id, schoolId: existing.schoolId }
+        );
+      }
+      await writeAudit({
+        userId: existing.id,
+        schoolId: existing.schoolId,
+        action: AUDIT_ACTIONS.PASSWORD_RESET_REQUEST,
+        resource: "User",
+        resourceId: existing.id,
+      });
+    }
+  }
+
+  return { ok: true };
+});
+```
+
+```ts
+/** Complete password recovery after Supabase redirects to /auth/reset with a recovery session. */
+export const completePasswordReset = action("completePasswordReset", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
+
+  const input = parseInput(setPasswordSchema, {
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new AppError("AUTH_RESET_LINK_EXPIRED");
+
+  const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  const { error } = await supabase.auth.updateUser({ password: input.password });
+  if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+  // …unchanged from here: update flags, write the audit row, redirect.
+});
+```
+
+`logoutAction` is wrapped as `action("logoutAction", …)` with its body unchanged.
+
+- [ ] **Step 4: Run to verify it passes** — `npx vitest run tests/unit/actions && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/actions/auth.ts tests/unit/actions/account-security.test.ts
+git commit -m "fix(auth): password and email failures name the actual refusal"
+```
+
+---
+
+### Task 14: Registration conflicts speak the catalog
+
+**Files:**
+- Modify: `src/lib/auth/teacher-registration-helpers.ts`, `src/lib/auth/teacher-registration.ts`, `src/lib/actions/auth.ts` (`registerTeacher`, `createOrAdoptTeacherAuthUser`, `finishTeacherRegister`)
+- Test: `tests/unit/auth-helpers.test.ts` (update), `tests/unit/actions/register-teacher.test.ts` (new)
+
+**Interfaces:**
+- Consumes: Tasks 2, 6, 10, 12
+- Produces:
+  - `registerConflictCode(user, schoolId) → ErrorCode`; `registerConflictError(user, schoolId) → string` kept as a thin wrapper
+  - `CompleteTeacherAuthResult` failure member becomes `{ ok: false; error: AppError; signOut: boolean }`
+  - `registerTeacher` wrapped, returning `{ ok: true; redirectTo } | ActionFailure`
+
+- [ ] **Step 1: Update `tests/unit/auth-helpers.test.ts`** — replace the "maps register conflict messages" case with one that pins codes, and keep a message assertion so the copy stays stable:
+
+```ts
+  it("maps register conflicts to codes, and keeps the wording", () => {
+    expect(registerConflictCode(base, "school-1")).toBe("AUTH_TEACHER_PENDING");
+    expect(registerConflictCode({ ...base, approvalStatus: "REJECTED" }, "school-1")).toBe("AUTH_REGISTRATION_DECLINED");
+    expect(registerConflictCode({ ...base, approvalStatus: "APPROVED", isActive: false }, "school-1")).toBe("AUTH_ACCOUNT_DEACTIVATED");
+    expect(registerConflictCode({ ...base, approvalStatus: "APPROVED", isActive: true }, "school-1")).toBe("AUTH_ACCOUNT_EXISTS_SIGN_IN");
+    // An account at ANOTHER school must not be described as one at this school.
+    expect(registerConflictCode(base, "other-school")).toBe("AUTH_EMAIL_IN_USE");
+
+    expect(registerConflictError(base, "school-1")).toBe("Your request is pending School Head approval.");
+    expect(registerConflictError(base, "other-school")).toBe("That email is already used by another LITRACK account.");
+  });
+```
+Add `registerConflictCode` to the import list at the top of that file.
+
+- [ ] **Step 2: Write `tests/unit/actions/register-teacher.test.ts`**
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * Teacher self-registration. Every conflict here is something the person can act
+ * on — sign in instead, wait for approval, contact the School Head — so each one
+ * gets its own answer. The throttle is charged on a conflict too: registration
+ * answers the same question as sign-in ("does this address have an account?").
+ */
+
+const userFindUnique = vi.fn();
+const schoolFindUnique = vi.fn();
+const createUser = vi.fn();
+const signInWithPassword = vi.fn();
+const getSession = vi.fn();
+const completeTeacherAuthAfterVerify = vi.fn();
+const checkRateLimit = vi.fn();
+const peekRateLimit = vi.fn();
+const reportError = vi.fn(() => "E-TESTREF7");
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: { get findUnique() { return userFindUnique; }, update: vi.fn(), findFirst: vi.fn() },
+    school: { get findUnique() { return schoolFindUnique; } },
+  },
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: async () => ({ auth: { signInWithPassword, getSession, signOut: vi.fn() } }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => ({ auth: { admin: { createUser } } }) }));
+vi.mock("@/lib/supabase/env", () => ({ isSupabaseConfigured: () => true, SUPABASE_NOT_CONFIGURED_MESSAGE: "env missing" }));
+vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(), AUDIT_ACTIONS: { TEACHER_REGISTER: "TEACHER_REGISTER" } }));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() { return checkRateLimit; },
+  get peekRateLimit() { return peekRateLimit; },
+}));
+vi.mock("@/lib/errors/report", () => ({ get reportError() { return reportError; } }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }) }));
+vi.mock("@/lib/auth/session", () => ({ requireUser: vi.fn(), roleHomePath: () => "/teacher", roleSecurityPath: () => "/x" }));
+vi.mock("@/lib/auth/warm-routes", () => ({ warmAdminRoutes: vi.fn(), warmSchoolHeadRoutes: vi.fn(), warmTeacherRoutes: vi.fn() }));
+vi.mock("@/lib/auth/teacher-registration", () => ({
+  get completeTeacherAuthAfterVerify() { return completeTeacherAuthAfterVerify; },
+}));
+vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: () => false }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: (p: string) => { throw new Error(`NEXT_REDIRECT:${p}`); },
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) throw err;
+  },
+}));
+
+import { registerTeacher } from "@/lib/actions/auth";
+
+function form(overrides: Record<string, string> = {}): FormData {
+  const fd = new FormData();
+  const base = {
+    schoolId: "school-1",
+    email: "new@school.edu",
+    firstName: "Maria",
+    lastName: "Santos",
+    isAralVolunteer: "false",
+    password: "N3wStrongPass",
+    confirmPassword: "N3wStrongPass",
+    ...overrides,
+  };
+  for (const [k, v] of Object.entries(base)) fd.set(k, v);
+  return fd;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  schoolFindUnique.mockResolvedValue({ id: "school-1", isActive: true, deletedAt: null });
+  userFindUnique.mockResolvedValue(null);
+  createUser.mockResolvedValue({ data: { user: { id: "auth-new" } }, error: null });
+  getSession.mockResolvedValue({ data: { session: { user: { id: "auth-new" } } } });
+  completeTeacherAuthAfterVerify.mockResolvedValue({ ok: true, outcome: "pending" });
+  reportError.mockReturnValue("E-TESTREF7");
+});
+
+describe("registerTeacher", () => {
+  it("creates the account and sends the teacher to the waiting page", async () => {
+    await expect(registerTeacher(form())).resolves.toEqual({ ok: true, redirectTo: "/account/created" });
+  });
+
+  it("tells someone who already has an account to sign in", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "t-1", role: "TEACHER", schoolId: "school-1", approvalStatus: "APPROVED", isActive: true, deletedAt: null,
+    });
+    const res = await registerTeacher(form());
+    expect(res).toMatchObject({ ok: false, code: "AUTH_ACCOUNT_EXISTS_SIGN_IN" });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("tells someone already waiting that they are waiting", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "t-1", role: "TEACHER", schoolId: "school-1", approvalStatus: "PENDING", isActive: false, deletedAt: null,
+    });
+    expect(await registerTeacher(form())).toMatchObject({ ok: false, code: "AUTH_TEACHER_PENDING" });
+  });
+
+  it("does not reveal that the address belongs to another school", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "t-1", role: "TEACHER", schoolId: "school-2", approvalStatus: "APPROVED", isActive: true, deletedAt: null,
+    });
+    const res = await registerTeacher(form());
+    expect(res).toMatchObject({ ok: false, code: "AUTH_EMAIL_IN_USE" });
+    expect((res as { error: string }).error).not.toMatch(/school-2|another school/i);
+  });
+
+  it("charges the lookup throttle on a conflict, because it answers the same question", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "t-1", role: "TEACHER", schoolId: "school-1", approvalStatus: "APPROVED", isActive: true, deletedAt: null,
+    });
+    await registerTeacher(form());
+    expect(checkRateLimit).toHaveBeenCalledWith("login:lookup-miss:ip:203.0.113.9", expect.any(Object));
+  });
+
+  it("says sign-ups are switched off when the project refuses them", async () => {
+    createUser.mockResolvedValue({ data: { user: null }, error: { code: "signup_disabled", message: "Signups not allowed for this instance" } });
+    expect(await registerTeacher(form())).toMatchObject({ ok: false, code: "AUTH_SIGNUPS_DISABLED", ref: "E-TESTREF7" });
+  });
+
+  it("tells the teacher to sign in when the account exists but the auto sign-in failed", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    signInWithPassword.mockResolvedValue({ error: { status: 400, message: "Invalid login credentials" } });
+    expect(await registerTeacher(form())).toMatchObject({ ok: false, code: "AUTH_REGISTERED_SIGN_IN" });
+  });
+});
+```
+
+- [ ] **Step 3: Run to verify they fail** — `npx vitest run tests/unit/auth-helpers.test.ts tests/unit/actions/register-teacher.test.ts` — Expected: FAIL.
+
+- [ ] **Step 4: Add `registerConflictCode` to `src/lib/auth/teacher-registration-helpers.ts`**
+
+```ts
+import type { ErrorCode } from "@/lib/errors/codes";
+import { formatMessage } from "@/lib/errors/codes";
+
+/**
+ * Why a registration cannot proceed for an address that already has an account.
+ *
+ * An account at ANOTHER school is deliberately the vaguest answer: naming it
+ * would tell a stranger where a colleague works.
+ */
+export function registerConflictCode(
+  user: Pick<User, "role" | "schoolId" | "approvalStatus" | "isActive">,
+  schoolId: string
+): ErrorCode {
+  if (user.role === "TEACHER" && user.schoolId === schoolId) {
+    if (user.approvalStatus === "PENDING") return "AUTH_TEACHER_PENDING";
+    if (user.approvalStatus === "REJECTED") return "AUTH_REGISTRATION_DECLINED";
+    if (user.approvalStatus === "APPROVED" && !user.isActive) return "AUTH_ACCOUNT_DEACTIVATED";
+    if (user.approvalStatus === "APPROVED" || user.isActive) return "AUTH_ACCOUNT_EXISTS_SIGN_IN";
+  }
+  return "AUTH_EMAIL_IN_USE";
+}
+
+/** Kept for callers that only want the sentence. */
+export function registerConflictError(
+  user: Pick<User, "role" | "schoolId" | "approvalStatus" | "isActive">,
+  schoolId: string
+): string {
+  return formatMessage(registerConflictCode(user, schoolId));
+}
+```
+Replace `DECLINED_REGISTRATION_MESSAGE` / `DEACTIVATED_TEACHER_MESSAGE` with re-exports so existing importers keep working:
+```ts
+/** @deprecated Use `formatMessage("AUTH_REGISTRATION_DECLINED")`. Kept while callers migrate. */
+export const DECLINED_REGISTRATION_MESSAGE = formatMessage("AUTH_REGISTRATION_DECLINED");
+/** @deprecated Use `formatMessage("AUTH_ACCOUNT_DEACTIVATED")`. Kept while callers migrate. */
+export const DEACTIVATED_TEACHER_MESSAGE = formatMessage("AUTH_ACCOUNT_DEACTIVATED");
+```
+
+- [ ] **Step 5: `teacher-registration.ts` carries an `AppError` instead of a string**
+
+```ts
+export type CompleteTeacherAuthResult =
+  | { ok: true; outcome: "pending" | "approved" }
+  | { ok: false; error: AppError; signOut: boolean };
+```
+Then each failure return becomes an `AppError`:
+- `"First and last name are required."` → `fieldError("firstName", "First and last name are required.")`
+- `"Registration failed. Please try again."` → `classifyError(err, { verb: "create your account" })` (the caught Prisma error, so a pool timeout says so and carries a reference)
+- the three `"No teacher account found for this school. Create an account first."` → `new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } })`
+- `registerConflictError(existing, schoolId)` → `new AppError(registerConflictCode(existing, schoolId))`
+- `DECLINED_REGISTRATION_MESSAGE` → `new AppError("AUTH_REGISTRATION_DECLINED")`
+- `DEACTIVATED_TEACHER_MESSAGE` → `new AppError("AUTH_ACCOUNT_DEACTIVATED")`
+
+- [ ] **Step 6: `registerTeacher` in `src/lib/actions/auth.ts`**
+
+```ts
+export const registerTeacher = action("registerTeacher", async (formData: FormData): Promise<{ ok: true; redirectTo: string }> => {
+  assertSupabaseConfigured();
+
+  const input = parseInput(teacherRegisterSchema, {
+    schoolId: formData.get("schoolId"),
+    email: formData.get("email"),
+    firstName: formData.get("firstName") || undefined,
+    middleName: formData.get("middleName") || undefined,
+    lastName: formData.get("lastName") || undefined,
+    // Unticked checkboxes send nothing, so absence is `false` — and the string
+    // "false" must be false too, since the client posts the flag explicitly.
+    isAralVolunteer: formData.get("isAralVolunteer") === "true",
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  const email = input.email.toLowerCase().trim();
+  const { schoolId, password } = input;
+  const names: TeacherRegisterNames = {
+    firstName: input.firstName.trim(),
+    middleName: input.middleName?.trim() || undefined,
+    lastName: input.lastName.trim(),
+  };
+
+  const rate = await checkRateLimit(`register:teacher:${schoolId}:${email}`, REGISTER_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+  await assertLookupAllowed();
+  await requireActiveSchool(schoolId);
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && !existing.deletedAt) {
+    // A conflict answers the same question sign-in does — "does this address
+    // have an account?" — so it costs the same allowance.
+    await recordFailedLookup();
+    throw new AppError(registerConflictCode(existing, schoolId));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const authId = await createOrAdoptTeacherAuthUser(supabase, { email, password, schoolId });
+
+  // Sign in so the browser holds a session for /account/created. If this fails
+  // the auth user exists but no LITRACK row does yet — signing in and creating
+  // the account again recovers it through the adopt path above.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || session.user.id !== authId) {
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) throw new AppError("AUTH_REGISTERED_SIGN_IN", { cause: signInError });
+  }
+
+  return finishTeacherRegister(supabase, { authId, email, schoolId, names, isAralVolunteer: input.isAralVolunteer });
+}, { verb: "create your account" });
+```
+
+`createOrAdoptTeacherAuthUser` now returns `Promise<string>` (the auth id) and throws:
+```ts
+  const { data, error } = await admin.auth.admin.createUser({ … });
+  if (!error && data.user) return data.user.id;
+
+  const message = (error?.message ?? "").toLowerCase();
+  const alreadyRegistered =
+    message.includes("already registered") ||
+    message.includes("already been registered") ||
+    message.includes("already exists");
+
+  if (!alreadyRegistered) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+  // An auth user can already exist without a LITRACK row (the Prisma conflict
+  // check above ran first): that is an abandoned earlier attempt, so adopt it
+  // when the same password signs in rather than dead-ending the teacher.
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInError || !signInData.user) throw new AppError("AUTH_ACCOUNT_EXISTS_SIGN_IN", { cause: signInError ?? undefined });
+  return signInData.user.id;
+```
+and its `createSupabaseAdminClient()` try/catch is deleted — the client throws `CONFIG_MISSING` itself now.
+
+`finishTeacherRegister` returns `{ ok: true; redirectTo }` and rethrows `result.error` (the `AppError`) after the sign-out branch.
+
+- [ ] **Step 7: Run to verify** — `npx vitest run tests/unit && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/lib/auth/teacher-registration-helpers.ts src/lib/auth/teacher-registration.ts src/lib/actions/auth.ts tests/unit/auth-helpers.test.ts tests/unit/actions/register-teacher.test.ts
+git commit -m "feat(auth): registration conflicts each get their own answer"
+```
+
+---
+
+### Task 15: The login form stops guessing
+
+**Files:**
+- Modify: `src/components/forms/login-form.tsx:187-196,304-315,265-269`
+- Test: `tests/components/login-form-errors.test.tsx`
+
+**Interfaces:**
+- Consumes: Tasks 1, 2, 11
+- Produces: the browser grant classified through `mapSupabaseAuthError(err, "browser")`; no hard-coded sentences left in the component
+
+**The bug being fixed:** when the browser cannot reach Supabase at all, the form currently says "Incorrect password" — the password was never checked.
+
+- [ ] **Step 1: Write the failing test** `tests/components/login-form-errors.test.tsx`
+
+```tsx
+import { describe, expect, it } from "vitest";
+import { formatMessage } from "@/lib/errors/codes";
+import { mapSupabaseAuthError } from "@/lib/errors/supabase";
+import { loginFailureReasonFor } from "@/lib/errors/supabase";
+
+/**
+ * What the login form says after the browser's own password grant fails.
+ *
+ * The component hands the error to `mapSupabaseAuthError(err, "browser")` and
+ * shows the catalog message for the code, so these cases pin the same decision
+ * the form makes, without rendering it.
+ */
+
+const WRONG_PASSWORD = { status: 400, code: "invalid_credentials", message: "Invalid login credentials" };
+const RATE_LIMITED = { status: 429, message: "Request rate limit reached" };
+const OFFLINE = { name: "AuthRetryableFetchError", status: 0, message: "Failed to fetch" };
+
+describe("browser sign-in failures", () => {
+  it("says the password is wrong only when it was actually checked", () => {
+    const code = mapSupabaseAuthError(WRONG_PASSWORD, "browser");
+    expect(code).toBe("AUTH_INCORRECT_PASSWORD");
+    expect(formatMessage(code)).toBe("Incorrect password. Check it and try again.");
+  });
+
+  it("blames the connection when the request never arrived", () => {
+    const code = mapSupabaseAuthError(OFFLINE, "browser");
+    expect(code).toBe("AUTH_SERVICE_UNREACHABLE");
+    expect(formatMessage(code)).toMatch(/internet connection/i);
+    expect(formatMessage(code)).not.toMatch(/password/i);
+  });
+
+  it("tells someone rate-limited not to reset a password that is fine", () => {
+    const code = mapSupabaseAuthError(RATE_LIMITED, "browser");
+    expect(formatMessage(code)).toMatch(/no need to reset/i);
+  });
+
+  it("records each cause under its own audit reason", () => {
+    expect(loginFailureReasonFor(mapSupabaseAuthError(WRONG_PASSWORD, "browser"))).toBe("incorrect_credentials");
+    expect(loginFailureReasonFor(mapSupabaseAuthError(RATE_LIMITED, "browser"))).toBe("rate_limited");
+    expect(loginFailureReasonFor(mapSupabaseAuthError(OFFLINE, "browser"))).toBe("service_unreachable");
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/components/login-form-errors.test.tsx` — Expected: PASS once Task 2 is in (this test guards the mapping the component will use). If it already passes, proceed: Step 3 is what changes the component.
+
+- [ ] **Step 3: Use the mapping in `src/components/forms/login-form.tsx`**
+
+Replace the `AUTH_RATE_LIMITED_MESSAGE`/`isAuthRateLimitError` import with:
+```tsx
+import { formatMessage } from "@/lib/errors/codes";
+import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
+```
+
+Teacher grant (was lines 187–196):
+```tsx
+      if (error) {
+        // The browser made this request, so it is the only place that can tell
+        // "the server said no" from "the request never arrived". Saying
+        // "incorrect password" for a dropped connection is what sent people to
+        // reset passwords that were never wrong.
+        const code = mapSupabaseAuthError(error, "browser");
+        await reportLoginFailure({
+          schoolId,
+          role: "TEACHER",
+          email: begin.email,
+          reason: loginFailureReasonFor(code),
+        });
+        toast.error(formatMessage(code));
+        return;
+      }
+```
+
+School Head grant (was lines 304–315):
+```tsx
+      if (error) {
+        const code = mapSupabaseAuthError(error, "browser");
+        await reportLoginFailure({
+          schoolId,
+          role: "SCHOOL_HEAD",
+          reason: loginFailureReasonFor(code),
+        });
+        toast.error(formatMessage(code));
+        return;
+      }
+```
+
+Register catch (was lines 265–269):
+```tsx
+      } catch (err) {
+        console.error("[login-form] teacher register failed:", err);
+        registerLock.current = false;
+        toast.error(formatMessage("INTERNAL_ERROR"));
+      }
+```
+
+- [ ] **Step 4: Run to verify** — `npx vitest run tests/components && npm run typecheck && npm run lint` — Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/forms/login-form.tsx tests/components/login-form-errors.test.tsx
+git commit -m "fix(auth): an unreachable sign-in service no longer reads as a wrong password"
+```
+
+---
+### Task 16: API routes and the retention job
+
+**Files:**
+- Modify: `src/app/api/schools/list/route.ts`, `src/app/api/cron/backup/route.ts`, `src/app/api/admin/backups/download/route.ts`
+- Test: `tests/unit/api/route-errors.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 5, 6, 10
+- Produces: all three routes wrapped in `route()`; the daily cron also purges expired `ErrorEvent` rows
+
+**Security note being fixed:** the cron route currently returns `err.message` in its 500 body.
+
+- [ ] **Step 1: Write the failing test** `tests/unit/api/route-errors.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const listSchoolsPublic = vi.fn();
+const checkRateLimit = vi.fn();
+const reportError = vi.fn(() => "E-TESTREF8");
+const purgeExpiredErrorEvents = vi.fn();
+const createSnapshot = vi.fn();
+const saveBackup = vi.fn();
+
+vi.mock("@/lib/actions/school", () => ({ get listSchoolsPublic() { return listSchoolsPublic; } }));
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() { return checkRateLimit; },
+  peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
+}));
+vi.mock("@/lib/errors/report", () => ({ get reportError() { return reportError; } }));
+vi.mock("@/lib/errors/retention", () => ({ get purgeExpiredErrorEvents() { return purgeExpiredErrorEvents; } }));
+vi.mock("@/lib/db/snapshot", () => ({ get createSnapshot() { return createSnapshot; } }));
+vi.mock("@/lib/db/backup-store", () => ({
+  isBackupStoreConfigured: () => true,
+  get saveBackup() { return saveBackup; },
+  readBackupBytes: vi.fn(),
+}));
+vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(), AUDIT_ACTIONS: { DB_BACKUP_CREATE: "DB_BACKUP_CREATE", DB_BACKUP_DOWNLOAD: "DB_BACKUP_DOWNLOAD" } }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }) }));
+
+import { NextRequest } from "next/server";
+import { GET as listSchools } from "@/app/api/schools/list/route";
+import { GET as cronBackup } from "@/app/api/cron/backup/route";
+
+function request(path: string, headers: Record<string, string> = {}): NextRequest {
+  return new NextRequest(new URL(path, "https://litrack.example.org"), { headers });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  listSchoolsPublic.mockResolvedValue([{ id: "s1", name: "School" }]);
+  purgeExpiredErrorEvents.mockResolvedValue(3);
+  createSnapshot.mockResolvedValue({ meta: { totalRows: 10 } });
+  saveBackup.mockResolvedValue({ pathname: "daily/x.gz", size: 100, stamp: "2026-09-11" });
+  process.env.CRON_SECRET = "s3cret";
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("/api/schools/list", () => {
+  it("answers with the schools", async () => {
+    const res = await listSchools(request("/api/schools/list"));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ schools: [{ id: "s1" }] });
+  });
+
+  it("says the database is unavailable, with a reference, not 'no schools'", async () => {
+    listSchoolsPublic.mockRejectedValue(Object.assign(new Error("pool timeout"), { name: "PrismaClientKnownRequestError", code: "P2024" }));
+    const res = await listSchools(request("/api/schools/list"));
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: "DB_UNAVAILABLE", ref: "E-TESTREF8" });
+    expect(body.message).not.toMatch(/prisma|pool timeout/i);
+  });
+});
+
+describe("/api/cron/backup", () => {
+  it("refuses a request without the shared secret", async () => {
+    const res = await cronBackup(request("/api/cron/backup?kind=daily"));
+    expect(res.status).toBe(401);
+  });
+
+  it("never echoes the underlying error text", async () => {
+    createSnapshot.mockRejectedValue(new Error("relation \"Learner\" does not exist"));
+    const res = await cronBackup(request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" }));
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toMatch(/relation|Learner/);
+    expect(body).toHaveProperty("ref");
+  });
+
+  it("purges expired error records alongside the backup", async () => {
+    const res = await cronBackup(request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" }));
+    expect(res.status).toBe(200);
+    expect(purgeExpiredErrorEvents).toHaveBeenCalledTimes(1);
+    await expect(res.json()).resolves.toMatchObject({ ok: true, errorEventsPurged: 3 });
+  });
+
+  it("still reports a successful backup when the purge fails", async () => {
+    purgeExpiredErrorEvents.mockRejectedValue(new Error("delete failed"));
+    const res = await cronBackup(request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ok: true });
+  });
+
+  it("does not purge on the weekly run", async () => {
+    await cronBackup(request("/api/cron/backup?kind=weekly", { authorization: "Bearer s3cret" }));
+    expect(purgeExpiredErrorEvents).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/api/route-errors.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Wrap `src/app/api/schools/list/route.ts`**
+
+```ts
+import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { listSchoolsPublic } from "@/lib/actions/school";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom } from "@/lib/request-ip";
+import { route } from "@/lib/errors/route";
+import { tooManyAttempts } from "@/lib/errors/app-error";
+
+// Must stay dynamic: prerendering this at build time requires a reachable
+// database, which is not guaranteed in the Vercel build environment.
+export const dynamic = "force-dynamic";
+
+/** Soft abuse protection for unauthenticated school enumeration (id + name only). */
+const PUBLIC_LIST_RATE = { limit: 60, windowMs: 60_000 };
+
+export const GET = route("GET /api/schools/list", async () => {
+  const ip = clientIpFrom(await headers());
+  const rate = await checkRateLimit(`api:schools-list:${ip}`, PUBLIC_LIST_RATE);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
+
+  // An unreachable database must not masquerade as "there are no schools" —
+  // that renders an empty picker on /login and hides the outage entirely. The
+  // wrapper turns the throw into a 503 naming the cause.
+  return NextResponse.json({ schools: await listSchoolsPublic() });
+});
+```
+
+- [ ] **Step 4: Wrap `src/app/api/cron/backup/route.ts`** — keep `isAuthorized` and the header comment; replace the handler:
+
+```ts
+export const GET = route("GET /api/cron/backup", async (request: NextRequest) => {
+  if (!isAuthorized(request)) throw new AppError("AUTH_NOT_SIGNED_IN", { detail: "Missing or wrong CRON_SECRET" });
+
+  const kindParam = request.nextUrl.searchParams.get("kind");
+  const kind: BackupKind = kindParam === "weekly" ? "weekly" : "daily";
+
+  if (!isBackupStoreConfigured()) {
+    throw new AppError("SERVICE_UNAVAILABLE", {
+      params: { service: "Backup storage" },
+      detail: "BLOB_READ_WRITE_TOKEN is not set; no backup store to write to.",
+      context: { service: "blob" },
+    });
+  }
+
+  const snapshot = await createSnapshot();
+  const saved = await saveBackup(kind, snapshot);
+
+  await writeAudit({
+    action: AUDIT_ACTIONS.DB_BACKUP_CREATE,
+    resource: "Database",
+    resourceId: saved.pathname,
+    metadata: { trigger: "cron", kind, totalRows: snapshot.meta.totalRows, bytes: saved.size },
+  });
+
+  // Housekeeping rides on the daily run rather than its own cron entry: one
+  // schedule fewer to keep working, and the plan's cron allowance is finite.
+  // A failed purge must never fail a backup.
+  let errorEventsPurged: number | null = null;
+  if (kind === "daily") {
+    try {
+      errorEventsPurged = await purgeExpiredErrorEvents();
+    } catch (err) {
+      console.error("[cron/backup] ErrorEvent purge failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    kind,
+    stamp: saved.stamp,
+    bytes: saved.size,
+    totalRows: snapshot.meta.totalRows,
+    errorEventsPurged,
+  });
+});
+```
+The old `catch` that returned `err.message` is gone: `route()` records the full error and answers with a reference. (`maxDuration = 300` stays.)
+
+- [ ] **Step 5: Wrap `src/app/api/admin/backups/download/route.ts`** — keep the header comment and the `getCurrentUser` gate; replace the refusals and the `catch`:
+
+```ts
+export const GET = route("GET /api/admin/backups/download", async (request: NextRequest) => {
+  const user = await getCurrentUser();
+  if (!user) throw new AppError("AUTH_NOT_SIGNED_IN");
+  if (user.role !== "SUPER_ADMIN") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "database backups" },
+      detail: `Role ${user.role} requested a backup download`,
+      context: { reason: "not_super_admin" },
+    });
+  }
+
+  if (!isBackupStoreConfigured()) {
+    throw new AppError("SERVICE_UNAVAILABLE", { params: { service: "Backup storage" }, context: { service: "blob" } });
+  }
+
+  const pathname = request.nextUrl.searchParams.get("path");
+  if (!pathname) throw fieldError("path", "Which backup? The link is missing its file name.");
+
+  // `readBackupBytes` rejects anything outside the backup layout, so a crafted
+  // `path` cannot turn this into a read of an arbitrary blob.
+  const bytes = await readBackupBytes(pathname);
+  if (!bytes) throw resourceNotFound("Backup");
+
+  await writeAudit({ … });   // unchanged
+
+  return new NextResponse(new Uint8Array(bytes), { headers: { … } });   // unchanged
+});
+```
+Because this link is opened by a browser, `errorResponse` sends a signed-out admin to `/admin/login` and a wrong role to `/forbidden` instead of showing JSON.
+
+- [ ] **Step 6: Run to verify** — `npx vitest run tests/unit/api && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/app/api tests/unit/api
+git commit -m "feat(errors): API routes answer in one shape, and the cron stops echoing raw errors"
+```
+
+---
+
+### Task 17: 404, 403 and 500 pages
+
+**Files:**
+- Create: `src/lib/nav/not-found-links.ts`, `src/components/errors/error-card.tsx`, `src/components/errors/route-error.tsx`, `src/components/errors/not-found-content.tsx`, `src/app/forbidden/page.tsx`, `src/app/global-error.tsx`, `src/app/teacher/(app)/[...missing]/page.tsx`, `src/app/teacher/(app)/not-found.tsx`, `src/app/school-head/(app)/[...missing]/page.tsx`, `src/app/school-head/(app)/not-found.tsx`, `src/app/admin/[...missing]/page.tsx`, `src/app/admin/not-found.tsx`
+- Modify: `src/app/not-found.tsx`, `src/app/error.tsx`, `src/app/admin/error.tsx`, `src/app/teacher/(app)/error.tsx`, `src/app/school-head/(app)/error.tsx`, `src/lib/auth/session.ts` (add `peekCurrentUser`)
+- Test: `tests/unit/errors/not-found-links.test.ts`, `tests/unit/errors/error-pages.test.ts`, `e2e/not-found.spec.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 9
+- Produces:
+  - `notFoundLinksFor(role: UserRole | null) → Array<{ href: string; label: string }>`
+  - `<ErrorCard icon title description reference? actions>`, `<RouteError error reset homeHref homeLabel title description>`, `<NotFoundContent links />`
+  - `peekCurrentUser()` — the current user or null, never redirecting
+
+- [ ] **Step 1: Write the failing tests** `tests/unit/errors/not-found-links.test.ts`
+
+```ts
+import { describe, expect, it } from "vitest";
+import { notFoundLinksFor } from "@/lib/nav/not-found-links";
+
+describe("notFoundLinksFor", () => {
+  it("offers a signed-out visitor only the way in", () => {
+    expect(notFoundLinksFor(null)).toEqual([{ href: "/login", label: "Sign in" }]);
+  });
+
+  it("offers each role its own main pages", () => {
+    expect(notFoundLinksFor("TEACHER").map((l) => l.href)).toEqual(["/teacher", "/teacher/aral", "/teacher/learners"]);
+    expect(notFoundLinksFor("SCHOOL_HEAD")[0].href).toBe("/school-head");
+    expect(notFoundLinksFor("SUPER_ADMIN").map((l) => l.href)).toContain("/admin/schools");
+  });
+
+  it("labels every link", () => {
+    for (const role of [null, "TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] as const) {
+      for (const link of notFoundLinksFor(role)) {
+        expect(link.label.length).toBeGreaterThan(2);
+        expect(link.href.startsWith("/")).toBe(true);
+      }
+    }
+  });
+});
+```
+
+`tests/unit/errors/error-pages.test.ts` — a repo invariant, in the style of `route-isr-safety.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+const APP = path.resolve(__dirname, "../../../src/app");
+
+function read(rel: string): string {
+  return readFileSync(path.join(APP, rel), "utf8");
+}
+
+/**
+ * The error pages are the last thing a person sees when everything else failed,
+ * so what they must NOT say matters as much as what they do.
+ */
+describe("error pages", () => {
+  it("exists for every boundary, including the root layout", () => {
+    for (const file of [
+      "not-found.tsx",
+      "error.tsx",
+      "global-error.tsx",
+      "forbidden/page.tsx",
+      "admin/error.tsx",
+      "teacher/(app)/error.tsx",
+      "school-head/(app)/error.tsx",
+      "teacher/(app)/not-found.tsx",
+      "school-head/(app)/not-found.tsx",
+      "admin/not-found.tsx",
+    ]) {
+      expect(() => read(file), file).not.toThrow();
+    }
+  });
+
+  it("catches unknown URLs inside every role area", () => {
+    for (const file of [
+      "teacher/(app)/[...missing]/page.tsx",
+      "school-head/(app)/[...missing]/page.tsx",
+      "admin/[...missing]/page.tsx",
+    ]) {
+      expect(read(file), file).toMatch(/notFound\(\)/);
+    }
+  });
+
+  it("never names our infrastructure to the person reading the page", () => {
+    const banned = /prisma|supabase|postgres|schema drift|vercel|DATABASE_URL/i;
+    for (const file of ["error.tsx", "global-error.tsx", "admin/error.tsx", "teacher/(app)/error.tsx", "school-head/(app)/error.tsx"]) {
+      expect(read(file), file).not.toMatch(banned);
+    }
+  });
+
+  it("shows the reference a person can quote", () => {
+    for (const file of ["error.tsx", "global-error.tsx", "admin/error.tsx", "teacher/(app)/error.tsx", "school-head/(app)/error.tsx"]) {
+      expect(read(file), file).toMatch(/digest/);
+    }
+  });
+
+  it("keeps the global boundary self-contained, since the layout it replaces may be what failed", () => {
+    const globalError = read("global-error.tsx");
+    expect(globalError).toMatch(/<html/);
+    expect(globalError).toMatch(/<body/);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run tests/unit/errors/not-found-links.test.ts tests/unit/errors/error-pages.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/nav/not-found-links.ts`**
+
+```ts
+import type { UserRole } from "@prisma/client";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+
+/**
+ * Where to offer to go from a page that does not exist.
+ *
+ * Deliberately three links, not the whole sidebar: a 404 is a wrong turn, and a
+ * menu of twelve options is not more helpful than the two or three places
+ * someone actually meant. Signed-out visitors get the one thing they can do.
+ */
+export function notFoundLinksFor(role: UserRole | null): Array<{ href: string; label: string }> {
+  switch (role) {
+    case "TEACHER":
+      return [
+        { href: "/teacher", label: "Dashboard" },
+        { href: "/teacher/aral", label: "ARAL classes" },
+        { href: "/teacher/learners", label: "Learners" },
+      ];
+    case "SCHOOL_HEAD":
+      return [
+        { href: SCHOOL_HEAD_ROUTES.dashboard, label: "Dashboard" },
+        { href: SCHOOL_HEAD_ROUTES.teachers, label: "Teachers" },
+        { href: SCHOOL_HEAD_ROUTES.reports, label: "Reports" },
+      ];
+    case "SUPER_ADMIN":
+      return [
+        { href: "/admin", label: "Dashboard" },
+        { href: "/admin/schools", label: "Schools" },
+        { href: "/admin/audit", label: "Audit" },
+      ];
+    default:
+      return [{ href: "/login", label: "Sign in" }];
+  }
+}
+```
+
+- [ ] **Step 4: Add `peekCurrentUser` to `src/lib/auth/session.ts`**
+
+```ts
+/**
+ * The signed-in user, or null, with no redirect of any kind.
+ *
+ * For pages that must render for anyone — the 404 above all. `getCurrentUser`
+ * redirects pending and declined teachers, which on a 404 would bounce someone
+ * away from the page explaining where they are.
+ */
+export async function peekCurrentUser(): Promise<User | null> {
+  try {
+    return await getCurrentUser({ allowPending: true });
+  } catch {
+    // A 404 must render even when the session or the database is unavailable.
+    return null;
+  }
+}
+```
+
+- [ ] **Step 5: Implement the shared components**
+
+`src/components/errors/error-card.tsx`:
+```tsx
+import type { LucideIcon } from "lucide-react";
+
+/**
+ * The one card every error page uses: icon in a tinted circle, title, an
+ * explanation, an optional reference, and the ways out. Matches the app's card
+ * style (`bg-card`, `shadow-card`); violet stays reserved for ARAL.
+ */
+export function ErrorCard({
+  icon: Icon,
+  tone = "destructive",
+  title,
+  description,
+  reference,
+  children,
+}: {
+  icon: LucideIcon;
+  tone?: "destructive" | "primary";
+  title: string;
+  description: React.ReactNode;
+  reference?: string | null;
+  children?: React.ReactNode;
+}) {
+  const toneClasses = tone === "primary" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive";
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md rounded-xl border border-border/80 bg-card p-8 text-center shadow-card">
+        <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${toneClasses}`}>
+          <Icon className="h-7 w-7" aria-hidden />
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <div className="mt-2 text-sm text-muted-foreground">{description}</div>
+        {reference ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Reference: <span className="font-mono">{reference}</span>
+          </p>
+        ) : null}
+        {children ? <div className="mt-6 flex flex-wrap justify-center gap-2">{children}</div> : null}
+      </div>
+    </main>
+  );
+}
+```
+
+`src/components/errors/route-error.tsx` — one client component behind all five `error.tsx` files:
+```tsx
+"use client";
+
+import { useEffect } from "react";
+import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ErrorCard } from "@/components/errors/error-card";
+
+/**
+ * The body of every route error boundary.
+ *
+ * The person is told what to do, never what broke: the digest is the whole of
+ * what is safe to show, and `onRequestError` has already filed the full error
+ * under that same digest for `/admin/errors`.
+ */
+export function RouteError({
+  error,
+  reset,
+  scope,
+  homeHref,
+  homeLabel,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+  scope: string;
+  homeHref: string;
+  homeLabel: string;
+}) {
+  useEffect(() => {
+    // A cancelled soft navigation should not leave the person on a fatal modal.
+    if (error.name === "AbortError") {
+      reset();
+      return;
+    }
+    console.error(`${scope} route error:`, error);
+  }, [error, reset, scope]);
+
+  if (error.name === "AbortError") return null;
+
+  return (
+    <ErrorCard
+      icon={AlertTriangle}
+      title="This page couldn't load"
+      description="Something went wrong on our side. Try again — if it keeps happening, give your administrator the reference below."
+      reference={error.digest ?? null}
+    >
+      <Button type="button" onClick={reset}>
+        Try again
+      </Button>
+      <Button asChild variant="outline">
+        <Link href={homeHref}>{homeLabel}</Link>
+      </Button>
+    </ErrorCard>
+  );
+}
+```
+
+`src/components/errors/not-found-content.tsx`:
+```tsx
+import Link from "next/link";
+import { FileQuestion } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ErrorCard } from "@/components/errors/error-card";
+
+export function NotFoundContent({ links }: { links: Array<{ href: string; label: string }> }) {
+  return (
+    <ErrorCard
+      icon={FileQuestion}
+      tone="primary"
+      title="Page not found"
+      description={
+        <>
+          <span className="block text-sm font-medium text-primary">404</span>
+          This page doesn&apos;t exist, or it may have moved. Here&apos;s where you can go instead.
+        </>
+      }
+    >
+      {links.map((link, index) => (
+        <Button key={link.href} asChild variant={index === 0 ? "default" : "outline"}>
+          <Link href={link.href}>{link.label}</Link>
+        </Button>
+      ))}
+    </ErrorCard>
+  );
+}
+```
+
+- [ ] **Step 6: Rewrite the pages**
+
+`src/app/not-found.tsx`:
+```tsx
+import { peekCurrentUser } from "@/lib/auth/session";
+import { notFoundLinksFor } from "@/lib/nav/not-found-links";
+import { NotFoundContent } from "@/components/errors/not-found-content";
+
+export default async function NotFound() {
+  const user = await peekCurrentUser();
+  return <NotFoundContent links={notFoundLinksFor(user?.role ?? null)} />;
+}
+```
+
+Each role `not-found.tsx` is the same three lines with the role fixed, so the sidebar stays mounted:
+```tsx
+import { notFoundLinksFor } from "@/lib/nav/not-found-links";
+import { NotFoundContent } from "@/components/errors/not-found-content";
+
+export default function TeacherNotFound() {
+  return <NotFoundContent links={notFoundLinksFor("TEACHER")} />;
+}
+```
+
+Each `[...missing]/page.tsx` is:
+```tsx
+import { notFound } from "next/navigation";
+
+/**
+ * Unknown URLs under this role area render the in-shell 404 instead of the bare
+ * root one, so the sidebar stays put. A catch-all has the lowest routing
+ * priority, so no real route is shadowed by it.
+ */
+export default function MissingTeacherRoute() {
+  notFound();
+}
+```
+
+The five `error.tsx` files become:
+```tsx
+"use client";
+
+import { RouteError } from "@/components/errors/route-error";
+
+export default function TeacherError(props: { error: Error & { digest?: string }; reset: () => void }) {
+  return <RouteError {...props} scope="Teacher" homeHref="/teacher" homeLabel="Back to dashboard" />;
+}
+```
+(root: `scope="App"`, `homeHref="/"`, `homeLabel="Back to home"`; admin: `/admin`; school head: `SCHOOL_HEAD_ROUTES.dashboard`.) The admin page's Prisma/Vercel/schema-drift paragraph is deleted — that detail now lives in `/admin/errors`, which is where an admin can actually act on it.
+
+`src/app/global-error.tsx`:
+```tsx
+"use client";
+
+import { RouteError } from "@/components/errors/route-error";
+
+/**
+ * The boundary for failures in the root layout itself. It replaces `<html>`, so
+ * it must render its own — and it cannot rely on anything the layout provides,
+ * including the theme script, hence the plain background.
+ */
+export default function GlobalError(props: { error: Error & { digest?: string }; reset: () => void }) {
+  return (
+    <html lang="en">
+      <body>
+        <RouteError {...props} scope="App" homeHref="/" homeLabel="Back to home" />
+      </body>
+    </html>
+  );
+}
+```
+
+`src/app/forbidden/page.tsx`:
+```tsx
+import Link from "next/link";
+import { ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ErrorCard } from "@/components/errors/error-card";
+import { peekCurrentUser } from "@/lib/auth/session";
+import { roleHomePath } from "@/lib/auth/roles";
+import { ROLE_LABELS } from "@/lib/constants/enum-labels";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Reached when a request is refused rather than redirected — today that is an
+ * API route opened in a browser (a stale backup-download link, say). Wrong-role
+ * page visits still bounce quietly to the person's own home.
+ */
+export default async function ForbiddenPage() {
+  const user = await peekCurrentUser();
+  const home = user ? roleHomePath(user.role) : "/login";
+
+  return (
+    <ErrorCard
+      icon={ShieldAlert}
+      title="You don't have access to this page"
+      description={
+        user
+          ? `You're signed in as ${ROLE_LABELS[user.role]}, which can't open this page. If you think you should have access, ask your administrator.`
+          : "Sign in to continue. If you're already signed in on another tab, refresh and try again."
+      }
+    >
+      <Button asChild>
+        <Link href={home}>{user ? "Back to your dashboard" : "Sign in"}</Link>
+      </Button>
+    </ErrorCard>
+  );
+}
+```
+(Check the exact export name for role labels in `src/lib/constants/enum-labels.ts` and use it; the file defines a label per `UserRole`.)
+
+- [ ] **Step 7: Write `e2e/not-found.spec.ts`** — following the opt-in pattern of `e2e/school-head-login.spec.ts` (reuse its `isServerReachable` guard and `test.skip` when unreachable):
+
+```ts
+import { test, expect } from "@playwright/test";
+
+/**
+ * Unknown URLs must reach a 404 rather than a blank page or a redirect loop —
+ * including inside a role area, where the layout authenticates first.
+ *
+ * Opt-in like the other specs: `playwright.config.ts` has no `webServer`, so
+ * start `npm run dev` yourself or set PLAYWRIGHT_BASE_URL. Never point it at
+ * production.
+ */
+
+test("an unknown public URL renders the 404 page", async ({ page }) => {
+  const response = await page.goto("/this-page-does-not-exist");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: /page not found/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /sign in/i })).toBeVisible();
+});
+
+test("an unknown role URL sends a signed-out visitor to sign in first", async ({ page }) => {
+  await page.goto("/teacher/does-not-exist");
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("the forbidden page explains itself", async ({ page }) => {
+  await page.goto("/forbidden");
+  await expect(page.getByRole("heading", { name: /don't have access/i })).toBeVisible();
+});
+```
+
+- [ ] **Step 8: Run to verify** — `npx vitest run tests/unit/errors && npm run typecheck && npm run lint` — Expected: PASS. (`no-hardcoded-colors` and `shadcn-coverage` cover the new components; keep to tokens and `Button`.)
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/app src/components/errors src/lib/nav/not-found-links.ts src/lib/auth/session.ts tests/unit/errors e2e/not-found.spec.ts
+git commit -m "feat(ui): 404 that offers a way on, a real 403, and error pages that show a reference"
+```
+
+---
+
+### Task 18: `/admin/errors`
+
+**Files:**
+- Create: `src/app/admin/errors/page.tsx`, `src/app/admin/errors/loading.tsx`, `src/components/admin/error-log-table.tsx`, `src/components/admin/error-log-filters.tsx`
+- Modify: `src/lib/nav/nav-config.ts` (one item after Audit)
+- Test: `tests/unit/errors/error-log-query.test.ts`
+- Create: `src/lib/admin/error-log.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 3
+- Produces: `ERROR_LOG_WINDOWS`, `buildErrorLogQuery(params, now?) → Prisma.ErrorEventWhereInput`, `parseErrorLogParams(searchParams)`
+
+- [ ] **Step 1: Write the failing test** `tests/unit/errors/error-log-query.test.ts`
+
+```ts
+import { describe, expect, it } from "vitest";
+import { buildErrorLogQuery, parseErrorLogParams } from "@/lib/admin/error-log";
+
+const NOW = new Date("2026-09-11T12:00:00Z");
+
+describe("parseErrorLogParams", () => {
+  it("defaults to the last 24 hours and no filters", () => {
+    expect(parseErrorLogParams({})).toEqual({ ref: null, code: null, severity: null, schoolId: null, window: "24h" });
+  });
+
+  it("accepts only known windows and severities", () => {
+    expect(parseErrorLogParams({ window: "7d" }).window).toBe("7d");
+    expect(parseErrorLogParams({ window: "all-time" }).window).toBe("24h");
+    expect(parseErrorLogParams({ severity: "system" }).severity).toBe("system");
+    expect(parseErrorLogParams({ severity: "user" }).severity).toBeNull();
+  });
+
+  it("keeps a reference exactly as typed, trimmed", () => {
+    expect(parseErrorLogParams({ ref: "  E-7K2P9QXM " }).ref).toBe("E-7K2P9QXM");
+  });
+});
+
+describe("buildErrorLogQuery", () => {
+  it("looks up a reference on its own, ignoring the time window", () => {
+    const where = buildErrorLogQuery({ ref: "E-7K2P9QXM", code: null, severity: null, schoolId: null, window: "24h" }, NOW);
+    expect(where).toEqual({ ref: "E-7K2P9QXM" });
+  });
+
+  it("filters by window, code, severity and school together", () => {
+    const where = buildErrorLogQuery(
+      { ref: null, code: "DB_UNAVAILABLE", severity: "system", schoolId: "school-1", window: "7d" },
+      NOW
+    );
+    expect(where).toEqual({
+      createdAt: { gte: new Date("2026-09-04T12:00:00Z") },
+      code: "DB_UNAVAILABLE",
+      severity: "system",
+      schoolId: "school-1",
+    });
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/errors/error-log-query.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/admin/error-log.ts`**
+
+```ts
+import type { Prisma } from "@prisma/client";
+
+/** Filters for `/admin/errors`, kept out of the page so they can be tested. */
+
+export const ERROR_LOG_WINDOWS = { "24h": 1, "7d": 7, "30d": 30 } as const;
+export type ErrorLogWindow = keyof typeof ERROR_LOG_WINDOWS;
+
+export type ErrorLogParams = {
+  ref: string | null;
+  code: string | null;
+  severity: "security" | "system" | null;
+  schoolId: string | null;
+  window: ErrorLogWindow;
+};
+
+function str(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function parseErrorLogParams(searchParams: Record<string, string | string[] | undefined>): ErrorLogParams {
+  const windowParam = str(searchParams.window);
+  const severity = str(searchParams.severity);
+  return {
+    ref: str(searchParams.ref),
+    code: str(searchParams.code),
+    severity: severity === "security" || severity === "system" ? severity : null,
+    schoolId: str(searchParams.schoolId),
+    window: windowParam && Object.hasOwn(ERROR_LOG_WINDOWS, windowParam) ? (windowParam as ErrorLogWindow) : "24h",
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function buildErrorLogQuery(params: ErrorLogParams, now: Date = new Date()): Prisma.ErrorEventWhereInput {
+  // A reference is a direct lookup: someone read it off a screen, and the time
+  // window is exactly the thing they do not know.
+  if (params.ref) return { ref: params.ref };
+
+  const where: Prisma.ErrorEventWhereInput = {
+    createdAt: { gte: new Date(now.getTime() - ERROR_LOG_WINDOWS[params.window] * DAY_MS) },
+  };
+  if (params.code) where.code = params.code;
+  if (params.severity) where.severity = params.severity;
+  if (params.schoolId) where.schoolId = params.schoolId;
+  return where;
+}
+```
+
+- [ ] **Step 4: Build the page**, mirroring `src/app/admin/audit/page.tsx`: `export const dynamic = "force-dynamic"`, `requireUser("SUPER_ADMIN")`, `AppShell` with title "Errors" and subtitle "Server-side failures across all schools", a `Suspense` around the table with `TableSectionSkeleton`, `EmptyState` when there are none. Columns: When · Code · Severity · Where · School · Reference. Take 150 rows, newest first, resolving school names the same way the audit page does. Each row expands (a `<details>` inside the cell, or a `Collapsible`) to show `message`, `stack` in a `<pre className="overflow-x-auto">`, `context` as JSON, and the user id. Filters go in `src/components/admin/error-log-filters.tsx` as a client component that pushes `?ref=&code=&severity=&schoolId=&window=` — the same query shape `parseErrorLogParams` reads, so the alert email's `?ref=` link lands correctly.
+
+- [ ] **Step 5: Add the nav item** in `src/lib/nav/nav-config.ts`, directly after `admin-audit`:
+```ts
+            { id: "admin-errors", label: "Errors", href: "/admin/errors", icon: TriangleAlert },
+```
+with `TriangleAlert` added to the lucide import block.
+
+- [ ] **Step 6: Run to verify** — `npx vitest run && npm run typecheck && npm run lint` — Expected: PASS. Check the nav test in `tests/unit/nav` if one asserts the item list, and update it if so.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/app/admin/errors src/components/admin/error-log-table.tsx src/components/admin/error-log-filters.tsx src/lib/admin/error-log.ts src/lib/nav/nav-config.ts tests/unit/errors/error-log-query.test.ts
+git commit -m "feat(admin): an error log a Super Admin can search by reference"
+```
+
+---
+
+### Task 19: Documentation and the full gate
+
+**Files:**
+- Create: `docs/errors.md`
+- Modify: `CLAUDE.md`, `.claude/agents/backend-developer.md`, `docs/runbook.md`, `docs/deployment.md`
+
+**Interfaces:**
+- Consumes: every earlier task
+
+- [ ] **Step 1: Write `docs/errors.md`** covering: the three severities and what each one triggers; how to add a code (catalog entry → throw site → test); the `action()` / `route()` house pattern with a full example; what must never reach `ErrorEvent` or an alert email; how an admin uses a reference (`/admin/errors?ref=…`, or search Vercel logs for `litrack.error`); retention and the env vars; and the full code table from the spec.
+
+- [ ] **Step 2: Update the house pattern in `CLAUDE.md`** — replace the server-actions block with:
+
+````md
+### Server actions — the house pattern
+
+Actions live in `src/lib/actions/*.ts`, all `"use server"`, wrapped once by
+`action()` so a single handler converts throws into results:
+
+```ts
+export const doThing = action("doThing", async (formData: FormData) => {
+  const user = await requireSchoolUser("TEACHER");           // 1. auth guard first
+  const input = parseInput(someSchema, formToObj(formData)); // 2. throws VALIDATION_FAILED
+  // 3. ownership check scoped to user.schoolId (assertSameSchool throws NOT_FOUND)
+  // 4. mutate (prisma.$transaction when multi-step)
+  // 5. writeAudit({ action: AUDIT_ACTIONS.X, ... })
+  // 6. revalidatePath / revalidate* helper
+  return { ok: true };
+}, { verb: "save the thing" });
+```
+
+Failures are thrown, never returned: `throw new AppError("CODE", { detail })`.
+The wrapper classifies anything else (Prisma, Supabase, bugs), records
+non-user errors to `ErrorEvent` + Vercel logs (+ an alert for `system`), and
+returns `{ ok: false, code, error, ref?, fieldErrors? }` — `error` is always
+the safe user message. Codes and messages live in `src/lib/errors/codes.ts`;
+see `docs/errors.md`.
+````
+Add a line to the Docs map: `docs/errors.md` (error codes, severities, admin log).
+
+- [ ] **Step 3: Update `.claude/agents/backend-developer.md`** — replace its `ActionResult` snippet with the same pattern, so a dispatched agent does not reintroduce the old shape.
+
+- [ ] **Step 4: Add to `docs/runbook.md`** a short section: *A user quotes a reference (E-XXXXXXXX)* → open `/admin/errors?ref=<ref>`, or search Vercel runtime logs for that ref (every event is one `litrack.error` JSON line); what each severity means; and that alert emails need `ERROR_ALERT_EMAIL` + the Resend vars. In `docs/deployment.md`, list the three new env vars.
+
+- [ ] **Step 5: Run the full gate**
+
+```bash
+npx prisma generate
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+```
+Expected: all five pass. CI is billing-locked, so this local run is the only gate before the branch is shippable. If `npm run build` fails on the new `ErrorEvent` client access, confirm Task 3's `prisma generate` ran against the updated schema.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add docs CLAUDE.md .claude/agents/backend-developer.md
+git commit -m "docs: how the error system works, and how to add to it"
+```
+
+- [ ] **Step 7: Report to the user** — the summary table of every code (from `docs/errors.md`), the security findings fixed, and the deploy order: **apply the `ErrorEvent` migration first**, then push `main`, then set `ERROR_ALERT_EMAIL` (and the Resend vars) in Vercel. Do not push or deploy without being asked.
+
+---
+
+## Self-review
+
+**Spec coverage.** §1 catalog → Task 1. §1 Supabase/DB reuse → Task 2. §2 action/route handlers → Task 6; `onRequestError` → Task 7. §3 table → Task 3; report/log/retention → Task 5; alerts → Task 4; `/admin/errors` → Task 18. §4 sign-in table → Tasks 11, 12; account flows → Task 13; registration → Task 14; browser classification → Task 15; enumeration throttle → Task 10; session-ended reasons → Task 9; config leaks → Task 8. §5 pages → Task 17. §6 tests are inside each task; docs and the gate → Task 19. API routes and the cron purge → Task 16.
+
+**Interface consistency.** `formatMessage`/`withReference`/`formatWait` (Task 1) are used unchanged in 8, 9, 14, 15. `toFailure(err, ref?)` is called only by `action()`. `mapSupabaseAuthError(err, side)` keeps its two-argument shape in Tasks 12–15. `reportError(err, input)` keeps one shape across Tasks 5, 7, 11, 13. `assertSameSchool` gains an optional third argument, so its 9 existing call sites still compile.
+
+**Ordering.** Task 3 (schema) precedes Task 5 (which writes the table). Task 10 precedes Tasks 11, 12 and 14, which call the throttle. Task 9 precedes Task 17, which uses `peekCurrentUser`. Tasks 1, 2 precede everything.
+
+**Known gap, deliberate.** The ~30 non-auth action modules keep their own `ActionResult` and their own try/catch in this slice. They still get admin visibility through `onRequestError` (Task 7). Their migration is slices 2–5 in the spec.
