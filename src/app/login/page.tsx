@@ -6,6 +6,7 @@ import { reportError } from "@/lib/errors/report";
 import { LoginForm } from "@/components/forms/login-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import Image from "next/image";
+import Link from "next/link";
 
 /**
  * Not ISR, despite being a public route. This page reads `searchParams`
@@ -75,9 +76,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <LoginForm schools={schools} loginError={loginError} />
           <p className="text-center text-xs text-muted-foreground">
             Super Admin?{" "}
-            <a className="underline hover:text-foreground" href="/admin/login">
+            <Link className="underline hover:text-foreground" href="/admin/login">
               Admin login
-            </a>
+            </Link>
           </p>
         </div>
       </div>
