@@ -191,11 +191,6 @@ export const ERRORS = {
     severity: "security",
     message: "Too many requests. Try again in {wait}.",
   },
-  NETWORK_UNREACHABLE: {
-    status: 503,
-    severity: "user",
-    message: "Couldn't reach LITRACK. Check your internet connection and try again.",
-  },
 
   // ── Our side ─────────────────────────────────────────────────────────────
   DB_CONFLICT: {
