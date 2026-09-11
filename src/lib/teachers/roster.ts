@@ -65,6 +65,12 @@ export const managedTeacherSelect = {
     },
     orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
   },
+  // The designation and advisory setting a School Head edits via
+  // `setTeacherAdvisorySetting` (`teacher-role-dialog.tsx`). `null` when the
+  // teacher has no `TeacherProfile` row yet — they have not finished profiling.
+  teacherProfile: {
+    select: { designation: true, advisoryMode: true },
+  },
   _count: {
     select: {
       managedLearners: { where: { deletedAt: null } },
@@ -86,6 +92,8 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,
     aralLearnerCount: t._count.aralLearners,
+    designation: t.teacherProfile?.designation ?? null,
+    advisoryMode: t.teacherProfile?.advisoryMode ?? null,
     // A teacher sets their first in profiling; the School Head adds and removes
     // from the Active teachers table (see `setTeacherAdvisorySection`).
     //

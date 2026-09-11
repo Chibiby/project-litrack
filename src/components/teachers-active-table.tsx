@@ -24,8 +24,9 @@ import {
   setTeacherActive,
 } from "@/lib/actions/school-head";
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
-import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
-import { FLOATING_CHIP_LABEL } from "@/lib/teachers/floating-copy";
+import { advisoryCapFor, advisoryCapReason } from "@/lib/teachers/advisory-limits";
+import { FLOATING_CHIP_LABEL, UNASSIGNED_CHIP_LABEL } from "@/lib/teachers/floating-copy";
+import { TeacherRoleDialog } from "@/components/school-head/teacher-role-dialog";
 import { X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
@@ -53,6 +54,13 @@ export type ActiveTeacherRow = {
   learnerCount: number;
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
   aralLearnerCount: number;
+  /**
+   * `TeacherProfile.designation` / `.advisoryMode`. Both `null` when the teacher
+   * has no profile yet — the row then shows "Hasn't finished profiling" instead
+   * of the "Edit role" button, since there is nothing yet to edit.
+   */
+  designation: string | null;
+  advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
   /**
    * The sections this teacher advises, grade derived from each, ordered by grade
    * then name. Empty when they advise none — one shape rather than a nullable
@@ -124,6 +132,17 @@ function AdvisoryCell({
   ) => void;
 }) {
   const selectId = `advisory-add-${row.id}`;
+  const cap = advisoryCapFor(row.designation, row.advisoryMode);
+
+  // A Volunteer or a Floating teacher advises no section at all — no picker to
+  // offer, only the reason there isn't one.
+  if (cap === 0) {
+    return (
+      <TableCell className="text-sm text-muted-foreground">
+        {advisoryCapReason(row.designation, row.advisoryMode)}
+      </TableCell>
+    );
+  }
 
   // No grade has a section, so there is nothing to offer. Saying so beats a
   // dropdown with nothing in it.
@@ -145,7 +164,11 @@ function AdvisoryCell({
     }
   }
 
-  const atCap = held.length >= MAX_ADVISORY_SECTIONS;
+  const atCap = held.length >= cap;
+  // §5: FLOATING is a School Head's explicit choice; a teacher who merely holds
+  // no section yet (still DEFAULT/MULTI_GRADE) is Unassigned instead.
+  const zeroChipLabel =
+    row.advisoryMode === "FLOATING" ? FLOATING_CHIP_LABEL : UNASSIGNED_CHIP_LABEL;
 
   return (
     <TableCell>
@@ -181,7 +204,7 @@ function AdvisoryCell({
           // section sets it, adding one clears it. A blank cell read as missing
           // data and left nobody sure whether an assignment had failed to save.
           <span className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-            {FLOATING_CHIP_LABEL}
+            {zeroChipLabel}
           </span>
         ) : null}
       </div>
@@ -200,7 +223,7 @@ function AdvisoryCell({
       >
         <option value="">
           {atCap
-            ? `At the limit of ${MAX_ADVISORY_SECTIONS}`
+            ? advisoryCapReason(row.designation, row.advisoryMode)
             : held.length > 0
               ? "Add another section…"
               : "Assign a section…"}
@@ -431,7 +454,11 @@ function TeachersManagedTable({
         op === "add"
           ? `Advisory added for ${row.fullName}`
           : next.length === 0
-            ? `${row.fullName} is now ${FLOATING_CHIP_LABEL.toLowerCase()}`
+            ? `${row.fullName} is now ${
+                row.advisoryMode === "FLOATING"
+                  ? FLOATING_CHIP_LABEL.toLowerCase()
+                  : UNASSIGNED_CHIP_LABEL.toLowerCase()
+              }`
             : `Advisory removed for ${row.fullName}`
       );
       router.refresh();
@@ -482,8 +509,8 @@ function TeachersManagedTable({
     }).finally(() => setActingKey(null));
   };
 
-  // Name, Email, Grade & section, ARAL, Profile, Approved (+ Actions when editable).
-  const colSpan = readOnly ? 6 : 7;
+  // Name, Email, Role, Grade & section, ARAL, Profile, Approved (+ Actions when editable).
+  const colSpan = readOnly ? 7 : 8;
 
   return (
     <Card>
@@ -541,6 +568,7 @@ function TeachersManagedTable({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
               <TableHead>Grade &amp; section</TableHead>
               <TableHead>ARAL learners</TableHead>
               <TableHead>Profile</TableHead>
@@ -567,6 +595,30 @@ function TeachersManagedTable({
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.fullName}</TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
+                  <TableCell className="text-sm">
+                    {row.designation === null ? (
+                      <span className="text-muted-foreground">
+                        Hasn&apos;t finished profiling
+                      </span>
+                    ) : readOnly ? (
+                      row.designation
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{row.designation}</span>
+                        <TeacherRoleDialog
+                          row={row}
+                          onSaved={() =>
+                            setAdvisoryOverrides((prev) => {
+                              if (!(row.id in prev)) return prev;
+                              const next = { ...prev };
+                              delete next[row.id];
+                              return next;
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                  </TableCell>
                   {editableAdvisory ? (
                     <AdvisoryCell
                       row={row}
@@ -584,7 +636,9 @@ function TeachersManagedTable({
                           .join(", ")
                       ) : (
                         <span className="text-muted-foreground">
-                          {FLOATING_CHIP_LABEL}
+                          {row.advisoryMode === "FLOATING"
+                            ? FLOATING_CHIP_LABEL
+                            : UNASSIGNED_CHIP_LABEL}
                         </span>
                       )}
                     </TableCell>

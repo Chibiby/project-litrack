@@ -33,6 +33,7 @@ const BASE = {
   profileCompleted: true,
   approvedAt: new Date(2026, 5, 1),
   advisorySections: [],
+  teacherProfile: { designation: "Teacher", advisoryMode: "DEFAULT" },
   _count: { managedLearners: 12, aralLearners: 3 },
 } satisfies ManagedTeacher;
 
@@ -107,6 +108,25 @@ describe("toManagedRow — advisory sections", () => {
   });
 });
 
+
+describe("toManagedRow — designation and advisory setting", () => {
+  it("maps the teacher's designation and advisory mode from their profile", () => {
+    const row = toManagedRow({
+      ...BASE,
+      teacherProfile: { designation: "Master Teacher", advisoryMode: "MULTI_GRADE" },
+    });
+
+    expect(row.designation).toBe("Master Teacher");
+    expect(row.advisoryMode).toBe("MULTI_GRADE");
+  });
+
+  it("reports both as null when the teacher has no TeacherProfile row yet", () => {
+    const row = toManagedRow({ ...BASE, teacherProfile: null });
+
+    expect(row.designation).toBeNull();
+    expect(row.advisoryMode).toBeNull();
+  });
+});
 
 describe("the other advisory-label readers guard soft deletes too", () => {
   const SRC = path.resolve(__dirname, "../../src");
