@@ -72,6 +72,7 @@ vi.mock("@/lib/rate-limit", () => ({
   get checkRateLimit() {
     return checkRateLimit;
   },
+  peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -93,6 +94,7 @@ vi.mock("@/lib/auth/teacher-registration-helpers", () => ({
   DEACTIVATED_TEACHER_MESSAGE: "deactivated",
   isDeactivatedTeacher: vi.fn(),
   isPendingTeacherAtSchool: vi.fn(),
+  registerConflictCode: vi.fn(),
   registerConflictError: vi.fn(),
 }));
 
@@ -105,7 +107,14 @@ vi.mock("next/navigation", () => ({
     // code after it unreachable here too.
     throw new Error(`NEXT_REDIRECT:${path}`);
   },
+  // The action wrapper calls this first so Next's control flow escapes intact.
+  // Mirroring it here is what keeps the redirect assertions below meaningful.
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) throw err;
+  },
 }));
+
+vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF4") }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -193,7 +202,11 @@ describe("loginAdmin", () => {
     const result = await run(form("nobody", "s3cret"));
 
     expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: false, error: "Incorrect credentials" });
+    expect(result).toEqual({
+      ok: false,
+      code: "AUTH_INCORRECT_CREDENTIALS",
+      error: "Incorrect username or password.",
+    });
   });
 
   it("gives an unknown handle and a wrong password the same message", async () => {
@@ -203,10 +216,25 @@ describe("loginAdmin", () => {
     vi.clearAllMocks();
     checkRateLimit.mockResolvedValue({ ok: true });
     userFindFirst.mockResolvedValue(ADMIN_ROW);
-    signInWithPassword.mockResolvedValue({ data: { user: null }, error: { message: "bad" } });
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
     const wrongPassword = await run(form("admin", "wrong"));
 
     expect(unknown).toEqual(wrongPassword);
+  });
+
+  it("still names a rate limit for what it is, rather than collapsing it too", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 429, message: "Request rate limit reached" },
+    });
+
+    const result = await run(form("admin", "s3cret"));
+
+    expect(result).toMatchObject({ ok: false, code: "AUTH_PROVIDER_RATE_LIMITED" });
   });
 
   it("does not write the typed username into the audit row for a failed attempt", async () => {
@@ -223,6 +251,10 @@ describe("loginAdmin", () => {
     const result = await run(form("   ", "s3cret"));
 
     expect(userFindFirst).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: false, error: "Username required" });
+    expect(result).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      error: "Username required",
+    });
   });
 });

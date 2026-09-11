@@ -22,7 +22,8 @@ import {
   reportLoginFailure,
 } from "@/lib/actions/login";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
+import { formatMessage } from "@/lib/errors/codes";
+import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
@@ -185,14 +186,18 @@ export function LoginForm({
         password,
       });
       if (error) {
-        const limited = isAuthRateLimitError(error);
+        // The browser made this request, so it is the only place that can tell
+        // "the server said no" from "the request never arrived". Calling a
+        // dropped connection a wrong password is what sends people off to reset
+        // a password that was never the problem.
+        const code = mapSupabaseAuthError(error, "browser");
         await reportLoginFailure({
           schoolId,
           role: "TEACHER",
           email: begin.email,
-          reason: limited ? "rate_limited" : "incorrect_credentials",
+          reason: loginFailureReasonFor(code),
         });
-        toast.error(limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect email or password.");
+        toast.error(formatMessage(code));
         return;
       }
 
@@ -265,7 +270,7 @@ export function LoginForm({
       } catch (err) {
         console.error("[login-form] teacher register failed:", err);
         registerLock.current = false;
-        toast.error("Could not create your account. Please try again.");
+        toast.error(formatMessage("INTERNAL_ERROR"));
       }
     });
   };
@@ -302,15 +307,13 @@ export function LoginForm({
         password: typedPassword,
       });
       if (error) {
-        const limited = isAuthRateLimitError(error);
+        const code = mapSupabaseAuthError(error, "browser");
         await reportLoginFailure({
           schoolId,
           role: "SCHOOL_HEAD",
-          reason: limited ? "rate_limited" : "incorrect_credentials",
+          reason: loginFailureReasonFor(code),
         });
-        toast.error(
-          limited ? AUTH_RATE_LIMITED_MESSAGE : "Login failed. Please contact your administrator."
-        );
+        toast.error(formatMessage(code));
         return;
       }
 
