@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
  * Action-level coverage for `setTeacherAdvisorySetting` — the School Head's
@@ -99,6 +100,7 @@ function makeTx() {
       createMany: vi.fn(async () => ({ count: 0 })),
     },
     user: {
+      findFirst: (...args: unknown[]) => userFindFirst(...(args as [never])),
       findUniqueOrThrow: vi.fn(async () => ({
         advisorySectionId: advisorySectionsOf(TEACHER_ID)[0]?.id ?? null,
         taughtGrades: [...new Set(advisorySectionsOf(TEACHER_ID).map(() => "grade-g3"))].map((id) => ({ id })),
@@ -223,8 +225,12 @@ describe("setTeacherAdvisorySetting", () => {
         { id: "88888888-8888-4888-8888-888888888888", label: "Grade 3 · Section 2" },
       ],
     });
-    expect(transaction).not.toHaveBeenCalled();
+    // The cap re-check now runs inside the transaction (to close the race
+    // Finding 1 flagged), so the transaction IS entered — it just returns
+    // without writing anything.
+    expect(transaction).toHaveBeenCalledTimes(1);
     expect(calls.teacherProfileUpdate).toHaveLength(0);
+    expect(calls.sectionUpdateMany).toHaveLength(0);
   });
 
   it("releases the excess and writes the update once confirmed", async () => {
@@ -291,7 +297,9 @@ describe("setTeacherAdvisorySetting", () => {
       error: "confirm_release",
       releases: [{ id: "66666666-6666-4666-8666-666666666666", label: "Grade 3 · Section 0" }],
     });
-    expect(transaction).not.toHaveBeenCalled();
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
+    expect(calls.sectionUpdateMany).toHaveLength(0);
   });
 
   it("switches Teacher to Volunteer with no sections held and no release", async () => {
@@ -357,7 +365,10 @@ describe("setTeacherAdvisorySetting", () => {
     );
 
     expect(result).toEqual({ ok: false, error: "Teacher not found" });
-    expect(transaction).not.toHaveBeenCalled();
+    // The lookup now happens inside the transaction, so it IS entered — it
+    // just finds nothing and writes nothing.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
@@ -369,7 +380,8 @@ describe("setTeacherAdvisorySetting", () => {
     );
 
     expect(result).toEqual({ ok: false, error: "This teacher hasn't finished profiling yet." });
-    expect(transaction).not.toHaveBeenCalled();
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
   });
 
   it("is a no-op, with no audit row, when the setting is unchanged", async () => {
@@ -381,7 +393,79 @@ describe("setTeacherAdvisorySetting", () => {
     );
 
     expect(result).toEqual({ ok: true });
-    expect(transaction).not.toHaveBeenCalled();
+    // Unchanged AND no excess — the transaction is entered to verify both,
+    // but nothing is written.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
     expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  // Finding 2: a Non-DepEd ARAL Volunteer already over their cap of 0 (the
+  // migration only releases sections with zero live learners) must still be
+  // offered a release when the School Head saves the *same* designation and
+  // mode the dialog defaulted to — the "nothing changed" early exit must not
+  // pre-empt the excess check.
+  it("offers a release for a volunteer already over cap even when nothing in the form changed", async () => {
+    holding(1);
+    teacherLookup!.teacherProfile = { designation: ARAL_VOLUNTEER_DESIGNATION, advisoryMode: "DEFAULT" };
+
+    const result = await setTeacherAdvisorySetting(
+      buildFormData({
+        teacherId: TEACHER_ID,
+        designationKind: ARAL_VOLUNTEER_DESIGNATION,
+        advisoryMode: "DEFAULT",
+      })
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "confirm_release",
+      releases: [{ id: "66666666-6666-4666-8666-666666666666", label: "Grade 3 · Section 0" }],
+    });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
+    expect(calls.sectionUpdateMany).toHaveLength(0);
+  });
+
+  it("releases a volunteer's over-cap section on confirmation even though the setting is unchanged", async () => {
+    holding(1);
+    teacherLookup!.teacherProfile = { designation: ARAL_VOLUNTEER_DESIGNATION, advisoryMode: "DEFAULT" };
+
+    const result = await setTeacherAdvisorySetting(
+      buildFormData({
+        teacherId: TEACHER_ID,
+        designationKind: ARAL_VOLUNTEER_DESIGNATION,
+        advisoryMode: "DEFAULT",
+        confirmRelease: "true",
+      })
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(calls.teacherProfileUpdate[0]).toEqual({
+      where: { userId: TEACHER_ID },
+      data: { designation: ARAL_VOLUNTEER_DESIGNATION, advisoryMode: "DEFAULT" },
+    });
+    expect(calls.sectionUpdateMany).toHaveLength(1);
+    expect(
+      (calls.sectionUpdateMany[0] as { data: { adviserId: string | null } }).data.adviserId
+    ).toBeNull();
+
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: HEAD_ID,
+        schoolId: SCHOOL_ID,
+        action: "TEACHER_ADVISORY_SETTING_CHANGE",
+        resource: "TeacherProfile",
+        resourceId: TEACHER_ID,
+        metadata: expect.objectContaining({
+          teacherId: TEACHER_ID,
+          previousDesignation: ARAL_VOLUNTEER_DESIGNATION,
+          designation: ARAL_VOLUNTEER_DESIGNATION,
+          previousMode: "DEFAULT",
+          advisoryMode: "DEFAULT",
+          releasedSectionIds: ["66666666-6666-4666-8666-666666666666"],
+        }),
+      })
+    );
   });
 });

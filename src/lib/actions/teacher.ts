@@ -418,50 +418,65 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
   const { teacherId, designationKind, designationOther, advisoryMode, confirmRelease } = parsed.data;
   const designation = designationKind === "__OTHER__" ? (designationOther as string) : designationKind;
 
-  const teacher = await prisma.user.findFirst({
-    where: { id: teacherId, schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
-    select: {
-      id: true,
-      fullName: true,
-      teacherProfile: { select: { designation: true, advisoryMode: true } },
-      advisorySections: {
-        where: { deletedAt: null },
-        select: { id: true, name: true, gradeLevel: { select: { type: true } } },
-        orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
-      },
-    },
-  });
-  if (!teacher) return { ok: false, error: "Teacher not found" };
-  if (!teacher.teacherProfile) {
-    return { ok: false, error: "This teacher hasn't finished profiling yet." };
-  }
+  type TxOutcome =
+    | { kind: "not-found" }
+    | { kind: "no-profile" }
+    | { kind: "needs-confirm"; releases: { id: string; label: string }[] }
+    | { kind: "no-op" }
+    | {
+        kind: "done";
+        teacherId: string;
+        previousDesignation: string;
+        previousMode: string;
+        releasedSectionIds: string[];
+      };
 
-  const previousDesignation = teacher.teacherProfile.designation;
-  const previousMode = teacher.teacherProfile.advisoryMode;
-
-  // Nothing changed — return early rather than write an audit row claiming a
-  // change that did not happen.
-  if (previousDesignation === designation && previousMode === advisoryMode) {
-    return { ok: true };
-  }
-
-  const held = teacher.advisorySections;
-  const cap = advisoryCapFor(designation, advisoryMode);
-  const excess = held.slice(cap);
-
-  if (excess.length > 0 && confirmRelease !== "true") {
-    return {
-      ok: false,
-      error: "confirm_release",
-      releases: excess.map((s) => ({
-        id: s.id,
-        label: `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`,
-      })),
-    };
-  }
-
+  let outcome: TxOutcome;
   try {
-    await prisma.$transaction(async (tx) => {
+    outcome = (await prisma.$transaction(async (tx) => {
+      // Reading and re-checking the cap inside the transaction narrows, but
+      // does not close, a concurrent-add race under READ COMMITTED — closing
+      // it needs a row lock here and in setTeacherAdvisory, which no
+      // advisory write takes today.
+      const teacher = await tx.user.findFirst({
+        where: { id: teacherId, schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
+        select: {
+          id: true,
+          fullName: true,
+          teacherProfile: { select: { designation: true, advisoryMode: true } },
+          advisorySections: {
+            where: { deletedAt: null },
+            select: { id: true, name: true, gradeLevel: { select: { type: true } } },
+            orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
+          },
+        },
+      });
+      if (!teacher) return { kind: "not-found" } as const;
+      if (!teacher.teacherProfile) return { kind: "no-profile" } as const;
+
+      const previousDesignation = teacher.teacherProfile.designation;
+      const previousMode = teacher.teacherProfile.advisoryMode;
+
+      const held = teacher.advisorySections;
+      const cap = advisoryCapFor(designation, advisoryMode);
+      const excess = held.slice(cap);
+
+      if (excess.length > 0 && confirmRelease !== "true") {
+        return {
+          kind: "needs-confirm",
+          releases: excess.map((s) => ({
+            id: s.id,
+            label: `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`,
+          })),
+        } as const;
+      }
+
+      // Nothing changed and nothing is over cap — return early rather than
+      // write an audit row claiming a change that did not happen.
+      if (previousDesignation === designation && previousMode === advisoryMode && excess.length === 0) {
+        return { kind: "no-op" } as const;
+      }
+
       await tx.teacherProfile.update({
         where: { userId: teacher.id },
         data: { designation, advisoryMode },
@@ -473,33 +488,50 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
           change: { op: "remove", sectionId: section.id },
         });
       }
-    });
+
+      return {
+        kind: "done",
+        teacherId: teacher.id,
+        previousDesignation,
+        previousMode,
+        releasedSectionIds: excess.map((s) => s.id),
+      } as const;
+    })) as TxOutcome;
   } catch (err) {
     console.error("[setTeacherAdvisorySetting] failed:", err);
     return { ok: false, error: describeDbFailure(err, { action: "update this teacher's advisory setting" }) };
   }
+
+  if (outcome.kind === "not-found") return { ok: false, error: "Teacher not found" };
+  if (outcome.kind === "no-profile") {
+    return { ok: false, error: "This teacher hasn't finished profiling yet." };
+  }
+  if (outcome.kind === "needs-confirm") {
+    return { ok: false, error: "confirm_release", releases: outcome.releases };
+  }
+  if (outcome.kind === "no-op") return { ok: true };
 
   await writeAudit({
     userId: user.id,
     schoolId: user.schoolId,
     action: AUDIT_ACTIONS.TEACHER_ADVISORY_SETTING_CHANGE,
     resource: "TeacherProfile",
-    resourceId: teacher.id,
+    resourceId: outcome.teacherId,
     metadata: {
       schoolId: user.schoolId,
-      teacherId: teacher.id,
-      previousDesignation,
+      teacherId: outcome.teacherId,
+      previousDesignation: outcome.previousDesignation,
       designation,
-      previousMode,
+      previousMode: outcome.previousMode,
       advisoryMode,
-      releasedSectionIds: excess.map((s) => s.id),
+      releasedSectionIds: outcome.releasedSectionIds,
     },
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidatePath("/teacher/settings/profile");
-  revalidateTeacherCaches(teacher.id);
+  revalidateTeacherCaches(outcome.teacherId);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
