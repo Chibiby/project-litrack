@@ -191,6 +191,17 @@ enum EmploymentType {
   NON_DEPED
 }
 
+/// How many advisory sections a DepEd teacher may hold, as a declared setting.
+/// Separate from `TeacherProfile.designation` (rank) on purpose: a Master
+/// Teacher may be floating. Ignored for the Non-DepEd ARAL Volunteer
+/// designation, which never advises. Caps live in
+/// `src/lib/teachers/advisory-limits.ts` (`advisoryCapFor`), not in SQL.
+enum AdvisoryMode {
+  DEFAULT
+  FLOATING
+  MULTI_GRADE
+}
+
 enum Specialization {
   GENERAL_EDUCATION
   ENGLISH
@@ -754,6 +765,11 @@ model TeacherProfile {
   /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
   contactEmail            String?
   designation             String?
+  /// DEFAULT = one advisory · FLOATING = none (no class roster, no end-of-term
+  /// reports; ARAL still open) · MULTI_GRADE = one to three, any grades.
+  /// Chosen once by the teacher at profiling, then changed only by the School
+  /// Head (`setTeacherAdvisorySetting`).
+  advisoryMode            AdvisoryMode     @default(DEFAULT)
   position                TeacherPosition?
   /// DepEd plantilla or not. Nullable because every profile completed before this
   /// field existed never answered the question, and a default would make those
