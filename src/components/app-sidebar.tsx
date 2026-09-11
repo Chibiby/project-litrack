@@ -398,6 +398,11 @@ export function AppSidebar({
           >
             {isCollapsed ? APP_VERSION : `LITRACK ${APP_VERSION}`}
           </Link>
+          {!isCollapsed && (
+            <p className="px-3 pb-1 text-[11px] text-muted-foreground/60">
+              Developed by Apache Spark
+            </p>
+          )}
         </div>
       </div>
     );
