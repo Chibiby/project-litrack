@@ -151,6 +151,27 @@ export async function setTeacherAdvisory(
       if (count === 0) {
         throw new SectionTakenError();
       }
+
+      // A section can hold learners with no adviser — a removed teacher's class
+      // is released that way (see `releaseTeacherAdvisory`). Whoever takes the
+      // section takes them. `teacherId: null` is the guard: a learner another
+      // teacher still advises is never pulled across. The active enrolment moves
+      // with the learner row so the two keep agreeing.
+      const liveLearner = { deletedAt: null, archivedAt: null };
+      await tx.learner.updateMany({
+        where: { sectionId: section.id, schoolId, teacherId: null, ...liveLearner },
+        data: { teacherId },
+      });
+      await tx.enrollment.updateMany({
+        where: {
+          sectionId: section.id,
+          schoolId,
+          teacherId: null,
+          status: "ACTIVE",
+          learner: liveLearner,
+        },
+        data: { teacherId },
+      });
     }
   } else if (change.op === "remove") {
     await tx.section.updateMany({

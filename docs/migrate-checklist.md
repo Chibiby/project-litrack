@@ -636,6 +636,41 @@ stored password, which is the fastest complete way to undo the privacy exposure.
 
 ---
 
+## (k) Release removed teachers' advisories  —  Sep 2026
+
+`20260911000005_release_removed_teacher_advisories`. Data only — no schema
+change — so it can be applied before or after the code in either order. Apply it
+with (or right after) the deploy that ships `releaseTeacherAdvisory`: the code
+stops new removals from stranding a section, and this frees the ones stranded
+already.
+
+Not yet applied.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260911000005_release_removed_teacher_advisories` | For teachers already soft-deleted: `Section.adviserId` → NULL (section reads Unassigned), `Learner.teacherId` and ACTIVE `Enrollment.teacherId` → NULL, their `TeacherSection` rows deleted and `User.advisorySectionId` nulled. | No. Every statement is bounded by `User.deletedAt IS NOT NULL`, and it is idempotent. |
+
+Leaves `Learner.aralTeacherId` alone on purpose — an ARAL designation is a
+separate assignment.
+
+### Steps
+
+1. Run the preview `SELECT` in the migration's header to see how many sections,
+   learners and active enrolments it will release.
+2. Apply and confirm `npx prisma migrate status` says up to date.
+3. As a School Head, open Teachers → Active: the "no adviser — Unassigned"
+   notice lists the freed sections, and the Grade & section picker offers them as
+   "— Unassigned". Teachers → Removed lists who was removed. Assigning a freed
+   section to a teacher gives them its adviser-less learners.
+
+### Rollback
+
+Not reversible by SQL — the cleared pointers named teachers who can no longer
+sign in, so there is nothing useful to restore. The code revert alone restores
+the old removal behaviour for future removals.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

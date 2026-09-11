@@ -26,6 +26,7 @@ import {
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL } from "@/lib/teachers/floating-copy";
+import { removalAdvisoryNote } from "@/lib/teachers/removal-copy";
 import { X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
@@ -50,6 +51,7 @@ export type ActiveTeacherRow = {
   email: string;
   profileCompleted: boolean;
   approvedAt: string | null;
+  /** Advisory learners — removal leaves them with no adviser; it does not block. */
   learnerCount: number;
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
   aralLearnerCount: number;
@@ -93,6 +95,14 @@ export type DeclinedTeacherRow = {
   fullName: string;
   email: string;
   rejectedAt: string | null;
+};
+
+export type RemovedTeacherRow = {
+  id: string;
+  fullName: string;
+  /** The address they signed in with, or null when removal did not keep it. */
+  email: string | null;
+  removedAt: string;
 };
 
 /**
@@ -214,9 +224,11 @@ function AdvisoryCell({
                 <option key={s.id} value={s.id}>
                   {/* Named, not hidden: the server refuses an occupied section, so
                       the option has to say whose it is or the refusal is a riddle. */}
-                  {s.adviserId && s.adviserId !== row.id
-                    ? `${s.name} — ${s.adviserName || "taken"}`
-                    : s.name}
+                  {!s.adviserId
+                    ? `${s.name} — Unassigned`
+                    : s.adviserId !== row.id
+                      ? `${s.name} — ${s.adviserName || "taken"}`
+                      : s.name}
                 </option>
               ))}
           </optgroup>
@@ -241,16 +253,20 @@ function TeacherManageActions({
   onSetActive: (row: ActiveTeacherRow, isActive: boolean) => Promise<void>;
   onRemove: (row: ActiveTeacherRow) => Promise<void>;
 }) {
-  // The server blocks removal while the teacher still holds learners on EITHER
-  // axis: advisory learners (Learner.teacherId is ON DELETE RESTRICT) and ARAL
-  // designations (ON DELETE SET NULL, which would silently wipe them). Mirror
-  // both here so the button explains itself instead of failing on click.
+  // The server blocks removal only while the teacher is someone's designated
+  // ARAL teacher. Mirror it here so the button explains itself instead of
+  // failing on click. Advisory learners do not block: removal releases them.
   const blockedReason =
-    row.learnerCount > 0
-      ? `${row.fullName} still has ${row.learnerCount} learner(s). Reassign or transfer them first, then try again.`
-      : row.aralLearnerCount > 0
-        ? `${row.fullName} is the ARAL teacher for ${row.aralLearnerCount} learner(s). Designate another ARAL teacher for them first.`
-        : null;
+    row.aralLearnerCount > 0
+      ? `${row.fullName} is the ARAL teacher for ${row.aralLearnerCount} learner(s). Designate another ARAL teacher for them first.`
+      : null;
+
+  const removeDescription = [
+    `${row.fullName} will be removed and their login deleted so the email can be used to register again. Historical records are kept.`,
+    removalAdvisoryNote(row),
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   // This row's other action is locked while one is running; every *other* row
   // stays live, so one slow request no longer freezes the whole table.
@@ -301,10 +317,7 @@ function TeacherManageActions({
       )}
       <ConfirmAction
         title="Remove teacher?"
-        description={
-          blockedReason ??
-          `${row.fullName} will be removed and their login deleted so the email can be used to register again. Historical records are kept.`
-        }
+        description={blockedReason ?? removeDescription}
         confirmLabel="Remove"
         variant="destructive"
         disabled={blockedReason !== null || rowBusy}
@@ -684,6 +697,45 @@ export function TeachersInactiveTable({
       mode="inactive"
       readOnly={readOnly}
     />
+  );
+}
+
+/**
+ * Teachers removed from this school. Read-only: removal deleted their login and
+ * released their advisory, so there is nothing to restore from here — a removed
+ * teacher registers again and is approved like anyone new.
+ */
+export function TeachersRemovedTable({ rows }: { rows: RemovedTeacherRow[] }) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="border-b px-4 py-3 text-sm font-medium">
+          Removed teachers ({rows.length})
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Removed</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="font-medium">{row.fullName}</TableCell>
+                <TableCell className="text-sm">
+                  {row.email ?? <span className="text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {formatDate(row.removedAt)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 

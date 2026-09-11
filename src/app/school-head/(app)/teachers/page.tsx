@@ -24,6 +24,7 @@ import {
   teacherWorkspaceTabs,
 } from "@/components/school-head/workspace-tabs";
 import { Callout } from "@/components/ui/callout";
+import { Badge } from "@/components/ui/badge";
 import {
   TeachersActiveTable,
   type ActiveTeacherRow,
@@ -112,10 +113,18 @@ async function ActiveTeachersBody({
     }));
 
   const gradeLevelCount = gradeSections.length;
-  const freeSectionCount = gradeSections.reduce(
-    (n, g) => n + g.sections.filter((s) => s.adviser === null).length,
-    0
+  // Every "Grade · Section" with no adviser — a new section, one a School Head
+  // set to Unassigned, or one a removed teacher left behind. Listed by name so
+  // the head sees exactly which classes are waiting for someone.
+  const unassignedSections = gradeSections.flatMap((g) =>
+    g.sections
+      .filter((s) => s.adviser === null)
+      .map((s) => ({
+        id: s.id,
+        label: `${GRADE_LEVEL_LABELS[g.type] ?? g.type} · ${s.name}`,
+      }))
   );
+  const freeSectionCount = unassignedSections.length;
 
   const activeRows: ActiveTeacherRow[] = activeTeachers.map(toManagedRow);
 
@@ -148,7 +157,27 @@ async function ActiveTeachersBody({
           </Link>
           , or set a sitting adviser to Unassigned to free one up.
         </Callout>
-      ) : null}
+      ) : (
+        <Callout
+          variant="info"
+          title={`${freeSectionCount} ${freeSectionCount === 1 ? "section has" : "sections have"} no adviser — Unassigned`}
+        >
+          <ul className="flex flex-wrap gap-1.5" aria-label="Sections without an adviser">
+            {unassignedSections.map((s) => (
+              <li key={s.id}>
+                <Badge variant="outline" className="font-normal">
+                  {s.label}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+          {!isSuperAdminView ? (
+            <p className="mt-2">
+              Assign one to a teacher with the Grade &amp; section picker below.
+            </p>
+          ) : null}
+        </Callout>
+      )}
 
       <TeachersActiveTable
         rows={activeRows}

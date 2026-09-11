@@ -42,13 +42,14 @@ export const SCHOOL_HEAD_ROUTES = {
   /**
    * Teachers workspace. The path is unchanged and Active remains the default
    * view, so every existing link and `revalidatePath("/school-head/teachers")`
-   * still resolves; the other three states become child segments instead of
-   * tables stacked below the fold.
+   * still resolves; the other states become child segments instead of tables
+   * stacked below the fold.
    */
   teachers: "/school-head/teachers",
   teachersPending: "/school-head/teachers/pending",
   teachersInactive: "/school-head/teachers/inactive",
   teachersDeclined: "/school-head/teachers/declined",
+  teachersRemoved: "/school-head/teachers/removed",
 
   aral: "/school-head/aral",
   transfer: "/school-head/transfer",
