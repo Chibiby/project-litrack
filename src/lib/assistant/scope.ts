@@ -6,6 +6,7 @@ import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-k
 import { formatWeekRange } from "@/lib/week-range";
 import { currentMonthKey, formatMonthLabel, monthStartOf, nextMonthStart } from "@/lib/month-range";
 import { getMonday } from "@/lib/utils";
+import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 import type { SchoolUser } from "@/lib/auth/session";
 import {
   MAX_NAMED_LEARNERS,
@@ -41,7 +42,7 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
     ...(user.role === "TEACHER" ? teacherLearnerScope(user.id) : {}),
   };
 
-  const [school, learners, attendanceRows, assessedCount, pending] = await Promise.all([
+  const [school, learners, attendanceRows, assessedCount, pending, lockingEnabled] = await Promise.all([
     prisma.school.findUnique({
       where: { id: user.schoolId },
       select: { name: true },
@@ -86,6 +87,10 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
         section: { select: { name: true } },
       },
     }),
+    // Whether deadlines are enforced at all today. The model is told this as
+    // live state, because the help index describes locks as a feature that
+    // exists and this switch decides whether that description applies today.
+    isSubmissionLockingEnabled(),
   ]);
 
   const aralLearners = learners.filter((l) => l.isAralLearner);
@@ -147,5 +152,6 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
       sectionName: learner.section?.name ?? null,
     })),
     pendingProfilesTruncated: pending.length > MAX_NAMED_LEARNERS,
+    submissionLockingEnabled: lockingEnabled,
   };
 }

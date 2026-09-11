@@ -10,14 +10,18 @@ import { buildAssistantScope } from "@/lib/assistant/scope";
 import { buildSystemInstruction } from "@/lib/assistant/prompt";
 
 /**
- * The assistant's model-backed answer.
+ * The assistant's answer. There is no other one.
  *
- * The contract with the panel is narrow on purpose: this returns prose or it
- * returns nothing, and "nothing" means the panel falls back to the curated
- * index it has always used. Every failure lands there — no key, no school, over
- * the rate limit, Gemini down, Gemini slow, Gemini refusing. A teacher marking
- * attendance on a Friday afternoon must never see this panel break because a
- * third party is having an incident.
+ * This used to be the better half of a pair: the panel rendered a curated
+ * answer from the offline index immediately and this action's prose replaced it
+ * a second later. Two answers to one question, the first of which was visibly
+ * rewritten in front of the reader — so the panel now waits for this, and this
+ * either answers or says why it cannot.
+ *
+ * "Cannot" has to stay honest and has to stay safe. Every failure — no key, no
+ * school, over the rate limit, Gemini down, slow, or refusing — comes back as a
+ * fixed sentence written for a teacher, pointing at the division admin, who is
+ * the real fallback now that the offline index no longer speaks.
  */
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -31,11 +35,31 @@ const askSchema = z.object({
     .optional(),
 });
 
+/** A link under the answer. The app's own route, never a model's invention. */
+export type AssistantLink = { label: string; href: string };
+
 export type AssistantAnswer = {
   text: string;
-  /** Topic ids the answer was grounded in, so the panel can show their links. */
-  topicIds: string[];
+  /**
+   * Where to actually go, from the topics the answer was grounded in.
+   *
+   * Resolved here rather than in the panel so the browser no longer has to ship
+   * the whole help index to render two buttons — and so the model can never be
+   * the source of a URL. Rule 6 of the system instruction forbids it printing
+   * one; these come from `HELP_TOPICS` on the server either way.
+   */
+  links: AssistantLink[];
 };
+
+/** Shown verbatim in the panel. Fixed copy — never an exception's message. */
+const UNAVAILABLE =
+  "I could not reach the assistant just now. Try again in a moment, or send your question to the division admin.";
+const NOT_CONFIGURED =
+  "The assistant is not switched on for this deployment, so I cannot answer questions here yet. Your division admin can still help.";
+const NO_SCHOOL =
+  "I answer from a school's own data, and this admin account is not attached to one. Open a school first and ask from there.";
+const RATE_LIMITED =
+  "That is a lot of questions in one hour. Give it a little while, or send this one to the division admin.";
 
 /**
  * Twenty questions an hour per person.
@@ -46,6 +70,9 @@ export type AssistantAnswer = {
  */
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 60 * 1000 };
 
+/** How many links an answer carries. The panel has room for a couple. */
+const MAX_LINKS = 2;
+
 export async function askAssistant(input: unknown): Promise<ActionResult<AssistantAnswer>> {
   const user = await requireUser();
 
@@ -55,27 +82,30 @@ export async function askAssistant(input: unknown): Promise<ActionResult<Assista
   }
   const { question, pathname } = parsed.data;
 
-  // Nothing configured: not an error, just no model. The panel already has an
-  // answer for this case and it is a good one.
-  if (!geminiConfigured()) return { ok: false, error: "unavailable" };
+  if (!geminiConfigured()) return { ok: false, error: NOT_CONFIGURED };
 
   // Super Admin holds no school of their own, so there is no "their learners"
-  // to describe. They get the curated index rather than an invented scope, or
-  // worse, an admin-wide one — this path must never carry cross-school data.
-  if (!user.schoolId) return { ok: false, error: "unavailable" };
+  // to describe, and this path must never carry an admin-wide or cross-school
+  // scope. They read a school's data from that school's own pages.
+  if (!user.schoolId) return { ok: false, error: NO_SCHOOL };
 
   const limit = await checkRateLimit(`assistant:${user.id}`, RATE_LIMIT);
-  if (!limit.ok) return { ok: false, error: "unavailable" };
+  if (!limit.ok) return { ok: false, error: RATE_LIMITED };
 
-  // The offline ranker picks what the prompt quotes in full, so a question
-  // about attendance does not pay for the text of every account topic.
+  // The ranker no longer picks what the prompt contains — every topic the role
+  // can see is quoted in full now. It still orders them, and it still decides
+  // which two "Open Learners" style links sit under the answer.
   const matches = answerQuery(question, { role: user.role, pathname }, 6);
   const topicIds = matches.map((match) => match.topic.id);
+  const links = matches
+    .filter((match) => match.topic.action)
+    .slice(0, MAX_LINKS)
+    .map((match) => ({ label: match.topic.action!.label, href: match.topic.action!.href }));
 
   try {
     const scope = await buildAssistantScope({ ...user, schoolId: user.schoolId });
     const result = await askGemini(buildSystemInstruction(scope, topicIds), question);
-    if (!result) return { ok: false, error: "unavailable" };
+    if (!result) return { ok: false, error: UNAVAILABLE };
 
     // Counts and ids only. The question can name a learner and the answer can
     // repeat it, so neither is ever written to the audit log.
@@ -91,10 +121,10 @@ export async function askAssistant(input: unknown): Promise<ActionResult<Assista
       },
     });
 
-    return { ok: true, data: { text: result.text, topicIds } };
+    return { ok: true, data: { text: result.text, links } };
   } catch (error) {
     // A scope query that fails must not take the panel with it.
     console.error("[assistant] scope or answer failed", error);
-    return { ok: false, error: "unavailable" };
+    return { ok: false, error: UNAVAILABLE };
   }
 }

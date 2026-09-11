@@ -17,8 +17,7 @@ import type { UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssistantTicketForm } from "@/components/assistant/assistant-ticket-form";
-import { answerQuery, detectSmallTalk, type HelpMatch } from "@/lib/help/search";
-import { askAssistant } from "@/lib/actions/assistant";
+import { askAssistant, type AssistantLink } from "@/lib/actions/assistant";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { getMyChatUnread } from "@/lib/actions/chat";
 import { fetchMyTickets, type MySupportTicket } from "@/lib/actions/support";
@@ -32,17 +31,26 @@ import { formatWeekRange } from "@/lib/week-range";
 import { cn } from "@/lib/utils";
 
 /**
- * The assistant panel: a curated help index in front, a support ticket behind.
+ * The assistant panel: one voice in front, a support ticket behind.
  *
- * Two rules shape everything here.
+ * Three rules shape everything here.
  *
- * The first is that this component never guesses. `answerQuery` returns an
- * empty array when nothing clears its threshold, and an empty array is rendered
- * as "I do not know, here is how to reach a person" — not as the closest topic
- * it could find. A school app that confidently mis-answers a question about a
- * locked grade sheet is worse than one that says nothing.
+ * The first is that there is exactly one answer per question, and it comes from
+ * `askAssistant`. This panel used to render a curated answer from the offline
+ * help index the instant Enter was pressed and then swap it for the model's
+ * prose a second later, which meant a teacher watched an answer they had begun
+ * reading get rewritten underneath them. The curated index is still the model's
+ * reference material, on the server, but it no longer speaks here: a question
+ * shows a thinking indicator and then becomes an answer. Never both.
  *
- * The second is that nothing here is an authorization decision. The tiles are
+ * The second is that this component never guesses. When the model cannot answer
+ * — not configured, over the rate limit, down, slow, or refusing — the action
+ * returns a sentence saying so and the panel renders it with the route to a
+ * person, rather than filling the silence with the closest help topic it could
+ * find. A school app that confidently mis-answers a question about a locked
+ * grade sheet is worse than one that says it does not know.
+ *
+ * The third is that nothing here is an authorization decision. The tiles are
  * filtered by role for tidiness; the ticket a teacher files is authorized by
  * `submitTicket`, and the access it might produce is authorized by
  * `resolveTicket`. Hiding a tile is a courtesy, never a gate.
@@ -54,15 +62,26 @@ import { cn } from "@/lib/utils";
 /** Matches `pageUrl` in `submitTicketSchema`: a bare pathname, no query string. */
 const PAGE_PATH_RE = /^\/(?!\/)[A-Za-z0-9\-._~/]*$/;
 
+/** Shown when the action itself could not be reached. Never an exception text. */
+const UNREACHABLE =
+  "I could not reach the assistant just now. Try again in a moment, or send your question to the division admin.";
+
 type Entry =
   | { id: string; kind: "user"; text: string }
   | {
       id: string;
       kind: "bot";
+      /**
+       * `asking` renders a thinking indicator and nothing else.
+       *
+       * This is the whole fix for the answer-then-rewrite flicker: a bubble
+       * holds no words until it holds its final ones, so there is never a
+       * sentence on screen that is about to be replaced by a different one.
+       */
+      state: "asking" | "answered" | "failed";
       text?: string;
-      matches: HelpMatch[];
-      /** A model answer is still in flight; the offline answer is already shown. */
-      pending?: boolean;
+      /** The app's own routes, resolved on the server. Empty while asking. */
+      links: AssistantLink[];
     };
 
 type Props = {
@@ -142,9 +161,18 @@ export function AssistantPanel({
   const pageUrl = pathname && PAGE_PATH_RE.test(pathname) ? pathname : undefined;
 
   // Typed to the bot shape rather than `Omit<Entry, "id">`: omitting a key from
-  // a union collapses it to the keys the members share, which drops `matches`.
+  // a union collapses it to the keys the members share, which drops `links`.
   const say = useCallback((entry: Omit<Extract<Entry, { kind: "bot" }>, "id">) => {
     setEntries((current) => [...current, { ...entry, id: nextId() }]);
+  }, []);
+
+  /** Settle the bubble this question is waiting on, whatever the outcome. */
+  const settle = useCallback((replyId: string, next: Partial<Extract<Entry, { kind: "bot" }>>) => {
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.id === replyId && entry.kind === "bot" ? { ...entry, ...next } : entry
+      )
+    );
   }, []);
 
   const ask = useCallback(
@@ -152,63 +180,42 @@ export function AssistantPanel({
       const trimmed = question.trim();
       if (!trimmed) return;
 
-      // A greeting is answered as a greeting. `answerQuery` deliberately
-      // returns nothing for one, and rendering that as "I could not find an
-      // answer" would send somebody to the ticket form for saying hello.
-      const smallTalk = detectSmallTalk(trimmed);
-      if (smallTalk) {
-        setEntries((current) => [
-          ...current,
-          { id: nextId(), kind: "user", text: trimmed },
-          {
-            id: nextId(),
-            kind: "bot",
-            text:
-              smallTalk === "greeting"
-                ? `Hello ${firstName}. Ask me how anything in LITRACK works — attendance, reading levels, learners, reports — and I will point you at the answer and the page that does it.`
-                : "Anytime. Ask me anything else about LITRACK whenever you need it.",
-            matches: [],
-          },
-        ]);
-        setDraft("");
-        return;
-      }
-
-      // The offline answer is computed first and shown immediately, so the
-      // panel is never empty while the network is in flight. If the model
-      // answers, it replaces that bubble; if it does not — no key, a timeout, a
-      // spent quota — what is already on screen is the answer, and nothing has
-      // to be undone.
-      const offline = answerQuery(trimmed, { role, pathname: pathname ?? undefined });
+      // Every message goes to the model — a greeting included. The panel used
+      // to answer small talk itself from a canned string and route everything
+      // else through a second path, which is how one question came to have two
+      // authors. Rule 4 of the system instruction covers the greeting now.
       const replyId = nextId();
 
       setEntries((current) => [
         ...current,
         { id: nextId(), kind: "user", text: trimmed },
-        { id: replyId, kind: "bot", matches: offline, pending: true },
+        { id: replyId, kind: "bot", state: "asking", links: [] },
       ]);
       setDraft("");
 
-      void askAssistant({ question: trimmed, pathname: pageUrl }).then((result) => {
-        setEntries((current) =>
-          current.map((entry) => {
-            if (entry.id !== replyId || entry.kind !== "bot") return entry;
-            if (!result.ok || !result.data) {
-              return { ...entry, pending: false };
-            }
-            // Keep the matched topics alongside the prose: they carry the
-            // "Open Learners" style links, which a paragraph cannot.
-            return {
-              ...entry,
-              pending: false,
+      void askAssistant({ question: trimmed, pathname: pageUrl })
+        .then((result) => {
+          if (result.ok && result.data) {
+            settle(replyId, {
+              state: "answered",
               text: result.data.text,
-              matches: offline,
-            };
-          })
-        );
-      });
+              links: result.data.links,
+            });
+            return;
+          }
+          // `error` is fixed copy chosen by the action for this person to read
+          // — it is never an exception message. See `askAssistant`.
+          settle(replyId, {
+            state: "failed",
+            text: result.ok ? UNREACHABLE : result.error,
+          });
+        })
+        // A server action can fail before it returns anything at all: a dropped
+        // connection, a deploy mid-request. That is the same silence to a
+        // reader as a spent quota, so it reads the same.
+        .catch(() => settle(replyId, { state: "failed", text: UNREACHABLE }));
     },
-    [firstName, pageUrl, pathname, role]
+    [pageUrl, settle]
   );
 
   // Loaded once, when the panel first mounts — which is the first time somebody
@@ -368,8 +375,9 @@ export function AssistantPanel({
               setMode("chat");
               say({
                 kind: "bot",
+                state: "answered",
                 text: `Sent. The division admin has your request about "${subject}" and their answer will show up here.`,
-                matches: [],
+                links: [],
               });
               void fetchMyTickets()
                 .then((result) => {
@@ -400,13 +408,24 @@ export function AssistantPanel({
                 {/* Said plainly, before anyone types. Answers are generated
                     outside the country from data about real children, and a
                     teacher is entitled to know that without hunting for it. */}
-                {aiEnabled && (
+                {aiEnabled ? (
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
                     Answers are generated by Google Gemini. Your question and a
                     summary of your own class — counts, this week&rsquo;s
                     attendance, and learners still needing a profile — are sent
                     to Google to produce them. No other teacher&rsquo;s learners
                     and no other school are ever included.
+                  </p>
+                ) : (
+                  /* Gemini is the only thing that answers here now, so with no
+                     key there is nothing to ask. Better said here, once, than
+                     discovered one question at a time. */
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    The assistant is not switched on for this deployment yet, so
+                    it cannot answer questions here.
+                    {canEscalate
+                      ? " Send anything you need to the division admin below."
+                      : ""}
                   </p>
                 )}
 
@@ -483,11 +502,15 @@ export function AssistantPanel({
 }
 
 /**
- * One answer.
+ * One answer, in exactly one of three states.
  *
- * `matches.length === 0` is the honest "I do not know" — see the module note.
- * The escalation button appears there and only there, so the offer to bother a
- * person tracks the moment the index actually failed.
+ * `asking` is a bubble with no words in it. That is deliberate and it is the
+ * point: a bubble that shows prose while a different answer is on its way is a
+ * bubble a reader watches get rewritten, which is what this panel used to do.
+ *
+ * `failed` is the honest "I cannot answer this", carrying the sentence the
+ * action chose. The escalation button appears there and only there, so the
+ * offer to bother a person tracks the moment the assistant actually failed.
  */
 function BotEntry({
   entry,
@@ -498,37 +521,32 @@ function BotEntry({
   canEscalate: boolean;
   onEscalate: () => void;
 }) {
-  if (entry.text) {
+  if (entry.state === "asking") {
     return (
-      <div className="space-y-2">
-        <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5 text-[13px] leading-relaxed">
-          {entry.text}
-        </div>
-        {/* The prose came from the model; these are the app's own links, which
-            a paragraph cannot carry. */}
-        {entry.matches
-          .filter((match) => match.topic.action)
-          .slice(0, 2)
-          .map(({ topic }) => (
-            <Link
-              key={topic.id}
-              href={topic.action!.href}
-              className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
-            >
-              {topic.action!.label}
-              <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
-          ))}
+      <div
+        className="flex w-fit items-center gap-1 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-3"
+        role="status"
+      >
+        <span className="sr-only">Thinking…</span>
+        {/* A staggered fade, not a hop. `animate-bounce` translates 25% on a
+            bounce curve, which on a 6px dot is a jump; the pulse keeps the
+            familiar typing rhythm without the dated easing. */}
+        {[0, 1, 2].map((dot) => (
+          <span
+            key={dot}
+            className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60"
+            style={{ animationDelay: `${dot * 160}ms` }}
+            aria-hidden
+          />
+        ))}
       </div>
     );
   }
 
-  if (entry.matches.length === 0) {
+  if (entry.state === "failed") {
     return (
       <div className="max-w-[85%] space-y-2 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5">
-        <p className="text-[13px] leading-relaxed">
-          I could not find that in my help index, so I would rather not guess.
-        </p>
+        <p className="text-[13px] leading-relaxed">{entry.text}</p>
         {canEscalate && (
           <Button
             type="button"
@@ -547,27 +565,21 @@ function BotEntry({
 
   return (
     <div className="space-y-2">
-      {entry.matches.map(({ topic }) => (
-        <div
-          key={topic.id}
-          className="max-w-[85%] space-y-1.5 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5"
+      <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5 text-[13px] leading-relaxed">
+        {entry.text}
+      </div>
+      {/* The prose came from the model; these are the app's own routes, picked
+          on the server, which a paragraph cannot carry and a model must not
+          invent. */}
+      {entry.links.map((link) => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
         >
-          <p className="text-[13px] font-semibold">{topic.title}</p>
-          {topic.body.map((paragraph, index) => (
-            <p key={index} className="text-[13px] leading-relaxed">
-              {paragraph}
-            </p>
-          ))}
-          {topic.action && (
-            <Link
-              href={topic.action.href}
-              className="inline-flex items-center gap-1 text-[12px] font-medium text-violet hover:underline"
-            >
-              {topic.action.label}
-              <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
-          )}
-        </div>
+          {link.label}
+          <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
       ))}
     </div>
   );
