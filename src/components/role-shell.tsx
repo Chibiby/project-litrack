@@ -5,6 +5,7 @@ import { AppSidebar } from "./app-sidebar";
 import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
+import { ReleaseNotesModal } from "@/components/release-notes-modal";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
@@ -46,6 +47,12 @@ interface RoleShellProps {
    * false privacy notice — which is worse than none.
    */
   aiEnabled?: boolean;
+  /**
+   * The release this user has acknowledged — `User.lastSeenReleaseVersion`,
+   * taken from the row the layout already loaded, so the common path (nothing
+   * to show) costs no extra query. `null` means they have acknowledged none.
+   */
+  lastSeenReleaseVersion?: string | null;
   children: React.ReactNode;
 }
 
@@ -66,6 +73,7 @@ export function RoleShell({
   advisoryGradeLevelId,
   notifications,
   aiEnabled,
+  lastSeenReleaseVersion,
   children,
 }: RoleShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
@@ -107,6 +115,13 @@ export function RoleShell({
               role={role}
               grades={grades}
               notifications={notifications}
+              // The bell's release row follows the modal: on only where the
+              // layout passed a stamp (so never while an admin impersonates a
+              // head), and never for a Super Admin, who holds no school and so
+              // can never have a row to fetch.
+              releaseAlerts={
+                lastSeenReleaseVersion !== undefined && role !== "SUPER_ADMIN"
+              }
               isAralVolunteer={isAralVolunteer}
               advisoryGradeLevelId={advisoryGradeLevelId}
               expanded={expanded}
@@ -121,6 +136,16 @@ export function RoleShell({
           {/* Outside the offset wrapper: the widget is fixed to the viewport, so
               it must not sit inside a node whose margin animates with the rail. */}
           <AssistantWidget role={role} userName={userName} aiEnabled={aiEnabled} />
+
+          {/* Last, after the page: a dialog portals out of this tree so its
+              place here does not affect layout, but it does set tab order, and
+              the notes should not sit between the nav and the page in it.
+              `undefined` — a layout that has not been taught to pass the stamp —
+              renders nothing, rather than announcing to everyone as if they had
+              seen no release. */}
+          {lastSeenReleaseVersion !== undefined ? (
+            <ReleaseNotesModal lastSeenVersion={lastSeenReleaseVersion} />
+          ) : null}
         </div>
       </NavPathProvider>
     </RoleShellContext.Provider>

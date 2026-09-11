@@ -28,6 +28,7 @@ export default async function AdminLayout({
         userName={user.fullName || user.email}
         aiEnabled={geminiConfigured()}
         notifications={await getChatNotifications(user)}
+        lastSeenReleaseVersion={user.lastSeenReleaseVersion}
       >
         {children}
       </RoleShell>

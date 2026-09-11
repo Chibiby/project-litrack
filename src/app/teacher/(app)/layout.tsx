@@ -95,6 +95,9 @@ export default async function TeacherAppLayout({
         isAralVolunteer={isAralVolunteer}
         advisoryGradeLevelId={advisoryGradeLevelId}
         aiEnabled={geminiConfigured()}
+        // From the row `requireUser` already loaded — no third read in a layout
+        // that is held to two.
+        lastSeenReleaseVersion={user.lastSeenReleaseVersion}
       >
         {children}
       </RoleShell>

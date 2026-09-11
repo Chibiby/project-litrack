@@ -26,6 +26,7 @@ import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { UserAccountMenu } from "@/components/user-account-menu";
 import { SignOutButton } from "@/components/sign-out-button";
 import { logoutAction } from "@/lib/actions/auth";
+import { APP_VERSION } from "@/lib/releases";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import {
   roleHomePath,
@@ -380,6 +381,23 @@ export function AppSidebar({
               iconOnly={isCollapsed}
             />
           </form>
+          {/*
+            Below sign-out, the quietest line in the rail: it answers "which
+            version am I on" and leads to what changed, and nobody needs it on
+            the way to anything else. The collapsed rail is icon-width, so it
+            drops the product name rather than force the rail wider.
+          */}
+          <Link
+            href="/releases"
+            onClick={onNavigate}
+            className={cn(
+              "block rounded-md py-1 text-[11px] text-muted-foreground/80 transition-colors hover:text-foreground",
+              isCollapsed ? "text-center" : "px-3"
+            )}
+            title={`LITRACK ${APP_VERSION} — what's new`}
+          >
+            {isCollapsed ? APP_VERSION : `LITRACK ${APP_VERSION}`}
+          </Link>
         </div>
       </div>
     );

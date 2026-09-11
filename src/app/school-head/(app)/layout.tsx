@@ -53,6 +53,10 @@ export default async function SchoolHeadAppLayout({
         userName={userName}
         schoolName={schoolName}
         aiEnabled={geminiConfigured()}
+        // Not while an admin impersonates this head: `user` IS the head's own
+        // account then, and acknowledging would stamp their row — the real head
+        // would never be shown the release they have not read.
+        lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}
       >
         {children}
       </RoleShell>
