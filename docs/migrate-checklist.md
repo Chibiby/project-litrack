@@ -771,6 +771,10 @@ step-(a) backup if that snapshot was not taken.
 because production had already applied `20260911000003_term_window_override` by the
 time this branch was ready — see the "Numbering" note under **(l)**.
 
+Applied to production 2026-09-11 (from `feat/error-handling`), after
+`20260911000010` was already in, before the code deployed. The RLS line ran
+straight after; `relrowsecurity` reads true and `migrate status` is up to date.
+
 ### What it does
 
 One new table, `ErrorEvent`, and four indexes. Nothing existing is altered.
