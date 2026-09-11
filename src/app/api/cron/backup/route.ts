@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSnapshot } from "@/lib/db/snapshot";
 import { isBackupStoreConfigured, saveBackup, type BackupKind } from "@/lib/db/backup-store";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { route } from "@/lib/errors/route";
+import { AppError } from "@/lib/errors/app-error";
+import { purgeExpiredErrorEvents } from "@/lib/errors/retention";
 
 /**
  * Scheduled backup endpoint, driven by the `crons` entries in `vercel.json`.
@@ -25,52 +28,61 @@ function isAuthorized(request: NextRequest): boolean {
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = route("GET /api/cron/backup", async (request: NextRequest) => {
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    throw new AppError("AUTH_NOT_SIGNED_IN", { detail: "Missing or wrong CRON_SECRET" });
   }
 
   const kindParam = request.nextUrl.searchParams.get("kind");
   const kind: BackupKind = kindParam === "weekly" ? "weekly" : "daily";
 
   if (!isBackupStoreConfigured()) {
-    return NextResponse.json(
-      { error: "BLOB_READ_WRITE_TOKEN is not set; no backup store to write to." },
-      { status: 503 }
-    );
+    throw new AppError("SERVICE_UNAVAILABLE", {
+      params: { service: "Backup storage" },
+      detail: "BLOB_READ_WRITE_TOKEN is not set; no backup store to write to.",
+      context: { service: "blob" },
+    });
   }
 
-  try {
-    const snapshot = await createSnapshot();
-    const saved = await saveBackup(kind, snapshot);
+  // A failure here is still logged and still returns non-200 for the cron
+  // dashboard — the wrapper does both — but the response no longer echoes the
+  // raw error text, which could name tables and values.
+  const snapshot = await createSnapshot();
+  const saved = await saveBackup(kind, snapshot);
 
-    await writeAudit({
-      action: AUDIT_ACTIONS.DB_BACKUP_CREATE,
-      resource: "Database",
-      resourceId: saved.pathname,
-      metadata: {
-        trigger: "cron",
-        kind,
-        totalRows: snapshot.meta.totalRows,
-        bytes: saved.size,
-      },
-    });
-
-    return NextResponse.json({
-      ok: true,
+  await writeAudit({
+    action: AUDIT_ACTIONS.DB_BACKUP_CREATE,
+    resource: "Database",
+    resourceId: saved.pathname,
+    metadata: {
+      trigger: "cron",
       kind,
-      stamp: saved.stamp,
-      bytes: saved.size,
       totalRows: snapshot.meta.totalRows,
-    });
-  } catch (err) {
-    // Logged rather than swallowed: a silently failing backup job is the worst
-    // possible outcome here, so this surfaces in Vercel's function logs and as
-    // a non-200 the cron dashboard shows as failed.
-    console.error(`[cron/backup] ${kind} backup failed:`, err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Backup failed" },
-      { status: 500 }
-    );
+      bytes: saved.size,
+    },
+  });
+
+  // Housekeeping rides on the daily run rather than its own cron entry: one
+  // fewer schedule to keep working, and the plan's cron allowance is finite.
+  // A failed purge must never fail a backup — the backup is the important half.
+  let errorEventsPurged: number | null = null;
+  if (kind === "daily") {
+    try {
+      errorEventsPurged = await purgeExpiredErrorEvents();
+    } catch (err) {
+      console.error(
+        "[cron/backup] ErrorEvent purge failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
   }
-}
+
+  return NextResponse.json({
+    ok: true,
+    kind,
+    stamp: saved.stamp,
+    bytes: saved.size,
+    totalRows: snapshot.meta.totalRows,
+    errorEventsPurged,
+  });
+});
