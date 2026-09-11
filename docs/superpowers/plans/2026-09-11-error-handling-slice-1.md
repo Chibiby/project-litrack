@@ -2380,3 +2380,685 @@ git commit -m "feat(errors): record crashed page renders under the digest the us
 ```
 
 ---
+### Task 8: Configuration failures and tenant refusals speak the catalog
+
+**Files:**
+- Modify: `src/lib/env.ts:78-82`, `src/lib/supabase/server.ts:14-18`, `src/lib/supabase/admin.ts:36-42`, `src/lib/auth/tenant.ts`, `src/app/login/page.tsx`, `src/app/admin/login/page.tsx`
+- Test: `tests/unit/tenant.test.ts` (update)
+
+**Interfaces:**
+- Consumes: Tasks 1, 2, 5
+- Produces: `assertSameSchool(userSchoolId, resourceSchoolId, resource = "Record")` throwing `AppError("NOT_FOUND")`; every configuration failure throwing `AppError("CONFIG_MISSING")` with the variable names in `detail`
+
+**Security note being fixed:** the two login pages currently print env-var names and hosting details to anonymous visitors.
+
+- [ ] **Step 1: Update `tests/unit/tenant.test.ts`** to pin the behaviour rather than the old string
+
+```ts
+import { describe, expect, it } from "vitest";
+import { AppError } from "@/lib/errors/app-error";
+import { assertSameSchool } from "@/lib/auth/tenant";
+
+function caught(userSchoolId: string, resourceSchoolId: string | null | undefined, resource?: string) {
+  try {
+    assertSameSchool(userSchoolId, resourceSchoolId, resource);
+    return null;
+  } catch (err) {
+    if (!(err instanceof AppError)) throw err;
+    return err;
+  }
+}
+
+describe("assertSameSchool", () => {
+  it("passes when school ids match", () => {
+    expect(caught("school-a", "school-a")).toBeNull();
+  });
+
+  it("refuses another school's row and a missing one with the SAME message", () => {
+    const foreign = caught("school-a", "school-b");
+    const missing = caught("school-a", null);
+    expect(foreign?.code).toBe("NOT_FOUND");
+    expect(missing?.code).toBe("NOT_FOUND");
+    expect(foreign?.message).toBe(missing?.message);
+    expect(caught("school-a", undefined)?.code).toBe("NOT_FOUND");
+  });
+
+  it("names the resource when asked, without leaking which case it was", () => {
+    const err = caught("school-a", "school-b", "Learner");
+    expect(err?.message).toBe("Learner not found. It may have been deleted or moved.");
+    expect(err?.message).not.toContain("school-b");
+  });
+
+  it("records a cross-tenant attempt as a security event, a missing row as ordinary", () => {
+    expect(caught("school-a", "school-b")?.severity).toBe("security");
+    expect(caught("school-a", "school-b")?.context.crossTenant).toBe(true);
+    expect(caught("school-a", null)?.severity).toBe("user");
+  });
+
+  it("keeps the other school's id for admins only", () => {
+    const err = caught("school-a", "school-b");
+    expect(err?.detail).toContain("school-b");
+    expect(err?.message).not.toContain("school-b");
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/tenant.test.ts` — Expected: FAIL (plain `Error("Not found")` is not an `AppError`).
+
+- [ ] **Step 3: Rewrite `src/lib/auth/tenant.ts`**
+
+```ts
+import "server-only";
+import { resourceNotFound } from "@/lib/errors/app-error";
+
+/**
+ * Tenant isolation.
+ *
+ * A row from another school and a row that does not exist produce the SAME
+ * message, so existence in another tenant never leaks. Only the admin record
+ * tells them apart: a cross-tenant attempt is severity "security" and carries
+ * both school ids in `detail`, which is the signal worth reviewing.
+ */
+export function assertSameSchool(
+  userSchoolId: string,
+  resourceSchoolId: string | null | undefined,
+  resource = "Record"
+): void {
+  if (!resourceSchoolId) throw resourceNotFound(resource);
+  if (resourceSchoolId !== userSchoolId) {
+    throw resourceNotFound(resource, {
+      crossTenant: true,
+      detail: `${resource} belongs to school ${resourceSchoolId}; requested from school ${userSchoolId}`,
+    });
+  }
+}
+```
+
+- [ ] **Step 4: Make configuration failures classifiable** — three edits.
+
+`src/lib/env.ts`, inside `getServerEnv`, replacing the `throw new Error(...)`:
+```ts
+  if (!parsed.success) {
+    const missing = missingVarNames(parsed.error.issues);
+    // Names only, never values — and now a code the handler can classify, so a
+    // misconfigured server says "not set up yet" to the person and names the
+    // variables only in the admin record.
+    throw new AppError("CONFIG_MISSING", {
+      detail: `Missing or invalid environment variables: ${missing.join(", ")}`,
+      context: { reason: "env_missing" },
+    });
+  }
+```
+with `import { AppError } from "@/lib/errors/app-error";` at the top.
+
+`src/lib/supabase/server.ts`:
+```ts
+  const env = getSupabasePublicEnv();
+  if (!env.ok) {
+    throw new AppError("CONFIG_MISSING", {
+      detail: "NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set",
+      context: { reason: "supabase_env_missing" },
+    });
+  }
+```
+
+`src/lib/supabase/admin.ts` — both throws become:
+```ts
+    throw new AppError("CONFIG_MISSING", {
+      detail: INVALID_SERVICE_ROLE_MESSAGE,
+      context: { reason: "service_role_key" },
+    });
+```
+Keep `INVALID_SERVICE_ROLE_MESSAGE` and `getInvalidServiceRoleMessage()` exactly as they are: they are now admin detail, not user copy.
+
+- [ ] **Step 5: Stop showing env details on the two login pages**
+
+`src/app/admin/login/page.tsx` — make the component async and replace the "Setup required" block:
+```tsx
+export default async function AdminLoginPage() {
+  const supabaseReady = isSupabaseConfigured();
+  if (!supabaseReady) {
+    // Recorded once per render while misconfigured, which is the only time it
+    // happens, and the only way anyone finds out before a school calls.
+    reportError(
+      new AppError("CONFIG_MISSING", {
+        detail: SUPABASE_NOT_CONFIGURED_MESSAGE,
+        context: { reason: "supabase_env_missing" },
+      }),
+      { route: "/admin/login", routeType: "render" }
+    );
+  }
+  ...
+          {!supabaseReady ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Sign-in unavailable</p>
+              <p className="mt-1 text-amber-800/90">{formatMessage("CONFIG_MISSING")}</p>
+            </div>
+          ) : null}
+```
+with imports `import { AppError } from "@/lib/errors/app-error";`, `import { formatMessage } from "@/lib/errors/codes";`, `import { reportError } from "@/lib/errors/report";`.
+
+`src/app/login/page.tsx` — replace the school-list `catch` and the `configUnavailable` message:
+```tsx
+  let schools: Awaited<ReturnType<typeof listSchoolsWithTeacherStatus>> = [];
+  let schoolsUnavailable: string | null = null;
+
+  try {
+    schools = await listSchoolsWithTeacherStatus();
+  } catch (err) {
+    // An unreachable database and a missing DATABASE_URL are different problems
+    // with different fixes; say which, and give the person a reference.
+    const appError = classifyError(err, { verb: "load the school list" });
+    const ref = reportError(appError, { route: "/login", routeType: "render" });
+    schoolsUnavailable = withReference(appError.message, appError.severity === "system" ? ref : undefined);
+  }
+```
+```tsx
+          {schoolsUnavailable ? (
+            <p className="text-center text-sm text-muted-foreground">{schoolsUnavailable}</p>
+          ) : null}
+```
+with imports `classifyError`, `reportError`, `withReference`.
+
+- [ ] **Step 6: Run to verify** — `npx vitest run tests/unit/tenant.test.ts && npm run typecheck` — Expected: PASS. Then `npx vitest run` and confirm the non-auth action tests that mock `@/lib/auth/tenant` are still green (they mock the module, so they are unaffected).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/env.ts src/lib/supabase src/lib/auth/tenant.ts src/app/login/page.tsx src/app/admin/login/page.tsx tests/unit/tenant.test.ts
+git commit -m "fix(errors): stop showing env details to visitors; tenant refusals carry a code"
+```
+
+---
+
+### Task 9: Tell people why they were signed out
+
+**Files:**
+- Create: `src/lib/auth/session-end.ts`
+- Modify: `src/middleware.ts`, `src/lib/auth/session.ts`, `src/app/pending-approval/page.tsx:28,33`, `src/app/account/created/page.tsx:32,37`, `src/app/login/page.tsx`, `src/app/admin/login/page.tsx`
+- Test: `tests/unit/errors/session-end.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 5
+- Produces:
+  - `SESSION_END_REASONS`, `type SessionEndReason`, `sessionEndCode(value) → ErrorCode | null`
+  - `loginPath(area: "admin" | "school", reason?: SessionEndReason | null) → string`
+  - `hasSupabaseSessionCookie(names: Iterable<string>) → boolean`
+
+**Security note being fixed:** `/login?error=<any text>` currently renders that text as a toast, so a crafted link can put a false message on the real login page. The allow-list ends that.
+
+- [ ] **Step 1: Write the failing test** `tests/unit/errors/session-end.test.ts`
+
+```ts
+import { describe, expect, it } from "vitest";
+import { hasSupabaseSessionCookie, loginPath, sessionEndCode } from "@/lib/auth/session-end";
+
+describe("sessionEndCode", () => {
+  it("maps each known reason to a catalog code", () => {
+    expect(sessionEndCode("session_expired")).toBe("AUTH_SESSION_EXPIRED");
+    expect(sessionEndCode("account_disabled")).toBe("AUTH_ACCOUNT_DISABLED");
+    expect(sessionEndCode("declined")).toBe("AUTH_REGISTRATION_DECLINED");
+    expect(sessionEndCode("deactivated")).toBe("AUTH_ACCOUNT_DEACTIVATED");
+  });
+
+  it("refuses anything else, so no text from a URL is ever shown", () => {
+    expect(sessionEndCode("Your account was hacked, call 0917-000-0000")).toBeNull();
+    expect(sessionEndCode("__proto__")).toBeNull();
+    expect(sessionEndCode("toString")).toBeNull();
+    expect(sessionEndCode(undefined)).toBeNull();
+    expect(sessionEndCode(["session_expired"])).toBeNull();
+  });
+});
+
+describe("loginPath", () => {
+  it("sends admins to the admin login and everyone else to the school login", () => {
+    expect(loginPath("admin")).toBe("/admin/login");
+    expect(loginPath("school")).toBe("/login");
+  });
+
+  it("carries the reason as a short token, never as a message", () => {
+    expect(loginPath("school", "session_expired")).toBe("/login?reason=session_expired");
+    expect(loginPath("admin", "account_disabled")).toBe("/admin/login?reason=account_disabled");
+    expect(loginPath("school", null)).toBe("/login");
+  });
+});
+
+describe("hasSupabaseSessionCookie", () => {
+  it("recognizes whole and chunked session cookies", () => {
+    expect(hasSupabaseSessionCookie(["theme", "sb-abcdef-auth-token"])).toBe(true);
+    expect(hasSupabaseSessionCookie(["sb-abcdef-auth-token.1"])).toBe(true);
+  });
+
+  it("ignores other cookies, including Supabase's non-session ones", () => {
+    expect(hasSupabaseSessionCookie(["theme", "litrack-sidebar"])).toBe(false);
+    expect(hasSupabaseSessionCookie(["sb-abcdef-auth-token-code-verifier"])).toBe(false);
+    expect(hasSupabaseSessionCookie([])).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/errors/session-end.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/auth/session-end.ts`**
+
+```ts
+/**
+ * Why a person is looking at the login page.
+ *
+ * The reason travels as a short token in `?reason=`, never as a message: the
+ * login page used to render `?error=<anything>` straight into a toast, which let
+ * a crafted link put any sentence on the real sign-in screen. Only these four
+ * tokens mean anything, and each maps to a message from the catalog.
+ *
+ * Pure and dependency-free (types only from the catalog) so `src/middleware.ts`
+ * can use it on the edge runtime.
+ */
+
+import type { ErrorCode } from "@/lib/errors/codes";
+
+export const SESSION_END_REASONS = {
+  session_expired: "AUTH_SESSION_EXPIRED",
+  account_disabled: "AUTH_ACCOUNT_DISABLED",
+  declined: "AUTH_REGISTRATION_DECLINED",
+  deactivated: "AUTH_ACCOUNT_DEACTIVATED",
+} as const satisfies Record<string, ErrorCode>;
+
+export type SessionEndReason = keyof typeof SESSION_END_REASONS;
+
+export function sessionEndCode(value: unknown): ErrorCode | null {
+  if (typeof value !== "string" || !Object.hasOwn(SESSION_END_REASONS, value)) return null;
+  return SESSION_END_REASONS[value as SessionEndReason];
+}
+
+export function loginPath(area: "admin" | "school", reason?: SessionEndReason | null): string {
+  const base = area === "admin" ? "/admin/login" : "/login";
+  return reason ? `${base}?reason=${reason}` : base;
+}
+
+/** `sb-<project>-auth-token`, whole or chunked — not the PKCE verifier cookie. */
+const SESSION_COOKIE = /^sb-.+-auth-token(?:\.\d+)?$/;
+
+export function hasSupabaseSessionCookie(names: Iterable<string>): boolean {
+  for (const name of names) if (SESSION_COOKIE.test(name)) return true;
+  return false;
+}
+```
+
+- [ ] **Step 4: Middleware decides the expired case** — in `src/middleware.ts`, capture the cookie state *before* `updateSession` (which rewrites request cookies when a refresh fails), and use it in the unauthenticated redirect:
+
+```ts
+  // Read before updateSession: a failed refresh clears these cookies on the
+  // request, and afterwards "expired" is indistinguishable from "never signed in".
+  const hadSession = hasSupabaseSessionCookie(
+    request.cookies.getAll().filter((cookie) => cookie.value).map((cookie) => cookie.name)
+  );
+
+  const { supabaseResponse, user } = await updateSession(request);
+```
+```ts
+  if (!user) {
+    const area = pathname.startsWith("/admin") ? "admin" : "school";
+    return NextResponse.redirect(new URL(loginPath(area, hadSession ? "session_expired" : null), request.url));
+  }
+```
+with `import { hasSupabaseSessionCookie, loginPath } from "@/lib/auth/session-end";`. Leave the `isSupabaseConfigured()` branch above it alone.
+
+- [ ] **Step 5: `requireUser` passes on the reason** — in `src/lib/auth/session.ts`:
+
+```ts
+import { cache } from "react";
+import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
+import { noteScopeUser } from "@/lib/errors/context";
+
+/**
+ * Why `getCurrentUser` returned null, for the redirect that follows it.
+ *
+ * Per request via `cache()`, alongside the user lookup itself. If the memo is
+ * ever unavailable the holder is simply fresh, the reason is null, and the
+ * redirect is the plain one it was before — never a wrong explanation.
+ */
+const sessionEndNote = cache((): { reason: SessionEndReason | null } => ({ reason: null }));
+```
+
+In `getCurrentUserCached`, set the note where the user is refused:
+```ts
+  if (user.deletedAt) {
+    sessionEndNote().reason = "account_disabled";
+    try { await supabase.auth.signOut(); } catch (err) { … }
+    return null;
+  }
+```
+```ts
+  if (isTeacherRejected(user)) {
+    if (allowPending) return user;
+    try { await supabase.auth.signOut(); } catch (err) { … }
+    redirect(loginPath("school", "declined"));
+  }
+```
+```ts
+  if (!user.isActive) {
+    sessionEndNote().reason = "account_disabled";
+    try { await supabase.auth.signOut(); } catch (err) { … }
+    return null;
+  }
+```
+
+In `requireUser`, use it and record the verified user for error reports:
+```ts
+  const user = await getCurrentUser({ allowPending: options?.allowPending });
+  if (!user) {
+    const isAdminRoute =
+      roles === "SUPER_ADMIN" || (Array.isArray(roles) && roles.includes("SUPER_ADMIN"));
+    redirect(loginPath(isAdminRoute ? "admin" : "school", sessionEndNote().reason));
+  }
+
+  // Lets an error recorded later in this action name the person, without every
+  // throw site passing ids around. No-op outside a wrapped action or route.
+  noteScopeUser({ id: user.id, schoolId: user.schoolId });
+```
+
+- [ ] **Step 6: Replace the two `?error=` redirects** — in `src/app/pending-approval/page.tsx` and `src/app/account/created/page.tsx`:
+
+```ts
+  if (user.approvalStatus === "REJECTED") {
+    await signOut();
+    redirect(loginPath("school", "declined"));
+  }
+
+  if (isDeactivatedTeacher(user)) {
+    await signOut();
+    redirect(loginPath("school", "deactivated"));
+  }
+```
+Remove the now-unused `DECLINED_REGISTRATION_MESSAGE` / `DEACTIVATED_TEACHER_MESSAGE` imports from both files and import `loginPath`.
+
+- [ ] **Step 7: Show the reason on both login pages**
+
+`src/app/login/page.tsx`:
+```tsx
+type LoginPageProps = {
+  searchParams: Promise<{ reason?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  // Allow-list: a token, never text from the URL.
+  const endedCode = sessionEndCode(params.reason);
+  const loginError = endedCode ? formatMessage(endedCode) : undefined;
+```
+(`LoginForm` keeps its `loginError` prop and its toast.)
+
+`src/app/admin/login/page.tsx` — take `searchParams` the same way and render a notice above the form:
+```tsx
+          {endedCode ? (
+            <div className="rounded-xl border border-border/80 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              {formatMessage(endedCode)}
+            </div>
+          ) : null}
+```
+
+- [ ] **Step 8: Run to verify** — `npx vitest run tests/unit/errors/session-end.test.ts tests/unit/auth-helpers.test.ts && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/lib/auth/session-end.ts src/middleware.ts src/lib/auth/session.ts src/app/pending-approval/page.tsx src/app/account/created/page.tsx src/app/login/page.tsx src/app/admin/login/page.tsx tests/unit/errors/session-end.test.ts
+git commit -m "feat(auth): say why a session ended, from an allow-list instead of the URL"
+```
+
+---
+
+### Task 10: Throttle account guessing without blocking a school
+
+**Files:**
+- Modify: `src/lib/rate-limit.ts` (add `peekRateLimit`), `src/app/api/schools/list/route.ts` (use the shared IP helper)
+- Create: `src/lib/request-ip.ts`, `src/lib/auth/lookup-throttle.ts`
+- Test: `tests/unit/rate-limit-peek.test.ts`, `tests/unit/auth/lookup-throttle.test.ts`
+
+**Interfaces:**
+- Consumes: Task 1
+- Produces:
+  - `peekRateLimit(key, options) → Promise<RateLimitResult>` (reads the window, records nothing)
+  - `clientIpFrom(headers: { get(name: string): string | null }) → string`
+  - `LOOKUP_FAILURE_RATE`, `assertLookupAllowed() → Promise<void>` (throws `AUTH_TOO_MANY_ATTEMPTS`), `recordFailedLookup() → Promise<void>`
+
+**The property that matters:** only a lookup that *fails* is charged, so a computer lab of teachers typing their real addresses never trips it; and once an address is over the limit, *every* lookup from it is refused, so the answer stops being an oracle.
+
+- [ ] **Step 1: Write the failing tests** `tests/unit/rate-limit-peek.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// No Upstash: exercise the in-memory window, which is what dev and unconfigured
+// deployments use. The Redis path is a single pipeline of the same semantics.
+vi.mock("@/lib/cache/upstash", () => ({
+  upstashCommand: async () => null,
+  upstashPipeline: async () => null,
+}));
+
+import { checkRateLimit, peekRateLimit } from "@/lib/rate-limit";
+
+const RATE = { limit: 3, windowMs: 60_000 } as const;
+
+beforeEach(() => {
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+describe("peekRateLimit", () => {
+  it("reports the window without consuming an attempt", async () => {
+    const key = `peek:${Math.random()}`;
+    expect((await peekRateLimit(key, RATE)).ok).toBe(true);
+    expect((await peekRateLimit(key, RATE)).ok).toBe(true);
+    expect((await peekRateLimit(key, RATE)).ok).toBe(true);
+    // Three peeks recorded nothing, so three attempts are still available.
+    expect((await checkRateLimit(key, RATE)).ok).toBe(true);
+    expect((await checkRateLimit(key, RATE)).ok).toBe(true);
+    expect((await checkRateLimit(key, RATE)).ok).toBe(true);
+    expect((await checkRateLimit(key, RATE)).ok).toBe(false);
+  });
+
+  it("turns false once the limit is reached, and says how long to wait", async () => {
+    const key = `peek:${Math.random()}`;
+    for (let i = 0; i < RATE.limit; i++) await checkRateLimit(key, RATE);
+    const gate = await peekRateLimit(key, RATE);
+    expect(gate.ok).toBe(false);
+    expect(gate.retryAfterMs).toBeGreaterThan(0);
+    expect(gate.retryAfterMs).toBeLessThanOrEqual(RATE.windowMs);
+  });
+});
+```
+
+`tests/unit/auth/lookup-throttle.test.ts`:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const checkRateLimit = vi.fn();
+const peekRateLimit = vi.fn();
+
+vi.mock("@/lib/rate-limit", () => ({
+  get checkRateLimit() {
+    return checkRateLimit;
+  },
+  get peekRateLimit() {
+    return peekRateLimit;
+  },
+}));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9, 70.41.3.18" }),
+}));
+
+import { AppError } from "@/lib/errors/app-error";
+import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+});
+
+describe("lookup throttle", () => {
+  it("keys on the first address in x-forwarded-for", async () => {
+    await assertLookupAllowed();
+    expect(peekRateLimit).toHaveBeenCalledWith("login:lookup-miss:ip:203.0.113.9", expect.any(Object));
+  });
+
+  it("allows a lookup while the address is under the limit", async () => {
+    await expect(assertLookupAllowed()).resolves.toBeUndefined();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("refuses every lookup once the address is over it, with a wait", async () => {
+    peekRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 4 * 60_000 });
+    await expect(assertLookupAllowed()).rejects.toMatchObject({
+      code: "AUTH_TOO_MANY_ATTEMPTS",
+      message: "Too many attempts. Try again in 4 minutes.",
+    });
+    await expect(assertLookupAllowed()).rejects.toBeInstanceOf(AppError);
+  });
+
+  it("charges the window only when a lookup actually failed", async () => {
+    await recordFailedLookup();
+    expect(checkRateLimit).toHaveBeenCalledWith("login:lookup-miss:ip:203.0.113.9", expect.any(Object));
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run tests/unit/rate-limit-peek.test.ts tests/unit/auth/lookup-throttle.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Add `peekRateLimit` to `src/lib/rate-limit.ts`** (below `checkRateLimit`)
+
+```ts
+/**
+ * Read a window without recording an attempt.
+ *
+ * `checkRateLimit` answers "may I, and I am taking one"; this answers "may I".
+ * The difference is what lets a throttle charge only the attempts that failed,
+ * while still refusing everything once the limit is reached — otherwise the
+ * successful answers stay available and the limit can be used as an oracle.
+ */
+export async function peekRateLimit(
+  key: string,
+  options: RateLimitOptions
+): Promise<RateLimitResult> {
+  const now = Date.now();
+
+  const shared = await redisPeek(key, options, now);
+  if (shared) return shared;
+
+  warnDegradedOnce();
+  return memoryPeek(key, options, now);
+}
+
+async function redisPeek(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+  now: number
+): Promise<RateLimitResult | null> {
+  const rkey = `rl:${key}`;
+  const replies = await upstashPipeline([
+    ["ZREMRANGEBYSCORE", rkey, "0", String(now - windowMs)],
+    ["ZCARD", rkey],
+    ["ZRANGE", rkey, "0", "0", "WITHSCORES"],
+  ]);
+  if (!replies) return null;
+
+  const count = Number(replies[1]);
+  if (!Number.isFinite(count)) return null;
+  if (count < limit) return { ok: true, retryAfterMs: 0 };
+
+  const oldest = replies[2];
+  const oldestScore = Array.isArray(oldest) ? Number(oldest[1]) : NaN;
+  const anchor = Number.isFinite(oldestScore) ? oldestScore : now;
+  return { ok: false, retryAfterMs: Math.max(0, anchor + windowMs - now) };
+}
+
+function memoryPeek(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+  now: number
+): RateLimitResult {
+  const entry = store.get(key);
+  if (!entry) return { ok: true, retryAfterMs: 0 };
+
+  prune(entry, now, windowMs);
+  if (entry.timestamps.length < limit) return { ok: true, retryAfterMs: 0 };
+
+  const oldest = entry.timestamps[0] ?? now;
+  return { ok: false, retryAfterMs: Math.max(0, oldest + windowMs - now) };
+}
+```
+
+- [ ] **Step 4: Implement `src/lib/request-ip.ts`**
+
+```ts
+/**
+ * The caller's address, as the platform reports it.
+ *
+ * Vercel sets `x-forwarded-for` with the client first. Falls back to
+ * `x-real-ip`, then to a shared "unknown" bucket, which is deliberately strict:
+ * a request whose origin cannot be told apart should share a limit, not escape it.
+ */
+export function clientIpFrom(headers: { get(name: string): string | null }): string {
+  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+  return headers.get("x-real-ip")?.trim() || "unknown";
+}
+```
+
+Then use it in `src/app/api/schools/list/route.ts`, replacing the inline header reading with `clientIpFrom(hdrs)`.
+
+- [ ] **Step 5: Implement `src/lib/auth/lookup-throttle.ts`**
+
+```ts
+import "server-only";
+import { headers } from "next/headers";
+import { checkRateLimit, peekRateLimit } from "@/lib/rate-limit";
+import { tooManyAttempts } from "@/lib/errors/app-error";
+import { clientIpFrom } from "@/lib/request-ip";
+
+/**
+ * Makes guessing which email addresses exist expensive, without making signing
+ * in expensive.
+ *
+ * The sign-in form answers "no teacher account uses this email at this school",
+ * which is genuinely useful — it is the difference between a typo and a missing
+ * account. The existing limiter could not meter that answer, because its key
+ * includes the email: every guessed address arrived with a fresh allowance.
+ *
+ * This one is keyed on the address the request came from, and is charged ONLY
+ * when a lookup failed. Teachers typing their own correct addresses never spend
+ * it, so a computer lab behind one NAT address is never locked out; a script
+ * working through a list spends one per guess. Once over the limit, every
+ * lookup from that address is refused — including the ones that would have
+ * succeeded, or the block itself would answer the question.
+ */
+
+export const LOOKUP_FAILURE_RATE = { limit: 10, windowMs: 10 * 60 * 1000 } as const;
+
+async function lookupKey(): Promise<string> {
+  return `login:lookup-miss:ip:${clientIpFrom(await headers())}`;
+}
+
+/** Call before an account lookup. Throws `AUTH_TOO_MANY_ATTEMPTS` when spent. */
+export async function assertLookupAllowed(): Promise<void> {
+  const gate = await peekRateLimit(await lookupKey(), LOOKUP_FAILURE_RATE);
+  if (!gate.ok) throw tooManyAttempts(gate.retryAfterMs);
+}
+
+/** Call when a lookup found no usable account, or hit a registration conflict. */
+export async function recordFailedLookup(): Promise<void> {
+  await checkRateLimit(await lookupKey(), LOOKUP_FAILURE_RATE);
+}
+```
+
+- [ ] **Step 6: Run to verify they pass** — `npx vitest run tests/unit/rate-limit-peek.test.ts tests/unit/auth/lookup-throttle.test.ts tests/unit/rate-limit.test.ts` — Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/rate-limit.ts src/lib/request-ip.ts src/lib/auth/lookup-throttle.ts src/app/api/schools/list/route.ts tests/unit/rate-limit-peek.test.ts tests/unit/auth/lookup-throttle.test.ts
+git commit -m "feat(auth): meter failed account lookups per address, not per email"
+```
+
+---
