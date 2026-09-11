@@ -41,6 +41,7 @@ export function AppHeader({
   role,
   grades,
   notifications = [],
+  releaseAlerts = false,
   isAralVolunteer,
   advisoryGradeLevelId,
   expanded,
@@ -49,6 +50,8 @@ export function AppHeader({
   role: UserRole;
   grades?: NavGrade[];
   notifications?: ShellNotification[];
+  /** Whether the bell fetches this user's release row; decided by `RoleShell`. */
+  releaseAlerts?: boolean;
   /**
    * Renders the advisory-only `Learners` nav item inert and drops the search box,
    * whose target is that roster; see `NavOptions.isAralVolunteer`.
@@ -132,7 +135,10 @@ export function AppHeader({
           />
         )}
 
-        <NotificationsMenu notifications={notifications} />
+        <NotificationsMenu
+          notifications={notifications}
+          releaseAlerts={releaseAlerts}
+        />
 
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 

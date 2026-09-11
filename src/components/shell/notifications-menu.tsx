@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useReleaseAlert } from "@/components/shell/use-release-alert";
 
 export interface ShellNotification {
   id: string;
@@ -24,13 +25,24 @@ const toneDot: Record<ShellNotification["tone"], string> = {
   muted: "bg-muted-foreground/50",
 };
 
-/** Derived, non-persisted alerts (pending profiling, due submissions). */
+/**
+ * Derived, non-persisted alerts (pending profiling, due submissions), plus the
+ * one persisted row the release channel adds when `releaseAlerts` is on.
+ */
 export function NotificationsMenu({
   notifications,
+  releaseAlerts = false,
 }: {
   notifications: ShellNotification[];
+  /**
+   * Fetch this user's unread release row after paint and list it first. Off by
+   * default, so the bell's other callers — and its own tests — pay nothing.
+   */
+  releaseAlerts?: boolean;
 }) {
-  const count = notifications.length;
+  const release = useReleaseAlert(releaseAlerts);
+  const items = release.alert ? [release.alert, ...notifications] : notifications;
+  const count = items.length;
 
   return (
     <Popover>
@@ -64,10 +76,17 @@ export function NotificationsMenu({
           </p>
         ) : (
           <ul className="max-h-80 overflow-y-auto py-1">
-            {notifications.map((n) => (
+            {items.map((n) => (
               <li key={n.id}>
                 <PrefetchLink
                   href={n.href}
+                  // Opening the release row is reading it. Every other row is
+                  // derived from live state and clears when that state does.
+                  onClick={
+                    n.id === release.alert?.id
+                      ? () => release.dismiss(n.id)
+                      : undefined
+                  }
                   className="flex gap-3 px-4 py-3 transition-colors hover:bg-muted"
                 >
                   <span
