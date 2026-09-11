@@ -129,12 +129,23 @@ export async function saveTermGrades(
   // state the schema permits — refuse instead of writing orphaned rows.
   const schoolYear = await prisma.schoolYear.findFirst({
     where: { schoolId: user.schoolId, isActive: true },
-    select: { id: true, startDate: true },
+    select: {
+      id: true,
+      startDate: true,
+      termWindowOverrides: {
+        select: {
+          term: true,
+          startKey: true,
+          endKey: true,
+          deadlineKey: true,
+        },
+      },
+    },
   });
   if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
 
   const window = resolveTermWindow(
-    getTermWindows(schoolYear.startDate),
+    getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
     parsed.data.term
   );
   if (!window) return { ok: false, error: "Invalid input" };
@@ -398,12 +409,24 @@ export async function exportTermGrades(
 
   const schoolYear = await prisma.schoolYear.findFirst({
     where: { schoolId, isActive: true },
-    select: { id: true, label: true, startDate: true },
+    select: {
+      id: true,
+      label: true,
+      startDate: true,
+      termWindowOverrides: {
+        select: {
+          term: true,
+          startKey: true,
+          endKey: true,
+          deadlineKey: true,
+        },
+      },
+    },
   });
   if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
 
   const window = resolveTermWindow(
-    getTermWindows(schoolYear.startDate),
+    getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
     parsed.data.term
   );
   if (!window) return { ok: false, error: "Invalid input" };

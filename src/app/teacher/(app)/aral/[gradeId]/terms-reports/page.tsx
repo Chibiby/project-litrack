@@ -211,7 +211,7 @@ export default async function AralGradeTermsReportsPage({
   }
 
   const todayKey = formatLocalDateKey(schoolToday());
-  const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey));
+  const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey), schoolYear.overrides);
   const activeTerm = resolveActiveTerm(windows, sp.term, todayKey);
   const activeWindow = windows.find((w) => w.term === activeTerm) ?? windows[0];
   // The lock is computed, and a grant reopens one term for one teacher. The

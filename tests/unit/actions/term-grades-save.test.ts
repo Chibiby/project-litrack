@@ -83,6 +83,12 @@ type SchoolYearRow = {
   schoolId: string;
   isActive: boolean;
   startDate: Date;
+  termWindowOverrides: {
+    term: string;
+    startKey: string;
+    endKey: string;
+    deadlineKey: string;
+  }[];
 };
 
 /** The school's learner table for one test. */
@@ -201,7 +207,13 @@ const schoolYearFindFirst = vi.fn(
     const found = schoolYears.find(
       (y) => y.schoolId === args.where.schoolId && y.isActive === args.where.isActive
     );
-    return found ? { id: found.id, startDate: found.startDate } : null;
+    return found
+      ? {
+          id: found.id,
+          startDate: found.startDate,
+          termWindowOverrides: found.termWindowOverrides,
+        }
+      : null;
   }
 );
 
@@ -431,6 +443,7 @@ beforeEach(() => {
       schoolId: SCHOOL_ID,
       isActive: true,
       startDate: SCHOOL_YEAR_START,
+      termWindowOverrides: [],
     },
   ];
   designation = null;
@@ -615,6 +628,42 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
     const res = await post({ term: LOCKED_TERM });
 
     expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
+  });
+
+  it("accepts a save past the months when the head extended the deadline", async () => {
+    // First Term's months ended Oct 31. The head moved entry to Dec 31, and the
+    // frozen clock is Dec 15 — inside the extension, past the months.
+    schoolYears[0].termWindowOverrides = [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-10-31",
+        deadlineKey: "2026-12-31",
+      },
+    ];
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("still refuses a save past the extended deadline", async () => {
+    // Extended, but only to Nov 30 — the clock is past that too.
+    schoolYears[0].termWindowOverrides = [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-10-31",
+        deadlineKey: "2026-11-30",
+      },
+    ];
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(false);
+    expect(res).toMatchObject({
+      error: expect.stringContaining("First Term is closed"),
+    });
   });
 });
 
@@ -816,6 +865,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
         schoolId: OTHER_SCHOOL_ID,
         isActive: true,
         startDate: SCHOOL_YEAR_START,
+        termWindowOverrides: [],
       },
     ];
 
@@ -833,6 +883,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
         schoolId: SCHOOL_ID,
         isActive: false,
         startDate: SCHOOL_YEAR_START,
+        termWindowOverrides: [],
       },
     ];
 
