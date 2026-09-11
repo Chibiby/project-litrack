@@ -12,7 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { acknowledgeRelease } from "@/lib/actions/release";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
-import { APP_VERSION, latestRelease, unseenReleases } from "@/lib/releases";
+import {
+  APP_VERSION,
+  latestRelease,
+  unseenReleases,
+  visibleFixes,
+  type ReleaseAudience,
+} from "@/lib/releases";
 
 /** How often to re-check whether the login splash still covers the screen. */
 const COVER_POLL_MS = 250;
@@ -48,11 +54,20 @@ const COVER_WAIT_CAP_MS = 10_000;
  */
 export function ReleaseNotesModal({
   lastSeenVersion,
+  role,
 }: {
   lastSeenVersion: string | null;
+  /**
+   * The reader's role, so a note written for one role never reaches another —
+   * see `visibleFixes`. A release whose every note is restricted away from this
+   * reader is skipped, and a modal with nothing left to say does not open.
+   */
+  role: ReleaseAudience | null;
 }) {
   const release = latestRelease();
-  const releases = unseenReleases(lastSeenVersion);
+  const releases = unseenReleases(lastSeenVersion)
+    .map((r) => ({ release: r, fixes: visibleFixes(r, role) }))
+    .filter((r) => r.fixes.length > 0);
   const unseen = releases.length > 0;
 
   const [open, setOpen] = useState(false);
@@ -116,7 +131,7 @@ export function ReleaseNotesModal({
         {/* One section per unseen version. Several can ship between two
             sign-ins, so the list scrolls rather than growing past the screen. */}
         <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
-          {releases.map((r) => (
+          {releases.map(({ release: r, fixes }) => (
             <section key={r.version} aria-label={`Version ${r.version}`}>
               <p className="text-sm font-medium text-foreground">
                 v{r.version}
@@ -126,7 +141,7 @@ export function ReleaseNotesModal({
                 </span>
               </p>
               <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                {r.fixes.map((fix) => (
+                {fixes.map((fix) => (
                   <li key={fix} className="flex gap-2">
                     <span aria-hidden="true" className="text-primary">
                       &bull;

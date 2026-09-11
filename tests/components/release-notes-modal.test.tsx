@@ -30,20 +30,24 @@ vi.mock("@/lib/post-login-flag", () => ({
 let announce = true;
 vi.mock("@/lib/releases", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/releases")>();
-  const history = () => [
+  const history = (): import("@/lib/releases").Release[] => [
     {
       version: "1.3.0",
       date: "2026-09-12",
       title: "A test release",
       announce,
-      fixes: ["The first fix", "The second fix"],
+      fixes: [
+        "The first fix",
+        "The second fix",
+        { text: "An admin-only fix", roles: ["SUPER_ADMIN"] },
+      ],
     },
     {
       version: "1.2.1",
       date: "2026-09-11",
       title: "A patch in between",
       announce: true,
-      fixes: ["A skipped fix"],
+      fixes: [{ text: "An admin-only patch", roles: ["SUPER_ADMIN"] }],
     },
     {
       version: "1.2.0",
@@ -58,6 +62,7 @@ vi.mock("@/lib/releases", async (importOriginal) => {
     latestRelease: () => history()[0],
     unseenReleases: (lastSeen: string | null) =>
       real.unseenReleases(lastSeen, history()),
+    visibleFixes: real.visibleFixes,
   };
 });
 
@@ -78,7 +83,7 @@ const HEADING = "LITRACK System updated to v1.3.0";
 
 describe("ReleaseNotesModal — who sees it", () => {
   it("says which version the system was updated to, with every fix", async () => {
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
 
     expect(await screen.findByText(HEADING)).toBeTruthy();
     expect(screen.getByText("The first fix")).toBeTruthy();
@@ -86,39 +91,74 @@ describe("ReleaseNotesModal — who sees it", () => {
   });
 
   it("shows only the current release to someone who has seen none", async () => {
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
     await screen.findByText(HEADING);
 
-    expect(screen.queryByText("A skipped fix")).toBeNull();
+    expect(screen.queryByText("An admin-only patch")).toBeNull();
     expect(screen.queryByText("An old fix")).toBeNull();
   });
 
   it("lists every version released since the one they last acknowledged", async () => {
-    render(<ReleaseNotesModal lastSeenVersion="1.2.0" />);
+    render(<ReleaseNotesModal lastSeenVersion="1.2.0" role="SUPER_ADMIN" />);
     await screen.findByText(HEADING);
 
     expect(screen.getByText("The first fix")).toBeTruthy();
-    expect(screen.getByText("A skipped fix")).toBeTruthy();
+    expect(screen.getByText("An admin-only patch")).toBeTruthy();
     // Already acknowledged, so not repeated.
     expect(screen.queryByText("An old fix")).toBeNull();
   });
 
   it("renders nothing for a user who already acknowledged this version", () => {
-    render(<ReleaseNotesModal lastSeenVersion="1.3.0" />);
+    render(<ReleaseNotesModal lastSeenVersion="1.3.0" role="TEACHER" />);
 
     expect(screen.queryByText(HEADING)).toBeNull();
   });
 
   it("shows again to someone who saw a NEWER build that was rolled back", async () => {
-    render(<ReleaseNotesModal lastSeenVersion="1.4.0" />);
+    render(<ReleaseNotesModal lastSeenVersion="1.4.0" role="TEACHER" />);
 
     expect(await screen.findByText(HEADING)).toBeTruthy();
-    expect(screen.queryByText("A skipped fix")).toBeNull();
+    expect(screen.queryByText("An admin-only patch")).toBeNull();
   });
 
   it("renders nothing for a release that does not announce", () => {
     announce = false;
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+
+    expect(screen.queryByText(HEADING)).toBeNull();
+  });
+});
+
+describe("ReleaseNotesModal — who a note is written for", () => {
+  it("keeps a restricted note away from a reader outside its roles", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(HEADING);
+
+    // The privacy case: a note that discloses a capability over the reader's
+    // own account must not reach them through a changelog.
+    expect(screen.queryByText("An admin-only fix")).toBeNull();
+  });
+
+  it("shows a restricted note to the role it names", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="SUPER_ADMIN" />);
+    await screen.findByText(HEADING);
+
+    expect(screen.getByText("An admin-only fix")).toBeTruthy();
+  });
+
+  it("skips a version whose every note is restricted away from the reader", async () => {
+    // 1.2.1 is admin-only in full, so a teacher catching up from 1.2.0 sees
+    // 1.3.0 and nothing else — not an empty section with a heading.
+    render(<ReleaseNotesModal lastSeenVersion="1.2.0" role="TEACHER" />);
+    await screen.findByText(HEADING);
+
+    expect(screen.queryByLabelText("Version 1.2.1")).toBeNull();
+    expect(screen.getByLabelText("Version 1.3.0")).toBeTruthy();
+  });
+
+  it("does not open at all when nothing unseen is for this reader", () => {
+    // Only 1.2.1 is unseen, and every note in it is admin-only.
+    render(<ReleaseNotesModal lastSeenVersion="1.3.0" role="TEACHER" />);
 
     expect(screen.queryByText(HEADING)).toBeNull();
   });
@@ -128,7 +168,7 @@ describe("ReleaseNotesModal — the login splash", () => {
   it("does not open while the splash covers the screen", () => {
     vi.useFakeTimers();
     covered = true;
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
 
     act(() => {
       vi.advanceTimersByTime(1000);
@@ -140,7 +180,7 @@ describe("ReleaseNotesModal — the login splash", () => {
   it("opens as soon as the splash lifts", () => {
     vi.useFakeTimers();
     covered = true;
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
 
     covered = false;
     act(() => {
@@ -153,7 +193,7 @@ describe("ReleaseNotesModal — the login splash", () => {
 
 describe("ReleaseNotesModal — acknowledging", () => {
   it("acknowledges and closes when Got it is pressed", async () => {
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
     await screen.findByText(HEADING);
 
     fireEvent.click(screen.getByRole("button", { name: /got it/i }));
@@ -163,7 +203,7 @@ describe("ReleaseNotesModal — acknowledging", () => {
   });
 
   it("acknowledges on Escape too, so closing is never a way to be shown it again", async () => {
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
     const title = await screen.findByText(HEADING);
 
     fireEvent.keyDown(title, { key: "Escape" });
@@ -177,7 +217,7 @@ describe("ReleaseNotesModal — acknowledging", () => {
       ok: false,
       error: "Could not save that you have seen this. Try again.",
     });
-    render(<ReleaseNotesModal lastSeenVersion={null} />);
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
     await screen.findByText(HEADING);
 
     fireEvent.click(screen.getByRole("button", { name: /got it/i }));

@@ -723,9 +723,13 @@ function DateRangeFilter({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        {/* Reads as a field, not a button: `outline` carries the border, and
+            the authored height, ground and left alignment are kept so it still
+            lines up with the inputs beside it. */}
+        <Button
           type="button"
-          className="flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-background px-3 text-left text-sm"
+          variant="outline"
+          className="flex h-10 w-full items-center justify-start gap-2 rounded-lg border-input bg-background px-3 text-left text-sm font-normal"
         >
           <CalendarDays
             aria-hidden
@@ -739,7 +743,7 @@ function DateRangeFilter({
           >
             {label}
           </span>
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 space-y-3 p-3">
         <div className="space-y-1">

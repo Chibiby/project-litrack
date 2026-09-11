@@ -147,7 +147,10 @@ export function RoleShell({
               renders nothing, rather than announcing to everyone as if they had
               seen no release. */}
           {lastSeenReleaseVersion !== undefined ? (
-            <ReleaseNotesModal lastSeenVersion={lastSeenReleaseVersion} />
+            // `role` is the shell's own role, which is what an admin
+            // impersonating a School Head reads as — and that shell is not
+            // handed a stamp at all, so no note crosses a role boundary here.
+            <ReleaseNotesModal lastSeenVersion={lastSeenReleaseVersion} role={role} />
           ) : null}
         </div>
       </NavPathProvider>

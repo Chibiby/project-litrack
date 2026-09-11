@@ -20,6 +20,30 @@
  *   minor  (1.X.0) the push holds at least one feature
  *   major  (X.0.0) only when the project owner says so
  */
+/**
+ * Who a note is written for. Mirrors Prisma's `UserRole` by hand rather than
+ * importing it: this module is shared with the client, and pulling
+ * `@prisma/client` into it for three string literals would drag the generated
+ * client into the browser bundle.
+ */
+export type ReleaseAudience = "SUPER_ADMIN" | "SCHOOL_HEAD" | "TEACHER";
+
+/**
+ * One line of "what changed".
+ *
+ * A bare string is for everybody — the default, and what nearly every note
+ * should be. The object form restricts a note to the roles that can act on it,
+ * and exists for one reason: a note can itself disclose something. "A Super
+ * Admin can read back the password a School Head chose" tells every School Head
+ * in the country that someone else can see the password they picked, which is a
+ * privacy matter and not theirs to learn from a changelog. Restrict a note when
+ * reading it would disclose a capability over the reader's own data; do not
+ * restrict one merely because it is about a screen the reader cannot open.
+ */
+export type ReleaseNote =
+  | string
+  | { text: string; roles: readonly ReleaseAudience[] };
+
 export type Release = {
   /** Semver, no leading "v". */
   version: string;
@@ -36,8 +60,12 @@ export type Release = {
    * console may not. Decided per release.
    */
   announce: boolean;
-  /** What changed, in the user's language, not the codebase's. */
-  fixes: string[];
+  /**
+   * What changed, in the user's language, not the codebase's. Read through
+   * `visibleFixes`, never directly — a restricted note must not reach a reader
+   * it was not written for.
+   */
+  fixes: readonly ReleaseNote[];
 };
 
 /**
@@ -57,8 +85,13 @@ export const RELEASES: readonly Release[] = [
       "You can clear a row in the weekly attendance and monthly reading level grids. The row stays cleared when you press Save.",
       "The monthly reading level sheet now saves rows you have only partly filled, instead of refusing the whole page.",
       "Monthly reading levels can now have a deadline, 7 days after the month ends. It is not enforced for now.",
-      "Super Admins can reopen a week, month, or term for one teacher or a whole school, for 1 to 90 days. Affected teachers are told once.",
+      "A closed week, month, or term can be reopened for entry. Your division admin arranges it, and you are told when your own entry window reopens.",
+      {
+        text: "The submissions console reopens a week, month, or term for one teacher or a whole school, for 1 to 90 days, and lists and revokes the unlocks in force.",
+        roles: ["SUPER_ADMIN"],
+      },
       "Teachers who advise more than one section now pick the grade and section when they add a learner.",
+      "The search results, the report date range and the school year suggestion are keyboard- and touch-friendly buttons like the rest of the app.",
     ],
   },
   {
@@ -69,7 +102,10 @@ export const RELEASES: readonly Release[] = [
     fixes: [
       "When sign-in fails, LITRACK now says what went wrong. When your session ends, it says why.",
       "Error pages show a reference code you can give to support. A missing page offers a way back, and pages you cannot open say so.",
-      "Super Admins can search the error log by that reference code.",
+      {
+        text: "The error log is searchable by that reference code, on the admin console.",
+        roles: ["SUPER_ADMIN"],
+      },
       "Visitors no longer see server configuration details on the sign-in page.",
       "The link from the login page to the admin sign-in works reliably.",
     ],
@@ -96,7 +132,14 @@ export const RELEASES: readonly Release[] = [
     announce: true,
     fixes: [
       "The assistant now gives one answer, instead of replacing an answer while you read it. If it cannot answer, it says so and points you to your division admin.",
-      "Super Admins can view the password a School Head chose, from the school accounts console, to help a head who forgot it. Every view is recorded in the audit log.",
+      {
+        // Restricted: telling every School Head that their chosen password can
+        // be read back is a privacy disclosure, and a changelog is the wrong
+        // place for a person to learn it. The capability itself is audited, and
+        // the runbook is where a head is told how their credential is handled.
+        text: "A School Head's own password can be recovered from the school accounts console when they are locked out, rather than only reset. Restricted to Super Admins, rate limited, and every reveal writes an audit row naming who viewed it.",
+        roles: ["SUPER_ADMIN"],
+      },
       "The sidebar shows “LITRACK by Apache Spark” with the version, above your profile. The account menu no longer has a second Sign out.",
     ],
   },
@@ -171,6 +214,24 @@ export function compareVersions(a: string, b: string): number {
     if (diff !== 0) return diff;
   }
   return 0;
+}
+
+/**
+ * The notes in a release this reader may see, in order.
+ *
+ * The single door to `release.fixes`. A bare-string note is for everybody; an
+ * object note reaches only the roles it names. A reader whose role is unknown
+ * (`null` — nothing signed in, or a role this list does not name) sees only the
+ * unrestricted notes, which is the safe direction: a restricted note is
+ * restricted because reading it discloses something.
+ */
+export function visibleFixes(
+  release: Release,
+  role: ReleaseAudience | null
+): string[] {
+  return release.fixes
+    .filter((fix) => typeof fix === "string" || (role !== null && fix.roles.includes(role)))
+    .map((fix) => (typeof fix === "string" ? fix : fix.text));
 }
 
 /** The release the app is currently running. */
