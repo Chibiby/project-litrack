@@ -185,6 +185,33 @@ change) and adding grade levels. The **School Head** button needs only a selecte
 3. **Restore:** Follow Supabase restore docs for the project plan; verify app env still points at the restored project; re-run `prisma migrate deploy` only if schema drift requires it.
 4. After restore, smoke: admin login, one school head, one teacher grade list.
 
+## A user quotes a reference E-XXXXXXXX
+
+**When:** someone reports an error and gives you a reference like `E-7K2P9QXM`
+(shown only for "system"-severity failures — our side broke, not theirs).
+
+1. Go to `/admin/errors?ref=E-7K2P9QXM` (Super Admin only). This shows the
+   code, severity, route, school, admin-only message, stack trace (if any),
+   and user id for that one event, under an expandable **Details** section.
+2. If nothing matches — the row aged out, or the event fired before the
+   `ErrorEvent` migration was applied — search the Vercel runtime logs for
+   the reference instead. Every recorded event is also written as a JSON
+   line tagged `"tag": "litrack.error"`, and that line is written before the
+   database insert, so it survives even a database outage.
+3. Rows are kept for `ERROR_EVENT_RETENTION_DAYS` days (default 30), then
+   purged by the daily backup cron (`/api/cron/backup`) — so an old
+   reference may simply be gone.
+4. What the severity on the row means: `system` is our failure (this is the
+   only kind that ever gets a reference); `security` is a correctly refused
+   request (an access check, a rate limit, another school's row) that was
+   recorded but never shown a reference; `user` mistakes (wrong password, a
+   blank field) aren't recorded here at all.
+5. A failure email only reaches you if `ERROR_ALERT_EMAIL` is set (along
+   with `RESEND_API_KEY` / `RESEND_FROM_EMAIL`) — without it, this page and
+   the Vercel logs are the only way to learn about a `system` failure. At
+   most one email per error code is sent every 15 minutes, so a sustained
+   outage won't flood the inbox.
+
 ## Incident checklist (auth / data leak suspicion)
 
 1. Disable affected users (`isActive` / soft delete) and rotate Supabase service role + Resend keys if exposed.
