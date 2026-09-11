@@ -165,7 +165,7 @@ export function LearnerSearchSelect({
                 </li>
               ) : null}
               {hits.map((hit) => (
-                <li key={hit.id} role="option">
+                <li key={hit.id} role="option" aria-selected={(value as LearnerSearchHit | null)?.id === hit.id || false}>
                   <Button
                     type="button"
                     variant="ghost"

@@ -82,6 +82,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     firstName: firstRaw,
     lastName: lastRaw,
     middleName: middleRaw,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Intentionally destructuring contactEmail to exclude it from profileFields
     contactEmail: _contactEmail,
     sectionId,
     // §5. A declared choice, never stored: floating IS zero live advisory
