@@ -360,3 +360,146 @@ export async function setTeacherAdvisorySection(
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
+
+export type AdvisorySettingResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | { ok: false; error: "confirm_release"; releases: { id: string; label: string }[] };
+
+const DESIGNATION_KINDS = ["Teacher", "Master Teacher", ARAL_VOLUNTEER_DESIGNATION, "__OTHER__"] as const;
+
+const advisorySettingSchema = z
+  .object({
+    teacherId: z.string().uuid("Invalid teacher"),
+    designationKind: z.enum(DESIGNATION_KINDS, {
+      errorMap: () => ({ message: "Invalid designation" }),
+    }),
+    designationOther: z.string().trim().max(100, "Keep the designation under 100 characters").optional(),
+    advisoryMode: z.enum(["DEFAULT", "FLOATING", "MULTI_GRADE"], {
+      errorMap: () => ({ message: "Invalid advisory mode" }),
+    }),
+    confirmRelease: z.union([z.literal("true"), z.undefined(), z.null()]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.designationKind === "__OTHER__" && !(data.designationOther && data.designationOther.length > 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["designationOther"],
+        message: "Enter the designation",
+      });
+    }
+  });
+
+/**
+ * Set a teacher's designation and advisory mode as the School Head.
+ *
+ * Changing either can lower the number of sections the teacher is allowed to
+ * advise (`advisoryCapFor`) below what they currently hold — dropping to
+ * DEFAULT while advising three sections, say. Rather than releasing the
+ * excess silently, the action stops and names exactly which sections would be
+ * freed, and only releases them once the School Head calls back with
+ * `confirmRelease: "true"`. The releases route through `setTeacherAdvisory`
+ * so the legacy `TeacherSection` / `taughtGrades` mirrors never diverge from
+ * who is dropped here.
+ */
+export async function setTeacherAdvisorySetting(formData: FormData): Promise<AdvisorySettingResult> {
+  const user = await requireSchoolUser("SCHOOL_HEAD");
+
+  const parsed = advisorySettingSchema.safeParse({
+    teacherId: formData.get("teacherId"),
+    designationKind: formData.get("designationKind"),
+    designationOther: formData.get("designationOther") ?? undefined,
+    advisoryMode: formData.get("advisoryMode"),
+    confirmRelease: formData.get("confirmRelease") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+  const { teacherId, designationKind, designationOther, advisoryMode, confirmRelease } = parsed.data;
+  const designation = designationKind === "__OTHER__" ? (designationOther as string) : designationKind;
+
+  const teacher = await prisma.user.findFirst({
+    where: { id: teacherId, schoolId: user.schoolId, role: "TEACHER", deletedAt: null },
+    select: {
+      id: true,
+      fullName: true,
+      teacherProfile: { select: { designation: true, advisoryMode: true } },
+      advisorySections: {
+        where: { deletedAt: null },
+        select: { id: true, name: true, gradeLevel: { select: { type: true } } },
+        orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
+      },
+    },
+  });
+  if (!teacher) return { ok: false, error: "Teacher not found" };
+  if (!teacher.teacherProfile) {
+    return { ok: false, error: "This teacher hasn't finished profiling yet." };
+  }
+
+  const previousDesignation = teacher.teacherProfile.designation;
+  const previousMode = teacher.teacherProfile.advisoryMode;
+
+  // Nothing changed — return early rather than write an audit row claiming a
+  // change that did not happen.
+  if (previousDesignation === designation && previousMode === advisoryMode) {
+    return { ok: true };
+  }
+
+  const held = teacher.advisorySections;
+  const cap = advisoryCapFor(designation, advisoryMode);
+  const excess = held.slice(cap);
+
+  if (excess.length > 0 && confirmRelease !== "true") {
+    return {
+      ok: false,
+      error: "confirm_release",
+      releases: excess.map((s) => ({
+        id: s.id,
+        label: `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`,
+      })),
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.teacherProfile.update({
+        where: { userId: teacher.id },
+        data: { designation, advisoryMode },
+      });
+      for (const section of excess) {
+        await setTeacherAdvisory(tx, {
+          teacherId: teacher.id,
+          schoolId: user.schoolId,
+          change: { op: "remove", sectionId: section.id },
+        });
+      }
+    });
+  } catch (err) {
+    console.error("[setTeacherAdvisorySetting] failed:", err);
+    return { ok: false, error: describeDbFailure(err, { action: "update this teacher's advisory setting" }) };
+  }
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.TEACHER_ADVISORY_SETTING_CHANGE,
+    resource: "TeacherProfile",
+    resourceId: teacher.id,
+    metadata: {
+      schoolId: user.schoolId,
+      teacherId: teacher.id,
+      previousDesignation,
+      designation,
+      previousMode,
+      advisoryMode,
+      releasedSectionIds: excess.map((s) => s.id),
+    },
+  });
+
+  revalidateSchoolHeadTeachers(user.schoolId);
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+  revalidatePath("/teacher/settings/profile");
+  revalidateTeacherCaches(teacher.id);
+  revalidateSchoolDashboard(user.schoolId);
+  return { ok: true };
+}
