@@ -90,6 +90,10 @@ function makeTx() {
         return { count: 1 };
       }),
     },
+    // Claiming a section adopts its adviser-less learners; nothing here asserts
+    // on that (see teacher-set-advisory-section.test.ts), it only has to exist.
+    learner: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    enrollment: { updateMany: vi.fn(async () => ({ count: 0 })) },
     section: {
       findMany: vi.fn(
         async (args: {

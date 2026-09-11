@@ -41,6 +41,8 @@ type TxCalls = {
   userUpdate: unknown[];
   sectionDeleteMany: unknown[];
   sectionCreateMany: unknown[];
+  learnerUpdateMany: unknown[];
+  enrollmentUpdateMany: unknown[];
 };
 
 let sections: SectionRow[];
@@ -82,6 +84,18 @@ function makeTx() {
       createMany: vi.fn(async (args: unknown) => {
         calls.sectionCreateMany.push(args);
         return { count: 1 };
+      }),
+    },
+    learner: {
+      updateMany: vi.fn(async (args: unknown) => {
+        calls.learnerUpdateMany.push(args);
+        return { count: 0 };
+      }),
+    },
+    enrollment: {
+      updateMany: vi.fn(async (args: unknown) => {
+        calls.enrollmentUpdateMany.push(args);
+        return { count: 0 };
       }),
     },
     section: {
@@ -257,7 +271,13 @@ beforeEach(() => {
   ];
   teacherLookup = { id: TEACHER_ID, advisorySections: [] };
   teacherRow = { advisorySectionId: null, taughtGrades: [] };
-  calls = { userUpdate: [], sectionDeleteMany: [], sectionCreateMany: [] };
+  calls = {
+    userUpdate: [],
+    sectionDeleteMany: [],
+    sectionCreateMany: [],
+    learnerUpdateMany: [],
+    enrollmentUpdateMany: [],
+  };
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
   // The action logs failures with console.error; keep test output pristine.
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -347,6 +367,52 @@ describe("setTeacherAdvisorySection", () => {
         }),
       })
     );
+  });
+
+  it("gives the new adviser the learners the section was left holding", async () => {
+    // A removed teacher's section keeps its learners with no adviser. Whoever
+    // takes the section next takes them too — only the adviser-less ones, so a
+    // learner another teacher still advises is never pulled across.
+    const result = await setTeacherAdvisorySection(
+      buildFormData(TEACHER_ID, SECTION_ID)
+    );
+    expect(result).toEqual({ ok: true });
+
+    expect(calls.learnerUpdateMany).toEqual([
+      {
+        where: {
+          sectionId: SECTION_ID,
+          schoolId: SCHOOL_ID,
+          teacherId: null,
+          deletedAt: null,
+          archivedAt: null,
+        },
+        data: { teacherId: TEACHER_ID },
+      },
+    ]);
+    // The active enrolment follows, so it keeps agreeing with the learner row.
+    expect(calls.enrollmentUpdateMany).toEqual([
+      {
+        where: {
+          sectionId: SECTION_ID,
+          schoolId: SCHOOL_ID,
+          teacherId: null,
+          status: "ACTIVE",
+          learner: { deletedAt: null, archivedAt: null },
+        },
+        data: { teacherId: TEACHER_ID },
+      },
+    ]);
+  });
+
+  it("leaves learners alone when an advisory is removed or cleared", async () => {
+    teacherLookup = { id: TEACHER_ID, advisorySections: [{ id: SECTION_ID }] };
+    teacherRow = { advisorySectionId: SECTION_ID, taughtGrades: [{ id: GRADE_ID }] };
+
+    await setTeacherAdvisorySection(buildFormData(TEACHER_ID, ""));
+
+    expect(calls.learnerUpdateMany).toEqual([]);
+    expect(calls.enrollmentUpdateMany).toEqual([]);
   });
 
   it("refuses an occupied section and names the sitting adviser", async () => {
