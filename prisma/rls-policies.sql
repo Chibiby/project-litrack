@@ -59,6 +59,13 @@ ALTER TABLE "ChatMessage"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatMention"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatRead"             ENABLE ROW LEVEL SECURITY;
 
+-- Server-side failures kept for the Super Admin error page. Rows carry stack
+-- traces, request routes and whatever context the failing call site attached, so
+-- this is a map of the app's weak points and may quote data from the failing
+-- operation. Super-Admin-only, read through Prisma on the service role. Deny-all
+-- with no policies, like everything else here.
+ALTER TABLE "ErrorEvent"           ENABLE ROW LEVEL SECURITY;
+
 -- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
 -- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
 -- never reaches it -- but it holds real teacher-to-grade assignments and Supabase grants

@@ -1483,3 +1483,34 @@ model ChatRead {
   @@id([channelId, userId])
   @@index([userId])
 }
+
+/// One server-side failure worth an admin's attention: a `security` refusal or a
+/// `system` failure. Written by `src/lib/errors/report.ts`, read only by the
+/// Super Admin page `/admin/errors`.
+///
+/// Deliberately unrelated to User/School (plain id columns, no FKs): a failure
+/// must be recordable while the rows it concerns are broken or gone, and a
+/// deleted school must not cascade its error history away before retention does.
+/// `ref` is not unique: a Next.js digest repeats for the same underlying error,
+/// and searching one should show every occurrence. Purged after
+/// ERROR_EVENT_RETENTION_DAYS (default 30) by the daily cron.
+model ErrorEvent {
+  id        String   @id @default(uuid())
+  ref       String
+  code      String
+  severity  String
+  message   String
+  stack     String?
+  route     String?
+  routeType String?
+  method    String?
+  userId    String?
+  schoolId  String?
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([ref])
+  @@index([code, createdAt])
+  @@index([schoolId, createdAt])
+}
