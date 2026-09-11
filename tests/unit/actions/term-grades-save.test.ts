@@ -97,6 +97,8 @@ let sections: SectionRow[];
 let schoolYears: SchoolYearRow[];
 /** `TeacherProfile.designation` for the caller; `null` is an ordinary DepEd teacher. */
 let designation: string | null;
+/** `TeacherProfile.advisoryMode`; `null` behaves as DEFAULT for an older row. */
+let advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
 /** What `requireSchoolUser` resolves. Mutated per test, never widened by default. */
 let session: {
   id: string;
@@ -198,7 +200,7 @@ const teacherProfileFindFirst = vi.fn(
   async (args: { where: { userId: string; user: { schoolId: string } } }) => {
     if (args.where.userId !== session.id) return null;
     if (args.where.user?.schoolId !== session.schoolId) return null;
-    return { designation };
+    return { designation, advisoryMode };
   }
 );
 
@@ -447,6 +449,7 @@ beforeEach(() => {
     },
   ];
   designation = null;
+  advisoryMode = null;
   session = {
     id: TEACHER_ID,
     schoolId: SCHOOL_ID,
@@ -936,6 +939,21 @@ describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
     expect(res).toEqual({
       ok: false,
       error: "End of Terms Reports is for DepEd teachers who advise a section.",
+    });
+    expectNoWrites();
+  });
+
+  it("refuses a floating teacher in words that fit a DepEd teacher", async () => {
+    // A floating teacher IS a DepEd teacher, so the volunteer copy would be
+    // false about them and would point them at the wrong remedy.
+    advisoryMode = "FLOATING";
+
+    const res = await post();
+
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "Floating teachers do not advise a section, so there is no end-of-term sheet. Your School Head can change this.",
     });
     expectNoWrites();
   });

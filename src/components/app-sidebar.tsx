@@ -62,6 +62,11 @@ interface AppSidebarProps {
    */
   isAralVolunteer?: boolean;
   /**
+   * Renders `Learners` and `End of Terms Reports` inert with a "Floating
+   * teacher" pill instead of a "DepEd only" one; see `NavOptions.isFloating`.
+   */
+  isFloating?: boolean;
+  /**
    * Points the "End of Terms Reports" item at the grade-scoped sheet instead of
    * the resolver route, so the row can match its own URL; see
    * `NavOptions.advisoryGradeLevelId`.
@@ -234,6 +239,7 @@ export function AppSidebar({
   viewedSchoolName,
   roleLabel: roleLabelOverride,
   isAralVolunteer,
+  isFloating,
   advisoryGradeLevelId,
   expanded = true,
   transitionsEnabled = true,
@@ -241,8 +247,13 @@ export function AppSidebar({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navGroups = useMemo(
-    () => getNavGroups(role, grades ?? [], { isAralVolunteer, advisoryGradeLevelId }),
-    [role, grades, isAralVolunteer, advisoryGradeLevelId]
+    () =>
+      getNavGroups(role, grades ?? [], {
+        isAralVolunteer,
+        isFloating,
+        advisoryGradeLevelId,
+      }),
+    [role, grades, isAralVolunteer, isFloating, advisoryGradeLevelId]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   // `navPath`, not `pathname`: during a click the router has not committed yet

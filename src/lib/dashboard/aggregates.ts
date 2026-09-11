@@ -564,7 +564,7 @@ const getTeacherShellContextCached = cache(
             ? Promise.resolve(null)
             : prisma.teacherProfile.findFirst({
                 where: { userId: teacherId, user: { schoolId } },
-                select: { designation: true },
+                select: { designation: true, advisoryMode: true },
               }),
           // A Super Admin impersonating the shell advises nothing, so skip the
           // read rather than let a miss read as "has an advisory".
@@ -588,12 +588,13 @@ const getTeacherShellContextCached = cache(
             hasAral: g._count.learners > 0,
           })),
           designation: profile?.designation ?? null,
+          advisoryMode: profile?.advisoryMode ?? null,
           advisoryGradeLevelId: advisorySection?.gradeLevelId ?? null,
         };
       },
       {
         keyParts: [
-          "teacher-shell-context-v5",
+          "teacher-shell-context-v6",
           schoolId,
           teacherId,
           String(isSuperAdmin),

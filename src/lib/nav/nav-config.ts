@@ -68,6 +68,15 @@ export interface NavOptions {
    */
   isAralVolunteer?: boolean;
   /**
+   * A DepEd teacher whose `advisoryMode` is FLOATING — a declared choice not to
+   * advise a section, distinct from an ordinary teacher who simply has not been
+   * assigned one yet. Renders `Learners` and `End of Terms Reports` inert with a
+   * "Floating teacher" pill; see `advisoryRosterDenial`. If `isAralVolunteer` is
+   * also set, the volunteer pill wins — a volunteer is not a DepEd teacher at
+   * all, so their reason takes precedence over a mode that only applies to one.
+   */
+  isFloating?: boolean;
+  /**
    * The grade level of the section this teacher advises, or `null` when they
    * advise none. The End of Terms Reports sheet is grade-scoped
    * (`/teacher/aral/[gradeId]/terms-reports`) but the grade is *derived* from the
@@ -144,23 +153,21 @@ export function getNavGroups(
       // Volunteers keep the ARAL group below — that *is* their roster. Learners
       // stays in the list too, inert: they should be able to see that the
       // advisory roster exists and that being non-DepEd is what closes it, rather
-      // than find one fewer row than the teacher beside them.
+      // than find one fewer row than the teacher beside them. A floating DepEd
+      // teacher gets the same inert treatment, worded for their own reason — the
+      // volunteer pill wins if both are set, since a volunteer is not a DepEd
+      // teacher at all.
+      const classLock = options.isAralVolunteer
+        ? { pill: "DepEd only", reason: "for DepEd teachers who advise a section" }
+        : options.isFloating
+          ? { pill: "Floating teacher", reason: "for teachers who advise a section" }
+          : null;
       const learners: NavItem = {
         id: "teacher-learners",
         label: "Learners",
         href: "/teacher/learners",
         icon: BookOpen,
-        ...(options.isAralVolunteer
-          ? {
-              unavailable: {
-                pill: "DepEd only",
-                // Lower-cased on purpose: renderers compose it as
-                // "{label} — {reason}" for the tooltip and the screen-reader
-                // text, so a capital here would read as a sentence break.
-                reason: "for DepEd teachers who advise a section",
-              },
-            }
-          : {}),
+        ...(classLock ? { unavailable: classLock } : {}),
       };
       return [
         {
@@ -196,14 +203,7 @@ export function getNavGroups(
                 ? `/teacher/aral/${options.advisoryGradeLevelId}/terms-reports`
                 : "/teacher/terms-reports",
               icon: FileText,
-              ...(options.isAralVolunteer
-                ? {
-                    unavailable: {
-                      pill: "DepEd only",
-                      reason: "for DepEd teachers who advise a section",
-                    },
-                  }
-                : {}),
+              ...(classLock ? { unavailable: classLock } : {}),
             },
           ],
         },

@@ -34,6 +34,13 @@ interface RoleShellProps {
    */
   isAralVolunteer?: boolean;
   /**
+   * Renders the same two class-bound items inert with a "Floating teacher" pill
+   * for a DepEd teacher whose `advisoryMode` is FLOATING; see
+   * `NavOptions.isFloating`. Also drops the header search, same as
+   * `isAralVolunteer`.
+   */
+  isFloating?: boolean;
+  /**
    * Points the "End of Terms Reports" row at the grade-scoped sheet the teacher
    * actually lands on; see `NavOptions.advisoryGradeLevelId`.
    */
@@ -70,6 +77,7 @@ export function RoleShell({
   viewedSchoolName,
   roleLabel,
   isAralVolunteer,
+  isFloating,
   advisoryGradeLevelId,
   notifications,
   aiEnabled,
@@ -95,6 +103,7 @@ export function RoleShell({
             viewedSchoolName={viewedSchoolName}
             roleLabel={roleLabel}
             isAralVolunteer={isAralVolunteer}
+            isFloating={isFloating}
             advisoryGradeLevelId={advisoryGradeLevelId}
             expanded={expanded}
             transitionsEnabled={hydrated}
@@ -123,6 +132,7 @@ export function RoleShell({
                 lastSeenReleaseVersion !== undefined && role !== "SUPER_ADMIN"
               }
               isAralVolunteer={isAralVolunteer}
+              isFloating={isFloating}
               advisoryGradeLevelId={advisoryGradeLevelId}
               expanded={expanded}
               onToggleSidebar={toggle}

@@ -48,6 +48,7 @@ afterEach(() => {
 function renderTeacherSidebar(props?: {
   roleLabel?: string;
   isAralVolunteer?: boolean;
+  isFloating?: boolean;
   /**
    * The advised section's grade level, as the shell context supplies it. Omitted
    * here by default so the shared cases exercise the resolver-href fallback;
@@ -461,6 +462,37 @@ describe("AppSidebar — teacher", () => {
       screen.getAllByRole("link", { name: "Learners" })[0].getAttribute("href")
     ).toBe("/teacher/learners");
     expect(screen.queryByText("DepEd only")).toBeNull();
+  });
+
+  it("renders Learners inert with a Floating teacher pill for a floating teacher", () => {
+    // A DepEd teacher whose advisoryMode is FLOATING gets the same inert
+    // treatment as an ARAL volunteer, worded for their own reason — mirrors the
+    // "renders Learners inert with a DepEd-only pill" case above.
+    renderTeacherSidebar({ isFloating: true });
+
+    expect(screen.getAllByText("Learners").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Floating teacher").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Learners" })).toBeNull();
+    expect(
+      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
+    ).not.toContain("/teacher/learners");
+
+    const row = screen.getAllByText("Learners")[0].closest("[aria-disabled]");
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute("aria-disabled")).toBe("true");
+
+    const reason = screen.getAllByText(
+      "Learners — for teachers who advise a section"
+    );
+    expect(reason.length).toBeGreaterThan(0);
+
+    // The ARAL rows and Reports stay live — only the two class-bound rows close.
+    expect(
+      screen.getAllByRole("link", { name: "Weekly Attendance" })[0].getAttribute("href")
+    ).toBe("/teacher/aral/g1/attendance");
+    expect(
+      screen.getAllByRole("link", { name: "Reports" })[0].getAttribute("href")
+    ).toBe("/teacher/reports");
   });
 });
 
