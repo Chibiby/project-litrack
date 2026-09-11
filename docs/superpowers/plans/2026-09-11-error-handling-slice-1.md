@@ -1350,3 +1350,1033 @@ git commit -m "feat(errors): throttled alert emails through Resend"
 ```
 
 ---
+### Task 5: Scope, report, retention
+
+**Files:**
+- Create: `src/lib/errors/context.ts`, `src/lib/errors/report.ts`, `src/lib/errors/retention.ts`
+- Test: `tests/unit/errors/report.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 3, 4
+- Produces:
+  - `runInErrorScope(route, fn)`, `currentErrorScope() → ErrorScope | undefined`, `noteScopeUser({ id, schoolId })`
+  - `reportError(err: AppError, input?: ReportInput) → string` (the ref; I/O deferred, never throws)
+  - `newReference() → string` matching `/^E-[0-9A-HJKMNP-TV-Z]{8}$/`
+  - `type ReportInput = { route?; routeType?; method?; ref?; userId?; schoolId?; authId?; userSource?: "session" | "cookie" }`
+  - `errorRetentionDays() → number`, `purgeExpiredErrorEvents(now?) → Promise<number>`
+
+- [ ] **Step 1: Write the failing test** `tests/unit/errors/report.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const errorEventCreate = vi.fn();
+const errorEventDeleteMany = vi.fn();
+const userFindUnique = vi.fn();
+const sendErrorAlert = vi.fn();
+const deferred: Promise<unknown>[] = [];
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    errorEvent: {
+      get create() {
+        return errorEventCreate;
+      },
+      get deleteMany() {
+        return errorEventDeleteMany;
+      },
+    },
+    user: {
+      get findUnique() {
+        return userFindUnique;
+      },
+    },
+  },
+}));
+vi.mock("next/server", () => ({
+  after: (task: () => Promise<unknown>) => {
+    deferred.push(task());
+  },
+}));
+vi.mock("@/lib/errors/alert", () => ({
+  get sendErrorAlert() {
+    return sendErrorAlert;
+  },
+}));
+
+import { AppError } from "@/lib/errors/app-error";
+import { noteScopeUser, runInErrorScope } from "@/lib/errors/context";
+import { newReference, reportError } from "@/lib/errors/report";
+import { errorRetentionDays, purgeExpiredErrorEvents } from "@/lib/errors/retention";
+
+async function flush() {
+  await Promise.all(deferred.splice(0));
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  deferred.length = 0;
+  errorEventCreate.mockResolvedValue({});
+  sendErrorAlert.mockResolvedValue(undefined);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("newReference", () => {
+  it("is short, unambiguous and random", () => {
+    const a = newReference();
+    expect(a).toMatch(/^E-[0-9A-HJKMNP-TV-Z]{8}$/);
+    expect(newReference()).not.toBe(a);
+  });
+});
+
+describe("reportError", () => {
+  it("returns a reference immediately and stores the event after the response", async () => {
+    const cause = Object.assign(new Error("Timed out fetching a new connection"), { code: "P2024" });
+    const ref = reportError(
+      new AppError("DB_UNAVAILABLE", { cause, detail: "P2024 pool timeout", context: { prismaCode: "P2024" } }),
+      { route: "saveSection", routeType: "action" }
+    );
+    expect(ref).toMatch(/^E-/);
+    await flush();
+    const row = errorEventCreate.mock.calls[0][0].data;
+    expect(row).toMatchObject({ ref, code: "DB_UNAVAILABLE", severity: "system", route: "saveSection", routeType: "action" });
+    expect(row.message).toContain("P2024 pool timeout");
+    expect(row.stack).toContain("Timed out");
+    expect(row.context).toMatchObject({ prismaCode: "P2024" });
+  });
+
+  it("keeps only allow-listed context keys", async () => {
+    reportError(new AppError("AUTH_FORBIDDEN", { context: { reason: "role_mismatch", email: "a@b.c", password: "x" } }));
+    await flush();
+    const ctx = errorEventCreate.mock.calls[0][0].data.context;
+    expect(ctx.reason).toBe("role_mismatch");
+    expect(ctx).not.toHaveProperty("email");
+    expect(ctx).not.toHaveProperty("password");
+  });
+
+  it("uses the verified user from the action scope", async () => {
+    await runInErrorScope("changePassword", async () => {
+      noteScopeUser({ id: "user-1", schoolId: "school-1" });
+      reportError(new AppError("AUTH_PROVIDER_ERROR"));
+    });
+    await flush();
+    expect(errorEventCreate.mock.calls[0][0].data).toMatchObject({
+      userId: "user-1",
+      schoolId: "school-1",
+      route: "changePassword",
+    });
+  });
+
+  it("resolves a cookie-derived auth id to a user id, marked as such", async () => {
+    userFindUnique.mockResolvedValue({ id: "user-9", schoolId: "school-9" });
+    reportError(new AppError("INTERNAL_ERROR"), { authId: "auth-9", userSource: "cookie" });
+    await flush();
+    expect(errorEventCreate.mock.calls[0][0].data).toMatchObject({ userId: "user-9", schoolId: "school-9" });
+    expect(errorEventCreate.mock.calls[0][0].data.context.userSource).toBe("cookie");
+  });
+
+  it("writes one searchable JSON line to the log", () => {
+    const ref = reportError(new AppError("INTERNAL_ERROR"));
+    const line = vi
+      .mocked(console.error)
+      .mock.calls.map((c) => String(c[0]))
+      .find((s) => s.includes(ref));
+    expect(line).toBeDefined();
+    expect(JSON.parse(line as string)).toMatchObject({ tag: "litrack.error", ref, code: "INTERNAL_ERROR" });
+  });
+
+  it("never throws when the database is down", async () => {
+    errorEventCreate.mockRejectedValue(new Error("P1001 can't reach database"));
+    expect(() => reportError(new AppError("DB_UNAVAILABLE"))).not.toThrow();
+    await expect(flush()).resolves.toBeDefined();
+  });
+
+  it("alerts for system failures only", async () => {
+    reportError(new AppError("DB_UNAVAILABLE"));
+    reportError(new AppError("AUTH_FORBIDDEN"));
+    await flush();
+    expect(sendErrorAlert).toHaveBeenCalledTimes(1);
+    expect(sendErrorAlert.mock.calls[0][0]).toMatchObject({ code: "DB_UNAVAILABLE" });
+  });
+
+  it("still alerts when the insert fails", async () => {
+    errorEventCreate.mockRejectedValue(new Error("down"));
+    reportError(new AppError("DB_UNAVAILABLE"));
+    await flush();
+    expect(sendErrorAlert).toHaveBeenCalledTimes(1);
+  });
+
+  it("files school-scoped refusals under the school", async () => {
+    reportError(new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", { context: { schoolId: "school-3" } }));
+    await flush();
+    expect(errorEventCreate.mock.calls[0][0].data.schoolId).toBe("school-3");
+  });
+});
+
+describe("retention", () => {
+  it("defaults to 30 days and honours a sane override", () => {
+    delete process.env.ERROR_EVENT_RETENTION_DAYS;
+    expect(errorRetentionDays()).toBe(30);
+    process.env.ERROR_EVENT_RETENTION_DAYS = "7";
+    expect(errorRetentionDays()).toBe(7);
+    process.env.ERROR_EVENT_RETENTION_DAYS = "0";
+    expect(errorRetentionDays()).toBe(30);
+    delete process.env.ERROR_EVENT_RETENTION_DAYS;
+  });
+
+  it("deletes only rows older than the cutoff", async () => {
+    errorEventDeleteMany.mockResolvedValue({ count: 4 });
+    const now = new Date("2026-09-30T00:00:00Z");
+    await expect(purgeExpiredErrorEvents(now)).resolves.toBe(4);
+    expect(errorEventDeleteMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: new Date("2026-08-31T00:00:00Z") } },
+    });
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run tests/unit/errors/report.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/errors/context.ts`**
+
+```ts
+import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+/**
+ * Who and where, for the duration of one wrapped server action or route.
+ *
+ * `action()`/`route()` open the scope with the route name; `requireUser` fills
+ * in the verified user when one is resolved. `reportError` reads it, so an
+ * error record names the user without every throw site passing ids around.
+ */
+
+export type ErrorScope = { route: string; userId?: string; schoolId?: string | null };
+
+const storage = new AsyncLocalStorage<ErrorScope>();
+
+export function runInErrorScope<T>(route: string, fn: () => Promise<T>): Promise<T> {
+  return storage.run({ route }, fn);
+}
+
+export function currentErrorScope(): ErrorScope | undefined {
+  return storage.getStore();
+}
+
+/** Called by `requireUser`. A no-op outside a wrapped action or route. */
+export function noteScopeUser(user: { id: string; schoolId: string | null }): void {
+  const scope = storage.getStore();
+  if (!scope) return;
+  scope.userId = user.id;
+  scope.schoolId = user.schoolId;
+}
+```
+
+- [ ] **Step 4: Implement `src/lib/errors/report.ts`**
+
+```ts
+import "server-only";
+import { after } from "next/server";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import type { AppError } from "./app-error";
+import { currentErrorScope } from "./context";
+import { sendErrorAlert } from "./alert";
+
+/**
+ * Record a failure for admins. Returns the reference synchronously; the log line
+ * is written now, the ErrorEvent row and any alert after the response.
+ *
+ * Never throws. An error path that can itself fail is how the original error
+ * gets lost — so every step is independently guarded, and the console line comes
+ * first because it survives a database outage, which is exactly when the table
+ * cannot be written.
+ */
+
+export type ReportInput = {
+  route?: string;
+  routeType?: string;
+  method?: string;
+  /** Use this reference instead of generating one (page errors use Next's digest). */
+  ref?: string;
+  userId?: string | null;
+  schoolId?: string | null;
+  /** Supabase auth id, resolved to a user after the response. Attribution only. */
+  authId?: string | null;
+  userSource?: "session" | "cookie";
+};
+
+/** Crockford base32: no I, L, O or U, so a reference read aloud survives. */
+const REF_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+export function newReference(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return `E-${Array.from(bytes, (b) => REF_ALPHABET[b % 32]).join("")}`;
+}
+
+/**
+ * The only context keys ever stored. Everything else a thrower attaches is
+ * dropped, so a stray `email` or `password` can never reach the table.
+ */
+export const ERROR_CONTEXT_KEYS = new Set([
+  "prismaCode",
+  "prismaError",
+  "supabaseCode",
+  "supabaseStatus",
+  "retryAfterSeconds",
+  "resource",
+  "crossTenant",
+  "reason",
+  "schoolId",
+  "digest",
+  "userSource",
+  "service",
+]);
+
+type EventRow = {
+  ref: string;
+  code: string;
+  severity: string;
+  message: string;
+  stack: string | null;
+  route: string | null;
+  routeType: string | null;
+  method: string | null;
+  userId: string | null;
+  schoolId: string | null;
+  context: Record<string, unknown>;
+};
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function adminMessage(err: AppError): string {
+  const cause = err.cause instanceof Error ? err.cause.message : typeof err.cause === "string" ? err.cause : "";
+  const parts = [err.detail, cause].filter((p): p is string => Boolean(p && p.trim()));
+  return truncate([...new Set(parts)].join(" | ") || err.message, 2000);
+}
+
+function adminStack(err: AppError): string | null {
+  const stack = err.cause instanceof Error && err.cause.stack ? err.cause.stack : err.stack;
+  return stack ? truncate(stack, 8000) : null;
+}
+
+function safeContext(err: AppError, input: ReportInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(err.context)) {
+    if (ERROR_CONTEXT_KEYS.has(key)) out[key] = value;
+  }
+  if (input.userSource) out.userSource = input.userSource;
+  if (input.ref && input.routeType && input.routeType !== "action") out.digest = input.ref;
+  return out;
+}
+
+function logLine(row: EventRow): void {
+  try {
+    console.error(
+      JSON.stringify({
+        tag: "litrack.error",
+        ...row,
+        stack: row.stack?.split("\n").slice(0, 6).join("\n") ?? null,
+      })
+    );
+  } catch {
+    // A console replaced by a log forwarder must not fail the request.
+  }
+}
+
+async function persist(row: EventRow, authId: string | null): Promise<void> {
+  let { userId, schoolId } = row;
+  try {
+    if (!userId && authId) {
+      const user = await prisma.user.findUnique({ where: { authId }, select: { id: true, schoolId: true } });
+      userId = user?.id ?? null;
+      schoolId = schoolId ?? user?.schoolId ?? null;
+    }
+    await prisma.errorEvent.create({
+      data: { ...row, userId, schoolId, context: row.context as Prisma.InputJsonValue },
+    });
+  } catch (insertErr) {
+    console.error("[errors] ErrorEvent insert failed:", insertErr instanceof Error ? insertErr.message : insertErr);
+  }
+
+  if (row.severity === "system") {
+    await sendErrorAlert({
+      ref: row.ref,
+      code: row.code,
+      route: row.route,
+      schoolId,
+      summary: row.message,
+      at: new Date(),
+    });
+  }
+}
+
+/** Same contract as `deferOrRun` in `@/lib/audit`: queue after the response, or run now. */
+function deferOrRun(task: () => Promise<void>): void {
+  try {
+    after(task);
+  } catch {
+    void task();
+  }
+}
+
+export function reportError(err: AppError, input: ReportInput = {}): string {
+  const scope = currentErrorScope();
+  const ref = input.ref ?? newReference();
+  try {
+    const contextSchool = typeof err.context.schoolId === "string" ? err.context.schoolId : null;
+    const row: EventRow = {
+      ref,
+      code: err.code,
+      severity: err.severity,
+      message: adminMessage(err),
+      stack: adminStack(err),
+      route: input.route ?? scope?.route ?? null,
+      routeType: input.routeType ?? (scope ? "action" : null),
+      method: input.method ?? null,
+      userId: input.userId ?? scope?.userId ?? null,
+      schoolId: input.schoolId ?? scope?.schoolId ?? contextSchool,
+      context: safeContext(err, input),
+    };
+    logLine(row);
+    deferOrRun(() => persist(row, input.authId ?? null));
+  } catch (reportErr) {
+    console.error("[errors] reportError failed:", reportErr);
+  }
+  return ref;
+}
+```
+
+- [ ] **Step 5: Implement `src/lib/errors/retention.ts`**
+
+```ts
+import "server-only";
+import { prisma } from "@/lib/prisma";
+
+const DEFAULT_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function errorRetentionDays(): number {
+  const raw = Number(process.env.ERROR_EVENT_RETENTION_DAYS);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_DAYS;
+}
+
+/** Bounded by date; run from the daily cron. Returns the number of rows removed. */
+export async function purgeExpiredErrorEvents(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - errorRetentionDays() * DAY_MS);
+  const { count } = await prisma.errorEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return count;
+}
+```
+
+- [ ] **Step 6: Run to verify it passes** — `npx vitest run tests/unit/errors` — Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/errors tests/unit/errors
+git commit -m "feat(errors): report failures to the log, the ErrorEvent table and alerts"
+```
+
+---
+
+### Task 6: The `action()` and `route()` wrappers
+
+**Files:**
+- Create: `src/lib/errors/action.ts`, `src/lib/errors/route.ts`
+- Test: `tests/unit/errors/action.test.ts`, `tests/unit/errors/route.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 1, 2, 5
+- Produces:
+  - `action<Args, R>(name, fn, options?) → (...args: Args) => Promise<R | ActionFailure>`; `type ActionOptions = { verb?: string }`
+  - `route(name, handler) → (request: NextRequest) => Promise<Response>`
+  - `errorResponse(request, err, ref?) → Response`
+
+**Why this shape:** verified against the installed Next 15.5 — `ensureServerEntryExports` only requires each export of a `"use server"` file to be a function, so `export const x = action("x", async () => {})` is valid.
+
+- [ ] **Step 1: Write the failing tests** `tests/unit/errors/action.test.ts`
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const reportError = vi.fn(() => "E-TESTREF1");
+vi.mock("@/lib/errors/report", () => ({
+  get reportError() {
+    return reportError;
+  },
+}));
+
+import { notFound, redirect } from "next/navigation";
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError } from "@/lib/errors/app-error";
+import { currentErrorScope } from "@/lib/errors/context";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  reportError.mockReturnValue("E-TESTREF1");
+});
+
+describe("action()", () => {
+  it("returns what the body returns when nothing goes wrong", async () => {
+    const run = action("ok", async (n: number) => ({ ok: true as const, data: n * 2 }));
+    await expect(run(21)).resolves.toEqual({ ok: true, data: 42 });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("turns an AppError into the house failure shape", async () => {
+    const run = action("wrong", async () => {
+      throw new AppError("AUTH_INCORRECT_PASSWORD");
+    });
+    await expect(run()).resolves.toEqual({
+      ok: false,
+      code: "AUTH_INCORRECT_PASSWORD",
+      error: "Incorrect password. Check it and try again.",
+    });
+  });
+
+  it("does not record an expected mistake", async () => {
+    const run = action("invalid", async () => {
+      throw fieldError("email", "Email is required");
+    });
+    const res = await run();
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED", fieldErrors: { email: "Email is required" } });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("records a refusal but gives the person no reference", async () => {
+    const run = action("denied", async () => {
+      throw new AppError("AUTH_FORBIDDEN");
+    });
+    const res = await run();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(res).not.toHaveProperty("ref");
+  });
+
+  it("records an unexpected failure and hands back a reference", async () => {
+    const run = action("boom", async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'id')");
+    }, { verb: "save the section" });
+    const res = await run();
+    expect(res).toMatchObject({ ok: false, code: "INTERNAL_ERROR", ref: "E-TESTREF1" });
+    expect((res as { error: string }).error).toContain("Reference: E-TESTREF1");
+    expect((res as { error: string }).error).not.toContain("undefined");
+    expect(reportError).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the verb for database failures", async () => {
+    const run = action("db", async () => {
+      throw Object.assign(new Error("pool timeout"), { name: "PrismaClientKnownRequestError", code: "P2024" });
+    }, { verb: "save the section" });
+    const res = await run();
+    expect((res as { error: string }).error).toMatch(/^Couldn't save the section: the database didn't respond/);
+  });
+
+  it("lets Next's redirect through untouched", async () => {
+    const run = action("redirects", async () => {
+      redirect("/teacher");
+    });
+    await expect(run()).rejects.toMatchObject({ digest: expect.stringContaining("NEXT_REDIRECT") });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("lets Next's notFound() through untouched", async () => {
+    const run = action("missing", async () => {
+      notFound();
+    });
+    await expect(run()).rejects.toMatchObject({ digest: expect.stringContaining("NEXT_HTTP_ERROR_FALLBACK") });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("opens a scope named after the action", async () => {
+    let seen: string | undefined;
+    const run = action("namedAction", async () => {
+      seen = currentErrorScope()?.route;
+      return { ok: true as const };
+    });
+    await run();
+    expect(seen).toBe("namedAction");
+  });
+});
+```
+
+`tests/unit/errors/route.test.ts`:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const reportError = vi.fn(() => "E-TESTREF2");
+vi.mock("@/lib/errors/report", () => ({
+  get reportError() {
+    return reportError;
+  },
+}));
+
+import { NextRequest, NextResponse } from "next/server";
+import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
+import { route } from "@/lib/errors/route";
+
+function request(url: string, headers: Record<string, string> = {}): NextRequest {
+  return new NextRequest(new URL(url, "https://litrack.example.org"), { headers });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  reportError.mockReturnValue("E-TESTREF2");
+});
+
+describe("route()", () => {
+  it("passes a successful response through", async () => {
+    const handler = route("GET /api/x", async () => NextResponse.json({ ok: true }));
+    const res = await handler(request("/api/x"));
+    expect(res.status).toBe(200);
+  });
+
+  it("answers a refused request with the house JSON shape", async () => {
+    const handler = route("GET /api/x", async () => {
+      throw new AppError("AUTH_FORBIDDEN");
+    });
+    const res = await handler(request("/api/x"));
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      code: "AUTH_FORBIDDEN",
+      message: "You don't have access to this.",
+      status: 403,
+    });
+  });
+
+  it("adds a reference for an unexpected failure", async () => {
+    const handler = route("GET /api/x", async () => {
+      throw new Error("kaboom");
+    });
+    const res = await handler(request("/api/x"));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: "INTERNAL_ERROR", ref: "E-TESTREF2" });
+    expect(body.message).not.toContain("kaboom");
+  });
+
+  it("sets Retry-After when the limiter says how long", async () => {
+    const handler = route("GET /api/x", async () => {
+      throw tooManyAttempts(30_000, "RATE_LIMITED");
+    });
+    const res = await handler(request("/api/x"));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("sends a browser to the right page instead of raw JSON", async () => {
+    const html = { accept: "text/html,application/xhtml+xml" };
+    const forbidden = await route("GET /api/admin/x", async () => {
+      throw new AppError("AUTH_FORBIDDEN");
+    })(request("/api/admin/x", html));
+    expect(forbidden.status).toBe(303);
+    expect(forbidden.headers.get("location")).toContain("/forbidden");
+
+    const signedOut = await route("GET /api/admin/x", async () => {
+      throw new AppError("AUTH_NOT_SIGNED_IN");
+    })(request("/api/admin/x", html));
+    expect(signedOut.headers.get("location")).toContain("/admin/login");
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run tests/unit/errors/action.test.ts tests/unit/errors/route.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/errors/action.ts`**
+
+```ts
+import "server-only";
+import { unstable_rethrow } from "next/navigation";
+import { classifyError } from "./classify";
+import { runInErrorScope } from "./context";
+import { reportError } from "./report";
+import { toFailure, type ActionFailure } from "./result";
+
+/**
+ * The single handler for server actions.
+ *
+ * Wrap each action once and let the body throw `AppError` instead of building
+ * `{ ok: false, error }` by hand. Anything else that escapes — Prisma, Supabase,
+ * a bug — is classified, recorded for admins, and answered with a safe message.
+ *
+ * `unstable_rethrow` runs FIRST and is not optional: `redirect()` and
+ * `notFound()` work by throwing, `requireUser` uses both, and swallowing them
+ * here would turn every sign-in redirect into a silent failure.
+ */
+
+export type ActionOptions = {
+  /** Completes "Couldn't {verb}" in database messages, e.g. "save the section". */
+  verb?: string;
+};
+
+export function action<Args extends unknown[], R>(
+  name: string,
+  fn: (...args: Args) => Promise<R>,
+  options: ActionOptions = {}
+): (...args: Args) => Promise<R | ActionFailure> {
+  return async (...args: Args): Promise<R | ActionFailure> =>
+    runInErrorScope(name, async () => {
+      try {
+        return await fn(...args);
+      } catch (err) {
+        unstable_rethrow(err);
+        const appError = classifyError(err, { verb: options.verb });
+        if (appError.severity === "user") return toFailure(appError);
+        const ref = reportError(appError, { route: name, routeType: "action" });
+        // Only a failure on our side is worth a reference: it is the code an
+        // admin can look up. A refusal or a rate limit is recorded without one.
+        return toFailure(appError, appError.severity === "system" ? ref : undefined);
+      }
+    });
+}
+```
+
+- [ ] **Step 4: Implement `src/lib/errors/route.ts`**
+
+```ts
+import "server-only";
+import { NextResponse, type NextRequest } from "next/server";
+import { unstable_rethrow } from "next/navigation";
+import { withReference } from "./codes";
+import { AppError } from "./app-error";
+import { classifyError } from "./classify";
+import { runInErrorScope } from "./context";
+import { reportError } from "./report";
+
+/** The same handler as `action()`, for the three API routes. */
+
+type RouteHandler = (request: NextRequest) => Promise<Response>;
+
+export function errorResponse(request: NextRequest, err: AppError, ref?: string): Response {
+  // A download link opened in a browser should land on a page, not on JSON.
+  const accept = request.headers.get("accept") ?? "";
+  if (accept.includes("text/html") && (err.status === 401 || err.status === 403)) {
+    const target =
+      err.status === 403
+        ? "/forbidden"
+        : request.nextUrl.pathname.startsWith("/api/admin")
+          ? "/admin/login"
+          : "/login";
+    return NextResponse.redirect(new URL(target, request.url), 303);
+  }
+
+  const headers = new Headers();
+  const retryAfter = err.context.retryAfterSeconds;
+  if (typeof retryAfter === "number") headers.set("Retry-After", String(Math.max(1, retryAfter)));
+
+  return NextResponse.json(
+    {
+      code: err.code,
+      message: withReference(err.message, ref),
+      status: err.status,
+      ...(ref ? { ref } : {}),
+    },
+    { status: err.status, headers }
+  );
+}
+
+export function route(name: string, handler: RouteHandler): RouteHandler {
+  return async (request: NextRequest): Promise<Response> =>
+    runInErrorScope(name, async () => {
+      try {
+        return await handler(request);
+      } catch (err) {
+        unstable_rethrow(err);
+        const appError = classifyError(err);
+        if (appError.severity === "user") return errorResponse(request, appError);
+        const ref = reportError(appError, { route: name, routeType: "route", method: request.method });
+        return errorResponse(request, appError, appError.severity === "system" ? ref : undefined);
+      }
+    });
+}
+```
+
+- [ ] **Step 5: Run to verify they pass** — `npx vitest run tests/unit/errors` — Expected: PASS. If importing `next/navigation` in the node test environment fails, mock it with a factory that re-exports the real `redirect`/`notFound`/`unstable_rethrow` rather than weakening the assertions.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/lib/errors tests/unit/errors
+git commit -m "feat(errors): one wrapper for server actions, one for API routes"
+```
+
+---
+
+### Task 7: Page-render errors reach the same log
+
+**Files:**
+- Create: `src/lib/errors/session-cookie.ts`, `src/lib/errors/request-error.ts`
+- Modify: `src/instrumentation.ts`
+- Test: `tests/unit/errors/session-cookie.test.ts`, `tests/unit/errors/request-error.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 2, 5
+- Produces:
+  - `authIdFromCookieHeader(header: string | string[] | undefined) → string | null`
+  - `reportRequestError(err, request, context) → Promise<void>` (never throws)
+  - `onRequestError` exported from `src/instrumentation.ts`
+
+- [ ] **Step 1: Write the failing tests** `tests/unit/errors/session-cookie.test.ts`
+
+```ts
+import { describe, expect, it } from "vitest";
+import { authIdFromCookieHeader } from "@/lib/errors/session-cookie";
+
+function jwt(payload: Record<string, unknown>): string {
+  const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  return `${part({ alg: "HS256" })}.${part(payload)}.signature`;
+}
+
+function sessionCookie(authId: string): string {
+  const session = { access_token: jwt({ sub: authId }), token_type: "bearer" };
+  return `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
+}
+
+describe("authIdFromCookieHeader", () => {
+  it("reads the auth id out of a base64 session cookie", () => {
+    const header = `theme=dark; sb-abcdefgh-auth-token=${sessionCookie("auth-123")}`;
+    expect(authIdFromCookieHeader(header)).toBe("auth-123");
+  });
+
+  it("joins the chunks of a split cookie in order", () => {
+    const whole = sessionCookie("auth-456");
+    const half = Math.ceil(whole.length / 2);
+    const header = `sb-abcdefgh-auth-token.0=${whole.slice(0, half)}; sb-abcdefgh-auth-token.1=${whole.slice(half)}`;
+    expect(authIdFromCookieHeader(header)).toBe("auth-456");
+  });
+
+  it("reads the older raw-JSON and array cookie formats", () => {
+    const raw = encodeURIComponent(JSON.stringify({ access_token: jwt({ sub: "auth-789" }) }));
+    expect(authIdFromCookieHeader(`sb-x-auth-token=${raw}`)).toBe("auth-789");
+    const arrayForm = encodeURIComponent(JSON.stringify([jwt({ sub: "auth-abc" }), "refresh"]));
+    expect(authIdFromCookieHeader(`sb-x-auth-token=${arrayForm}`)).toBe("auth-abc");
+  });
+
+  it("returns null rather than throwing on anything unexpected", () => {
+    expect(authIdFromCookieHeader(undefined)).toBeNull();
+    expect(authIdFromCookieHeader("")).toBeNull();
+    expect(authIdFromCookieHeader("sb-x-auth-token=not-base64-or-json")).toBeNull();
+    expect(authIdFromCookieHeader("theme=dark")).toBeNull();
+    expect(authIdFromCookieHeader(`sb-x-auth-token=base64-${Buffer.from("{}").toString("base64url")}`)).toBeNull();
+  });
+});
+```
+
+`tests/unit/errors/request-error.test.ts`:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const reportError = vi.fn(() => "E-IGNORED");
+vi.mock("@/lib/errors/report", () => ({
+  get reportError() {
+    return reportError;
+  },
+}));
+
+import { reportRequestError } from "@/lib/errors/request-error";
+
+const REQUEST = { path: "/teacher/learners/abc?q=maria", method: "GET", headers: {} as Record<string, string> };
+const CONTEXT = { routerKind: "App Router" as const, routePath: "/teacher/learners/[id]", routeType: "render" as const, revalidateReason: undefined };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("reportRequestError", () => {
+  it("records a crashed render under the route pattern, using Next's digest as the reference", async () => {
+    const err = Object.assign(new Error("boom"), { digest: "2847562910" });
+    await reportRequestError(err, REQUEST, CONTEXT);
+    expect(reportError).toHaveBeenCalledTimes(1);
+    const [appError, input] = reportError.mock.calls[0];
+    expect(appError).toMatchObject({ code: "INTERNAL_ERROR" });
+    expect(input).toMatchObject({ ref: "2847562910", route: "/teacher/learners/[id]", routeType: "render", method: "GET" });
+  });
+
+  it("stores the route pattern, never the URL with its values", async () => {
+    await reportRequestError(new Error("boom"), REQUEST, CONTEXT);
+    expect(JSON.stringify(reportError.mock.calls[0][1])).not.toContain("maria");
+  });
+
+  it("ignores Next's control flow", async () => {
+    for (const digest of ["NEXT_REDIRECT;replace;/login;307;", "NEXT_HTTP_ERROR_FALLBACK;404", "DYNAMIC_SERVER_USAGE"]) {
+      await reportRequestError(Object.assign(new Error("control"), { digest }), REQUEST, CONTEXT);
+    }
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("ignores an expected refusal that reached the boundary", async () => {
+    const { AppError } = await import("@/lib/errors/app-error");
+    await reportRequestError(new AppError("AUTH_SESSION_EXPIRED"), REQUEST, CONTEXT);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("attributes the error to the signed-in account when the cookie says who", async () => {
+    const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const token = `${part({ alg: "HS256" })}.${part({ sub: "auth-42" })}.sig`;
+    const cookie = `sb-proj-auth-token=base64-${Buffer.from(JSON.stringify({ access_token: token })).toString("base64url")}`;
+    await reportRequestError(new Error("boom"), { ...REQUEST, headers: { cookie } }, CONTEXT);
+    expect(reportError.mock.calls[0][1]).toMatchObject({ authId: "auth-42", userSource: "cookie" });
+  });
+
+  it("never throws", async () => {
+    reportError.mockImplementation(() => {
+      throw new Error("reporting is broken");
+    });
+    await expect(reportRequestError(new Error("boom"), REQUEST, CONTEXT)).resolves.toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run tests/unit/errors/session-cookie.test.ts tests/unit/errors/request-error.test.ts` — Expected: FAIL.
+
+- [ ] **Step 3: Implement `src/lib/errors/session-cookie.ts`**
+
+```ts
+/**
+ * Who was signed in, read from the request's Supabase cookie.
+ *
+ * The JWT signature is NOT verified, and this must never gate access. It exists
+ * so a crashed page render can be filed under an account: `onRequestError` runs
+ * outside the request's React scope, where `getCurrentUser()` is unavailable.
+ * Records written from it are marked `userSource: "cookie"`.
+ */
+
+const SESSION_COOKIE = /^sb-.+-auth-token(?:\.(\d+))?$/;
+
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const raw = Array.isArray(header) ? header.join("; ") : (header ?? "");
+  const out = new Map<string, string>();
+  for (const part of raw.split(/;\s*/)) {
+    const eq = part.indexOf("=");
+    if (eq > 0) out.set(part.slice(0, eq).trim(), part.slice(eq + 1));
+  }
+  return out;
+}
+
+function decodeJwtSubject(token: unknown): string | null {
+  if (typeof token !== "string") return null;
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+  try {
+    const json = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: unknown };
+    return typeof json.sub === "string" && json.sub ? json.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+export function authIdFromCookieHeader(header: string | string[] | undefined): string | null {
+  try {
+    const cookies = parseCookies(header);
+    const names = [...cookies.keys()].filter((name) => SESSION_COOKIE.test(name));
+    if (names.length === 0) return null;
+
+    // @supabase/ssr splits a large session across `.0`, `.1`, … in order.
+    const base = names[0].replace(/\.\d+$/, "");
+    const chunks = names
+      .filter((name) => name === base || name.startsWith(`${base}.`))
+      .sort((a, b) => Number(a.split(".").pop() ?? 0) - Number(b.split(".").pop() ?? 0));
+    let value = chunks.map((name) => cookies.get(name) ?? "").join("");
+    if (!value) return null;
+
+    value = decodeURIComponent(value);
+    if (value.startsWith("base64-")) {
+      value = Buffer.from(value.slice("base64-".length), "base64url").toString("utf8");
+    }
+
+    const session = JSON.parse(value) as unknown;
+    if (Array.isArray(session)) return decodeJwtSubject(session[0]);
+    if (session && typeof session === "object") {
+      return decodeJwtSubject((session as { access_token?: unknown }).access_token);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+```
+
+- [ ] **Step 4: Implement `src/lib/errors/request-error.ts`**
+
+```ts
+import "server-only";
+import type { Instrumentation } from "next";
+import { classifyError } from "./classify";
+import { reportError } from "./report";
+import { authIdFromCookieHeader } from "./session-cookie";
+
+/**
+ * Uncaught errors from page renders, route handlers, middleware, and any server
+ * action not yet wrapped by `action()` — the reason every module gets admin
+ * visibility from this slice, before its own migration.
+ *
+ * The reference stored is Next's `digest`, which is exactly what `error.tsx`
+ * shows the person, so the code they read off the screen finds the record.
+ */
+
+const CONTROL_FLOW = /^(?:NEXT_REDIRECT|NEXT_NOT_FOUND|NEXT_HTTP_ERROR_FALLBACK|DYNAMIC_SERVER_USAGE|BAILOUT_TO_CLIENT_SIDE_RENDERING|NEXT_STATIC_GEN_BAILOUT)/;
+
+export const reportRequestError: Instrumentation.onRequestError = async (err, request, context) => {
+  try {
+    const digest = typeof (err as { digest?: unknown })?.digest === "string" ? (err as { digest: string }).digest : undefined;
+    if (digest && CONTROL_FLOW.test(digest)) return;
+
+    const appError = classifyError(err);
+    // An expected refusal is already answered where it was thrown.
+    if (appError.severity === "user") return;
+
+    reportError(appError, {
+      ref: digest,
+      // The pattern ("/teacher/learners/[id]"), never the URL, which carries ids
+      // and search terms.
+      route: context.routePath,
+      routeType: context.routeType,
+      method: request.method,
+      authId: authIdFromCookieHeader(request.headers.cookie),
+      userSource: "cookie",
+    });
+  } catch (reportErr) {
+    console.error("[errors] onRequestError failed:", reportErr instanceof Error ? reportErr.message : reportErr);
+  }
+};
+```
+
+- [ ] **Step 5: Wire it up in `src/instrumentation.ts`** — append below the existing `register()`:
+
+```ts
+/**
+ * Node-runtime only, and dynamically imported for the same reason `register()`
+ * is: the per-compilation NEXT_RUNTIME define folds this branch away in the edge
+ * build, so middleware does not pay for Prisma and the reporting stack.
+ */
+export async function onRequestError(
+  ...args: Parameters<Instrumentation.onRequestError>
+): Promise<void> {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { reportRequestError } = await import("./lib/errors/request-error");
+    await reportRequestError(...args);
+  }
+}
+```
+
+and add at the top of the file:
+
+```ts
+import type { Instrumentation } from "next";
+```
+
+- [ ] **Step 6: Run to verify they pass** — `npx vitest run tests/unit/errors && npm run typecheck` — Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/instrumentation.ts src/lib/errors tests/unit/errors
+git commit -m "feat(errors): record crashed page renders under the digest the user sees"
+```
+
+---
