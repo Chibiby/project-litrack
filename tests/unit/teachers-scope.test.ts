@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  advisoryRosterDenial,
   aralLearnerScope,
   deniesAdvisoryRoster,
   isAralVolunteerDesignation,
@@ -281,5 +282,29 @@ describe("teacherIsAralTutorFor", () => {
     expect(
       teacherIsAralTutorFor({ teacherId: null, aralTeacherId: null }, TEACHER)
     ).toBe(false);
+  });
+});
+
+describe("advisoryRosterDenial", () => {
+  it("names the volunteer", () => {
+    expect(
+      advisoryRosterDenial({ isSuperAdmin: false, designation: ARAL_VOLUNTEER_DESIGNATION, advisoryMode: "DEFAULT" })
+    ).toBe("volunteer");
+  });
+  it("names a declared floating teacher", () => {
+    expect(advisoryRosterDenial({ isSuperAdmin: false, designation: "Teacher", advisoryMode: "FLOATING" })).toBe("floating");
+  });
+  it("lets a default or multi-grade teacher through", () => {
+    expect(advisoryRosterDenial({ isSuperAdmin: false, designation: "Teacher", advisoryMode: "DEFAULT" })).toBeNull();
+    expect(advisoryRosterDenial({ isSuperAdmin: false, designation: "Teacher", advisoryMode: "MULTI_GRADE" })).toBeNull();
+  });
+  it("never denies a Super Admin", () => {
+    expect(advisoryRosterDenial({ isSuperAdmin: true, designation: "Teacher", advisoryMode: "FLOATING" })).toBeNull();
+  });
+  it("fails open on a missing mode", () => {
+    expect(advisoryRosterDenial({ isSuperAdmin: false, designation: "Teacher" })).toBeNull();
+  });
+  it("keeps deniesAdvisoryRoster as its boolean form", () => {
+    expect(deniesAdvisoryRoster({ isSuperAdmin: false, designation: "Teacher", advisoryMode: "FLOATING" })).toBe(true);
   });
 });
