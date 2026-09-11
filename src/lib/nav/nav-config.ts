@@ -13,6 +13,7 @@ import {
   Megaphone,
   School,
   ScrollText,
+  TriangleAlert,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -107,6 +108,7 @@ export function getNavGroups(
             { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },
             { id: "admin-chat", label: "School chat", href: "/admin/chat", icon: MessagesSquare },
             { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
+            { id: "admin-errors", label: "Errors", href: "/admin/errors", icon: TriangleAlert },
             { id: "admin-database", label: "Database", href: "/admin/database", icon: Database },
           ],
         },
