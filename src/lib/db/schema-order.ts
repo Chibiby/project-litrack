@@ -123,6 +123,16 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // `AuditLog.schoolId` is a plain nullable column, not a relation (see the
   // note at the top). A school-scoped clear takes that school's trail and
   // leaves the system-wide rows, whose `schoolId` is null, standing.
+  // Same shape as AuditLog below: a plain nullable `schoolId` column rather
+  // than a relation, and no foreign keys in either direction, so its position
+  // is unconstrained — it sits here only to keep AuditLog last, which is an
+  // invariant the ordering test states outright.
+  //
+  // Included rather than skipped because a table silently missing from a
+  // restore is exactly the failure this list exists to prevent, and a
+  // post-incident trail is worth keeping across one. Retention already bounds
+  // it to ERROR_EVENT_RETENTION_DAYS, so it cannot grow a backup without limit.
+  { model: "ErrorEvent", delegate: "errorEvent", operational: true, schoolScope: bySchoolId },
   { model: "AuditLog", delegate: "auditLog", operational: true, schoolScope: bySchoolId },
 ];
 
