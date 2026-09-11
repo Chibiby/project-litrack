@@ -34,12 +34,28 @@ const OTHER_SCHOOL_ID = "school-kiblawan";
 const START_DATE = new Date(2026, 5, 1);
 const START_KEY = "2026-06-01";
 
+const END_DATE = new Date(2027, 2, 31);
+const END_KEY = "2027-03-31";
+
 type FindFirstArgs = {
   where: { schoolId: string; isActive: boolean };
   select: Record<string, boolean>;
 };
 
-let row: { id: string; label: string; startDate: Date } | null = null;
+let row:
+  | {
+      id: string;
+      label: string;
+      startDate: Date;
+      endDate: Date;
+      termWindowOverrides: {
+        term: string;
+        startKey: string;
+        endKey: string;
+        deadlineKey: string;
+      }[];
+    }
+  | null = null;
 
 const schoolYearFindFirst = vi.fn(async (_args: FindFirstArgs) => row);
 
@@ -81,7 +97,13 @@ const { getActiveSchoolYear } = await import("@/lib/cache/school-year");
 beforeEach(() => {
   vi.clearAllMocks();
   cacheCalls = [];
-  row = { id: "sy-1", label: "2026-2027", startDate: START_DATE };
+  row = {
+    id: "sy-1",
+    label: "2026-2027",
+    startDate: START_DATE,
+    endDate: END_DATE,
+    termWindowOverrides: [],
+  };
 });
 
 describe("getActiveSchoolYear", () => {
@@ -120,9 +142,9 @@ describe("getActiveSchoolYear", () => {
     // the cross-tenant leak, with a green suite and no visible symptom until two
     // tenants are live. Pinned as a whole array so reordering fails it too.
     expect(cacheCalls).toHaveLength(2);
-    expect(cacheCalls[0].keyParts).toEqual(["active-school-year-v1", SCHOOL_ID]);
+    expect(cacheCalls[0].keyParts).toEqual(["active-school-year-v2", SCHOOL_ID]);
     expect(cacheCalls[1].keyParts).toEqual([
-      "active-school-year-v1",
+      "active-school-year-v2",
       OTHER_SCHOOL_ID,
     ]);
     expect(cacheCalls[0].keyParts).not.toEqual(cacheCalls[1].keyParts);
@@ -153,5 +175,51 @@ describe("getActiveSchoolYear", () => {
     // `schoolDashboard` tag when a year is activated. Asserted because the guard
     // that produces it also protects the conversion above from a null row.
     await expect(getActiveSchoolYear(SCHOOL_ID)).resolves.toBeNull();
+  });
+
+  it("returns the year's overrides as plain date-key strings", async () => {
+    row = {
+      id: "sy1",
+      label: "2026-2027",
+      startDate: START_DATE,
+      endDate: END_DATE,
+      termWindowOverrides: [
+        {
+          term: "FIRST",
+          startKey: "2026-06-01",
+          endKey: "2026-08-31",
+          deadlineKey: "2026-09-30",
+        },
+      ],
+    };
+
+    const year = await getActiveSchoolYear(SCHOOL_ID);
+
+    expect(year).toMatchObject({
+      startDateKey: START_KEY,
+      endDateKey: END_KEY,
+      overrides: [
+        {
+          term: "FIRST",
+          startKey: "2026-06-01",
+          endKey: "2026-08-31",
+          deadlineKey: "2026-09-30",
+        },
+      ],
+    });
+  });
+
+  it("returns an empty override list for an un-edited year", async () => {
+    row = {
+      id: "sy1",
+      label: "2026-2027",
+      startDate: START_DATE,
+      endDate: END_DATE,
+      termWindowOverrides: [],
+    };
+
+    const year = await getActiveSchoolYear(SCHOOL_ID);
+
+    expect(year?.overrides).toEqual([]);
   });
 });
