@@ -140,13 +140,19 @@ Create `prisma/migrations/20260911000003_term_window_override/migration.sql`:
 -- would convert 126 schools from "derived, and follows the year if its dates are
 -- corrected" to "frozen at whatever the derivation said on migration day".
 --
--- SAFE TO APPLY BEFORE OR AFTER THE CODE
--- --------------------------------------
--- Unlike 20260911000002, this one has no ordering hazard. Nothing selects from
--- this table until `getActiveSchoolYear` is changed to read it, and an empty
--- table produces `overrides: []`, which is `getTermWindows`'s default argument
--- and therefore today's behaviour exactly. Applying it early is invisible;
--- applying it late only delays the feature.
+-- APPLY THIS BEFORE THE CODE THAT READS IT
+-- ----------------------------------------
+-- Not optional, and the same hazard 20260911000002 carried.
+--
+-- Once `getActiveSchoolYear` and `saveTermGrades` name `termWindowOverrides` in
+-- a `select`, every one of those queries asks Postgres for a table. If the code
+-- ships first, the table is missing and Prisma raises P2021 — which takes down
+-- the teacher grade sheet, the term export and every page reading the active
+-- school year, not merely the unbuilt terms feature.
+--
+-- Applied FIRST it is invisible: an empty table yields `overrides: []`, which is
+-- exactly `getTermWindows`'s default argument, so the running code that has
+-- never heard of this table behaves precisely as it does today.
 --
 -- CHECK CONSTRAINTS
 -- -----------------
@@ -1032,4 +1038,4 @@ git commit -m "feat: the grade sheet reads the deadline its school actually has"
 - [ ] All four gates pass: `typecheck`, `lint`, `test`, `build`.
 - [ ] Every pre-existing case in `tests/unit/terms/windows.test.ts` passes **unchanged** — the regression guarantee that un-edited schools behave identically.
 - [ ] No UI exists yet. A head cannot create an override; only a direct database row can. That is Wave B.
-- [ ] The migration is handed to the owner with `docs/migrate-checklist.md`, noting it is additive, un-backfilled, and safe to apply before or after the code.
+- [ ] The migration is handed to the owner with `docs/migrate-checklist.md`, noting it is additive and un-backfilled, and **must be applied before this code deploys** — once the `select`s name `termWindowOverrides`, a missing table is P2021 on the grade sheet, the export and every active-school-year read.

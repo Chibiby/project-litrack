@@ -133,6 +133,13 @@ One `CREATE TABLE`, no backfill, nothing rewritten. Authored by
 run since 2026-08-14 (billing lock), so the four local gates are the only
 verification before this ships.
 
+**Ordering is not optional: this migration must be applied before the code
+deploys.** Once §2's call sites name `termWindowOverrides` in a Prisma `select`,
+a missing table raises P2021 on the teacher grade sheet, the term export and
+every read of the active school year — far beyond the unbuilt feature itself.
+Applied first it is invisible, because an empty table yields `overrides: []`,
+which is exactly the default argument.
+
 ## 2. Deriving windows
 
 `getTermWindows` gains a second parameter and stays pure:
