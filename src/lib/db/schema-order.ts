@@ -87,6 +87,16 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   { model: "TeacherProfile", delegate: "teacherProfile", operational: false },
   { model: "TeacherSection", delegate: "teacherSection", operational: false },
   { model: "TeacherInvite", delegate: "teacherInvite", operational: false },
+  // Last of the structural block because it points at three things above it:
+  // School, SchoolYear and — through `setById` — User.
+  //
+  // Structural, not operational, and the distinction matters here. A term
+  // window is the shape of a school year, not a record of what a learner did,
+  // so "clear operational data" must leave it standing: a school that had its
+  // learners cleared still has the deadlines its head set, exactly as it still
+  // has its grades and sections. Wiping them would silently return that school
+  // to derived thirds, which is a different set of dates.
+  { model: "TermWindowOverride", delegate: "termWindowOverride", operational: false },
 
   // Operational: learners and everything recorded about them.
   { model: "Learner", delegate: "learner", operational: true, schoolScope: bySchoolId },
