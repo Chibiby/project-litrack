@@ -68,6 +68,13 @@ Committed migrations (apply in order via `migrate deploy`):
   (212 of 336 flagged after). The rows it would flip were snapshotted by id before
   applying; reverting is `UPDATE "User" SET "passwordIsSchoolId" = false` over those ids.
 
+- `20260911000010_teacher_advisory_mode` — one additive enum and one additive column on
+  `TeacherProfile`, then two bounded data statements that move existing rows onto the new
+  setting. **Apply it before the code deploys** — see **(k)**, which also carries the
+  read-only pre-check. The row counts written into the migration's own comments are a
+  snapshot taken while it was authored and drift daily; trust the predicate, not the number.
+  Adds no table, so `prisma/rls-policies.sql` does not need re-running.
+
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
 `npx prisma migrate status` first.
@@ -633,6 +640,87 @@ is a bcrypt hash in Supabase Auth. Heads are sealed as they next set a password.
 Revert the code first, then `ALTER TABLE "User" DROP COLUMN "passwordVaultCipher",
 DROP COLUMN "passwordVaultSetAt"`. Dropping the columns also destroys every
 stored password, which is the fastest complete way to undo the privacy exposure.
+
+---
+
+## (k) Teacher advisory modes  —  Sep 2026
+
+`20260911000010_teacher_advisory_mode`. **Apply BEFORE the code deploys.** The
+generated Prisma client names `advisoryMode` on every `TeacherProfile` read, so
+code-first is P2022 on profiling and on the School Head's teachers page. Applied
+first, the column is simply invisible to the running code.
+
+Numbering: production holds up to `20260911000005_release_removed_teacher_advisories`;
+006-009 are left free for `feat/error-handling`, which still has to renumber its
+`ErrorEvent` table. Confirm 010 is still unclaimed with `npx prisma migrate status`
+before applying.
+
+| # | Statement | What it does | Can it fail? |
+|---|-----------|--------------|--------------|
+| 1 | `CREATE TYPE "AdvisoryMode"` + `ALTER TABLE "TeacherProfile" ADD COLUMN "advisoryMode"` | Additive, `NOT NULL DEFAULT 'DEFAULT'`. Every existing row lands on DEFAULT. | No. Metadata-only on PostgreSQL 11+, so no table rewrite. |
+| 2 | `UPDATE "TeacherProfile" SET "advisoryMode" = 'MULTI_GRADE'` | Marks teachers who already advise two or more live sections, so the new cap does not retroactively put them over it. | No. Bounded by the live-section count; idempotent. |
+| 3 | Release volunteers' empty sections | A `Non-DepEd ARAL Volunteer` never advises, but the old wizard let them pick a section and made them its adviser — those sections read as taken and no real teacher can claim them. Clears `Section.adviserId` and the legacy mirrors (`User.advisorySectionId`, `TeacherSection`, `_TeacherGrades`) **only** where the section has zero live learners. | No, but it is the one statement that loses information — see Rollback. |
+
+Statement 3 is deliberately narrow: a section holding even one live learner keeps
+its adviser, so no roster changes hands and nobody loses access to a learner they
+are teaching.
+
+### Pre-check (read-only, run it immediately before applying)
+
+```sql
+-- statement 2: how many profiles become MULTI_GRADE
+SELECT count(*) AS multi_grade_profiles
+  FROM "TeacherProfile" tp
+ WHERE (SELECT count(*) FROM "Section" s
+         WHERE s."adviserId" = tp."userId" AND s."deletedAt" IS NULL) >= 2;
+
+-- statement 3: which sections are released, and from whom
+SELECT s.id AS section_id, s.name, s."adviserId" AS volunteer_id
+  FROM "Section" s
+  JOIN "TeacherProfile" tp ON tp."userId" = s."adviserId"
+ WHERE tp.designation = 'Non-DepEd ARAL Volunteer'
+   AND s."deletedAt" IS NULL
+   AND NOT EXISTS (
+     SELECT 1 FROM "Learner" l WHERE l."sectionId" = s.id AND l."deletedAt" IS NULL
+   );
+```
+
+**Save the second query's rows before applying.** They are the only record of which
+section belonged to which volunteer; the migration keeps none. Three read-only runs
+on 2026-09-11 returned 9, then 10, then 11 profiles for statement 2, and 25, 21 and
+23 sections for statement 3 — live data moves under you, so the numbers in the
+migration's comments are illustrative. The predicate is the specification; a count
+that differs from the comment is not a reason to stop.
+
+### Steps
+
+1. Run the gates on the branch: `npx prisma generate`, `npm run typecheck`,
+   `npm run lint`, `npm run test`, `npm run build`.
+2. Run the pre-check above and **save the section-id rows**.
+3. Take the step-**(a)** backup. Statement 3 is not reversible without it.
+4. `npx prisma migrate deploy` against `DIRECT_URL` (port 5432), then confirm
+   `npx prisma migrate status` reports up to date.
+5. Deploy the code.
+6. Smoke test: profile a teacher and pick Floating — the sidebar shows the
+   "Floating teacher" pill and the class-bound pages are closed. As a School Head,
+   open Teachers → Edit role on a teacher advising more than one section, drop them
+   to a single advisory, and confirm the dialog names the sections it would release
+   before anything is written.
+
+### Rollback
+
+Revert the code first, then:
+
+```sql
+ALTER TABLE "TeacherProfile" DROP COLUMN "advisoryMode";
+DROP TYPE "AdvisoryMode";
+```
+
+That undoes statements 1 and 2 completely. **Statement 3 does not roll back** — the
+released `adviserId` values are gone. Restore them from the rows saved in step 2
+(`UPDATE "Section" SET "adviserId" = <volunteer_id> WHERE id = <section_id>`, plus
+the matching `User.advisorySectionId` and `TeacherSection` rows), or from the
+step-(a) backup if that snapshot was not taken.
 
 ---
 

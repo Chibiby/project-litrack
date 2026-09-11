@@ -579,7 +579,7 @@ describe("teacherProfileSchema", () => {
     ).toBe(false);
   });
 
-  it("accepts the ARAL Volunteer designation with no position and an optional section", () => {
+  it("accepts the ARAL Volunteer designation with no position and no section", () => {
     const noSection = teacherProfileSchema.safeParse(aralVolunteerBase);
     expect(noSection.success).toBe(true);
     if (noSection.success) {
