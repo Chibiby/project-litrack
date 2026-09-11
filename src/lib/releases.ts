@@ -44,13 +44,31 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    // The ten concerns raised alongside 1.0.0 — the spec calls them "the first
+    // release notes", and this is the entry that announces itself. Minor, not
+    // patch: several are features. Announced because they change what teachers
+    // see on their ARAL pages and on the School Head's Teachers page.
+    version: "1.1.0",
+    date: "2026-09-11",
+    title: "Up to three advisory sections, and clearer ARAL pages",
+    announce: true,
+    fixes: [
+      "ARAL pages now list only the learners you are the designated ARAL tutor for. Learners in your class who have a different tutor stay on your Learners page.",
+      "A teacher can now advise up to three sections. School Heads add and remove them on the Teachers page.",
+      "A teacher without an advisory section can finish their profile by answering No to “Do you advise a classroom section?” They show as Floating on the Teachers page until one is assigned.",
+      "School Heads can deactivate a grade level that was added by mistake, and restore it later. A grade that still has learners cannot be deactivated.",
+      "An archived section no longer shows as a teacher's assignment.",
+      "Weekly attendance and term grades have no editing deadline for now. Your division admin can switch deadlines back on.",
+      "LITRACK now tells you what changed after an update. The version number at the bottom of the sidebar opens every release's notes.",
+    ],
+  },
+  {
     version: "1.0.0",
     date: "2026-09-10",
     title: "LITRACK 1.0",
     announce: false,
     fixes: [
       "First numbered release. Everything the app does today, gathered under one version number.",
-      "You can see which version you are running in the sidebar, and what changed on the Releases page.",
     ],
   },
 ];
