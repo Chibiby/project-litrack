@@ -599,6 +599,43 @@ Postgres cannot drop an enum value; `RELEASE_PUBLISHED` is harmless left in plac
 
 ---
 
+## (j) School Head password vault  —  Sep 2026
+
+`20260911000004_password_vault`. **Apply BEFORE the code, for the same reason as
+(i):** `getCurrentUser` loads the user with no `select`, so once the code ships
+every signed-in request selects the new columns, and every set/change/recovery of
+a password writes them. Missing columns means P2022 on every authenticated page.
+
+Applied to production 2026-09-11 (from `feat/terms-management`); `migrate status`
+reported it as the only pending migration beforehand.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260911000004_password_vault` | Adds `User.passwordVaultCipher` (nullable TEXT) and `User.passwordVaultSetAt` (nullable TIMESTAMP). No backfill. | No. Two additive nullable columns. |
+
+Not backfilled because it cannot be: the only existing copy of a chosen password
+is a bcrypt hash in Supabase Auth. Heads are sealed as they next set a password.
+
+### Steps
+
+1. Apply and confirm `npx prisma migrate status` says up to date.
+2. Set `PASSWORD_VAULT_KEY` (32 bytes, `openssl rand -base64 32`) in **both**
+   Vercel projects before or with the deploy. Unset, the key derives from
+   `SUPABASE_SERVICE_ROLE_KEY` and still works — but changing it later strands
+   every password sealed under the derived key. Pick one and keep it.
+3. Deploy. Sign in as a School Head, change the password from Settings →
+   Security, then as Super Admin open `/admin/school-accounts`: that row shows
+   "Chosen by the School Head", the eye reveals the new password, and
+   `/admin/audit` has a `SCHOOL_HEAD_PASSWORD_VIEWED` row.
+
+### Rollback
+
+Revert the code first, then `ALTER TABLE "User" DROP COLUMN "passwordVaultCipher",
+DROP COLUMN "passwordVaultSetAt"`. Dropping the columns also destroys every
+stored password, which is the fastest complete way to undo the privacy exposure.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

@@ -30,6 +30,7 @@ import {
 import {
   impersonateSchoolHead,
   resetSchoolHeadPasswordToDefault,
+  revealSchoolHeadPassword,
 } from "@/lib/actions/school-accounts";
 import type { SchoolAccountRow } from "@/lib/admin/school-accounts";
 
@@ -44,79 +45,137 @@ export type SchoolAccountsList = {
 /**
  * The password cell.
  *
- * Shows a credential only in the one case where the system knows it: the
- * account's live password is the School ID, because LITRACK set it there
- * itself. A user's own password is a bcrypt hash inside Supabase Auth and
- * cannot be read back by anyone — so rather than pretend, the cell says so and
- * points at the reset that always works.
+ * Three states, because there are three genuinely different things the system
+ * can know about an account's password:
  *
- * Masked by default even though the School ID is printed in the column beside
- * it: what the mask protects is not the digits, it is shoulder-surfing a screen
- * that says "this string signs you in as this school".
+ *  1. It is the School ID. LITRACK put it there, the value is already in this
+ *     row, and revealing costs nothing but a click.
+ *  2. The head chose it and LITRACK sealed a copy. The value is NOT in this
+ *     row — clicking fetches it from `revealSchoolHeadPassword`, which is
+ *     Super-Admin-gated, rate-limited, and writes an audit row per reveal. Ten
+ *     rows of live credentials should not sit in a page payload on the chance
+ *     one gets looked at.
+ *  3. The head chose it before sealing existed. Genuinely unrecoverable — the
+ *     only copy is a bcrypt hash in Supabase Auth — so the cell says so and
+ *     points at the reset that always works.
+ *
+ * Masked by default in every case, including the School ID that is printed in
+ * the column beside it: what the mask protects is not the digits, it is
+ * shoulder-surfing a screen that says "this string signs you in as this school".
  */
 function PasswordCell({ row }: { row: SchoolAccountRow }) {
-  const [revealed, setRevealed] = useState(false);
+  const [revealed, setRevealed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [loading, startReveal] = useTransition();
 
   if (!row.head) {
     return <span className="text-sm text-muted-foreground">No account</span>;
   }
 
-  if (!row.head.passwordIsSchoolId) {
+  const head = row.head;
+  const stored = !head.passwordIsSchoolId && head.passwordStored;
+
+  if (!head.passwordIsSchoolId && !stored) {
     return (
       <div className="space-y-0.5">
         <p className="text-sm font-medium">Custom password</p>
         <p className="text-xs text-muted-foreground">
-          Not readable — reset to sign in
+          Set before LITRACK could record it — reset to sign in
         </p>
       </div>
     );
   }
 
+  const hide = () => {
+    setRevealed(null);
+    setCopied(false);
+  };
+
+  const show = () => {
+    // The School ID is already on the row, so there is nothing to go and get.
+    if (head.passwordIsSchoolId) {
+      setRevealed(row.defaultPassword);
+      return;
+    }
+    startReveal(async () => {
+      const fd = new FormData();
+      fd.set("schoolId", row.schoolId);
+      const res = await revealSchoolHeadPassword(fd);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setRevealed(res.data?.password ?? null);
+    });
+  };
+
+  const isRevealed = revealed !== null;
+  // Width of the mask must not leak the real length of a password someone
+  // chose, so a stored one always masks to the same eight dots.
+  const mask = head.passwordIsSchoolId
+    ? "•".repeat(Math.max(6, row.defaultPassword.length))
+    : "••••••••";
+
   return (
-    <div className="flex items-center gap-1">
-      <code
-        className="rounded bg-muted px-2 py-1 font-mono text-sm tabular-nums"
-        aria-label={
-          revealed
-            ? `Password for ${row.schoolName}: ${row.defaultPassword}`
-            : `Password for ${row.schoolName} is hidden`
-        }
-      >
-        {revealed ? row.defaultPassword : "•".repeat(Math.max(6, row.defaultPassword.length))}
-      </code>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
-        aria-pressed={revealed}
-        aria-label={revealed ? `Hide password for ${row.schoolName}` : `Show password for ${row.schoolName}`}
-        title={revealed ? "Hide" : "Show"}
-        onClick={() => setRevealed((v) => !v)}
-      >
-        {revealed ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
-      </Button>
-      {revealed ? (
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-1">
+        <code
+          className="rounded bg-muted px-2 py-1 font-mono text-sm tabular-nums"
+          aria-label={
+            isRevealed
+              ? `Password for ${row.schoolName}: ${revealed}`
+              : `Password for ${row.schoolName} is hidden`
+          }
+        >
+          {isRevealed ? revealed : mask}
+        </code>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          aria-label={`Copy password for ${row.schoolName}`}
-          title={copied ? "Copied" : "Copy"}
-          onClick={async () => {
-            await navigator.clipboard.writeText(row.defaultPassword);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          }}
+          loading={loading}
+          aria-pressed={isRevealed}
+          aria-label={
+            isRevealed
+              ? `Hide password for ${row.schoolName}`
+              : `Show password for ${row.schoolName}`
+          }
+          title={isRevealed ? "Hide" : "Show"}
+          onClick={() => (isRevealed ? hide() : show())}
         >
-          {copied ? (
-            <Check className="h-4 w-4 text-primary" aria-hidden />
+          {isRevealed ? (
+            <EyeOff className="h-4 w-4" aria-hidden />
           ) : (
-            <Copy className="h-4 w-4" aria-hidden />
+            <Eye className="h-4 w-4" aria-hidden />
           )}
         </Button>
+        {isRevealed ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={`Copy password for ${row.schoolName}`}
+            title={copied ? "Copied" : "Copy"}
+            onClick={async () => {
+              await navigator.clipboard.writeText(revealed);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            {copied ? (
+              <Check className="h-4 w-4 text-primary" aria-hidden />
+            ) : (
+              <Copy className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
+        ) : null}
+      </div>
+      {stored ? (
+        <p className="text-xs text-muted-foreground">
+          Chosen by the School Head · viewing is logged
+        </p>
       ) : null}
     </div>
   );

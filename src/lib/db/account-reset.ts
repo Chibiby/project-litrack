@@ -82,7 +82,15 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
 
       await prisma.user.update({
         where: { id: head.id },
-        data: { passwordIsSchoolId: true, mustChangePassword: false, isActive: true },
+        data: {
+          passwordIsSchoolId: true,
+          mustChangePassword: false,
+          isActive: true,
+          // The sealed copy described a password that no longer signs anyone
+          // in. `passwordIsSchoolId` is what the console reads now.
+          passwordVaultCipher: null,
+          passwordVaultSetAt: null,
+        },
       });
       processed += 1;
     } catch (err) {
@@ -191,6 +199,8 @@ async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
           advisorySectionId: null,
           mustChangePassword: false,
           passwordIsSchoolId: false,
+          passwordVaultCipher: null,
+          passwordVaultSetAt: null,
         },
       });
       processed += 1;

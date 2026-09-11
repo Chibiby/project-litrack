@@ -17,6 +17,7 @@ import {
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { passwordChangeFields } from "@/lib/auth/password-vault";
 import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -715,7 +716,7 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { mustChangePassword: false, passwordIsSchoolId: false },
+    data: passwordChangeFields(user.role, parsed.data.password),
   });
 
   await writeAudit({
@@ -813,7 +814,7 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { mustChangePassword: false, passwordIsSchoolId: false },
+    data: passwordChangeFields(user.role, parsed.data.password),
   });
 
   await writeAudit({
@@ -1012,7 +1013,7 @@ export async function completePasswordReset(formData: FormData): Promise<ActionR
   if (appUser) {
     await prisma.user.update({
       where: { id: appUser.id },
-      data: { mustChangePassword: false, passwordIsSchoolId: false },
+      data: passwordChangeFields(appUser.role, parsed.data.password),
     });
     await writeAudit({
       userId: appUser.id,

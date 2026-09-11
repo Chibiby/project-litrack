@@ -200,7 +200,15 @@ export async function regenerateSchoolHeadCredential(
     // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
     // on the very next sign-in, with no forced interstitial, and the console can
     // show it because the live password is once again the School ID.
-    data: { mustChangePassword: false, isActive: true, passwordIsSchoolId: true },
+    data: {
+      mustChangePassword: false,
+      isActive: true,
+      passwordIsSchoolId: true,
+      // Any password the head had chosen is gone from Auth, so the sealed copy
+      // of it must go too — showing it would hand out a dead credential.
+      passwordVaultCipher: null,
+      passwordVaultSetAt: null,
+    },
   });
 
   // Recorded as a reset-to-default, not a regeneration: the audit trail is how

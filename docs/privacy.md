@@ -73,9 +73,56 @@ panel says plainly that the assistant is not switched on rather than answering
 from anything else. The support-ticket and chat routes to a real person are
 untouched, as is the rest of the app.
 
+## School Head passwords are recoverable by a Super Admin
+
+Deliberate, and a genuine trade-off, so it is written down rather than left to
+be discovered in the schema.
+
+**What is stored:** when a School Head sets or changes their own password,
+LITRACK keeps a copy of it in `User.passwordVaultCipher`, sealed with
+AES-256-GCM (`src/lib/auth/password-vault.ts`). Supabase Auth still holds the
+bcrypt hash that actually authenticates; this copy exists only so the Super
+Admin accounts console can show the credential instead of resetting it out from
+under a head who phoned for help.
+
+**Who else:** nobody. Teachers and Super Admins are never sealed — no console
+displays them. A head who set their password before this shipped has no stored
+copy and never will; bcrypt does not run backwards.
+
+**The exposure this creates:** a database dump plus the key decrypts real
+personal passwords, and people reuse passwords. Before, a dump was worthless
+for that. The key is `PASSWORD_VAULT_KEY`, or — unset — one derived from
+`SUPABASE_SERVICE_ROLE_KEY`; either way it lives in deployment env and never in
+Postgres, so a dump on its own still decrypts nothing. The in-app backups at
+`/admin/database` null both columns (`REDACTED_SNAPSHOT_COLUMNS`), so a
+downloaded backup file carries no password material at all; Supabase's own
+platform backups are full dumps and do. Set
+`PASSWORD_VAULT_KEY` explicitly if you want password recovery to survive a
+service-role rotation, or to be able to destroy every stored password at once by
+discarding the key.
+
+**Accountability:** every reveal writes a `SCHOOL_HEAD_PASSWORD_VIEWED` audit
+row naming the admin, the account, and the time — never the password —
+viewable at `/admin/audit`. The reveal action is Super-Admin-only and rate
+limited to 20 per 15 minutes so the console cannot be scripted into a
+password dump.
+
+**Turning it off:** unset both `PASSWORD_VAULT_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY`… which also disables admin Auth APIs, so in
+practice: set `PASSWORD_VAULT_KEY` to a value you then discard. Nothing new is
+sealed that can be opened, existing blobs stop opening, and the console returns
+to saying a custom password is not readable. Clearing the stored copies
+outright is a `UPDATE "User" SET "passwordVaultCipher" = NULL` — a destructive
+statement, so it follows `docs/migrate-checklist.md`, not an ad-hoc console.
+
+**Tell people.** A head's password is now visible to the deployment's Super
+Admins. Say so in the privacy notice the schools are given; the alternative is
+a surprise during an audit.
+
 ## Security measures in product
 
-- Private passwords (School ID is not the password).
+- Private passwords (School ID is not the password), with the School Head
+  exception documented above.
 - Rate limiting on login/invite/recovery (soft / per-instance).
 - Security headers via Next config.
 - Secrets only in server env (`SUPABASE_SERVICE_ROLE_KEY`, etc.).

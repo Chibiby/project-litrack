@@ -30,6 +30,15 @@ export const AUDIT_ACTIONS = {
    */
   SCHOOL_HEAD_PASSWORD_RESET_DEFAULT: "SCHOOL_HEAD_PASSWORD_RESET_DEFAULT",
   /**
+   * Super Admin revealed a School Head's own password in the accounts console.
+   *
+   * This is the one action in LITRACK where an admin reads a credential a
+   * person chose for themselves, so it is logged on every single reveal — not
+   * deduped, not batched. The row records who looked, at whose account, and
+   * when; never the password, which is the whole point of logging it.
+   */
+  SCHOOL_HEAD_PASSWORD_VIEWED: "SCHOOL_HEAD_PASSWORD_VIEWED",
+  /**
    * Super Admin took over a School Head session without touching its password.
    * Both ends are logged so the audit trail can always answer "was this the
    * School Head or the admin?" for any write in between.

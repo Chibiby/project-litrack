@@ -80,7 +80,16 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
 
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: "head-1" },
-      data: { mustChangePassword: false, isActive: true, passwordIsSchoolId: true },
+      data: {
+        mustChangePassword: false,
+        isActive: true,
+        passwordIsSchoolId: true,
+        // Any password the head had chosen no longer opens the account, so the
+        // sealed copy the accounts console reveals is deleted with it —
+        // otherwise the console would show a credential that fails at login.
+        passwordVaultCipher: null,
+        passwordVaultSetAt: null,
+      },
     });
   });
 

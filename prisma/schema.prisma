@@ -601,6 +601,25 @@ model User {
   /// (`School.schoolIdCode`). A user's own password is a bcrypt hash inside
   /// Supabase Auth and is never readable — by design.
   passwordIsSchoolId        Boolean                @default(false)
+  /// The account's own password, sealed with AES-256-GCM, so the Super Admin
+  /// console can show a School Head the credential they actually chose instead
+  /// of telling the admin to reset it out from under them.
+  ///
+  /// Written ONLY for `SCHOOL_HEAD` rows, and only by the three paths where the
+  /// person types a password themselves (set-password, change-password,
+  /// recovery). Teachers and Super Admins are never sealed — nothing displays
+  /// them, so storing them would be exposure with no purpose. Cleared whenever
+  /// the password becomes the School ID again, because `passwordIsSchoolId`
+  /// already covers that case and a stale blob would show a dead credential.
+  ///
+  /// Format and key handling live in `src/lib/auth/password-vault.ts`. This is
+  /// reversible by anyone holding the key plus this column, which is the point
+  /// and also the cost — see `docs/privacy.md`.
+  passwordVaultCipher       String?
+  /// When `passwordVaultCipher` was last written. Shown to the admin so a
+  /// revealed password carries its own age, and lets an operator find accounts
+  /// sealed under a key that has since rotated.
+  passwordVaultSetAt        DateTime?
   // Profile completion flags
   profileCompleted          Boolean                @default(false)
   /// Ticked the "I am a Non-DepEd ARAL Volunteer" box during self-registration.
