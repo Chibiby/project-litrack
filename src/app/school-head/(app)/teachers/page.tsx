@@ -31,6 +31,8 @@ import {
 } from "@/components/teachers-active-table";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { getAdviserlessSections } from "@/lib/teachers/adviserless";
+import { AdviserlessSectionsNotice } from "@/components/school-head/adviserless-sections-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +185,7 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
   // Awaited outside the Suspense boundary because the tab bar renders above it:
   // the four badges paint with the frame, and only the roster itself streams.
   const counts = await teacherTabCounts(view.schoolId);
+  const adviserlessSections = await getAdviserlessSections(view.schoolId);
 
   return (
     <SchoolHeadPage
@@ -192,6 +195,8 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
       tabs={teacherWorkspaceTabs(counts)}
       activeTab={TEACHER_TABS.active}
     >
+      <AdviserlessSectionsNotice sections={adviserlessSections} showLink={false} />
+
       <Suspense fallback={<TableSectionSkeleton rows={8} columns={7} />}>
         <ActiveTeachersBody
           view={view}
