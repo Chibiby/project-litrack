@@ -40,6 +40,16 @@ export type SchoolAccountRow = {
      * user-chosen or a random one-time credential — unreadable either way.
      */
     passwordIsSchoolId: boolean;
+    /**
+     * True when LITRACK holds a sealed copy of the head's own password, so the
+     * console can offer to reveal it.
+     *
+     * A boolean, never the ciphertext: the row goes to the browser, and the
+     * password itself only travels in the response to an explicit, audited
+     * `revealSchoolHeadPassword` call. False is the permanent state for every
+     * password chosen before sealing existed.
+     */
+    passwordStored: boolean;
     mustChangePassword: boolean;
   } | null;
 };
@@ -116,6 +126,9 @@ export async function getSchoolAccountsPage(
             lastName: true,
             isActive: true,
             passwordIsSchoolId: true,
+            // Selected only to be turned into a boolean below. It must not
+            // reach the client component.
+            passwordVaultCipher: true,
             mustChangePassword: true,
           },
         },
@@ -144,6 +157,7 @@ export async function getSchoolAccountsPage(
                 head.fullName || `${head.firstName} ${head.lastName}`.trim() || school.name,
               isActive: head.isActive,
               passwordIsSchoolId: head.passwordIsSchoolId,
+              passwordStored: head.passwordVaultCipher !== null,
               mustChangePassword: head.mustChangePassword,
             }
           : null,

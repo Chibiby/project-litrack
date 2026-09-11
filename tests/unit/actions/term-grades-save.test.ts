@@ -83,6 +83,12 @@ type SchoolYearRow = {
   schoolId: string;
   isActive: boolean;
   startDate: Date;
+  termWindowOverrides: {
+    term: string;
+    startKey: string;
+    endKey: string;
+    deadlineKey: string;
+  }[];
 };
 
 /** The school's learner table for one test. */
@@ -91,6 +97,8 @@ let sections: SectionRow[];
 let schoolYears: SchoolYearRow[];
 /** `TeacherProfile.designation` for the caller; `null` is an ordinary DepEd teacher. */
 let designation: string | null;
+/** `TeacherProfile.advisoryMode`; `null` behaves as DEFAULT for an older row. */
+let advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
 /** What `requireSchoolUser` resolves. Mutated per test, never widened by default. */
 let session: {
   id: string;
@@ -192,7 +200,7 @@ const teacherProfileFindFirst = vi.fn(
   async (args: { where: { userId: string; user: { schoolId: string } } }) => {
     if (args.where.userId !== session.id) return null;
     if (args.where.user?.schoolId !== session.schoolId) return null;
-    return { designation };
+    return { designation, advisoryMode };
   }
 );
 
@@ -201,7 +209,13 @@ const schoolYearFindFirst = vi.fn(
     const found = schoolYears.find(
       (y) => y.schoolId === args.where.schoolId && y.isActive === args.where.isActive
     );
-    return found ? { id: found.id, startDate: found.startDate } : null;
+    return found
+      ? {
+          id: found.id,
+          startDate: found.startDate,
+          termWindowOverrides: found.termWindowOverrides,
+        }
+      : null;
   }
 );
 
@@ -431,9 +445,11 @@ beforeEach(() => {
       schoolId: SCHOOL_ID,
       isActive: true,
       startDate: SCHOOL_YEAR_START,
+      termWindowOverrides: [],
     },
   ];
   designation = null;
+  advisoryMode = null;
   session = {
     id: TEACHER_ID,
     schoolId: SCHOOL_ID,
@@ -615,6 +631,42 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
     const res = await post({ term: LOCKED_TERM });
 
     expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
+  });
+
+  it("accepts a save past the months when the head extended the deadline", async () => {
+    // First Term's months ended Oct 31. The head moved entry to Dec 31, and the
+    // frozen clock is Dec 15 — inside the extension, past the months.
+    schoolYears[0].termWindowOverrides = [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-10-31",
+        deadlineKey: "2026-12-31",
+      },
+    ];
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("still refuses a save past the extended deadline", async () => {
+    // Extended, but only to Nov 30 — the clock is past that too.
+    schoolYears[0].termWindowOverrides = [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-10-31",
+        deadlineKey: "2026-11-30",
+      },
+    ];
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(false);
+    expect(res).toMatchObject({
+      error: expect.stringContaining("First Term is closed"),
+    });
   });
 });
 
@@ -816,6 +868,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
         schoolId: OTHER_SCHOOL_ID,
         isActive: true,
         startDate: SCHOOL_YEAR_START,
+        termWindowOverrides: [],
       },
     ];
 
@@ -833,6 +886,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
         schoolId: SCHOOL_ID,
         isActive: false,
         startDate: SCHOOL_YEAR_START,
+        termWindowOverrides: [],
       },
     ];
 
@@ -885,6 +939,21 @@ describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
     expect(res).toEqual({
       ok: false,
       error: "End of Terms Reports is for DepEd teachers who advise a section.",
+    });
+    expectNoWrites();
+  });
+
+  it("refuses a floating teacher in words that fit a DepEd teacher", async () => {
+    // A floating teacher IS a DepEd teacher, so the volunteer copy would be
+    // false about them and would point them at the wrong remedy.
+    advisoryMode = "FLOATING";
+
+    const res = await post();
+
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "Floating teachers do not advise a section, so there is no end-of-term sheet. Your School Head can change this.",
     });
     expectNoWrites();
   });

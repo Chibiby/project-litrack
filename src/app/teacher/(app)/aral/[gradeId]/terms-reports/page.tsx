@@ -16,11 +16,12 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
 import { getActiveSchoolYear } from "@/lib/cache/school-year";
-import { deniesAdvisoryRoster, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
+import { advisoryRosterDenial, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacements,
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
+import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
 import {
   AralEnrollAction,
   AralEnrollActionFallback,
@@ -137,7 +138,7 @@ export default async function AralGradeTermsReportsPage({
   // pool timeout where a card would have rendered. That is one indexed lookup
   // on a pool the rest of the page already depends on, so the trade is a rare
   // error page against a round trip on every load.
-  const [{ grades: shellGrades, designation }, advisory, grade] =
+  const [{ grades: shellGrades, designation, advisoryMode }, advisory, grade] =
     await Promise.all([
       // The teacher layout already awaited this exact call for this request and it
       // is React-`cache()`d on (schoolId, teacherId, isSuperAdmin), so both halves
@@ -168,7 +169,15 @@ export default async function AralGradeTermsReportsPage({
   // `/teacher/learners`. The Super Admin carve-out lives in the predicate, and
   // the copy is shared with the `/teacher/terms-reports` resolver so the two
   // entry points cannot come to word the same refusal differently.
-  if (deniesAdvisoryRoster({ isSuperAdmin, designation })) {
+  const denial = advisoryRosterDenial({ isSuperAdmin, designation, advisoryMode });
+  if (denial === "floating") {
+    return (
+      <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
+        <EmptyState {...DECLARED_FLOATING_CARD} />
+      </AppShell>
+    );
+  }
+  if (denial === "volunteer") {
     return (
       <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
         <EmptyState {...TERM_SHEET_VOLUNTEER_CARD} />
@@ -211,7 +220,7 @@ export default async function AralGradeTermsReportsPage({
   }
 
   const todayKey = formatLocalDateKey(schoolToday());
-  const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey));
+  const windows = getTermWindows(parseLocalDateKey(schoolYear.startDateKey), schoolYear.overrides);
   const activeTerm = resolveActiveTerm(windows, sp.term, todayKey);
   const activeWindow = windows.find((w) => w.term === activeTerm) ?? windows[0];
   // The lock is computed, and a grant reopens one term for one teacher. The

@@ -3,24 +3,22 @@ import type { UserRole } from "@prisma/client";
 /**
  * The assistant's entire knowledge base.
  *
- * Deliberately hand-written data. Three reasons, in order of weight:
+ * Deliberately hand-written data, and — since Gemini became the panel's only
+ * voice — the model's entire reference material. Every topic here is quoted in
+ * full in every prompt (`src/lib/assistant/prompt.ts`), so this file is what
+ * makes the assistant answer about LITRACK as it actually is rather than about
+ * school software in general. A subject missing from this index is a question
+ * the assistant cannot answer; a wrong answer is usually a paragraph to fix
+ * here rather than a prompt to re-tune.
  *
- * 1. It answers with nothing leaving the country. A model backend now exists
- *    alongside this file — `src/lib/assistant/` calls Gemini when
- *    `GEMINI_API_KEY` is set, a cross-border transfer documented in
- *    `docs/privacy.md` — but it is an addition, not a replacement. This index
- *    is what answers when there is no key, no network, or no quota, and it is
- *    also what grounds the model's answer when there is.
- * 2. Answers are deterministic, so a wrong answer is a bug someone can fix here
- *    rather than a prompt someone has to re-tune.
- * 3. It costs nothing per message and works with the network down.
+ * It no longer answers a person directly. `answerQuery` in `./search` still
+ * ranks it, but ranking now only orders the prompt and picks the two links that
+ * sit under the answer — a curated topic is never rendered as an answer of its
+ * own, because one question having two authors is exactly the flicker that got
+ * removed from the panel.
  *
- * `answerQuery` in `./search` ranks this index, and its ranking now also picks
- * which topics the Gemini prompt quotes in full — so a topic added here
- * improves both answers at once.
- *
- * Plain data with no imports beyond the role type, so this is safe in a client
- * component — the whole index ships to the browser and answers land instantly.
+ * Plain data with no imports beyond the role type. It reads on the server now;
+ * keeping it importable anywhere costs nothing and rules nothing out.
  */
 
 export type HelpTopic = {

@@ -17,7 +17,10 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 
 afterEach(cleanup);
 
-function renderHeader(onToggle = vi.fn(), props?: { isAralVolunteer?: boolean }) {
+function renderHeader(
+  onToggle = vi.fn(),
+  props?: { isAralVolunteer?: boolean; isFloating?: boolean }
+) {
   render(
     <ThemeProvider>
       <AppHeader
@@ -94,5 +97,17 @@ describe("AppHeader", () => {
     // The header carries no nav links, so the inert row's absence here is
     // expected — the search combobox is the only volunteer-conditional control.
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("drops the search box for a floating teacher too", () => {
+    // Same reasoning as the volunteer case: a floating teacher has declared they
+    // will not advise a section, so /teacher/learners is closed to them as well.
+    pathname.value = "/teacher/aral";
+    renderHeader(vi.fn(), { isFloating: true });
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("button", { name: /notifications/i })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /switch to (dark|light) mode/i })
+    ).not.toBeNull();
   });
 });

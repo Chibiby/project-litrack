@@ -27,7 +27,8 @@ export function teacherRosterScope(schoolId: string): Prisma.UserWhereInput {
 }
 
 /**
- * The four states, as `where` fragments to spread over `teacherRosterScope`.
+ * The four live states, as `where` fragments to spread over `teacherRosterScope`.
+ * Removed is the fifth tab but not one of these — see `removedTeacherScope`.
  *
  * Pending and Declined deliberately ignore `isActive`: it is meaningless before
  * approval, and filtering on it would hide a request whose flag happens to be
@@ -38,7 +39,22 @@ export const TEACHER_ROSTER_STATE = {
   pending: { approvalStatus: "PENDING" },
   inactive: { approvalStatus: "APPROVED", isActive: false },
   declined: { approvalStatus: "REJECTED" },
-} satisfies Record<keyof TeacherTabCounts, Prisma.UserWhereInput>;
+} satisfies Record<Exclude<keyof TeacherTabCounts, "removed">, Prisma.UserWhereInput>;
+
+/**
+ * Teachers removed from this school — the rows every other state filters out.
+ *
+ * A scope of its own rather than a state to spread: `teacherRosterScope` pins
+ * `deletedAt: null`, and spreading `deletedAt: { not: null }` over it would
+ * work only by key-order accident. Same tenant boundary, never optional.
+ *
+ * Removal is the only thing that soft-deletes a teacher (a declined request is
+ * hard-deleted when cleared), so everything here was removed by a School Head
+ * or a Super Admin, whatever their approval state was at the time.
+ */
+export function removedTeacherScope(schoolId: string): Prisma.UserWhereInput {
+  return { schoolId, role: "TEACHER", deletedAt: { not: null } };
+}
 
 /**
  * Columns the Active and Inactive tables render. The two `_count`s filter
@@ -65,6 +81,12 @@ export const managedTeacherSelect = {
     },
     orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
   },
+  // The designation and advisory setting a School Head edits via
+  // `setTeacherAdvisorySetting` (`teacher-role-dialog.tsx`). `null` when the
+  // teacher has no `TeacherProfile` row yet — they have not finished profiling.
+  teacherProfile: {
+    select: { designation: true, advisoryMode: true },
+  },
   _count: {
     select: {
       managedLearners: { where: { deletedAt: null } },
@@ -86,6 +108,8 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,
     aralLearnerCount: t._count.aralLearners,
+    designation: t.teacherProfile?.designation ?? null,
+    advisoryMode: t.teacherProfile?.advisoryMode ?? null,
     // A teacher sets their first in profiling; the School Head adds and removes
     // from the Active teachers table (see `setTeacherAdvisorySection`).
     //
@@ -103,14 +127,14 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
 }
 
 /**
- * Badge numbers for the tab bar. Every tab renders the same four, so they are
- * fetched the same way on all four routes and cannot disagree.
+ * Badge numbers for the tab bar. Every tab renders the same five, so they are
+ * fetched the same way on all five routes and cannot disagree.
  *
  * Unfiltered on purpose: the Active tab has a search box, and a badge that
  * moved while you typed would read as teachers disappearing from the school
  * rather than from the current page. Pagination uses its own filtered count.
  *
- * Four counts rather than one `groupBy`: they run concurrently in the
+ * Separate counts rather than one `groupBy`: they run concurrently in the
  * `Promise.all` below, the roster is a few dozen rows per school, and the
  * `where` fragments stay readable next to the `findMany` that renders the tab.
  */
@@ -118,11 +142,12 @@ export async function teacherTabCounts(
   schoolId: string
 ): Promise<TeacherTabCounts> {
   const scope = teacherRosterScope(schoolId);
-  const [active, pending, inactive, declined] = await Promise.all([
+  const [active, pending, inactive, declined, removed] = await Promise.all([
     prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.active } }),
     prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.pending } }),
     prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.inactive } }),
     prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.declined } }),
+    prisma.user.count({ where: removedTeacherScope(schoolId) }),
   ]);
-  return { active, pending, inactive, declined };
+  return { active, pending, inactive, declined, removed };
 }

@@ -29,6 +29,7 @@ export default async function TeacherAppLayout({
   let grades: { id: string; label: string; hasAral?: boolean }[] | undefined;
   let roleLabel: string | undefined;
   let isAralVolunteer = false;
+  let isFloating = false;
   let advisoryGradeLevelId: string | null = null;
 
   // Layouts cannot read searchParams; super-admin school impersonation still
@@ -76,6 +77,11 @@ export default async function TeacherAppLayout({
         // read leaves that row live rather than disabling a page for a teacher
         // who is entitled to it.
         isAralVolunteer = true;
+      } else if (shell.advisoryMode === "FLOATING") {
+        // A declared choice, not an unassigned state — `roleLabel` stays the
+        // default "Teacher" because floating is still a real classroom role, just
+        // one with no advisory section right now.
+        isFloating = true;
       }
     } catch (err) {
       console.error("[teacher/layout] shell grades/school name failed:", err);
@@ -93,6 +99,7 @@ export default async function TeacherAppLayout({
         grades={grades}
         roleLabel={roleLabel}
         isAralVolunteer={isAralVolunteer}
+        isFloating={isFloating}
         advisoryGradeLevelId={advisoryGradeLevelId}
         aiEnabled={geminiConfigured()}
         // From the row `requireUser` already loaded — no third read in a layout

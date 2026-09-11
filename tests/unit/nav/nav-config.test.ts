@@ -606,6 +606,27 @@ describe("getNavGroups — the term report's deep href", () => {
   });
 });
 
+describe("getNavGroups — floating teacher", () => {
+  const floating = () => getNavGroups("TEACHER", oneAral, { isFloating: true });
+  it("closes Learners and End of Terms Reports with the Floating teacher pill", () => {
+    const items = flattenNavGroups(floating());
+    for (const id of ["teacher-learners", "teacher-terms-reports"]) {
+      expect(items.find((i) => i.id === id)?.unavailable).toEqual({
+        pill: "Floating teacher",
+        reason: "for teachers who advise a section",
+      });
+    }
+  });
+  it("keeps the ARAL rows open", () => {
+    const items = flattenNavGroups(floating());
+    expect(items.filter((i) => i.id.startsWith("teacher-aral-")).every((i) => !i.unavailable)).toBe(true);
+  });
+  it("lets the volunteer pill win when both are set", () => {
+    const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { isFloating: true, isAralVolunteer: true }));
+    expect(items.find((i) => i.id === "teacher-learners")?.unavailable?.pill).toBe("DepEd only");
+  });
+});
+
 describe("getNavGroups — admin", () => {
   it("keeps admin on a single unlabeled group", () => {
     // The redesign regrouped the School Head sidebar only; admin was left

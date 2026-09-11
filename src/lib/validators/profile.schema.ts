@@ -260,7 +260,7 @@ function isMasterTeacherRankPosition(
   );
 }
 
-/** Teacher designation ↔ position pairing (Teacher / Master Teacher / Others). */
+/** Teacher designation <-> position pairing (Teacher / Master Teacher / Others). */
 function refineTeacherDesignationPosition(
   data: {
     designation: string;
@@ -343,7 +343,7 @@ export const schoolHeadProfileSchema = baseProfile
   .superRefine(refineProfileConditionals);
 
 /** Names update User on save; other fields persist on TeacherProfile. */
-export const teacherProfileSchema = baseProfile
+const teacherProfileObject = baseProfile
   .merge(profileNames)
   .extend({
     designation: nonEmpty("Designation is required").max(100),
@@ -355,63 +355,94 @@ export const teacherProfileSchema = baseProfile
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
     /**
-     * "I have no advisory section yet" — the floating DepEd teacher (§5).
-     *
-     * A declared choice, not a stored flag. Floating IS zero live advisory
-     * sections, derived from `Section.adviserId`, so nothing here is persisted;
-     * this boolean only lifts the two requirements below for a teacher who says
-     * the answer is none. A column would be able to disagree with the sections
-     * themselves, and then neither would be authoritative.
-     *
-     * Deliberately distinct from the ARAL Volunteer carve-out beside it. A
-     * volunteer holds no classroom role at all; a floating DepEd teacher holds
-     * one and simply has no section yet. Same lifted requirement, two different
-     * facts, and the interface should not make one of them wear the other's
-     * label to get past a form.
+     * DEFAULT = one section . FLOATING = none . MULTI_GRADE = one to three.
+     * Only read on a teacher's FIRST save; afterwards the School Head owns it
+     * (see `saveTeacherProfile`). Ignored for the volunteer designation.
      */
-    noAdvisorySection: z.boolean().default(false),
+    advisoryMode: z.enum(["DEFAULT", "FLOATING", "MULTI_GRADE"]).default("DEFAULT"),
+    /** Multi-grades second and third sections. `sectionId` stays the first. */
+    additionalSectionIds: z
+      .array(z.string().uuid("Invalid section"))
+      .max(2, "A multi-grade teacher advises at most 3 sections")
+      .default([]),
     yearsInService: teacherYearsInServiceSchema,
-  })
-  .superRefine((data, ctx) => {
-    refineProfileConditionals(data, ctx);
-    refineTeacherDesignationPosition(data, ctx);
-    refineEthnicityPair(data, ctx);
-    // An ARAL Volunteer holds no classroom assignment at all: they advise no
-    // section and they are not attached to a grade. Every other designation
-    // describes a classroom teaching role, so both stay required there.
-    // `undefined` on either field clears whatever the teacher held before.
-    if (data.designation === ARAL_VOLUNTEER_DESIGNATION) return;
-    // A DepEd teacher who declares they have no advisory section yet. The
-    // section is genuinely unknown, so requiring one would leave them unable to
-    // finish profiling at all — which is the state §5 exists to end.
-    if (data.noAdvisorySection) {
-      // Declaring none and naming one at the same time is contradictory, and
-      // silently honouring either half would make the form lie about what was
-      // saved.
-      if (data.sectionId !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Clear the section, or untick “I have no advisory section yet”",
-          path: ["sectionId"],
-        });
-      }
-      return;
-    }
-    if (data.currentGradeAssignment === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select a grade level",
-        path: ["currentGradeAssignment"],
-      });
-    }
-    if (data.sectionId === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select a section",
-        path: ["sectionId"],
-      });
-    }
   });
+
+/**
+ * Validate advisory constraints: volunteers and floating teachers hold no section,
+ * DEFAULT and MULTI_GRADE teachers require a section and grade assignment.
+ * Used in the CREATE schema; UPDATE schema skips this to allow Settings-only changes.
+ */
+export function refineTeacherAdvisory(
+  data: {
+    designation: string;
+    advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE";
+    sectionId?: string;
+    additionalSectionIds: string[];
+    currentGradeAssignment?: string;
+  },
+  ctx: z.RefinementCtx
+): void {
+  const isVolunteer = data.designation === ARAL_VOLUNTEER_DESIGNATION;
+  const extras = data.additionalSectionIds;
+
+  if (isVolunteer || data.advisoryMode === "FLOATING") {
+    const message = isVolunteer
+      ? "Non-DepEd ARAL Volunteers don't advise a section"
+      : "Floating teachers don't advise a section. Clear it, or untick Floating teacher";
+    if (data.sectionId !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["sectionId"] });
+    }
+    if (extras.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["additionalSectionIds"] });
+    }
+    return;
+  }
+
+  if (data.currentGradeAssignment === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a grade level",
+      path: ["currentGradeAssignment"],
+    });
+  }
+  if (data.sectionId === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a section", path: ["sectionId"] });
+  }
+  if (data.advisoryMode === "DEFAULT" && extras.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Tick Multi-grade advisory to add more than one section",
+      path: ["additionalSectionIds"],
+    });
+  }
+  if (data.advisoryMode === "MULTI_GRADE") {
+    const all = [data.sectionId, ...extras].filter((id): id is string => Boolean(id));
+    if (new Set(all).size !== all.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pick each section only once",
+        path: ["additionalSectionIds"],
+      });
+    }
+  }
+}
+
+/** CREATE schema: teacher's first save, includes advisory constraints. */
+export const teacherProfileSchema = teacherProfileObject.superRefine((data, ctx) => {
+  refineProfileConditionals(data, ctx);
+  refineTeacherDesignationPosition(data, ctx);
+  refineEthnicityPair(data, ctx);
+  refineTeacherAdvisory(data, ctx);
+});
+
+/** UPDATE schema: teacher's later saves, skips advisory constraints so Settings-only changes work. */
+export const teacherProfileUpdateSchema = teacherProfileObject.superRefine((data, ctx) => {
+  refineProfileConditionals(data, ctx);
+  refineTeacherDesignationPosition(data, ctx);
+  refineEthnicityPair(data, ctx);
+});
 
 export type SchoolHeadProfileInput = z.infer<typeof schoolHeadProfileSchema>;
 export type TeacherProfileInput = z.infer<typeof teacherProfileSchema>;
+export type TeacherProfileUpdateInput = z.infer<typeof teacherProfileUpdateSchema>;

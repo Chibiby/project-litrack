@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { AdvisoryMode, Prisma } from "@prisma/client";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
@@ -134,11 +134,32 @@ export function isAralVolunteerDesignation(
   return designation === ARAL_VOLUNTEER_DESIGNATION;
 }
 
+export type AdvisoryRosterDenial = "volunteer" | "floating" | null;
+
+/**
+ * Why the class-bound surfaces (`/teacher/learners`, the End of Terms Reports
+ * sheet, their sidebar rows) are closed to this user, or null when they are not.
+ * A Non-DepEd ARAL Volunteer never advises; a DepEd teacher set to FLOATING has
+ * declared they will not. Two facts, two sets of words, one gate. Fails open on
+ * a missing mode, and never closes for a Super Admin impersonating the shell.
+ */
+export function advisoryRosterDenial(args: {
+  isSuperAdmin: boolean;
+  designation: string | null | undefined;
+  advisoryMode?: AdvisoryMode | null;
+}): AdvisoryRosterDenial {
+  if (args.isSuperAdmin) return null;
+  if (isAralVolunteerDesignation(args.designation)) return "volunteer";
+  if (args.advisoryMode === "FLOATING") return "floating";
+  return null;
+}
+
 /**
  * Whether the advisory roster (`/teacher/learners`) must be closed to this user.
  *
  * A Non-DepEd ARAL Volunteer advises no section, so that roster is not theirs —
  * their learners are in the ARAL programme, reached through its own pages.
+ * A DepEd teacher set to FLOATING has declared they will not advise a section.
  *
  * The `isSuperAdmin` branch is load-bearing and must not be folded away as
  * redundant. `getTeacherShellContext` happens to return `designation: null` for a
@@ -156,7 +177,7 @@ export function isAralVolunteerDesignation(
 export function deniesAdvisoryRoster(args: {
   isSuperAdmin: boolean;
   designation: string | null | undefined;
+  advisoryMode?: AdvisoryMode | null;
 }): boolean {
-  if (args.isSuperAdmin) return false;
-  return isAralVolunteerDesignation(args.designation);
+  return advisoryRosterDenial(args) !== null;
 }

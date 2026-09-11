@@ -26,6 +26,12 @@ const serverEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  // Optional. Seals the School Head passwords the Super Admin console reveals;
+  // `@/lib/auth/password-vault` falls back to deriving a key from the
+  // service-role key, and stores nothing at all when neither exists. Read
+  // directly from `process.env` there rather than through this parse, because
+  // the vault is also exercised by unit tests that swap keys between cases.
+  PASSWORD_VAULT_KEY: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().min(1).optional(),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
@@ -50,6 +56,7 @@ function readEnvInput(): Record<string, string | undefined> {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
+    PASSWORD_VAULT_KEY: process.env.PASSWORD_VAULT_KEY || undefined,
     RESEND_API_KEY: process.env.RESEND_API_KEY || undefined,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL || undefined,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,

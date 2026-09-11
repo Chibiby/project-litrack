@@ -53,6 +53,7 @@ export const TEACHER_TABS = {
   pending: "pending",
   inactive: "inactive",
   declined: "declined",
+  removed: "removed",
 } as const;
 
 export interface TeacherTabCounts {
@@ -60,6 +61,8 @@ export interface TeacherTabCounts {
   pending: number;
   inactive: number;
   declined: number;
+  /** Soft-deleted by a removal — a record of who left, not a live account. */
+  removed: number;
 }
 
 /**
@@ -95,6 +98,13 @@ export function teacherWorkspaceTabs(counts: TeacherTabCounts): SchoolHeadTab[] 
       label: "Declined",
       href: SCHOOL_HEAD_ROUTES.teachersDeclined,
       count: counts.declined,
+    },
+    // Last: the only tab whose rows are not accounts any more.
+    {
+      key: TEACHER_TABS.removed,
+      label: "Removed",
+      href: SCHOOL_HEAD_ROUTES.teachersRemoved,
+      count: counts.removed,
     },
   ];
 }

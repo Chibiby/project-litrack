@@ -2,9 +2,29 @@
 
 Operational procedures for admins. Does not replace training or legal advice.
 
+## Read back a School Head's own password
+
+**When:** SH forgot the password they chose, and you would rather tell them what
+it is than take it away from them.
+
+1. Super Admin → `/admin/school-accounts` → the eye icon in the Password column.
+2. If the cell says **"Set before LITRACK could record it"**, there is nothing to
+   read — go to the Reset procedure below. Only passwords set from 2026-09-11
+   onwards were sealed, and a `PASSWORD_VAULT_KEY` rotation makes anything
+   sealed under the old key unreadable in the same way.
+3. Every reveal writes `SCHOOL_HEAD_PASSWORD_VIEWED` to `/admin/audit` against
+   your account. Do it because someone asked, not to browse.
+
+Reveal changes nothing for the head — they keep signing in with what they have.
+Prefer it to Reset for exactly that reason. Teacher passwords are never stored
+and cannot be read back by anyone; teachers use `/forgot-password` (real email)
+or a re-invite. The privacy consequences of storing these at all are in
+`docs/privacy.md`.
+
 ## Reset a School Head's password to the School ID
 
-**When:** SH forgot the password they chose / locked out / synthetic email cannot receive reset mail.
+**When:** SH forgot the password they chose and it is not on record (see above) /
+locked out / synthetic email cannot receive reset mail.
 
 1. Super Admin → `/admin/schools` → key icon on the school's row (or `/admin/school-accounts`
    → Reset to School ID — the two do the same thing).

@@ -81,12 +81,13 @@ export default async function SchoolAccountsPage({ searchParams }: PageProps) {
         <div className="space-y-1">
           <p className="font-medium">How passwords work here</p>
           <p className="text-muted-foreground">
-            Passwords are stored as one-way hashes, so a password a School Head chose themselves
-            cannot be displayed — not by anyone, including this console. What you can always do is{" "}
+            The eye icon shows the password a School Head is signing in with. Every view of a
+            password they chose themselves is recorded in the audit log against your account.
+            Passwords set before this console could record them stay unreadable — for those, use{" "}
             <strong className="font-medium text-foreground">Reset</strong>, which puts the password
             back to the school&rsquo;s School ID so you can sign in, or{" "}
             <strong className="font-medium text-foreground">Sign in as</strong>, which takes over
-            the session without changing their password at all. Both are recorded in the audit log.
+            the session without changing their password at all.
           </p>
         </div>
       </div>

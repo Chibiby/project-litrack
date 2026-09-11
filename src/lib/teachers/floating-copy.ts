@@ -33,3 +33,21 @@ export const FLOATING_TEACHER_CARD = {
 
 /** The chip the School Head's teachers table shows in place of a blank cell. */
 export const FLOATING_CHIP_LABEL = "Floating";
+
+/**
+ * What a DepEd teacher SET to Floating sees where a class roster or the end-of-
+ * term sheet would be. Distinct from FLOATING_TEACHER_CARD, which is for a
+ * default teacher whose School Head has not assigned a section yet: this one
+ * was a choice, so "ask for a section" would be the wrong advice.
+ */
+export const DECLARED_FLOATING_CARD = {
+  icon: Sparkles,
+  title: "You're a floating teacher",
+  description:
+    "Floating teachers don't advise a section, so there is no class roster or end-of-term sheet here. Your School Head can change this. Learners you tutor for ARAL are in the ARAL Program.",
+  actionHref: "/teacher/aral",
+  actionLabel: "Go to ARAL Program",
+} as const;
+
+/** The chip for a teacher holding no section who has NOT been set to Floating. */
+export const UNASSIGNED_CHIP_LABEL = "Unassigned";

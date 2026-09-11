@@ -66,6 +66,10 @@ ALTER TABLE "ChatRead"             ENABLE ROW LEVEL SECURITY;
 -- with no policies, like everything else here.
 ALTER TABLE "ErrorEvent"           ENABLE ROW LEVEL SECURITY;
 
+-- A School Head's edit to one term's window. Deny-all: every read and write
+-- goes through Prisma on the service role, the same as every other table here.
+ALTER TABLE "TermWindowOverride"   ENABLE ROW LEVEL SECURITY;
+
 -- Prisma’s implicit many-to-many join table, for User.taughtGrades <-> GradeLevel.teachers
 -- (@relation("TeacherGrades")). It is not a `model`, so the "name every model" rule above
 -- never reaches it -- but it holds real teacher-to-grade assignments and Supabase grants

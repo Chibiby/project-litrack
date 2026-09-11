@@ -10,6 +10,7 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { revalidateSchoolsList } from "@/lib/cache/revalidate";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
+import { openPassword } from "@/lib/auth/password-vault";
 import {
   clearImpersonationCookie,
   readImpersonationTicket,
@@ -20,25 +21,33 @@ import { revalidatePath } from "next/cache";
 /**
  * Super Admin school-account console.
  *
- * A note on why there is no "view the School Head's password" action here, and
- * why there never can be: Supabase Auth stores passwords as bcrypt hashes.
- * There is no API — service role included — that reads one back, and LITRACK
- * deliberately does not keep its own copy. Storing user-chosen passwords in
- * recoverable form would put every School Head's personal password in Postgres
- * and in every backup, which the PH Data Privacy Act obligations in
- * `docs/privacy.md` do not permit.
- *
- * The two actions below give an admin the same operational power without that:
- *  - `resetSchoolHeadPasswordToDefault` puts a known, system-chosen credential
- *    (the School ID) back on the account, so the admin can sign in normally.
+ * Three ways in to a School Head's account, in increasing order of how much
+ * they disturb the person on the other end:
+ *  - `revealSchoolHeadPassword` shows the password the head is using right now,
+ *    when LITRACK holds a sealed copy of it. Nothing changes for the head.
  *  - `impersonateSchoolHead` takes over the session without touching the
- *    password at all, so the School Head's own login keeps working.
+ *    password at all, so their own login keeps working.
+ *  - `resetSchoolHeadPasswordToDefault` puts the School ID back on the account,
+ *    which invalidates whatever they had chosen.
+ *
+ * On reveal specifically: Supabase Auth stores a bcrypt hash that no API reads
+ * back, so the credential shown comes from LITRACK's own sealed copy
+ * (`User.passwordVaultCipher`, see `@/lib/auth/password-vault`). That copy only
+ * exists for passwords set after that feature shipped — for anything older the
+ * action refuses and the admin resets instead. Every reveal is audit-logged;
+ * the privacy consequences of keeping the copy at all are in `docs/privacy.md`.
  */
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
 const RESET_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const IMPERSONATE_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+/**
+ * Deliberately tighter than a page of rows. Reading personal credentials is a
+ * one-at-a-time, someone-called-for-help activity; a script walking all 333
+ * schools to harvest passwords is not, and this is what stops it being cheap.
+ */
+const REVEAL_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
 
 const schoolIdInput = z.object({ schoolId: z.string().uuid() });
 
@@ -49,6 +58,90 @@ async function findSchoolHead(schoolId: string) {
     select: { id: true, authId: true, email: true, fullName: true },
     orderBy: { createdAt: "asc" },
   });
+}
+
+/**
+ * Show the password a School Head is currently signing in with.
+ *
+ * Fetched on demand rather than rendered with the table on purpose: the list is
+ * 10 rows of live credentials, and shipping all ten to the browser so that one
+ * of them might be clicked would put nine passwords in a page payload, in
+ * memory, and in anything that caches it. One click, one password, one audit
+ * row.
+ *
+ * Returns the School ID when that is what the account is on — the same string
+ * the row already prints — and refuses when nothing is on record, which is the
+ * permanent state for any password chosen before sealing existed.
+ */
+export async function revealSchoolHeadPassword(
+  formData: FormData
+): Promise<ActionResult<{ password: string; setAt: string | null; isSchoolId: boolean }>> {
+  const admin = await requireUser("SUPER_ADMIN");
+
+  const parsed = schoolIdInput.safeParse({ schoolId: formData.get("schoolId") });
+  if (!parsed.success) return { ok: false, error: "Invalid school" };
+
+  const rate = await checkRateLimit(`reveal:sh:${admin.id}`, REVEAL_RATE);
+  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+
+  const school = await prisma.school.findFirst({
+    where: { id: parsed.data.schoolId, deletedAt: null },
+    select: { id: true, schoolIdCode: true },
+  });
+  if (!school) return { ok: false, error: "School not found" };
+
+  const head = await prisma.user.findFirst({
+    where: { schoolId: school.id, role: "SCHOOL_HEAD", deletedAt: null },
+    select: {
+      id: true,
+      passwordIsSchoolId: true,
+      passwordVaultCipher: true,
+      passwordVaultSetAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!head) return { ok: false, error: "School Head account not found" };
+
+  if (head.passwordIsSchoolId) {
+    return {
+      ok: true,
+      data: {
+        password: defaultSchoolHeadPassword(school.schoolIdCode),
+        setAt: null,
+        isSchoolId: true,
+      },
+    };
+  }
+
+  const password = openPassword(head.passwordVaultCipher);
+  if (!password) {
+    // Three different causes — never recorded, vault key missing, key rotated
+    // since sealing — and the same remedy for all of them, so they are not
+    // distinguished here.
+    return {
+      ok: false,
+      error: "This password is not on record. Use Reset to put the School ID back.",
+    };
+  }
+
+  await writeAudit({
+    userId: admin.id,
+    schoolId: school.id,
+    action: AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_VIEWED,
+    resource: "User",
+    resourceId: head.id,
+    // Ids and a timestamp. The password itself never goes near the audit log.
+    metadata: { schoolId: school.id, sealedAt: head.passwordVaultSetAt?.toISOString() ?? null },
+  });
+
+  return {
+    ok: true,
+    data: {
+      password,
+      setAt: head.passwordVaultSetAt?.toISOString() ?? null,
+      isSchoolId: false,
+    },
+  };
 }
 
 /**
@@ -95,6 +188,10 @@ export async function resetSchoolHeadPasswordToDefault(
       passwordIsSchoolId: true,
       mustChangePassword: false,
       isActive: true,
+      // Whatever the head had chosen no longer opens the account, so the sealed
+      // copy of it is deleted rather than left to be revealed later.
+      passwordVaultCipher: null,
+      passwordVaultSetAt: null,
     },
   });
 

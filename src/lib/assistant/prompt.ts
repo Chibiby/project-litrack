@@ -1,5 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { HELP_TOPICS } from "@/lib/help/topics";
+import { APP_VERSION, RELEASES } from "@/lib/releases";
 
 /**
  * The prompt sent to Gemini, built as a pure function.
@@ -21,6 +22,13 @@ import { HELP_TOPICS } from "@/lib/help/topics";
  *    email addresses, no birthdates. First name and last initial are enough for
  *    a teacher to recognise their own pupil in a list of twenty, and are
  *    useless to anyone who is not that teacher.
+ *
+ * Since the model became the assistant's only voice, this prompt is also the
+ * only thing standing between a question and no answer at all. That is why it
+ * now carries the *whole* help index rather than a ranked slice, and why it
+ * carries the release notes and the live state of the deadline switch: whatever
+ * the team changed this release, the model is told about it on the next
+ * question, without anyone re-tuning a prompt.
  */
 
 /** A learner as the model is allowed to see them: recognisable, not identifying. */
@@ -57,6 +65,16 @@ export type AssistantScope = {
   pendingProfiles: ScopeLearner[];
   /** True when the list above was cut short, so the model does not imply it is all. */
   pendingProfilesTruncated: boolean;
+  /**
+   * Whether editing deadlines are switched on right now.
+   *
+   * The help index describes locks as a thing that exists, because they do —
+   * but `submissions.locking` decides whether they are *enforced today*, and a
+   * model told only about the feature will confidently tell a teacher their
+   * week is locked while the app is happily saving it. The most change-prone
+   * rule in the app, so it is sent as live state rather than baked into prose.
+   */
+  submissionLockingEnabled: boolean;
 };
 
 /** How many learners a scope block will name. Beyond this it reports a count. */
@@ -70,20 +88,23 @@ export function learnerLabel(firstName: string, lastName: string): string {
   return `${first} ${initial.toUpperCase()}.`;
 }
 
-/** Topics quoted in full. Beyond this the model gets titles only. */
-export const MAX_FULL_TOPICS = 6;
+/** How many releases back the "what changed" block reaches. */
+export const MAX_RELEASE_NOTES = 5;
 
 /**
  * The knowledge base, flattened for grounding.
  *
- * Not the whole index. The offline ranker already knows which topics a question
- * is about, so the prompt quotes those in full and lists the rest by title
- * alone — the model still knows every subject the app covers and can say "that
- * exists, ask it this way", but a question about attendance does not pay for
- * the text of every reports and account topic on every request.
+ * Every topic the asker's role can see, quoted in full, every time.
  *
- * Sending the index at all is what makes the model answer about LITRACK as it
- * actually is rather than about school software in general.
+ * It used to be six. That was the right trade when an offline ranker answered
+ * alongside the model and a mismatched rank only cost a slightly worse second
+ * answer. Now the model is the only answer there is, and a topic left out of
+ * the prompt is a question the assistant simply cannot answer — so the budget
+ * moved from "quote the six we guessed at" to "quote everything, cheaply".
+ *
+ * `relevantIds` no longer decides what is included, only what comes first.
+ * Order still matters to a model, and the ranker is still the best available
+ * guess at what the question is about.
  */
 function knowledgeBase(role: UserRole, relevantIds: string[]): string {
   const visible = HELP_TOPICS.filter(
@@ -91,25 +112,45 @@ function knowledgeBase(role: UserRole, relevantIds: string[]): string {
       !topic.roles || topic.roles.length === 0 || role === "SUPER_ADMIN" || topic.roles.includes(role)
   );
 
-  const ranked = relevantIds.slice(0, MAX_FULL_TOPICS);
-  const full = visible.filter((topic) => ranked.includes(topic.id));
-  const rest = visible.filter((topic) => !ranked.includes(topic.id));
+  // Ranked topics float to the top; everything else keeps the index's own
+  // order, which groups topics by subject. `sort` is stable, so ties hold.
+  const rank = new Map(relevantIds.map((id, index) => [id, index]));
+  const ordered = [...visible].sort(
+    (a, b) =>
+      (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+  );
 
-  const quoted = (full.length > 0 ? full : visible.slice(0, MAX_FULL_TOPICS)).map((topic) => {
-    const action = topic.action ? `\n  Where: ${topic.action.label} (${topic.action.href})` : "";
-    return `- [${topic.id}] ${topic.title}\n  ${topic.body.join("\n  ")}${action}`;
-  });
-
-  const listed = rest.map((topic) => `- [${topic.id}] ${topic.title}`);
-
-  return [
-    quoted.join("\n"),
-    listed.length > 0
-      ? `\nOther subjects this app covers, titles only. If the answer is one of these, say so and name it rather than guessing at the detail:\n${listed.join("\n")}`
-      : "",
-  ]
-    .filter(Boolean)
+  return ordered
+    .map((topic) => {
+      const action = topic.action ? `\n  Where: ${topic.action.label} (${topic.action.href})` : "";
+      return `- [${topic.id}] ${topic.title}\n  ${topic.body.join("\n  ")}${action}`;
+    })
     .join("\n");
+}
+
+/**
+ * What changed in the app recently, in the users' own words.
+ *
+ * `RELEASES` is committed copy that a release is required to update in the same
+ * commit as the work it describes. Reading it here is what makes "keep the
+ * assistant current" something that happens by shipping, rather than a prompt
+ * somebody has to remember to re-tune. It is also the only way this panel can
+ * answer "why does this page look different today", which is the question a
+ * teacher actually asks the morning after a deploy.
+ *
+ * Release dates are deliberately omitted. A release date is a `YYYY-MM-DD`
+ * string, and part of what keeps this module's privacy boundary testable is
+ * that exactly one ISO date appears in the whole prompt: the "Today:" line.
+ */
+function releaseNotes(): string {
+  const lines = [`LITRACK is currently at version ${APP_VERSION}.`];
+
+  for (const release of RELEASES.slice(0, MAX_RELEASE_NOTES)) {
+    lines.push(`Version ${release.version} — ${release.title}`);
+    for (const fix of release.fixes) lines.push(`  - ${fix}`);
+  }
+
+  return lines.join("\n");
 }
 
 function scopeBlock(scope: AssistantScope): string {
@@ -147,6 +188,12 @@ function scopeBlock(scope: AssistantScope): string {
     lines.push("Reading level: no records for the current month.");
   }
 
+  lines.push(
+    scope.submissionLockingEnabled
+      ? "Editing deadlines: ON. Past weeks and closed terms are locked, and reopening one needs a request to the division admin."
+      : "Editing deadlines: OFF. Every attendance week and term grade sheet is editable right now, past ones included, and nobody needs to request access to edit one. Say so plainly if asked, even though the reference describes how locks behave when they are on."
+  );
+
   if (scope.pendingProfiles.length > 0) {
     lines.push("Learners with no ARAL profile yet:");
     for (const learner of scope.pendingProfiles) {
@@ -176,22 +223,26 @@ function scopeBlock(scope: AssistantScope): string {
  */
 export function buildSystemInstruction(
   scope: AssistantScope,
-  /** Topic ids the offline ranker matched, best first. Quoted in full. */
+  /** Topic ids the ranker matched, best first. Ordering only — all are quoted. */
   relevantIds: string[] = []
 ): string {
   return [
     "You are the LITRACK assistant. LITRACK is a DepEd school management app used by Philippine public elementary schools to track learners in the ARAL reading remediation programme.",
     "",
     "RULES, in order of importance:",
-    "1. Answer only from the REFERENCE and CONTEXT below. If they do not contain the answer, say plainly that you do not know and suggest sending the question to the division admin with Request Access. Never invent a screen, button, field, menu or rule that is not described below.",
-    "2. Never state a deadline, lock, permission or approval rule that is not in the REFERENCE. The app enforces only what is written there.",
+    "1. Answer only from the REFERENCE, CHANGES and CONTEXT below. If they do not contain the answer, say plainly that you do not know and suggest sending the question to the division admin with Request Access. Never invent a screen, button, field, menu or rule that is not described below.",
+    "2. Never state a deadline, lock, permission or approval rule that is not in the REFERENCE. The app enforces only what is written there, and the CONTEXT line about editing deadlines overrides the REFERENCE on whether locks apply today.",
     "3. The CONTEXT describes only this person's own learners. Never claim to know about another teacher, another school, or the division as a whole.",
-    "4. Be brief: two or three short sentences. This renders in a small chat panel on a phone.",
-    "5. Write plain text. No markdown, no bullet characters, no headings. Name screens the way the sidebar names them (\"Weekly Attendance\"); never print a URL or a path — the panel renders the link itself.",
-    "6. Answer in the language the question is asked in. English and Filipino are both normal here.",
+    "4. You are the only assistant here, so answer every message — a greeting and a thank-you included. Greet the person back by name in one short line and invite their question; never answer small talk with help articles.",
+    "5. Be brief: two or three short sentences. This renders in a small chat panel on a phone.",
+    "6. Write plain text. No markdown, no bullet characters, no headings. Name screens the way the sidebar names them (\"Weekly Attendance\"); never print a URL or a path — the panel renders the link itself.",
+    "7. Answer in the language the question is asked in. English and Filipino are both normal here.",
     "",
     "REFERENCE — what LITRACK does:",
     knowledgeBase(scope.role, relevantIds),
+    "",
+    "CHANGES — what is new in this app, newest first. Use this for any question about what changed, what is new, or why something behaves differently than it used to:",
+    releaseNotes(),
     "",
     "CONTEXT — the person asking, and their own data only:",
     scopeBlock(scope),

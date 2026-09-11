@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TEACHER_EMAIL_DOMAIN } from "@/lib/auth/synthetic-email";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
+import { releaseTeacherAdvisory } from "@/lib/teachers/release-advisory";
 
 /**
  * Bulk account operations for the database console.
@@ -82,7 +83,15 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
 
       await prisma.user.update({
         where: { id: head.id },
-        data: { passwordIsSchoolId: true, mustChangePassword: false, isActive: true },
+        data: {
+          passwordIsSchoolId: true,
+          mustChangePassword: false,
+          isActive: true,
+          // The sealed copy described a password that no longer signs anyone
+          // in. `passwordIsSchoolId` is what the console reads now.
+          passwordVaultCipher: null,
+          passwordVaultSetAt: null,
+        },
       });
       processed += 1;
     } catch (err) {
@@ -93,7 +102,10 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
   return { processed, failed };
 }
 
-/** Frees the address for re-registration while keeping the person's name on history. */
+/**
+ * Frees the address for re-registration while keeping the person's name on history.
+ * `originalTeacherEmail` recognises this shape and shows no address for it.
+ */
 function tombstoneEmail(userId: string): string {
   return `removed+${userId}@${TEACHER_EMAIL_DOMAIN}`;
 }
@@ -153,17 +165,24 @@ const TEACHER_REMOVAL_FIELDS = {
   authId: true,
   fullName: true,
   email: true,
+  schoolId: true,
 } as const;
 
-type TeacherRow = { id: string; authId: string; fullName: string; email: string };
+type TeacherRow = {
+  id: string;
+  authId: string;
+  fullName: string;
+  email: string;
+  schoolId: string | null;
+};
 
 /**
  * The removal itself, over whichever teachers the caller selected.
  *
  * Split out so "every teacher" and "these four teachers" cannot drift apart:
- * the tombstoning, the Supabase deletion and the `advisorySectionId` clear all
- * have to happen together, and a second copy of this loop would eventually
- * forget one of them.
+ * the tombstoning, the Supabase deletion and the advisory release all have to
+ * happen together, and a second copy of this loop would eventually forget one
+ * of them.
  */
 async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
   const supabaseAdmin = createSupabaseAdminClient();
@@ -180,18 +199,32 @@ async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(teacher.authId);
       if (error && !/not.?found/i.test(error.message)) throw new Error(error.message);
 
-      await prisma.user.update({
-        where: { id: teacher.id },
-        data: {
-          deletedAt: new Date(),
-          isActive: false,
-          email: tombstoneEmail(teacher.id),
-          // `@unique` on User — a stale pointer would keep the section
-          // adviser-less *and* unassignable to anyone new.
-          advisorySectionId: null,
-          mustChangePassword: false,
-          passwordIsSchoolId: false,
-        },
+      await prisma.$transaction(async (tx) => {
+        // Same release the School Head's Remove performs: sections back to
+        // Unassigned, learners adviser-less. Scoped to the teacher's own school —
+        // the bulk path can span every school, so there is no single caller
+        // school to use. A teacher attached to none advises nothing to release.
+        if (teacher.schoolId) {
+          await releaseTeacherAdvisory(tx, {
+            teacherId: teacher.id,
+            schoolId: teacher.schoolId,
+          });
+        }
+        await tx.user.update({
+          where: { id: teacher.id },
+          data: {
+            deletedAt: new Date(),
+            isActive: false,
+            email: tombstoneEmail(teacher.id),
+            // `@unique` on User — a stale pointer would keep the section
+            // adviser-less *and* unassignable to anyone new.
+            advisorySectionId: null,
+            mustChangePassword: false,
+            passwordIsSchoolId: false,
+            passwordVaultCipher: null,
+            passwordVaultSetAt: null,
+          },
+        });
       });
       processed += 1;
     } catch (err) {

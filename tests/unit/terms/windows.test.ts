@@ -5,6 +5,7 @@ import {
   getTermWindows,
   isTermLocked,
   resolveTermWindow,
+  validateTermWindows,
 } from "@/lib/terms/windows";
 
 /**
@@ -204,5 +205,184 @@ describe("resolveTermWindow", () => {
 describe("TERM_PERIODS", () => {
   it("lists the three terms in chronological order", () => {
     expect(TERM_PERIODS).toEqual(["FIRST", "SECOND", "THIRD"]);
+  });
+});
+
+describe("getTermWindows with overrides", () => {
+  it("derives a deadline equal to the month end when nothing is overridden", () => {
+    const windows = getTermWindows(AUGUST_START);
+
+    expect(windows.map((w) => w.deadlineKey)).toEqual([
+      "2026-10-31",
+      "2027-01-31",
+      "2027-04-30",
+    ]);
+    expect(windows.every((w) => w.deadlineKey === w.endKey)).toBe(true);
+    expect(windows.every((w) => w.isOverridden === false)).toBe(true);
+  });
+
+  it("replaces only the term it names, leaving the other two derived", () => {
+    const windows = getTermWindows(AUGUST_START, [
+      {
+        term: "SECOND",
+        startKey: "2026-11-01",
+        endKey: "2027-01-31",
+        deadlineKey: "2027-02-28",
+      },
+    ]);
+
+    expect(windows[0]).toMatchObject({
+      term: "FIRST",
+      startKey: "2026-08-01",
+      endKey: "2026-10-31",
+      deadlineKey: "2026-10-31",
+      isOverridden: false,
+    });
+    expect(windows[1]).toMatchObject({
+      term: "SECOND",
+      endKey: "2027-01-31",
+      deadlineKey: "2027-02-28",
+      isOverridden: true,
+    });
+    expect(windows[2]).toMatchObject({ term: "THIRD", isOverridden: false });
+  });
+
+  it("relabels the range when an override moves the months", () => {
+    const [first] = getTermWindows(AUGUST_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-09-30",
+        deadlineKey: "2026-09-30",
+      },
+    ]);
+
+    expect(first.rangeLabel).toBe("August - September");
+  });
+
+  it("ignores an override naming a term that does not exist", () => {
+    const windows = getTermWindows(AUGUST_START, [
+      {
+        term: "FOURTH" as never,
+        startKey: "2027-05-01",
+        endKey: "2027-07-31",
+        deadlineKey: "2027-07-31",
+      },
+    ]);
+
+    expect(windows).toHaveLength(3);
+    expect(windows.every((w) => w.isOverridden === false)).toBe(true);
+  });
+});
+
+describe("isTermLocked reads the deadline, not the months", () => {
+  const extended = getTermWindows(JUNE_START, [
+    {
+      term: "FIRST",
+      startKey: "2026-06-01",
+      endKey: "2026-08-31",
+      deadlineKey: "2026-09-30",
+    },
+  ]);
+
+  it("keeps a term open past its last month when the deadline was extended", () => {
+    // The months ended Aug 31; the head moved entry to Sept 30.
+    expect(isTermLocked(extended[0], "2026-09-15")).toBe(false);
+  });
+
+  it("locks on the day after the deadline, not the day after the months", () => {
+    expect(isTermLocked(extended[0], "2026-09-30")).toBe(false);
+    expect(isTermLocked(extended[0], "2026-10-01")).toBe(true);
+  });
+
+  it("still locks a derived term the day after its months end", () => {
+    const [first] = getTermWindows(JUNE_START);
+    expect(isTermLocked(first, "2026-08-31")).toBe(false);
+    expect(isTermLocked(first, "2026-09-01")).toBe(true);
+  });
+});
+
+describe("validateTermWindows", () => {
+  const YEAR_START = "2026-06-01";
+  const YEAR_END = "2027-03-31";
+
+  it("accepts the derived windows of the year it was derived from", () => {
+    const windows = getTermWindows(JUNE_START);
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toBeNull();
+  });
+
+  it("rejects a term that ends before it starts", () => {
+    const windows = getTermWindows(JUNE_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-08-01",
+        endKey: "2026-06-30",
+        deadlineKey: "2026-08-01",
+      },
+    ]);
+
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toMatch(
+      /First Term ends before it starts/
+    );
+  });
+
+  it("rejects a deadline that falls before its own term ends", () => {
+    const windows = getTermWindows(JUNE_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-06-01",
+        endKey: "2026-08-31",
+        deadlineKey: "2026-07-15",
+      },
+    ]);
+
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toMatch(
+      /First Term's deadline is before/
+    );
+  });
+
+  it("rejects overlapping months across two terms", () => {
+    const windows = getTermWindows(JUNE_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-06-01",
+        endKey: "2026-09-30",
+        deadlineKey: "2026-09-30",
+      },
+    ]);
+
+    // Derived SECOND starts 2026-09-01, so FIRST now runs past it.
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toMatch(
+      /Second Term starts before First Term ends/
+    );
+  });
+
+  it("allows a deadline to run past the next term's start", () => {
+    const windows = getTermWindows(JUNE_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-06-01",
+        endKey: "2026-08-31",
+        deadlineKey: "2026-10-15",
+      },
+    ]);
+
+    // The whole point of a separate deadline: entry stays open into Term 2.
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toBeNull();
+  });
+
+  it("rejects months that start before the school year does", () => {
+    const windows = getTermWindows(JUNE_START, [
+      {
+        term: "FIRST",
+        startKey: "2026-05-01",
+        endKey: "2026-08-31",
+        deadlineKey: "2026-08-31",
+      },
+    ]);
+
+    expect(validateTermWindows(windows, YEAR_START, "2027-05-31")).toMatch(
+      /First Term starts before the school year/
+    );
   });
 });

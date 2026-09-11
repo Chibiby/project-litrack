@@ -5,12 +5,11 @@ import { HELP_TOPICS, type HelpTopic } from "./topics";
  * Ranking for the assistant's curated help index.
  *
  * A pure function over `HELP_TOPICS` — no network, no server action, no state.
- * That is what lets the panel answer in the same frame the person presses
- * Enter, and what makes every answer reproducible in a unit test.
+ * That is what makes its output reproducible in a unit test.
  *
- * `answerQuery` is the assistant's single entry point. If a model backend is
- * ever added, it replaces the body of this one function; the panel and the
- * ticket flow never learn the difference.
+ * `answerQuery` no longer answers anybody. Gemini does, and this ranks what the
+ * prompt puts first and which two links sit under the answer. The name stayed
+ * because the ranking is unchanged; what changed is who reads the result.
  */
 
 /** Words carrying no signal in a question about a school app. */

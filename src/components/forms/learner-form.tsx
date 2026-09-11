@@ -506,26 +506,28 @@ export function LearnerForm({
           ) : null}
 
           {ethnicity && !showSecondEthnicity ? (
-            <button
+            <Button
               type="button"
+              variant="link"
               onClick={() => setShowSecondEthnicity(true)}
-              className="mt-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              className="mt-2 h-auto p-0"
             >
               + Add another ethnicity
-            </button>
+            </Button>
           ) : null}
 
           {ethnicity && showSecondEthnicity ? (
             <div className="mt-3 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="secondaryEthnicity">Second ethnicity (optional)</Label>
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={removeSecondEthnicity}
-                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                  className="h-auto p-0 text-xs text-muted-foreground"
                 >
                   Remove
-                </button>
+                </Button>
               </div>
               <select
                 id="secondaryEthnicity"
@@ -715,7 +717,29 @@ export function LearnerForm({
     <form
       ref={formRef}
       onSubmit={handleFormSubmit}
-      onInput={refreshValues}
+      // Each control is snapshotted on the event that is safe for it, because
+      // no single event is safe for both.
+      //
+      // A <select> must NOT be snapshotted on `input`. A browser fires `input`
+      // before `change`, so snapshotting there re-rendered the tree while the
+      // select's own state was still stale — React re-applied the old controlled
+      // `value`, wiping the pick, and the `change` handler then read back "".
+      // That is why every ethnicity choice snapped to "Not specified". On
+      // `change` the form rides the same native event as the control's own
+      // handler, so both state updates land in one batch and nothing re-renders
+      // in between.
+      //
+      // A text input must NOT wait for `change`, which only fires on blur — the
+      // completion bar has to follow typing, which is what `input` gives it.
+      //
+      // Splitting them this way also keeps it at exactly one snapshot per
+      // interaction rather than two.
+      onInput={(e) => {
+        if ((e.target as HTMLElement).tagName !== "SELECT") refreshValues();
+      }}
+      onChange={(e) => {
+        if ((e.target as HTMLElement).tagName === "SELECT") refreshValues();
+      }}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">

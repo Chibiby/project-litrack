@@ -87,6 +87,16 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   { model: "TeacherProfile", delegate: "teacherProfile", operational: false },
   { model: "TeacherSection", delegate: "teacherSection", operational: false },
   { model: "TeacherInvite", delegate: "teacherInvite", operational: false },
+  // Last of the structural block because it points at three things above it:
+  // School, SchoolYear and — through `setById` — User.
+  //
+  // Structural, not operational, and the distinction matters here. A term
+  // window is the shape of a school year, not a record of what a learner did,
+  // so "clear operational data" must leave it standing: a school that had its
+  // learners cleared still has the deadlines its head set, exactly as it still
+  // has its grades and sections. Wiping them would silently return that school
+  // to derived thirds, which is a different set of dates.
+  { model: "TermWindowOverride", delegate: "termWindowOverride", operational: false },
 
   // Operational: learners and everything recorded about them.
   { model: "Learner", delegate: "learner", operational: true, schoolScope: bySchoolId },
@@ -177,6 +187,43 @@ export const EXCLUDED_TABLES = [
   "SyncInbox",
   "SyncOutbox",
 ] as const;
+
+/**
+ * Columns written into a snapshot as null, whatever the live row holds.
+ *
+ * Same rule as `EXCLUDED_TABLES` — a downloadable backup must not carry a
+ * credential out of the system — applied to a column rather than a table:
+ *
+ *  - `User.passwordVaultCipher` is a School Head's own password, sealed. The
+ *    key is not in the backup, but "encrypted" is not a reason to ship
+ *    password material in a file people download and email around.
+ *  - It is also wrong after a restore. Restore never touches Supabase Auth, so
+ *    a restored seal describes whatever password the head had when the backup
+ *    was taken, and the console would reveal a credential that no longer signs
+ *    in. Null reads as "not on record — reset", which is always true.
+ *
+ * `passwordVaultSetAt` goes with it; a date for a password that is not there
+ * would only mislead.
+ */
+export const REDACTED_SNAPSHOT_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  User: ["passwordVaultCipher", "passwordVaultSetAt"],
+};
+
+/** A table's rows with `REDACTED_SNAPSHOT_COLUMNS` nulled. Never mutates. */
+export function redactSnapshotRows(
+  model: string,
+  rows: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  const columns = REDACTED_SNAPSHOT_COLUMNS[model];
+  if (!columns?.length) return rows;
+  return rows.map((row) => {
+    const copy = { ...row };
+    for (const column of columns) {
+      if (column in copy) copy[column] = null;
+    }
+    return copy;
+  });
+}
 
 /** Insert order. */
 export const WRITE_ORDER = SNAPSHOT_MODELS;

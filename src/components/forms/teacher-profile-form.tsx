@@ -7,6 +7,10 @@ import { toast } from "sonner";
 import { AlertCircle, Lock, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AppForm, useAppForm, markFormClean } from "@/components/forms/app-form";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { ProfileWizardChrome, type WizardStepDef } from "@/components/forms/profiling/wizard-chrome";
@@ -40,6 +44,7 @@ import {
 } from "@/lib/constants/enum-labels";
 import {
   teacherProfileSchema,
+  teacherProfileUpdateSchema,
   TEACHER_RANK_POSITIONS,
   MASTER_TEACHER_RANK_POSITIONS,
   YEARS_IN_SERVICE_MIN,
@@ -48,6 +53,7 @@ import {
   type TeacherProfileInput,
 } from "@/lib/validators/profile.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
+import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 import { saveTeacherProfile } from "@/lib/actions/teacher";
 import { toFormData } from "@/lib/forms/to-form-data";
 
@@ -77,11 +83,8 @@ const teacherWizardFormSchema = z.object({
   yearsInServiceApplicable: z.boolean(),
   currentGradeAssignment: z.string().optional(),
   sectionId: z.string().optional(),
-  /**
-   * Asked in the positive because a form should not make someone tick a box to
-   * say No. Sent to the server inverted, as `noAdvisorySection`.
-   */
-  hasAdvisorySection: z.boolean(),
+  advisoryMode: z.enum(["DEFAULT", "FLOATING", "MULTI_GRADE"]),
+  additionalSectionIds: z.array(z.string()),
   hasReadingTraining: z.boolean().optional(),
   readingTrainings: z.array(z.string()),
   hasEnglishTraining: z.boolean().optional(),
@@ -131,6 +134,8 @@ type Defaults = Partial<{
   currentGradeAssignment: string | null;
   /** Teacher's current advisory section (`User.advisorySectionId`), not a TeacherProfile column. */
   sectionId: string | null;
+  /** `TeacherProfile.advisoryMode`, decided once on first save. */
+  advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE";
   hasReadingTraining: boolean;
   readingTrainings: string[];
   hasEnglishTraining: boolean;
@@ -139,7 +144,7 @@ type Defaults = Partial<{
 }>;
 
 /** Client form values — booleans may be unset until the user chooses. */
-type TeacherFormValues = {
+export type TeacherFormValues = {
   firstName: string;
   middleName: string;
   lastName: string;
@@ -163,7 +168,8 @@ type TeacherFormValues = {
   yearsInServiceApplicable: boolean;
   currentGradeAssignment: string | undefined;
   sectionId: string | undefined;
-  hasAdvisorySection: boolean;
+  advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE";
+  additionalSectionIds: string[];
   hasReadingTraining: boolean | undefined;
   readingTrainings: string[];
   hasEnglishTraining: boolean | undefined;
@@ -200,11 +206,13 @@ function labelOf(map: Record<string, string>, value?: string | null) {
   return map[value] ?? value;
 }
 
-function buildPayload(values: TeacherFormValues): Record<string, unknown> {
+/** Exported for its unit test only — the form is its one real caller. */
+export function buildPayload(values: TeacherFormValues): Record<string, unknown> {
   const designation =
     values.designationKind === "__OTHER__"
       ? values.designationOther.trim()
       : values.designationKind;
+  const isVolunteer = designation === ARAL_VOLUNTEER_DESIGNATION;
 
   const payload: Record<string, unknown> = {
     firstName: values.firstName.trim(),
@@ -232,16 +240,26 @@ function buildPayload(values: TeacherFormValues): Record<string, unknown> {
     yearsInService: values.yearsInServiceApplicable
       ? values.yearsInService || undefined
       : undefined,
-    // §5: a floating DepEd teacher declares they have none, which lifts the
-    // two requirements below. Never sent for an ARAL Volunteer, whose exemption
-    // comes from the designation and is a different fact about a different
-    // person — see the note on `noAdvisorySection` in profile.schema.ts.
-    noAdvisorySection:
-      designation !== ARAL_VOLUNTEER_DESIGNATION && !values.hasAdvisorySection,
-    currentGradeAssignment: values.hasAdvisorySection
-      ? values.currentGradeAssignment || undefined
-      : undefined,
-    sectionId: values.hasAdvisorySection ? values.sectionId || undefined : undefined,
+    // A volunteer advises nothing, whatever the checkboxes said before the
+    // designation changed: the card hides them, so a stale MULTI_GRADE and its
+    // extra rows would fail validation on fields the volunteer can no longer see.
+    advisoryMode: isVolunteer ? "DEFAULT" : values.advisoryMode,
+    // Only meaningful for Multi-grade advisory; dropped otherwise so a mode
+    // switch cannot leave a stale list behind in the payload.
+    additionalSectionIds:
+      !isVolunteer && values.advisoryMode === "MULTI_GRADE"
+        ? values.additionalSectionIds
+        : undefined,
+    // A volunteer holds no classroom role, and a floating teacher declared they
+    // advise none — neither ever names a grade or section.
+    currentGradeAssignment:
+      !isVolunteer && values.advisoryMode !== "FLOATING"
+        ? values.currentGradeAssignment || undefined
+        : undefined,
+    sectionId:
+      !isVolunteer && values.advisoryMode !== "FLOATING"
+        ? values.sectionId || undefined
+        : undefined,
     hasReadingTraining: values.hasReadingTraining,
     readingTrainings:
       values.hasReadingTraining === true ? values.readingTrainings : [],
@@ -283,7 +301,7 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
     "yearsInService",
     "yearsInServiceApplicable",
   ],
-  ["hasAdvisorySection", "currentGradeAssignment", "sectionId"],
+  ["advisoryMode", "currentGradeAssignment", "sectionId", "additionalSectionIds"],
   [
     "hasReadingTraining",
     "readingTrainings",
@@ -322,6 +340,8 @@ const FIELD_LABELS: Partial<Record<keyof TeacherFormValues, string>> = {
   yearsInService: "Years in Service",
   currentGradeAssignment: "Current Grade Level / Assignment",
   sectionId: "Section",
+  advisoryMode: "Advisory mode",
+  additionalSectionIds: "Additional sections",
   hasReadingTraining: "Trainings related to literacy/reading?",
   readingTrainings: "Recent reading trainings (last 5y)",
   hasEnglishTraining: "Trainings related to English Curriculum?",
@@ -367,10 +387,10 @@ export function TeacherProfileForm({
    * They ticked "I am a Non-DepEd ARAL Volunteer" when they registered
    * (`User.registeredAsAralVolunteer`).
    *
-   * In the wizard this locks Designation to that value and drops the Teaching
-   * Assignment step — a volunteer advises no section. The flat edit view
-   * ignores it entirely, which is the escape hatch: a mis-tick is corrected in
-   * Settings -> Profile, where Designation is an ordinary editable field.
+   * Seeds the wizard's Designation, field of specialization and years-in-service
+   * defaults on a brand-new profile only — Designation itself stays an ordinary
+   * editable field, so a mis-tick is correctable on the same step it seeded.
+   * Ignored in `edit`, where every field already reflects the saved profile.
    */
   registeredAsAralVolunteer?: boolean;
   /** Active grades + their sections, for the grade→section cascade in Step 3. */
@@ -391,23 +411,17 @@ export function TeacherProfileForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = presentation === "edit";
   /**
-   * Volunteer rules apply to the onboarding wizard only. In `edit` the whole
-   * form is on one page and every field stays editable, so locking there would
-   * remove the only way to undo a mis-ticked box at registration.
+   * The wizard no longer locks a volunteer into a separate step flow — every
+   * teacher walks the same five steps. `prefillVolunteer` only seeds the
+   * default values a brand-new volunteer profile starts with (designation,
+   * field of specialization, years in service), on the onboarding wizard only.
    */
-  const volunteerWizard = !isEdit && registeredAsAralVolunteer;
-  /** The rail: every step for a teacher, all but Teaching Assignment for a volunteer. */
-  const wizardSteps = useMemo(
-    () => visibleTeacherSteps(volunteerWizard) as WizardStepDef[],
-    [volunteerWizard]
-  );
-  /**
-   * Card heading numeral for a canonical step, counted over the steps this
-   * person actually sees — so a volunteer reads I, II, III, IV rather than
-   * I, II, IV, V with a hole where Teaching Assignment used to be.
-   */
+  const prefillVolunteer = !isEdit && registeredAsAralVolunteer;
+  /** The rail: every step, for everyone. */
+  const wizardSteps = useMemo(() => visibleTeacherSteps(false) as WizardStepDef[], []);
+  /** Card heading numeral for a canonical step — always its own canonical position now. */
   const stepNumeral = (canonicalStep: number) =>
-    ["I", "II", "III", "IV", "V"][visiblePositionOf(canonicalStep, volunteerWizard)];
+    ["I", "II", "III", "IV", "V"][visiblePositionOf(canonicalStep, false)];
   const initialDesig = resolveDesignationKind(defaultValues.designation);
   // Tracks whether the user has explicitly toggled the years-in-service
   // Yes/No pills in this session, so switching designation to the ARAL
@@ -435,14 +449,14 @@ export function TeacherProfileForm({
       // pills' onValueChange. A locked designation is never "changed", so that
       // handler never runs and the seeding has to happen here instead.
       fieldOfSpecialization:
-        defaultValues.fieldOfSpecialization ?? (volunteerWizard ? "NA" : ""),
+        defaultValues.fieldOfSpecialization ?? (prefillVolunteer ? "NA" : ""),
       specializationOther: defaultValues.specializationOther ?? "",
       yearsInService:
         defaultValues.yearsInService === null ||
         defaultValues.yearsInService === undefined
           ? ""
           : String(defaultValues.yearsInService),
-      yearsInServiceApplicable: volunteerWizard
+      yearsInServiceApplicable: prefillVolunteer
         ? // Same reason as fieldOfSpecialization above: N/A is the volunteer
           // default, unless a saved profile already carries a number.
           resolveYearsInServiceApplicable(defaultValues) &&
@@ -450,12 +464,8 @@ export function TeacherProfileForm({
         : resolveYearsInServiceApplicable(defaultValues),
       currentGradeAssignment: defaultValues.currentGradeAssignment ?? undefined,
       sectionId: defaultValues.sectionId ?? undefined,
-      // Opens on Yes for a new profile: advising a section is the ordinary case,
-      // and floating should be a choice somebody makes rather than the state a
-      // form starts in. An existing profile opens on what it actually holds.
-      hasAdvisorySection: defaultValues.sectionId
-        ? true
-        : !defaultValues.currentGradeAssignment,
+      advisoryMode: defaultValues.advisoryMode ?? "DEFAULT",
+      additionalSectionIds: [],
       hasReadingTraining: defaultValues.hasReadingTraining,
       readingTrainings: defaultValues.readingTrainings ?? [],
       hasEnglishTraining: defaultValues.hasEnglishTraining,
@@ -474,18 +484,12 @@ export function TeacherProfileForm({
   const values = form.watch();
 
   // A designation only needs a classroom assignment when it corresponds to an
-  // actual teaching role. The ARAL Volunteer holds neither a grade nor a
-  // section, so both fields go optional together — one flag, because there is
-  // no designation where one applies and the other does not.
-  //
-  // §5 adds the second half: a DepEd teacher may also declare they have no
-  // advisory section yet. Same lifted requirement, a different fact — the
-  // volunteer never holds a classroom role, the floating teacher holds one and
-  // has no section for it — so the two conditions are written separately rather
-  // than folded into one predicate that would blur them.
-  const hasAdvisorySection = form.watch("hasAdvisorySection");
+  // actual teaching role, and a Floating teacher declared they advise none —
+  // both lift the same requirement for different reasons, so both are checked.
+  const advisoryMode = form.watch("advisoryMode");
+  const additionalSectionIds = form.watch("additionalSectionIds");
   const assignmentRequired =
-    designationKind !== ARAL_VOLUNTEER_DESIGNATION && hasAdvisorySection !== false;
+    designationKind !== ARAL_VOLUNTEER_DESIGNATION && advisoryMode !== "FLOATING";
 
   /*
     A second ethnicity is opt-in, so the field is not on screen until someone
@@ -576,6 +580,75 @@ export function TeacherProfileForm({
     gradeLevels.every((g) =>
       g.sections.every((s) => s.takenByOther && s.id !== values.sectionId)
     );
+
+  /**
+   * Grade selected for each `additionalSectionIds` row, kept alongside the
+   * form state rather than in it — only the section id the row resolves to is
+   * ever submitted, the grade is UI-only filtering for the section picker.
+   */
+  const [extraGrades, setExtraGrades] = useState<string[]>([]);
+
+  /** Clears what a mode switch cannot hold, per §Wizard changes 4. */
+  function handleAdvisoryModeChange(next: "DEFAULT" | "FLOATING" | "MULTI_GRADE") {
+    if (next === "FLOATING") {
+      form.setValue("currentGradeAssignment", undefined);
+      form.setValue("sectionId", undefined);
+      form.setValue("additionalSectionIds", []);
+      setExtraGrades([]);
+    } else if (next === "DEFAULT") {
+      form.setValue("additionalSectionIds", []);
+      setExtraGrades([]);
+    }
+  }
+
+  function addExtraSection() {
+    setExtraGrades((g) => [...g, ""]);
+    form.setValue("additionalSectionIds", [...form.getValues("additionalSectionIds"), ""]);
+  }
+
+  function removeExtraSection(index: number) {
+    setExtraGrades((g) => g.filter((_, i) => i !== index));
+    form.setValue(
+      "additionalSectionIds",
+      form.getValues("additionalSectionIds").filter((_, i) => i !== index)
+    );
+  }
+
+  function setExtraGrade(index: number, gradeType: string) {
+    setExtraGrades((g) => g.map((v, i) => (i === index ? gradeType : v)));
+    const grade = gradeLevels.find((gl) => gl.type === gradeType);
+    const current = form.getValues("additionalSectionIds");
+    const stillValid = current[index]
+      ? (grade?.sections ?? []).some((s) => s.id === current[index])
+      : false;
+    if (!stillValid) {
+      const next = [...current];
+      next[index] = "";
+      form.setValue("additionalSectionIds", next);
+    }
+  }
+
+  function setExtraSection(index: number, sectionId: string) {
+    const next = [...form.getValues("additionalSectionIds")];
+    next[index] = sectionId;
+    form.setValue("additionalSectionIds", next);
+  }
+
+  /** Section options for one additional row: its own grade, minus sections already chosen elsewhere. */
+  function extraSectionOptions(index: number) {
+    const grade = gradeLevels.find((g) => g.type === extraGrades[index]);
+    const own = additionalSectionIds[index];
+    const chosenElsewhere = new Set<string>();
+    if (values.sectionId) chosenElsewhere.add(values.sectionId);
+    additionalSectionIds.forEach((id, i) => {
+      if (i !== index && id) chosenElsewhere.add(id);
+    });
+    return (grade?.sections ?? []).map((s) => ({
+      value: s.id,
+      label: s.name,
+      disabled: s.id !== own && (s.takenByOther || chosenElsewhere.has(s.id)),
+    }));
+  }
 
   const teacherPositionOptions = useMemo(
     () =>
@@ -678,7 +751,8 @@ export function TeacherProfileForm({
     }
 
     if (index === 2) {
-      const needsAssignment = v.designationKind !== ARAL_VOLUNTEER_DESIGNATION;
+      const needsAssignment =
+        v.designationKind !== ARAL_VOLUNTEER_DESIGNATION && v.advisoryMode !== "FLOATING";
       if (needsAssignment && !v.currentGradeAssignment) {
         form.setError("currentGradeAssignment", { message: "Select a grade level" });
         ok = false;
@@ -700,6 +774,12 @@ export function TeacherProfileForm({
       } else if (v.sectionId && !sectionOptions.some((o) => o.value === v.sectionId)) {
         form.setError("sectionId", {
           message: "This section is no longer available — select your current one",
+        });
+        ok = false;
+      }
+      if (v.advisoryMode === "MULTI_GRADE" && v.additionalSectionIds.some((id) => !id)) {
+        form.setError("additionalSectionIds", {
+          message: "Select a section for each additional row, or remove it",
         });
         ok = false;
       }
@@ -747,7 +827,15 @@ export function TeacherProfileForm({
     setSaveError(null);
     const values = form.getValues();
     const payload = buildPayload(values);
-    const parsed = teacherProfileSchema.safeParse(payload);
+    // Edit mode is a later save: Designation and Teaching Assignment render
+    // read-only there and the server ignores whatever is submitted for them
+    // (`saveTeacherProfile` keeps the stored designation/advisoryMode on every
+    // save but the first). The CREATE schema's DEFAULT-requires-a-section rule
+    // would otherwise permanently block a DEFAULT teacher with no section from
+    // saving so much as a phone number in Settings.
+    const parsed = (isEdit ? teacherProfileUpdateSchema : teacherProfileSchema).safeParse(
+      payload
+    );
     if (!parsed.success) {
       // These issues are raised against the transformed payload, not the form,
       // so without this mapping they can only ever be toasted as text. Mapped,
@@ -815,10 +903,11 @@ export function TeacherProfileForm({
     let ok = true;
     ok = (await validateStep(0, { clear: false })) && ok;
     ok = (await validateStep(1, { clear: false })) && ok;
-    // Step 2 is Teaching Assignment. A volunteer never sees it, and its own
-    // rules already exempt the designation — running it here would only be
-    // wasted work, but skipping it keeps the two paths honest about that.
-    if (!volunteerWizard) {
+    // Teaching Assignment renders read-only in edit mode — nothing there is
+    // editable, so nothing there is validated. Validating it here would block a
+    // DEFAULT teacher with no section from saving an unrelated field like
+    // Contact number (see the note on the schema choice in `submitProfile`).
+    if (!isEdit) {
       ok = (await validateStep(2, { clear: false })) && ok;
     }
     ok = (await validateStep(3, { clear: false })) && ok;
@@ -828,10 +917,10 @@ export function TeacherProfileForm({
 
   async function handleContinue() {
     setSaveError(null);
-    if (!isLastTeacherStep(step, volunteerWizard)) {
+    if (!isLastTeacherStep(step, false)) {
       const ok = await validateStep(step);
       if (!ok) return;
-      setStep((s) => nextTeacherStep(s, volunteerWizard));
+      setStep((s) => nextTeacherStep(s, false));
       return;
     }
     // Review → submit
@@ -1004,24 +1093,25 @@ export function TeacherProfileForm({
                 </div>
               ) : null}
             </div>
-            {volunteerWizard ? (
+            {isEdit ? (
               /*
-                Locked, not hidden: the person has to see what they registered
-                as, and read the one line telling them where to change it. The
-                value itself is already in form state (seeded by the page from
-                `User.registeredAsAralVolunteer`), so nothing is submitted from
-                this block — it only renders that state.
+                Read-only in Settings: a School Head owns designation changes
+                once profiling is done, same as the Teaching Assignment card
+                below. Locked, not hidden — the value stays visible.
               */
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">Designation</p>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <span className="text-sm font-medium">{ARAL_VOLUNTEER_DESIGNATION}</span>
+                  <span className="text-sm font-medium">
+                    {designationKind === "__OTHER__"
+                      ? values.designationOther || "—"
+                      : designationKind || "—"}
+                  </span>
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   <span className="sr-only">This field cannot be changed here.</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  From the box you ticked when you created this account. If that was a
-                  mistake, change it later under Settings → Profile.
+                  Ask your School Head to change this.
                 </p>
               </div>
             ) : (
@@ -1063,7 +1153,7 @@ export function TeacherProfileForm({
               }}
             />
             )}
-            {designationKind === "__OTHER__" ? (
+            {!isEdit && designationKind === "__OTHER__" ? (
               <FormTextField
                 control={form.control}
                 name="designationOther"
@@ -1071,7 +1161,7 @@ export function TeacherProfileForm({
                 required
               />
             ) : null}
-            {designationKind === "Teacher" ? (
+            {!isEdit && designationKind === "Teacher" ? (
               <FormSelectField
                 control={form.control}
                 name="position"
@@ -1081,7 +1171,7 @@ export function TeacherProfileForm({
                 placeholder="Select Teacher I–VII"
               />
             ) : null}
-            {designationKind === "Master Teacher" ? (
+            {!isEdit && designationKind === "Master Teacher" ? (
               <FormSelectField
                 control={form.control}
                 name="position"
@@ -1163,91 +1253,205 @@ export function TeacherProfileForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {noAssignableSections ? (
-              <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                {gradeLevels.length === 0
-                  ? "Your school has no grade levels set up yet. Ask your School Head to add grade levels and sections before you can finish profiling."
-                  : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}
+            {isEdit ? (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <span className="text-sm font-medium">
+                    {designationKind === ARAL_VOLUNTEER_DESIGNATION
+                      ? "Non-DepEd ARAL Volunteer — no teaching assignment"
+                      : values.advisoryMode === "FLOATING"
+                        ? "Floating teacher — no classroom section"
+                        : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-grade advisory)" : ""}`}
+                  </span>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <span className="sr-only">This field cannot be changed here.</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Ask your School Head to change this.
+                </p>
               </div>
-            ) : null}
-            {designationKind !== ARAL_VOLUNTEER_DESIGNATION ? (
-              <FormYesNoPills
-                control={form.control}
-                name="hasAdvisorySection"
-                label="Do you advise a classroom section?"
-                onValueChange={(next) => {
-                  // Clear rather than keep: a grade and section left behind
-                  // would be submitted the moment somebody flipped back, and
-                  // the server refuses a profile that both declares none and
-                  // names one.
-                  if (next === false) {
-                    form.setValue("currentGradeAssignment", undefined);
-                    form.setValue("sectionId", undefined);
-                  }
-                }}
-              />
-            ) : null}
-            {designationKind !== ARAL_VOLUNTEER_DESIGNATION &&
-            hasAdvisorySection !== false ? (
-              <p className="-mt-4 text-sm text-muted-foreground">
-                Answer No if your School Head has not assigned you one yet. You
-                can still be designated an ARAL tutor, and this can be changed
-                later.
+            ) : designationKind === ARAL_VOLUNTEER_DESIGNATION ? (
+              <p
+                aria-disabled="true"
+                className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+              >
+                Non-DepEd ARAL Volunteers don&apos;t take a teaching assignment. Your
+                School Head assigns the learners you tutor for ARAL.
               </p>
-            ) : null}
-            {hasAdvisorySection === false &&
-            designationKind !== ARAL_VOLUNTEER_DESIGNATION ? (
-              <p className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                You will show as <strong>Floating</strong> on your School Head&apos;s
-                teachers list until a section is assigned to you. Your ARAL
-                learners, if you have any, are unaffected.
-              </p>
-            ) : null}
-            {designationKind === ARAL_VOLUNTEER_DESIGNATION ||
-            hasAdvisorySection !== false ? (
-            <>
-            <FormSelectField
-              control={form.control}
-              name="currentGradeAssignment"
-              label="Current Grade Level / Assignment"
-              description={
-                assignmentRequired
-                  ? "The grade you're assigned to. Fully-booked grades are disabled unless you don't need a classroom section."
-                  : "Optional for the ARAL Volunteer designation — you aren't attached to a grade level."
-              }
-              required={assignmentRequired}
-              allowEmpty={!assignmentRequired}
-              emptyLabel="N/A — no grade assignment"
-              options={gradeOptions}
-              placeholder="Select grade"
-              onValueChange={(newGradeType) => {
-                const grade = gradeLevels.find((g) => g.type === newGradeType);
-                const currentSectionId = form.getValues("sectionId");
-                const stillValid = currentSectionId
-                  ? (grade?.sections ?? []).some((s) => s.id === currentSectionId)
-                  : false;
-                if (!stillValid) {
-                  form.setValue("sectionId", undefined);
-                }
-              }}
-            />
-            <FormSelectField
-              control={form.control}
-              name="sectionId"
-              label="Section"
-              description={
-                assignmentRequired
-                  ? "The classroom section you'll advise. Sections already taken by another teacher are disabled."
-                  : "Optional for the ARAL Volunteer designation — you don't advise a classroom section."
-              }
-              required={assignmentRequired}
-              allowEmpty={!assignmentRequired}
-              emptyLabel="N/A — no classroom section"
-              options={sectionOptions}
-              placeholder={values.currentGradeAssignment ? "Select section" : "Select a grade first"}
-            />
-            </>
-            ) : null}
+            ) : (
+              <>
+                {noAssignableSections ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {gradeLevels.length === 0
+                      ? "Your school has no grade levels set up yet. Ask your School Head to add grade levels and sections before you can finish profiling."
+                      : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}
+                  </div>
+                ) : null}
+                <FormField
+                  control={form.control}
+                  name="advisoryMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="advisory-floating"
+                            checked={field.value === "FLOATING"}
+                            onCheckedChange={(checked) => {
+                              const next = checked === true ? "FLOATING" : "DEFAULT";
+                              field.onChange(next);
+                              handleAdvisoryModeChange(next);
+                            }}
+                          />
+                          <div className="space-y-1">
+                            <Label htmlFor="advisory-floating" className="font-medium">
+                              Floating teacher
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              You&apos;re a DepEd teacher who won&apos;t handle a class
+                              roster or end-of-term reports.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="advisory-multigrade"
+                            checked={field.value === "MULTI_GRADE"}
+                            onCheckedChange={(checked) => {
+                              const next = checked === true ? "MULTI_GRADE" : "DEFAULT";
+                              field.onChange(next);
+                              handleAdvisoryModeChange(next);
+                            }}
+                          />
+                          <div className="space-y-1">
+                            <Label htmlFor="advisory-multigrade" className="font-medium">
+                              Multi-grade advisory
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              You advise up to 3 sections, in any grades.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {advisoryMode === "FLOATING" ? (
+                  <p className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    You won&apos;t have a class roster or end-of-term reports. ARAL
+                    stays open.
+                  </p>
+                ) : (
+                  <>
+                    <FormSelectField
+                      control={form.control}
+                      name="currentGradeAssignment"
+                      label="Current Grade Level / Assignment"
+                      description="The grade you're assigned to. Fully-booked grades are disabled."
+                      required
+                      options={gradeOptions}
+                      placeholder="Select grade"
+                      onValueChange={(newGradeType) => {
+                        const grade = gradeLevels.find((g) => g.type === newGradeType);
+                        const currentSectionId = form.getValues("sectionId");
+                        const stillValid = currentSectionId
+                          ? (grade?.sections ?? []).some((s) => s.id === currentSectionId)
+                          : false;
+                        if (!stillValid) {
+                          form.setValue("sectionId", undefined);
+                        }
+                      }}
+                    />
+                    <FormSelectField
+                      control={form.control}
+                      name="sectionId"
+                      label="Section"
+                      description="The classroom section you'll advise. Sections already taken by another teacher are disabled."
+                      required
+                      options={sectionOptions}
+                      placeholder={
+                        values.currentGradeAssignment ? "Select section" : "Select a grade first"
+                      }
+                    />
+                    {advisoryMode === "MULTI_GRADE" ? (
+                      <div className="space-y-4">
+                        {additionalSectionIds.map((sectionId, index) => (
+                          <div
+                            key={index}
+                            className="space-y-3 rounded-lg border border-border/70 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">
+                                Additional section {index + 1}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeExtraSection(index)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`extra-grade-${index}`}>Grade Level</Label>
+                              <Select
+                                value={extraGrades[index] || undefined}
+                                onValueChange={(v) => setExtraGrade(index, v)}
+                              >
+                                <SelectTrigger id={`extra-grade-${index}`}>
+                                  <SelectValue placeholder="Select grade" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {gradeOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`extra-section-${index}`}>Section</Label>
+                              <Select
+                                value={sectionId || undefined}
+                                onValueChange={(v) => setExtraSection(index, v)}
+                              >
+                                <SelectTrigger id={`extra-section-${index}`}>
+                                  <SelectValue
+                                    placeholder={
+                                      extraGrades[index] ? "Select section" : "Select a grade first"
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {extraSectionOptions(index).map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        ))}
+                        {additionalSectionIds.length < MAX_ADVISORY_SECTIONS - 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addExtraSection}
+                          >
+                            Add another section
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -1375,17 +1579,15 @@ export function TeacherProfileForm({
                 ],
               ]}
             />
-            {/* No step to review, and its Edit button would jump to a step the
-                volunteer's Continue walk skips. */}
-            {volunteerWizard ? null : (
             <ReviewBlock
               title="Teaching Assignment"
               onEdit={() => setStep(2)}
               rows={[
                 [
                   "Grade assignment",
-                  // "N/A" rather than labelOf's "—": for a volunteer this is a
-                  // deliberate choice, not a value they forgot to fill in.
+                  // "N/A" rather than labelOf's "—": for a volunteer or a
+                  // floating teacher this is a deliberate choice, not a value
+                  // they forgot to fill in.
                   values.currentGradeAssignment
                     ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment)
                     : "N/A",
@@ -1396,7 +1598,6 @@ export function TeacherProfileForm({
                 ],
               ]}
             />
-            )}
             <ReviewBlock
               title="Training & Professional Development"
               onEdit={() => setStep(3)}
@@ -1458,9 +1659,9 @@ export function TeacherProfileForm({
       ) : (
         <ProfileWizardChrome
           steps={wizardSteps}
-          currentStep={visiblePositionOf(step, volunteerWizard)}
+          currentStep={visiblePositionOf(step, false)}
           pending={pending}
-          onBack={() => setStep((s) => previousTeacherStep(s, volunteerWizard))}
+          onBack={() => setStep((s) => previousTeacherStep(s, false))}
           onContinue={() => void handleContinue()}
         >
           {sections}

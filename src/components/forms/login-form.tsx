@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
@@ -86,14 +85,6 @@ export function LoginForm({
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
-  /**
-   * Self-declared Non-DepEd ARAL Volunteer.
-   *
-   * Registration is identical either way — same PENDING row, same School Head
-   * approval. All this does is seed and lock Designation in the profiling
-   * wizard, which is the field the app actually reads.
-   */
-  const [isAralVolunteer, setIsAralVolunteer] = useState(false);
   /** Sync lock so double Enter/click cannot start two registrations before `pending` re-renders. */
   const registerLock = useRef(false);
 
@@ -125,7 +116,6 @@ export function LoginForm({
     setFirstName("");
     setMiddleName("");
     setLastName("");
-    setIsAralVolunteer(false);
   };
 
   const goBackToSchoolSelect = () => {
@@ -146,7 +136,6 @@ export function LoginForm({
     formData.set("firstName", firstName.trim());
     formData.set("middleName", middleName.trim());
     formData.set("lastName", lastName.trim());
-    formData.set("isAralVolunteer", String(isAralVolunteer));
     formData.set("password", password);
     formData.set("confirmPassword", confirmPassword);
     return formData;
@@ -602,30 +591,6 @@ export function LoginForm({
                     onChange={(e) => setLastName(e.target.value)}
                     disabled={pending}
                   />
-                </div>
-                {/*
-                  Sits between the names and the account credentials because it
-                  is a fact about the person, not about the login. Nothing else
-                  on this form branches on it: the account is created PENDING
-                  either way, and the School Head still approves it.
-                */}
-                <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                  <Checkbox
-                    id="isAralVolunteer"
-                    className="mt-0.5"
-                    checked={isAralVolunteer}
-                    onCheckedChange={(next) => setIsAralVolunteer(next === true)}
-                    disabled={pending}
-                  />
-                  <div className="min-w-0 space-y-1">
-                    <Label htmlFor="isAralVolunteer" className="font-medium leading-snug">
-                      I am a Non-DepEd ARAL Volunteer
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      A reading tutor who is not a DepEd teacher. Leave this unticked if you
-                      teach at this school.
-                    </p>
-                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="registerEmail">Email</Label>

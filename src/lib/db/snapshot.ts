@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import {
   DELETE_ORDER,
   OPERATIONAL_DELETE_ORDER,
+  redactSnapshotRows,
   SNAPSHOT_MODELS,
   TEACHER_GRADES_JOIN,
   WRITE_ORDER,
@@ -141,7 +142,7 @@ export async function createSnapshot(): Promise<Snapshot> {
   // simultaneous pooler connections against a pool floored at 3 (see
   // resolvePooledDatabaseUrl) and spend the whole backup queueing on P2024.
   for (const { model, delegate } of WRITE_ORDER) {
-    const rows = await delegateFor(prisma, delegate).findMany({});
+    const rows = redactSnapshotRows(model, await delegateFor(prisma, delegate).findMany({}));
     data[model] = rows;
     counts[model] = rows.length;
   }

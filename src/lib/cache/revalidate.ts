@@ -4,12 +4,12 @@ import * as tags from "@/lib/cache/tags";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
- * The School Head teachers workspace — all four tab pathnames — plus this
+ * The School Head teachers workspace — all five tab pathnames — plus this
  * school's teacher list wherever it is cached.
  *
  * `revalidatePath(p)` with no `type` emits one softTag that matches only a
- * render whose concrete URL is exactly `p`, which is why there are four calls
- * for four pathnames rather than one for the folder. All four of those pages are
+ * render whose concrete URL is exactly `p`, which is why there are five calls
+ * for five pathnames rather than one for the folder. All five of those pages are
  * `force-dynamic`, so none of them has a Full Route Cache entry for those
  * softTags to hit. They are not free of the Data Cache, though: all four call
  * `resolveSchoolHeadView`, which on a Super Admin drill-down (`?schoolId=`)
@@ -36,6 +36,7 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersPending);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersInactive);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersDeclined);
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachersRemoved);
   revalidateSchoolTeachers(schoolId);
 }
 

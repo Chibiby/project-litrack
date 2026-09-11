@@ -17,6 +17,7 @@ import {
   forgotPasswordSchema,
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { passwordChangeFields } from "@/lib/auth/password-vault";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
@@ -603,17 +604,17 @@ export const setPasswordAction = action(
     // "please try again" was advice that could not work.
     if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { mustChangePassword: false, passwordIsSchoolId: false },
-  });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: passwordChangeFields(user.role, input.password),
+    });
 
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-    resource: "User",
-    resourceId: user.id,
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+      resource: "User",
+      resourceId: user.id,
       metadata: { reason: "set_password" },
     });
 
@@ -696,7 +697,7 @@ export const changePasswordAction = action(
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { mustChangePassword: false, passwordIsSchoolId: false },
+      data: passwordChangeFields(user.role, input.password),
     });
 
     await writeAudit({
@@ -890,17 +891,17 @@ export const completePasswordReset = action(
     if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
 
     const appUser = await prisma.user.findUnique({ where: { authId: authUser.id } });
-  if (appUser) {
-    await prisma.user.update({
-      where: { id: appUser.id },
-      data: { mustChangePassword: false, passwordIsSchoolId: false },
-    });
-    await writeAudit({
-      userId: appUser.id,
-      schoolId: appUser.schoolId,
-      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-      resource: "User",
-      resourceId: appUser.id,
+    if (appUser) {
+      await prisma.user.update({
+        where: { id: appUser.id },
+        data: passwordChangeFields(appUser.role, input.password),
+      });
+      await writeAudit({
+        userId: appUser.id,
+        schoolId: appUser.schoolId,
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        resource: "User",
+        resourceId: appUser.id,
         metadata: { reason: "password_reset" },
       });
       redirect(roleHomePath(appUser.role));

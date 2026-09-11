@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_FULL_TOPICS,
   buildSystemInstruction,
   learnerLabel,
   type AssistantScope,
 } from "@/lib/assistant/prompt";
 import { HELP_TOPICS } from "@/lib/help/topics";
+import { APP_VERSION, RELEASES } from "@/lib/releases";
 
 /**
  * What the model is allowed to be told.
@@ -42,6 +42,7 @@ const scope: AssistantScope = {
     { label: "Asriel A.", gradeLabel: "Grade 3", sectionName: "Mango" },
   ],
   pendingProfilesTruncated: false,
+  submissionLockingEnabled: false,
 };
 
 describe("learnerLabel", () => {
@@ -59,7 +60,7 @@ describe("learnerLabel", () => {
 describe("buildSystemInstruction", () => {
   it("grounds the model and forbids inventing rules", () => {
     const prompt = buildSystemInstruction(scope);
-    expect(prompt).toContain("Answer only from the REFERENCE and CONTEXT");
+    expect(prompt).toContain("Answer only from the REFERENCE, CHANGES and CONTEXT");
     expect(prompt).toMatch(/never invent a screen, button, field, menu or rule/i);
     // The app's whole "no rule we do not enforce" position, restated for a model
     // that would otherwise supply plausible school-software behaviour.
@@ -88,21 +89,33 @@ describe("buildSystemInstruction", () => {
     expect(empty).toContain("no ARAL profile yet: none");
   });
 
-  it("quotes only the ranked topics in full, and lists the rest by title", () => {
-    // The token budget. A question about attendance must not pay for the body
-    // text of every reports and account topic.
-    const ranked = ["attendance-mark-week", "attendance-week-locked"];
-    const prompt = buildSystemInstruction(scope, ranked);
+  it("quotes every topic the role can see, in full", () => {
+    // The model is the only thing that answers now. A topic left out of the
+    // prompt is not a slightly worse answer — it is a question the assistant
+    // cannot answer at all, so the whole visible index goes every time.
+    const prompt = buildSystemInstruction(scope, ["attendance-mark-week"]);
 
-    // A ranked topic's body is present...
-    const marked = HELP_TOPICS.find((t) => t.id === "attendance-mark-week")!;
-    expect(prompt).toContain(marked.body[0]);
+    const visible = HELP_TOPICS.filter(
+      (topic) => !topic.roles || topic.roles.length === 0 || topic.roles.includes("TEACHER")
+    );
+    for (const topic of visible) {
+      expect(prompt, topic.id).toContain(topic.body[0]);
+    }
+  });
 
-    // ...an unranked one's is not, though its title still is, so the model can
-    // say "that exists" rather than guessing at the detail.
-    const password = HELP_TOPICS.find((t) => t.id === "account-password")!;
-    expect(prompt).not.toContain(password.body[0]);
-    expect(prompt).toContain(password.title);
+  it("puts the ranked topics first without dropping the others", () => {
+    // Ranking is an ordering hint now, not a filter. Order still steers a
+    // model, so the ranker's best guess leads.
+    const prompt = buildSystemInstruction(scope, ["reports-export"]);
+    const ranked = HELP_TOPICS.find((t) => t.id === "reports-export");
+    if (!ranked) return; // the index is free to rename its topics
+
+    const first = HELP_TOPICS.find(
+      (topic) =>
+        topic.id !== ranked.id &&
+        (!topic.roles || topic.roles.length === 0 || topic.roles.includes("TEACHER"))
+    )!;
+    expect(prompt.indexOf(ranked.title)).toBeLessThan(prompt.indexOf(first.title));
   });
 
   it("still grounds on something when the ranker matched nothing", () => {
@@ -111,11 +124,24 @@ describe("buildSystemInstruction", () => {
     expect(prompt).toContain("REFERENCE");
   });
 
-  it("never quotes more than the cap in full", () => {
-    const everyId = HELP_TOPICS.map((t) => t.id);
-    const prompt = buildSystemInstruction(scope, everyId);
-    const quoted = HELP_TOPICS.filter((topic) => prompt.includes(topic.body[0]));
-    expect(quoted.length).toBeLessThanOrEqual(MAX_FULL_TOPICS);
+  it("tells the model what changed in the app, so an update reaches answers", () => {
+    // `RELEASES` is updated in the same commit as the work it describes, which
+    // is what keeps the assistant current without anyone re-tuning a prompt.
+    const prompt = buildSystemInstruction(scope);
+    expect(prompt).toContain("CHANGES");
+    expect(prompt).toContain(APP_VERSION);
+    expect(prompt).toContain(RELEASES[0].title);
+    expect(prompt).toContain(RELEASES[0].fixes[0]);
+  });
+
+  it("states whether editing deadlines are actually on today", () => {
+    // The reference describes locks because locks exist. Whether they bite this
+    // morning is a settings row, and a model told only the former will tell a
+    // teacher their week is locked while the app is saving it.
+    expect(buildSystemInstruction(scope)).toContain("Editing deadlines: OFF");
+    expect(
+      buildSystemInstruction({ ...scope, submissionLockingEnabled: true })
+    ).toContain("Editing deadlines: ON");
   });
 
   it("shows a teacher no school-head-only topic", () => {

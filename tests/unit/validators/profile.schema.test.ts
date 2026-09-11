@@ -3,6 +3,7 @@ import {
   ARAL_VOLUNTEER_DESIGNATION,
   schoolHeadProfileSchema,
   teacherProfileSchema,
+  teacherProfileUpdateSchema,
 } from "@/lib/validators/profile.schema";
 
 const baseFields = {
@@ -578,7 +579,7 @@ describe("teacherProfileSchema", () => {
     ).toBe(false);
   });
 
-  it("accepts the ARAL Volunteer designation with no position and an optional section", () => {
+  it("accepts the ARAL Volunteer designation with no position and no section", () => {
     const noSection = teacherProfileSchema.safeParse(aralVolunteerBase);
     expect(noSection.success).toBe(true);
     if (noSection.success) {
@@ -591,15 +592,6 @@ describe("teacherProfileSchema", () => {
       const blank = teacherProfileSchema.safeParse({ ...aralVolunteerBase, sectionId });
       expect(blank.success).toBe(true);
       if (blank.success) expect(blank.data.sectionId).toBeUndefined();
-    }
-
-    const withSection = teacherProfileSchema.safeParse({
-      ...aralVolunteerBase,
-      sectionId: SECTION_ID,
-    });
-    expect(withSection.success).toBe(true);
-    if (withSection.success) {
-      expect(withSection.data.sectionId).toBe(SECTION_ID);
     }
 
     // Ranked positions stay forbidden for the volunteer designation.
@@ -622,6 +614,65 @@ describe("teacherProfileSchema", () => {
       expect(naDefaults.data.yearsInService).toBeUndefined();
       expect(naDefaults.data.fieldOfSpecialization).toBe("NA");
     }
+  });
+});
+
+describe("teacherProfileSchema — advisory mode", () => {
+  const S2 = "22222222-2222-4222-8222-222222222222";
+  const S3 = "33333333-3333-4333-8333-333333333333";
+  const S4 = "44444444-4444-4444-8444-444444444444";
+  const firstError = (r: ReturnType<typeof teacherProfileSchema.safeParse>) =>
+    r.success ? null : r.error.errors[0];
+
+  it("defaults to DEFAULT with no additional sections", () => {
+    const r = teacherProfileSchema.safeParse(teacherBase);
+    expect(r.success && r.data.advisoryMode).toBe("DEFAULT");
+    expect(r.success && r.data.additionalSectionIds).toEqual([]);
+  });
+
+  it("refuses a second section for a DEFAULT teacher", () => {
+    const r = teacherProfileSchema.safeParse({ ...teacherBase, additionalSectionIds: [S2] });
+    expect(firstError(r)?.message).toMatch(/Multi-grade/);
+  });
+
+  it("allows up to three sections in all for MULTI_GRADE", () => {
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, advisoryMode: "MULTI_GRADE", additionalSectionIds: [S2, S3] }).success
+    ).toBe(true);
+    expect(
+      teacherProfileSchema.safeParse({ ...teacherBase, advisoryMode: "MULTI_GRADE", additionalSectionIds: [S2, S3, S4] }).success
+    ).toBe(false);
+  });
+
+  it("refuses the same section twice", () => {
+    const r = teacherProfileSchema.safeParse({
+      ...teacherBase, advisoryMode: "MULTI_GRADE", additionalSectionIds: [SECTION_ID],
+    });
+    expect(firstError(r)?.message).toMatch(/only once/);
+  });
+
+  it("requires a first section for MULTI_GRADE", () => {
+    const { sectionId: _s, ...noSection } = teacherBase;
+    expect(teacherProfileSchema.safeParse({ ...noSection, advisoryMode: "MULTI_GRADE" }).success).toBe(false);
+  });
+
+  it("lets FLOATING finish with no section and refuses one that names a section", () => {
+    const { sectionId: _s, currentGradeAssignment: _g, ...bare } = teacherBase;
+    expect(teacherProfileSchema.safeParse({ ...bare, advisoryMode: "FLOATING" }).success).toBe(true);
+    const r = teacherProfileSchema.safeParse({ ...teacherBase, advisoryMode: "FLOATING" });
+    expect(firstError(r)?.message).toMatch(/Floating teachers don't advise/);
+  });
+
+  it("refuses a section for a volunteer — the bug that held 25 sections", () => {
+    const r = teacherProfileSchema.safeParse({ ...aralVolunteerBase, sectionId: SECTION_ID });
+    expect(firstError(r)?.message).toMatch(/Volunteers don't advise/);
+  });
+
+  it("lets Others behave like Teacher", () => {
+    const { position: _p, ...others } = teacherBase;
+    expect(
+      teacherProfileSchema.safeParse({ ...others, designation: "ARAL Coordinator", advisoryMode: "MULTI_GRADE", additionalSectionIds: [S2] }).success
+    ).toBe(true);
   });
 });
 
@@ -701,5 +752,40 @@ describe("teacherProfileSchema — ethnicity", () => {
       expect(parsed.data).not.toHaveProperty("ethnicity");
       expect(parsed.data).not.toHaveProperty("secondaryEthnicity");
     }
+  });
+});
+
+describe("teacherProfileUpdateSchema — Settings saves (later saves)", () => {
+  it("accepts a DEFAULT teacher with no section or grade assignment", () => {
+    // This is the bug fix: a DEFAULT teacher whose Section was released by the School Head
+    // can now save their phone number in Settings. The update schema drops the advisory
+    // requirement so Settings-only changes (like phone number) work.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    const parsed = teacherProfileUpdateSchema.safeParse(noAdvisory);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.sectionId).toBeUndefined();
+      expect(parsed.data.currentGradeAssignment).toBeUndefined();
+    }
+  });
+
+  it("still refuses the same data in the CREATE schema", () => {
+    // The CREATE (first save) schema requires advisory assignment; the UPDATE
+    // schema does not. Regression guard on the two schemas.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    expect(teacherProfileSchema.safeParse(noAdvisory).success).toBe(false);
+    expect(teacherProfileUpdateSchema.safeParse(noAdvisory).success).toBe(true);
+  });
+
+  it("still validates designation/position pairing in the UPDATE schema", () => {
+    // The advisory fields are skipped, but the structural rules still apply:
+    // a Teacher must have a Teacher position.
+    const { sectionId: _s, currentGradeAssignment: _g, ...noAdvisory } = teacherBase;
+    const invalid = teacherProfileUpdateSchema.safeParse({
+      ...noAdvisory,
+      designation: "Teacher",
+      position: "MASTER_TEACHER_I", // Wrong: Teacher role requires Teacher I-VII
+    });
+    expect(invalid.success).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pathname = vi.hoisted(() => ({ value: "/teacher" }));
@@ -37,6 +37,7 @@ vi.mock("@/components/nav-prefetcher", () => ({
 vi.mock("@/lib/actions/auth", () => ({ logoutAction: vi.fn() }));
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { APP_VERSION } from "@/lib/releases";
 
 afterEach(cleanup);
 afterEach(() => {
@@ -47,6 +48,7 @@ afterEach(() => {
 function renderTeacherSidebar(props?: {
   roleLabel?: string;
   isAralVolunteer?: boolean;
+  isFloating?: boolean;
   /**
    * The advised section's grade level, as the shell context supplies it. Omitted
    * here by default so the shared cases exercise the resolver-href fallback;
@@ -110,6 +112,35 @@ describe("AppSidebar — teacher", () => {
     // SignOutButton's visible label is "Sign out".
     expect(
       screen.getAllByRole("button", { name: /sign out|log ?out/i }).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("credits Apache Spark on the version line, above the account menu", () => {
+    renderTeacherSidebar();
+    const credit = screen.getAllByText(`LITRACK v${APP_VERSION} by Apache Spark`)[0];
+    const link = credit.closest("a");
+    expect(link?.getAttribute("href")).toBe("/releases");
+    // The mark rides in the same link, in both colourways (one hidden per theme).
+    expect(link?.querySelectorAll("svg")).toHaveLength(2);
+
+    const account = screen.getAllByRole("button", { name: "Account menu" })[0];
+    expect(
+      link!.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("leaves Sign out out of the account dropdown — the footer already has one", async () => {
+    renderTeacherSidebar();
+    fireEvent.keyDown(screen.getAllByRole("button", { name: "Account menu" })[0], {
+      key: "Enter",
+    });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Profile" })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeTruthy();
+    expect(within(menu).queryByText(/sign out/i)).toBeNull();
+    // The one that stays, outside the menu.
+    expect(
+      screen.getAllByRole("button", { name: /sign out/i, hidden: true }).length
     ).toBeGreaterThan(0);
   });
 
@@ -431,6 +462,37 @@ describe("AppSidebar — teacher", () => {
       screen.getAllByRole("link", { name: "Learners" })[0].getAttribute("href")
     ).toBe("/teacher/learners");
     expect(screen.queryByText("DepEd only")).toBeNull();
+  });
+
+  it("renders Learners inert with a Floating teacher pill for a floating teacher", () => {
+    // A DepEd teacher whose advisoryMode is FLOATING gets the same inert
+    // treatment as an ARAL volunteer, worded for their own reason — mirrors the
+    // "renders Learners inert with a DepEd-only pill" case above.
+    renderTeacherSidebar({ isFloating: true });
+
+    expect(screen.getAllByText("Learners").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Floating teacher").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Learners" })).toBeNull();
+    expect(
+      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
+    ).not.toContain("/teacher/learners");
+
+    const row = screen.getAllByText("Learners")[0].closest("[aria-disabled]");
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute("aria-disabled")).toBe("true");
+
+    const reason = screen.getAllByText(
+      "Learners — for teachers who advise a section"
+    );
+    expect(reason.length).toBeGreaterThan(0);
+
+    // The ARAL rows and Reports stay live — only the two class-bound rows close.
+    expect(
+      screen.getAllByRole("link", { name: "Weekly Attendance" })[0].getAttribute("href")
+    ).toBe("/teacher/aral/g1/attendance");
+    expect(
+      screen.getAllByRole("link", { name: "Reports" })[0].getAttribute("href")
+    ).toBe("/teacher/reports");
   });
 });
 

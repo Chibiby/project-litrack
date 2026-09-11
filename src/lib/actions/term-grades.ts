@@ -19,7 +19,7 @@ import {
   resolveAdvisoryTarget,
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
-import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
+import { advisoryRosterDenial } from "@/lib/teachers/scope";
 import { generalAverage } from "@/lib/terms/average";
 import { canWriteWindow } from "@/lib/unlock/grants";
 import {
@@ -43,6 +43,10 @@ type TermGradeEntry = TermGradesSaveInput["entries"][number];
  */
 const DEPED_ONLY_MESSAGE =
   "End of Terms Reports is for DepEd teachers who advise a section.";
+// A floating teacher IS a DepEd teacher, so the message above would be wrong
+// about them, and would send them to the wrong person to fix it.
+const FLOATING_MESSAGE =
+  "Floating teachers do not advise a section, so there is no end-of-term sheet. Your School Head can change this.";
 const NO_SCHOOL_YEAR_MESSAGE =
   "No school year is active. Ask your School Head to activate one before encoding term grades.";
 const WRONG_GRADE_MESSAGE = "You are not assigned to this grade level";
@@ -72,12 +76,18 @@ async function requireAdvisoryForTermSheet(
   // though `userId` is unique — TeacherProfile carries no `schoolId` of its own.
   const profile = await prisma.teacherProfile.findFirst({
     where: { userId: user.id, user: { schoolId: user.schoolId } },
-    select: { designation: true },
+    select: { designation: true, advisoryMode: true },
   });
-  if (
-    deniesAdvisoryRoster({ isSuperAdmin: false, designation: profile?.designation })
-  ) {
-    return { ok: false, error: DEPED_ONLY_MESSAGE };
+  const denial = advisoryRosterDenial({
+    isSuperAdmin: false,
+    designation: profile?.designation,
+    advisoryMode: profile?.advisoryMode,
+  });
+  if (denial) {
+    return {
+      ok: false,
+      error: denial === "floating" ? FLOATING_MESSAGE : DEPED_ONLY_MESSAGE,
+    };
   }
 
   const placements = await getAdvisoryPlacements(user);
@@ -129,12 +139,23 @@ export async function saveTermGrades(
   // state the schema permits — refuse instead of writing orphaned rows.
   const schoolYear = await prisma.schoolYear.findFirst({
     where: { schoolId: user.schoolId, isActive: true },
-    select: { id: true, startDate: true },
+    select: {
+      id: true,
+      startDate: true,
+      termWindowOverrides: {
+        select: {
+          term: true,
+          startKey: true,
+          endKey: true,
+          deadlineKey: true,
+        },
+      },
+    },
   });
   if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
 
   const window = resolveTermWindow(
-    getTermWindows(schoolYear.startDate),
+    getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
     parsed.data.term
   );
   if (!window) return { ok: false, error: "Invalid input" };
@@ -398,12 +419,24 @@ export async function exportTermGrades(
 
   const schoolYear = await prisma.schoolYear.findFirst({
     where: { schoolId, isActive: true },
-    select: { id: true, label: true, startDate: true },
+    select: {
+      id: true,
+      label: true,
+      startDate: true,
+      termWindowOverrides: {
+        select: {
+          term: true,
+          startKey: true,
+          endKey: true,
+          deadlineKey: true,
+        },
+      },
+    },
   });
   if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
 
   const window = resolveTermWindow(
-    getTermWindows(schoolYear.startDate),
+    getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
     parsed.data.term
   );
   if (!window) return { ok: false, error: "Invalid input" };
