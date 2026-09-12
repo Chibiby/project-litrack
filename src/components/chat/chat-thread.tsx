@@ -200,7 +200,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto p-4" role="log">
+      <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/15 p-4 sm:p-5" role="log">
         {channel === null && !error && (
           <p className="text-[13px] text-muted-foreground">Opening the conversation…</p>
         )}
@@ -240,7 +240,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
         </p>
       )}
 
-      <div className="relative border-t border-border/60 p-3">
+      <div className="relative border-t border-border/60 bg-card p-3">
         {suggestions.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 mb-1 overflow-hidden rounded-lg border bg-popover shadow-md">
             {suggestions.map((target) => (

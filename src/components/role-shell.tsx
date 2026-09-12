@@ -11,6 +11,7 @@ import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
+import { TeacherPresenceHeartbeat } from "@/components/presence/teacher-presence-heartbeat";
 
 const RoleShellContext = createContext(false);
 
@@ -60,6 +61,8 @@ interface RoleShellProps {
    * to show) costs no extra query. `null` means they have acknowledged none.
    */
   lastSeenReleaseVersion?: string | null;
+  /** Mount the active-app heartbeat for a real, non-impersonated teacher. */
+  trackTeacherPresence?: boolean;
   children: React.ReactNode;
 }
 
@@ -82,6 +85,7 @@ export function RoleShell({
   notifications,
   aiEnabled,
   lastSeenReleaseVersion,
+  trackTeacherPresence = false,
   children,
 }: RoleShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
@@ -139,6 +143,8 @@ export function RoleShell({
           {/* Outside the offset wrapper: the widget is fixed to the viewport, so
               it must not sit inside a node whose margin animates with the rail. */}
           <AssistantWidget role={role} userName={userName} aiEnabled={aiEnabled} />
+
+          {trackTeacherPresence ? <TeacherPresenceHeartbeat /> : null}
 
           {/* Last, after the page: a dialog portals out of this tree so its
               place here does not affect layout, but it does set tab order, and

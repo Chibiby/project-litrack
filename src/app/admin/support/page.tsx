@@ -28,7 +28,7 @@ export default async function AdminSupportPage({
   return (
     <AppShell
       title="Admin Support"
-      subtitle="Chat with the division admin or review support tickets from every school."
+      subtitle="Support schools through direct conversations and submitted tickets."
       role={user.role}
       userName={user.fullName || user.email}
     >

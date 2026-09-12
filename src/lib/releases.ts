@@ -74,6 +74,19 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.10.0",
+    date: "2026-09-12",
+    title: "Support conversations now show real availability",
+    announce: true,
+    fixes: [
+      {
+        text: "Super Admins can work through school conversations and support tickets in a clearer two-pane support workspace.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "Teacher activity now appears as Online or Last online in private support conversations, without counting administrator impersonation as teacher activity.",
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-09-12",
     title: "A clearer account management workspace",

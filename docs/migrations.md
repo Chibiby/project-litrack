@@ -88,6 +88,28 @@ All nine were `ON DELETE RESTRICT`, which made a permanent delete of any teacher
 
 **Locking.** Brief `ACCESS EXCLUSIVE` on each of the nine tables for `DROP CONSTRAINT` + `DROP NOT NULL` (both catalog-only, no table rewrite), then `SHARE ROW EXCLUSIVE` on the child table and on `User` while each re-added foreign key validates by scanning the child. `migrate deploy` wraps the file in one transaction, so the locks accumulate — including on `User`, which means sign-in blocks for the duration. Apply in a low-traffic window.
 
+## `20260912000002_add_teacher_presence`
+
+Adds nullable `User.lastOnlineAt` for the teacher activity heartbeat used by the
+Super Admin support workspace. It is additive, has no default and needs no
+backfill: every existing account remains valid and reports unavailable presence
+until its own eligible teacher session records activity.
+
+**Rollout.** Apply the migration before deploying version `1.10.0`. Version
+`1.9.0` ignores the extra nullable column, so the migration-first mixed-version
+window is safe. Deploying the application first is not safe because the new
+support query selects the column immediately.
+
+**Retry and verification.** `ADD COLUMN IF NOT EXISTS` makes a retry idempotent.
+After the human-run migration, verify `information_schema.columns` contains
+`public.User.lastOnlineAt` as nullable `timestamp without time zone`, then open a
+real teacher session and confirm its heartbeat changes only that account.
+
+**Rollback.** First redeploy `1.9.0`, which stops all readers and writers. The
+column can then remain harmlessly in place (preferred). Dropping it with a later
+compensating migration is destructive because it erases last-online history and
+must be separately authorized; no automatic down migration is provided.
+
 ## Preview features
 
 `generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.

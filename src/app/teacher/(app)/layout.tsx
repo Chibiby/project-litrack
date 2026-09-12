@@ -122,6 +122,7 @@ export default async function TeacherAppLayout({
         isFloating={isFloating}
         advisoryGradeLevelId={advisoryGradeLevelId}
         aiEnabled={geminiConfigured()}
+        trackTeacherPresence={!impersonating}
         // Not while an admin impersonates this teacher: `user` IS the teacher's
         // own account then, and acknowledging would stamp their row — the real
         // teacher would never be shown the release they have not read.

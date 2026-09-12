@@ -36,4 +36,10 @@ describe("impersonation notice wiring", () => {
     expect(banner).toContain("<SignOutButton");
     expect(banner).toContain("{expired ? (");
   });
+
+  it("does not track teacher presence while a Super Admin impersonates the teacher", () => {
+    const layout = read("src/app/teacher/(app)/layout.tsx");
+
+    expect(layout).toContain("trackTeacherPresence={!impersonating}");
+  });
 });

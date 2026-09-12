@@ -21,6 +21,7 @@ export type AdminChatSchool = {
     memberName: string;
     memberRole: string;
     lastMessageAt: Date | null;
+    lastOnlineAt: Date | null;
     unread: boolean;
   }[];
 };
@@ -45,7 +46,14 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
       lastMessageAt: true,
       school: { select: { name: true } },
       member: {
-        select: { id: true, firstName: true, lastName: true, fullName: true, role: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          fullName: true,
+          role: true,
+          lastOnlineAt: true,
+        },
       },
       reads: {
         where: { userId: adminId },
@@ -82,6 +90,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
           "A member",
         memberRole: member?.role === "SCHOOL_HEAD" ? "School Head" : "Teacher",
         lastMessageAt: channel.lastMessageAt,
+        lastOnlineAt: member?.lastOnlineAt ?? null,
         unread,
       });
     }

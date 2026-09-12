@@ -681,6 +681,10 @@ model User {
   /// 1.0.9 is not re-interrupted) and it records WHICH release they saw, which a
   /// boolean cannot. Written on acknowledgement, never on display.
   lastSeenReleaseVersion    String?
+  /// Most recent active-app heartbeat from this teacher's own signed-in session.
+  /// Null means presence has never been recorded. Super Admin impersonation is
+  /// explicitly excluded by the write action.
+  lastOnlineAt              DateTime?
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?

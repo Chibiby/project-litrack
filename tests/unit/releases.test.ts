@@ -59,6 +59,15 @@ describe("visibleFixes", () => {
 });
 
 describe("the committed release notes", () => {
+  it("describes the support workspace and teacher presence release", () => {
+    expect(RELEASES[0].version).toBe("1.10.0");
+    const notes = RELEASES[0].fixes.map((fix) =>
+      typeof fix === "string" ? fix : fix.text
+    );
+    expect(notes.join(" ").toLowerCase()).toContain("support");
+    expect(notes.join(" ").toLowerCase()).toContain("last online");
+  });
+
   it("announces the current release through the read-once modal", () => {
     expect(RELEASES[0].announce).toBe(true);
   });
