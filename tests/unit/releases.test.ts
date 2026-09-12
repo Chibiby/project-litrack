@@ -59,6 +59,10 @@ describe("visibleFixes", () => {
 });
 
 describe("the committed release notes", () => {
+  it("announces the current release through the read-once modal", () => {
+    expect(RELEASES[0].announce).toBe(true);
+  });
+
   it("never tells a School Head that their own password can be read back", () => {
     // The 1.3.0 privacy case, pinned: this capability is a Super Admin note.
     for (const release of RELEASES) {

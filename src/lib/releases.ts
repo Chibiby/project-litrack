@@ -74,6 +74,19 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.8.1",
+    date: "2026-09-12",
+    title: "The account support update now appears after sign-in",
+    announce: true,
+    fixes: [
+      "The account support update now appears in the one-time update notice after sign-in and stays available in release history after it is acknowledged.",
+      {
+        text: "Super Admins can find any teacher or School Head in the new Accounts console, inspect account status, reset credentials, and securely sign in as that account while troubleshooting.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-09-12",
     title: "Account support is now in one place",
