@@ -23,9 +23,38 @@ import { resolvePooledDatabaseUrl } from "../../src/lib/db-url";
  * printing a credential into a terminal log.
  *
  * A missing file is not an error: a CI or shell-exported environment is equally valid.
+ *
+ * A relative name is searched for in the current directory and then in each
+ * parent, first match winning. That is for git worktrees: this project runs
+ * several at once under `.claude/worktrees/*`, and `.env.local` is gitignored,
+ * so it exists only in the main checkout. Resolving against `process.cwd()`
+ * alone meant every `db:*` script failed from a worktree with
+ * "Set DIRECT_URL (preferred) or DATABASE_URL" — an error that names the
+ * variable but not the reason, and sends you looking for a missing value rather
+ * than a file the script simply never looked for. Walking up finds the main
+ * checkout's copy from any worktree, and finds nothing new when run from the
+ * main checkout itself.
  */
+/**
+ * The nearest `name` at or above the current directory, or null.
+ *
+ * Bounded by the filesystem root, which `path.dirname` reports by returning the
+ * same path it was given — that fixed point is the loop's stop condition.
+ */
+function findUpwards(name: string): string | null {
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = path.join(dir, name);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export function loadEnvFile(file = ".env.local"): string[] {
-  const full = path.isAbsolute(file) ? file : path.join(process.cwd(), file);
+  const full = path.isAbsolute(file) ? file : findUpwards(file);
+  if (!full) return [];
   if (!fs.existsSync(full)) return [];
 
   const names: string[] = [];
