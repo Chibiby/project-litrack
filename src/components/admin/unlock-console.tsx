@@ -71,6 +71,7 @@ type Props = {
   schools: UnlockTargetSchool[];
   active: { teacher: ActiveTeacherUnlock[]; school: ActiveSchoolUnlock[] };
   scopes?: UnlockScope[];
+  allowSchoolAudience?: boolean;
 };
 
 /** How a target key reads to a person, switched on the scope that named it. */
@@ -127,7 +128,7 @@ function targetOptionsFor(scope: UnlockScope): { value: string; label: string }[
   }));
 }
 
-export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unknown as UnlockScope[] }: Props) {
+export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unknown as UnlockScope[], allowSchoolAudience = true }: Props) {
   const router = useRouter();
   const rows = useMemo(() => combineRows(active), [active]);
 
@@ -264,12 +265,14 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
                 One teacher
               </Label>
             </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="school" id="unlock-mode-school" />
-              <Label htmlFor="unlock-mode-school" className="font-normal">
-                Whole school
-              </Label>
-            </div>
+            {allowSchoolAudience ? (
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="school" id="unlock-mode-school" />
+                <Label htmlFor="unlock-mode-school" className="font-normal">
+                  Whole school
+                </Label>
+              </div>
+            ) : null}
           </RadioGroup>
         </div>
 
