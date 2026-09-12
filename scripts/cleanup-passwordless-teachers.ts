@@ -186,76 +186,32 @@ async function listPasswordlessViaAdminApi(): Promise<PasswordlessRow[]> {
   return out;
 }
 
-/**
- * Count every row that would have blocked this delete under the schema's old
- * `ON DELETE RESTRICT` rules.
- *
- * Migration `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes`
- * relaxed nine `User` foreign keys from `RESTRICT` to `SET NULL`: `Attendance.
- * recordedById`, `AttendanceDayMeta.recordedById`, `ReadingLevelRecord.recordedById`,
- * `TermGrade.recordedById`, `Announcement.authorId`, `Report.createdById`,
- * `UnlockGrant.grantedById`, `SchoolUnlockGrant.grantedById`, and
- * `TermWindowOverride.setById`. `Learner.teacherId` is the only one of the ten
- * that still restricts toward `User`. Before that migration, deleting a
- * "passwordless" teacher who had actually recorded any of the above aborted
- * with Postgres error P2003 and nothing was touched. Now that same delete
- * SUCCEEDS and silently blanks the recorder/author/granter/setter column on
- * every one of those rows — including attendance, reading-level and term-grade
- * history for learners who are still active. This function reproduces the old
- * RESTRICT check by hand so this script can keep refusing those deletes on
- * purpose rather than by accident of a constraint that no longer exists.
- */
 async function blockingRelationSummary(userId: string): Promise<string | null> {
-  const [
-    learners,
-    announcements,
-    attendance,
-    attendanceDayMeta,
-    readingLevels,
-    termGrades,
-    reports,
-    unlockGrants,
-    schoolUnlockGrants,
-    termWindowOverrides,
-  ] = await Promise.all([
+  const [learners, announcements, attendance, readingLevels] = await Promise.all([
     prisma.learner.count({ where: { teacherId: userId } }),
     prisma.announcement.count({ where: { authorId: userId } }),
     prisma.attendance.count({ where: { recordedById: userId } }),
-    prisma.attendanceDayMeta.count({ where: { recordedById: userId } }),
     prisma.readingLevelRecord.count({ where: { recordedById: userId } }),
-    prisma.termGrade.count({ where: { recordedById: userId } }),
-    prisma.report.count({ where: { createdById: userId } }),
-    prisma.unlockGrant.count({ where: { grantedById: userId } }),
-    prisma.schoolUnlockGrant.count({ where: { grantedById: userId } }),
-    prisma.termWindowOverride.count({ where: { setById: userId } }),
   ]);
 
   const parts: string[] = [];
   if (learners) parts.push(`${learners} learner(s)`);
   if (announcements) parts.push(`${announcements} announcement(s)`);
   if (attendance) parts.push(`${attendance} attendance row(s)`);
-  if (attendanceDayMeta) parts.push(`${attendanceDayMeta} attendance-day-meta row(s)`);
   if (readingLevels) parts.push(`${readingLevels} reading-level row(s)`);
-  if (termGrades) parts.push(`${termGrades} term-grade row(s)`);
-  if (reports) parts.push(`${reports} report(s)`);
-  if (unlockGrants) parts.push(`${unlockGrants} unlock-grant(s)`);
-  if (schoolUnlockGrants) parts.push(`${schoolUnlockGrants} school-unlock-grant(s)`);
-  if (termWindowOverrides) parts.push(`${termWindowOverrides} term-window-override(s)`);
   return parts.length ? parts.join(", ") : null;
 }
 
 /**
  * Hard-delete matching clearRejectedTeacher: auth.deleteUser then prisma.user.delete.
- * Clears safe optional FKs / M2M first; skips (via `blockingRelationSummary`) if the
- * teacher has any related data a delete should never touch — see that function's
- * doc comment for why this check can no longer rely on the database refusing for us.
+ * Clears safe optional FKs / M2M first; skips if required FKs would block.
  */
 async function deleteTeacher(teacher: PasswordlessRow): Promise<"deleted" | "skipped"> {
   assertSafeTeacher(teacher);
 
   const blocking = await blockingRelationSummary(teacher.id);
   if (blocking) {
-    console.warn(`[cleanup] SKIP ${teacher.email} (id=${teacher.id}) — has related data: ${blocking}`);
+    console.warn(`[cleanup] SKIP ${teacher.email} — has related data: ${blocking}`);
     return "skipped";
   }
 

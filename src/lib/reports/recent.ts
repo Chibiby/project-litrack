@@ -3,7 +3,6 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { RecentReportRow } from "@/components/reports/reports-hub";
 import type { ReportFilters } from "@/lib/reports/kinds";
-import { PURGED_USER_LABEL } from "@/lib/constants/purged-user";
 
 /** How many history rows the hub's table shows before "View all reports". */
 export const RECENT_REPORTS_TAKE = 8;
@@ -47,7 +46,7 @@ export async function loadRecentReports(args: {
     scopeLabel: r.scopeLabel,
     // Serialized for the client boundary; the component formats it locally.
     createdAt: r.createdAt.toISOString(),
-    createdByName: r.createdBy?.fullName ?? PURGED_USER_LABEL,
+    createdByName: r.createdBy.fullName,
     // `filters` is Json in the schema, so it arrives as JsonValue. It is only
     // ever written by `generateReport` from a Zod-parsed object, and it is
     // replayed through that same schema on Re-generate, so a malformed value

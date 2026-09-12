@@ -21,21 +21,11 @@
  * default differs by relation optionality):
  *
  *   Enrollment.schoolId, .gradeLevelId, .schoolYearId  -> RESTRICT
- *   Learner.gradeLevelId                               -> RESTRICT
- *   Learner.teacherId                                  -> RESTRICT
- *
- * As of migration 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes,
- * Announcement.authorId and Attendance/AttendanceDayMeta/ReadingLevelRecord
- * .recordedById are ON DELETE SET NULL, not RESTRICT — `Learner.teacherId` is
- * now the only remaining RESTRICT toward User in this subtree. That migration
- * did not change this script's end state (steps 1 and 4 below still run
- * before step 8, and this is a total wipe so those rows are deleted anyway),
- * but it does mean Postgres itself no longer catches a reordering mistake
- * here the way it used to: get the order wrong now and step 8's User delete
- * just silently nulls `recordedById`/`authorId` on whatever of those rows
- * happen to still exist instead of aborting the transaction with P2003. The
- * ordering below is load-bearing on the comments being followed, not on the
- * database enforcing it.
+ *   Learner.gradeLevelId, .teacherId                   -> RESTRICT
+ *   Announcement.authorId                              -> RESTRICT
+ *   Attendance.recordedById                            -> RESTRICT
+ *   AttendanceDayMeta.recordedById                      -> RESTRICT
+ *   ReadingLevelRecord.recordedById                     -> RESTRICT
  *
  * A bare `prisma.school.deleteMany({})` throws the moment any Enrollment row
  * exists, and RESTRICT is checked immediately per-constraint — Postgres does
@@ -312,12 +302,7 @@ async function main(): Promise<void> {
         removedUsers,
       ] = await prisma.$transaction([
         // 1. Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById -> User
-        //    was ON DELETE RESTRICT; as of migration
-        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes
-        //    it is SET NULL. Still deleted here before step 8 (User) so the end
-        //    state is unchanged, but Postgres no longer enforces this order —
-        //    getting it wrong would silently null `recordedById` instead of
-        //    aborting.
+        //    is ON DELETE RESTRICT. Must be gone before step 8 (User).
         prisma.attendance.deleteMany({}),
         prisma.attendanceDayMeta.deleteMany({}),
         prisma.readingLevelRecord.deleteMany({}),
@@ -328,12 +313,8 @@ async function main(): Promise<void> {
         //    GradeLevel / SchoolYear are ON DELETE RESTRICT. Must be gone
         //    before step 6 (GradeLevel, SchoolYear) and step 7 (School).
         prisma.enrollment.deleteMany({}),
-        // 4. Announcement.authorId -> User was ON DELETE RESTRICT; as of
-        //    migration
-        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes
-        //    it is SET NULL. Still deleted here before step 8 (User) for the
-        //    same reason as step 1 — the end state is unchanged, but a wrong
-        //    order now nulls `authorId` silently instead of aborting.
+        // 4. Announcement.authorId -> User is ON DELETE RESTRICT. Must be gone
+        //    before step 8 (User).
         prisma.announcement.deleteMany({}),
         // 5. Learner.gradeLevelId -> GradeLevel and Learner.teacherId -> User
         //    are both ON DELETE RESTRICT. Must be gone before step 6
@@ -354,16 +335,9 @@ async function main(): Promise<void> {
         // 7. Only remaining RESTRICT on School was Enrollment.schoolId,
         //    cleared in step 3.
         prisma.school.deleteMany({}),
-        // 8. Learner.teacherId -> User is the only remaining RESTRICT against
-        //    User; it was cleared in step 5. Announcement.authorId and
-        //    Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById were
-        //    also RESTRICT and are still deleted in steps 1 and 4 first, but as
-        //    of migration
-        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes
-        //    they are SET NULL, so skipping/reordering those steps would no
-        //    longer make this step throw — it would just leave those tables'
-        //    rows deleted with nothing to null (this is a total wipe) rather
-        //    than aborting early. Scoped to the pre-captured id list so
+        // 8. Every RESTRICT against User (Learner.teacherId, Announcement.authorId,
+        //    Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById) was
+        //    cleared in steps 1, 4, and 5. Scoped to the pre-captured id list so
         //    Super Admin rows (schoolId = null) are never touched.
         prisma.user.deleteMany({ where: { id: { in: doomed.map((u) => u.id) } } }),
       ]);

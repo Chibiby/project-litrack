@@ -568,22 +568,20 @@ model TermWindowOverride {
   /// next term's months — the case the feature exists for.
   deadlineKey String
 
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. The
-  /// window this row defines is unaffected by losing the name of who set it.
-  setById   String?
+  setById   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  setBy      User?      @relation("TermWindowSetter", fields: [setById], references: [id], onDelete: SetNull)
+  setBy      User       @relation("TermWindowSetter", fields: [setById], references: [id])
 
   /// One override per term per year. A re-edit updates this row rather than
   /// stacking a second one, so "what is this term's window?" never depends on
   /// row order — the same reasoning as `UnlockGrant`'s unique.
   @@unique([schoolYearId, term])
   @@index([schoolId])
-  /// R6. FK lookup side — now the side `SetNull` scans on a `User` delete.
+  /// R6. FK-enforcement lookup side (implicit `Restrict` on `setBy`).
   @@index([setById])
 }
 
@@ -724,11 +722,6 @@ model User {
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
   @@index([authId])
-  /// The global `/admin/archive` read: `deletedAt IS NOT NULL ORDER BY deletedAt
-  /// DESC`, cross-tenant and uncached. `[schoolId, role, deletedAt]` cannot serve
-  /// it — that query supplies no `schoolId`, so `deletedAt` is never a usable
-  /// leading column there. Same reasoning as `Learner`'s twin of this index.
-  @@index([deletedAt])
 }
 
 model SchoolHeadProfile {
@@ -1100,22 +1093,12 @@ model Learner {
   /// name order. NOT redundant with #2: same trailing sort column, different lead
   /// column, so neither subsumes the other. Do not consolidate them.
   @@index([schoolId, fullName])
-  /// The global `/admin/archive` read: `deletedAt IS NOT NULL ORDER BY deletedAt
-  /// DESC`, cross-tenant and uncached. None of the composites above can serve it
-  /// — every one of them leads with `schoolId` or `gradeLevelId`, which that
-  /// query does not supply, so it was a seq scan plus an external sort.
-  /// Deliberately a plain index, not a partial `WHERE "deletedAt" IS NOT NULL`:
-  /// Prisma cannot express a partial index, and a fourth SQL-only object drifting
-  /// from this file costs more than the megabytes it would save.
-  @@index([deletedAt])
 }
 
 model Announcement {
   id          String    @id @default(uuid())
   schoolId    String
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. An
-  /// announcement outlives its author: the school still needs to read it.
-  authorId    String?
+  authorId    String
   title       String
   body        String
   publishedAt DateTime  @default(now())
@@ -1124,11 +1107,12 @@ model Announcement {
   deletedAt   DateTime?
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  author User?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author User   @relation(fields: [authorId], references: [id])
 
   @@index([schoolId, publishedAt])
   @@index([deletedAt])
-  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
+  /// R6 #5. FK-enforcement lookup side. Required relation with no `onDelete`, so
+  /// Prisma's implicit action is `Restrict` — every `User` delete probes this.
   @@index([authorId])
 }
 
@@ -1170,34 +1154,17 @@ model Attendance {
   weekStart    DateTime         @db.Date // Monday of that week, for aggregation
   status       AttendanceStatus
   notes        String?
-  /// NULLABLE, `ON DELETE SET NULL` — the canonical instance of the attribution
-  /// rule that also governs `AttendanceDayMeta.recordedById`,
-  /// `ReadingLevelRecord.recordedById`, `TermGrade.recordedById`,
-  /// `Announcement.authorId`, `Report.createdById`, `UnlockGrant.grantedById`,
-  /// `SchoolUnlockGrant.grantedById` and `TermWindowOverride.setById`.
-  ///
-  /// These nine were `ON DELETE RESTRICT`, which made a permanent delete of any
-  /// teacher who had ever recorded anything impossible at the storage layer. The
-  /// project owner's decision is that a permanent delete must ALWAYS succeed, so
-  /// the row survives the person and loses only its "who recorded this" pointer.
-  ///
-  /// The cost is real and accepted: a purged teacher's attendance marks, reading
-  /// assessments and term grades keep existing but can no longer name who took
-  /// them. Read sites must treat NULL as "recorder no longer exists", not as an
-  /// error. NULL here NEVER means "not yet recorded" — the row's existence is
-  /// what records the event.
-  recordedById String?
+  recordedById String
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy User?   @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy User    @relation("AttendanceRecorder", fields: [recordedById], references: [id])
 
   @@unique([learnerId, date])
   @@index([learnerId, weekStart])
   @@index([date])
-  /// R6 #3. FK lookup side — now the side `SetNull` scans on a `User` delete,
-  /// which makes it load-bearing for the purge, not only for the old `Restrict`.
+  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
   @@index([recordedById])
 }
 
@@ -1207,17 +1174,16 @@ model AttendanceDayMeta {
   gradeLevelId String
   date         DateTime @db.Date
   isHoliday    Boolean  @default(false)
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
-  recordedById String?
+  recordedById String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   gradeLevel GradeLevel @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
-  recordedBy User?      @relation("AttendanceDayRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy User       @relation("AttendanceDayRecorder", fields: [recordedById], references: [id])
 
   @@unique([gradeLevelId, date])
   @@index([date])
-  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
+  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
   @@index([recordedById])
 }
 
@@ -1237,20 +1203,16 @@ model ReadingLevelRecord {
   readingComprehensionLevel WeeklyReadingComprehensionLevel?
   writingLevel              WeeklyWritingLevel?
   notes                     String?
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
-  /// Distinct from the two nullable profile columns above: those are nullable
-  /// because a partial assessment is legitimate, this one because the recorder
-  /// can be permanently deleted after the fact.
-  recordedById              String?
+  recordedById              String
   createdAt                 DateTime                         @default(now())
   updatedAt                 DateTime                         @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy User?   @relation("ReadingRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy User    @relation("ReadingRecorder", fields: [recordedById], references: [id])
 
   @@unique([learnerId, weekStart])
   @@index([weekStart])
-  /// R6 #3. FK lookup side — now the side `SetNull` scans on a `User` delete.
+  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
   @@index([recordedById])
 }
 
@@ -1263,18 +1225,17 @@ model TermGrade {
   term         TermPeriod
   subject      LearningArea
   score        Int // 60-100, enforced by a CHECK constraint in SQL
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
-  recordedById String?
+  recordedById String
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
   schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  recordedBy User?      @relation("TermGradeRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy User       @relation("TermGradeRecorder", fields: [recordedById], references: [id])
 
   @@unique([learnerId, schoolYearId, term, subject])
   @@index([schoolYearId, term])
-  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
+  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
   @@index([recordedById])
 }
 
@@ -1391,10 +1352,7 @@ enum ReportFormat {
 model Report {
   id          String       @id @default(uuid())
   schoolId    String
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. A
-  /// history row whose author was purged still lists and still re-generates:
-  /// everything it needs is in `filters`.
-  createdById String?
+  createdById String
   kind        ReportKind
   format      ReportFormat
   /// Shown verbatim in the Recent Reports table.
@@ -1407,12 +1365,11 @@ model Report {
   deletedAt   DateTime?
 
   school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdBy User?  @relation("ReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy User   @relation("ReportCreator", fields: [createdById], references: [id])
 
   /// The Recent Reports query: one school, one author, newest first.
   @@index([schoolId, createdById, createdAt])
-  /// FK lookup side — now the side `SetNull` scans on a `User` delete, matching
-  /// the R6 #3/#5 rule.
+  /// FK-enforcement lookup side (implicit `Restrict`), matching the R6 #3/#5 rule.
   @@index([createdById])
 }
 
@@ -1525,11 +1482,7 @@ model UnlockGrant {
   /// the lock sites already key their windows by exactly these strings.
   targetKey String
 
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. NULL
-  /// here means "the admin who issued this has since been permanently deleted",
-  /// never "granted by nobody"; the grant itself is unaffected and still expires
-  /// on its own terms.
-  grantedById String?
+  grantedById String
   /// The ticket this grant answers, when it came from one. Nullable so an admin
   /// can also grant directly. `@unique` keeps one ticket from issuing two grants.
   ticketId    String? @unique
@@ -1543,7 +1496,7 @@ model UnlockGrant {
 
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user          User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy     User?          @relation("UnlockGrantGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+  grantedBy     User           @relation("UnlockGrantGranter", fields: [grantedById], references: [id])
   revokedBy     User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
   ticket        SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   notifications Notification[] @relation("NotificationUnlockGrant")
@@ -1582,10 +1535,7 @@ model SchoolUnlockGrant {
   /// anchor `YYYY-MM-01` for `MONTHLY_READING_LEVEL`.
   targetKey String
 
-  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. This
-  /// one previously carried an EXPLICIT `onDelete: Restrict`, the only one of the
-  /// nine that did; it is now `SetNull` like the rest.
-  grantedById String?
+  grantedById String
 
   /// Required. A grant that never expires is a lock that was removed, not
   /// reopened — same rule as `UnlockGrant.expiresAt`.
@@ -1596,7 +1546,7 @@ model SchoolUnlockGrant {
   createdAt DateTime @default(now())
 
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  grantedBy     User?          @relation("SchoolUnlockGrantGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+  grantedBy     User           @relation("SchoolUnlockGrantGranter", fields: [grantedById], references: [id], onDelete: Restrict)
   revokedBy     User?          @relation("SchoolUnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
   notifications Notification[] @relation("NotificationSchoolUnlockGrant")
 

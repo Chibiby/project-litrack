@@ -16,7 +16,6 @@ import {
 import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
-import { reactivateEnrollment } from "@/lib/learners/reactivate-enrollment";
 import {
   formatPersonName,
   formatOptionalPersonName,
@@ -404,7 +403,43 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
       data: { archivedAt: null },
     });
 
-    await reactivateEnrollment(tx, learner);
+    const existingActive = await tx.enrollment.findFirst({
+      where: { learnerId: learner.id, status: "ACTIVE" },
+    });
+    if (existingActive) return;
+
+    const activeYear = await tx.schoolYear.findFirst({
+      where: { schoolId: learner.schoolId, isActive: true },
+    });
+    if (!activeYear) return;
+
+    const archivedEnrollment = await tx.enrollment.findFirst({
+      where: {
+        learnerId: learner.id,
+        schoolYearId: activeYear.id,
+        status: "ARCHIVED",
+      },
+      orderBy: { endedAt: "desc" },
+    });
+
+    if (archivedEnrollment) {
+      await tx.enrollment.update({
+        where: { id: archivedEnrollment.id },
+        data: { status: "ACTIVE", endedAt: null },
+      });
+    } else {
+      await tx.enrollment.create({
+        data: {
+          learnerId: learner.id,
+          schoolId: learner.schoolId,
+          schoolYearId: activeYear.id,
+          gradeLevelId: learner.gradeLevelId,
+          sectionId: learner.sectionId,
+          teacherId: learner.teacherId,
+          status: "ACTIVE",
+        },
+      });
+    }
   });
 
   await writeAudit({

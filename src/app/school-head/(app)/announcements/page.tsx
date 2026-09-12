@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
-import { PURGED_USER_LABEL } from "@/lib/constants/purged-user";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -76,7 +75,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
                 id: a.id,
                 title: a.title,
                 body: a.body,
-                authorName: a.author?.fullName ?? PURGED_USER_LABEL,
+                authorName: a.author.fullName,
                 publishedAt: a.publishedAt.toISOString().slice(0, 10),
               }))}
             />

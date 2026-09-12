@@ -73,35 +73,6 @@ export type Release = {
  * test enforces strict descending order so it cannot quietly stop being true.
  */
 export const RELEASES: readonly Release[] = [
-  {
-    version: "1.7.0",
-    date: "2026-09-12",
-    title: "Removed teachers and learners now have a home, and a way out",
-    announce: true,
-    fixes: [
-      {
-        text: "Removed teachers and learners from every school now collect in one place, under Archive. You can put a row back, or delete it for good.",
-        roles: ["SUPER_ADMIN"],
-      },
-      {
-        text: "Restoring a teacher brings the record back but not the sign-in. The account cannot log in until a School Head sends a new invite, or the teacher registers again with their email. The screen says so before you restore, and again after.",
-        roles: ["SUPER_ADMIN"],
-      },
-      {
-        text: "Deleting for good says exactly what goes first — the attendance, assessments, grades and enrolments, counted. It is one row at a time, and it cannot be undone.",
-        roles: ["SUPER_ADMIN"],
-      },
-      {
-        text: "Permanently deleting a teacher leaves every attendance mark, assessment and grade they recorded in place, but the name of who recorded it is blanked and cannot be recovered. The confirmation says this before you agree to it.",
-        roles: ["SUPER_ADMIN"],
-      },
-      {
-        text: "A removed teacher whose school was deleted can still be cleaned up from the Archive, rather than sitting there refusing to go.",
-        roles: ["SUPER_ADMIN"],
-      },
-      "Restoring a learner now puts them back in the grade and section they hold today, instead of the ones they held when they were removed.",
-    ],
-  },
   // 1.2.0–1.6.0 were written on 2026-09-12, after the fact: these changes had
   // already shipped with no entry. One version per group, in the order each
   // group reached main.

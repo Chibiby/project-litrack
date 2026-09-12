@@ -60,34 +60,6 @@ CREATE UNIQUE INDEX "Enrollment_learner_active_unique"
 
 Prisma’s schema language cannot express partial unique indexes, so this lives only in the SQL migration. Keep it when editing Enrollment-related migrations.
 
-## `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes`
-
-Authored for the Global Archive (`docs/archive-purge-spec.md`, task T1), **not yet applied to production**. It does two things in one file.
-
-**Part A — nine "who recorded this" foreign keys become nullable with `ON DELETE SET NULL`:**
-
-| Table | Column | Constraint |
-|---|---|---|
-| `Attendance` | `recordedById` | `Attendance_recordedById_fkey` |
-| `AttendanceDayMeta` | `recordedById` | `AttendanceDayMeta_recordedById_fkey` |
-| `ReadingLevelRecord` | `recordedById` | `ReadingLevelRecord_recordedById_fkey` |
-| `TermGrade` | `recordedById` | `TermGrade_recordedById_fkey` |
-| `Announcement` | `authorId` | `Announcement_authorId_fkey` |
-| `Report` | `createdById` | `Report_createdById_fkey` |
-| `UnlockGrant` | `grantedById` | `UnlockGrant_grantedById_fkey` |
-| `SchoolUnlockGrant` | `grantedById` | `SchoolUnlockGrant_grantedById_fkey` |
-| `TermWindowOverride` | `setById` | `TermWindowOverride_setById_fkey` |
-
-All nine were `ON DELETE RESTRICT`, which made a permanent delete of any teacher who had ever recorded anything impossible at the storage layer. `docs/archive-purge-spec.md` section 2b recommended refusing such a delete; **the project owner overruled that** — a permanent delete of a teacher must always succeed. The stated and accepted cost is that attendance records, reading assessments and term grades taken by a purged teacher keep existing but lose their attribution. `SchoolUnlockGrant` was the only one whose `RESTRICT` was written explicitly rather than inherited as Prisma's implicit action.
-
-**Part B — `User_deletedAt_idx` and `Learner_deletedAt_idx`**, batch 2 of the concurrent-index pair above.
-
-**Existing rows: untouched.** Every statement widens what a column may hold, widens what a delete may do, or adds an index. Nothing narrows, nothing rewrites a row, nothing sets a value. No backfill is needed, and all nine columns stay fully populated — a `NULL` can only appear later, when a `User` row is actually deleted.
-
-**Rollback.** Clean only *before* the first purge: re-tighten by restoring each constraint to `ON DELETE RESTRICT` and each column to `SET NOT NULL`. Once any teacher has been purged, `NULL`s exist and nothing can reconstruct who the recorder was — the `User` row is gone and `AuditLog` stores ids, not per-row attribution. From that point a revert needs point-in-time recovery, not a compensating migration. **Whoever applies this is committing to that.**
-
-**Locking.** Brief `ACCESS EXCLUSIVE` on each of the nine tables for `DROP CONSTRAINT` + `DROP NOT NULL` (both catalog-only, no table rewrite), then `SHARE ROW EXCLUSIVE` on the child table and on `User` while each re-added foreign key validates by scanning the child. `migrate deploy` wraps the file in one transaction, so the locks accumulate — including on `User`, which means sign-in blocks for the duration. Apply in a low-traffic window.
-
 ## Preview features
 
 `generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.
@@ -106,7 +78,7 @@ Remove `relationJoins` from `previewFeatures`, run `npx prisma generate`, redepl
 
 ## Concurrent index builds
 
-**This section is the normative statement of the concurrent-index rule.** The operational copies of it — in `prisma/concurrent-indexes.sql`, the header comments of `prisma/migrations/20260823000001_add_perf_indexes/migration.sql` and `prisma/migrations/20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/migration.sql`, and `docs/migrate-checklist.md` section (b1) — are deliberate duplicates, kept so each file stands alone at the moment someone is using it; if the rule changes, all five must be updated together.
+**This section is the normative statement of the concurrent-index rule.** The operational copies of it — in `prisma/concurrent-indexes.sql`, the header comment of `prisma/migrations/20260823000001_add_perf_indexes/migration.sql`, and `docs/migrate-checklist.md` section (b1) — are deliberate duplicates, kept so each file stands alone at the moment someone is using it; if the rule changes, all four must be updated together.
 
 Index-only migrations have a second, hand-applied artifact. `20260823000001_add_perf_indexes` is the first:
 
@@ -114,17 +86,6 @@ Index-only migrations have a second, hand-applied artifact. `20260823000001_add_
 - `prisma/concurrent-indexes.sql` — the `CREATE INDEX CONCURRENTLY IF NOT EXISTS` form, for the existing populated production database, followed by `prisma migrate resolve --applied 20260823000001_add_perf_indexes` to do the bookkeeping the DDL skipped.
 
 The split is forced, not stylistic: plain `CREATE INDEX` holds an ACCESS EXCLUSIVE lock for the whole build (blocking all reads and writes on that table), while `CREATE INDEX CONCURRENTLY` takes only SHARE UPDATE EXCLUSIVE but **cannot run inside a transaction block** — and `prisma migrate deploy` wraps every migration file in one.
-
-`prisma/concurrent-indexes.sql` now holds **two batches**, 14 indexes in total:
-
-| Batch | Indexes | Migration | Bookkeeping after running the script |
-|---|---|---|---|
-| 1 | 12 (R6 / Phase 4) | `20260823000001_add_perf_indexes` | `migrate resolve --applied` — the carve-out |
-| 2 | `User_deletedAt_idx`, `Learner_deletedAt_idx` | `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes` | **`migrate deploy`. Never resolve.** |
-
-**The batch 2 exception matters.** The carve-out in `docs/migrate-checklist.md` (b1) is scoped, in its own words, to *index-only* migrations, and batch 2's migration is not one: alongside the two indexes it drops `NOT NULL` on nine columns and rewrites nine foreign keys from `ON DELETE RESTRICT` to `ON DELETE SET NULL`. `resolve --applied` writes the bookkeeping row and runs no SQL, so resolving it would record it as done while silently skipping all of that — the database would keep enforcing `RESTRICT` against a `schema.prisma` that promises `SET NULL`, and a teacher purge would fail with `P2003` for a reason nothing in the code explains.
-
-Running the script first is still the right move: it builds the two indexes concurrently, and the migration's `CREATE INDEX IF NOT EXISTS` then makes them no-ops, so `migrate deploy` does only the foreign-key work and never holds `ACCESS EXCLUSIVE` on `Learner` for an index build.
 
 Both files must keep **byte-identical index names**, taken from `prisma migrate diff --script` output, or the migration's `IF NOT EXISTS` stops protecting the production database and you get duplicate indexes under different names.
 

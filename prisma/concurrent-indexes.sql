@@ -1,20 +1,9 @@
 -- PROJECT LITRACK — concurrent index builds for the EXISTING production database
--- 14 indexes across 10 tables, in two batches:
+-- R6 / Phase 4. 12 indexes across 9 tables.
 --
---   BATCH 1 (12 indexes) — R6 / Phase 4, for migration
---     20260823000001_add_perf_indexes.
---   BATCH 2 (2 indexes)  — the /admin/archive lists, for migration
---     20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes.
---
--- THE TWO BATCHES HAVE DIFFERENT BOOKKEEPING. Batch 1's migration is index-only,
--- so it takes the `migrate resolve --applied` carve-out. Batch 2's migration also
--- changes nine foreign keys, so it MUST go through `migrate deploy` and must NEVER
--- be resolved. Step 5 below spells this out; getting it wrong silently skips the
--- foreign-key half. Running this file is safe and idempotent either way.
---
--- Run this with psql on DIRECT_URL (port 5432 / session mode) BEFORE the
--- bookkeeping / deploy step. Sibling in spirit to prisma/rls-policies.sql: an
--- out-of-band SQL file a human applies, not something `migrate deploy` picks up.
+-- Run this with psql on DIRECT_URL (port 5432 / session mode) BEFORE marking the
+-- migration applied. Sibling in spirit to prisma/rls-policies.sql: an out-of-band
+-- SQL file a human applies, not something `migrate deploy` picks up.
 --
 -- ============================================================================
 -- WHO RUNS THIS, AND WHO DOES NOT
@@ -24,11 +13,9 @@
 --
 --   * Every other environment — CI, fresh clones, local dev, a brand-new
 --     Supabase project — takes `npx prisma migrate deploy`, which applies
---     prisma/migrations/20260823000001_add_perf_indexes/migration.sql and
---     .../20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/
---     migration.sql. Do NOT run this file there; on an empty or small table a
---     plain CREATE INDEX is instant and the normal path also does the migration
---     bookkeeping for you.
+--     prisma/migrations/20260823000001_add_perf_indexes/migration.sql. Do NOT
+--     run this file there; on an empty or small table a plain CREATE INDEX is
+--     instant and the normal path also does the migration bookkeeping for you.
 --
 -- ============================================================================
 -- WHY A SEPARATE FILE EXISTS AT ALL
@@ -67,14 +54,10 @@
 --      NOT the transaction pooler on 6543.
 --
 --   4. Read the validity table this file prints at the end (the VERIFY section is
---      a live SELECT, so it runs as part of step 3). Expect 14 rows, all valid.
+--      a live SELECT, so it runs as part of step 3). Expect 12 rows, all valid.
 --      Check it before step 5 — step 5 tells Prisma the DDL is done, so a
 --      silently-invalid index would go unnoticed from then on. A zero exit code
 --      is NOT sufficient evidence; look at the rows.
---
---      Fewer than 14 rows on a database that has only ever taken batch 1 is NOT
---      a partial success — it means this file is newer than the last run. Re-run
---      it; batch 1's statements skip and batch 2's build.
 --
 --      BUT: if step 3 exited NON-ZERO, no table was printed at all. ON_ERROR_STOP=1
 --      aborts psql at the first error, and the VERIFY SELECT is the last statement
@@ -99,33 +82,13 @@
 --      error was. Conversely, a zero exit with no table in front of you means
 --      you are not looking at the end of the output, not that the query is missing.
 --
---   5. Bookkeeping — DIFFERENT FOR THE TWO BATCHES. Read both bullets.
---
---      BATCH 1 — record the migration as applied WITHOUT re-running its SQL:
+--   5. Record the migration as applied WITHOUT re-running its SQL:
 --        npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
 --
---      Skipping this leaves the migration pending forever: the next
---      `migrate deploy` re-runs it. (It would in fact succeed, because the
+--      Skipping step 5 leaves the migration pending forever: the next
+--      `migrate deploy` re-runs it. (It would in fact succeed here, because the
 --      migration uses IF NOT EXISTS — but it would take ACCESS EXCLUSIVE locks
---      to do nothing, which is exactly the downtime this file avoided.)
---
---      BATCH 2 — *** DO NOT RESOLVE. Run `npx prisma migrate deploy`. ***
---
---      20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes is
---      NOT index-only: alongside these two indexes it drops NOT NULL on nine
---      columns and rewrites nine foreign keys from ON DELETE RESTRICT to
---      ON DELETE SET NULL. `resolve --applied` writes the bookkeeping row and
---      runs no SQL, so resolving it would mark it done while silently skipping
---      every one of those changes — leaving the database enforcing RESTRICT
---      against a schema.prisma that promises SET NULL, and a teacher purge
---      failing with P2003 for reasons nothing in the code explains.
---
---      `migrate deploy` is correct and cheap here precisely because this file
---      already built the two indexes: the migration's CREATE INDEX IF NOT EXISTS
---      statements become no-ops, so the deploy does only the foreign-key work.
---      Read that migration's header before running it — it takes brief ACCESS
---      EXCLUSIVE locks on nine tables and on "User", inside one transaction, so
---      it wants a low-traffic window.
+--      to do nothing, which is exactly the downtime this file avoided. Do step 5.)
 --
 --   6. `npx prisma migrate status` again — expect no pending migrations.
 --
@@ -162,21 +125,14 @@
 -- NAME PARITY — DO NOT BREAK THIS
 -- ============================================================================
 --
--- Every index name below is byte-identical to the name in its migration —
--- batch 1 in prisma/migrations/20260823000001_add_perf_indexes/migration.sql,
--- batch 2 in prisma/migrations/
--- 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/
--- migration.sql — and all were
+-- Every index name below is byte-identical to the name in
+-- prisma/migrations/20260823000001_add_perf_indexes/migration.sql, and both were
 -- taken from `prisma migrate diff --script` output generated from
 -- prisma/schema.prisma. That is what makes the migration's IF NOT EXISTS a real
 -- safety net rather than decoration: after this file runs, the migration becomes
 -- a no-op on this database. Rename an index in one file and you must rename it
 -- in the other and in schema.prisma (via @@index ordering), or the two apply
 -- paths diverge and you get duplicate indexes under different names.
-
--- ============================================================================
--- BATCH 1 — R6 / Phase 4 (migration 20260823000001_add_perf_indexes)
--- ============================================================================
 
 -- R6 #4 — deleteSection's `enrollment.updateMany({ where: { sectionId } })`;
 -- [gradeLevelId, sectionId] cannot serve it because sectionId is not leading.
@@ -220,29 +176,6 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Notification_actorId_idx" ON "Notificat
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuditLog_timestamp_idx" ON "AuditLog"("timestamp");
 
 -- ============================================================================
--- BATCH 2 — /admin/archive lists (migration
--- 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes)
---
--- These two are the reason to run this file again on a database that already
--- took batch 1. Batch 1's statements above skip harmlessly.
---
--- REMINDER: after this file, batch 2 needs `prisma migrate deploy`, NOT
--- `migrate resolve --applied`. Its migration also rewrites nine foreign keys.
--- ============================================================================
-
--- The global, cross-tenant archive read:
---   WHERE "deletedAt" IS NOT NULL ORDER BY "deletedAt" DESC
--- No existing index serves it — User's [schoolId, role, deletedAt] and Learner's
--- composites all lead with a column that query does not supply. Ascending on
--- purpose: PostgreSQL scans a b-tree backwards at equal cost, so DESC buys
--- nothing (same reasoning as AuditLog_timestamp_idx above).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "User_deletedAt_idx" ON "User"("deletedAt");
-
--- Twin of the above. "Learner" is the larger table and the one that most needs
--- CONCURRENTLY rather than the migration's plain CREATE INDEX.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "Learner_deletedAt_idx" ON "Learner"("deletedAt");
-
--- ============================================================================
 -- VERIFY — runs automatically as part of this file, BEFORE `migrate resolve`
 -- ============================================================================
 --
@@ -257,13 +190,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Learner_deletedAt_idx" ON "Learner"("de
 --
 -- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
---   Expect exactly 14 rows, every one with valid = t.
+--   Expect exactly 12 rows, every one with valid = t.
 --
---   Fewer than 14 rows => that index was never built. Re-run this whole file
---                         (every statement is IF NOT EXISTS-guarded). Exactly 12
---                         rows, all of them batch 1, is the expected state of a
---                         database that last ran the pre-batch-2 version of this
---                         file — the same remedy applies.
+--   Fewer than 12 rows => that index was never built. Re-run this whole file
+--                         (every statement is IF NOT EXISTS-guarded).
 --   valid = f          => that build FAILED. Drop it with
 --                         DROP INDEX CONCURRENTLY (see "IF A BUILD FAILS" above,
 --                         and note it needs psql for the same transaction
@@ -304,8 +234,6 @@ WHERE c.relname IN (
   'ReadingLevelRecord_recordedById_idx',
   'TermGrade_recordedById_idx',
   'Notification_actorId_idx',
-  'AuditLog_timestamp_idx',
-  'User_deletedAt_idx',
-  'Learner_deletedAt_idx'
+  'AuditLog_timestamp_idx'
 )
 ORDER BY c.relname;
