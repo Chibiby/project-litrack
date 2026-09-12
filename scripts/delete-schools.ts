@@ -22,19 +22,31 @@
  *
  *   Enrollment.schoolId, .gradeLevelId, .schoolYearId        -> RESTRICT
  *   Learner.gradeLevelId, .teacherId                         -> RESTRICT
- *   Announcement.authorId                                    -> RESTRICT
- *   Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById -> RESTRICT
+ *
+ * Announcement.authorId and Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById
+ * were also ON DELETE RESTRICT until migration
+ * 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes, which changed
+ * them (and five other User FKs outside this subtree) to ON DELETE SET NULL.
+ * `Learner.teacherId` is now the only RESTRICT toward User left in this subtree.
  *
  * So the delete below walks the subtree explicitly, children first, in one transaction,
- * in the order that satisfies every RESTRICT above — the same order and for the same
- * reasons as that script's Phase 4, just scoped to the named schools.
+ * in the order that satisfies every remaining RESTRICT above — the same order and for the
+ * same reasons as that script's Phase 4, just scoped to the named schools. The steps that
+ * exist only to clear the now-SET NULL FKs (Announcement.authorId,
+ * Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById) still run in the same
+ * order, so the end state — those rows deleted, not merely nulled — is unchanged, but
+ * getting that order wrong would no longer make the transaction abort. It would silently
+ * null attribution on rows this run does not otherwise touch instead.
  *
  * Two scoping subtleties, both deliberate:
  *
  *  - Attendance, AttendanceDayMeta and ReadingLevelRecord carry no schoolId. They are
  *    matched by learner/gradeLevel of a doomed school OR by `recordedById` among the
- *    doomed users. Tenancy should make the second half redundant; it is there so that a
- *    single leaked cross-tenant row cannot leave a RESTRICT unsatisfied and abort the run.
+ *    doomed users. Tenancy should make the second half redundant; it exists so that a
+ *    single leaked cross-tenant row is still swept up (previously that mattered so it
+ *    could not leave a RESTRICT unsatisfied and abort the run; since the migration above
+ *    it matters so that a leaked row for a school being deleted is not left behind with a
+ *    dangling `recordedById` pointing at a user this run is about to delete).
  *  - `User.schoolId` is ON DELETE SET NULL, not cascade, so deleting School alone would
  *    silently orphan its accounts with schoolId nulled — indistinguishable from a Super
  *    Admin. User rows are therefore deleted explicitly, by an id list captured up front.
@@ -273,11 +285,16 @@ async function main(): Promise<void> {
 
     // ---- Phase 4: delete the rows ------------------------------------------
     heading("PHASE 4 — DELETE ROWS");
-    // One transaction: if any RESTRICT is left unsatisfied the whole thing rolls back
-    // and the database is exactly as it was. Order matters — see the header comment.
+    // One transaction: if the remaining RESTRICT (Learner.teacherId, Learner.gradeLevelId,
+    // or Enrollment's three) is left unsatisfied the whole thing rolls back and the
+    // database is exactly as it was. Order matters — see the header comment.
     const counts = await prisma.$transaction(
       async (tx) => {
-        // 1. recordedById -> User is RESTRICT. Clear before step 8.
+        // 1. recordedById -> User was RESTRICT; as of migration
+        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes it is
+        //    SET NULL. Still cleared before step 8 so these rows are deleted, not merely
+        //    nulled — reordering no longer aborts the transaction, it just nulls
+        //    `recordedById` on whatever of these rows step 8's user delete reaches first.
         const attendanceDel = await tx.attendance.deleteMany({ where: learnerOrRecorder });
         const dayMetaDel = await tx.attendanceDayMeta.deleteMany({
           where: {
@@ -294,7 +311,9 @@ async function main(): Promise<void> {
         const enrollmentDel = await tx.enrollment.deleteMany({
           where: { OR: [{ schoolId: { in: doomedSchoolIds } }, { learnerId: { in: doomedLearnerIds } }] },
         });
-        // 4. Announcement.authorId -> User is RESTRICT. Clear before step 8.
+        // 4. Announcement.authorId -> User was RESTRICT; as of migration
+        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes it is
+        //    SET NULL. Still cleared before step 8 for the same reason as step 1.
         const announcementDel = await tx.announcement.deleteMany({
           where: { OR: [{ schoolId: { in: doomedSchoolIds } }, { authorId: { in: doomedUserIds } }] },
         });
@@ -314,9 +333,14 @@ async function main(): Promise<void> {
         const inviteDel = await tx.teacherInvite.deleteMany({ where: { schoolId: { in: doomedSchoolIds } } });
         // 7. School's only remaining RESTRICT was Enrollment.schoolId, cleared in step 3.
         const schoolDel = await tx.school.deleteMany({ where: { id: { in: doomedSchoolIds } } });
-        // 8. Every RESTRICT against User was cleared in steps 1, 4 and 5. Scoped to the
-        //    id list captured before step 1, so a schoolId nulled by School's SET NULL
-        //    cannot widen this, and Super Admin rows are never in it.
+        // 8. Learner.teacherId -> User is the only remaining RESTRICT against User; it was
+        //    cleared in step 5. Announcement.authorId and
+        //    Attendance/AttendanceDayMeta/ReadingLevelRecord.recordedById were also
+        //    RESTRICT and are still cleared in steps 1 and 4, but since migration
+        //    20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes they are
+        //    SET NULL, so this step no longer depends on them for its own success. Scoped
+        //    to the id list captured before step 1, so a schoolId nulled by School's SET
+        //    NULL cannot widen this, and Super Admin rows are never in it.
         const userDel = await tx.user.deleteMany({ where: { id: { in: doomedUserIds } } });
 
         return {
