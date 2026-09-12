@@ -43,6 +43,21 @@ Your job is to *author* migrations; a human applies them. Safe offline commands:
 
 Conventions: committed SQL under `prisma/migrations/`, named `YYYYMMDDNNNNNN_short_description`, baseline `0_init`. Additive first — nullable column → backfill migration → tighten (see `20260808190002_backfill_null_section_a`). `Enrollment`'s partial unique index (one `ACTIVE` row per learner) exists only in SQL because Prisma's schema language can't express it — preserve it when editing Enrollment migrations. Details in `docs/migrations.md`, apply checklist in `docs/migrate-checklist.md`.
 
+## The other hard rule: releases
+
+**Every push to main that changes `src/` or `prisma/` ships a release entry.** Push to main is a production deploy, and a deploy that reaches users unannounced is the failure this rule prevents. In the same push:
+
+1. Add an entry to the top of `RELEASES` in `src/lib/releases.ts` — `version`, `date` (local `YYYY-MM-DD`), one-line `title`, `announce: true`, and `fixes` written in the user's language, not the codebase's ("The ethnicity you pick no longer snaps back", not "fix select controlled value").
+2. Set the same version string in `package.json` and `package-lock.json` (both the top-level `version` and `packages."".version`). A test fails if `package.json` and `APP_VERSION` drift.
+
+Which number moves: the push holds only fixes → last number (1.6.0 → 1.6.1). The push holds any feature → middle number (1.6.0 → 1.7.0). First number → only when the project owner says so.
+
+`announce: true` is the default; it shows the "LITRACK System updated to vX.Y.Z" modal once per user, listing every version they have not acknowledged. Set `announce: false` only for a release nobody needs to be interrupted by — it still appears at `/releases` and in the bell's Updates list. One entry per push, not per commit: group the push's commits into one release.
+
+A `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/require-release-entry.mjs`) blocks the push when the entry is missing. It fails open, so it is a reminder, not the rule.
+
+Concurrent sessions: if `releases.ts` or `package.json` conflicts on merge, renumber your entry above whatever main now holds. Never reuse a version number.
+
 ## Architecture
 
 ### Request path
@@ -68,23 +83,21 @@ Super Admin viewing School Head pages passes `?schoolId=`; `resolveSchoolContext
 
 ### Server actions — the house pattern
 
-Actions live in `src/lib/actions/*.ts`, all `"use server"`, and return a discriminated result rather than throwing:
+Actions live in `src/lib/actions/*.ts`, all `"use server"`, wrapped once by `action()` so a single handler converts throws into results:
 
 ```ts
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
-
-export async function doThing(formData: FormData): Promise<ActionResult> {
-  const user = await requireSchoolUser("TEACHER");          // 1. auth guard first
-  const parsed = someSchema.safeParse(formToObj(formData)); // 2. Zod safeParse
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-  // 3. ownership check scoped to user.schoolId
+export const doThing = action("doThing", async (formData: FormData) => {
+  const user = await requireSchoolUser("TEACHER");           // 1. auth guard first
+  const input = parseInput(someSchema, formToObj(formData)); // 2. throws VALIDATION_FAILED
+  assertSameSchool(user.schoolId, row.schoolId, "Learner");  // 3. throws NOT_FOUND
   // 4. mutate (prisma.$transaction when multi-step)
   // 5. writeAudit({ action: AUDIT_ACTIONS.X, ... })
   // 6. revalidatePath / revalidate* helper
-}
+  return { ok: true };
+}, { verb: "save the thing" });
 ```
+
+Failures are thrown, never returned: `throw new AppError("CODE", { detail })`. The wrapper classifies anything else (Prisma, Supabase, bugs), records non-user errors to `ErrorEvent` + Vercel logs (+ an alert email for `system`), and returns `{ ok: false, code, error, ref?, fieldErrors? }` — `error` keeps its historical field name and is always the safe user message, so existing `toast.error(res.error)` call sites keep working. `logoutAction` is deliberately left unwrapped, because it's a `<form action={logoutAction}>` target and that requires `Promise<void>`. About 30 legacy action modules still use the old hand-rolled `{ ok: false, error }` shape and their own try/catch; they migrate to `action()` in later slices. Codes and messages live in `src/lib/errors/codes.ts`; see `docs/errors.md`.
 
 Other invariants: soft delete via `deletedAt` (filter `deletedAt: null` on reads unless archived rows are wanted); `Learner`'s denormalized current grade/section pointers must stay transactionally consistent with the active `Enrollment` row; client-facing errors must be safe.
 
@@ -127,4 +140,4 @@ Zod schemas in `src/lib/validators/*.schema.ts`, shared primitives in `common.ts
 
 ## Docs map
 
-`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Vercel + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix).
+`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Vercel + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log).

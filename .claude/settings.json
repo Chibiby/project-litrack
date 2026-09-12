@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/require-release-entry.mjs",
+            "timeout": 20,
+            "statusMessage": "Checking for a release entry…"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -56,6 +56,9 @@ export const attendanceWeekSchema = z
     weekStart: dateKey,
     cells: z.array(attendanceWeekCellSchema).max(1400),
   })
+  // The "Nothing to save" message here is unreachable from the UI — the weekly
+  // grid guards an empty diff before calling the action — but the refine stays
+  // as the correct contract for a diff endpoint called any other way.
   .refine((d) => d.cells.length > 0, { message: "Nothing to save" });
 
 export type AttendanceMarkInput = z.infer<typeof attendanceMarkSchema>;

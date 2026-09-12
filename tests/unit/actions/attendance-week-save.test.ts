@@ -1,6 +1,6 @@
 // Asia/Manila BEFORE anything constructs a Date. This file's whole subject is the
 // gap between local calendar fields and a UTC instant, and on this timezone a
-// local midnight is 16:00 the PREVIOUS day in UTC — so a rewrite that bound a JS
+// local midnight is 16:00 the PREVIOUS day in UTC â€” so a rewrite that bound a JS
 // `Date` into a `@db.Date` column would write the wrong day here and the right one
 // on Vercel (TZ=UTC), which is the reason this file pins the zone rather than
 // trusting the developer's box.
@@ -16,7 +16,7 @@ import { formatLocalDateKey } from "@/lib/date-keys";
  * What is contract here, and so asserted rather than assumed:
  *
  *   - `upserted` and `cleared` are two DIFFERENT reductions. `cleared` is a sum of
- *     rows actually deleted, not of cells submitted — clearing an already-empty
+ *     rows actually deleted, not of cells submitted â€” clearing an already-empty
  *     cell deletes nothing. The old code derived both by indexing `results[i]` off
  *     an array transaction; the set-based rewrite derives them from `RETURNING`,
  *     and nothing else in the repo would notice if either were wrong.
@@ -56,7 +56,7 @@ type Day = {
 let attendance: Day[];
 let learnerIds: string[];
 let rawCalls: { sql: string; params: unknown[] }[];
-/** Makes the INSERT RETURN one row fewer than it was given — see the guard test. */
+/** Makes the INSERT RETURN one row fewer than it was given â€” see the guard test. */
 let dropOneReturnedRow: boolean;
 
 function flattenBoundParams(values: readonly unknown[]): unknown[] {
@@ -75,8 +75,8 @@ function flattenBoundParams(values: readonly unknown[]): unknown[] {
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Prisma nests `Prisma.sql` fragments, so the per-row `VALUES (…)` text — casts
- * included — lives one level down from the outer template rather than in it.
+ * Prisma nests `Prisma.sql` fragments, so the per-row `VALUES (â€¦)` text â€” casts
+ * included â€” lives one level down from the outer template rather than in it.
  * Splice it back in, or an assertion about `::date` silently examines only the
  * outer statement and passes for the wrong reason.
  */
@@ -135,7 +135,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
       (p): p is string => typeof p === "string" && DATE_KEY.test(p)
     );
     const weekStart = dateKeys[1];
-    // Each row binds (uuid, learnerId, date, weekStart, status, notes, …), so the
+    // Each row binds (uuid, learnerId, date, weekStart, status, notes, â€¦), so the
     // note sits four places past its own learner id. Scanned by position rather
     // than looked up by id: one learner legitimately has several days in a save,
     // and `indexOf` would give every one of them the FIRST day's reason.
@@ -155,7 +155,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
       else attendance.push({ learnerId: id, dateKey, notes, weekStart });
     }
     const marked = rows.map((r) => ({ id: `att-${r.learnerId}-${r.dateKey}` }));
-    // One row silently skipped by the JOIN — a soft-deleted or cross-tenant learner.
+    // One row silently skipped by the JOIN â€” a soft-deleted or cross-tenant learner.
     // Postgres reports no error for that, so the guard is the only thing that turns
     // it into a refusal instead of a week saved with a hole in it.
     return dropOneReturnedRow ? marked.slice(1) : marked;
@@ -168,7 +168,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
       const i = attendance.findIndex(
         (a) => a.learnerId === r.learnerId && a.dateKey === r.dateKey
       );
-      // Only rows that really exist are deleted — that is what makes `cleared`
+      // Only rows that really exist are deleted â€” that is what makes `cleared`
       // differ from "cells submitted".
       if (i >= 0) {
         attendance.splice(i, 1);
@@ -181,7 +181,7 @@ const queryRaw = vi.fn(async (strings: readonly string[], ...values: unknown[]) 
   // There is deliberately no `UPDATE "Attendance"` branch. The weekly-remark
   // UPDATE pass is gone: a reason rides on the cell it explains and is written by
   // the INSERT itself. Reintroducing a second pass would fall through to the throw
-  // below rather than quietly passing, which is the point — that pass is what used
+  // below rather than quietly passing, which is the point â€” that pass is what used
   // to overwrite a per-day reason with a week-wide one.
   throw new Error(`unexpected statement: ${sql}`);
 });
@@ -235,6 +235,15 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
     }));
 });
 
+/**
+ * The two grant tables `canWriteWindow` reads from â€” left un-mocked at the
+ * module level (unlike `reading-level-bulk-save.test.ts`'s window mock) so the
+ * real `canWriteWindow` runs here, exactly as the "refuses a week past its
+ * deadline" test above already depends on for its fail-closed behaviour.
+ */
+const unlockGrantFindFirst = vi.fn(async (_args?: unknown) => null as unknown);
+const schoolUnlockGrantFindFirst = vi.fn(async (_args?: unknown) => null as unknown);
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     get $transaction() {
@@ -243,6 +252,12 @@ vi.mock("@/lib/prisma", () => ({
     gradeLevel: { findFirst: (...a: unknown[]) => gradeFindFirst(...(a as [never])) },
     attendanceDayMeta: { findMany: () => dayMetaFindMany() },
     learner: { findMany: (...a: unknown[]) => learnerFindMany(...(a as [never])) },
+    unlockGrant: {
+      findFirst: (...a: unknown[]) => unlockGrantFindFirst(...(a as [never])),
+    },
+    schoolUnlockGrant: {
+      findFirst: (...a: unknown[]) => schoolUnlockGrantFindFirst(...(a as [never])),
+    },
   },
 }));
 
@@ -257,7 +272,11 @@ vi.mock("@/lib/auth/session", () => ({
 const writeAudit = vi.fn(async (_e: { metadata: Record<string, unknown> }) => {});
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...a: unknown[]) => writeAudit(...(a as [never])),
-  AUDIT_ACTIONS: { ATTENDANCE_WEEK_SAVE: "ATTENDANCE_WEEK_SAVE" },
+  AUDIT_ACTIONS: {
+    ATTENDANCE_WEEK_SAVE: "ATTENDANCE_WEEK_SAVE",
+    UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
+    UNLOCK_SCHOOL_GRANT_USED: "UNLOCK_SCHOOL_GRANT_USED",
+  },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -268,7 +287,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
 
 // `attendanceDeadline` locks a week some days after it ends, so the fake clock has
 // to sit inside the editable window for this week. Mutable rather than fixed, so
-// the two §3 cases below can move the deadline into the past.
+// the two Â§3 cases below can move the deadline into the past.
 let deadline = new Date(2099, 0, 1);
 vi.mock("@/lib/week-range", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -278,7 +297,7 @@ vi.mock("@/lib/week-range", async (importOriginal) => {
 /**
  * Submission locking, ON by default here for the same reason the term-grades
  * suite pins it: the real reader would reach `prisma.systemSetting`, which the
- * Prisma mock above does not define, and degrade to "off" — turning the locked
+ * Prisma mock above does not define, and degrade to "off" â€” turning the locked
  * case below into a second test of the unlocked path.
  */
 const isSubmissionLockingEnabled = vi.fn(async () => true);
@@ -312,16 +331,18 @@ beforeEach(() => {
   dropOneReturnedRow = false;
   deadline = new Date(2099, 0, 1);
   isSubmissionLockingEnabled.mockResolvedValue(true);
+  unlockGrantFindFirst.mockResolvedValue(null);
+  schoolUnlockGrantFindFirst.mockResolvedValue(null);
 });
 
 /**
- * §3 of the ten concerns, at this write path.
+ * Â§3 of the ten concerns, at this write path.
  *
  * The pair is the point: the SAME past-deadline week, from the same teacher,
  * with no grant anywhere, refused in one regime and accepted in the other. It
  * fails if `canWriteWindow` is ever bypassed here, in either direction.
  */
-describe("saveAralWeeklyAttendance — the submission-locking switch", () => {
+describe("saveAralWeeklyAttendance â€” the submission-locking switch", () => {
   it("refuses a week past its deadline while deadlines are enforced", async () => {
     deadline = new Date(2000, 0, 1);
 
@@ -345,11 +366,69 @@ describe("saveAralWeeklyAttendance — the submission-locking switch", () => {
   });
 });
 
-describe("saveAralWeeklyAttendance — the RETURNING count guard", () => {
+describe("saveAralWeeklyAttendance â€” which grant table wrote the second audit row", () => {
+  // A school-wide grant lives in a DIFFERENT table (`SchoolUnlockGrant`) than a
+  // personal one (`UnlockGrant`). Joining its id against `UnlockGrant` finds
+  // nothing, so the second audit row must name the right table â€” in `action`
+  // AND in `resource` â€” not just carry `grantKind` in `metadata`.
+  it("writes UNLOCK_GRANT_USED against UnlockGrant for a personal grant", async () => {
+    deadline = new Date(2000, 0, 1);
+    unlockGrantFindFirst.mockResolvedValue({
+      id: "grant-personal-1",
+      expiresAt: new Date(2099, 0, 1),
+      grantedBy: null,
+    });
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: WEEK_START, status: "PRESENT" }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    expect(writeAudit.mock.calls[0][0]).toMatchObject({
+      action: "ATTENDANCE_WEEK_SAVE",
+      metadata: expect.objectContaining({ grantKind: "user" }),
+    });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_GRANT_USED",
+      resource: "UnlockGrant",
+      resourceId: "grant-personal-1",
+      metadata: expect.objectContaining({ grantKind: "user" }),
+    });
+  });
+
+  it("writes UNLOCK_SCHOOL_GRANT_USED against SchoolUnlockGrant for a school-wide grant", async () => {
+    deadline = new Date(2000, 0, 1);
+    schoolUnlockGrantFindFirst.mockResolvedValue({
+      id: "grant-school-1",
+      expiresAt: new Date(2099, 0, 1),
+      grantedBy: null,
+    });
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: WEEK_START, status: "PRESENT" }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    expect(writeAudit.mock.calls[0][0]).toMatchObject({
+      action: "ATTENDANCE_WEEK_SAVE",
+      metadata: expect.objectContaining({ grantKind: "school" }),
+    });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_SCHOOL_GRANT_USED",
+      resource: "SchoolUnlockGrant",
+      resourceId: "grant-school-1",
+      metadata: expect.objectContaining({ grantKind: "school" }),
+    });
+  });
+});
+
+describe("saveAralWeeklyAttendance â€” the RETURNING count guard", () => {
   it("refuses the whole save when the INSERT writes fewer rows than it was given", async () => {
     // The last defence against a silently skipped row. The JOIN drops any learner
     // that is soft-deleted, non-ARAL, or in another tenant, and Postgres reports NO
-    // error — the teacher would be shown a saved week with one learner's marks
+    // error â€” the teacher would be shown a saved week with one learner's marks
     // missing. Nothing else in this file fires the branch, so an inverted or deleted
     // comparison would go unnoticed.
     dropOneReturnedRow = true;
@@ -371,7 +450,7 @@ describe("saveAralWeeklyAttendance — the RETURNING count guard", () => {
   });
 });
 
-describe("saveAralWeeklyAttendance — the Asia/Manila date bind", () => {
+describe("saveAralWeeklyAttendance â€” the Asia/Manila date bind", () => {
   it("proves the timezone this file runs in actually shifts a UTC instant", () => {
     // The premise. Without this, the assertions below could pass on a UTC box for
     // the wrong reason and the whole point of the file would be lost.
@@ -400,7 +479,7 @@ describe("saveAralWeeklyAttendance — the Asia/Manila date bind", () => {
   });
 });
 
-describe("saveAralWeeklyAttendance — the three derived counts", () => {
+describe("saveAralWeeklyAttendance â€” the three derived counts", () => {
   it("counts cleared as rows actually deleted, not cells submitted", async () => {
     // The distinction the old `sum of deleteMany counts` encoded: clearing a cell
     // that was never marked deletes nothing and must not be counted.
@@ -449,7 +528,7 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
 
   it("issues no UPDATE statement at all", async () => {
     // The weekly-remark pass is gone. Were it reintroduced, the mock's fallthrough
-    // would throw `unexpected statement` — this asserts the shape directly so the
+    // would throw `unexpected statement` â€” this asserts the shape directly so the
     // reason for its absence is recorded next to it.
     await post({
       cells: [
@@ -471,7 +550,7 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
   });
 
   it("clears a stored reason when the day turns Present", async () => {
-    // Present takes no reason — the picker says so and the action enforces it, so a
+    // Present takes no reason â€” the picker says so and the action enforces it, so a
     // day that was Absent for a reason must not keep that reason once it is Present.
     // The client is not trusted here: it sends the note and the action drops it.
     attendance = [
@@ -553,7 +632,7 @@ describe("saveAralWeeklyAttendance — the three derived counts", () => {
   });
 });
 
-describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
+describe("saveAralWeeklyAttendance â€” payload size and tenancy", () => {
   it("rejects 1401 cells before any write", async () => {
     // The `.max(1400)` cap (200 learners x 7 days) pre-dates this program, and the
     // set-based rewrite deliberately relied on it instead of paginating: it is what
@@ -639,7 +718,7 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
     // Two statements now, not three: the weekly-remark UPDATE is gone.
     expect(rawCalls).toHaveLength(2);
     for (const call of rawCalls) {
-      // Bound, not interpolated — the only witness a raw statement has that the
+      // Bound, not interpolated â€” the only witness a raw statement has that the
       // tenant predicate held.
       expect(call.params).toContain(SCHOOL_ID);
       expect(call.params).toContain(GRADE_ID);
@@ -653,7 +732,7 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
 
   it("refuses a learner that exists in another school, writing nothing", async () => {
     // CROSS_TENANT_LEARNER exists in the fake table under OTHER_SCHOOL_ID, with this
-    // teacher's own teacherId and this grade — only `schoolId: user.schoolId` on the
+    // teacher's own teacherId and this grade â€” only `schoolId: user.schoolId` on the
     // roster query excludes it. Remove that and this goes red.
     const res = await post({
       cells: [{ learnerId: CROSS_TENANT_LEARNER, date: TUESDAY, status: "PRESENT" }],
@@ -664,7 +743,7 @@ describe("saveAralWeeklyAttendance — payload size and tenancy", () => {
     expect(transaction).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
     expect(learnerFindMany.mock.calls[0][0].where.schoolId).toBe(SCHOOL_ID);
-    // Indistinguishable from a learner that does not exist at all — no oracle.
+    // Indistinguishable from a learner that does not exist at all â€” no oracle.
     const missing = await post({
       cells: [{ learnerId: "learner-nowhere", date: TUESDAY, status: "PRESENT" }],
     });

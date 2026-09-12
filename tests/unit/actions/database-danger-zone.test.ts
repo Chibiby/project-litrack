@@ -92,12 +92,12 @@ vi.mock("@/lib/rate-limit", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 // Imported after the mock factories above are registered.
-const {
-  CONFIRM_PHRASES,
-  removeAllTeachers,
-  resetAllSchoolAccounts,
-  resetOperationalData,
-} = await import("@/lib/actions/database");
+const { removeAllTeachers, resetAllSchoolAccounts, resetOperationalData } = await import(
+  "@/lib/actions/database"
+);
+// Not from the action module: a "use server" file may export only async
+// functions, so the phrases live in a plain module both sides import.
+const { CONFIRM_PHRASES } = await import("@/lib/constants/confirm-phrases");
 
 const ADMIN = { id: "admin-1", schoolId: null, role: "SUPER_ADMIN" };
 const SCHOOL = { id: "6b1d0c4a-8e2f-4a7b-9c3d-1e5f7a9b0c2d", name: "Camarin Elementary School" };

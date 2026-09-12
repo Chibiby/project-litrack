@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServiceEnv } from "@/lib/supabase/env";
+import { AppError } from "@/lib/errors/app-error";
 
 const INVALID_SERVICE_ROLE_MESSAGE =
   "SUPABASE_SERVICE_ROLE_KEY is missing or invalid. In Supabase Dashboard → Project Settings → API, copy the service_role secret (JWT) into .env.local — not the anon key.";
@@ -35,10 +36,22 @@ export function getInvalidServiceRoleMessage(): string {
 export function createSupabaseAdminClient() {
   const env = getSupabaseServiceEnv();
   if (!env.ok) {
-    throw new Error(INVALID_SERVICE_ROLE_MESSAGE);
+    // The setup instructions are admin detail, not user copy: this message
+    // names a dashboard, a key and a file, and the person who hit it is usually
+    // a teacher who can do nothing with any of that.
+    throw new AppError("CONFIG_MISSING", {
+      detail: INVALID_SERVICE_ROLE_MESSAGE,
+      context: { reason: "service_role_key" },
+    });
   }
   if (!isServiceRoleJwt(env.serviceRoleKey)) {
-    throw new Error(INVALID_SERVICE_ROLE_MESSAGE);
+    // The setup instructions are admin detail, not user copy: this message
+    // names a dashboard, a key and a file, and the person who hit it is usually
+    // a teacher who can do nothing with any of that.
+    throw new AppError("CONFIG_MISSING", {
+      detail: INVALID_SERVICE_ROLE_MESSAGE,
+      context: { reason: "service_role_key" },
+    });
   }
 
   return createClient(env.url, env.serviceRoleKey, {

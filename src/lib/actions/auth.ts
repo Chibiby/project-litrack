@@ -18,11 +18,23 @@ import {
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { passwordChangeFields } from "@/lib/auth/password-vault";
-import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
-import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
+import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { action } from "@/lib/errors/action";
+import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
+import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
+import { reportError } from "@/lib/errors/report";
+import type { ActionFailure } from "@/lib/errors/result";
+import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
+import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
+import {
+  clearImpersonationCookie,
+  checkCurrentSession,
+  readImpersonationContext,
+} from "@/lib/auth/impersonation";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
 import {
   warmAdminRoutes,
@@ -30,204 +42,110 @@ import {
   warmTeacherRoutes,
 } from "@/lib/auth/warm-routes";
 import {
-  DECLINED_REGISTRATION_MESSAGE,
-  DEACTIVATED_TEACHER_MESSAGE,
   isDeactivatedTeacher,
   isPendingTeacherAtSchool,
-  registerConflictError,
+  registerConflictCode,
 } from "@/lib/auth/teacher-registration-helpers";
 
-type ActionResult = { ok: true } | { ok: false; error: string };
-
-const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
 const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
-
-function requireSupabaseConfigured(): { ok: false; error: string } | null {
-  if (!isSupabaseConfigured()) {
-    return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
-  }
-  return null;
-}
 
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
 /**
- * Turns a Supabase auth failure into something safe to show, and — just as
- * importantly — logs the one it was given.
- *
- * Every branch here used to collapse to a generic sentence with nothing
- * written anywhere, so "Failed to send code. Please try again." was a dead end:
- * it could equally mean signups are switched off for the project, the SMTP
- * sender is misconfigured, or the address was rejected, and no one could tell
- * which. `scope` names the caller so the server log says where it came from.
- *
- * The email is not logged. The message Supabase returns can be, because it
- * describes the project's own configuration rather than the person signing in.
- */
-function mapSupabaseAuthError(
-  message: string | undefined,
-  fallback: string,
-  scope = "auth"
-): string {
-  const msg = (message ?? "").toLowerCase();
-  console.error(`[${scope}] supabase auth error:`, message ?? "(no message)");
-
-  if (
-    msg.includes("rate") ||
-    msg.includes("too many") ||
-    msg.includes("security purposes") ||
-    msg.includes("after")
-  ) {
-    return "Too many attempts. Please try again later.";
-  }
-  // Supabase returns this when "Allow new users to sign up" is off for the
-  // project. Nothing the person typed can fix it, so say so rather than
-  // inviting them to retry forever.
-  if (msg.includes("signup") && msg.includes("not allowed")) {
-    return "New account sign-ups are currently disabled. Please contact your school head.";
-  }
-  // "Error sending magic link email" / "Error sending confirmation email" —
-  // the project's SMTP sender failed or is over quota. Also nothing the person
-  // can act on, but it is genuinely worth retrying.
-  if (msg.includes("error sending") || msg.includes("smtp")) {
-    return "We could not send the email right now. Please try again in a few minutes, or contact your school head if it keeps failing.";
-  }
-  if (msg.includes("invalid") && msg.includes("email")) {
-    return "That email address was rejected. Please check it and try again.";
-  }
-  return fallback;
-}
-
-async function assertActiveSchool(
-  schoolId: string
-): Promise<{ id: string } | { ok: false; error: string }> {
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { id: true, isActive: true, deletedAt: true },
-  });
-  if (!school || !school.isActive || school.deletedAt) {
-    return { ok: false, error: "School not found or inactive" };
-  }
-  return { id: school.id };
-}
-
-/**
  * School Head login: school selection + password (activation credential or private password).
  * Sign-in uses the SH account's stored Prisma email (synthetic by default, or changed later).
  */
-export async function loginSchoolHead(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const loginSchoolHead = action(
+  "loginSchoolHead",
+  async (formData: FormData): Promise<never> => {
+    assertSupabaseConfigured();
 
-  const parsed = schoolLoginSchema.safeParse({
-    schoolId: formData.get("schoolId"),
-    role: "SCHOOL_HEAD",
-    password: formData.get("password"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const rate = await checkRateLimit(`login:school-head:${parsed.data.schoolId}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  const school = await prisma.school.findUnique({
-    where: { id: parsed.data.schoolId },
-    select: { id: true, isActive: true, deletedAt: true },
-  });
-  if (!school || !school.isActive || school.deletedAt) {
-    return { ok: false, error: "School not found or inactive" };
-  }
-
-  const shUser = await prisma.user.findFirst({
-    where: {
+    const input = parseInput(schoolLoginSchema, {
+      schoolId: formData.get("schoolId"),
       role: "SCHOOL_HEAD",
-      schoolId: school.id,
-      deletedAt: null,
-      isActive: true,
-    },
-    select: { id: true, email: true, isActive: true },
-    // Must match `findSchoolHead` in ./school-accounts, which the Super Admin
-    // reset targets. Unordered, a school with two head rows could authenticate
-    // against one account while the admin resets the other — and the reset
-    // would look like it did nothing.
-    orderBy: { createdAt: "asc" },
-  });
-  if (!shUser) {
-    return { ok: false, error: "Login failed. Please contact your administrator." };
-  }
+      password: formData.get("password"),
+    });
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: shUser.email,
-    password: parsed.data.password,
-  });
-  if (error) {
-    const limited = isAuthRateLimitError(error);
-    if (limited) console.error("[loginSchoolHead] supabase rate limit:", error.message);
+    const rate = await checkRateLimit(`login:school-head:${input.schoolId}`, LOGIN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
+
+    const school = await requireActiveSchool(input.schoolId);
+
+    // Shared with every reveal/reset/impersonation control so duplicate head
+    // rows cannot make an admin act on a different account than sign-in uses.
+    const shUser = await findSignInSchoolHead(school.id);
+    if (!shUser) {
+      throw new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", {
+        detail: `School ${school.id} has no active School Head account`,
+        context: { schoolId: school.id, reason: "no_school_head" },
+      });
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: shUser.email,
+      password: input.password,
+    });
+    if (error) {
+      // Once the school is chosen and the account exists, a wrong password is a
+      // wrong password — and this used to say "contact your administrator",
+      // which is what sent schools off resetting credentials that were fine.
+      const code = mapSupabaseAuthError(error, "server");
+      await writeAudit({
+        userId: shUser.id,
+        schoolId: school.id,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: shUser.id,
+        metadata: {
+          role: "SCHOOL_HEAD",
+          schoolId: school.id,
+          reason: loginFailureReasonFor(code),
+        },
+      });
+      throw new AppError(code, { cause: error, context: { schoolId: school.id } });
+    }
+
     await writeAudit({
       userId: shUser.id,
       schoolId: school.id,
-      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
       resource: "User",
       resourceId: shUser.id,
-      metadata: {
-        role: "SCHOOL_HEAD",
-        schoolId: school.id,
-        reason: limited ? "rate_limited" : "incorrect_credentials",
-      },
+      metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
     });
-    return {
-      ok: false,
-      error: limited
-        ? AUTH_RATE_LIMITED_MESSAGE
-        : "Login failed. Please contact your administrator.",
-    };
+
+    await warmSchoolHeadRoutes(school.id);
+
+    redirect(SCHOOL_HEAD_ROUTES.dashboard);
   }
-
-  await writeAudit({
-    userId: shUser.id,
-    schoolId: school.id,
-    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-    resource: "User",
-    resourceId: shUser.id,
-    metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
-  });
-
-  await warmSchoolHeadRoutes(school.id);
-
-  redirect(SCHOOL_HEAD_ROUTES.dashboard);
-}
+);
 
 /**
  * Teacher login with email + password only (no OTP / codes).
  */
-export async function loginTeacher(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const loginTeacher = action("loginTeacher", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
 
-  const parsed = teacherLoginSchema.safeParse({
+  const input = parseInput(teacherLoginSchema, {
     schoolId: formData.get("schoolId"),
     email: formData.get("email"),
     password: formData.get("password"),
   });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
 
-  const email = parsed.data.email.toLowerCase().trim();
-  const { schoolId, password } = parsed.data;
+  const email = input.email.toLowerCase().trim();
+  const { schoolId, password } = input;
 
   const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const school = await assertActiveSchool(schoolId);
-  if ("ok" in school && school.ok === false) return school;
+  await assertLookupAllowed();
+  await requireActiveSchool(schoolId);
 
   const teacher = await prisma.user.findUnique({
     where: { email },
@@ -247,14 +165,10 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
     teacher.role !== "TEACHER" ||
     teacher.schoolId !== schoolId
   ) {
-    return {
-      ok: false,
-      error: "No teacher account found for this school. Create an account first.",
-    };
+    await recordFailedLookup();
+    throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
   }
-  if (teacher.approvalStatus === "REJECTED") {
-    return { ok: false, error: DECLINED_REGISTRATION_MESSAGE };
-  }
+  if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
   if (isDeactivatedTeacher(teacher)) {
     await writeAudit({
       userId: teacher.id,
@@ -264,27 +178,22 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
       resourceId: teacher.id,
       metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
     });
-    return { ok: false, error: DEACTIVATED_TEACHER_MESSAGE };
+    throw new AppError("AUTH_ACCOUNT_DEACTIVATED");
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    const limited = isAuthRateLimitError(error);
-    if (limited) console.error("[loginTeacher] supabase rate limit:", error.message);
+    const code = mapSupabaseAuthError(error, "server");
     await writeAudit({
       userId: teacher.id,
       schoolId,
       action: AUDIT_ACTIONS.LOGIN_DENIED,
       resource: "User",
       resourceId: teacher.id,
-      metadata: {
-        role: "TEACHER",
-        schoolId,
-        reason: limited ? "rate_limited" : "incorrect_credentials",
-      },
+      metadata: { role: "TEACHER", schoolId, reason: loginFailureReasonFor(code) },
     });
-    return { ok: false, error: limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect email or password." };
+    throw new AppError(code, { cause: error, context: { schoolId } });
   }
 
   await writeAudit({
@@ -308,7 +217,7 @@ export async function loginTeacher(formData: FormData): Promise<ActionResult> {
   }
 
   redirect(pending ? "/pending-approval" : "/teacher");
-}
+});
 
 type TeacherRegisterNames = {
   firstName: string;
@@ -321,15 +230,10 @@ type TeacherRegisterNames = {
  * the browser must apply the Set-Cookie from this action before requesting the
  * success page, otherwise that page sees no session and bounces to /login.
  */
-type TeacherRegisterResult =
-  | { ok: true; redirectTo: string }
-  | { ok: false; error: string };
+export type TeacherRegisterResult = { ok: true; redirectTo: string } | ActionFailure;
 
 /** Success page for a teacher awaiting School Head approval. */
 const REGISTER_PENDING_PATH = "/account/created";
-
-const REGISTER_SIGN_IN_MESSAGE =
-  "Your account was created. Please sign in with your email and password.";
 
 /**
  * Finish teacher self-register once the Supabase session exists.
@@ -344,7 +248,7 @@ async function finishTeacherRegister(
     names: TeacherRegisterNames;
     isAralVolunteer: boolean;
   }
-): Promise<TeacherRegisterResult> {
+): Promise<{ ok: true; redirectTo: string }> {
   const result = await completeTeacherAuthAfterVerify({
     authId: params.authId,
     email: params.email,
@@ -390,7 +294,8 @@ async function finishTeacherRegister(
         console.error("[registerTeacher] signOut failed:", err);
       }
     }
-    return { ok: false, error: result.error };
+    // An AppError, carried up so the wrapper answers with it.
+    throw result.error;
   }
 
   return {
@@ -412,19 +317,13 @@ async function finishTeacherRegister(
 async function createOrAdoptTeacherAuthUser(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   params: { email: string; password: string; schoolId: string }
-): Promise<{ ok: true; authId: string } | { ok: false; error: string }> {
+): Promise<string> {
   const { email, password, schoolId } = params;
 
-  let admin;
-  try {
-    admin = createSupabaseAdminClient();
-  } catch (err) {
-    console.error("[registerTeacher] admin client unavailable:", err);
-    return {
-      ok: false,
-      error: "Account creation is temporarily unavailable. Please contact your School Head.",
-    };
-  }
+  // Throws CONFIG_MISSING when the service-role key is absent or wrong, which
+  // the wrapper turns into "not set up yet" plus a reference — where the old
+  // "temporarily unavailable" implied waiting would fix it.
+  const admin = createSupabaseAdminClient();
 
   const { data, error } = await admin.auth.admin.createUser({
     email,
@@ -432,9 +331,7 @@ async function createOrAdoptTeacherAuthUser(
     email_confirm: true,
     app_metadata: { role: "TEACHER", schoolId },
   });
-  if (!error && data.user) {
-    return { ok: true, authId: data.user.id };
-  }
+  if (!error && data.user) return data.user.id;
 
   const message = (error?.message ?? "").toLowerCase();
   const alreadyRegistered =
@@ -443,14 +340,7 @@ async function createOrAdoptTeacherAuthUser(
     message.includes("already exists");
 
   if (!alreadyRegistered) {
-    return {
-      ok: false,
-      error: mapSupabaseAuthError(
-        error?.message,
-        "Could not create your account. Please try again.",
-        "registerTeacher"
-      ),
-    };
+    throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error ?? undefined });
   }
 
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -458,13 +348,9 @@ async function createOrAdoptTeacherAuthUser(
     password,
   });
   if (signInError || !signInData.user) {
-    return {
-      ok: false,
-      error:
-        "That email already has an account. Sign in instead, or use Forgot password to reset it.",
-    };
+    throw new AppError("AUTH_ACCOUNT_EXISTS_SIGN_IN", { cause: signInError ?? undefined });
   }
-  return { ok: true, authId: signInData.user.id };
+  return signInData.user.id;
 }
 
 /**
@@ -475,71 +361,74 @@ async function createOrAdoptTeacherAuthUser(
  * password recovery. Returns the destination on success so the client navigates
  * after the session cookies land, or an error message on failure.
  */
-export async function registerTeacher(formData: FormData): Promise<TeacherRegisterResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const registerTeacher = action(
+  "registerTeacher",
+  async (formData: FormData): Promise<{ ok: true; redirectTo: string }> => {
+    assertSupabaseConfigured();
 
-  const parsed = teacherRegisterSchema.safeParse({
-    schoolId: formData.get("schoolId"),
-    email: formData.get("email"),
-    firstName: formData.get("firstName") || undefined,
-    middleName: formData.get("middleName") || undefined,
-    lastName: formData.get("lastName") || undefined,
-    // Unticked checkboxes send nothing, so absence is `false` — and the string
-    // "false" must be false too, since the client posts the flag explicitly.
-    isAralVolunteer: formData.get("isAralVolunteer") === "true",
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+    const input = parseInput(teacherRegisterSchema, {
+      schoolId: formData.get("schoolId"),
+      email: formData.get("email"),
+      firstName: formData.get("firstName") || undefined,
+      middleName: formData.get("middleName") || undefined,
+      lastName: formData.get("lastName") || undefined,
+      // Unticked checkboxes send nothing, so absence is `false` — and the string
+      // "false" must be false too, since the client posts the flag explicitly.
+      isAralVolunteer: formData.get("isAralVolunteer") === "true",
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-  const email = parsed.data.email.toLowerCase().trim();
-  const { schoolId, password } = parsed.data;
-  const names: TeacherRegisterNames = {
-    firstName: parsed.data.firstName.trim(),
-    middleName: parsed.data.middleName?.trim() || undefined,
-    lastName: parsed.data.lastName.trim(),
-  };
+    const email = input.email.toLowerCase().trim();
+    const { schoolId, password } = input;
+    const names: TeacherRegisterNames = {
+      firstName: input.firstName.trim(),
+      middleName: input.middleName?.trim() || undefined,
+      lastName: input.lastName.trim(),
+    };
 
-  const rate = await checkRateLimit(`register:teacher:${schoolId}:${email}`, REGISTER_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const rate = await checkRateLimit(`register:teacher:${schoolId}:${email}`, REGISTER_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const school = await assertActiveSchool(schoolId);
-  if ("ok" in school && school.ok === false) return school;
+    await assertLookupAllowed();
+    await requireActiveSchool(schoolId);
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && !existing.deletedAt) {
-    return { ok: false, error: registerConflictError(existing, schoolId) };
-  }
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing && !existing.deletedAt) {
+      // A conflict answers the same question sign-in does — "does this address
+      // have an account?" — so it costs the same allowance.
+      await recordFailedLookup();
+      throw new AppError(registerConflictCode(existing, schoolId));
+    }
 
-  const supabase = await createSupabaseServerClient();
-  const auth = await createOrAdoptTeacherAuthUser(supabase, { email, password, schoolId });
-  if (!auth.ok) return auth;
+    const supabase = await createSupabaseServerClient();
+    const authId = await createOrAdoptTeacherAuthUser(supabase, { email, password, schoolId });
 
   // Sign in so the browser holds a session for /account/created. If this fails
   // the auth user exists but no LITRACK row does yet — signing in and creating
   // the account again recovers it through the adopt path above.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session || session.user.id !== auth.authId) {
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
-      console.error("[registerTeacher] sign-in after create failed:", signInError.message);
-      return { ok: false, error: REGISTER_SIGN_IN_MESSAGE };
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session || session.user.id !== authId) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        // The account exists; only the automatic sign-in failed. Telling them to
+        // sign in is the one instruction that actually works here.
+        throw new AppError("AUTH_REGISTERED_SIGN_IN", { cause: signInError });
+      }
     }
-  }
 
-  return finishTeacherRegister(supabase, {
-    authId: auth.authId,
-    email,
-    schoolId,
-    names,
-    isAralVolunteer: parsed.data.isAralVolunteer,
-  });
-}
+    return finishTeacherRegister(supabase, {
+      authId,
+      email,
+      schoolId,
+      names,
+      isAralVolunteer: input.isAralVolunteer,
+    });
+  },
+  { verb: "create your account" }
+);
 
 /**
  * Super Admin login: username + password.
@@ -549,24 +438,18 @@ export async function registerTeacher(formData: FormData): Promise<TeacherRegist
  * `User.username` here and the row's `email` is what actually reaches Supabase.
  * Password recovery is unaffected and still runs entirely off that email.
  */
-export async function loginAdmin(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const loginAdmin = action("loginAdmin", async (formData: FormData): Promise<never> => {
+  assertSupabaseConfigured();
 
-  const parsed = adminLoginSchema.safeParse({
+  const { username, password } = parseInput(adminLoginSchema, {
     username: formData.get("username"),
     password: formData.get("password"),
   });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const { username, password } = parsed.data;
 
   const rate = await checkRateLimit(`login:admin:${username}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  try {
+  {
     // Supabase Auth authenticates on an email address, so the handle has to be
     // resolved to one before we can hand anything to `signInWithPassword`.
     //
@@ -592,8 +475,11 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
         metadata: { role: "SUPER_ADMIN", reason: "unknown_username" },
       });
       // Identical to the wrong-password message below, so the field cannot be
-      // used to enumerate which handles exist.
-      return { ok: false, error: "Incorrect credentials" };
+      // used to enumerate which handles exist. This is the one login where the
+      // generic message is deliberate: these are the highest-value accounts in
+      // the system, and unlike a teacher there is no legitimate "did I type my
+      // address wrong?" confusion to resolve.
+      throw new AppError("AUTH_INCORRECT_CREDENTIALS");
     }
 
     const supabase = await createSupabaseServerClient();
@@ -602,16 +488,20 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
       password,
     });
     if (error || !data.user) {
-      const limited = isAuthRateLimitError(error);
-      if (limited) console.error("[loginAdmin] supabase rate limit:", error?.message);
+      const mapped = error ? mapSupabaseAuthError(error, "server") : "AUTH_INCORRECT_PASSWORD";
       await writeAudit({
         userId: account.id,
         action: AUDIT_ACTIONS.LOGIN_DENIED,
         resource: "User",
         resourceId: account.id,
-        metadata: { role: "SUPER_ADMIN", reason: limited ? "rate_limited" : "incorrect_credentials" },
+        metadata: { role: "SUPER_ADMIN", reason: loginFailureReasonFor(mapped) },
       });
-      return { ok: false, error: limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect credentials" };
+      // Collapsed to the same message as an unknown handle — but only for the
+      // credential case. A rate limit or an outage still says what it is.
+      throw new AppError(
+        mapped === "AUTH_INCORRECT_PASSWORD" ? "AUTH_INCORRECT_CREDENTIALS" : mapped,
+        { cause: error ?? undefined }
+      );
     }
 
     const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
@@ -624,7 +514,11 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
         resourceId: user?.id,
         metadata: { role: user?.role ?? "UNKNOWN", reason: "not_authorized" },
       });
-      return { ok: false, error: "Not authorized" };
+      throw new AppError("AUTH_FORBIDDEN", {
+        params: { what: "the admin console" },
+        detail: `Signed in, but the account is not an active Super Admin (role ${user?.role ?? "none"})`,
+        context: { reason: "not_super_admin" },
+      });
     }
 
     await writeAudit({
@@ -638,25 +532,22 @@ export async function loginAdmin(formData: FormData): Promise<ActionResult> {
     await warmAdminRoutes();
 
     redirect("/admin");
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Login failed";
-    if (message.includes("SUPABASE") || message.includes("Missing NEXT_PUBLIC")) {
-      return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
-    }
-    if (
-      message.includes("DATABASE") ||
-      message.includes("Prisma") ||
-      message.includes("Environment variable not found")
-    ) {
-      return {
-        ok: false,
-        error: "Database is not configured. Set DATABASE_URL on Vercel and run migrations/seed.",
-      };
-    }
-    throw err;
   }
-}
+  // The try/catch that used to live here sniffed error messages for "SUPABASE",
+  // "Prisma" and "Environment variable not found", then told an anonymous
+  // visitor to set DATABASE_URL on Vercel. Both configuration failures now
+  // throw CONFIG_MISSING from where they happen, and the wrapper gives the
+  // person a reference while the variable names go to the error record.
+});
 
+/**
+ * Deliberately NOT wrapped by `action()`.
+ *
+ * This is passed straight to `<form action={logoutAction}>`, whose signature
+ * requires `Promise<void>` — and a form action has no way to read a returned
+ * result anyway, so the wrapper would add a type error and nothing else. It
+ * always redirects; anything that escapes is recorded by `onRequestError`.
+ */
 export async function logoutAction(): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -673,7 +564,55 @@ export async function logoutAction(): Promise<void> {
     schoolId = row?.schoolId ?? null;
   }
 
-  await supabase.auth.signOut();
+  // Whose session is ending decides how much of it ends, and has to be read
+  // before the clear below removes the ticket that says so.
+  //
+  // An admin inside an impersonation ends ONLY the impersonation session: the
+  // default global scope would delete every session the target has, logging a
+  // teacher out of their own phone and laptop because an admin clicked Sign out
+  // in their sidebar. `local` is `POST /logout?scope=local` with this session's
+  // token, which GoTrue answers by deleting this one session row — so it is
+  // still revoked server-side, not merely dropped from this browser.
+  //
+  // Any valid signed ticket makes this browser's session impersonation-related,
+  // even when its binding is stale after a target re-login. Keep that logout
+  // local so an old ticket cannot make a teacher lose unrelated sessions.
+  const ticketContext = await readImpersonationContext();
+  const sessionCheck = ticketContext ? await checkCurrentSession(supabase.auth) : null;
+  if (sessionCheck?.status === "unavailable") {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      detail: "Could not verify the impersonated session before sign-out; ticket retained",
+    });
+  }
+  const impersonation =
+    ticketContext && sessionCheck?.status === "live" &&
+    sessionCheck.sessionId === ticketContext.ticket.sessionId
+      ? ticketContext
+      : null;
+
+  // Keep the ticket until Supabase confirms sign-out. Session binding makes a
+  // leftover ticket useless to any later login, while clearing first on a
+  // network failure strands the admin in the target session without a banner.
+  const { error: signOutError } = await supabase.auth.signOut({
+    scope: ticketContext ? "local" : "global",
+  });
+  if (signOutError) {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      cause: signOutError,
+      detail: "Supabase sign-out failed; impersonation ticket retained",
+    });
+  }
+  await clearImpersonationCookie();
+
+  if (impersonation) {
+    await writeAudit({
+      userId: impersonation.ticket.adminUserId,
+      schoolId,
+      action: AUDIT_ACTIONS.IMPERSONATION_END,
+      resource: "User",
+      resourceId: impersonation.ticket.targetUserId,
+    });
+  }
   await writeAudit({
     userId: appUserId,
     schoolId,
@@ -687,49 +626,44 @@ export async function logoutAction(): Promise<void> {
 /**
  * Forced first-login / activation password change (current session).
  */
-export async function setPasswordAction(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const setPasswordAction = action(
+  "setPasswordAction",
+  async (formData: FormData): Promise<never> => {
+    assertSupabaseConfigured();
 
-  const user = await requireUser(undefined, true, { allowMustChangePassword: true });
+    const user = await requireUser(undefined, true, { allowMustChangePassword: true });
 
-  const rate = await checkRateLimit(`password:set:${user.id}`, PASSWORD_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const rate = await checkRateLimit(`password:set:${user.id}`, PASSWORD_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const parsed = setPasswordSchema.safeParse({
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+    const input = parseInput(setPasswordSchema, {
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
+
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.updateUser({ password: input.password });
+    // A reused or policy-rejected password fails again on the next attempt, so
+    // "please try again" was advice that could not work.
+    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: passwordChangeFields(user.role, input.password),
+    });
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+      resource: "User",
+      resourceId: user.id,
+      metadata: { reason: "set_password" },
+    });
+
+    redirect(roleHomePath(user.role));
   }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) {
-    if (isAuthRateLimitError(error)) {
-      console.error("[updatePassword] supabase rate limit:", error.message);
-      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
-    }
-    return { ok: false, error: "Failed to update password. Please try again." };
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: passwordChangeFields(user.role, parsed.data.password),
-  });
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { reason: "set_password" },
-  });
-
-  redirect(roleHomePath(user.role));
-}
+);
 
 /**
  * Dismiss the first-login password prompt and keep the current credential.
@@ -745,8 +679,14 @@ export async function setPasswordAction(formData: FormData): Promise<ActionResul
  * public. `/account/password` remains available from Settings → Security, and
  * a Super Admin can always reset the account back to the School ID.
  */
-export async function skipPasswordChange(): Promise<ActionResult> {
+export const skipPasswordChange = action("skipPasswordChange", async (): Promise<never> => {
   const user = await requireUser(undefined, true, { allowMustChangePassword: true });
+
+  if (user.role === "TEACHER") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      detail: "Teachers must choose a new password after an administrator reset it",
+    });
+  }
 
   await prisma.user.update({
     where: { id: user.id },
@@ -765,266 +705,257 @@ export async function skipPasswordChange(): Promise<ActionResult> {
   });
 
   redirect(roleHomePath(user.role));
-}
+});
 
 /**
  * Voluntary password change — requires verifying the current password first.
  */
-export async function changePasswordAction(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const changePasswordAction = action(
+  "changePasswordAction",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    assertSupabaseConfigured();
 
-  const user = await requireUser();
+    const user = await requireUser();
 
-  const rate = await checkRateLimit(`password:change:${user.id}`, PASSWORD_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const rate = await checkRateLimit(`password:change:${user.id}`, PASSWORD_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const parsed = changePasswordSchema.safeParse({
-    currentPassword: formData.get("currentPassword"),
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+    const input = parseInput(changePasswordSchema, {
+      currentPassword: formData.get("currentPassword"),
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-  const supabase = await createSupabaseServerClient();
-  const { error: verifyErr } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: parsed.data.currentPassword,
-  });
-  if (verifyErr) {
-    // A 429 here means Supabase declined to check the password at all. Saying
-    // "incorrect" would send the person off to reset a password that is fine.
-    if (isAuthRateLimitError(verifyErr)) {
-      console.error("[changePassword] supabase rate limit:", verifyErr.message);
-      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    const supabase = await createSupabaseServerClient();
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: input.currentPassword,
+    });
+    if (verifyErr) {
+      // A 429 here means Supabase declined to check the password at all. Saying
+      // "incorrect" would send the person off to reset a password that is fine.
+      const code = mapSupabaseAuthError(verifyErr, "server");
+      throw new AppError(
+        code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code,
+        { cause: verifyErr }
+      );
     }
-    return { ok: false, error: "Current password is incorrect" };
+
+    const { error } = await supabase.auth.updateUser({ password: input.password });
+    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: passwordChangeFields(user.role, input.password),
+    });
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+      resource: "User",
+      resourceId: user.id,
+      metadata: { reason: "change_password" },
+    });
+
+    return { ok: true };
   }
-
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) {
-    if (isAuthRateLimitError(error)) {
-      console.error("[updatePassword] supabase rate limit:", error.message);
-      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
-    }
-    return { ok: false, error: "Failed to update password. Please try again." };
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: passwordChangeFields(user.role, parsed.data.password),
-  });
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { reason: "change_password" },
-  });
-
-  return { ok: true };
-}
+);
 
 /**
  * Change account email — re-auth with current password, then dual-write Auth + Prisma.
  */
-export async function changeEmailAction(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const changeEmailAction = action(
+  "changeEmailAction",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    assertSupabaseConfigured();
 
-  const user = await requireUser();
+    const user = await requireUser();
 
-  const rate = await checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const rate = await checkRateLimit(`email:change:${user.id}`, EMAIL_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const parsed = changeEmailSchema.safeParse({
-    newEmail: formData.get("newEmail"),
-    confirmEmail: formData.get("confirmEmail"),
-    currentPassword: formData.get("currentPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const newEmail = parsed.data.newEmail.trim().toLowerCase();
-  const currentEmail = user.email.trim().toLowerCase();
-  if (newEmail === currentEmail) {
-    return { ok: false, error: "New email must be different from your current email" };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error: verifyErr } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: parsed.data.currentPassword,
-  });
-  if (verifyErr) {
-    if (isAuthRateLimitError(verifyErr)) {
-      console.error("[changeEmail] supabase rate limit:", verifyErr.message);
-      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
-    }
-    return { ok: false, error: "Current password is incorrect" };
-  }
-
-  const taken = await prisma.user.findFirst({
-    where: {
-      email: newEmail,
-      deletedAt: null,
-      NOT: { id: user.id },
-    },
-    select: { id: true },
-  });
-  if (taken) {
-    return { ok: false, error: "That email is already in use." };
-  }
-
-  const previousWasSynthetic = isSyntheticEmail(user.email);
-  const oldEmail = user.email;
-
-  let admin;
-  try {
-    admin = createSupabaseAdminClient();
-  } catch {
-    return { ok: false, error: "Email change is temporarily unavailable. Please try again later." };
-  }
-
-  const { error: authErr } = await admin.auth.admin.updateUserById(user.authId, {
-    email: newEmail,
-    email_confirm: true,
-  });
-  if (authErr) {
-    return { ok: false, error: "Failed to update email. Please try again." };
-  }
-
-  try {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { email: newEmail },
+    const input = parseInput(changeEmailSchema, {
+      newEmail: formData.get("newEmail"),
+      confirmEmail: formData.get("confirmEmail"),
+      currentPassword: formData.get("currentPassword"),
     });
-  } catch {
-    const { error: rollbackErr } = await admin.auth.admin.updateUserById(user.authId, {
-      email: oldEmail,
+
+    const newEmail = input.newEmail.trim().toLowerCase();
+    if (newEmail === user.email.trim().toLowerCase()) throw new AppError("AUTH_EMAIL_UNCHANGED");
+
+    const supabase = await createSupabaseServerClient();
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: input.currentPassword,
+    });
+    if (verifyErr) {
+      const code = mapSupabaseAuthError(verifyErr, "server");
+      throw new AppError(
+        code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code,
+        { cause: verifyErr }
+      );
+    }
+
+    const taken = await prisma.user.findFirst({
+      where: { email: newEmail, deletedAt: null, NOT: { id: user.id } },
+      select: { id: true },
+    });
+    if (taken) throw new AppError("AUTH_EMAIL_IN_USE");
+
+    const previousWasSynthetic = isSyntheticEmail(user.email);
+    const oldEmail = user.email;
+
+    // Throws CONFIG_MISSING when the service-role key is absent, which the
+    // wrapper answers with a reference — the old "temporarily unavailable"
+    // implied waiting would fix a permanent misconfiguration.
+    const admin = createSupabaseAdminClient();
+
+    const { error: authErr } = await admin.auth.admin.updateUserById(user.authId, {
+      email: newEmail,
       email_confirm: true,
     });
-    if (rollbackErr) {
-      return {
-        ok: false,
-        error:
-          "Email was updated in authentication but failed to save locally. Please contact support.",
-      };
+    if (authErr) throw new AppError(mapSupabaseAuthError(authErr, "server"), { cause: authErr });
+
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
+    } catch (dbErr) {
+      // Put the address back, or the person signs in with an address LITRACK
+      // does not know. If even that fails, the two systems disagree about who
+      // this account is — the one failure here that must page a human, because
+      // no amount of retrying by the user can reconcile them.
+      const { error: rollbackErr } = await admin.auth.admin.updateUserById(user.authId, {
+        email: oldEmail,
+        email_confirm: true,
+      });
+      if (rollbackErr) {
+        throw new AppError("AUTH_EMAIL_PARTIAL_UPDATE", {
+          cause: dbErr,
+          detail: `Auth email changed to the new address but the LITRACK row still holds the old one, and the rollback failed: ${rollbackErr.message}`,
+          context: { reason: "email_rollback_failed" },
+        });
+      }
+      throw dbErr;
     }
-    return { ok: false, error: "Failed to update email. Please try again." };
-  }
 
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.EMAIL_CHANGE,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { previousWasSynthetic },
-  });
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.EMAIL_CHANGE,
+      resource: "User",
+      resourceId: user.id,
+      metadata: { previousWasSynthetic },
+    });
 
-  revalidatePath(roleSecurityPath(user.role));
+    revalidatePath(roleSecurityPath(user.role));
 
-  return { ok: true };
-}
+    return { ok: true };
+  },
+  { verb: "save your new email" }
+);
 
 /**
  * Email recovery for accounts with a real (non-synthetic) email.
  * Always returns the same success message (no account enumeration).
  */
-export async function requestPasswordReset(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const requestPasswordReset = action(
+  "requestPasswordReset",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    assertSupabaseConfigured();
 
-  const parsed = forgotPasswordSchema.safeParse({
-    email: formData.get("email"),
-  });
-  if (!parsed.success) return { ok: false, error: "Invalid email address" };
+    const input = parseInput(forgotPasswordSchema, { email: formData.get("email") });
 
-  const email = parsed.data.email.toLowerCase();
-  const rate = await checkRateLimit(`password:forgot:${email}`, RECOVERY_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const email = input.email.toLowerCase();
+    const rate = await checkRateLimit(`password:forgot:${email}`, RECOVERY_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  // Do not reveal whether the account exists. Skip reset for synthetic emails.
-  if (!isSyntheticEmail(email)) {
-    const existing = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, schoolId: true, isActive: true, deletedAt: true },
-    });
-    if (existing && existing.isActive && !existing.deletedAt) {
-      const supabase = await createSupabaseServerClient();
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl()}/auth/reset`,
+    // Do not reveal whether the account exists. Skip reset for synthetic emails.
+    if (!isSyntheticEmail(email)) {
+      const existing = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, schoolId: true, isActive: true, deletedAt: true },
       });
-      await writeAudit({
-        userId: existing.id,
-        schoolId: existing.schoolId,
-        action: AUDIT_ACTIONS.PASSWORD_RESET_REQUEST,
-        resource: "User",
-        resourceId: existing.id,
-      });
+      if (existing && existing.isActive && !existing.deletedAt) {
+        const supabase = await createSupabaseServerClient();
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${appUrl()}/auth/reset`,
+        });
+        if (error) {
+          // The person must still see "sent" — telling them it failed would
+          // tell a stranger the account exists. But a mail sender that has
+          // stopped working is otherwise invisible to everyone, which is how
+          // you get a week of "I never got the email" with nothing logged.
+          reportError(
+            new AppError("AUTH_EMAIL_SEND_FAILED", {
+              cause: error,
+              detail: `resetPasswordForEmail failed: ${error.message}`,
+              context: { reason: "reset_email_failed", schoolId: existing.schoolId },
+            }),
+            {
+              route: "requestPasswordReset",
+              userId: existing.id,
+              schoolId: existing.schoolId,
+            }
+          );
+        }
+        await writeAudit({
+          userId: existing.id,
+          schoolId: existing.schoolId,
+          action: AUDIT_ACTIONS.PASSWORD_RESET_REQUEST,
+          resource: "User",
+          resourceId: existing.id,
+        });
+      }
     }
-  }
 
-  return { ok: true };
-}
+    return { ok: true };
+  }
+);
 
 /**
  * Complete password recovery after Supabase redirects to /auth/reset with a recovery session.
  */
-export async function completePasswordReset(formData: FormData): Promise<ActionResult> {
-  const missing = requireSupabaseConfigured();
-  if (missing) return missing;
+export const completePasswordReset = action(
+  "completePasswordReset",
+  async (formData: FormData): Promise<never> => {
+    assertSupabaseConfigured();
 
-  const parsed = setPasswordSchema.safeParse({
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+    const input = parseInput(setPasswordSchema, {
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) {
-    return { ok: false, error: "Reset session expired. Please request a new link." };
-  }
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    // The link, not the password: sending them to type a new one again would
+    // fail exactly the same way.
+    if (!authUser) throw new AppError("AUTH_RESET_LINK_EXPIRED");
 
-  const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) {
-    if (isAuthRateLimitError(error)) {
-      console.error("[updatePassword] supabase rate limit:", error.message);
-      return { ok: false, error: AUTH_RATE_LIMITED_MESSAGE };
+    const { error } = await supabase.auth.updateUser({ password: input.password });
+    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
+
+    const appUser = await prisma.user.findUnique({ where: { authId: authUser.id } });
+    if (appUser) {
+      await prisma.user.update({
+        where: { id: appUser.id },
+        data: passwordChangeFields(appUser.role, input.password),
+      });
+      await writeAudit({
+        userId: appUser.id,
+        schoolId: appUser.schoolId,
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        resource: "User",
+        resourceId: appUser.id,
+        metadata: { reason: "password_reset" },
+      });
+      redirect(roleHomePath(appUser.role));
     }
-    return { ok: false, error: "Failed to update password. Please try again." };
-  }
 
-  const appUser = await prisma.user.findUnique({ where: { authId: authUser.id } });
-  if (appUser) {
-    await prisma.user.update({
-      where: { id: appUser.id },
-      data: passwordChangeFields(appUser.role, parsed.data.password),
-    });
-    await writeAudit({
-      userId: appUser.id,
-      schoolId: appUser.schoolId,
-      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-      resource: "User",
-      resourceId: appUser.id,
-      metadata: { reason: "password_reset" },
-    });
-    redirect(roleHomePath(appUser.role));
+    redirect("/login");
   }
-
-  redirect("/login");
-}
+);

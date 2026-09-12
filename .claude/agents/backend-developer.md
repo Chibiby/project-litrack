@@ -43,28 +43,28 @@ You do NOT own:
 
 ## The house pattern
 
-Every server action in this codebase looks like this. Match it exactly:
+Server actions are wrapped once by `action()` (`src/lib/errors/action.ts`), which turns thrown `AppError`s (and anything else — Prisma, Supabase, a bug) into a safe result. Throw instead of returning `{ ok: false, ... }` by hand:
 
 ```ts
 "use server";
 
-type ActionResult = { ok: true } | { ok: false; error: string };
-
-export async function doThing(formData: FormData): Promise<ActionResult> {
+export const doThing = action("doThing", async (formData: FormData) => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
-  const parsed = someSchema.safeParse({ /* fields from formData */ });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const input = parseInput(someSchema, /* fields from formData */ {}); // throws VALIDATION_FAILED
 
-  // ownership check scoped to user.schoolId, then mutate (in a transaction if multi-step)
+  // ownership check scoped to user.schoolId — assertSameSchool(user.schoolId, row.schoolId, "X") throws NOT_FOUND
+  // then mutate (in a transaction if multi-step)
 
   await writeAudit({ userId: user.id, schoolId: user.schoolId, action: AUDIT_ACTIONS.X, resource: "X", resourceId: id, metadata: {} });
   revalidatePath("/relevant/path");
   return { ok: true };
-}
+}, { verb: "save the thing" });
 ```
+
+The wrapper returns `{ ok: false, code, error, ref?, fieldErrors? }` on a throw — `error` is always the safe user-facing message (the field name is historical; keep using it). Only `system`-severity failures carry a `ref` a person can quote back. Full reference: `docs/errors.md`.
+
+`logoutAction`-style actions passed directly to `<form action={...}>` are the one exception — a form action must return `Promise<void>`, so those stay unwrapped. About 30 older action modules still use the pre-`action()` `{ ok: false, error }` shape; don't reintroduce that shape in new code even when working alongside one of them.
 
 ## Working rules
 

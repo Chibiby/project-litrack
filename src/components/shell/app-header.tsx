@@ -41,8 +41,8 @@ export function AppHeader({
   role,
   grades,
   notifications = [],
-  releaseAlerts = false,
   isAralVolunteer,
+  isFloating,
   advisoryGradeLevelId,
   expanded,
   onToggleSidebar,
@@ -50,13 +50,17 @@ export function AppHeader({
   role: UserRole;
   grades?: NavGrade[];
   notifications?: ShellNotification[];
-  /** Whether the bell fetches this user's release row; decided by `RoleShell`. */
-  releaseAlerts?: boolean;
   /**
    * Renders the advisory-only `Learners` nav item inert and drops the search box,
    * whose target is that roster; see `NavOptions.isAralVolunteer`.
    */
   isAralVolunteer?: boolean;
+  /**
+   * Same treatment as `isAralVolunteer` — inert nav items and a dropped search
+   * box — for a DepEd teacher whose `advisoryMode` is FLOATING; see
+   * `NavOptions.isFloating`.
+   */
+  isFloating?: boolean;
   /**
    * Lets the "End of Terms Reports" row match the grade-scoped sheet, so the title
    * reads the item's label instead of the URL segment; see
@@ -72,8 +76,13 @@ export function AppHeader({
   // is worse than both of them waiting. See `@/components/nav/nav-path`.
   const { navPath } = useNavPath();
   const navGroups = useMemo(
-    () => getNavGroups(role, grades ?? [], { isAralVolunteer, advisoryGradeLevelId }),
-    [role, grades, isAralVolunteer, advisoryGradeLevelId]
+    () =>
+      getNavGroups(role, grades ?? [], {
+        isAralVolunteer,
+        isFloating,
+        advisoryGradeLevelId,
+      }),
+    [role, grades, isAralVolunteer, isFloating, advisoryGradeLevelId]
   );
   const title = resolvePageTitle(navPath, navGroups);
 
@@ -118,15 +127,16 @@ export function AppHeader({
 
         <div className="flex-1" />
 
-        {/* The teacher target is the advisory roster, so a volunteer has nothing
-            to search. Hidden rather than pointed at the ARAL roster, which does
-            not read `?q=` — a box that silently drops the query is worse than no
-            box. The flex-1 spacer above absorbs the width.
+        {/* The teacher target is the advisory roster, so a volunteer — or a
+            floating teacher, who has declared they will not advise one — has
+            nothing to search. Hidden rather than pointed at the ARAL roster,
+            which does not read `?q=` — a box that silently drops the query is
+            worse than no box. The flex-1 spacer above absorbs the width.
             Deliberately not symmetric with the nav, which keeps `Learners` as an
             inert row: a labelled row can carry the reason it is shut, an empty
             input cannot, and typing into one only to be turned away is a worse
             answer than its absence. */}
-        {!isAralVolunteer && (
+        {!isAralVolunteer && !isFloating && (
           <HeaderSearch
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
@@ -135,10 +145,7 @@ export function AppHeader({
           />
         )}
 
-        <NotificationsMenu
-          notifications={notifications}
-          releaseAlerts={releaseAlerts}
-        />
+        <NotificationsMenu notifications={notifications} />
 
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 

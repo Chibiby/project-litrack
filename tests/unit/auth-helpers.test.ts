@@ -23,6 +23,7 @@ import {
   DEACTIVATED_TEACHER_MESSAGE,
   isDeactivatedTeacher,
   isPendingTeacherAtSchool,
+  registerConflictCode,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
 
@@ -150,27 +151,29 @@ describe("teacher registration helpers", () => {
     ).toBe(false);
   });
 
-  it("maps register conflict messages", () => {
+  it("maps register conflicts to codes, and keeps the wording", () => {
+    expect(registerConflictCode(base, "school-1")).toBe("AUTH_TEACHER_PENDING");
+    expect(registerConflictCode({ ...base, approvalStatus: "REJECTED" }, "school-1")).toBe(
+      "AUTH_REGISTRATION_DECLINED"
+    );
+    expect(
+      registerConflictCode({ ...base, approvalStatus: "APPROVED", isActive: false }, "school-1")
+    ).toBe("AUTH_ACCOUNT_DEACTIVATED");
+    expect(
+      registerConflictCode({ ...base, approvalStatus: "APPROVED", isActive: true }, "school-1")
+    ).toBe("AUTH_ACCOUNT_EXISTS_SIGN_IN");
+    // An account at ANOTHER school must never be described as one at this
+    // school — that would tell a stranger where a colleague works.
+    expect(registerConflictCode(base, "other-school")).toBe("AUTH_EMAIL_IN_USE");
+
     expect(registerConflictError(base, "school-1")).toBe(
       "Your request is pending School Head approval."
     );
-    expect(
-      registerConflictError({ ...base, approvalStatus: "REJECTED" }, "school-1")
-    ).toBe(DECLINED_REGISTRATION_MESSAGE);
-    expect(
-      registerConflictError(
-        { ...base, approvalStatus: "APPROVED", isActive: false },
-        "school-1"
-      )
-    ).toBe(DEACTIVATED_TEACHER_MESSAGE);
-    expect(
-      registerConflictError(
-        { ...base, approvalStatus: "APPROVED", isActive: true },
-        "school-1"
-      )
-    ).toBe("Account already exists. Use Login instead.");
+    expect(registerConflictError({ ...base, approvalStatus: "REJECTED" }, "school-1")).toBe(
+      DECLINED_REGISTRATION_MESSAGE
+    );
     expect(registerConflictError(base, "other-school")).toBe(
-      "This email is already in use."
+      "That email is already used by another LITRACK account."
     );
   });
 

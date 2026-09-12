@@ -178,6 +178,13 @@ export const EMPLOYMENT_TYPE_LABELS = {
   NON_DEPED: "Non-DepEd",
 } as const;
 
+/** The advisory setting beside a DepEd teacher's designation. */
+export const ADVISORY_MODE_LABELS = {
+  DEFAULT: "One advisory section",
+  FLOATING: "Floating teacher",
+  MULTI_GRADE: "Multi-grade advisory",
+} as const;
+
 export const TEACHER_POSITION_LABELS = {
   TEACHER_I: "Teacher I",
   TEACHER_II: "Teacher II",
@@ -491,6 +498,7 @@ export const SUPPORT_TICKET_STATUS_LABELS = {
 export const UNLOCK_SCOPE_LABELS = {
   ARAL_WEEKLY_ATTENDANCE: "Weekly ARAL attendance",
   TERM_GRADES: "Term grade sheet",
+  MONTHLY_READING_LEVEL: "Monthly reading level",
 } as const;
 
 /**

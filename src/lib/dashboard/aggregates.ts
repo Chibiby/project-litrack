@@ -12,6 +12,7 @@ import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
+import { COMPLETE_ASSESSMENT_WHERE } from "@/lib/aral/reading-level-progress";
 import {
   adminDashboard,
   schoolsList,
@@ -564,7 +565,7 @@ const getTeacherShellContextCached = cache(
             ? Promise.resolve(null)
             : prisma.teacherProfile.findFirst({
                 where: { userId: teacherId, user: { schoolId } },
-                select: { designation: true },
+                select: { designation: true, advisoryMode: true },
               }),
           // A Super Admin impersonating the shell advises nothing, so skip the
           // read rather than let a miss read as "has an advisory".
@@ -588,12 +589,13 @@ const getTeacherShellContextCached = cache(
             hasAral: g._count.learners > 0,
           })),
           designation: profile?.designation ?? null,
+          advisoryMode: profile?.advisoryMode ?? null,
           advisoryGradeLevelId: advisorySection?.gradeLevelId ?? null,
         };
       },
       {
         keyParts: [
-          "teacher-shell-context-v5",
+          "teacher-shell-context-v6",
           schoolId,
           teacherId,
           String(isSuperAdmin),
@@ -782,6 +784,7 @@ export async function getTeacherReadingOverview(opts: TeacherOpts) {
               by: ["learnerId"],
               where: {
                 weekStart: { gte: start, lt: end },
+                ...COMPLETE_ASSESSMENT_WHERE,
                 learner: {
                   gradeLevelId: { in: gradeIds },
                   deletedAt: null,
@@ -791,6 +794,9 @@ export async function getTeacherReadingOverview(opts: TeacherOpts) {
               },
             })
             .then((rows) => rows.length),
+          // Plain row count meaning "records saved" this month, complete or not —
+          // a partial row is still a submission. Deliberately has no profile
+          // predicate; do not add COMPLETE_ASSESSMENT_WHERE here.
           prisma.readingLevelRecord.count({
             where: {
               weekStart: { gte: start, lt: end },

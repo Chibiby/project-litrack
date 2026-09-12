@@ -26,8 +26,8 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
+import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
 import {
-  CONFIRM_PHRASES,
   createBackupNow,
   removeAllTeachers,
   removeBackup,

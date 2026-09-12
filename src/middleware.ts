@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { authedLoginRedirect, enforceRolePrefix } from "@/lib/auth/roles";
+import { hasSupabaseSessionCookie, loginPath } from "@/lib/auth/session-end";
 
 function isPublicPath(pathname: string) {
   return (
@@ -42,6 +43,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Read BEFORE updateSession: a failed refresh clears these cookies on the
+  // request, and afterwards "your session ended" is indistinguishable from
+  // "you were never signed in".
+  const hadSession = hasSupabaseSessionCookie(
+    request.cookies
+      .getAll()
+      .filter((cookie) => cookie.value)
+      .map((cookie) => cookie.name)
+  );
+
   const { supabaseResponse, user } = await updateSession(request);
 
   // Already authenticated users with a known JWT role *loading* a login page →
@@ -56,10 +67,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    const loginUrl = pathname.startsWith("/admin")
-      ? new URL("/admin/login", request.url)
-      : new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    const area = pathname.startsWith("/admin") ? "admin" : "school";
+    return NextResponse.redirect(
+      new URL(loginPath(area, hadSession ? "session_expired" : null), request.url)
+    );
   }
 
   const gate = enforceRolePrefix(pathname, user.role);

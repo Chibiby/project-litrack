@@ -22,6 +22,10 @@ import { lettersNeededToReachCount } from "@/lib/section-letters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
+import {
+  releaseTeacherAdvisory,
+  type ReleasedAdvisory,
+} from "@/lib/teachers/release-advisory";
 
 import {
   revalidateSchoolDashboard,
@@ -840,8 +844,15 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
 
 /**
  * Soft-remove an approved teacher: blocks sign-in, frees the email for re-register,
- * and keeps historical records (learners / attendance) intact.
- * Refuses when the teacher still has active (non-deleted) learners — reassign first.
+ * and keeps historical records (attendance, grades, closed enrolments) intact.
+ *
+ * Their advisory is released in the same transaction: every section they
+ * advised goes back to Unassigned and their advisory learners are left with no
+ * adviser until the School Head gives the section a new one, who picks them up
+ * (see `releaseTeacherAdvisory` and `setTeacherAdvisory`'s `add`).
+ *
+ * Still refuses while they are someone's designated ARAL teacher — that is a
+ * separate assignment the School Head must hand over deliberately.
  */
 export async function removeTeacher(formData: FormData): Promise<ActionResult> {
   const user = await requireSchoolUser("SCHOOL_HEAD");
@@ -859,29 +870,19 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
       approvalStatus: "APPROVED",
       deletedAt: null,
     },
-    include: {
-      taughtGrades: { select: { id: true } },
-      _count: {
-        select: {
-          managedLearners: { where: { deletedAt: null } },
-          aralLearners: { where: { deletedAt: null } },
-        },
-      },
+    select: {
+      id: true,
+      authId: true,
+      email: true,
+      _count: { select: { aralLearners: { where: { deletedAt: null } } } },
     },
   });
   if (!teacher) return { ok: false, error: "Teacher not found" };
 
-  if (teacher._count.managedLearners > 0) {
-    return {
-      ok: false,
-      error: `Reassign or transfer ${teacher._count.managedLearners} learner(s) before removing this teacher.`,
-    };
-  }
-
-  // An ARAL-only teacher has no managed learners, so the guard above lets them
-  // through -- and Learner_aralTeacherId_fkey is ON DELETE SET NULL, which would
-  // silently wipe every designation. Block instead, the same way advisory learners
-  // do, so the School Head reassigns deliberately.
+  // Advisory learners no longer block removal — they are released below. ARAL
+  // designations still do: nothing releases those, so a removed teacher would
+  // stay the named tutor of learners nobody is then tracking. The School Head
+  // designates someone else first.
   if (teacher._count.aralLearners > 0) {
     return {
       ok: false,
@@ -895,26 +896,27 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: authDelete.error };
   }
 
+  // Read back by `originalTeacherEmail` on the Removed tab — keep the two in step.
   const freedEmail = `${teacher.email}.deleted.${Date.now()}`;
+  let released: ReleasedAdvisory;
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.teacherSection.deleteMany({ where: { teacherId: teacher.id } });
+    released = await prisma.$transaction(async (tx) => {
+      // Sections, learners and the legacy advisory mirrors, all at once. A
+      // soft-deleted teacher left naming a section would keep it out of every
+      // School Head's reach — no FK action fires on a soft delete.
+      const result = await releaseTeacherAdvisory(tx, {
+        teacherId: teacher.id,
+        schoolId: user.schoolId,
+      });
       await tx.user.update({
         where: { id: teacher.id },
         data: {
           email: freedEmail,
           isActive: false,
           deletedAt: new Date(),
-          // User.advisorySectionId is @unique, so a soft-deleted teacher that keeps
-          // it set would permanently occupy the section's only adviser slot and no
-          // replacement could ever be assigned. Release it here.
-          advisorySectionId: null,
-          taughtGrades:
-            teacher.taughtGrades.length > 0
-              ? { disconnect: teacher.taughtGrades.map((g) => ({ id: g.id })) }
-              : undefined,
         },
       });
+      return result;
     });
   } catch (err) {
     console.error("[removeTeacher] prisma soft-delete failed after auth delete:", err);
@@ -931,10 +933,18 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     action: AUDIT_ACTIONS.TEACHER_REMOVE,
     resource: "User",
     resourceId: teacher.id,
-    metadata: { schoolId: user.schoolId, teacherId: teacher.id },
+    metadata: {
+      schoolId: user.schoolId,
+      teacherId: teacher.id,
+      // What the removal handed back, so the log answers "which class lost its
+      // adviser, and when" without a join against rows that have since moved.
+      releasedSectionIds: released.sectionIds,
+      learnersUnassigned: released.learnerCount,
+    },
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidateSchoolDashboard(user.schoolId);
   revalidateTeacherCaches(teacher.id);
   return { ok: true };

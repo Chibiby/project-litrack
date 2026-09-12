@@ -4,7 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/dashboard";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
-import { deniesAdvisoryRoster } from "@/lib/teachers/scope";
+import { advisoryRosterDenial } from "@/lib/teachers/scope";
+import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
 import {
   TERM_SHEET_NO_ADVISORY_CARD,
   TERM_SHEET_VOLUNTEER_CARD,
@@ -59,13 +60,21 @@ export default async function TeacherTermsReportsResolverPage({
 
   // React-`cache()`d on (schoolId, teacherId, isSuperAdmin) and already awaited by
   // the teacher layout for this request, so the designation costs no extra query.
-  const { designation } = await getTeacherShellContext({
+  const { designation, advisoryMode } = await getTeacherShellContext({
     schoolId,
     teacherId: user.id,
     isSuperAdmin,
   });
 
-  if (deniesAdvisoryRoster({ isSuperAdmin, designation })) {
+  const denial = advisoryRosterDenial({ isSuperAdmin, designation, advisoryMode });
+  if (denial === "floating") {
+    return (
+      <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
+        <EmptyState {...DECLARED_FLOATING_CARD} />
+      </AppShell>
+    );
+  }
+  if (denial === "volunteer") {
     return (
       <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
         <EmptyState {...TERM_SHEET_VOLUNTEER_CARD} />

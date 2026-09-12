@@ -39,8 +39,8 @@ export type ProfileReadingLevel = {
   id: string;
   /** Local date key, `YYYY-MM-DD`. */
   weekStart: string;
-  englishProfile: string;
-  filipinoProfile: string;
+  englishProfile: string | null;
+  filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
   notes: string | null;

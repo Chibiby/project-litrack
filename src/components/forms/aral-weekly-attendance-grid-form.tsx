@@ -10,6 +10,7 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import { Eraser } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -404,6 +405,26 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     });
   }
 
+  const clearRow = useCallback(
+    (learnerId: string) => {
+      if (readOnly || pending) return;
+      const editable = days.filter((d) => !d.locked);
+      setRows((prev) => {
+        const row = prev[learnerId];
+        if (!row) return prev;
+        const statuses = { ...row.statuses };
+        const notes = { ...row.notes };
+        for (const day of editable) {
+          statuses[day.key] = "";
+          notes[day.key] = "";
+        }
+        return { ...prev, [learnerId]: { statuses, notes } };
+      });
+      toast.success("Row cleared. Save to keep the change.");
+    },
+    [readOnly, pending, days]
+  );
+
   const applyBulk = useCallback(
     (action: BulkAttendanceAction) => {
       if (readOnly || pending) return;
@@ -483,7 +504,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     }
 
     if (cells.length === 0) {
-      toast("No changes to save");
+      toast("Everything here is already saved.");
       return;
     }
 
@@ -585,6 +606,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
                   </span>
                 </TableHead>
               ))}
+              <TableHead className="w-12 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -648,6 +670,18 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
                       </TableCell>
                     );
                   })}
+                  <TableCell className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={readOnly || pending}
+                      aria-label={`Clear ${learner.fullName}'s week`}
+                      onClick={() => clearRow(learner.id)}
+                    >
+                      <Eraser className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               );
             })}

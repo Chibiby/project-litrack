@@ -1,4 +1,5 @@
 import {
+  Archive,
   ArrowRightLeft,
   BookOpen,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   Megaphone,
   School,
   ScrollText,
+  TriangleAlert,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -43,6 +45,17 @@ export interface NavItem {
    * disabled row is not access control.
    */
   unavailable?: { pill: string; reason: string };
+  /**
+   * Opts this row out of hover/focus intent-prefetch (`PrefetchLink`'s
+   * `intent` prop). Set on routes whose render is too heavy to speculate on
+   * — a mouse merely passing down the sidebar must not trigger a full
+   * server render of them. Archive is the first: it is `force-dynamic`,
+   * reads two global cross-tenant tables without their supporting indexes
+   * applied yet, and running that against the pooler's floor of 3
+   * connections starved unrelated requests in production. Ordinary click
+   * navigation is unaffected — this only removes the speculative render.
+   */
+  heavy?: true;
 }
 
 /** A labelled sidebar section. `label` omitted renders the items with no heading. */
@@ -67,6 +80,15 @@ export interface NavOptions {
    * agree, or the sidebar either advertises a dead end or hides a live one.
    */
   isAralVolunteer?: boolean;
+  /**
+   * A DepEd teacher whose `advisoryMode` is FLOATING — a declared choice not to
+   * advise a section, distinct from an ordinary teacher who simply has not been
+   * assigned one yet. Renders `Learners` and `End of Terms Reports` inert with a
+   * "Floating teacher" pill; see `advisoryRosterDenial`. If `isAralVolunteer` is
+   * also set, the volunteer pill wins — a volunteer is not a DepEd teacher at
+   * all, so their reason takes precedence over a mode that only applies to one.
+   */
+  isFloating?: boolean;
   /**
    * The grade level of the section this teacher advises, or `null` when they
    * advise none. The End of Terms Reports sheet is grade-scoped
@@ -101,12 +123,14 @@ export function getNavGroups(
           items: [
             { id: "admin-dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard },
             { id: "admin-schools", label: "Schools", href: "/admin/schools", icon: School },
-            { id: "admin-school-accounts", label: "School accounts", href: "/admin/school-accounts", icon: KeyRound },
+            { id: "admin-accounts", label: "Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
             { id: "admin-transfers", label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
             { id: "admin-school-years", label: "School years", href: "/admin/school-years", icon: CalendarRange },
             { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },
             { id: "admin-chat", label: "School chat", href: "/admin/chat", icon: MessagesSquare },
             { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
+            { id: "admin-errors", label: "Errors", href: "/admin/errors", icon: TriangleAlert },
+            { id: "admin-archive", label: "Archive", href: "/admin/archive", icon: Archive, heavy: true },
             { id: "admin-database", label: "Database", href: "/admin/database", icon: Database },
           ],
         },
@@ -144,23 +168,21 @@ export function getNavGroups(
       // Volunteers keep the ARAL group below — that *is* their roster. Learners
       // stays in the list too, inert: they should be able to see that the
       // advisory roster exists and that being non-DepEd is what closes it, rather
-      // than find one fewer row than the teacher beside them.
+      // than find one fewer row than the teacher beside them. A floating DepEd
+      // teacher gets the same inert treatment, worded for their own reason — the
+      // volunteer pill wins if both are set, since a volunteer is not a DepEd
+      // teacher at all.
+      const classLock = options.isAralVolunteer
+        ? { pill: "DepEd only", reason: "for DepEd teachers who advise a section" }
+        : options.isFloating
+          ? { pill: "Floating teacher", reason: "for teachers who advise a section" }
+          : null;
       const learners: NavItem = {
         id: "teacher-learners",
         label: "Learners",
         href: "/teacher/learners",
         icon: BookOpen,
-        ...(options.isAralVolunteer
-          ? {
-              unavailable: {
-                pill: "DepEd only",
-                // Lower-cased on purpose: renderers compose it as
-                // "{label} — {reason}" for the tooltip and the screen-reader
-                // text, so a capital here would read as a sentence break.
-                reason: "for DepEd teachers who advise a section",
-              },
-            }
-          : {}),
+        ...(classLock ? { unavailable: classLock } : {}),
       };
       return [
         {
@@ -196,14 +218,7 @@ export function getNavGroups(
                 ? `/teacher/aral/${options.advisoryGradeLevelId}/terms-reports`
                 : "/teacher/terms-reports",
               icon: FileText,
-              ...(options.isAralVolunteer
-                ? {
-                    unavailable: {
-                      pill: "DepEd only",
-                      reason: "for DepEd teachers who advise a section",
-                    },
-                  }
-                : {}),
+              ...(classLock ? { unavailable: classLock } : {}),
             },
           ],
         },

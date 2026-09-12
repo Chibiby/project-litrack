@@ -212,14 +212,17 @@ export function CreateSchoolYearDialog({
           />
 
           {suggestion && draft.label !== suggestion ? (
-            <button
+            <Button
               type="button"
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+              variant="link"
+              // Inline text beside a field, so it keeps its own height and sits
+              // flush left rather than taking the primitive's button box.
+              className="h-auto justify-start p-0 text-xs font-medium underline-offset-2"
               onClick={() => setDraft({ ...draft, label: suggestion })}
               disabled={pending}
             >
               Use {suggestion}
-            </button>
+            </Button>
           ) : null}
 
           <label className="flex items-start gap-2 text-sm">

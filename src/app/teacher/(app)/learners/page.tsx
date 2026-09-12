@@ -23,7 +23,7 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
 import {
-  deniesAdvisoryRoster,
+  advisoryRosterDenial,
   teacherGradeScope,
   teacherLearnerScope,
 } from "@/lib/teachers/scope";
@@ -31,7 +31,10 @@ import {
   getAdvisoryPlacements,
   NO_ADVISORY_MESSAGE,
 } from "@/lib/teachers/advisory";
-import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
+import {
+  DECLARED_FLOATING_CARD,
+  FLOATING_TEACHER_CARD,
+} from "@/lib/teachers/floating-copy";
 import {
   aralStatusWhere,
   genderWhere,
@@ -106,22 +109,14 @@ async function LearnersAddControl({
   user: { id: string; schoolId: string };
 }) {
   // The Add menu targets ONE section. A teacher with several advisories picks
-  // which in the form; this component opens on the first, which is what the
-  // menu was already doing implicitly when a teacher could only hold one.
+  // which one in the form itself, via every placement passed down here; the
+  // import link (which cannot express a choice) still targets the first.
   const placements = await getAdvisoryPlacements(user);
-  const advisory = placements[0];
-  if (!advisory) return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
+  if (placements.length === 0) {
+    return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
+  }
 
-  return (
-    <LearnerAddMenu
-      gradeLevelId={advisory.gradeLevelId}
-      gradeType={advisory.gradeType}
-      placement={{
-        gradeLabel: advisory.gradeLabel,
-        sectionName: advisory.sectionName,
-      }}
-    />
-  );
+  return <LearnerAddMenu placements={placements} />;
 }
 
 async function LearnersBody({
@@ -249,21 +244,27 @@ export default async function TeacherLearnersPage({
   // React-`cache()`d on (schoolId, teacherId, isSuperAdmin) — so reading the
   // designation here costs no extra query. `grades` is the half this page used
   // before; the designation rides along.
-  const { grades: shellGrades, designation } = await getTeacherShellContext({
+  const {
+    grades: shellGrades,
+    designation,
+    advisoryMode,
+  } = await getTeacherShellContext({
     schoolId,
     teacherId: user.id,
     isSuperAdmin,
   });
 
-  // A Non-DepEd ARAL Volunteer advises no section, so this roster is not theirs.
-  // The sidebar shows the row inert with a "DepEd only" pill; this is the gate
-  // behind it, because a disabled row is not access control — the row can be
-  // bypassed by typing the URL, and the dashboard cards still link here. The copy
-  // answers the same question the pill raises, at the length a page allows.
-  // The Super Admin carve-out and the fail-open behaviour both live in
-  // `deniesAdvisoryRoster`, which is unit-tested — see its doc for why the
+  // A Non-DepEd ARAL Volunteer advises no section, so this roster is not theirs;
+  // a DepEd teacher set to FLOATING has declared they will not. The sidebar
+  // shows the row inert with the matching pill; this is the gate behind it,
+  // because a disabled row is not access control — the row can be bypassed by
+  // typing the URL, and the dashboard cards still link here. The copy answers
+  // the same question the pill raises, at the length a page allows. The Super
+  // Admin carve-out and the fail-open behaviour both live in
+  // `advisoryRosterDenial`, which is unit-tested — see its doc for why the
   // impersonation branch must not be folded away.
-  if (deniesAdvisoryRoster({ isSuperAdmin, designation })) {
+  const denial = advisoryRosterDenial({ isSuperAdmin, designation, advisoryMode });
+  if (denial === "volunteer") {
     return (
       <AppShell
         title="Learners"
@@ -277,6 +278,17 @@ export default async function TeacherLearnersPage({
           actionHref="/teacher/aral"
           actionLabel="Go to ARAL Program"
         />
+      </AppShell>
+    );
+  }
+  if (denial === "floating") {
+    return (
+      <AppShell
+        title="Learners"
+        role={user.role}
+        userName={user.fullName || `${user.firstName} ${user.lastName}`}
+      >
+        <EmptyState {...DECLARED_FLOATING_CARD} />
       </AppShell>
     );
   }

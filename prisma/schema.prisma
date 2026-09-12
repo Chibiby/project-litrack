@@ -191,6 +191,17 @@ enum EmploymentType {
   NON_DEPED
 }
 
+/// How many advisory sections a DepEd teacher may hold, as a declared setting.
+/// Separate from `TeacherProfile.designation` (rank) on purpose: a Master
+/// Teacher may be floating. Ignored for the Non-DepEd ARAL Volunteer
+/// designation, which never advises. Caps live in
+/// `src/lib/teachers/advisory-limits.ts` (`advisoryCapFor`), not in SQL.
+enum AdvisoryMode {
+  DEFAULT
+  FLOATING
+  MULTI_GRADE
+}
+
 enum Specialization {
   GENERAL_EDUCATION
   ENGLISH
@@ -402,6 +413,11 @@ enum NotificationType {
   /// to every row at release time. Its bell text is composed at read time in
   /// `fetchReleaseAlert`, like the chat types above.
   RELEASE_PUBLISHED
+  /// An `UnlockGrant` or `SchoolUnlockGrant` was issued to the recipient (or,
+  /// for a school-wide grant, to every teacher in the school). Its bell text
+  /// is composed at read time from the grant row `unlockGrantId` /
+  /// `schoolUnlockGrantId` points at, like the chat and release types above.
+  UNLOCK_GRANTED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -483,6 +499,7 @@ model School {
   reports             Report[]
   supportTickets      SupportTicket[]
   unlockGrants        UnlockGrant[]
+  schoolUnlockGrants  SchoolUnlockGrant[]
   chatChannels        ChatChannel[]
   termWindowOverrides TermWindowOverride[]
 
@@ -551,20 +568,22 @@ model TermWindowOverride {
   /// next term's months — the case the feature exists for.
   deadlineKey String
 
-  setById   String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. The
+  /// window this row defines is unaffected by losing the name of who set it.
+  setById   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  setBy      User       @relation("TermWindowSetter", fields: [setById], references: [id])
+  setBy      User?      @relation("TermWindowSetter", fields: [setById], references: [id], onDelete: SetNull)
 
   /// One override per term per year. A re-edit updates this row rather than
   /// stacking a second one, so "what is this term's window?" never depends on
   /// row order — the same reasoning as `UnlockGrant`'s unique.
   @@unique([schoolYearId, term])
   @@index([schoolId])
-  /// R6. FK-enforcement lookup side (implicit `Restrict` on `setBy`).
+  /// R6. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([setById])
 }
 
@@ -666,43 +685,50 @@ model User {
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?
 
-  school                 School?              @relation(fields: [schoolId], references: [id])
-  schoolHeadProfile      SchoolHeadProfile?
-  teacherProfile         TeacherProfile?
+  school                    School?              @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile         SchoolHeadProfile?
+  teacherProfile            TeacherProfile?
   /// Authoritative. The sections this teacher advises — up to three, and the cap
   /// is enforced in `setTeacherAdvisory`, not in SQL, so the number can change
   /// without a migration. Deliberately renamed from `advisorySection`: every
   /// read site that assumed at most one now fails to compile rather than
   /// silently rendering the first of several.
-  advisorySections       Section[]            @relation("SectionAdviser")
-  taughtGrades           GradeLevel[]         @relation("TeacherGrades")
-  taughtSections         TeacherSection[]
-  managedLearners        Learner[]            @relation("TeacherLearners")
-  aralLearners           Learner[]            @relation("AralTeacherLearners")
-  recordedAttendance     Attendance[]         @relation("AttendanceRecorder")
-  recordedReadingLevels  ReadingLevelRecord[] @relation("ReadingRecorder")
-  recordedTermGrades     TermGrade[]          @relation("TermGradeRecorder")
-  recordedAttendanceDays AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
-  teacherEnrollments     Enrollment[]         @relation("TeacherEnrollments")
-  announcements          Announcement[]
-  teacherInvites         TeacherInvite[]      @relation("TeacherInviteUser")
-  notifications          Notification[]       @relation("NotificationRecipient")
-  notificationsCaused    Notification[]       @relation("NotificationActor")
-  reports                Report[]             @relation("ReportCreator")
-  chatChannels           ChatChannel[]        @relation("ChatChannelMember")
-  chatMessages           ChatMessage[]        @relation("ChatMessageAuthor")
-  chatMentions           ChatMention[]        @relation("ChatMentionUser")
-  chatReads              ChatRead[]           @relation("ChatReadUser")
-  supportTickets         SupportTicket[]      @relation("SupportTicketRequester")
-  supportTicketsResolved SupportTicket[]      @relation("SupportTicketResolver")
-  unlockGrants           UnlockGrant[]        @relation("UnlockGrantUser")
-  unlockGrantsIssued     UnlockGrant[]        @relation("UnlockGrantGranter")
-  unlockGrantsRevoked    UnlockGrant[]        @relation("UnlockGrantRevoker")
-  termWindowOverridesSet TermWindowOverride[] @relation("TermWindowSetter")
+  advisorySections          Section[]            @relation("SectionAdviser")
+  taughtGrades              GradeLevel[]         @relation("TeacherGrades")
+  taughtSections            TeacherSection[]
+  managedLearners           Learner[]            @relation("TeacherLearners")
+  aralLearners              Learner[]            @relation("AralTeacherLearners")
+  recordedAttendance        Attendance[]         @relation("AttendanceRecorder")
+  recordedReadingLevels     ReadingLevelRecord[] @relation("ReadingRecorder")
+  recordedTermGrades        TermGrade[]          @relation("TermGradeRecorder")
+  recordedAttendanceDays    AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
+  teacherEnrollments        Enrollment[]         @relation("TeacherEnrollments")
+  announcements             Announcement[]
+  teacherInvites            TeacherInvite[]      @relation("TeacherInviteUser")
+  notifications             Notification[]       @relation("NotificationRecipient")
+  notificationsCaused       Notification[]       @relation("NotificationActor")
+  reports                   Report[]             @relation("ReportCreator")
+  chatChannels              ChatChannel[]        @relation("ChatChannelMember")
+  chatMessages              ChatMessage[]        @relation("ChatMessageAuthor")
+  chatMentions              ChatMention[]        @relation("ChatMentionUser")
+  chatReads                 ChatRead[]           @relation("ChatReadUser")
+  supportTickets            SupportTicket[]      @relation("SupportTicketRequester")
+  supportTicketsResolved    SupportTicket[]      @relation("SupportTicketResolver")
+  unlockGrants              UnlockGrant[]        @relation("UnlockGrantUser")
+  unlockGrantsIssued        UnlockGrant[]        @relation("UnlockGrantGranter")
+  unlockGrantsRevoked       UnlockGrant[]        @relation("UnlockGrantRevoker")
+  schoolUnlockGrantsIssued  SchoolUnlockGrant[]  @relation("SchoolUnlockGrantGranter")
+  schoolUnlockGrantsRevoked SchoolUnlockGrant[]  @relation("SchoolUnlockGrantRevoker")
+  termWindowOverridesSet    TermWindowOverride[] @relation("TermWindowSetter")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
   @@index([authId])
+  /// The global `/admin/archive` read: `deletedAt IS NOT NULL ORDER BY deletedAt
+  /// DESC`, cross-tenant and uncached. `[schoolId, role, deletedAt]` cannot serve
+  /// it — that query supplies no `schoolId`, so `deletedAt` is never a usable
+  /// leading column there. Same reasoning as `Learner`'s twin of this index.
+  @@index([deletedAt])
 }
 
 model SchoolHeadProfile {
@@ -754,6 +780,11 @@ model TeacherProfile {
   /// Survey contact email (DOCX P-I4). Distinct from User.email login/synthetic identity.
   contactEmail            String?
   designation             String?
+  /// DEFAULT = one advisory · FLOATING = none (no class roster, no end-of-term
+  /// reports; ARAL still open) · MULTI_GRADE = one to three, any grades.
+  /// Chosen once by the teacher at profiling, then changed only by the School
+  /// Head (`setTeacherAdvisorySetting`).
+  advisoryMode            AdvisoryMode     @default(DEFAULT)
   position                TeacherPosition?
   /// DepEd plantilla or not. Nullable because every profile completed before this
   /// field existed never answered the question, and a default would make those
@@ -1069,12 +1100,22 @@ model Learner {
   /// name order. NOT redundant with #2: same trailing sort column, different lead
   /// column, so neither subsumes the other. Do not consolidate them.
   @@index([schoolId, fullName])
+  /// The global `/admin/archive` read: `deletedAt IS NOT NULL ORDER BY deletedAt
+  /// DESC`, cross-tenant and uncached. None of the composites above can serve it
+  /// — every one of them leads with `schoolId` or `gradeLevelId`, which that
+  /// query does not supply, so it was a seq scan plus an external sort.
+  /// Deliberately a plain index, not a partial `WHERE "deletedAt" IS NOT NULL`:
+  /// Prisma cannot express a partial index, and a fourth SQL-only object drifting
+  /// from this file costs more than the megabytes it would save.
+  @@index([deletedAt])
 }
 
 model Announcement {
   id          String    @id @default(uuid())
   schoolId    String
-  authorId    String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. An
+  /// announcement outlives its author: the school still needs to read it.
+  authorId    String?
   title       String
   body        String
   publishedAt DateTime  @default(now())
@@ -1083,12 +1124,11 @@ model Announcement {
   deletedAt   DateTime?
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  author User   @relation(fields: [authorId], references: [id])
+  author User?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([schoolId, publishedAt])
   @@index([deletedAt])
-  /// R6 #5. FK-enforcement lookup side. Required relation with no `onDelete`, so
-  /// Prisma's implicit action is `Restrict` — every `User` delete probes this.
+  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([authorId])
 }
 
@@ -1130,17 +1170,34 @@ model Attendance {
   weekStart    DateTime         @db.Date // Monday of that week, for aggregation
   status       AttendanceStatus
   notes        String?
-  recordedById String
+  /// NULLABLE, `ON DELETE SET NULL` — the canonical instance of the attribution
+  /// rule that also governs `AttendanceDayMeta.recordedById`,
+  /// `ReadingLevelRecord.recordedById`, `TermGrade.recordedById`,
+  /// `Announcement.authorId`, `Report.createdById`, `UnlockGrant.grantedById`,
+  /// `SchoolUnlockGrant.grantedById` and `TermWindowOverride.setById`.
+  ///
+  /// These nine were `ON DELETE RESTRICT`, which made a permanent delete of any
+  /// teacher who had ever recorded anything impossible at the storage layer. The
+  /// project owner's decision is that a permanent delete must ALWAYS succeed, so
+  /// the row survives the person and loses only its "who recorded this" pointer.
+  ///
+  /// The cost is real and accepted: a purged teacher's attendance marks, reading
+  /// assessments and term grades keep existing but can no longer name who took
+  /// them. Read sites must treat NULL as "recorder no longer exists", not as an
+  /// error. NULL here NEVER means "not yet recorded" — the row's existence is
+  /// what records the event.
+  recordedById String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy User    @relation("AttendanceRecorder", fields: [recordedById], references: [id])
+  recordedBy User?   @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([learnerId, date])
   @@index([learnerId, weekStart])
   @@index([date])
-  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
+  /// R6 #3. FK lookup side — now the side `SetNull` scans on a `User` delete,
+  /// which makes it load-bearing for the purge, not only for the old `Restrict`.
   @@index([recordedById])
 }
 
@@ -1150,16 +1207,17 @@ model AttendanceDayMeta {
   gradeLevelId String
   date         DateTime @db.Date
   isHoliday    Boolean  @default(false)
-  recordedById String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
+  recordedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   gradeLevel GradeLevel @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
-  recordedBy User       @relation("AttendanceDayRecorder", fields: [recordedById], references: [id])
+  recordedBy User?      @relation("AttendanceDayRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([gradeLevelId, date])
   @@index([date])
-  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
+  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([recordedById])
 }
 
@@ -1167,22 +1225,32 @@ model ReadingLevelRecord {
   id                        String                           @id @default(uuid())
   learnerId                 String
   weekStart                 DateTime                         @db.Date // Anchor of the recorded assessment period. The live monthly writer stores the 1st of the month; older rows from the retired weekly grid hold a Monday.
-  englishProfile            ReadingProfile
-  filipinoProfile           ReadingProfile
+  /// Nullable: a partial monthly assessment (only one language scored so far)
+  /// is a legitimate row, not an error. Whether a row counts as COMPLETE for a
+  /// given month is a predicate, not a schema constraint — it lives in
+  /// `src/lib/aral/reading-level-progress.ts`, not here.
+  englishProfile            ReadingProfile?
+  /// See `englishProfile` — same nullability, same reason, same completeness
+  /// predicate in `src/lib/aral/reading-level-progress.ts`.
+  filipinoProfile           ReadingProfile?
   wordRecognitionLevel      WeeklyWordRecognitionLevel?
   readingComprehensionLevel WeeklyReadingComprehensionLevel?
   writingLevel              WeeklyWritingLevel?
   notes                     String?
-  recordedById              String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
+  /// Distinct from the two nullable profile columns above: those are nullable
+  /// because a partial assessment is legitimate, this one because the recorder
+  /// can be permanently deleted after the fact.
+  recordedById              String?
   createdAt                 DateTime                         @default(now())
   updatedAt                 DateTime                         @updatedAt
 
   learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy User    @relation("ReadingRecorder", fields: [recordedById], references: [id])
+  recordedBy User?   @relation("ReadingRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([learnerId, weekStart])
   @@index([weekStart])
-  /// R6 #3. FK-enforcement lookup side (implicit `Restrict`).
+  /// R6 #3. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([recordedById])
 }
 
@@ -1195,17 +1263,18 @@ model TermGrade {
   term         TermPeriod
   subject      LearningArea
   score        Int // 60-100, enforced by a CHECK constraint in SQL
-  recordedById String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
+  recordedById String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
   schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  recordedBy User       @relation("TermGradeRecorder", fields: [recordedById], references: [id])
+  recordedBy User?      @relation("TermGradeRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([learnerId, schoolYearId, term, subject])
   @@index([schoolYearId, term])
-  /// R6 #5. FK-enforcement lookup side (implicit `Restrict`).
+  /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([recordedById])
 }
 
@@ -1215,13 +1284,13 @@ model TermGrade {
 /// cannot carry "who did this to me" or "I have seen it". Both are required for an
 /// ARAL designation, so designations get a row.
 model Notification {
-  id          String           @id @default(uuid())
-  schoolId    String
-  recipientId String
+  id                  String           @id @default(uuid())
+  schoolId            String
+  recipientId         String
   /// Who caused it. Nullable so removing an account leaves the notification
   /// readable rather than deleting the recipient's history with it.
-  actorId     String?
-  type        NotificationType
+  actorId             String?
+  type                NotificationType
   /// Learner ids this notification is about. Ids only: the sentence the recipient
   /// reads is composed at read time from the current learner rows, so no learner
   /// PII is duplicated into this table and a renamed or removed learner cannot
@@ -1229,22 +1298,35 @@ model Notification {
   ///
   /// One row per action, not per learner — enrolling twelve learners at once
   /// notifies the tutor once.
-  learnerIds  String[]
+  learnerIds          String[]
   /// Set on the `SUPPORT_TICKET_*` types instead of `learnerIds`, which is
   /// learner-specific by design. `SetNull` so deleting a ticket leaves the
   /// notification readable.
-  ticketId    String?
+  ticketId            String?
   /// Set on the `CHAT_*` types. `SetNull` so deleting a channel leaves the
   /// notification readable rather than removing the recipient's history.
-  channelId   String?
-  readAt      DateTime?
-  createdAt   DateTime         @default(now())
+  channelId           String?
+  /// The personal `UnlockGrant` this notification is about, when the unlock
+  /// was issued to this recipient specifically. Mutually exclusive with
+  /// `schoolUnlockGrantId` — see the CHECK constraint below, which is
+  /// SQL-only: Prisma's schema language cannot express it, the same
+  /// situation as `Enrollment`'s one-ACTIVE-row-per-learner index. Preserve
+  /// it when editing this table's migrations.
+  unlockGrantId       String?
+  /// The `SchoolUnlockGrant` this notification is about, when the unlock
+  /// covered every teacher in the school. Mutually exclusive with
+  /// `unlockGrantId` — see the note above.
+  schoolUnlockGrantId String?
+  readAt              DateTime?
+  createdAt           DateTime         @default(now())
 
-  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  recipient User           @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User?          @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  ticket    SupportTicket? @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
-  channel   ChatChannel?   @relation("NotificationChatChannel", fields: [channelId], references: [id], onDelete: SetNull)
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  recipient         User               @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor             User?              @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  ticket            SupportTicket?     @relation("NotificationTicket", fields: [ticketId], references: [id], onDelete: SetNull)
+  channel           ChatChannel?       @relation("NotificationChatChannel", fields: [channelId], references: [id], onDelete: SetNull)
+  unlockGrant       UnlockGrant?       @relation("NotificationUnlockGrant", fields: [unlockGrantId], references: [id], onDelete: SetNull)
+  schoolUnlockGrant SchoolUnlockGrant? @relation("NotificationSchoolUnlockGrant", fields: [schoolUnlockGrantId], references: [id], onDelete: SetNull)
 
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
@@ -1254,6 +1336,9 @@ model Notification {
   @@index([actorId])
   /// Same rule for the ticket pointer's `SetNull`.
   @@index([ticketId])
+  /// Same rule for each unlock pointer's `SetNull`.
+  @@index([unlockGrantId])
+  @@index([schoolUnlockGrantId])
 }
 
 model AuditLog {
@@ -1306,7 +1391,10 @@ enum ReportFormat {
 model Report {
   id          String       @id @default(uuid())
   schoolId    String
-  createdById String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. A
+  /// history row whose author was purged still lists and still re-generates:
+  /// everything it needs is in `filters`.
+  createdById String?
   kind        ReportKind
   format      ReportFormat
   /// Shown verbatim in the Recent Reports table.
@@ -1319,11 +1407,12 @@ model Report {
   deletedAt   DateTime?
 
   school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdBy User   @relation("ReportCreator", fields: [createdById], references: [id])
+  createdBy User?  @relation("ReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   /// The Recent Reports query: one school, one author, newest first.
   @@index([schoolId, createdById, createdAt])
-  /// FK-enforcement lookup side (implicit `Restrict`), matching the R6 #3/#5 rule.
+  /// FK lookup side — now the side `SetNull` scans on a `User` delete, matching
+  /// the R6 #3/#5 rule.
   @@index([createdById])
 }
 
@@ -1360,6 +1449,10 @@ enum SupportTicketStatus {
 enum UnlockScope {
   ARAL_WEEKLY_ATTENDANCE
   TERM_GRADES
+  /// `targetKey` is a month anchor `YYYY-MM-01`, matching
+  /// `ReadingLevelRecord.weekStart`'s monthly convention. Lock site:
+  /// `bulkRecordMonthlyReadingLevel` in `src/lib/actions/reading-level.ts`.
+  MONTHLY_READING_LEVEL
 }
 
 /// One request for help raised from the floating assistant.
@@ -1432,7 +1525,11 @@ model UnlockGrant {
   /// the lock sites already key their windows by exactly these strings.
   targetKey String
 
-  grantedById String
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. NULL
+  /// here means "the admin who issued this has since been permanently deleted",
+  /// never "granted by nobody"; the grant itself is unaffected and still expires
+  /// on its own terms.
+  grantedById String?
   /// The ticket this grant answers, when it came from one. Nullable so an admin
   /// can also grant directly. `@unique` keeps one ticket from issuing two grants.
   ticketId    String? @unique
@@ -1444,11 +1541,12 @@ model UnlockGrant {
 
   createdAt DateTime @default(now())
 
-  school    School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user      User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy User           @relation("UnlockGrantGranter", fields: [grantedById], references: [id])
-  revokedBy User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
-  ticket    SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user          User           @relation("UnlockGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User?          @relation("UnlockGrantGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+  revokedBy     User?          @relation("UnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  ticket        SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  notifications Notification[] @relation("NotificationUnlockGrant")
 
   /// One grant row per window per person. A re-grant updates this row rather
   /// than stacking a second one, so "is it open?" never depends on row order.
@@ -1459,6 +1557,57 @@ model UnlockGrant {
   /// The admin list of live grants for one school.
   @@index([schoolId, expiresAt])
   /// R6 #3/#5. FK lookup sides.
+  @@index([grantedById])
+  @@index([revokedById])
+}
+
+/// One unlock covering every teacher in a school for one window, rather than
+/// one person.
+///
+/// A DEDICATED TABLE, not a nullable `UnlockGrant.userId`. In Postgres two
+/// NULLs are never equal, so `@@unique([userId, scope, targetKey])` treats
+/// every NULL-userId row as distinct from every other one — a school-wide
+/// grant modeled that way would silently defeat the unique and let a second,
+/// third, or Nth live school-wide grant for the same window exist alongside
+/// the first, making "is it open?" depend on row order rather than on a
+/// single row of truth. Keeping the school-wide case in its own table, with
+/// its own all-NOT-NULL `(schoolId, scope, targetKey)` unique, avoids the
+/// NULL-collapse problem entirely instead of working around it.
+model SchoolUnlockGrant {
+  id        String      @id @default(uuid())
+  schoolId  String
+  scope     UnlockScope
+  /// Same convention as `UnlockGrant.targetKey` — a Monday `YYYY-MM-DD` for
+  /// `ARAL_WEEKLY_ATTENDANCE`, a `TermPeriod` name for `TERM_GRADES`, a month
+  /// anchor `YYYY-MM-01` for `MONTHLY_READING_LEVEL`.
+  targetKey String
+
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule. This
+  /// one previously carried an EXPLICIT `onDelete: Restrict`, the only one of the
+  /// nine that did; it is now `SetNull` like the rest.
+  grantedById String?
+
+  /// Required. A grant that never expires is a lock that was removed, not
+  /// reopened — same rule as `UnlockGrant.expiresAt`.
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  revokedById String?
+
+  createdAt DateTime @default(now())
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grantedBy     User?          @relation("SchoolUnlockGrantGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+  revokedBy     User?          @relation("SchoolUnlockGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  notifications Notification[] @relation("NotificationSchoolUnlockGrant")
+
+  /// One grant row per window per school. Same reasoning as `UnlockGrant`'s
+  /// own unique: a re-grant updates this row rather than stacking a second
+  /// one, so "is it open?" never depends on row order.
+  @@unique([schoolId, scope, targetKey])
+  /// The hot read, on every save into a closed window: this school, this
+  /// scope, still in date.
+  @@index([schoolId, scope, expiresAt])
+  /// R6. FK lookup sides.
   @@index([grantedById])
   @@index([revokedById])
 }
@@ -1552,4 +1701,35 @@ model ChatRead {
 
   @@id([channelId, userId])
   @@index([userId])
+}
+
+/// One server-side failure worth an admin's attention: a `security` refusal or a
+/// `system` failure. Written by `src/lib/errors/report.ts`, read only by the
+/// Super Admin page `/admin/errors`.
+///
+/// Deliberately unrelated to User/School (plain id columns, no FKs): a failure
+/// must be recordable while the rows it concerns are broken or gone, and a
+/// deleted school must not cascade its error history away before retention does.
+/// `ref` is not unique: a Next.js digest repeats for the same underlying error,
+/// and searching one should show every occurrence. Purged after
+/// ERROR_EVENT_RETENTION_DAYS (default 30) by the daily cron.
+model ErrorEvent {
+  id        String   @id @default(uuid())
+  ref       String
+  code      String
+  severity  String
+  message   String
+  stack     String?
+  route     String?
+  routeType String?
+  method    String?
+  userId    String?
+  schoolId  String?
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([ref])
+  @@index([code, createdAt])
+  @@index([schoolId, createdAt])
 }

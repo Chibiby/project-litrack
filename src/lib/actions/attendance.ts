@@ -156,12 +156,14 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   // already says.
   const deadline = attendanceDeadline(weekStart);
   let usedGrantId: string | null = null;
+  let usedGrantKind: "user" | "school" | null = null;
   if (schoolToday() > deadline) {
-    const verdict = await canWriteWindow(
-      user.id,
-      "ARAL_WEEKLY_ATTENDANCE",
-      parsed.data.weekStart
-    );
+    const verdict = await canWriteWindow({
+      userId: user.id,
+      schoolId: user.schoolId,
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+      targetKey: parsed.data.weekStart,
+    });
     if (!verdict.writable) {
       return {
         ok: false,
@@ -171,6 +173,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
     // Null when locking is off — the audit row then records a save past the
     // deadline that no grant paid for, which is exactly what happened.
     usedGrantId = verdict.grantId;
+    usedGrantKind = verdict.grantKind;
   }
 
   // ARAL attendance: an ARAL-only teacher (no advisory section) reaches this
@@ -391,18 +394,27 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
       upserted,
       cleared,
       learnerIds,
+      grantKind: usedGrantKind,
     },
   });
 
   // A second row, only when the save got in through a grant. Kept separate from
   // the save row so "which edits happened inside a reopened window" is one
   // action to filter on rather than a metadata flag to search for.
+  //
+  // Which action and resource depends on WHICH table the grant came from — a
+  // school-wide grant is a `SchoolUnlockGrant` row, and joining its id against
+  // `UnlockGrant` finds nothing. `grantKind` also rides in `metadata` so the
+  // save row and this row agree on which table answered "may this person write".
   if (usedGrantId) {
+    const isSchoolGrant = usedGrantKind === "school";
     await writeAudit({
       userId: user.id,
       schoolId: user.schoolId,
-      action: AUDIT_ACTIONS.UNLOCK_GRANT_USED,
-      resource: "UnlockGrant",
+      action: isSchoolGrant
+        ? AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_USED
+        : AUDIT_ACTIONS.UNLOCK_GRANT_USED,
+      resource: isSchoolGrant ? "SchoolUnlockGrant" : "UnlockGrant",
       resourceId: usedGrantId,
       metadata: {
         scope: "ARAL_WEEKLY_ATTENDANCE",
@@ -410,6 +422,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
         gradeLevelId: grade.id,
         upserted,
         cleared,
+        grantKind: usedGrantKind,
       },
     });
   }

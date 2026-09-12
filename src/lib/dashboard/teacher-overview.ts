@@ -14,6 +14,7 @@ import {
   monthBounds,
   type TeacherOpts,
 } from "@/lib/dashboard/aggregates";
+import { COMPLETE_ASSESSMENT_WHERE } from "@/lib/aral/reading-level-progress";
 
 /**
  * Everything the teacher dashboard renders, in one cached snapshot.
@@ -190,6 +191,7 @@ export async function getTeacherOverview(
             by: ["learnerId"],
             where: {
               weekStart: { gte: monthStart, lt: monthEnd },
+              ...COMPLETE_ASSESSMENT_WHERE,
               learner: {
                 gradeLevelId: { in: gradeIds },
                 deletedAt: null,
@@ -199,6 +201,9 @@ export async function getTeacherOverview(
             },
           })
           .then((rows) => rows.length),
+        // Plain row count meaning "records saved" this month, complete or not —
+        // a partial row is still a submission. Deliberately has no profile
+        // predicate; do not add COMPLETE_ASSESSMENT_WHERE here.
         prisma.readingLevelRecord.count({
           where: {
             weekStart: { gte: monthStart, lt: monthEnd },

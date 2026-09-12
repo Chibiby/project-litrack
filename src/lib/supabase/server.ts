@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { AppError } from "@/lib/errors/app-error";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -11,9 +12,10 @@ export async function createSupabaseServerClient() {
 
   const env = getSupabasePublicEnv();
   if (!env.ok) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
-    );
+    throw new AppError("CONFIG_MISSING", {
+      detail: "NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set",
+      context: { reason: "supabase_env_missing" },
+    });
   }
 
   return createServerClient(env.url, env.anonKey, {

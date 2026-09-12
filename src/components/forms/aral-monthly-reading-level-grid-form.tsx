@@ -13,7 +13,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, ChevronDown, MessageSquare, MoreVertical } from "lucide-react";
+import { Check, ChevronDown, MessageSquare, MoreVertical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -191,8 +191,8 @@ export type MonthlyReadingLevelGridLearner = {
 
 export type MonthlyReadingLevelGridExisting = {
   learnerId: string;
-  englishProfile: string;
-  filipinoProfile: string;
+  englishProfile: string | null;
+  filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
   writingLevel: string | null;
@@ -333,6 +333,21 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
   const profileBand = useMemo(() => profileBandFor(gradeType), [gradeType]);
   const learnerIds = useMemo(() => learners.map((l) => l.id), [learners]);
   const progress = useMemo(() => countRows(rows, learnerIds), [rows, learnerIds]);
+  /**
+   * Learners who have a stored row for this month. Emptying one of THESE rows
+   * means "delete what's there" (`clears`); emptying a row that was never
+   * stored means nothing changed, so it is sent nowhere. Re-seeded whenever a
+   * new `existing` prop arrives (e.g. after `router.refresh()`), and updated
+   * locally on a successful save so a second save before the refresh lands
+   * still sees the first save's effect — mirroring how the weekly grid moves
+   * its `initial` baseline forward with `setInitial(rows)`.
+   */
+  const [hadRecord, setHadRecord] = useState(
+    () => new Set(existing.map((r) => r.learnerId))
+  );
+  useEffect(() => {
+    setHadRecord(new Set(existing.map((r) => r.learnerId)));
+  }, [existing]);
 
   useEffect(() => {
     onSavePendingChange?.(pending);
@@ -346,40 +361,35 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
     });
   }
 
+  function clearRow(learnerId: string) {
+    setRows((prev) => ({ ...prev, [learnerId]: { ...EMPTY_ROW } }));
+    toast.success("Row cleared. Save to keep the change.");
+  }
+
   const handleSave = useCallback(() => {
     if (readOnly || pending) return;
 
     const entries = learners
-      .filter((learner) => isRowComplete(rows[learner.id]))
+      .filter((learner) => hasAnyValue(rows[learner.id]))
       .map((learner) => {
         const row = rows[learner.id]!;
         return {
           learnerId: learner.id,
-          englishProfile: row.englishProfile,
-          filipinoProfile: row.filipinoProfile,
-          wordRecognitionLevel: row.wordRecognitionLevel,
-          readingComprehensionLevel: row.readingComprehensionLevel,
+          englishProfile: row.englishProfile || undefined,
+          filipinoProfile: row.filipinoProfile || undefined,
+          wordRecognitionLevel: row.wordRecognitionLevel || undefined,
+          readingComprehensionLevel: row.readingComprehensionLevel || undefined,
           writingLevel: row.writingLevel || undefined,
           notes: row.notes.trim() || undefined,
         };
       });
 
-    if (entries.length === 0) {
-      toast.error(
-        "Set English, Filipino, Word recognition, and Reading comprehension for at least one learner"
-      );
-      return;
-    }
+    const clears = learners
+      .filter((learner) => !hasAnyValue(rows[learner.id]) && hadRecord.has(learner.id))
+      .map((learner) => learner.id);
 
-    const incomplete = learners.filter(
-      (learner) => hasAnyValue(rows[learner.id]) && !isRowComplete(rows[learner.id])
-    );
-    if (incomplete.length > 0) {
-      const names = incomplete.slice(0, 3).map((l) => l.fullName).join(", ");
-      const rest = incomplete.length > 3 ? ` and ${incomplete.length - 3} more` : "";
-      toast.error(
-        `Complete all four reading levels for ${names}${rest}, or clear the row before saving.`
-      );
+    if (entries.length === 0 && clears.length === 0) {
+      toast("Nothing to save yet.");
       return;
     }
 
@@ -388,19 +398,27 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
       const res = await bulkRecordMonthlyReadingLevel({
         monthStart: monthStartKey,
         entries,
+        clears,
       });
       if (!res.ok) {
         toast.error(res.error, { id: toastId });
         return;
       }
-      const saved = res.data?.upserted ?? entries.length;
-      toast.success(
-        `Saved reading levels for ${saved} learner${saved === 1 ? "" : "s"}`,
-        { id: toastId }
-      );
+      const savedCount = res.data?.upserted ?? entries.length;
+      const clearedCount = res.data?.cleared ?? clears.length;
+      const message =
+        `Saved ${savedCount} learner${savedCount === 1 ? "" : "s"}` +
+        (clearedCount > 0 ? `, cleared ${clearedCount}` : "");
+      toast.success(message, { id: toastId });
+      setHadRecord((prev) => {
+        const next = new Set(prev);
+        for (const entry of entries) next.add(entry.learnerId);
+        for (const learnerId of clears) next.delete(learnerId);
+        return next;
+      });
       router.refresh();
     });
-  }, [readOnly, pending, learners, rows, monthStartKey, router]);
+  }, [readOnly, pending, learners, rows, hadRecord, monthStartKey, router]);
 
   useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
 
@@ -478,28 +496,36 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
             onChange={(v) => setField(learner.id, "notes", v)}
           />
         </TableCell>
-        {learnerHrefFor && (
-          <TableCell>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  aria-label={`Actions for ${learner.fullName}`}
-                >
-                  <MoreVertical className="size-4" aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+        <TableCell>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label={`Actions for ${learner.fullName}`}
+              >
+                <MoreVertical className="size-4" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {learnerHrefFor && (
                 <DropdownMenuItem asChild>
                   <Link href={learnerHrefFor(learner.id)}>View reading history</Link>
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </TableCell>
-        )}
+              )}
+              <DropdownMenuItem
+                className="text-destructive"
+                disabled={readOnly || pending}
+                onSelect={() => clearRow(learner.id)}
+              >
+                <X className="size-4" aria-hidden />
+                Clear row
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
       </TableRow>
     );
   }
@@ -518,9 +544,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
               <ScaleHead title="Reading Comprehension" sub="Level" />
               <ScaleHead title="Writing" sub="Level" />
               <TableHead className="w-24 text-center">Remarks</TableHead>
-              {learnerHrefFor && (
-                <TableHead className="w-12 text-center">Actions</TableHead>
-              )}
+              <TableHead className="w-12 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -44,6 +44,7 @@ ALTER TABLE "Report"               ENABLE ROW LEVEL SECURITY;
 -- through Prisma on the service role, which bypasses RLS.
 ALTER TABLE "SupportTicket"        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UnlockGrant"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SchoolUnlockGrant"    ENABLE ROW LEVEL SECURITY;
 
 -- Global operator switches (currently the demo-mode flag). It carries no learner
 -- data, but it is the table that decides what the public login page shows, so a
@@ -58,6 +59,13 @@ ALTER TABLE "ChatChannel"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatMessage"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatMention"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatRead"             ENABLE ROW LEVEL SECURITY;
+
+-- Server-side failures kept for the Super Admin error page. Rows carry stack
+-- traces, request routes and whatever context the failing call site attached, so
+-- this is a map of the app's weak points and may quote data from the failing
+-- operation. Super-Admin-only, read through Prisma on the service role. Deny-all
+-- with no policies, like everything else here.
+ALTER TABLE "ErrorEvent"           ENABLE ROW LEVEL SECURITY;
 
 -- A School Head's edit to one term's window. Deny-all: every read and write
 -- goes through Prisma on the service role, the same as every other table here.

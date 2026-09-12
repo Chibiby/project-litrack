@@ -1,5 +1,7 @@
 "use server";
 
+import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
+
 /**
  * The two server halves of a browser-side sign-in.
  *
@@ -13,7 +15,7 @@
  * school head retrying a forgotten password thirty times locks out every other
  * school for the rest of the window, and the 429 that comes back is
  * indistinguishable from a wrong password unless you look for it (see
- * `@/lib/auth/auth-errors`). That is exactly what happened: heads whose
+ * `@/lib/errors/supabase`). That is exactly what happened: heads whose
  * password was provably correct minutes earlier could not get in, and password
  * resets did nothing, because the password was never the problem.
  *
@@ -33,25 +35,23 @@
  * back to the original server-side action. See `beginSchoolHeadLogin`.
  */
 
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { warmSchoolHeadRoutes, warmTeacherRoutes } from "@/lib/auth/warm-routes";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
-import {
-  DECLINED_REGISTRATION_MESSAGE,
-  DEACTIVATED_TEACHER_MESSAGE,
-  isDeactivatedTeacher,
-} from "@/lib/auth/teacher-registration-helpers";
-
-const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
-
-const SCHOOL_HEAD_GENERIC_ERROR = "Login failed. Please contact your administrator.";
-const TEACHER_GENERIC_ERROR = "Incorrect email or password.";
-const TOO_MANY_ATTEMPTS = "Too many attempts. Please try again later.";
+import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration-helpers";
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError, tooManyAttempts } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
+import type { ActionFailure } from "@/lib/errors/result";
+import { LOGIN_FAILURE_REASONS, type LoginFailureReason } from "@/lib/errors/supabase";
+import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
+import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
+import { clientIpFrom } from "@/lib/request-ip";
 
 /**
  * Where the password grant should be made.
@@ -59,18 +59,21 @@ const TOO_MANY_ATTEMPTS = "Too many attempts. Please try again later.";
  * `browser` carries the address to sign in with; `server` means the caller must
  * use the server-side action instead.
  */
-export type BeginLoginResult =
+type BeginLoginSuccess =
   | { ok: true; mode: "browser"; email: string }
-  | { ok: true; mode: "server" }
-  | { ok: false; error: string };
+  | { ok: true; mode: "server" };
 
-export type FinishLoginResult = { ok: true; redirectTo: string } | { ok: false; error: string };
+export type BeginLoginResult = BeginLoginSuccess | ActionFailure;
+export type FinishLoginResult = { ok: true; redirectTo: string } | ActionFailure;
+export type { LoginFailureReason };
 
-/** Reasons a failed attempt can be recorded as. Client input, so it is an allow-list. */
-export type LoginFailureReason = "incorrect_credentials" | "rate_limited";
+/** Attempts the browser may report per address, so the audit trail cannot be flooded. */
+const REPORT_RATE = { limit: 30, windowMs: 10 * 60 * 1000 } as const;
 
 function normalizeReason(reason: string): LoginFailureReason {
-  return reason === "rate_limited" ? "rate_limited" : "incorrect_credentials";
+  return (LOGIN_FAILURE_REASONS as readonly string[]).includes(reason)
+    ? (reason as LoginFailureReason)
+    : "incorrect_credentials";
 }
 
 /**
@@ -84,27 +87,32 @@ function normalizeReason(reason: string): LoginFailureReason {
  * that address is personal data, and a login page that returns it on demand
  * would be an enumeration endpoint for every School Head's real email.
  */
-export async function beginSchoolHeadLogin(schoolId: string): Promise<BeginLoginResult> {
-  if (!isSupabaseConfigured()) return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
-  if (!schoolId) return { ok: false, error: "Please select a school" };
+export const beginSchoolHeadLogin = action(
+  "beginSchoolHeadLogin",
+  async (schoolId: string): Promise<BeginLoginSuccess> => {
+    assertSupabaseConfigured();
+    if (!schoolId) throw fieldError("schoolId", "Please select a school");
 
-  const rate = await checkRateLimit(`login:school-head:${schoolId}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: TOO_MANY_ATTEMPTS };
+    const rate = await checkRateLimit(`login:school-head:${schoolId}`, LOGIN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { id: true, isActive: true, deletedAt: true },
-  });
-  if (!school || !school.isActive || school.deletedAt) {
-    return { ok: false, error: "School not found or inactive" };
+    const school = await requireActiveSchool(schoolId);
+
+    const head = await findSignInSchoolHead(school.id);
+    if (!head) {
+      // Never a password problem, and it never was: the school has no head
+      // account at all. Recorded because only an admin can fix it, and the old
+      // "contact your administrator" gave them nothing to act on.
+      throw new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", {
+        detail: `School ${school.id} has no active School Head account`,
+        context: { schoolId: school.id, reason: "no_school_head" },
+      });
+    }
+
+    if (!isSyntheticEmail(head.email)) return { ok: true, mode: "server" };
+    return { ok: true, mode: "browser", email: head.email };
   }
-
-  const head = await findSchoolHead(school.id);
-  if (!head) return { ok: false, error: SCHOOL_HEAD_GENERIC_ERROR };
-
-  if (!isSyntheticEmail(head.email)) return { ok: true, mode: "server" };
-  return { ok: true, mode: "browser", email: head.email };
-}
+);
 
 /**
  * School Head: verify the session the browser just established, then admit it.
@@ -114,49 +122,60 @@ export async function beginSchoolHeadLogin(schoolId: string): Promise<BeginLogin
  * actually signed in — a mismatch signs the session straight back out rather
  * than trusting either side.
  */
-export async function finishSchoolHeadLogin(schoolId: string): Promise<FinishLoginResult> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return { ok: false, error: SCHOOL_HEAD_GENERIC_ERROR };
+export const finishSchoolHeadLogin = action(
+  "finishSchoolHeadLogin",
+  async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw new AppError("AUTH_SESSION_EXPIRED", {
+        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+      });
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { authId: data.user.id },
-    select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true },
-  });
-
-  if (
-    !user ||
-    user.deletedAt ||
-    !user.isActive ||
-    user.role !== "SCHOOL_HEAD" ||
-    !user.schoolId ||
-    user.schoolId !== schoolId
-  ) {
-    await supabase.auth.signOut();
-    await writeAudit({
-      userId: user?.id,
-      schoolId: user?.schoolId ?? schoolId,
-      action: AUDIT_ACTIONS.LOGIN_DENIED,
-      resource: "User",
-      resourceId: user?.id,
-      metadata: { role: "SCHOOL_HEAD", schoolId, reason: "not_authorized" },
+    const user = await prisma.user.findUnique({
+      where: { authId: data.user.id },
+      select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true },
     });
-    return { ok: false, error: SCHOOL_HEAD_GENERIC_ERROR };
+
+    const cause = schoolHeadDenial(user, schoolId);
+    if (cause) {
+      await supabase.auth.signOut();
+      await writeAudit({
+        userId: user?.id,
+        schoolId: user?.schoolId ?? schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: user?.id,
+        metadata: { role: "SCHOOL_HEAD", schoolId, reason: "not_authorized", cause },
+      });
+      throw new AppError(
+        cause === "deleted" || cause === "inactive" ? "AUTH_ACCOUNT_DISABLED" : "AUTH_FORBIDDEN",
+        {
+          params: { what: "this school" },
+          detail: `School Head sign-in refused: ${cause}`,
+          context: { schoolId, reason: cause },
+        }
+      );
+    }
+
+    // `schoolHeadDenial` returning null proves every field below is present.
+    const admitted = user!;
+
+    await writeAudit({
+      userId: admitted.id,
+      schoolId: admitted.schoolId,
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      resource: "User",
+      resourceId: admitted.id,
+      metadata: { role: "SCHOOL_HEAD", schoolId: admitted.schoolId, method: "browser_password" },
+    });
+
+    await warmSchoolHeadRoutes(admitted.schoolId!);
+
+    return { ok: true, redirectTo: SCHOOL_HEAD_ROUTES.dashboard };
   }
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { role: "SCHOOL_HEAD", schoolId: user.schoolId, method: "browser_password" },
-  });
-
-  await warmSchoolHeadRoutes(user.schoolId);
-
-  return { ok: true, redirectTo: SCHOOL_HEAD_ROUTES.dashboard };
-}
+);
 
 /**
  * Teacher: run the pre-flight gates and hand the address back for the browser.
@@ -167,115 +186,129 @@ export async function finishSchoolHeadLogin(schoolId: string): Promise<FinishLog
  * password leaves the browser so a declined or deactivated account gets its
  * real explanation instead of a failed grant.
  */
-export async function beginTeacherLogin(schoolId: string, rawEmail: string): Promise<BeginLoginResult> {
-  if (!isSupabaseConfigured()) return { ok: false, error: SUPABASE_NOT_CONFIGURED_MESSAGE };
-  if (!schoolId) return { ok: false, error: "Please select a school" };
+export const beginTeacherLogin = action(
+  "beginTeacherLogin",
+  async (schoolId: string, rawEmail: string): Promise<BeginLoginSuccess> => {
+    assertSupabaseConfigured();
+    if (!schoolId) throw fieldError("schoolId", "Please select a school");
 
-  const email = rawEmail.trim().toLowerCase();
-  if (!email) return { ok: false, error: "Email is required" };
+    const email = rawEmail.trim().toLowerCase();
+    if (!email) throw fieldError("email", "Email is required");
 
-  const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
-  if (!rate.ok) return { ok: false, error: TOO_MANY_ATTEMPTS };
+    const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { id: true, isActive: true, deletedAt: true },
-  });
-  if (!school || !school.isActive || school.deletedAt) {
-    return { ok: false, error: "School not found or inactive" };
-  }
+    // Before the lookup, so that once an address has spent its allowance every
+    // answer is the same and this stops being an enumeration oracle.
+    await assertLookupAllowed();
+    await requireActiveSchool(schoolId);
 
-  const teacher = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      role: true,
-      schoolId: true,
-      isActive: true,
-      deletedAt: true,
-      approvalStatus: true,
-    },
-  });
-
-  if (!teacher || teacher.deletedAt || teacher.role !== "TEACHER" || teacher.schoolId !== schoolId) {
-    return {
-      ok: false,
-      error: "No teacher account found for this school. Create an account first.",
-    };
-  }
-  if (teacher.approvalStatus === "REJECTED") {
-    return { ok: false, error: DECLINED_REGISTRATION_MESSAGE };
-  }
-  if (isDeactivatedTeacher(teacher)) {
-    await writeAudit({
-      userId: teacher.id,
-      schoolId,
-      action: AUDIT_ACTIONS.LOGIN_DENIED,
-      resource: "User",
-      resourceId: teacher.id,
-      metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
+    const teacher = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        role: true,
+        schoolId: true,
+        isActive: true,
+        deletedAt: true,
+        approvalStatus: true,
+      },
     });
-    return { ok: false, error: DEACTIVATED_TEACHER_MESSAGE };
-  }
 
-  return { ok: true, mode: "browser", email };
-}
+    if (
+      !teacher ||
+      teacher.deletedAt ||
+      teacher.role !== "TEACHER" ||
+      teacher.schoolId !== schoolId
+    ) {
+      await recordFailedLookup();
+      throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
+    }
+    if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
+    if (isDeactivatedTeacher(teacher)) {
+      await writeAudit({
+        userId: teacher.id,
+        schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: teacher.id,
+        metadata: { role: "TEACHER", schoolId, reason: "deactivated" },
+      });
+      throw new AppError("AUTH_ACCOUNT_DEACTIVATED");
+    }
+
+    return { ok: true, mode: "browser", email };
+  }
+);
 
 /** Teacher counterpart to `finishSchoolHeadLogin`; see that function for the reasoning. */
-export async function finishTeacherLogin(schoolId: string): Promise<FinishLoginResult> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return { ok: false, error: TEACHER_GENERIC_ERROR };
+export const finishTeacherLogin = action(
+  "finishTeacherLogin",
+  async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw new AppError("AUTH_SESSION_EXPIRED", {
+        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+      });
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { authId: data.user.id },
-    select: {
-      id: true,
-      role: true,
-      schoolId: true,
-      isActive: true,
-      deletedAt: true,
-      approvalStatus: true,
-    },
-  });
-
-  if (
-    !user ||
-    user.deletedAt ||
-    user.role !== "TEACHER" ||
-    !user.schoolId ||
-    user.schoolId !== schoolId ||
-    user.approvalStatus === "REJECTED" ||
-    isDeactivatedTeacher(user)
-  ) {
-    await supabase.auth.signOut();
-    await writeAudit({
-      userId: user?.id,
-      schoolId: user?.schoolId ?? schoolId,
-      action: AUDIT_ACTIONS.LOGIN_DENIED,
-      resource: "User",
-      resourceId: user?.id,
-      metadata: { role: "TEACHER", schoolId, reason: "not_authorized" },
+    const user = await prisma.user.findUnique({
+      where: { authId: data.user.id },
+      select: {
+        id: true,
+        role: true,
+        schoolId: true,
+        isActive: true,
+        deletedAt: true,
+        approvalStatus: true,
+      },
     });
-    return { ok: false, error: TEACHER_GENERIC_ERROR };
+
+    const cause = teacherDenial(user, schoolId);
+    if (cause) {
+      await supabase.auth.signOut();
+      await writeAudit({
+        userId: user?.id,
+        schoolId: user?.schoolId ?? schoolId,
+        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        resource: "User",
+        resourceId: user?.id,
+        metadata: { role: "TEACHER", schoolId, reason: "not_authorized", cause },
+      });
+      throw new AppError(
+        cause === "declined"
+          ? "AUTH_REGISTRATION_DECLINED"
+          : cause === "deactivated"
+            ? "AUTH_ACCOUNT_DEACTIVATED"
+            : "AUTH_TEACHER_NOT_FOUND",
+        { detail: `Teacher sign-in refused: ${cause}`, context: { schoolId, reason: cause } }
+      );
+    }
+
+    const admitted = user!;
+
+    await writeAudit({
+      userId: admitted.id,
+      schoolId: admitted.schoolId,
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      resource: "User",
+      resourceId: admitted.id,
+      metadata: { role: "TEACHER", schoolId: admitted.schoolId, method: "browser_password" },
+    });
+
+    const pending = admitted.approvalStatus === "PENDING";
+    if (!pending) {
+      await warmTeacherRoutes({
+        schoolId: admitted.schoolId!,
+        teacherId: admitted.id,
+        isSuperAdmin: false,
+      });
+    }
+
+    return { ok: true, redirectTo: pending ? "/pending-approval" : "/teacher" };
   }
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-    resource: "User",
-    resourceId: user.id,
-    metadata: { role: "TEACHER", schoolId: user.schoolId, method: "browser_password" },
-  });
-
-  const pending = user.approvalStatus === "PENDING";
-  if (!pending) {
-    await warmTeacherRoutes({ schoolId: user.schoolId, teacherId: user.id, isSuperAdmin: false });
-  }
-
-  return { ok: true, redirectTo: pending ? "/pending-approval" : "/teacher" };
-}
+);
 
 /**
  * Record an attempt that failed at the browser's grant.
@@ -284,57 +317,104 @@ export async function finishTeacherLogin(schoolId: string): Promise<FinishLoginR
  * never see, and losing it would blind `/admin/audit` to exactly the pattern
  * that made this bug so hard to read. Nothing here trusts the caller: the
  * subject is resolved from the school and role, and `reason` is narrowed to the
- * two values the login form can legitimately report.
+ * values the login form can legitimately report.
+ *
+ * A provider failure is recorded at "security" severity rather than "system":
+ * the input comes from the browser, and a client-triggered alert would be a way
+ * for anyone to flood an inbox.
  */
-export async function reportLoginFailure(input: {
-  schoolId: string;
-  role: "SCHOOL_HEAD" | "TEACHER";
-  reason: string;
-  email?: string;
-}): Promise<void> {
-  const reason = normalizeReason(input.reason);
-  if (!input.schoolId) return;
+export const reportLoginFailure = action(
+  "reportLoginFailure",
+  async (input: {
+    schoolId: string;
+    role: "SCHOOL_HEAD" | "TEACHER";
+    reason: string;
+    email?: string;
+  }): Promise<{ ok: true }> => {
+    const reason = normalizeReason(input.reason);
+    if (!input.schoolId) return { ok: true };
 
-  const subject =
-    input.role === "SCHOOL_HEAD"
-      ? await findSchoolHead(input.schoolId)
-      : input.email
-        ? await prisma.user.findUnique({
-            where: { email: input.email.trim().toLowerCase() },
-            select: { id: true, email: true, schoolId: true },
-          })
+    const gate = await checkRateLimit(`login:report:${clientIpFrom(await headers())}`, REPORT_RATE);
+    if (!gate.ok) return { ok: true };
+
+    const subject =
+      input.role === "SCHOOL_HEAD"
+        ? await findSignInSchoolHead(input.schoolId)
+        : input.email
+          ? await prisma.user.findUnique({
+              where: { email: input.email.trim().toLowerCase() },
+              select: { id: true, email: true, schoolId: true },
+            })
+          : null;
+
+    // A teacher row from another school must not be credited to this one.
+    const userId =
+      subject && (input.role === "SCHOOL_HEAD" || subject.schoolId === input.schoolId)
+        ? subject.id
         : null;
 
-  // A teacher row from another school must not be credited to this one.
-  const userId =
-    subject && (input.role === "SCHOOL_HEAD" || subject.schoolId === input.schoolId)
-      ? subject.id
-      : null;
+    await writeAudit({
+      userId,
+      schoolId: input.schoolId,
+      action: AUDIT_ACTIONS.LOGIN_DENIED,
+      resource: "User",
+      resourceId: userId,
+      metadata: { role: input.role, schoolId: input.schoolId, reason },
+    });
 
-  await writeAudit({
-    userId,
-    schoolId: input.schoolId,
-    action: AUDIT_ACTIONS.LOGIN_DENIED,
-    resource: "User",
-    resourceId: userId,
-    metadata: { role: input.role, schoolId: input.schoolId, reason },
-  });
+    if (reason === "rate_limited" || reason === "provider_error") {
+      reportError(
+        new AppError(
+          reason === "rate_limited" ? "AUTH_PROVIDER_RATE_LIMITED" : "AUTH_PROVIDER_ERROR",
+          {
+            severity: "security",
+            detail: `Reported by the browser after a failed password grant (${input.role})`,
+            context: { schoolId: input.schoolId, reason },
+          }
+        ),
+        { route: "reportLoginFailure", userId, schoolId: input.schoolId }
+      );
+    }
+
+    return { ok: true };
+  }
+);
+
+type SchoolHeadRow = {
+  id: string;
+  role: string;
+  schoolId: string | null;
+  isActive: boolean;
+  deletedAt: Date | null;
+} | null;
+
+function schoolHeadDenial(user: SchoolHeadRow, schoolId: string): string | null {
+  if (!user) return "no_account";
+  if (user.deletedAt) return "deleted";
+  if (!user.isActive) return "inactive";
+  if (user.role !== "SCHOOL_HEAD") return "role_mismatch";
+  if (!user.schoolId || user.schoolId !== schoolId) return "school_mismatch";
+  return null;
 }
 
-/**
- * The school's School Head account.
- *
- * `orderBy createdAt asc` is not cosmetic. The Super Admin console's reset
- * (`findSchoolHead` in `./school-accounts`) targets the oldest row, so an
- * unordered lookup here could authenticate against a different account than the
- * one an admin just reset — the reset would appear to do nothing at all. One
- * head per school is not enforced in the schema, so the two lookups have to
- * agree by construction.
- */
-async function findSchoolHead(schoolId: string) {
-  return prisma.user.findFirst({
-    where: { schoolId, role: "SCHOOL_HEAD", deletedAt: null, isActive: true },
-    select: { id: true, email: true, schoolId: true },
-    orderBy: { createdAt: "asc" },
-  });
+type TeacherRow = {
+  id: string;
+  role: string;
+  schoolId: string | null;
+  isActive: boolean;
+  deletedAt: Date | null;
+  // Nullable in the schema — legacy rows predate the approval flow.
+  approvalStatus: string | null;
+} | null;
+
+function teacherDenial(user: TeacherRow, schoolId: string): string | null {
+  if (!user) return "no_account";
+  if (user.deletedAt) return "deleted";
+  if (user.role !== "TEACHER") return "role_mismatch";
+  if (!user.schoolId || user.schoolId !== schoolId) return "school_mismatch";
+  if (user.approvalStatus === "REJECTED") return "declined";
+  if (isDeactivatedTeacher(user as Parameters<typeof isDeactivatedTeacher>[0])) {
+    return "deactivated";
+  }
+  return null;
 }

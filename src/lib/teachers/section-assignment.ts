@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
+import { advisoryCapFor, advisoryCapReason, MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 
 type Tx = Prisma.TransactionClient;
 
@@ -103,14 +103,14 @@ export function advisoryCapError(held: string[]): string {
  * to hold the teacher's first remaining advisory (or null), so the dying mirror
  * stays a truthful subset until Wave B drops it. Nothing reads it for access.
  *
- * Throws `AdvisoryCapError` when a fourth is requested, and Prisma P2002 when
+ * Throws `AdvisoryCapError` when a cap is reached, and Prisma P2002 when
  * another teacher already advises the section — the calling action maps both to
  * user-facing text rather than swallowing them, so an adviser is never silently
  * displaced and a cap is never silently exceeded.
  */
 export class AdvisoryCapError extends Error {
-  constructor(public readonly held: string[]) {
-    super(advisoryCapError(held));
+  constructor(public readonly held: string[], public readonly reason: string) {
+    super(held.length > 0 ? `${reason} They advise ${held.join(", ")}.` : reason);
     this.name = "AdvisoryCapError";
   }
 }
@@ -137,8 +137,16 @@ export async function setTeacherAdvisory(
 
   if (change.op === "add") {
     if (!current.some((s) => s.id === change.sectionId)) {
-      if (current.length >= MAX_ADVISORY_SECTIONS) {
-        throw new AdvisoryCapError(current.map((s) => s.name));
+      const profile = await tx.teacherProfile.findFirst({
+        where: { userId: teacherId, user: { schoolId } },
+        select: { designation: true, advisoryMode: true },
+      });
+      const cap = advisoryCapFor(profile?.designation, profile?.advisoryMode);
+      if (current.length >= cap) {
+        throw new AdvisoryCapError(
+          current.map((s) => s.name),
+          advisoryCapReason(profile?.designation, profile?.advisoryMode)
+        );
       }
       const [section] = await loadValidSections(tx, [change.sectionId], schoolId);
       // `updateMany` with an `adviserId IS NULL` guard rather than `update`: two
@@ -151,6 +159,27 @@ export async function setTeacherAdvisory(
       if (count === 0) {
         throw new SectionTakenError();
       }
+
+      // A section can hold learners with no adviser — a removed teacher's class
+      // is released that way (see `releaseTeacherAdvisory`). Whoever takes the
+      // section takes them. `teacherId: null` is the guard: a learner another
+      // teacher still advises is never pulled across. The active enrolment moves
+      // with the learner row so the two keep agreeing.
+      const liveLearner = { deletedAt: null, archivedAt: null };
+      await tx.learner.updateMany({
+        where: { sectionId: section.id, schoolId, teacherId: null, ...liveLearner },
+        data: { teacherId },
+      });
+      await tx.enrollment.updateMany({
+        where: {
+          sectionId: section.id,
+          schoolId,
+          teacherId: null,
+          status: "ACTIVE",
+          learner: liveLearner,
+        },
+        data: { teacherId },
+      });
     }
   } else if (change.op === "remove") {
     await tx.section.updateMany({

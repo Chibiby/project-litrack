@@ -17,12 +17,26 @@ export const SUPPORT_TICKET_CATEGORIES = [
   "OTHER",
 ] as const;
 
-export const UNLOCK_SCOPES = ["ARAL_WEEKLY_ATTENDANCE", "TERM_GRADES"] as const;
+export const UNLOCK_SCOPES = [
+  "ARAL_WEEKLY_ATTENDANCE",
+  "TERM_GRADES",
+  "MONTHLY_READING_LEVEL",
+] as const;
 
 const TERM_PERIODS = ["FIRST", "SECOND", "THIRD"] as const;
 
 /** Local `YYYY-MM-DD`, the key format `src/lib/date-keys.ts` produces. */
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A month anchor, `YYYY-MM-01`.
+ *
+ * Deliberately narrower than `DATE_KEY`, which would happily accept the 17th of
+ * the month: `MONTHLY_READING_LEVEL` windows are keyed by the first of the month
+ * at their lock site, so a grant for any other day of it would be a row nothing
+ * ever reads.
+ */
+const MONTH_ANCHOR = /^\d{4}-\d{2}-01$/;
 
 /**
  * Free text a person types about their problem. Capped so a paste of an entire
@@ -86,6 +100,13 @@ const unlockTarget = z
         message: "Choose a term",
       });
     }
+    if (value.scope === "MONTHLY_READING_LEVEL" && !MONTH_ANCHOR.test(value.targetKey)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["targetKey"],
+        message: "Choose a month",
+      });
+    }
   });
 
 export const submitTicketSchema = z
@@ -133,8 +154,19 @@ export const submitTicketSchema = z
 
 export type SubmitTicketInput = z.infer<typeof submitTicketSchema>;
 
-/** Longest access an admin can hand out in one grant, and the default offered. */
-export const MAX_UNLOCK_DAYS = 30;
+/**
+ * Longest access an admin can hand out in one grant, and the default offered.
+ *
+ * ONE maximum for both paths that issue a grant — answering a ticket and the
+ * unlock console. They are the same decision made by the same person about the
+ * same table, and two constants for it would drift into "the console let me
+ * pick 90, the ticket form refused it" with no rule to say which is right.
+ *
+ * Duration is a number of days, never an end date: expiry is always
+ * `Date.now() + days * 86_400_000`, so a grant issued at 4pm runs out at 4pm,
+ * not at whatever midnight a date picker would have implied.
+ */
+export const MAX_UNLOCK_DAYS = 90;
 export const DEFAULT_UNLOCK_DAYS = 7;
 
 export const resolveTicketSchema = z.object({
@@ -169,3 +201,85 @@ export const declineTicketSchema = z.object({
 export const revokeGrantSchema = z.object({
   grantId: nonEmpty("Grant is required").uuid("Grant is required"),
 });
+
+/**
+ * A uuid a form may also send as `""` when the picker it belongs to is not the
+ * one in play. The empty string becomes "absent" so the `superRefine` below can
+ * speak about presence, rather than every mode failing a `uuid()` on the field
+ * it deliberately left blank.
+ */
+const optionalId = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().uuid("Choose a valid option").optional()
+);
+
+/**
+ * The unlock console's issue form: one grant, to one teacher or to a whole
+ * school.
+ *
+ * `mode` decides which id is required and, just as deliberately, which id is
+ * refused. A payload carrying both would leave the action choosing between two
+ * targets, and "which one wins" is not a question an access grant should have.
+ *
+ * `days` is coerced because this arrives from a number input as a string, and
+ * the maximum is the schema's job rather than the action's: an action that
+ * clamped 500 down to 90 would hand out three months of access to somebody who
+ * asked for sixteen and never learn they had mistyped.
+ */
+export const issueUnlockSchema = z
+  .object({
+    mode: z.enum(["teacher", "school"]),
+    userId: optionalId,
+    schoolId: optionalId,
+    scope: z.enum(UNLOCK_SCOPES),
+    targetKey: nonEmpty("Choose which period to reopen"),
+    days: z.coerce
+      .number()
+      .int("Choose a whole number of days")
+      .min(1, "Access must last at least a day")
+      .max(MAX_UNLOCK_DAYS, `Access cannot last more than ${MAX_UNLOCK_DAYS} days`),
+  })
+  .superRefine((value, ctx) => {
+    const required = value.mode === "teacher" ? "userId" : "schoolId";
+    const unused = value.mode === "teacher" ? "schoolId" : "userId";
+    if (!value[required]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [required],
+        message: value.mode === "teacher" ? "Choose a teacher" : "Choose a school",
+      });
+    }
+    if (value[unused]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [unused],
+        message: "Choose either one teacher or one school, not both",
+      });
+    }
+
+    const target = unlockTarget.safeParse({
+      scope: value.scope,
+      targetKey: value.targetKey,
+    });
+    if (!target.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["targetKey"],
+        message: target.error.errors[0]?.message ?? "Choose which period to reopen",
+      });
+    }
+  });
+
+export type IssueUnlockInput = z.infer<typeof issueUnlockSchema>;
+
+/**
+ * Revoking from the console. `kind` says which table the id is in — the two
+ * grant tables have independent uuid spaces, so without it a revoke would have
+ * to probe both and could only report "not found" after two round trips.
+ */
+export const revokeUnlockSchema = z.object({
+  kind: z.enum(["teacher", "school"]),
+  grantId: nonEmpty("Grant is required").uuid("Grant is required"),
+});
+
+export type RevokeUnlockInput = z.infer<typeof revokeUnlockSchema>;

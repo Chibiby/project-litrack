@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TEACHER_EMAIL_DOMAIN } from "@/lib/auth/synthetic-email";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
+import { releaseTeacherAdvisory } from "@/lib/teachers/release-advisory";
 
 /**
  * Bulk account operations for the database console.
@@ -36,7 +37,7 @@ function reasonOf(err: unknown): string {
 /**
  * Put every school's School Head password back to that school's School ID.
  *
- * Same operation the per-row Reset performs in the school-accounts console,
+ * Same operation the per-row Reset performs in the accounts console,
  * applied to every school at once, and it sets `passwordIsSchoolId` for the
  * same reason: it is the only way the console can show a working credential
  * without anyone storing a plaintext password.
@@ -53,12 +54,16 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
     where: {
       role: "SCHOOL_HEAD",
       deletedAt: null,
+      isActive: true,
       school: { deletedAt: null },
       ...(schoolId ? { schoolId } : {}),
     },
+    orderBy: [{ schoolId: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       authId: true,
+      schoolId: true,
+      createdAt: true,
       fullName: true,
       school: { select: { id: true, name: true, schoolIdCode: true } },
     },
@@ -66,8 +71,16 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
 
   const failed: BulkResult["failed"] = [];
   let processed = 0;
+  const signInHeadIds = new Set<string>();
+  const seenSchools = new Set<string>();
+  for (const head of heads) {
+    if (head.schoolId && !seenSchools.has(head.schoolId)) {
+      seenSchools.add(head.schoolId);
+      signInHeadIds.add(head.id);
+    }
+  }
 
-  await inBatches(heads, async (head) => {
+  await inBatches(heads.filter((head) => signInHeadIds.has(head.id)), async (head) => {
     const label = head.school?.name ?? head.fullName ?? head.id;
     if (!head.school) {
       failed.push({ id: head.id, label, reason: "No school attached" });
@@ -101,7 +114,10 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
   return { processed, failed };
 }
 
-/** Frees the address for re-registration while keeping the person's name on history. */
+/**
+ * Frees the address for re-registration while keeping the person's name on history.
+ * `originalTeacherEmail` recognises this shape and shows no address for it.
+ */
 function tombstoneEmail(userId: string): string {
   return `removed+${userId}@${TEACHER_EMAIL_DOMAIN}`;
 }
@@ -109,13 +125,22 @@ function tombstoneEmail(userId: string): string {
 /**
  * Remove every teacher account.
  *
- * Soft delete, not `DELETE`. Six tables point at `User` with a *required*
- * foreign key — `Attendance.recordedById`, `AttendanceDayMeta`,
- * `ReadingLevelRecord`, `TermGrade`, `Announcement.authorId`,
- * `Report.createdById` — all of which restrict on delete. A hard delete would
- * therefore either fail outright or, if the records were cleared first, destroy
- * the learner history those teachers recorded. Removing accounts must not be a
- * back door into deleting learner data.
+ * Soft delete, not `DELETE`, and deliberately so even though a hard delete
+ * would now succeed. Nine tables record who did something by pointing at
+ * `User` — `Attendance.recordedById`, `AttendanceDayMeta.recordedById`,
+ * `ReadingLevelRecord.recordedById`, `TermGrade.recordedById`,
+ * `Announcement.authorId`, `Report.createdById`, `UnlockGrant.grantedById`,
+ * `SchoolUnlockGrant.grantedById`, `TermWindowOverride.setById`. Until
+ * migration `20260912000001` those foreign keys restricted on delete and a
+ * hard delete was impossible; they are nullable with `ON DELETE SET NULL` now,
+ * so a hard delete succeeds and silently blanks the recorder on every one of
+ * those rows.
+ *
+ * That is exactly why this stays a soft delete. This function removes a whole
+ * school's teachers at once, and blanking attribution across a school's entire
+ * attendance, assessment and grade history is not something a bulk reset should
+ * do as a side effect. Permanently deleting one account, with its cost shown
+ * first, is `/admin/archive`'s job and nothing else's.
  *
  * What removal actually means here, and it is complete from every angle a user
  * can see: the Supabase auth user is deleted so the password stops working,
@@ -161,17 +186,24 @@ const TEACHER_REMOVAL_FIELDS = {
   authId: true,
   fullName: true,
   email: true,
+  schoolId: true,
 } as const;
 
-type TeacherRow = { id: string; authId: string; fullName: string; email: string };
+type TeacherRow = {
+  id: string;
+  authId: string;
+  fullName: string;
+  email: string;
+  schoolId: string | null;
+};
 
 /**
  * The removal itself, over whichever teachers the caller selected.
  *
  * Split out so "every teacher" and "these four teachers" cannot drift apart:
- * the tombstoning, the Supabase deletion and the `advisorySectionId` clear all
- * have to happen together, and a second copy of this loop would eventually
- * forget one of them.
+ * the tombstoning, the Supabase deletion and the advisory release all have to
+ * happen together, and a second copy of this loop would eventually forget one
+ * of them.
  */
 async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
   const supabaseAdmin = createSupabaseAdminClient();
@@ -188,20 +220,32 @@ async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(teacher.authId);
       if (error && !/not.?found/i.test(error.message)) throw new Error(error.message);
 
-      await prisma.user.update({
-        where: { id: teacher.id },
-        data: {
-          deletedAt: new Date(),
-          isActive: false,
-          email: tombstoneEmail(teacher.id),
-          // `@unique` on User — a stale pointer would keep the section
-          // adviser-less *and* unassignable to anyone new.
-          advisorySectionId: null,
-          mustChangePassword: false,
-          passwordIsSchoolId: false,
-          passwordVaultCipher: null,
-          passwordVaultSetAt: null,
-        },
+      await prisma.$transaction(async (tx) => {
+        // Same release the School Head's Remove performs: sections back to
+        // Unassigned, learners adviser-less. Scoped to the teacher's own school —
+        // the bulk path can span every school, so there is no single caller
+        // school to use. A teacher attached to none advises nothing to release.
+        if (teacher.schoolId) {
+          await releaseTeacherAdvisory(tx, {
+            teacherId: teacher.id,
+            schoolId: teacher.schoolId,
+          });
+        }
+        await tx.user.update({
+          where: { id: teacher.id },
+          data: {
+            deletedAt: new Date(),
+            isActive: false,
+            email: tombstoneEmail(teacher.id),
+            // `@unique` on User — a stale pointer would keep the section
+            // adviser-less *and* unassignable to anyone new.
+            advisorySectionId: null,
+            mustChangePassword: false,
+            passwordIsSchoolId: false,
+            passwordVaultCipher: null,
+            passwordVaultSetAt: null,
+          },
+        });
       });
       processed += 1;
     } catch (err) {

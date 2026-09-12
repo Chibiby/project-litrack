@@ -15,6 +15,11 @@ import { prisma } from "@/lib/prisma";
 import { listMyTickets } from "@/lib/support/queries";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
+  findUnlockRecipient,
+  issueTeacherUnlock,
+  revokeTeacherUnlock,
+} from "@/lib/unlock/issue";
+import {
   declineTicketSchema,
   resolveTicketSchema,
   revokeGrantSchema,
@@ -195,13 +200,22 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
     ) {
       return { ok: false, error: "This request did not ask for access to a period" };
     }
+
+    // A ticket's requester is not necessarily someone a grant can still reach —
+    // `REQUESTER_ROLES` includes `SCHOOL_HEAD`, and a teacher can be deactivated
+    // or deleted after filing. `findUnlockRecipient`'s own contract is the set
+    // of people the picker offers and a grant can actually honor; resolving
+    // "granted" for anyone outside that set would record `granted: true` on a
+    // ticket while the requester gets no real access. Checked before the
+    // transaction opens, so a refusal here never touches the ticket row — the
+    // admin is left free to decline it instead.
+    const recipient = await findUnlockRecipient(ticket.requesterId);
+    if (!recipient) {
+      return { ok: false, error: "This person can no longer receive access" };
+    }
   }
 
-  const expiresAt = grant
-    ? new Date(Date.now() + grant.days * 24 * 60 * 60 * 1000)
-    : null;
-
-  const grantId = await prisma.$transaction(async (tx) => {
+  const issuedGrant = await prisma.$transaction(async (tx) => {
     await tx.supportTicket.update({
       where: { id: ticket.id },
       data: {
@@ -212,43 +226,59 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
       },
     });
 
-    if (!grant || !expiresAt || !ticket.requestedScope || !ticket.requestedTargetKey) {
+    if (!grant || !ticket.requestedScope || !ticket.requestedTargetKey) {
       return null;
     }
 
-    // Upsert on the natural key: a second grant for the same window replaces the
-    // first rather than stacking, which is what makes "is it open?" a lookup of
-    // one row and not a question about ordering.
-    const row = await tx.unlockGrant.upsert({
-      where: {
-        userId_scope_targetKey: {
-          userId: ticket.requesterId,
-          scope: ticket.requestedScope,
-          targetKey: ticket.requestedTargetKey,
-        },
-      },
-      create: {
-        schoolId: ticket.schoolId,
+    // The upsert and the expiry arithmetic live in `src/lib/unlock/issue.ts` —
+    // see the note there about why three call sites computing the same upsert
+    // was worth removing. `tx` is passed so the grant and the ticket close
+    // together, and the bell is suppressed because `notifyRequester` below
+    // already tells this exact person about this exact act.
+    //
+    // `audit: false`: `writeAudit` dispatches through `after()`, which queues
+    // the instant it is called, not once this transaction commits. Auditing
+    // from inside the callback would let an `UNLOCK_GRANT_ISSUE` row survive a
+    // transaction that failed to commit, naming a grant that never existed.
+    // The row is written below, once `$transaction` has actually resolved.
+    //
+    // `schoolId` is the ticket's own, read from the row above. Nothing about
+    // this grant comes from the payload except the number of days.
+    const issued = await issueTeacherUnlock({
+      actorId: admin.id,
+      userId: ticket.requesterId,
+      schoolId: ticket.schoolId,
+      scope: ticket.requestedScope,
+      targetKey: ticket.requestedTargetKey,
+      days: grant.days,
+      ticketId: ticket.id,
+      client: tx,
+      notifyRecipient: false,
+      audit: false,
+    });
+    return issued;
+  });
+  const grantId = issuedGrant?.id ?? null;
+
+  if (issuedGrant && ticket.requestedScope && ticket.requestedTargetKey) {
+    await writeAudit({
+      userId: admin.id,
+      schoolId: ticket.schoolId,
+      action: AUDIT_ACTIONS.UNLOCK_GRANT_ISSUE,
+      resource: "UnlockGrant",
+      resourceId: issuedGrant.id,
+      // Same shape `issueTeacherUnlock` would have written from inside the
+      // transaction — see the note above for why it moved out here.
+      metadata: {
+        ticketId: ticket.id,
         userId: ticket.requesterId,
         scope: ticket.requestedScope,
         targetKey: ticket.requestedTargetKey,
-        grantedById: admin.id,
-        ticketId: ticket.id,
-        expiresAt,
+        expiresAt: issuedGrant.expiresAt.toISOString(),
+        direct: false,
       },
-      update: {
-        grantedById: admin.id,
-        ticketId: ticket.id,
-        expiresAt,
-        // A re-grant clears any previous revocation; otherwise the new expiry
-        // would sit on a row that every read still treats as revoked.
-        revokedAt: null,
-        revokedById: null,
-      },
-      select: { id: true },
     });
-    return row.id;
-  });
+  }
 
   await notifyRequester(ticket.schoolId, ticket.requesterId, admin.id, ticket.id);
 
@@ -260,23 +290,6 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
     resourceId: ticket.id,
     metadata: { category: ticket.category, granted: grantId !== null },
   });
-
-  if (grantId && expiresAt) {
-    await writeAudit({
-      userId: admin.id,
-      schoolId: ticket.schoolId,
-      action: AUDIT_ACTIONS.UNLOCK_GRANT_ISSUE,
-      resource: "UnlockGrant",
-      resourceId: grantId,
-      metadata: {
-        ticketId: ticket.id,
-        userId: ticket.requesterId,
-        scope: ticket.requestedScope,
-        targetKey: ticket.requestedTargetKey,
-        expiresAt: expiresAt.toISOString(),
-      },
-    });
-  }
 
   revalidateSupportTicket(ticket.requesterId);
   revalidatePath(SUPPORT_ROUTE);
@@ -344,35 +357,15 @@ export async function revokeUnlockGrant(input: unknown): Promise<ActionResult> {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const grant = await prisma.unlockGrant.findUnique({
-    where: { id: parsed.data.grantId },
-    select: {
-      id: true,
-      schoolId: true,
-      userId: true,
-      scope: true,
-      targetKey: true,
-      revokedAt: true,
-    },
+  const outcome = await revokeTeacherUnlock({
+    actorId: admin.id,
+    grantId: parsed.data.grantId,
   });
-  if (!grant) return { ok: false, error: "Not found" };
-  if (grant.revokedAt) return { ok: true };
+  if (!outcome.found) return { ok: false, error: "Not found" };
 
-  await prisma.unlockGrant.update({
-    where: { id: grant.id },
-    data: { revokedAt: new Date(), revokedById: admin.id },
-  });
-
-  await writeAudit({
-    userId: admin.id,
-    schoolId: grant.schoolId,
-    action: AUDIT_ACTIONS.UNLOCK_GRANT_REVOKE,
-    resource: "UnlockGrant",
-    resourceId: grant.id,
-    metadata: { userId: grant.userId, scope: grant.scope, targetKey: grant.targetKey },
-  });
-
-  revalidateSupportTicket(grant.userId);
+  for (const recipientId of outcome.recipientIds) {
+    revalidateSupportTicket(recipientId);
+  }
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true };
@@ -393,54 +386,24 @@ export async function grantUnlockDirect(input: {
 }): Promise<ActionResult<{ id: string }>> {
   const admin = await requireUser(["SUPER_ADMIN"]);
 
-  const target = await prisma.user.findFirst({
-    where: { id: input.userId, deletedAt: null, schoolId: { not: null } },
-    select: { id: true, schoolId: true },
-  });
-  if (!target?.schoolId) return { ok: false, error: "Not found" };
+  // The teacher row is what establishes the school this grant belongs to. The
+  // caller states a user id and nothing else about tenancy.
+  const target = await findUnlockRecipient(input.userId);
+  if (!target) return { ok: false, error: "Not found" };
 
-  const days = Math.min(Math.max(Math.trunc(input.days), 1), 30);
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-
-  const grant = await prisma.unlockGrant.upsert({
-    where: {
-      userId_scope_targetKey: {
-        userId: target.id,
-        scope: input.scope,
-        targetKey: input.targetKey,
-      },
-    },
-    create: {
-      schoolId: target.schoolId,
-      userId: target.id,
-      scope: input.scope,
-      targetKey: input.targetKey,
-      grantedById: admin.id,
-      expiresAt,
-    },
-    update: { grantedById: admin.id, expiresAt, revokedAt: null, revokedById: null },
-    select: { id: true },
-  });
-
-  await writeAudit({
-    userId: admin.id,
+  const issued = await issueTeacherUnlock({
+    actorId: admin.id,
+    userId: target.id,
     schoolId: target.schoolId,
-    action: AUDIT_ACTIONS.UNLOCK_GRANT_ISSUE,
-    resource: "UnlockGrant",
-    resourceId: grant.id,
-    metadata: {
-      userId: target.id,
-      scope: input.scope,
-      targetKey: input.targetKey,
-      expiresAt: expiresAt.toISOString(),
-      direct: true,
-    },
+    scope: input.scope,
+    targetKey: input.targetKey,
+    days: input.days,
   });
 
   revalidateSupportTicket(target.id);
   revalidatePath(SUPPORT_ROUTE);
 
-  return { ok: true, data: { id: grant.id } };
+  return { ok: true, data: { id: issued.id } };
 }
 
 /**

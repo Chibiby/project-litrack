@@ -137,6 +137,72 @@ export async function checkRateLimit(
   return memoryCheck(key, options, now);
 }
 
+/**
+ * Read a window without recording an attempt.
+ *
+ * `checkRateLimit` answers "may I, and I am taking one"; this answers "may I".
+ * The difference is what lets a throttle charge only the attempts that failed,
+ * while still refusing everything once the limit is reached — otherwise the
+ * successful answers stay available and the limit can be read as an oracle.
+ */
+export async function peekRateLimit(
+  key: string,
+  options: RateLimitOptions
+): Promise<RateLimitResult> {
+  const now = Date.now();
+
+  const shared = await redisPeek(key, options, now);
+  if (shared) return shared;
+
+  warnDegradedOnce();
+  return memoryPeek(key, options, now);
+}
+
+/**
+ * Redis counterpart to `memoryPeek`. Prunes expired members as it reads — the
+ * same ZREMRANGEBYSCORE `redisCheck` does — so a peek never reports attempts
+ * that have already fallen out of the window.
+ */
+async function redisPeek(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+  now: number
+): Promise<RateLimitResult | null> {
+  const rkey = `rl:${key}`;
+  const replies = await upstashPipeline([
+    ["ZREMRANGEBYSCORE", rkey, "0", String(now - windowMs)],
+    ["ZCARD", rkey],
+    ["ZRANGE", rkey, "0", "0", "WITHSCORES"],
+  ]);
+  if (!replies) return null;
+
+  const count = Number(replies[1]);
+  if (!Number.isFinite(count)) return null;
+  // No ZADD here, so the current request is NOT counted: `< limit` where
+  // `redisCheck` uses `<= limit` on a count that already includes itself.
+  if (count < limit) return { ok: true, retryAfterMs: 0 };
+
+  const oldest = replies[2];
+  const oldestScore = Array.isArray(oldest) ? Number(oldest[1]) : NaN;
+  const anchor = Number.isFinite(oldestScore) ? oldestScore : now;
+  return { ok: false, retryAfterMs: Math.max(0, anchor + windowMs - now) };
+}
+
+function memoryPeek(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+  now: number
+): RateLimitResult {
+  const entry = store.get(key);
+  if (!entry) return { ok: true, retryAfterMs: 0 };
+
+  prune(entry, now, windowMs);
+  if (entry.timestamps.length < limit) return { ok: true, retryAfterMs: 0 };
+
+  const oldest = entry.timestamps[0] ?? now;
+  return { ok: false, retryAfterMs: Math.max(0, oldest + windowMs - now) };
+}
+
 let warnedDegraded = false;
 
 /**

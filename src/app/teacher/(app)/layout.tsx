@@ -7,7 +7,11 @@ import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
+import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
 import { geminiConfigured } from "@/lib/assistant/gemini";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +22,18 @@ export default async function TeacherAppLayout({
 }) {
   const user = await requireUser("TEACHER");
 
-  // Only gate real teachers — SUPER_ADMIN may view teacher pages without profiling.
+  const supabase = await createSupabaseServerClient();
+  const impersonation = await readBoundImpersonationSession(supabase.auth);
+  const impersonating = impersonation?.ticket.targetUserId === user.id;
+
+  // Unlike the School Head layout, this gate is NOT bypassed while
+  // impersonating. A stuck profiling wizard is one of the two things this
+  // console exists to diagnose, so an admin who lands here should see the
+  // actual failure the teacher sees, not a bypass around it. This is safe
+  // because — unlike School Head profiling, which blocks the entire
+  // /school-head tree — the teacher onboarding route is a real page that
+  // renders and itself carries the banner, so there is always a way back to
+  // the admin's own session.
   if (user.role === "TEACHER" && !user.profileCompleted) {
     redirect("/teacher/profiling");
   }
@@ -29,6 +44,7 @@ export default async function TeacherAppLayout({
   let grades: { id: string; label: string; hasAral?: boolean }[] | undefined;
   let roleLabel: string | undefined;
   let isAralVolunteer = false;
+  let isFloating = false;
   let advisoryGradeLevelId: string | null = null;
 
   // Layouts cannot read searchParams; super-admin school impersonation still
@@ -76,6 +92,11 @@ export default async function TeacherAppLayout({
         // read leaves that row live rather than disabling a page for a teacher
         // who is entitled to it.
         isAralVolunteer = true;
+      } else if (shell.advisoryMode === "FLOATING") {
+        // A declared choice, not an unassigned state — `roleLabel` stays the
+        // default "Teacher" because floating is still a real classroom role, just
+        // one with no advisory section right now.
+        isFloating = true;
       }
     } catch (err) {
       console.error("[teacher/layout] shell grades/school name failed:", err);
@@ -84,8 +105,13 @@ export default async function TeacherAppLayout({
 
   return (
     <>
+      <ImpersonationNotice
+        userId={user.id}
+        accountName={`${userName} · ${schoolName ?? "school"}`}
+        impersonation={impersonation}
+      />
       {/* Sibling of RoleShell (also portaled to body) so chrome cannot contain it. */}
-      <PostLoginSplash role="teacher" />
+      {!impersonating && <PostLoginSplash role="teacher" />}
       <RoleShell
         role={user.role}
         userName={userName}
@@ -93,11 +119,13 @@ export default async function TeacherAppLayout({
         grades={grades}
         roleLabel={roleLabel}
         isAralVolunteer={isAralVolunteer}
+        isFloating={isFloating}
         advisoryGradeLevelId={advisoryGradeLevelId}
         aiEnabled={geminiConfigured()}
-        // From the row `requireUser` already loaded — no third read in a layout
-        // that is held to two.
-        lastSeenReleaseVersion={user.lastSeenReleaseVersion}
+        // Not while an admin impersonates this teacher: `user` IS the teacher's
+        // own account then, and acknowledging would stamp their row — the real
+        // teacher would never be shown the release they have not read.
+        lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}
       >
         {children}
       </RoleShell>
@@ -108,6 +136,7 @@ export default async function TeacherAppLayout({
         teacher has no waiting designation, which is the usual case.
       */}
       <AralAssignmentAlerts />
+      <UnlockGrantAlerts />
     </>
   );
 }

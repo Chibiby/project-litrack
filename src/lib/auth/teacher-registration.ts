@@ -13,12 +13,12 @@ import {
 } from "@/lib/cache/revalidate";
 import type { TeacherApprovalStatus, User } from "@prisma/client";
 import {
-  DECLINED_REGISTRATION_MESSAGE,
-  DEACTIVATED_TEACHER_MESSAGE,
   isDeactivatedTeacher,
   isPendingTeacherAtSchool,
-  registerConflictError,
+  registerConflictCode,
 } from "@/lib/auth/teacher-registration-helpers";
+import { AppError, fieldError } from "@/lib/errors/app-error";
+import { classifyError } from "@/lib/errors/classify";
 
 export type TeacherAuthIntent = "login" | "register";
 
@@ -27,6 +27,7 @@ export {
   DEACTIVATED_TEACHER_MESSAGE,
   isDeactivatedTeacher,
   isPendingTeacherAtSchool,
+  registerConflictCode,
   registerConflictError,
 } from "@/lib/auth/teacher-registration-helpers";
 
@@ -57,7 +58,7 @@ export type CompleteTeacherAuthParams = {
 
 export type CompleteTeacherAuthResult =
   | { ok: true; outcome: "pending" | "approved" }
-  | { ok: false; error: string; signOut: boolean };
+  | { ok: false; error: AppError; signOut: boolean };
 
 // buildFullName and the casing rules that feed it live in @/lib/names.
 
@@ -70,10 +71,10 @@ function prismaErrorCode(err: unknown): string {
 
 function redirectOutcome(user: User): CompleteTeacherAuthResult {
   if (user.approvalStatus === "REJECTED") {
-    return { ok: false, error: DECLINED_REGISTRATION_MESSAGE, signOut: true };
+    return { ok: false, error: new AppError("AUTH_REGISTRATION_DECLINED"), signOut: true };
   }
   if (isDeactivatedTeacher(user)) {
-    return { ok: false, error: DEACTIVATED_TEACHER_MESSAGE, signOut: true };
+    return { ok: false, error: new AppError("AUTH_ACCOUNT_DEACTIVATED"), signOut: true };
   }
   if (user.approvalStatus === "PENDING") {
     return { ok: true, outcome: "pending" };
@@ -127,7 +128,11 @@ export async function completeTeacherAuthAfterVerify(
   if (intent === "register" && !existing) {
     const names = params.names;
     if (!names?.firstName?.trim() || !names?.lastName?.trim()) {
-      return { ok: false, error: "First and last name are required.", signOut: true };
+      return {
+        ok: false,
+        error: fieldError("firstName", "First and last name are required."),
+        signOut: true,
+      };
     }
 
     const firstName = formatPersonName(names.firstName);
@@ -163,7 +168,15 @@ export async function completeTeacherAuthAfterVerify(
       }
       existing = await prisma.user.findUnique({ where: { email } });
       if (!existing) {
-        return { ok: false, error: "Registration failed. Please try again.", signOut: true };
+        // The create genuinely failed and no peer beat us to it. Classifying the
+        // caught error means a pool timeout says so and carries a reference,
+        // instead of "Registration failed. Please try again." — advice that is
+        // wrong whenever the cause is a schema or configuration problem.
+        return {
+          ok: false,
+          error: classifyError(err, { verb: "create your account" }),
+          signOut: true,
+        };
       }
       // Fall through to register rules with `existing` (PENDING → success).
     }
@@ -201,7 +214,7 @@ export async function completeTeacherAuthAfterVerify(
   if (!existing) {
     return {
       ok: false,
-      error: "No teacher account found for this school. Create an account first.",
+      error: new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } }),
       signOut: true,
     };
   }
@@ -209,7 +222,7 @@ export async function completeTeacherAuthAfterVerify(
   if (existing.deletedAt) {
     return {
       ok: false,
-      error: "No teacher account found for this school. Create an account first.",
+      error: new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } }),
       signOut: true,
     };
   }
@@ -221,7 +234,7 @@ export async function completeTeacherAuthAfterVerify(
     if (!isPendingTeacherAtSchool(existing, schoolId)) {
       return {
         ok: false,
-        error: registerConflictError(existing, schoolId),
+        error: new AppError(registerConflictCode(existing, schoolId)),
         signOut: true,
       };
     }
@@ -229,12 +242,12 @@ export async function completeTeacherAuthAfterVerify(
     if (existing.role !== "TEACHER" || existing.schoolId !== schoolId) {
       return {
         ok: false,
-        error: "No teacher account found for this school. Create an account first.",
+        error: new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } }),
         signOut: true,
       };
     }
     if (existing.approvalStatus === "REJECTED") {
-      return { ok: false, error: DECLINED_REGISTRATION_MESSAGE, signOut: true };
+      return { ok: false, error: new AppError("AUTH_REGISTRATION_DECLINED"), signOut: true };
     }
   }
 

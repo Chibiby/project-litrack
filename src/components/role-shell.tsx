@@ -34,6 +34,13 @@ interface RoleShellProps {
    */
   isAralVolunteer?: boolean;
   /**
+   * Renders the same two class-bound items inert with a "Floating teacher" pill
+   * for a DepEd teacher whose `advisoryMode` is FLOATING; see
+   * `NavOptions.isFloating`. Also drops the header search, same as
+   * `isAralVolunteer`.
+   */
+  isFloating?: boolean;
+  /**
    * Points the "End of Terms Reports" row at the grade-scoped sheet the teacher
    * actually lands on; see `NavOptions.advisoryGradeLevelId`.
    */
@@ -70,6 +77,7 @@ export function RoleShell({
   viewedSchoolName,
   roleLabel,
   isAralVolunteer,
+  isFloating,
   advisoryGradeLevelId,
   notifications,
   aiEnabled,
@@ -95,6 +103,7 @@ export function RoleShell({
             viewedSchoolName={viewedSchoolName}
             roleLabel={roleLabel}
             isAralVolunteer={isAralVolunteer}
+            isFloating={isFloating}
             advisoryGradeLevelId={advisoryGradeLevelId}
             expanded={expanded}
             transitionsEnabled={hydrated}
@@ -115,14 +124,8 @@ export function RoleShell({
               role={role}
               grades={grades}
               notifications={notifications}
-              // The bell's release row follows the modal: on only where the
-              // layout passed a stamp (so never while an admin impersonates a
-              // head), and never for a Super Admin, who holds no school and so
-              // can never have a row to fetch.
-              releaseAlerts={
-                lastSeenReleaseVersion !== undefined && role !== "SUPER_ADMIN"
-              }
               isAralVolunteer={isAralVolunteer}
+              isFloating={isFloating}
               advisoryGradeLevelId={advisoryGradeLevelId}
               expanded={expanded}
               onToggleSidebar={toggle}
@@ -144,7 +147,10 @@ export function RoleShell({
               renders nothing, rather than announcing to everyone as if they had
               seen no release. */}
           {lastSeenReleaseVersion !== undefined ? (
-            <ReleaseNotesModal lastSeenVersion={lastSeenReleaseVersion} />
+            // `role` is the shell's own role, which is what an admin
+            // impersonating a School Head reads as — and that shell is not
+            // handed a stamp at all, so no note crosses a role boundary here.
+            <ReleaseNotesModal lastSeenVersion={lastSeenReleaseVersion} role={role} />
           ) : null}
         </div>
       </NavPathProvider>

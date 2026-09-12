@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 
 /**
- * Reads for `UnlockGrant` — the permission that lets one person write inside one
- * already-closed editing window.
+ * Reads for `UnlockGrant` and `SchoolUnlockGrant` — the permission that lets one
+ * person, or every teacher in a school, write inside one already-closed editing
+ * window.
  *
  * Two rules govern everything here:
  *
@@ -29,8 +30,9 @@ import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
  *   the same string `saveAralWeeklyAttendance` receives and the weekly grid
  *   navigates by.
  * - `TERM_GRADES` — a `TermPeriod` name (`FIRST` / `SECOND` / `THIRD`).
+ * - `MONTHLY_READING_LEVEL` — a month anchor `YYYY-MM-01`.
  *
- * Both are already the natural key at their lock site, which is why this is one
+ * All are already the natural key at their lock site, which is why this is one
  * string rather than a union of typed columns.
  */
 export type UnlockTargetKey = string;
@@ -82,6 +84,51 @@ export const findActiveUnlock = cache(async function findActiveUnlock(
   }
 });
 
+/**
+ * The one live school-wide grant for this school/scope/target, or `null`.
+ *
+ * A school-wide grant covers every teacher in the school for one window — the
+ * `@@unique([schoolId, scope, targetKey])` constraint means there is at most
+ * one row to consider, same shape as `findActiveUnlock`.
+ *
+ * `schoolId` must come from the caller's session (`user.schoolId`), never from
+ * client input — it is the tenant boundary for this read.
+ */
+export const findActiveSchoolUnlock = cache(
+  async function findActiveSchoolUnlock(
+    schoolId: string,
+    scope: UnlockScope,
+    targetKey: UnlockTargetKey
+  ): Promise<ActiveGrant | null> {
+    try {
+      const grant = await prisma.schoolUnlockGrant.findFirst({
+        where: {
+          schoolId,
+          scope,
+          targetKey,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: {
+          id: true,
+          expiresAt: true,
+          grantedBy: { select: { fullName: true } },
+        },
+      });
+      if (!grant) return null;
+      return {
+        id: grant.id,
+        expiresAt: grant.expiresAt,
+        grantedByName: grant.grantedBy?.fullName ?? null,
+      };
+    } catch (err) {
+      // Fail closed, same reasoning as `findActiveUnlock`.
+      console.error("[unlock] school grant lookup failed:", err);
+      return null;
+    }
+  }
+);
+
 /** `findActiveUnlock` as a boolean, for the lock sites that only need the verdict. */
 export async function hasActiveUnlock(
   userId: string,
@@ -92,13 +139,34 @@ export async function hasActiveUnlock(
 }
 
 /**
- * Every live grant this user holds for one scope, keyed by target.
+ * Every live grant this user holds for one scope, keyed by target, unioned with
+ * every live school-wide grant for their school.
  *
  * The weekly attendance grid and the term sheet each render one window at a
  * time, but the term sheet's tab strip shows all three terms' locked state at
  * once — one query for the set beats three for the members.
+ *
+ * `schoolId` comes from the caller's session. `null` means the user has no
+ * school and skips the school-wide read entirely — there is no school to hold a
+ * grant.
  */
-export async function listActiveUnlockKeys(
+export async function listActiveUnlockKeys({
+  userId,
+  schoolId,
+  scope,
+}: {
+  userId: string;
+  schoolId: string | null;
+  scope: UnlockScope;
+}): Promise<Set<string>> {
+  const [personalKeys, schoolKeys] = await Promise.all([
+    listPersonalUnlockKeys(userId, scope),
+    schoolId ? listSchoolUnlockKeys(schoolId, scope) : Promise.resolve(new Set<string>()),
+  ]);
+  return new Set([...personalKeys, ...schoolKeys]);
+}
+
+async function listPersonalUnlockKeys(
   userId: string,
   scope: UnlockScope
 ): Promise<Set<string>> {
@@ -119,6 +187,27 @@ export async function listActiveUnlockKeys(
   }
 }
 
+async function listSchoolUnlockKeys(
+  schoolId: string,
+  scope: UnlockScope
+): Promise<Set<string>> {
+  try {
+    const grants = await prisma.schoolUnlockGrant.findMany({
+      where: {
+        schoolId,
+        scope,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { targetKey: true },
+    });
+    return new Set(grants.map((g) => g.targetKey));
+  } catch (err) {
+    console.error("[unlock] school grant list failed:", err);
+    return new Set();
+  }
+}
+
 /**
  * "The date says this window is closed — may this user write into it anyway?"
  *
@@ -128,30 +217,45 @@ export async function listActiveUnlockKeys(
  * grant lookup to learn what the date already said.
  *
  * When submission locking is switched off this returns writable **without
- * touching `UnlockGrant` at all** — no query, no grant, nothing to revoke. When
- * it is on, the behaviour is exactly what it has always been: one live grant for
- * this user, this scope and this target, or a refusal.
+ * touching `UnlockGrant` or `SchoolUnlockGrant` at all** — no query, no grant,
+ * nothing to revoke. When it is on, the personal and school-wide reads run
+ * together in one `Promise.all`, never sequentially, and a personal grant wins
+ * for attribution when both exist — the person's own grant is the more specific
+ * fact about why they could write.
  *
  * `grantId` is non-null only when a grant is what opened the window, so the
  * caller's audit row still distinguishes "written under a grant" from "written
- * because nothing was locked".
+ * because nothing was locked". `grantKind` says which table that id came from.
  */
 export type WindowWriteVerdict =
-  | { writable: true; grantId: string | null }
-  | { writable: false; grantId: null };
+  | { writable: true; grantId: string | null; grantKind: "user" | "school" | null }
+  | { writable: false; grantId: null; grantKind: null };
 
-export async function canWriteWindow(
-  userId: string,
-  scope: UnlockScope,
-  targetKey: UnlockTargetKey
-): Promise<WindowWriteVerdict> {
+export async function canWriteWindow({
+  userId,
+  schoolId,
+  scope,
+  targetKey,
+}: {
+  userId: string;
+  schoolId: string | null;
+  scope: UnlockScope;
+  targetKey: UnlockTargetKey;
+}): Promise<WindowWriteVerdict> {
   if (!(await isSubmissionLockingEnabled())) {
-    return { writable: true, grantId: null };
+    return { writable: true, grantId: null, grantKind: null };
   }
-  const grant = await findActiveUnlock(userId, scope, targetKey);
-  return grant
-    ? { writable: true, grantId: grant.id }
-    : { writable: false, grantId: null };
+  const [personalGrant, schoolGrant] = await Promise.all([
+    findActiveUnlock(userId, scope, targetKey),
+    schoolId ? findActiveSchoolUnlock(schoolId, scope, targetKey) : Promise.resolve(null),
+  ]);
+  if (personalGrant) {
+    return { writable: true, grantId: personalGrant.id, grantKind: "user" };
+  }
+  if (schoolGrant) {
+    return { writable: true, grantId: schoolGrant.id, grantKind: "school" };
+  }
+  return { writable: false, grantId: null, grantKind: null };
 }
 
 /**
@@ -167,15 +271,20 @@ export type UnlockState = {
   unlockedKeys: Set<string>;
 };
 
-export async function readUnlockState(
-  userId: string,
-  scope: UnlockScope
-): Promise<UnlockState> {
+export async function readUnlockState({
+  userId,
+  schoolId,
+  scope,
+}: {
+  userId: string;
+  schoolId: string | null;
+  scope: UnlockScope;
+}): Promise<UnlockState> {
   if (!(await isSubmissionLockingEnabled())) {
     return { lockingEnabled: false, unlockedKeys: new Set() };
   }
   return {
     lockingEnabled: true,
-    unlockedKeys: await listActiveUnlockKeys(userId, scope),
+    unlockedKeys: await listActiveUnlockKeys({ userId, schoolId, scope }),
   };
 }

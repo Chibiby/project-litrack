@@ -21,7 +21,13 @@ LITRACK is a Next.js 14 App Router app. Production hosting target: **Vercel**. D
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `NEXT_PUBLIC_APP_URL` (production site URL)
    - `SYNTHETIC_EMAIL_DOMAIN`
-   - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (required for real invite/recovery email)
+   - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (required for real invite/recovery email, and for
+     server-side error alert email — see below)
+   - `ERROR_ALERT_EMAIL` — comma-separated recipients for emails about server-side ("system"
+     severity) failures. Alerts stay off until this and the two `RESEND_*` vars above are all
+     set. At most one email per error code every 15 minutes. See `docs/errors.md`.
+   - `ERROR_EVENT_RETENTION_DAYS` — optional, default 30. Days to keep rows in the `ErrorEvent`
+     table before the daily backup cron (`/api/cron/backup`) purges them.
    - `NEXT_OTEL_VERBOSE` — optional, debugging only. Read by Next.js itself, not app code;
      set to `1` to emit verbose OpenTelemetry spans (including internal framework spans).
      Leave unset in Production; it is very noisy.

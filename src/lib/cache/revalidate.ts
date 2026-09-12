@@ -4,12 +4,12 @@ import * as tags from "@/lib/cache/tags";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
- * The School Head teachers workspace — all four tab pathnames — plus this
+ * The School Head teachers workspace — all five tab pathnames — plus this
  * school's teacher list wherever it is cached.
  *
  * `revalidatePath(p)` with no `type` emits one softTag that matches only a
- * render whose concrete URL is exactly `p`, which is why there are four calls
- * for four pathnames rather than one for the folder. All four of those pages are
+ * render whose concrete URL is exactly `p`, which is why there are five calls
+ * for five pathnames rather than one for the folder. All five of those pages are
  * `force-dynamic`, so none of them has a Full Route Cache entry for those
  * softTags to hit. They are not free of the Data Cache, though: all four call
  * `resolveSchoolHeadView`, which on a Super Admin drill-down (`?schoolId=`)
@@ -36,6 +36,7 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersPending);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersInactive);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersDeclined);
+  revalidatePath(SCHOOL_HEAD_ROUTES.teachersRemoved);
   revalidateSchoolTeachers(schoolId);
 }
 
@@ -129,4 +130,31 @@ export function revalidateLearnerScoped(opts: {
 export function revalidateSupportTicket(requesterId: string) {
   revalidateTag(tags.supportInbox);
   revalidateTag(tags.userSupportTickets(requesterId));
+}
+
+/**
+ * An unlock grant was issued or revoked.
+ *
+ * Two surfaces go stale and they belong to different people, which is why this
+ * takes a list rather than deriving one:
+ *
+ * 1. **Each recipient's own support panel.** The assistant lists a person's
+ *    tickets with the expiry of the grant each produced, so the grant holder —
+ *    not the admin who issued it — is whose cached list is now wrong. A
+ *    school-wide grant has N of them.
+ * 2. **The admin console** at `/admin/settings/submissions`, which renders the
+ *    live-grant tables and the admin's own view of what they just did.
+ *
+ * Nothing else needs busting, and in particular **the teacher-facing lock
+ * surfaces do not**. Every role page is `force-dynamic`, and `canWriteWindow` /
+ * `readUnlockState` (`src/lib/unlock/grants.ts`) are React-`cache()`d per
+ * request only — never `unstable_cache` — so the very next request re-reads the
+ * grant row. There is no tag to emit for them, and adding one would suggest a
+ * Data Cache entry exists where none does.
+ */
+export function revalidateUnlockGrants({ recipientIds }: { recipientIds: string[] }) {
+  for (const recipientId of recipientIds) {
+    revalidateSupportTicket(recipientId);
+  }
+  revalidatePath("/admin/settings/submissions");
 }

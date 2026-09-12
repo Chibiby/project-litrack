@@ -5,6 +5,9 @@ import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetr
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
+import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
+import { noteScopeUser } from "@/lib/errors/context";
+import { clearImpersonationCookie } from "@/lib/auth/impersonation";
 import type { User, UserRole } from "@prisma/client";
 
 export {
@@ -30,6 +33,15 @@ export type RequireUserOptions = {
   allowPending?: boolean;
 };
 
+/**
+ * Why `getCurrentUser` returned null, for the redirect that follows it.
+ *
+ * Per request via `cache()`, alongside the user lookup itself. If the memo is
+ * ever unavailable the holder is simply fresh, the reason is null, and the
+ * redirect is the plain one it has always been — never a wrong explanation.
+ */
+const sessionEndNote = cache((): { reason: SessionEndReason | null } => ({ reason: null }));
+
 function isTeacherRejected(user: User): boolean {
   return user.role === "TEACHER" && user.approvalStatus === "REJECTED";
 }
@@ -37,6 +49,25 @@ function isTeacherRejected(user: User): boolean {
 /** Pending School Head approval only (deactivated approved teachers use isActive below). */
 function isTeacherPendingGate(user: User): boolean {
   return user.role === "TEACHER" && user.approvalStatus === "PENDING";
+}
+
+/**
+ * Every session teardown here ends impersonation too, and runs this BEFORE the
+ * `signOut` it accompanies.
+ *
+ * Its own try, never the signOut's: these paths run in Server Components as well
+ * as actions, and in a Server Component Next throws on any cookie write. That
+ * throw must not skip the signOut that follows. It only happens when a ticket is
+ * present (`clearImpersonationCookie` checks first), so it is logged. The ticket
+ * surviving in that case is not a hole — it is bound to one Supabase session
+ * (`@/lib/auth/impersonation`), and the signOut below ends that session.
+ */
+async function dropImpersonationTicket(): Promise<void> {
+  try {
+    await clearImpersonationCookie();
+  } catch (err) {
+    console.error("[session] clearing impersonation ticket on sign-out failed:", err);
+  }
 }
 
 /** Spans for the two blocking round trips every authenticated request pays for. */
@@ -169,6 +200,8 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   if (!user) return null;
 
   if (user.deletedAt) {
+    sessionEndNote().reason = "account_disabled";
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -181,12 +214,13 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
     if (allowPending) {
       return user;
     }
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
       console.error("[session] signOut for rejected teacher failed:", err);
     }
-    redirect("/login");
+    redirect(loginPath("school", "declined"));
   }
 
   if (isTeacherPendingGate(user)) {
@@ -198,6 +232,8 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
 
   // Soft-deleted already handled. Inactive non-pending users (SH/admin/legacy): sign out.
   if (!user.isActive) {
+    sessionEndNote().reason = "account_disabled";
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -216,6 +252,22 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
  */
 export async function getCurrentUser(options?: GetCurrentUserOptions): Promise<User | null> {
   return getCurrentUserCached(Boolean(options?.allowPending));
+}
+
+/**
+ * The signed-in user, or null, with no redirect of any kind.
+ *
+ * For pages that must render for anyone — the 404 above all. `getCurrentUser`
+ * redirects pending and declined teachers, which on a 404 would bounce someone
+ * away from the page explaining where they are.
+ */
+export async function peekCurrentUser(): Promise<User | null> {
+  try {
+    return await getCurrentUser({ allowPending: true });
+  } catch {
+    // A 404 must render even when the session or the database is unavailable.
+    return null;
+  }
 }
 
 /**
@@ -239,8 +291,13 @@ export async function requireUser(
   if (!user) {
     const isAdminRoute =
       roles === "SUPER_ADMIN" || (Array.isArray(roles) && roles.includes("SUPER_ADMIN"));
-    redirect(isAdminRoute ? "/admin/login" : "/login");
+    redirect(loginPath(isAdminRoute ? "admin" : "school", sessionEndNote().reason));
   }
+
+  // Lets an error recorded later in this action or route name the person,
+  // without every throw site threading ids through its signature. A no-op
+  // outside a wrapped action.
+  noteScopeUser({ id: user.id, schoolId: user.schoolId });
 
   if (user.mustChangePassword && !options?.allowMustChangePassword) {
     redirect("/account/set-password");
@@ -279,7 +336,13 @@ export function isSuperAdmin(user: User): boolean {
   return user.role === "SUPER_ADMIN";
 }
 
+/**
+ * Sign out and end any impersonation with it. The ticket goes here, in the one
+ * helper, so every page that signs out through it — `/pending-approval` and
+ * `/account/created` today — is covered without repeating the rule at each site.
+ */
 export async function signOut() {
+  await dropImpersonationTicket();
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
 }

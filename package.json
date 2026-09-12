@@ -1,6 +1,6 @@
 {
   "name": "litrack",
-  "version": "1.1.2",
+  "version": "1.8.2",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -18,6 +18,7 @@
     "db:delete-schools": "tsx scripts/delete-schools.ts",
     "db:set-super-admin": "tsx scripts/set-super-admin-credentials.ts",
     "db:seed-division-admins": "tsx scripts/seed-division-admins.ts",
+    "db:retire-super-admin": "tsx scripts/retire-super-admin.ts",
     "diagnose:login": "tsx scripts/diagnose-login.ts",
     "diagnose:login-trail": "tsx scripts/diagnose-login-trail.ts",
     "test": "vitest run",

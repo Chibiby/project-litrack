@@ -26,6 +26,7 @@ const create = vi.fn();
 const findUnique = vi.fn();
 const update = vi.fn();
 const userFindMany = vi.fn();
+const userFindFirst = vi.fn();
 const notificationCreate = vi.fn();
 const notificationCreateMany = vi.fn();
 const grantUpsert = vi.fn();
@@ -49,6 +50,9 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       get findMany() {
         return userFindMany;
+      },
+      get findFirst() {
+        return userFindFirst;
       },
     },
     notification: {
@@ -114,9 +118,13 @@ vi.mock("@/lib/cache/revalidate", () => ({
 }));
 
 // Imported after the mock factories above are registered.
+// `src/lib/unlock/issue.ts` is deliberately NOT mocked: since the three grant
+// paths were folded onto it, it is where the upsert these tests assert actually
+// happens.
 const {
   declineTicket,
   fetchMyTickets,
+  grantUnlockDirect,
   resolveTicket,
   revokeUnlockGrant,
   submitTicket,
@@ -184,6 +192,7 @@ beforeEach(() => {
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   create.mockResolvedValue({ id: TICKET_ID });
   userFindMany.mockResolvedValue([{ id: "admin-1" }, { id: "admin-2" }]);
+  userFindFirst.mockResolvedValue({ id: "teacher-1", schoolId: "school-1" });
   notificationCreateMany.mockResolvedValue({ count: 2 });
   notificationCreate.mockResolvedValue({ id: "notif-1" });
   update.mockResolvedValue({ id: TICKET_ID });
@@ -460,18 +469,145 @@ describe("resolveTicket", () => {
 
     expect(allWrittenText()).not.toContain("Reyes");
 
-    const actions = writeAudit.mock.calls.map((call) => call[0].action);
-    expect(actions).toEqual(["SUPPORT_TICKET_RESOLVE", "UNLOCK_GRANT_ISSUE"]);
-    expect(writeAudit.mock.calls[0]?.[0]?.metadata).toEqual({
+    // Both rows, asserted by counting calls filtered by action rather than by
+    // grouping into a `Map` keyed on `action` — a `Map` collapses two calls for
+    // the same action into one entry, which would hide a duplicate write.
+    // `UNLOCK_GRANT_ISSUE` lands first because `resolveTicket` writes it
+    // explicitly right after `$transaction` resolves, not because `issue.ts`
+    // audited it from inside the transaction — `audit: false` on that call
+    // means `issue.ts` writes nothing; see the note in `support.ts`.
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    const issueCalls = writeAudit.mock.calls.filter(
+      (call) => call[0].action === "UNLOCK_GRANT_ISSUE"
+    );
+    const resolveCalls = writeAudit.mock.calls.filter(
+      (call) => call[0].action === "SUPPORT_TICKET_RESOLVE"
+    );
+    expect(issueCalls).toHaveLength(1);
+    expect(resolveCalls).toHaveLength(1);
+    expect(resolveCalls[0]?.[0]?.metadata).toEqual({
       category: "UNLOCK_REQUEST",
       granted: true,
     });
-    expect(writeAudit.mock.calls[1]?.[0]?.metadata).toMatchObject({
+    expect(issueCalls[0]?.[0]?.metadata).toMatchObject({
       ticketId: TICKET_ID,
       userId: "teacher-1",
       scope: "ARAL_WEEKLY_ATTENDANCE",
       targetKey: WEEK_A,
     });
+  });
+
+  it("writes the grant's UNLOCK_GRANT_ISSUE row only after the transaction resolves", async () => {
+    // `writeAudit` dispatches through `after()`, which queues the instant it is
+    // called — not once the surrounding transaction commits. If `issueTeacherUnlock`
+    // still audited from inside `$transaction`'s callback, that row would be
+    // queued before Postgres had agreed to keep the grant.
+    //
+    // Proven by actually running the callback against a fake `tx` — so
+    // `grantUpsert` really is called, the way the real transaction would call
+    // it — and then holding the outer `$transaction` promise open with a gate
+    // the test controls, standing in for "the callback finished but Postgres
+    // has not committed yet". Nothing must be audited while that gate is shut.
+    findUnique.mockResolvedValue(storedTicket());
+    let releaseCommit!: () => void;
+    const commitGate = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    let notifyUpsertCalled!: () => void;
+    const upsertCalled = new Promise<void>((resolve) => {
+      notifyUpsertCalled = resolve;
+    });
+    grantUpsert.mockImplementationOnce(async () => {
+      notifyUpsertCalled();
+      return { id: GRANT_ID };
+    });
+    transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const result = await fn({
+        supportTicket: { update },
+        unlockGrant: { upsert: grantUpsert },
+      });
+      await commitGate;
+      return result;
+    });
+
+    const settled = resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
+    await upsertCalled;
+
+    // The callback ran — the grant row exists — but the transaction has not
+    // resolved, so nothing has been audited yet.
+    expect(grantUpsert).toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+
+    releaseCommit();
+    const result = await settled;
+
+    expect(result).toEqual({ ok: true });
+    const issueCalls = writeAudit.mock.calls.filter(
+      (call) => call[0].action === "UNLOCK_GRANT_ISSUE"
+    );
+    expect(issueCalls).toHaveLength(1);
+    expect(issueCalls[0]?.[0]).toMatchObject({
+      resource: "UnlockGrant",
+      resourceId: GRANT_ID,
+    });
+  });
+
+  it("writes no grant audit row at all when the transaction rejects", async () => {
+    // A grant whose ticket update never committed must leave no trace that says
+    // otherwise — auditing it anyway would name a grant id Postgres rolled back.
+    //
+    // The callback still runs against a fake `tx` (the grant upsert really
+    // happens, exactly as it would mid-transaction in Postgres before a later
+    // statement forces a rollback), and only then does the surrounding
+    // `$transaction` reject, standing in for the commit itself failing.
+    findUnique.mockResolvedValue(storedTicket());
+    transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      await fn({
+        supportTicket: { update },
+        unlockGrant: { upsert: grantUpsert },
+      });
+      throw new Error("connection reset");
+    });
+
+    await expect(
+      resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } })
+    ).rejects.toThrow("connection reset");
+
+    expect(grantUpsert).toHaveBeenCalled();
+    const issueCalls = writeAudit.mock.calls.filter(
+      (call) => call[0].action === "UNLOCK_GRANT_ISSUE"
+    );
+    expect(issueCalls).toHaveLength(0);
+  });
+
+  it("refuses to grant when the requester can no longer receive access, e.g. a School Head", async () => {
+    // `REQUESTER_ROLES` lets a School Head file a ticket, but `findUnlockRecipient`
+    // only ever resolves an active TEACHER — a School Head requester (or a
+    // teacher deactivated after filing) must never end up with `granted: true`
+    // and no real access behind it.
+    findUnique.mockResolvedValue(storedTicket());
+    userFindFirst.mockResolvedValue(null);
+
+    const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "This person can no longer receive access",
+    });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(grantUpsert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("still resolves without granting for a requester who cannot receive a grant", async () => {
+    findUnique.mockResolvedValue(storedTicket());
+    userFindFirst.mockResolvedValue(null);
+
+    const result = await resolveTicket({ ticketId: TICKET_ID, note: "Handled another way" });
+
+    expect(result).toEqual({ ok: true });
+    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({ status: "RESOLVED" });
+    expect(grantUpsert).not.toHaveBeenCalled();
   });
 
   it("records granted: false when it only closed the ticket", async () => {
@@ -611,6 +747,84 @@ describe("revokeUnlockGrant", () => {
 
     expect(result.ok).toBe(false);
     expect(grantFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("grantUnlockDirect", () => {
+  const DIRECT = {
+    userId: "teacher-1",
+    scope: "MONTHLY_READING_LEVEL" as const,
+    targetKey: "2026-09-01",
+    days: 10,
+  };
+
+  it("still answers in its legacy ActionResult shape after delegating the write", async () => {
+    // The shape, not just the success: several existing callers read
+    // `res.data.id` and `res.error`, and folding the upsert into
+    // `src/lib/unlock/issue.ts` must not have moved either.
+    const result = await grantUnlockDirect(DIRECT);
+
+    expect(result).toEqual({ ok: true, data: { id: GRANT_ID } });
+  });
+
+  it("takes the school from the teacher's own row", async () => {
+    await grantUnlockDirect(DIRECT);
+
+    expect(userFindFirst.mock.calls[0]?.[0]).toMatchObject({
+      where: { id: "teacher-1", deletedAt: null, schoolId: { not: null } },
+    });
+    expect(grantUpsert.mock.calls[0]?.[0]?.create).toMatchObject({
+      schoolId: "school-1",
+      userId: "teacher-1",
+      scope: "MONTHLY_READING_LEVEL",
+      targetKey: "2026-09-01",
+      grantedById: "admin-1",
+      // No ticket: this path has no request behind it.
+      ticketId: null,
+    });
+  });
+
+  it("keeps saying 'Not found' for a teacher it cannot grant to", async () => {
+    userFindFirst.mockResolvedValue(null);
+
+    expect(await grantUnlockDirect(DIRECT)).toEqual({ ok: false, error: "Not found" });
+    expect(grantUpsert).not.toHaveBeenCalled();
+  });
+
+  it("marks the audit row as direct, with no ticket and no name", async () => {
+    await grantUnlockDirect(DIRECT);
+
+    expect(writeAudit.mock.calls[0]?.[0]).toMatchObject({
+      action: "UNLOCK_GRANT_ISSUE",
+      resource: "UnlockGrant",
+      resourceId: GRANT_ID,
+      metadata: { direct: true, ticketId: null, userId: "teacher-1" },
+    });
+    expect(allWrittenText()).not.toContain("Reyes");
+  });
+
+  it("tells the teacher, because nothing else on this path does", async () => {
+    await grantUnlockDirect(DIRECT);
+
+    expect(notificationCreate.mock.calls[0]?.[0]?.data).toMatchObject({
+      recipientId: "teacher-1",
+      type: "UNLOCK_GRANTED",
+      unlockGrantId: GRANT_ID,
+      learnerIds: [],
+    });
+  });
+});
+
+describe("one bell per act", () => {
+  it("does not add an UNLOCK_GRANTED bell to a resolved ticket", async () => {
+    // The requester already gets SUPPORT_TICKET_RESOLVED for this exact event,
+    // and that notification is what carries the grant's expiry to them.
+    findUnique.mockResolvedValue(storedTicket());
+
+    await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
+
+    const types = notificationCreate.mock.calls.map((call) => call[0]?.data?.type);
+    expect(types).toEqual(["SUPPORT_TICKET_RESOLVED"]);
   });
 });
 

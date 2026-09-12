@@ -4,18 +4,18 @@ import { getTermWindows, isTermLocked } from "@/lib/terms/windows";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
- * Action-level coverage for `saveTermGrades` — the only write behind the End of
+ * Action-level coverage for `saveTermGrades` â€” the only write behind the End of
  * Terms grade sheet.
  *
  * The design (`docs/superpowers/specs/2026-08-22-end-of-terms-reports-design.md`
- * §4, §9) lists five refusals, and every one of them is enforced here and nowhere
+ * Â§4, Â§9) lists five refusals, and every one of them is enforced here and nowhere
  * else: the grid disables its inputs and hides its Save button, but a client is
  * not an enforcement point. What is contract, and so asserted rather than
  * assumed:
  *
  *   - The roster is read through `schoolId` AND the adviser's own section, so a
  *     learner from another tenant or another section cannot be graded by id. A
- *     partial match fails the WHOLE batch with one generic message — that is what
+ *     partial match fails the WHOLE batch with one generic message â€” that is what
  *     stops a probe from telling "another school's" apart from "not my section",
  *     and what stops the valid half of a poisoned batch from being written.
  *   - Every placement fact is re-derived server-side. The posted `gradeLevelId` is
@@ -41,7 +41,7 @@ const OTHER_GRADE_ID = "grade-g8";
 const SCHOOL_YEAR_ID = "sy-2026-2027";
 
 /**
- * The fake clock. December 15 2026 at LOCAL noon — built from local fields, never
+ * The fake clock. December 15 2026 at LOCAL noon â€” built from local fields, never
  * a UTC instant, and deliberately mid-month: this box is UTC+8 and CI is UTC, and
  * both must resolve `schoolToday()` to the same civil day or the set of locked
  * terms changes between the two.
@@ -51,7 +51,7 @@ const SCHOOL_YEAR_ID = "sy-2026-2027";
  * the lock. The distance from either boundary is what makes it robust.
  */
 const TODAY = new Date(2026, 11, 15, 12, 0, 0);
-/** August 1 2026 — the approved sheet's calendar. Local midnight, no UTC instant. */
+/** August 1 2026 â€” the approved sheet's calendar. Local midnight, no UTC instant. */
 const SCHOOL_YEAR_START = new Date(2026, 7, 1);
 /** Open on `TODAY`. The term every non-lock test posts. */
 const OPEN_TERM = "SECOND";
@@ -97,6 +97,8 @@ let sections: SectionRow[];
 let schoolYears: SchoolYearRow[];
 /** `TeacherProfile.designation` for the caller; `null` is an ordinary DepEd teacher. */
 let designation: string | null;
+/** `TeacherProfile.advisoryMode`; `null` behaves as DEFAULT for an older row. */
+let advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
 /** What `requireSchoolUser` resolves. Mutated per test, never widened by default. */
 let session: {
   id: string;
@@ -124,7 +126,7 @@ function learner(overrides: Partial<LearnerRow> & { id: string }): LearnerRow {
  *
  * This is the load-bearing property of the fake: if the action ever drops
  * `schoolId` or `sectionId` from the roster `where`, the foreign rows below stop
- * being filtered here too, the counts agree, and the cross-tenant tests go red —
+ * being filtered here too, the counts agree, and the cross-tenant tests go red â€”
  * which is the direction a fake must fail in. A fake that hardcoded the filters
  * would keep passing after the real ones were deleted.
  */
@@ -198,7 +200,7 @@ const teacherProfileFindFirst = vi.fn(
   async (args: { where: { userId: string; user: { schoolId: string } } }) => {
     if (args.where.userId !== session.id) return null;
     if (args.where.user?.schoolId !== session.schoolId) return null;
-    return { designation };
+    return { designation, advisoryMode };
   }
 );
 
@@ -221,17 +223,17 @@ const schoolYearFindFirst = vi.fn(
  * The write surface.
  *
  * Encoded cells are no longer written through `prisma.termGrade.upsert`. They go
- * out as ONE multi-row `INSERT … ON CONFLICT DO UPDATE` per chunk, issued with
+ * out as ONE multi-row `INSERT â€¦ ON CONFLICT DO UPDATE` per chunk, issued with
  * `tx.$queryRaw`, because a per-row upsert loop could not finish a full sheet
  * inside a transaction timeout. So "wrote nothing" now means: the raw statement
  * was never issued, `deleteMany` was never called, and the transaction never
  * opened. Asserting on `upsert` would be asserting on a builder the action no
- * longer has — a dead assertion that reads as coverage.
+ * longer has â€” a dead assertion that reads as coverage.
  *
  * `queryRaw` below is not a stub. It models the tenant JOIN in the real
  * statement: a row comes back only if the learner it names satisfies the school,
  * grade and section ids THAT WERE ACTUALLY BOUND into the SQL. That is what makes
- * this fake fail in the right direction — delete `l."schoolId" = $n` from the
+ * this fake fail in the right direction â€” delete `l."schoolId" = $n` from the
  * action and `SCHOOL_ID` stops being bound, no rows come back, the action's own
  * `RETURNING` count check throws, and the happy path goes red. Once the Prisma
  * `where` object is gone, the bound-parameter list is the only witness that a
@@ -239,7 +241,7 @@ const schoolYearFindFirst = vi.fn(
  */
 type RawCall = { sql: string; params: unknown[] };
 let rawWrites: RawCall[];
-/** Makes the statement RETURN one row fewer than it was given — see the guard test. */
+/** Makes the statement RETURN one row fewer than it was given â€” see the guard test. */
 let dropOneReturnedRow = false;
 
 /** Prisma nests `Prisma.sql`/`Prisma.join` fragments; bound params are the leaves. */
@@ -306,6 +308,15 @@ const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
   return arg;
 });
 
+/**
+ * The two grant tables `canWriteWindow` reads from â€” left un-mocked at the
+ * module level so the real `canWriteWindow` runs here, exactly as the
+ * "refuses a term whose months have passed" test above already depends on
+ * for its fail-closed behaviour when both resolve to `null`.
+ */
+const unlockGrantFindFirst = vi.fn(async (_args?: unknown) => null as unknown);
+const schoolUnlockGrantFindFirst = vi.fn(async (_args?: unknown) => null as unknown);
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     get $transaction() {
@@ -323,6 +334,13 @@ vi.mock("@/lib/prisma", () => ({
     },
     schoolYear: {
       findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [never])),
+    },
+    unlockGrant: {
+      findFirst: (...args: unknown[]) => unlockGrantFindFirst(...(args as [never])),
+    },
+    schoolUnlockGrant: {
+      findFirst: (...args: unknown[]) =>
+        schoolUnlockGrantFindFirst(...(args as [never])),
     },
   },
 }));
@@ -348,6 +366,8 @@ vi.mock("@/lib/audit", () => ({
   AUDIT_ACTIONS: {
     TERM_GRADES_BULK_SAVE: "TERM_GRADES_BULK_SAVE",
     TERM_GRADES_EXPORT: "TERM_GRADES_EXPORT",
+    UNLOCK_GRANT_USED: "UNLOCK_GRANT_USED",
+    UNLOCK_SCHOOL_GRANT_USED: "UNLOCK_SCHOOL_GRANT_USED",
   },
 }));
 
@@ -367,7 +387,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
  *
  * This file's subject is the term deadline, so it runs in the regime where
  * deadlines are enforced. Mocked rather than left to the real reader, which
- * would reach `prisma.systemSetting` — absent from the Prisma mock above — and
+ * would reach `prisma.systemSetting` â€” absent from the Prisma mock above â€” and
  * degrade to "off", quietly turning every locked-term assertion here into a
  * test of the unlocked path. The switched-off case has its own test below.
  */
@@ -447,6 +467,7 @@ beforeEach(() => {
     },
   ];
   designation = null;
+  advisoryMode = null;
   session = {
     id: TEACHER_ID,
     schoolId: SCHOOL_ID,
@@ -456,17 +477,19 @@ beforeEach(() => {
   learnerFindManyArgs = [];
   rawWrites = [];
   dropOneReturnedRow = false;
+  unlockGrantFindFirst.mockResolvedValue(null);
+  schoolUnlockGrantFindFirst.mockResolvedValue(null);
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("saveTermGrades — the fixture clock", () => {
+describe("saveTermGrades â€” the fixture clock", () => {
   it("puts one term shut and one term open on the same day", () => {
     // Guards every other case in this file. If `schoolToday()` ever resolves to a
     // different civil day here than it does in CI, the lock assertions below
-    // would flip silently — so the assumption is stated once, loudly, instead of
+    // would flip silently â€” so the assumption is stated once, loudly, instead of
     // being spread implicitly across a dozen tests.
     const todayKey = formatLocalDateKey(schoolToday());
     expect(todayKey).toBe("2026-12-15");
@@ -480,10 +503,10 @@ describe("saveTermGrades — the fixture clock", () => {
   });
 });
 
-describe("saveTermGrades — the happy path this file's refusals are measured against", () => {
+describe("saveTermGrades â€” the happy path this file's refusals are measured against", () => {
   it("upserts encoded cells, deletes cleared ones, and logs no scores", async () => {
     // The control. Without it every refusal below could be passing for the wrong
-    // reason — a harness that can never reach the write makes "wrote nothing"
+    // reason â€” a harness that can never reach the write makes "wrote nothing"
     // vacuously true.
     const res = await post({
       entries: [
@@ -515,7 +538,7 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
     // The conflict target IS the unique constraint, and `updatedAt` is bumped in
     // the DO UPDATE branch. Prisma's `@updatedAt` is client-side and there is no
     // database trigger, so omitting that clause would freeze the column at
-    // first-insert time forever — silently, with nothing to fail.
+    // first-insert time forever â€” silently, with nothing to fail.
     expect(sql).toContain(
       'ON CONFLICT ("learnerId", "schoolYearId", "term", "subject") DO UPDATE'
     );
@@ -531,13 +554,13 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
     for (const id of ["learner-a", "learner-b"]) {
       expect(params).toContain(id);
     }
-    // Scores are bound values, and `recordedById` is the caller — never a client
+    // Scores are bound values, and `recordedById` is the caller â€” never a client
     // -supplied id.
     expect(params).toContain(87);
     expect(params).toContain(93);
     expect(params).toContain(TEACHER_ID);
 
-    // Placement, counts and learner ids — and an EXACT shape, because that is the
+    // Placement, counts and learner ids â€” and an EXACT shape, because that is the
     // only assertion a newly added `scores` key cannot slip past.
     const audit = writeAudit.mock.calls[0][0];
     expect(audit.action).toBe("TERM_GRADES_BULK_SAVE");
@@ -551,6 +574,7 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
       saved: 2,
       cleared: 1,
       learnerIds: ["learner-a", "learner-b"],
+      grantKind: null,
     });
     // Belt and braces on the PII rule: the scores are distinctive two-digit
     // numbers that cannot collide with any count in the row above.
@@ -585,7 +609,7 @@ describe("saveTermGrades — the happy path this file's refusals are measured ag
   });
 });
 
-describe("saveTermGrades — refusal 1: a locked term", () => {
+describe("saveTermGrades â€” refusal 1: a locked term", () => {
   it("refuses a term whose months have passed", async () => {
     // The grid disables its inputs once a term closes; a stale tab does not. This
     // is the only enforcement point.
@@ -601,7 +625,7 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
   });
 
   it("still accepts a term that has not started yet", async () => {
-    // "Not yet begun" is not "closed" — a teacher may encode ahead, and treating
+    // "Not yet begun" is not "closed" â€” a teacher may encode ahead, and treating
     // a future window as locked would shut the sheet for two thirds of the year.
     const res = await post({ term: "THIRD" });
     expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
@@ -617,8 +641,8 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
   });
 
   /**
-   * §3: the programme-wide switch. With deadlines off, the same closed term the
-   * first case refuses is accepted — from the same teacher, with no grant
+   * Â§3: the programme-wide switch. With deadlines off, the same closed term the
+   * first case refuses is accepted â€” from the same teacher, with no grant
    * anywhere. This is the pair that proves the switch reaches this action, and
    * it fails if `canWriteWindow` is ever bypassed here.
    */
@@ -632,7 +656,7 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
 
   it("accepts a save past the months when the head extended the deadline", async () => {
     // First Term's months ended Oct 31. The head moved entry to Dec 31, and the
-    // frozen clock is Dec 15 — inside the extension, past the months.
+    // frozen clock is Dec 15 â€” inside the extension, past the months.
     schoolYears[0].termWindowOverrides = [
       {
         term: "FIRST",
@@ -648,7 +672,7 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
   });
 
   it("still refuses a save past the extended deadline", async () => {
-    // Extended, but only to Nov 30 — the clock is past that too.
+    // Extended, but only to Nov 30 â€” the clock is past that too.
     schoolYears[0].termWindowOverrides = [
       {
         term: "FIRST",
@@ -667,7 +691,60 @@ describe("saveTermGrades — refusal 1: a locked term", () => {
   });
 });
 
-describe("saveTermGrades — refusal 2: a learner outside the advisory section", () => {
+describe("saveTermGrades â€” which grant table wrote the second audit row", () => {
+  // A school-wide grant lives in a DIFFERENT table (`SchoolUnlockGrant`) than a
+  // personal one (`UnlockGrant`). Joining its id against `UnlockGrant` finds
+  // nothing, so the second audit row must name the right table â€” in `action`
+  // AND in `resource` â€” not just carry `grantKind` in `metadata`. Mirrors the
+  // pair in `tests/unit/actions/attendance-week-save.test.ts`.
+  it("writes UNLOCK_GRANT_USED against UnlockGrant for a personal grant", async () => {
+    unlockGrantFindFirst.mockResolvedValue({
+      id: "grant-personal-1",
+      expiresAt: new Date(2099, 0, 1),
+      grantedBy: null,
+    });
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(true);
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    expect(writeAudit.mock.calls[0][0]).toMatchObject({
+      action: "TERM_GRADES_BULK_SAVE",
+      metadata: expect.objectContaining({ grantKind: "user" }),
+    });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_GRANT_USED",
+      resource: "UnlockGrant",
+      resourceId: "grant-personal-1",
+      metadata: expect.objectContaining({ grantKind: "user" }),
+    });
+  });
+
+  it("writes UNLOCK_SCHOOL_GRANT_USED against SchoolUnlockGrant for a school-wide grant", async () => {
+    schoolUnlockGrantFindFirst.mockResolvedValue({
+      id: "grant-school-1",
+      expiresAt: new Date(2099, 0, 1),
+      grantedBy: null,
+    });
+
+    const res = await post({ term: LOCKED_TERM });
+
+    expect(res.ok).toBe(true);
+    expect(writeAudit).toHaveBeenCalledTimes(2);
+    expect(writeAudit.mock.calls[0][0]).toMatchObject({
+      action: "TERM_GRADES_BULK_SAVE",
+      metadata: expect.objectContaining({ grantKind: "school" }),
+    });
+    expect(writeAudit.mock.calls[1][0]).toMatchObject({
+      action: "UNLOCK_SCHOOL_GRANT_USED",
+      resource: "SchoolUnlockGrant",
+      resourceId: "grant-school-1",
+      metadata: expect.objectContaining({ grantKind: "school" }),
+    });
+  });
+});
+
+describe("saveTermGrades â€” refusal 2: a learner outside the advisory section", () => {
   it("refuses a real learner in another section of the same grade", async () => {
     learners.push(learner({ id: "learner-other-section", sectionId: OTHER_SECTION_ID }));
 
@@ -732,7 +809,7 @@ describe("saveTermGrades — refusal 2: a learner outside the advisory section",
   });
 });
 
-describe("saveTermGrades — refusal 3: a cross-tenant learner id", () => {
+describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
   /**
    * Same grade id, same section id, different school. Contrived on purpose: it
    * leaves `schoolId` as the ONLY clause that can exclude the row, so this case
@@ -843,10 +920,10 @@ describe("saveTermGrades — refusal 3: a cross-tenant learner id", () => {
   });
 });
 
-describe("saveTermGrades — refusal 4: no active school year", () => {
+describe("saveTermGrades â€” refusal 4: no active school year", () => {
   it("refuses when the school has no active year", async () => {
-    // A real state the schema permits — learner creation already skips enrolment
-    // when there is none — so the answer is a refusal, not orphaned rows keyed to
+    // A real state the schema permits â€” learner creation already skips enrolment
+    // when there is none â€” so the answer is a refusal, not orphaned rows keyed to
     // a year that does not exist.
     schoolYears = [];
 
@@ -893,7 +970,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
   });
 });
 
-describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
+describe("saveTermGrades â€” refusal 5: a caller who advises nothing", () => {
   it("refuses a teacher with no advisory placement", async () => {
     // Advising nothing is now a property of the SECTIONS, not of the session
     // pointer: `getAdvisoryPlacements` asks which sections name this teacher.
@@ -940,9 +1017,24 @@ describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
     expectNoWrites();
   });
 
+  it("refuses a floating teacher in words that fit a DepEd teacher", async () => {
+    // A floating teacher IS a DepEd teacher, so the volunteer copy would be
+    // false about them and would point them at the wrong remedy.
+    advisoryMode = "FLOATING";
+
+    const res = await post();
+
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "Floating teachers do not advise a section, so there is no end-of-term sheet. Your School Head can change this.",
+    });
+    expectNoWrites();
+  });
+
   it("refuses a volunteer even when they somehow hold an advisory section", async () => {
     // The designation gate runs BEFORE the placement lookup, so it cannot be
-    // routed around by data drift — a volunteer with a section assigned by mistake
+    // routed around by data drift â€” a volunteer with a section assigned by mistake
     // is still refused, and the sidebar's inert row agrees with this refusal.
     designation = ARAL_VOLUNTEER_DESIGNATION;
     session.advisorySectionId = SECTION_ID;
@@ -957,7 +1049,7 @@ describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
   });
 });
 
-describe("saveTermGrades — the two that cost nothing extra", () => {
+describe("saveTermGrades â€” the two that cost nothing extra", () => {
   it("refuses a Super Admin outright", async () => {
     // `requireSchoolUser("TEACHER")` passes a Super Admin by impersonation and
     // only checks that `schoolId` is non-null, so an admin row that carries one
@@ -1015,11 +1107,11 @@ describe("saveTermGrades — the two that cost nothing extra", () => {
   });
 });
 
-describe("saveTermGrades — the RETURNING count guard", () => {
+describe("saveTermGrades â€” the RETURNING count guard", () => {
   it("refuses the whole save when the statement writes fewer rows than it was given", async () => {
     // The last defence against a silently skipped row. The JOIN drops any learner
     // that is soft-deleted, archived, or outside the caller's tenant or section, and
-    // Postgres reports NO error for that — the teacher would see a saved grade sheet
+    // Postgres reports NO error for that â€” the teacher would see a saved grade sheet
     // with one learner's marks missing. Nothing else in this file fires the branch,
     // so an inverted or deleted comparison would go unnoticed.
     dropOneReturnedRow = true;
@@ -1042,7 +1134,7 @@ describe("saveTermGrades — the RETURNING count guard", () => {
   });
 });
 
-describe("saveTermGrades — the set-based write", () => {
+describe("saveTermGrades â€” the set-based write", () => {
   it("dedupes a repeated conflict tuple instead of hitting Postgres 21000", async () => {
     // The serial array form made a duplicated cell a harmless last-write-wins. One
     // multi-row `ON CONFLICT DO UPDATE` raises 21000 ("cannot affect row a second
@@ -1098,7 +1190,7 @@ describe("saveTermGrades — the set-based write", () => {
     expect(rawWrites[0].params).toContain(87);
   });
 
-  it("accepts a full sheet — 100 learners x 8 subjects — in one transaction", async () => {
+  it("accepts a full sheet â€” 100 learners x 8 subjects â€” in one transaction", async () => {
     // The payload the cap is sized for. It must be ACCEPTED, and it must not
     // degenerate back into a statement per cell.
     learners = Array.from({ length: 100 }, (_, i) =>

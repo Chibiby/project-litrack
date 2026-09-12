@@ -10,6 +10,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { globalSearch } from "@/lib/actions/global-search";
@@ -256,14 +257,18 @@ export function HeaderSearch({
                       {heading}
                     </p>
                   )}
-                  <button
+                  {/* A result row, not a control: `h-auto` and `justify-start`
+                      undo the primitive's fixed height and centring so the row
+                      keeps hugging its own two lines of text. */}
+                  <Button
                     type="button"
+                    variant="ghost"
                     role="option"
                     aria-selected={i === active}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => go(row)}
                     className={cn(
-                      "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm",
+                      "flex h-auto w-full items-center justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal",
                       i === active && "bg-accent"
                     )}
                   >
@@ -281,7 +286,7 @@ export function HeaderSearch({
                         </span>
                       )}
                     </span>
-                  </button>
+                  </Button>
                 </div>
               );
             })

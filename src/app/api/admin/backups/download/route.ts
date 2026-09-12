@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { readBackupBytes, isBackupStoreConfigured } from "@/lib/db/backup-store";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { route } from "@/lib/errors/route";
+import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
 
 /**
  * Streams a stored backup to the admin who asked for it.
@@ -19,28 +21,35 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function GET(request: NextRequest) {
+export const GET = route("GET /api/admin/backups/download", async (request: NextRequest) => {
+  // This link is opened by a browser, so `errorResponse` sends a signed-out
+  // admin to /admin/login and a wrong role to /forbidden rather than showing
+  // them raw JSON.
   const user = await getCurrentUser();
-  if (!user || user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  if (!user) throw new AppError("AUTH_NOT_SIGNED_IN");
+  if (user.role !== "SUPER_ADMIN") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "database backups" },
+      detail: `Role ${user.role} requested a backup download`,
+      context: { reason: "not_super_admin" },
+    });
   }
 
   if (!isBackupStoreConfigured()) {
-    return NextResponse.json({ error: "Backup storage is not connected." }, { status: 503 });
+    throw new AppError("SERVICE_UNAVAILABLE", {
+      params: { service: "Backup storage" },
+      context: { service: "blob" },
+    });
   }
 
   const pathname = request.nextUrl.searchParams.get("path");
-  if (!pathname) {
-    return NextResponse.json({ error: "Missing backup path" }, { status: 400 });
-  }
+  if (!pathname) throw fieldError("path", "Which backup? The link is missing its file name.");
 
-  try {
+  {
     // `readBackupBytes` rejects anything outside the backup layout, so a
     // crafted `path` cannot turn this into a read of an arbitrary blob.
     const bytes = await readBackupBytes(pathname);
-    if (!bytes) {
-      return NextResponse.json({ error: "That backup is no longer in storage." }, { status: 404 });
-    }
+    if (!bytes) throw resourceNotFound("Backup");
 
     await writeAudit({
       userId: user.id,
@@ -62,8 +71,5 @@ export async function GET(request: NextRequest) {
         "Cache-Control": "no-store, max-age=0",
       },
     });
-  } catch (err) {
-    console.error("[backups/download] failed:", err);
-    return NextResponse.json({ error: "Could not read that backup." }, { status: 500 });
   }
-}
+});

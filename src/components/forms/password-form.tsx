@@ -35,7 +35,7 @@ const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
 type ChangeValues = ChangePasswordInput;
 type SetValues = SetPasswordInput;
 
-export function PasswordForm({ mode }: { mode: Mode }) {
+export function PasswordForm({ mode, allowSkip = true }: { mode: Mode; allowSkip?: boolean }) {
   const [pending, startTransition] = useTransition();
 
   const title =
@@ -54,6 +54,7 @@ export function PasswordForm({ mode }: { mode: Mode }) {
   return (
     <PasswordFormSetOrReset
       mode={mode}
+      allowSkip={allowSkip}
       title={title}
       pending={pending}
       startTransition={startTransition}
@@ -171,11 +172,13 @@ function PasswordFormChange({
 
 function PasswordFormSetOrReset({
   mode,
+  allowSkip,
   title,
   pending,
   startTransition,
 }: {
   mode: "set" | "reset";
+  allowSkip: boolean;
   title: string;
   pending: boolean;
   startTransition: React.TransitionStartFunction;
@@ -253,7 +256,7 @@ function PasswordFormSetOrReset({
           >
             Save password
           </Button>
-          {mode === "set" ? <SkipForNowButton disabled={pending} /> : null}
+          {mode === "set" && allowSkip ? <SkipForNowButton disabled={pending} /> : null}
         </AppForm>
       </CardContent>
     </Card>

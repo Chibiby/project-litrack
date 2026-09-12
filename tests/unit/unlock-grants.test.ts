@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
 const findMany = vi.fn();
+const schoolFindFirst = vi.fn();
+const schoolFindMany = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -28,6 +30,14 @@ vi.mock("@/lib/prisma", () => ({
       },
       get findMany() {
         return findMany;
+      },
+    },
+    schoolUnlockGrant: {
+      get findFirst() {
+        return schoolFindFirst;
+      },
+      get findMany() {
+        return schoolFindMany;
       },
     },
   },
@@ -66,6 +76,9 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   findFirst.mockReset();
   findMany.mockReset();
+  schoolFindFirst.mockReset();
+  schoolFindMany.mockReset();
+  schoolFindMany.mockResolvedValue([]);
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -164,7 +177,11 @@ describe("listActiveUnlockKeys", () => {
   it("returns the granted target keys as a set", async () => {
     findMany.mockResolvedValue([{ targetKey: WEEK_A }, { targetKey: WEEK_B }]);
 
-    const keys = await listActiveUnlockKeys(USER, "ARAL_WEEKLY_ATTENDANCE");
+    const keys = await listActiveUnlockKeys({
+      userId: USER,
+      schoolId: "school-1",
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+    });
 
     expect(keys).toBeInstanceOf(Set);
     expect(keys.has(WEEK_A)).toBe(true);
@@ -179,7 +196,7 @@ describe("listActiveUnlockKeys", () => {
     // to save — the worst of both answers.
     findMany.mockResolvedValue([]);
 
-    await listActiveUnlockKeys(USER, "TERM_GRADES");
+    await listActiveUnlockKeys({ userId: USER, schoolId: "school-1", scope: "TERM_GRADES" });
 
     expect(findMany.mock.calls[0]?.[0]?.where).toMatchObject({
       userId: USER,
@@ -192,16 +209,41 @@ describe("listActiveUnlockKeys", () => {
   it("returns an empty set with no grants", async () => {
     findMany.mockResolvedValue([]);
     await expect(
-      listActiveUnlockKeys(USER, "ARAL_WEEKLY_ATTENDANCE")
+      listActiveUnlockKeys({ userId: USER, schoolId: "school-1", scope: "ARAL_WEEKLY_ATTENDANCE" })
     ).resolves.toEqual(new Set());
   });
 
   it("returns an empty set when the query throws", async () => {
     findMany.mockRejectedValue(new Error("P2024: pool timeout"));
 
-    const keys = await listActiveUnlockKeys(USER, "ARAL_WEEKLY_ATTENDANCE");
+    const keys = await listActiveUnlockKeys({
+      userId: USER,
+      schoolId: "school-1",
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+    });
 
     expect(keys.size).toBe(0);
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("unions in school-wide target keys", async () => {
+    findMany.mockResolvedValue([{ targetKey: WEEK_A }]);
+    schoolFindMany.mockResolvedValue([{ targetKey: WEEK_B }]);
+
+    const keys = await listActiveUnlockKeys({
+      userId: USER,
+      schoolId: "school-1",
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+    });
+
+    expect([...keys].sort()).toEqual([WEEK_A, WEEK_B].sort());
+  });
+
+  it("skips the school read when schoolId is null", async () => {
+    findMany.mockResolvedValue([]);
+
+    await listActiveUnlockKeys({ userId: USER, schoolId: null, scope: "TERM_GRADES" });
+
+    expect(schoolFindMany).not.toHaveBeenCalled();
   });
 });

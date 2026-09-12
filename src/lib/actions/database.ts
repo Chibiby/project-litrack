@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
 import {
   BACKUP_STORE_SETUP_MESSAGE,
   deleteBackup,
@@ -59,16 +60,12 @@ const BACKUP_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
  * deliberate escape hatch: it travels with one submission, is never
  * remembered, and what it lets through genuinely cannot be undone.
  *
- * One `as const` map rather than separate consts because a "use server" file
- * may not export a bare string.
+ * The phrases themselves live in `@/lib/constants/confirm-phrases`, which is a
+ * plain module. They cannot be defined here: a "use server" file may export
+ * nothing but async functions, and an exported `as const` map trips that rule
+ * at runtime — on whatever unrelated page happens to pull this module into its
+ * action chunk. See that file's header for the full story.
  */
-export const CONFIRM_PHRASES = {
-  restore: "RESTORE",
-  resetOperational: "CLEAR DATA",
-  resetSchoolAccounts: "RESET ACCOUNTS",
-  removeTeachers: "REMOVE TEACHERS",
-  noBackupAck: "NO BACKUP, NOT REVERSIBLE",
-} as const;
 
 const backupPath = z.object({ pathname: z.string().min(1).max(300) });
 
@@ -417,7 +414,7 @@ export async function resetAllSchoolAccounts(formData: FormData): Promise<Action
     });
 
     revalidatePath("/admin/database");
-    revalidatePath("/admin/school-accounts");
+    revalidatePath("/admin/accounts");
     return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
   } catch (err) {
     console.error("[database] school account reset failed:", err);

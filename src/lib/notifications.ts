@@ -1,7 +1,28 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
-import type { UserRole } from "@prisma/client";
+import type { TermPeriod, UnlockScope, UserRole } from "@prisma/client";
+import { TERM_PERIOD_LABELS, UNLOCK_SCOPE_LABELS } from "@/lib/constants/enum-labels";
+import { formatWeekRange } from "@/lib/week-range";
+import { formatMonthLabel } from "@/lib/month-range";
+import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
+
+/**
+ * `expiresAt` (a real UTC instant, e.g. `UnlockGrant.expiresAt`) rendered as
+ * the calendar date it lands on in the school's time zone — "September 8,
+ * 2026" for an instant that is still September 7 in UTC. Reading `getMonth()`
+ * directly on the instant would answer with the server process's own time
+ * zone (UTC in prod) rather than Manila's — the same reasoning `schoolToday()`
+ * in `src/lib/date-keys.ts` uses, via the same `SCHOOL_TIME_ZONE`.
+ */
+function formatLongDateInSchoolTimeZone(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: SCHOOL_TIME_ZONE,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
 
 /**
  * In-app notifications.
@@ -187,6 +208,155 @@ export async function getUnreadAralAssignments(user: {
   });
 }
 
+export type UnlockAlert = {
+  id: string;
+  /** "Monthly reading level reopened." */
+  title: string;
+  /** "August 2026, for everyone at your school. Open until September 7, 2026." */
+  description: string;
+  href: string;
+};
+
+/**
+ * `targetKey`, in words, for the scope it belongs to — the window the grant reopened.
+ *
+ * Every scope's `targetKey` convention is documented once, at the write side
+ * (`src/lib/unlock/issue.ts`) and the grant reader (`src/lib/unlock/grants.ts`);
+ * this just renders whichever one applies.
+ */
+function describeWindow(scope: UnlockScope, targetKey: string): string {
+  if (scope === "ARAL_WEEKLY_ATTENDANCE") return formatWeekRange(targetKey);
+  if (scope === "MONTHLY_READING_LEVEL") return formatMonthLabel(targetKey);
+  return TERM_PERIOD_LABELS[targetKey as TermPeriod];
+}
+
+/**
+ * A live grant's `UnlockAlert`, or `null` when the grant it points to no longer
+ * grants anything.
+ *
+ * "Live" mirrors `findActiveUnlock`/`findActiveSchoolUnlock` in
+ * `src/lib/unlock/grants.ts`: not revoked, not expired. A notification whose
+ * grant was revoked, expired, or removed (the FK `SetNull`s the pointer, so
+ * both `grant` and `schoolGrant` arrive `null`) must never promise the teacher
+ * access the server would refuse at the lock site.
+ */
+function composeUnlockAlert(row: {
+  id: string;
+  unlockGrant: { scope: UnlockScope; targetKey: string; expiresAt: Date; revokedAt: Date | null } | null;
+  schoolUnlockGrant: {
+    scope: UnlockScope;
+    targetKey: string;
+    expiresAt: Date;
+    revokedAt: Date | null;
+  } | null;
+}): UnlockAlert | null {
+  const isSchoolWide = row.unlockGrant === null && row.schoolUnlockGrant !== null;
+  const grant = row.unlockGrant ?? row.schoolUnlockGrant;
+  if (!grant) return null;
+  if (grant.revokedAt !== null) return null;
+  if (grant.expiresAt <= new Date()) return null;
+
+  const window = describeWindow(grant.scope, grant.targetKey);
+  const scope = isSchoolWide ? `${window}, for everyone at your school` : window;
+  return {
+    id: row.id,
+    title: `${UNLOCK_SCOPE_LABELS[grant.scope]} reopened.`,
+    description: `${scope}. Open until ${formatLongDateInSchoolTimeZone(grant.expiresAt)}.`,
+    // No grade is knowable from a grant — send the teacher to the ARAL hub
+    // rather than guessing one.
+    href: "/teacher/aral",
+  };
+}
+
+/**
+ * A teacher's unread, still-live unlock alerts, newest first.
+ *
+ * Tenant-scoped on `schoolId` as well as `recipientId`, same reasoning as
+ * `getUnreadAralAssignments`. "Still-live" is checked here rather than in the
+ * `where`, because a notification can point at either of two tables and only
+ * one of the two pointers is ever set — see `composeUnlockAlert`.
+ */
+export async function getUnreadUnlockGrants(user: {
+  id: string;
+  schoolId: string;
+}): Promise<UnlockAlert[]> {
+  const rows = await prisma.notification.findMany({
+    where: {
+      recipientId: user.id,
+      schoolId: user.schoolId,
+      type: "UNLOCK_GRANTED",
+      readAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+    take: FEED_LIMIT,
+    select: {
+      id: true,
+      unlockGrantId: true,
+      schoolUnlockGrantId: true,
+      unlockGrant: {
+        select: { scope: true, targetKey: true, expiresAt: true, revokedAt: true },
+      },
+      schoolUnlockGrant: {
+        select: { scope: true, targetKey: true, expiresAt: true, revokedAt: true },
+      },
+    },
+  });
+  if (rows.length === 0) return [];
+
+  // Re-issuing a window UPDATEs the same `UnlockGrant`/`SchoolUnlockGrant` row
+  // (see `issueTeacherUnlock`'s upsert) but INSERTs a fresh `Notification` row
+  // every time, so the same live grant can show up here more than once. Rows
+  // arrive newest first, so the first row seen for a grant id is the one the
+  // teacher should read; every older row for that same grant is a duplicate.
+  //
+  // A dead row (revoked, expired, or its grant FK went null) is never coming
+  // back to life, so leaving it `readAt: null` would let it and rows like it
+  // occupy the whole `FEED_LIMIT` window forever, hiding an older live alert
+  // behind them. Both dead rows and duplicates are cleared here, in the same
+  // request that discovered them, rather than left for the teacher to dismiss
+  // by hand — there is nothing left for them to read in either case.
+  const alerts: UnlockAlert[] = [];
+  const seenGrantKeys = new Set<string>();
+  const staleIds: string[] = [];
+
+  for (const row of rows) {
+    const grantKey = row.unlockGrantId ?? row.schoolUnlockGrantId ?? row.id;
+    const alert = composeUnlockAlert(row);
+    if (!alert) {
+      staleIds.push(row.id);
+      continue;
+    }
+    if (seenGrantKeys.has(grantKey)) {
+      staleIds.push(row.id);
+      continue;
+    }
+    seenGrantKeys.add(grantKey);
+    alerts.push(alert);
+  }
+
+  if (staleIds.length > 0) {
+    try {
+      await prisma.notification.updateMany({
+        where: {
+          id: { in: staleIds },
+          recipientId: user.id,
+          schoolId: user.schoolId,
+          type: "UNLOCK_GRANTED",
+          readAt: null,
+        },
+        data: { readAt: new Date() },
+      });
+    } catch (err) {
+      // Same posture as `notifyAralAssigned`: this is housekeeping on rows the
+      // teacher will never act on, not the alert list itself. Losing it for
+      // one request just means these rows get cleaned up on the next read.
+      console.error("[notifications] stale unlock alert cleanup failed:", err);
+    }
+  }
+
+  return alerts;
+}
+
 /**
  * Mark notifications read.
  *
@@ -205,6 +375,33 @@ export async function markNotificationsRead(input: {
       id: { in: input.ids },
       recipientId: input.recipientId,
       schoolId: input.schoolId,
+      readAt: null,
+    },
+    data: { readAt: new Date() },
+  });
+  return result.count;
+}
+
+/**
+ * Mark unlock alerts read.
+ *
+ * Scoped to the recipient AND `type: "UNLOCK_GRANTED"`, on top of the id list:
+ * the ids arrive from the client, so a caller must never be able to reach into
+ * another notification type — or another user's row — through this action.
+ */
+export async function markUnlockAlertsRead(input: {
+  recipientId: string;
+  schoolId: string;
+  ids: string[];
+}): Promise<number> {
+  if (input.ids.length === 0) return 0;
+
+  const result = await prisma.notification.updateMany({
+    where: {
+      id: { in: input.ids },
+      recipientId: input.recipientId,
+      schoolId: input.schoolId,
+      type: "UNLOCK_GRANTED",
       readAt: null,
     },
     data: { readAt: new Date() },

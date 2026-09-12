@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
@@ -22,7 +21,8 @@ import {
   reportLoginFailure,
 } from "@/lib/actions/login";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { AUTH_RATE_LIMITED_MESSAGE, isAuthRateLimitError } from "@/lib/auth/auth-errors";
+import { formatMessage } from "@/lib/errors/codes";
+import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
@@ -85,14 +85,6 @@ export function LoginForm({
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
-  /**
-   * Self-declared Non-DepEd ARAL Volunteer.
-   *
-   * Registration is identical either way — same PENDING row, same School Head
-   * approval. All this does is seed and lock Designation in the profiling
-   * wizard, which is the field the app actually reads.
-   */
-  const [isAralVolunteer, setIsAralVolunteer] = useState(false);
   /** Sync lock so double Enter/click cannot start two registrations before `pending` re-renders. */
   const registerLock = useRef(false);
 
@@ -124,7 +116,6 @@ export function LoginForm({
     setFirstName("");
     setMiddleName("");
     setLastName("");
-    setIsAralVolunteer(false);
   };
 
   const goBackToSchoolSelect = () => {
@@ -145,7 +136,6 @@ export function LoginForm({
     formData.set("firstName", firstName.trim());
     formData.set("middleName", middleName.trim());
     formData.set("lastName", lastName.trim());
-    formData.set("isAralVolunteer", String(isAralVolunteer));
     formData.set("password", password);
     formData.set("confirmPassword", confirmPassword);
     return formData;
@@ -185,14 +175,18 @@ export function LoginForm({
         password,
       });
       if (error) {
-        const limited = isAuthRateLimitError(error);
+        // The browser made this request, so it is the only place that can tell
+        // "the server said no" from "the request never arrived". Calling a
+        // dropped connection a wrong password is what sends people off to reset
+        // a password that was never the problem.
+        const code = mapSupabaseAuthError(error, "browser");
         await reportLoginFailure({
           schoolId,
           role: "TEACHER",
           email: begin.email,
-          reason: limited ? "rate_limited" : "incorrect_credentials",
+          reason: loginFailureReasonFor(code),
         });
-        toast.error(limited ? AUTH_RATE_LIMITED_MESSAGE : "Incorrect email or password.");
+        toast.error(formatMessage(code));
         return;
       }
 
@@ -265,7 +259,7 @@ export function LoginForm({
       } catch (err) {
         console.error("[login-form] teacher register failed:", err);
         registerLock.current = false;
-        toast.error("Could not create your account. Please try again.");
+        toast.error(formatMessage("INTERNAL_ERROR"));
       }
     });
   };
@@ -302,15 +296,13 @@ export function LoginForm({
         password: typedPassword,
       });
       if (error) {
-        const limited = isAuthRateLimitError(error);
+        const code = mapSupabaseAuthError(error, "browser");
         await reportLoginFailure({
           schoolId,
           role: "SCHOOL_HEAD",
-          reason: limited ? "rate_limited" : "incorrect_credentials",
+          reason: loginFailureReasonFor(code),
         });
-        toast.error(
-          limited ? AUTH_RATE_LIMITED_MESSAGE : "Login failed. Please contact your administrator."
-        );
+        toast.error(formatMessage(code));
         return;
       }
 
@@ -599,30 +591,6 @@ export function LoginForm({
                     onChange={(e) => setLastName(e.target.value)}
                     disabled={pending}
                   />
-                </div>
-                {/*
-                  Sits between the names and the account credentials because it
-                  is a fact about the person, not about the login. Nothing else
-                  on this form branches on it: the account is created PENDING
-                  either way, and the School Head still approves it.
-                */}
-                <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                  <Checkbox
-                    id="isAralVolunteer"
-                    className="mt-0.5"
-                    checked={isAralVolunteer}
-                    onCheckedChange={(next) => setIsAralVolunteer(next === true)}
-                    disabled={pending}
-                  />
-                  <div className="min-w-0 space-y-1">
-                    <Label htmlFor="isAralVolunteer" className="font-medium leading-snug">
-                      I am a Non-DepEd ARAL Volunteer
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      A reading tutor who is not a DepEd teacher. Leave this unticked if you
-                      teach at this school.
-                    </p>
-                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="registerEmail">Email</Label>

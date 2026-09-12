@@ -1,3 +1,6 @@
+import type { AdvisoryMode } from "@prisma/client";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+
 /**
  * How many sections one teacher may advise.
  *
@@ -12,3 +15,34 @@
  * need a migration.
  */
 export const MAX_ADVISORY_SECTIONS = 3;
+
+/**
+ * How many advisory sections this teacher may hold. The one rule the
+ * transaction, the wizard and the School Head's picker all read, so the three
+ * cannot disagree. A missing mode reads as DEFAULT (a profile predating the
+ * column, or a read that failed).
+ */
+export function advisoryCapFor(
+  designation: string | null | undefined,
+  mode: AdvisoryMode | null | undefined
+): number {
+  if (designation === ARAL_VOLUNTEER_DESIGNATION) return 0;
+  if (mode === "FLOATING") return 0;
+  if (mode === "MULTI_GRADE") return MAX_ADVISORY_SECTIONS;
+  return 1;
+}
+
+/** Why the picker stops at `advisoryCapFor`, in words a School Head can act on. */
+export function advisoryCapReason(
+  designation: string | null | undefined,
+  mode: AdvisoryMode | null | undefined
+): string {
+  if (designation === ARAL_VOLUNTEER_DESIGNATION) {
+    return "Non-DepEd ARAL Volunteers don't advise a section.";
+  }
+  if (mode === "FLOATING") return "Floating teachers don't advise a section.";
+  if (mode === "MULTI_GRADE") {
+    return `Multi-grade teachers advise up to ${MAX_ADVISORY_SECTIONS} sections.`;
+  }
+  return "This teacher advises one section. Set them to Multi-grade to add more.";
+}

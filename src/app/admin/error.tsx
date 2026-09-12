@@ -1,41 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { RouteError } from "@/components/errors/route-error";
 
-export default function AdminError({
-  error,
-  reset,
-}: {
+/**
+ * This boundary also covers /admin/login, which anyone can reach — which is why
+ * it names no part of our infrastructure and offers no diagnosis. All of that
+ * now lives in /admin/errors, keyed by the digest shown here, where the only
+ * readers are Super Admins who can act on it.
+ *
+ * (An invariant test enforces the same rule on this file's own text, comments
+ * included — hence the circumlocution.)
+ */
+export default function AdminError(props: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    console.error("Admin route error:", error);
-  }, [error]);
-
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-muted p-6">
-      <div className="w-full max-w-md space-y-4 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">Admin page error</h1>
-        <p className="text-sm text-muted-foreground">
-          Something went wrong loading this page. Check Vercel runtime logs for the Prisma
-          error behind this digest — common causes include schema drift (missing migrations)
-          or a bad database connection string.
-        </p>
-        {error.digest ? (
-          <p className="text-xs text-muted-foreground">Digest: {error.digest}</p>
-        ) : null}
-        <div className="flex justify-center gap-2">
-          <Button type="button" onClick={reset}>
-            Try again
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin">Back to dashboard</Link>
-          </Button>
-        </div>
-      </div>
-    </main>
-  );
+  return <RouteError {...props} scope="Admin" homeHref="/admin" homeLabel="Back to dashboard" />;
 }

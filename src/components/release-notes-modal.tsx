@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,17 +10,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { acknowledgeRelease, announceRelease } from "@/lib/actions/release";
+import { acknowledgeRelease } from "@/lib/actions/release";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
-import { latestRelease } from "@/lib/releases";
-
-/**
- * Fired on `window` once a release is acknowledged, so the bell can show the row
- * `announceRelease` wrote while the modal was open. The bell fetched on mount,
- * before that row existed; without this it would stay empty until the next full
- * load — exactly when someone reaches for it to find what they just dismissed.
- */
-export const RELEASE_ACKNOWLEDGED_EVENT = "litrack:release-acknowledged";
+import {
+  APP_VERSION,
+  latestRelease,
+  unseenReleases,
+  visibleFixes,
+  type ReleaseAudience,
+} from "@/lib/releases";
 
 /** How often to re-check whether the login splash still covers the screen. */
 const COVER_POLL_MS = 250;
@@ -31,17 +29,19 @@ const COVER_POLL_MS = 250;
 const COVER_WAIT_CAP_MS = 10_000;
 
 /**
- * "Here is what changed", shown once per release per user.
+ * "LITRACK System updated to vX.Y.Z", shown once per release per user, listing
+ * every version they have not seen yet (`unseenReleases`) with its changes.
+ * The bell keeps the history afterwards; this dialog is read once.
  *
  * Takes `lastSeenVersion` as a prop rather than reading it: the layout already
  * holds the user row, and a second round trip on every entry to re-answer a
  * question the server just answered would be waste on the common path — where
  * the answer is "nothing to show".
  *
- * A string equality test, not a `compareVersions` call. Anything other than the
- * exact current version means "has not acknowledged THIS release", which is true
- * both for someone older and for someone who was served a newer build that was
- * then rolled back. Ordering is not the question being asked.
+ * Whether to open is a string equality test, not a `compareVersions` call.
+ * Anything other than the exact current version means "has not acknowledged
+ * THIS release", which is true both for someone older and for someone who was
+ * served a newer build that was then rolled back.
  *
  * Waits out the post-login splash before opening, via the same shared flag the
  * ARAL alerts use: the splash owns the screen at z-9999, and a dialog opened
@@ -54,18 +54,25 @@ const COVER_WAIT_CAP_MS = 10_000;
  */
 export function ReleaseNotesModal({
   lastSeenVersion,
+  role,
 }: {
   lastSeenVersion: string | null;
+  /**
+   * The reader's role, so a note written for one role never reaches another —
+   * see `visibleFixes`. A release whose every note is restricted away from this
+   * reader is skipped, and a modal with nothing left to say does not open.
+   */
+  role: ReleaseAudience | null;
 }) {
   const release = latestRelease();
-  const unseen = release.announce && lastSeenVersion !== release.version;
+  const releases = unseenReleases(lastSeenVersion)
+    .map((r) => ({ release: r, fixes: visibleFixes(r, role) }))
+    .filter((r) => r.fixes.length > 0);
+  const unseen = releases.length > 0;
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // A ref, not state: React mounts effects twice in development, and this is
-  // what keeps that from writing two bell rows.
-  const announced = useRef(false);
 
   useEffect(() => {
     if (!unseen) return;
@@ -80,12 +87,6 @@ export function ReleaseNotesModal({
         return;
       }
       setOpen(true);
-      if (!announced.current) {
-        announced.current = true;
-        // Not awaited: the modal is on screen, and the bell row is a durable
-        // record for later, not a precondition for reading this.
-        void announceRelease();
-      }
     };
 
     whenUncovered();
@@ -110,7 +111,6 @@ export function ReleaseNotesModal({
       return;
     }
     setOpen(false);
-    window.dispatchEvent(new Event(RELEASE_ACKNOWLEDGED_EVENT));
   };
 
   return (
@@ -122,22 +122,37 @@ export function ReleaseNotesModal({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{release.title}</DialogTitle>
+          <DialogTitle>LITRACK System updated to v{APP_VERSION}</DialogTitle>
           <DialogDescription>
-            What&apos;s new in LITRACK {release.version} · {release.date}
+            {release.title} · {release.date}
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          {release.fixes.map((fix) => (
-            <li key={fix} className="flex gap-2">
-              <span aria-hidden="true" className="text-primary">
-                &bull;
-              </span>
-              <span>{fix}</span>
-            </li>
+        {/* One section per unseen version. Several can ship between two
+            sign-ins, so the list scrolls rather than growing past the screen. */}
+        <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
+          {releases.map(({ release: r, fixes }) => (
+            <section key={r.version} aria-label={`Version ${r.version}`}>
+              <p className="text-sm font-medium text-foreground">
+                v{r.version}
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  · {r.date} · {r.title}
+                </span>
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                {fixes.map((fix) => (
+                  <li key={fix} className="flex gap-2">
+                    <span aria-hidden="true" className="text-primary">
+                      &bull;
+                    </span>
+                    <span>{fix}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
 
         {error ? (
           <p role="alert" className="text-sm text-destructive">

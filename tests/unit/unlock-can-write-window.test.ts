@@ -19,15 +19,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const USER_ID = "teacher-marivic";
+const SCHOOL_ID = "school-1";
 const WEEK_KEY = "2026-09-07";
 
 const findFirst = vi.fn();
 const findMany = vi.fn();
+const schoolFindFirst = vi.fn();
+const schoolFindMany = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     unlockGrant: {
       findFirst: (...args: unknown[]) => findFirst(...args),
       findMany: (...args: unknown[]) => findMany(...args),
+    },
+    schoolUnlockGrant: {
+      findFirst: (...args: unknown[]) => schoolFindFirst(...args),
+      findMany: (...args: unknown[]) => schoolFindMany(...args),
     },
   },
 }));
@@ -49,6 +56,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   findFirst.mockResolvedValue(null);
   findMany.mockResolvedValue([]);
+  schoolFindFirst.mockResolvedValue(null);
+  schoolFindMany.mockResolvedValue([]);
 });
 
 describe("canWriteWindow — locking off", () => {
@@ -57,22 +66,34 @@ describe("canWriteWindow — locking off", () => {
   });
 
   it("opens the window without reading a grant", async () => {
-    const verdict = await canWriteWindow(USER_ID, "ARAL_WEEKLY_ATTENDANCE", WEEK_KEY);
+    const verdict = await canWriteWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+      targetKey: WEEK_KEY,
+    });
 
-    expect(verdict).toEqual({ writable: true, grantId: null });
+    expect(verdict).toEqual({ writable: true, grantId: null, grantKind: null });
     // The assertion the whole switch exists for.
     expect(findFirst).not.toHaveBeenCalled();
+    expect(schoolFindFirst).not.toHaveBeenCalled();
   });
 
   it("reports no grant id, so an audit row cannot claim one paid for the save", async () => {
     findFirst.mockResolvedValue(LIVE_GRANT);
 
-    const verdict = await canWriteWindow(USER_ID, "TERM_GRADES", "FIRST");
+    const verdict = await canWriteWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "TERM_GRADES",
+      targetKey: "FIRST",
+    });
 
     // Even though a grant exists, it was neither read nor credited: nothing was
     // refused, so nothing had to be granted.
     expect(verdict.grantId).toBeNull();
     expect(findFirst).not.toHaveBeenCalled();
+    expect(schoolFindFirst).not.toHaveBeenCalled();
   });
 });
 
@@ -82,22 +103,37 @@ describe("canWriteWindow — locking on", () => {
   });
 
   it("refuses when the user holds no live grant", async () => {
-    const verdict = await canWriteWindow(USER_ID, "ARAL_WEEKLY_ATTENDANCE", WEEK_KEY);
+    const verdict = await canWriteWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+      targetKey: WEEK_KEY,
+    });
 
-    expect(verdict).toEqual({ writable: false, grantId: null });
+    expect(verdict).toEqual({ writable: false, grantId: null, grantKind: null });
     expect(findFirst).toHaveBeenCalledTimes(1);
   });
 
   it("opens the window and credits the grant that did it", async () => {
     findFirst.mockResolvedValue(LIVE_GRANT);
 
-    const verdict = await canWriteWindow(USER_ID, "TERM_GRADES", "FIRST");
+    const verdict = await canWriteWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "TERM_GRADES",
+      targetKey: "FIRST",
+    });
 
-    expect(verdict).toEqual({ writable: true, grantId: "grant-1" });
+    expect(verdict).toEqual({ writable: true, grantId: "grant-1", grantKind: "user" });
   });
 
   it("asks for this user, this scope and this target only", async () => {
-    await canWriteWindow(USER_ID, "TERM_GRADES", "SECOND");
+    await canWriteWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "TERM_GRADES",
+      targetKey: "SECOND",
+    });
 
     expect(findFirst.mock.calls[0][0]).toMatchObject({
       where: expect.objectContaining({
@@ -115,8 +151,13 @@ describe("canWriteWindow — locking on", () => {
     // `findActiveUnlock` swallows and returns null; the lock therefore holds.
     // A database error must never read as permission.
     expect(
-      await canWriteWindow(USER_ID, "ARAL_WEEKLY_ATTENDANCE", WEEK_KEY)
-    ).toEqual({ writable: false, grantId: null });
+      await canWriteWindow({
+        userId: USER_ID,
+        schoolId: SCHOOL_ID,
+        scope: "ARAL_WEEKLY_ATTENDANCE",
+        targetKey: WEEK_KEY,
+      })
+    ).toEqual({ writable: false, grantId: null, grantKind: null });
   });
 });
 
@@ -124,20 +165,29 @@ describe("readUnlockState", () => {
   it("reports locking off and reads no grants", async () => {
     isSubmissionLockingEnabled.mockResolvedValue(false);
 
-    const state = await readUnlockState(USER_ID, "TERM_GRADES");
+    const state = await readUnlockState({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "TERM_GRADES",
+    });
 
     expect(state.lockingEnabled).toBe(false);
     expect(state.unlockedKeys.size).toBe(0);
     // The empty set means "not read", not "holds none" — which is exactly why
     // callers must branch on the flag and never on the set being empty.
     expect(findMany).not.toHaveBeenCalled();
+    expect(schoolFindMany).not.toHaveBeenCalled();
   });
 
   it("reports locking on with the keys the user holds", async () => {
     isSubmissionLockingEnabled.mockResolvedValue(true);
     findMany.mockResolvedValue([{ targetKey: "FIRST" }, { targetKey: "THIRD" }]);
 
-    const state = await readUnlockState(USER_ID, "TERM_GRADES");
+    const state = await readUnlockState({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "TERM_GRADES",
+    });
 
     expect(state.lockingEnabled).toBe(true);
     expect([...state.unlockedKeys].sort()).toEqual(["FIRST", "THIRD"]);
@@ -147,7 +197,11 @@ describe("readUnlockState", () => {
     isSubmissionLockingEnabled.mockResolvedValue(true);
     findMany.mockRejectedValue(new Error("boom"));
 
-    const state = await readUnlockState(USER_ID, "ARAL_WEEKLY_ATTENDANCE");
+    const state = await readUnlockState({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      scope: "ARAL_WEEKLY_ATTENDANCE",
+    });
 
     // Fail closed on the read path too: an unreadable grant list renders every
     // window locked rather than every window open.

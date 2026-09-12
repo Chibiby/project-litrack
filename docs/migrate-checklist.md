@@ -30,7 +30,7 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260903000001_support_assistant`
 - `20260907000001_password_is_school_id` — one additive `BOOLEAN NOT NULL DEFAULT false` column on
   `User`, deliberately not backfilled. Adds no table, so `prisma/rls-policies.sql` does not need
-  re-running. Existing School Head rows land on `false`, which the Super Admin school-accounts
+  re-running. Existing School Head rows land on `false`, which the Super Admin accounts
   console reads as "custom password — reset to sign in"; that is always true and always
   recoverable in one click. The comment at the top of the migration explains why a backfill would
   be worse than none.
@@ -67,6 +67,19 @@ Committed migrations (apply in order via `migrate deploy`):
   Applied to production on 2026-09-10: 208 heads flagged, 124 left false, 4 already true
   (212 of 336 flagged after). The rows it would flip were snapshotted by id before
   applying; reverting is `UPDATE "User" SET "passwordIsSchoolId" = false` over those ids.
+
+- `20260911000006_add_error_event` — one additive table (`ErrorEvent`) and four
+  indexes, no backfill. See section **(m)** below.
+- `20260911000010_teacher_advisory_mode` — one additive enum and one additive column on
+  `TeacherProfile`, then two bounded data statements that move existing rows onto the new
+  setting. **Apply it before the code deploys** — see **(l)**, which also carries the
+  read-only pre-check. The row counts written into the migration's own comments are a
+  snapshot taken while it was authored and drift daily; trust the predicate, not the number.
+  Adds no table, so `prisma/rls-policies.sql` does not need re-running.
+- `20260911000011_reading_level_nullable_profiles` through
+  `20260911000015_notification_unlock_pointers` — partial reading-level rows, the
+  monthly reading-level lock, school-wide unlocks and unlock notifications. Five
+  additive files, no backfill. See section **(n)** below.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
@@ -624,7 +637,7 @@ is a bcrypt hash in Supabase Auth. Heads are sealed as they next set a password.
    `SUPABASE_SERVICE_ROLE_KEY` and still works — but changing it later strands
    every password sealed under the derived key. Pick one and keep it.
 3. Deploy. Sign in as a School Head, change the password from Settings →
-   Security, then as Super Admin open `/admin/school-accounts`: that row shows
+   Security, then as Super Admin open `/admin/accounts` and filter to School Heads: that row shows
    "Chosen by the School Head", the eye reveals the new password, and
    `/admin/audit` has a `SCHOOL_HEAD_PASSWORD_VIEWED` row.
 
@@ -633,6 +646,237 @@ is a bcrypt hash in Supabase Auth. Heads are sealed as they next set a password.
 Revert the code first, then `ALTER TABLE "User" DROP COLUMN "passwordVaultCipher",
 DROP COLUMN "passwordVaultSetAt"`. Dropping the columns also destroys every
 stored password, which is the fastest complete way to undo the privacy exposure.
+
+---
+
+## (k) Release removed teachers' advisories  —  Sep 2026
+
+`20260911000005_release_removed_teacher_advisories`. Data only — no schema
+change — so it can be applied before or after the code in either order. Apply it
+with (or right after) the deploy that ships `releaseTeacherAdvisory`: the code
+stops new removals from stranding a section, and this frees the ones stranded
+already.
+
+Applied to production 2026-09-11 (from `worktree-removed-teachers`), before the
+code was pushed; `migrate status` reported it as the only pending migration. The
+preview found 15 sections in 10 schools still advised by removed teachers and no
+learners, active enrolments or legacy rows pointing at one — so it freed those
+15 sections and nothing else. Re-running the preview afterwards returned zero.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 1 | `20260911000005_release_removed_teacher_advisories` | For teachers already soft-deleted: `Section.adviserId` → NULL (section reads Unassigned), `Learner.teacherId` and ACTIVE `Enrollment.teacherId` → NULL, their `TeacherSection` rows deleted and `User.advisorySectionId` nulled. | No. Every statement is bounded by `User.deletedAt IS NOT NULL`, and it is idempotent. |
+
+Leaves `Learner.aralTeacherId` alone on purpose — an ARAL designation is a
+separate assignment.
+
+### Steps
+
+1. Run the preview `SELECT` in the migration's header to see how many sections,
+   learners and active enrolments it will release.
+2. Apply and confirm `npx prisma migrate status` says up to date.
+3. As a School Head, open Teachers → Active: the "no adviser — Unassigned"
+   notice lists the freed sections, and the Grade & section picker offers them as
+   "— Unassigned". Teachers → Removed lists who was removed. Assigning a freed
+   section to a teacher gives them its adviser-less learners.
+
+### Rollback
+
+Not reversible by SQL — the cleared pointers named teachers who can no longer
+sign in, so there is nothing useful to restore. The code revert alone restores
+the old removal behaviour for future removals.
+
+---
+
+## (l) Teacher advisory modes  —  Sep 2026
+
+`20260911000010_teacher_advisory_mode`. **Apply BEFORE the code deploys.** The
+generated Prisma client names `advisoryMode` on every `TeacherProfile` read, so
+code-first is P2022 on profiling and on the School Head's teachers page. Applied
+first, the column is simply invisible to the running code.
+
+Numbering: production holds up to `20260911000005_release_removed_teacher_advisories`;
+006 is now claimed by `feat/error-handling`'s `20260911000006_add_error_event`
+(see section **(m)**); 007-009 remain free. Confirm 010 is still unclaimed with
+`npx prisma migrate status` before applying.
+
+| # | Statement | What it does | Can it fail? |
+|---|-----------|--------------|--------------|
+| 1 | `CREATE TYPE "AdvisoryMode"` + `ALTER TABLE "TeacherProfile" ADD COLUMN "advisoryMode"` | Additive, `NOT NULL DEFAULT 'DEFAULT'`. Every existing row lands on DEFAULT. | No. Metadata-only on PostgreSQL 11+, so no table rewrite. |
+| 2 | `UPDATE "TeacherProfile" SET "advisoryMode" = 'MULTI_GRADE'` | Marks teachers who already advise two or more live sections, so the new cap does not retroactively put them over it. | No. Bounded by the live-section count; idempotent. |
+| 3 | Release volunteers' empty sections | A `Non-DepEd ARAL Volunteer` never advises, but the old wizard let them pick a section and made them its adviser — those sections read as taken and no real teacher can claim them. Clears `Section.adviserId` and the legacy mirrors (`User.advisorySectionId`, `TeacherSection`, `_TeacherGrades`) **only** where the section has zero live learners. | No, but it is the one statement that loses information — see Rollback. |
+
+Statement 3 is deliberately narrow: a section holding even one live learner keeps
+its adviser, so no roster changes hands and nobody loses access to a learner they
+are teaching.
+
+### Pre-check (read-only, run it immediately before applying)
+
+```sql
+-- statement 2: how many profiles become MULTI_GRADE
+SELECT count(*) AS multi_grade_profiles
+  FROM "TeacherProfile" tp
+ WHERE (SELECT count(*) FROM "Section" s
+         WHERE s."adviserId" = tp."userId" AND s."deletedAt" IS NULL) >= 2;
+
+-- statement 3: which sections are released, and from whom
+SELECT s.id AS section_id, s.name, s."adviserId" AS volunteer_id
+  FROM "Section" s
+  JOIN "TeacherProfile" tp ON tp."userId" = s."adviserId"
+ WHERE tp.designation = 'Non-DepEd ARAL Volunteer'
+   AND s."deletedAt" IS NULL
+   AND NOT EXISTS (
+     SELECT 1 FROM "Learner" l WHERE l."sectionId" = s.id AND l."deletedAt" IS NULL
+   );
+```
+
+**Save the second query's rows before applying.** They are the only record of which
+section belonged to which volunteer; the migration keeps none. Three read-only runs
+on 2026-09-11 returned 9, then 10, then 11 profiles for statement 2, and 25, 21 and
+23 sections for statement 3 — live data moves under you, so the numbers in the
+migration's comments are illustrative. The predicate is the specification; a count
+that differs from the comment is not a reason to stop.
+
+### Steps
+
+1. Run the gates on the branch: `npx prisma generate`, `npm run typecheck`,
+   `npm run lint`, `npm run test`, `npm run build`.
+2. Run the pre-check above and **save the section-id rows**.
+3. Take the step-**(a)** backup. Statement 3 is not reversible without it.
+4. `npx prisma migrate deploy` against `DIRECT_URL` (port 5432), then confirm
+   `npx prisma migrate status` reports up to date.
+5. Deploy the code.
+6. Smoke test: profile a teacher and pick Floating — the sidebar shows the
+   "Floating teacher" pill and the class-bound pages are closed. As a School Head,
+   open Teachers → Edit role on a teacher advising more than one section, drop them
+   to a single advisory, and confirm the dialog names the sections it would release
+   before anything is written.
+
+### Rollback
+
+Revert the code first, then:
+
+```sql
+ALTER TABLE "TeacherProfile" DROP COLUMN "advisoryMode";
+DROP TYPE "AdvisoryMode";
+```
+
+That undoes statements 1 and 2 completely. **Statement 3 does not roll back** — the
+released `adviserId` values are gone. Restore them from the rows saved in step 2
+(`UPDATE "Section" SET "adviserId" = <volunteer_id> WHERE id = <section_id>`, plus
+the matching `User.advisorySectionId` and `TeacherSection` rows), or from the
+step-(a) backup if that snapshot was not taken.
+
+---
+
+## (m) Error event log  —  Sep 2026
+
+`20260911000006_add_error_event`. Renumbered from `20260911000003_add_error_event`
+because production had already applied `20260911000003_term_window_override` by the
+time this branch was ready — see the "Numbering" note under **(l)**.
+
+Applied to production 2026-09-11 (from `feat/error-handling`), after
+`20260911000010` was already in, before the code deployed. The RLS line ran
+straight after; `relrowsecurity` reads true and `migrate status` is up to date.
+
+### What it does
+
+One new table, `ErrorEvent`, and four indexes. Nothing existing is altered.
+
+| # | Statement | What it does | Can it fail? |
+|---|-----------|--------------|--------------|
+| 1 | `CREATE TABLE "ErrorEvent"` | New table recording one row per server-side failure worth a Super Admin's attention (`ref`, `code`, `severity`, `message`, `stack`, `route`, `routeType`, `method`, `userId`, `schoolId`, `context`, `createdAt`). No foreign keys — `userId`/`schoolId` are plain nullable text, same shape as `School.createdById` and `AuditLog.userId`, so a failure stays recordable even when the rows it concerns are broken or mid-rollback. | No. New table; nothing else touched. |
+| 2-5 | `CREATE INDEX` × 4 | `ErrorEvent_createdAt_idx`, `ErrorEvent_ref_idx`, `ErrorEvent_code_createdAt_idx`, `ErrorEvent_schoolId_createdAt_idx` — support the admin list, the retention purge, and lookups by ref/code/school. | No. |
+
+No backfill, because there is nothing to backfill: the table records events that
+happen after it exists, and an empty table is the truthful record of a history
+nobody was keeping yet.
+
+### Order vs the code deploy
+
+Safe in either order:
+
+- **Applied first**, the table simply sits empty until `src/lib/errors/report.ts`
+  ships — nothing reads it yet.
+- **Code deployed first**, `reportError` never throws on its own insert failure
+  (by design — a reporter that throws would replace the original error with its
+  own), so the app keeps serving. Errors in that window only reach the Vercel
+  function log; they are lost from `ErrorEvent`, which is the only reason to
+  prefer applying the migration first.
+
+### Steps
+
+1. Apply and confirm `npx prisma migrate status` reports up to date.
+2. **Run `prisma/rls-policies.sql` after this migration** — it adds a new table,
+   so RLS is off until the enable line runs:
+   `ALTER TABLE "ErrorEvent" ENABLE ROW LEVEL SECURITY;`. No policies are added
+   (deny-all is the point): reads go through Prisma on the service role, which
+   bypasses RLS, and the table is Super-Admin-only in the app.
+3. Deploy the code. Trigger a handled failure and confirm a row lands in
+   `/admin/errors`.
+
+### Rollback
+
+`DROP TABLE "ErrorEvent"` loses only rows this migration itself made possible —
+nothing else references the table.
+
+---
+
+## (n) Grid clear, partial reading levels, and unlocks  —  Sep 2026
+
+`20260911000011` through `20260911000015`. **Apply all five BEFORE the code
+deploys.** The generated client names the new `Notification` columns on every
+notification read and the new `SchoolUnlockGrant` table is in `SNAPSHOT_MODELS`,
+so code-first is P2022 on the teacher shell and a broken backup cron.
+
+Applied to production 2026-09-12 (from `feat/grid-unlock-clear-placement`),
+before the code was pushed. `migrate status` beforehand listed exactly these
+five as pending and nothing else; afterwards it reported up to date. Verified in
+the catalog: `SchoolUnlockGrant.relrowsecurity` is true, the
+`Notification_one_unlock_pointer` CHECK exists, both profile columns are
+nullable, and both enum values are present.
+
+| # | File | What it does | Can it fail? |
+|---|------|--------------|--------------|
+| 11 | `reading_level_nullable_profiles` | `ReadingLevelRecord.englishProfile` / `filipinoProfile` → `DROP NOT NULL`, so a partly filled monthly row can be saved. | No. Loosening only; every existing row already has a value. |
+| 12 | `monthly_reading_level_unlock_scope` | `UnlockScope` += `MONTHLY_READING_LEVEL`. Alone in its file: Postgres forbids *using* a new enum value in the transaction that added it. | No. |
+| 13 | `unlock_granted_notification_type` | `NotificationType` += `UNLOCK_GRANTED`. Alone for the same reason. | No. |
+| 14 | `school_unlock_grant` | New table `SchoolUnlockGrant` (one unlock covering every teacher in a school for one window), unique `(schoolId, scope, targetKey)`, FK indexes, and `ENABLE ROW LEVEL SECURITY` **in the migration itself** — `prisma/rls-policies.sql` carries the same line but needs no separate run. | No. New table. |
+| 15 | `notification_unlock_pointers` | `Notification` += nullable `unlockGrantId` / `schoolUnlockGrantId` with indexes and `SET NULL` FKs, plus the SQL-only CHECK `Notification_one_unlock_pointer` (at most one pointer set). **Prisma cannot express that CHECK — preserve it when editing this table**, as with `Enrollment`'s partial unique index. | No. Existing rows get NULL/NULL, which satisfies the CHECK. |
+
+Why a table rather than a nullable `UnlockGrant.userId`: two NULLs never compare
+equal in Postgres, so a nullable `userId` would silently defeat
+`@@unique([userId, scope, targetKey])` and let two live school-wide grants exist
+for one window.
+
+### The reading-level lock ships inert
+
+The monthly reading-level deadline (last day of the month + 7) is enforced
+server-side from this deploy, but it is gated by the `SystemSetting`
+`submissions.readingLevelUnlockAll`, which reads a **missing row as ON**
+(unlocked). No row exists, so nothing is locked until a Super Admin turns the
+switch off on `/admin/settings/submissions`. No migration was needed for the
+setting — `SystemSetting` is untyped by design.
+
+### Smoke test
+
+1. As a teacher on the monthly reading-level sheet, fill only English for one
+   learner and save — it saves. Clear that row from its Actions menu and save —
+   the row is gone after reload.
+2. On the weekly attendance grid, press a row's Clear button and save.
+3. As Super Admin on `/admin/settings/submissions`, reopen a week for one teacher
+   for 1 day; that teacher sees the "reopened" modal on next sign-in. Revoke it.
+4. As a teacher advising two sections, Add learner shows a required
+   "Grade & section" picker.
+
+### Rollback
+
+Revert the code first. Then `DROP TABLE "SchoolUnlockGrant"` (after dropping
+migration 15's two columns and CHECK, which reference it). Re-tightening
+migration 11 with `SET NOT NULL` fails once any partial row has been saved —
+check `SELECT count(*) FROM "ReadingLevelRecord" WHERE "englishProfile" IS NULL
+OR "filipinoProfile" IS NULL` first. Postgres cannot drop an enum value;
+`MONTHLY_READING_LEVEL` and `UNLOCK_GRANTED` are harmless left in place.
 
 ---
 

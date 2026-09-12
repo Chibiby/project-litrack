@@ -200,8 +200,12 @@ export async function buildReadingLevelTable(
       r.learner.fullName,
       GRADE_LEVEL_LABELS[r.learner.gradeLevel.type] ?? r.learner.gradeLevel.type,
       r.learner.section?.name ?? "—",
-      READING_PROFILE_LABELS[r.englishProfile] ?? r.englishProfile,
-      READING_PROFILE_LABELS[r.filipinoProfile] ?? r.filipinoProfile,
+      r.englishProfile
+        ? (READING_PROFILE_LABELS[r.englishProfile] ?? r.englishProfile)
+        : "",
+      r.filipinoProfile
+        ? (READING_PROFILE_LABELS[r.filipinoProfile] ?? r.filipinoProfile)
+        : "",
       r.wordRecognitionLevel
         ? (WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[r.wordRecognitionLevel] ??
           r.wordRecognitionLevel)

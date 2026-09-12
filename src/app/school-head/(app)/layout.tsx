@@ -3,8 +3,9 @@ import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
-import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
-import { readImpersonationTicket } from "@/lib/auth/impersonation";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 
@@ -20,8 +21,9 @@ export default async function SchoolHeadAppLayout({
   // Read before the profiling gate below: an impersonating admin must be able
   // to reach "Return to admin" even on a school whose head never profiled —
   // which is exactly the kind of stuck account they came here to look at.
-  const impersonation = await readImpersonationTicket();
-  const impersonating = impersonation?.targetUserId === user.id;
+  const supabase = await createSupabaseServerClient();
+  const impersonation = await readBoundImpersonationSession(supabase.auth);
+  const impersonating = impersonation?.ticket.targetUserId === user.id;
 
   // Only gate real school heads — SUPER_ADMIN may view without profiling.
   if (user.role === "SCHOOL_HEAD" && !user.profileCompleted && !impersonating) {
@@ -43,11 +45,12 @@ export default async function SchoolHeadAppLayout({
 
   return (
     <>
-      {impersonating ? (
-        <ImpersonationBanner accountName={`${userName} · ${schoolName ?? "school"}`} />
-      ) : (
-        <PostLoginSplash role="school-head" />
-      )}
+      <ImpersonationNotice
+        userId={user.id}
+        accountName={`${userName} · ${schoolName ?? "school"}`}
+        impersonation={impersonation}
+      />
+      {!impersonating && <PostLoginSplash role="school-head" />}
       <RoleShell
         role={user.role}
         userName={userName}
