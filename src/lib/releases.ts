@@ -74,6 +74,22 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.7.1",
+    date: "2026-09-12",
+    title: "Removing a teacher from a school now works",
+    announce: true,
+    fixes: [
+      {
+        text: "Removing a teacher or a learner from a school page works. The buttons have been there since the page was built, but every one of them failed with a reference code instead of removing anything — the page could not load the code behind its own forms.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "The Danger zone on a school page, and the database console, are fixed by the same change.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-09-12",
     title: "Removed teachers and learners now have a home, and a way out",

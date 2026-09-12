@@ -28,11 +28,8 @@ import {
 } from "lucide-react";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { removeSchoolLearners, removeSchoolTeachers } from "@/lib/actions/admin-school";
-import {
-  CONFIRM_PHRASES,
-  removeAllTeachers,
-  resetOperationalData,
-} from "@/lib/actions/database";
+import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
+import { removeAllTeachers, resetOperationalData } from "@/lib/actions/database";
 import type { LearnerRow, SchoolDetail, TeacherRow } from "@/lib/admin/school-detail";
 
 /**
