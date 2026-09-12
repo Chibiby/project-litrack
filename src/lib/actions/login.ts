@@ -1,5 +1,7 @@
 "use server";
 
+import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
+
 /**
  * The two server halves of a browser-side sign-in.
  *
@@ -96,7 +98,7 @@ export const beginSchoolHeadLogin = action(
 
     const school = await requireActiveSchool(schoolId);
 
-    const head = await findSchoolHead(school.id);
+    const head = await findSignInSchoolHead(school.id);
     if (!head) {
       // Never a password problem, and it never was: the school has no head
       // account at all. Recorded because only an admin can fix it, and the old
@@ -337,7 +339,7 @@ export const reportLoginFailure = action(
 
     const subject =
       input.role === "SCHOOL_HEAD"
-        ? await findSchoolHead(input.schoolId)
+        ? await findSignInSchoolHead(input.schoolId)
         : input.email
           ? await prisma.user.findUnique({
               where: { email: input.email.trim().toLowerCase() },
@@ -415,22 +417,4 @@ function teacherDenial(user: TeacherRow, schoolId: string): string | null {
     return "deactivated";
   }
   return null;
-}
-
-/**
- * The school's School Head account.
- *
- * `orderBy createdAt asc` is not cosmetic. The Super Admin console's reset
- * (`findSchoolHead` in `./school-accounts`) targets the oldest row, so an
- * unordered lookup here could authenticate against a different account than the
- * one an admin just reset — the reset would appear to do nothing at all. One
- * head per school is not enforced in the schema, so the two lookups have to
- * agree by construction.
- */
-async function findSchoolHead(schoolId: string) {
-  return prisma.user.findFirst({
-    where: { schoolId, role: "SCHOOL_HEAD", deletedAt: null, isActive: true },
-    select: { id: true, email: true, schoolId: true },
-    orderBy: { createdAt: "asc" },
-  });
 }

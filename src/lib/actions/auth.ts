@@ -18,6 +18,7 @@ import {
 } from "@/lib/validators/auth.schema";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { passwordChangeFields } from "@/lib/auth/password-vault";
+import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
@@ -29,6 +30,11 @@ import type { ActionFailure } from "@/lib/errors/result";
 import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
 import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
+import {
+  clearImpersonationCookie,
+  checkCurrentSession,
+  readImpersonationContext,
+} from "@/lib/auth/impersonation";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
 import {
   warmAdminRoutes,
@@ -70,20 +76,9 @@ export const loginSchoolHead = action(
 
     const school = await requireActiveSchool(input.schoolId);
 
-    const shUser = await prisma.user.findFirst({
-      where: {
-        role: "SCHOOL_HEAD",
-        schoolId: school.id,
-        deletedAt: null,
-        isActive: true,
-      },
-      select: { id: true, email: true, isActive: true },
-      // Must match `findSchoolHead` in ./school-accounts, which the Super Admin
-      // reset targets. Unordered, a school with two head rows could authenticate
-      // against one account while the admin resets the other — and the reset
-      // would look like it did nothing.
-      orderBy: { createdAt: "asc" },
-    });
+    // Shared with every reveal/reset/impersonation control so duplicate head
+    // rows cannot make an admin act on a different account than sign-in uses.
+    const shUser = await findSignInSchoolHead(school.id);
     if (!shUser) {
       throw new AppError("AUTH_NO_SCHOOL_HEAD_ACCOUNT", {
         detail: `School ${school.id} has no active School Head account`,
@@ -569,7 +564,55 @@ export async function logoutAction(): Promise<void> {
     schoolId = row?.schoolId ?? null;
   }
 
-  await supabase.auth.signOut();
+  // Whose session is ending decides how much of it ends, and has to be read
+  // before the clear below removes the ticket that says so.
+  //
+  // An admin inside an impersonation ends ONLY the impersonation session: the
+  // default global scope would delete every session the target has, logging a
+  // teacher out of their own phone and laptop because an admin clicked Sign out
+  // in their sidebar. `local` is `POST /logout?scope=local` with this session's
+  // token, which GoTrue answers by deleting this one session row — so it is
+  // still revoked server-side, not merely dropped from this browser.
+  //
+  // Any valid signed ticket makes this browser's session impersonation-related,
+  // even when its binding is stale after a target re-login. Keep that logout
+  // local so an old ticket cannot make a teacher lose unrelated sessions.
+  const ticketContext = await readImpersonationContext();
+  const sessionCheck = ticketContext ? await checkCurrentSession(supabase.auth) : null;
+  if (sessionCheck?.status === "unavailable") {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      detail: "Could not verify the impersonated session before sign-out; ticket retained",
+    });
+  }
+  const impersonation =
+    ticketContext && sessionCheck?.status === "live" &&
+    sessionCheck.sessionId === ticketContext.ticket.sessionId
+      ? ticketContext
+      : null;
+
+  // Keep the ticket until Supabase confirms sign-out. Session binding makes a
+  // leftover ticket useless to any later login, while clearing first on a
+  // network failure strands the admin in the target session without a banner.
+  const { error: signOutError } = await supabase.auth.signOut({
+    scope: ticketContext ? "local" : "global",
+  });
+  if (signOutError) {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      cause: signOutError,
+      detail: "Supabase sign-out failed; impersonation ticket retained",
+    });
+  }
+  await clearImpersonationCookie();
+
+  if (impersonation) {
+    await writeAudit({
+      userId: impersonation.ticket.adminUserId,
+      schoolId,
+      action: AUDIT_ACTIONS.IMPERSONATION_END,
+      resource: "User",
+      resourceId: impersonation.ticket.targetUserId,
+    });
+  }
   await writeAudit({
     userId: appUserId,
     schoolId,
@@ -638,6 +681,12 @@ export const setPasswordAction = action(
  */
 export const skipPasswordChange = action("skipPasswordChange", async (): Promise<never> => {
   const user = await requireUser(undefined, true, { allowMustChangePassword: true });
+
+  if (user.role === "TEACHER") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      detail: "Teachers must choose a new password after an administrator reset it",
+    });
+  }
 
   await prisma.user.update({
     where: { id: user.id },

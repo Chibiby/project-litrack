@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const SCHOOL_ID = "3f1c2b8e-7d4a-4e6b-9c1f-2a5d8e7b6c40";
+const HEAD_ID = "9c4d1f77-2b36-4a80-9d5e-61c0a7f3e8b2";
 
 const updateUserById = vi.fn(async (_authId: string, _attrs: Record<string, unknown>) => ({
   error: null as null | { message: string },
@@ -39,8 +40,16 @@ const prismaMock = {
     count: vi.fn(async () => 0),
   },
   user: {
-    findFirst: vi.fn(async (_args?: unknown) => ({ id: "head-1", authId: "auth-head-1", email: "e", fullName: "f" })),
+    findFirst: vi.fn(async (_args?: unknown) => ({
+      id: "head-1",
+      role: "SCHOOL_HEAD",
+      authId: "auth-head-1",
+      email: "e",
+      fullName: "f",
+      school: { id: SCHOOL_ID, schoolIdCode: "130554-2" },
+    })),
     findMany: vi.fn(async (_args?: unknown): Promise<unknown[]> => []),
+    count: vi.fn(async (_args?: unknown) => 0),
     update: vi.fn(async (_args: unknown) => ({})),
   },
   $transaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
@@ -71,10 +80,10 @@ vi.mock("@/lib/settings/system-settings", () => ({
   isDemoEnabled: vi.fn(async () => false),
 }));
 
-const { resetSchoolHeadPasswordToDefault } = await import("@/lib/actions/school-accounts");
+const { resetSchoolHeadPasswordToDefault } = await import("@/lib/actions/accounts");
 const { createSchool } = await import("@/lib/actions/school");
 const { resetAllSchoolHeadPasswords } = await import("@/lib/db/account-reset");
-const { getSchoolAccountsPage, parseSchoolAccountsParams } = await import("@/lib/admin/school-accounts");
+const { getAccountsPage, parseAccountsParams } = await import("@/lib/admin/accounts");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -82,8 +91,9 @@ beforeEach(() => {
 
 describe("console Reset (resetSchoolHeadPasswordToDefault)", () => {
   it("sets and returns the bare School ID for an extension school", async () => {
+    // Keyed on the account, not the school — the console lists every user.
     const fd = new FormData();
-    fd.set("schoolId", SCHOOL_ID);
+    fd.set("userId", HEAD_ID);
 
     const res = await resetSchoolHeadPasswordToDefault(fd);
 
@@ -95,8 +105,8 @@ describe("console Reset (resetSchoolHeadPasswordToDefault)", () => {
 describe("database console bulk reset (resetAllSchoolHeadPasswords)", () => {
   it("puts each head on its own school's bare School ID", async () => {
     prismaMock.user.findMany.mockResolvedValueOnce([
-      { id: "h1", authId: "a1", fullName: "x", school: { id: "s1", name: "Naidas T. Opong ES", schoolIdCode: "130554" } },
-      { id: "h2", authId: "a2", fullName: "y", school: { id: "s2", name: "Naidas T. Opong ES (Banlas Extension)", schoolIdCode: "130554-2" } },
+      { id: "h1", authId: "a1", schoolId: "s1", fullName: "x", school: { id: "s1", name: "Naidas T. Opong ES", schoolIdCode: "130554" } },
+      { id: "h2", authId: "a2", schoolId: "s2", fullName: "y", school: { id: "s2", name: "Naidas T. Opong ES (Banlas Extension)", schoolIdCode: "130554-2" } },
     ]);
 
     const res = await resetAllSchoolHeadPasswords();
@@ -137,35 +147,35 @@ describe("createSchool", () => {
   });
 });
 
-describe("console rows (getSchoolAccountsPage)", () => {
+describe("console rows (getAccountsPage)", () => {
   it("shows an extension school's working default password, not its stored code", async () => {
-    prismaMock.school.findMany.mockResolvedValueOnce([
+    prismaMock.user.findMany.mockResolvedValueOnce([
       {
-        id: SCHOOL_ID,
-        name: "Naidas T. Opong ES (Banlas Extension)",
-        schoolIdCode: "130554-2",
+        id: "head-1",
+        role: "SCHOOL_HEAD",
+        fullName: "Head",
+        firstName: "",
+        lastName: "",
+        email: "sh@130554-2.litrack.local",
+        username: null,
+        schoolId: SCHOOL_ID,
         isActive: true,
-        region: null,
-        division: null,
-        users: [
-          {
-            id: "head-1",
-            email: "sh@130554-2.litrack.local",
-            fullName: "Head",
-            firstName: "",
-            lastName: "",
-            isActive: true,
-            passwordIsSchoolId: true,
-            mustChangePassword: false,
-          },
-        ],
+        mustChangePassword: false,
+        approvalStatus: null,
+        passwordIsSchoolId: true,
+        passwordVaultCipher: null,
+        school: {
+          id: SCHOOL_ID,
+          name: "Naidas T. Opong ES (Banlas Extension)",
+          schoolIdCode: "130554-2",
+        },
       },
     ]);
-    prismaMock.school.count.mockResolvedValueOnce(1);
+    prismaMock.user.count.mockResolvedValueOnce(1);
 
-    const page = await getSchoolAccountsPage(parseSchoolAccountsParams({}));
+    const page = await getAccountsPage(parseAccountsParams({}));
 
-    expect(page.rows[0].schoolIdCode).toBe("130554-2");
-    expect(page.rows[0].defaultPassword).toBe("130554");
+    expect(page.rows[0].school?.schoolIdCode).toBe("130554-2");
+    expect(page.rows[0].password).toEqual({ kind: "school_id", value: "130554" });
   });
 });

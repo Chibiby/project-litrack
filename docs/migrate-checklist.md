@@ -30,7 +30,7 @@ Committed migrations (apply in order via `migrate deploy`):
 - `20260903000001_support_assistant`
 - `20260907000001_password_is_school_id` — one additive `BOOLEAN NOT NULL DEFAULT false` column on
   `User`, deliberately not backfilled. Adds no table, so `prisma/rls-policies.sql` does not need
-  re-running. Existing School Head rows land on `false`, which the Super Admin school-accounts
+  re-running. Existing School Head rows land on `false`, which the Super Admin accounts
   console reads as "custom password — reset to sign in"; that is always true and always
   recoverable in one click. The comment at the top of the migration explains why a backfill would
   be worse than none.
@@ -637,7 +637,7 @@ is a bcrypt hash in Supabase Auth. Heads are sealed as they next set a password.
    `SUPABASE_SERVICE_ROLE_KEY` and still works — but changing it later strands
    every password sealed under the derived key. Pick one and keep it.
 3. Deploy. Sign in as a School Head, change the password from Settings →
-   Security, then as Super Admin open `/admin/school-accounts`: that row shows
+   Security, then as Super Admin open `/admin/accounts` and filter to School Heads: that row shows
    "Chosen by the School Head", the eye reveals the new password, and
    `/admin/audit` has a `SCHOOL_HEAD_PASSWORD_VIEWED` row.
 

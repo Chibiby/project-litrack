@@ -414,7 +414,7 @@ export async function resetAllSchoolAccounts(formData: FormData): Promise<Action
     });
 
     revalidatePath("/admin/database");
-    revalidatePath("/admin/school-accounts");
+    revalidatePath("/admin/accounts");
     return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
   } catch (err) {
     console.error("[database] school account reset failed:", err);

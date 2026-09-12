@@ -40,9 +40,27 @@ export const AUDIT_ACTIONS = {
    */
   SCHOOL_HEAD_PASSWORD_VIEWED: "SCHOOL_HEAD_PASSWORD_VIEWED",
   /**
-   * Super Admin took over a School Head session without touching its password.
-   * Both ends are logged so the audit trail can always answer "was this the
-   * School Head or the admin?" for any write in between.
+   * Super Admin issued a teacher a new one-time credential from
+   * `/admin/accounts`.
+   *
+   * Deliberately NOT folded into `SCHOOL_HEAD_PASSWORD_RESET_DEFAULT`: that
+   * string means "the live password is once again the School ID" and is
+   * replayed by the `passwordIsSchoolId` backfill. A teacher reset means the
+   * opposite — a random credential nobody can read back — and one shared string
+   * would leave the log unable to say which happened.
+   *
+   * Metadata is the school id and where it was done from. NEVER the credential
+   * itself, the teacher's email, or their name: the credential is shown once in
+   * the admin's browser and is never persisted anywhere.
+   */
+  TEACHER_PASSWORD_RESET: "TEACHER_PASSWORD_RESET",
+  /**
+   * Super Admin took over another account's session without touching its
+   * password. Any role except SUPER_ADMIN — a School Head or a teacher, the
+   * latter since the accounts console replaced the school-accounts one. Both
+   * ends are logged so the audit trail can always answer "was this the account
+   * holder or the admin?" for any write in between; START carries `targetRole`
+   * so that question can be answered without a join.
    */
   IMPERSONATION_START: "IMPERSONATION_START",
   IMPERSONATION_END: "IMPERSONATION_END",

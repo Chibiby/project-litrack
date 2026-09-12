@@ -9,6 +9,9 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
 import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
 import { geminiConfigured } from "@/lib/assistant/gemini";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,18 @@ export default async function TeacherAppLayout({
 }) {
   const user = await requireUser("TEACHER");
 
-  // Only gate real teachers — SUPER_ADMIN may view teacher pages without profiling.
+  const supabase = await createSupabaseServerClient();
+  const impersonation = await readBoundImpersonationSession(supabase.auth);
+  const impersonating = impersonation?.ticket.targetUserId === user.id;
+
+  // Unlike the School Head layout, this gate is NOT bypassed while
+  // impersonating. A stuck profiling wizard is one of the two things this
+  // console exists to diagnose, so an admin who lands here should see the
+  // actual failure the teacher sees, not a bypass around it. This is safe
+  // because — unlike School Head profiling, which blocks the entire
+  // /school-head tree — the teacher onboarding route is a real page that
+  // renders and itself carries the banner, so there is always a way back to
+  // the admin's own session.
   if (user.role === "TEACHER" && !user.profileCompleted) {
     redirect("/teacher/profiling");
   }
@@ -91,8 +105,13 @@ export default async function TeacherAppLayout({
 
   return (
     <>
+      <ImpersonationNotice
+        userId={user.id}
+        accountName={`${userName} · ${schoolName ?? "school"}`}
+        impersonation={impersonation}
+      />
       {/* Sibling of RoleShell (also portaled to body) so chrome cannot contain it. */}
-      <PostLoginSplash role="teacher" />
+      {!impersonating && <PostLoginSplash role="teacher" />}
       <RoleShell
         role={user.role}
         userName={userName}
@@ -103,9 +122,10 @@ export default async function TeacherAppLayout({
         isFloating={isFloating}
         advisoryGradeLevelId={advisoryGradeLevelId}
         aiEnabled={geminiConfigured()}
-        // From the row `requireUser` already loaded — no third read in a layout
-        // that is held to two.
-        lastSeenReleaseVersion={user.lastSeenReleaseVersion}
+        // Not while an admin impersonates this teacher: `user` IS the teacher's
+        // own account then, and acknowledging would stamp their row — the real
+        // teacher would never be shown the release they have not read.
+        lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}
       >
         {children}
       </RoleShell>

@@ -176,7 +176,7 @@ one alert email is sent per error code per 15 minutes
 (`ALERT_WINDOW` in `alert.ts`), so a sustained outage producing hundreds of
 identical events sends one email, not hundreds.
 
-## The full code table (39 codes)
+## The full code table (40 codes)
 
 Generated from `src/lib/errors/codes.ts` — that file is the source of truth;
 if this table and the code ever disagree, trust the code.
@@ -211,6 +211,7 @@ if this table and the code ever disagree, trust the code.
 | `AUTH_EMAIL_REJECTED` | 422 | user | That email address was rejected. Check it and try again. |
 | `AUTH_EMAIL_SEND_FAILED` | 503 | system | We couldn't send the email right now. Try again in a few minutes. |
 | `AUTH_EMAIL_PARTIAL_UPDATE` | 500 | system | Your sign-in email changed but LITRACK couldn't save it. Don't try again yet — contact your administrator. |
+| `ADMIN_IMPERSONATE_INACTIVE` | 409 | user | This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it. |
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |

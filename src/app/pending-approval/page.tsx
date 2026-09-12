@@ -7,6 +7,7 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration";
 import { loginPath } from "@/lib/auth/session-end";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +42,18 @@ export default async function PendingApprovalPage() {
       })
     : null;
 
+  const userName = user.fullName || `${user.firstName} ${user.lastName}`;
+
   return (
     <main id="main-content" className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      {/*
+        Where a PENDING teacher's session lands. Without this an impersonating
+        admin is signed in as the teacher on a page with no way back.
+      */}
+      <ImpersonationNotice
+        userId={user.id}
+        accountName={`${userName} · ${school?.name ?? "school"}`}
+      />
       <PostLoginSplash />
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">

@@ -7,6 +7,7 @@ import { createSchoolSchema } from "@/lib/validators/school.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
+import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedQuery } from "@/lib/cache/unstable";
@@ -173,18 +174,7 @@ export async function regenerateSchoolHeadCredential(
   });
   if (!school) return { ok: false, error: "School not found" };
 
-  const shUser = await prisma.user.findFirst({
-    where: {
-      schoolId: school.id,
-      role: "SCHOOL_HEAD",
-      deletedAt: null,
-    },
-    select: { id: true, authId: true },
-    // Must pick the same row the sign-in does (`findSchoolHead` in ./login and
-    // `loginSchoolHead` in ./auth). Unordered, a school with two head rows could
-    // have its password reset on an account nobody signs in to.
-    orderBy: { createdAt: "asc" },
-  });
+  const shUser = await findSignInSchoolHead(school.id);
   if (!shUser) return { ok: false, error: "School Head account not found" };
 
   const password = defaultSchoolHeadPassword(school.schoolIdCode);
@@ -224,7 +214,7 @@ export async function regenerateSchoolHeadCredential(
   });
 
   revalidatePath("/admin/schools");
-  revalidatePath("/admin/school-accounts");
+  revalidatePath("/admin/accounts");
   revalidateSchoolsList();
   return { ok: true, data: { password } };
 }

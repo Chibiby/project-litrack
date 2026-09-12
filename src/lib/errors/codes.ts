@@ -175,6 +175,24 @@ export const ERRORS = {
       "Your sign-in email changed but LITRACK couldn't save it. Don't try again yet — contact your administrator.",
   },
 
+  // ── Admin accounts console ───────────────────────────────────────────────
+  /**
+   * Refusing to sign a Super Admin in as an account that is switched off.
+   *
+   * Not politeness and not a permission check — the admin is allowed to do
+   * this, and the swap would appear to work. `getCurrentUser` signs out
+   * inactive and removed accounts on their very next request, and by then the
+   * admin's own session has already been replaced, so they land on the login
+   * page holding a ticket they can no longer redeem. Refusing before the swap
+   * is the only correct order, which is why the message names the fix.
+   */
+  ADMIN_IMPERSONATE_INACTIVE: {
+    status: 409,
+    severity: "user",
+    message:
+      "This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it.",
+  },
+
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
     status: 422,

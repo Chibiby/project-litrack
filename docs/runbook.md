@@ -7,7 +7,7 @@ Operational procedures for admins. Does not replace training or legal advice.
 **When:** SH forgot the password they chose, and you would rather tell them what
 it is than take it away from them.
 
-1. Super Admin → `/admin/school-accounts` → the eye icon in the Password column.
+1. Super Admin → `/admin/accounts` → filter to School Heads → the eye icon in the Password column.
 2. If the cell says **"Set before LITRACK could record it"**, there is nothing to
    read — go to the Reset procedure below. Only passwords set from 2026-09-11
    onwards were sealed, and a `PASSWORD_VAULT_KEY` rotation makes anything
@@ -26,8 +26,8 @@ or a re-invite. The privacy consequences of storing these at all are in
 **When:** SH forgot the password they chose and it is not on record (see above) /
 locked out / synthetic email cannot receive reset mail.
 
-1. Super Admin → `/admin/schools` → key icon on the school's row (or `/admin/school-accounts`
-   → Reset to School ID — the two do the same thing).
+1. Super Admin → `/admin/schools` → key icon on the school's row (or `/admin/accounts`
+   → filter to School Heads → Reset to School ID — the two do the same thing).
 2. Tell the School Head to sign in with their **School ID**. It works immediately; there is no
    forced password change, and they can set a private password later from Settings → Security.
 3. Confirm audit: `SCHOOL_HEAD_PASSWORD_RESET_DEFAULT`.
@@ -40,6 +40,33 @@ Rows written before then say `SCHOOL_HEAD_CREDENTIAL_REGENERATED`.
 every reset path now sets that. Before this was fixed, Reset set the suffixed code, so an extension
 head who was reset before then may still be on `130554-2`. If the plain ID is refused, press Reset
 once more; it will then be the plain ID.
+
+## Reset a teacher's password
+
+**When:** a teacher cannot use email recovery, or support needs to issue a one-time credential.
+
+1. Super Admin → `/admin/accounts` → find the teacher → Reset password.
+2. Copy the generated credential before closing the dialog. It is shown once, is never stored
+   in readable form, and never appears in the audit log.
+3. Give it directly to the teacher. Their next sign-in requires them to choose a private password.
+4. Confirm audit: `TEACHER_PASSWORD_RESET`.
+
+Prefer `/forgot-password` when the teacher has a working mailbox. Reset does not reactivate an
+account that its School Head switched off.
+
+## Sign in as a teacher or School Head
+
+**When:** support must see the exact page, gate, or data state the account holder sees.
+
+1. Super Admin → `/admin/accounts` → find the account → Sign in as.
+2. Work only on the reported problem. The amber banner identifies the impersonated account and
+   returns you to the accounts console while the return window is open.
+3. If that return window expires, use the banner's Sign out control and sign back in as yourself.
+
+Impersonation is full-write. Start and end are recorded as `IMPERSONATION_START` and
+`IMPERSONATION_END`; actions performed in between are recorded against the impersonated account.
+Super Admin accounts, removed accounts, inactive accounts, and non-sign-in duplicate School Head
+rows cannot be impersonated.
 
 ## Add an extension school
 

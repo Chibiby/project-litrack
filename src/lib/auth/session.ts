@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
 import { noteScopeUser } from "@/lib/errors/context";
+import { clearImpersonationCookie } from "@/lib/auth/impersonation";
 import type { User, UserRole } from "@prisma/client";
 
 export {
@@ -48,6 +49,25 @@ function isTeacherRejected(user: User): boolean {
 /** Pending School Head approval only (deactivated approved teachers use isActive below). */
 function isTeacherPendingGate(user: User): boolean {
   return user.role === "TEACHER" && user.approvalStatus === "PENDING";
+}
+
+/**
+ * Every session teardown here ends impersonation too, and runs this BEFORE the
+ * `signOut` it accompanies.
+ *
+ * Its own try, never the signOut's: these paths run in Server Components as well
+ * as actions, and in a Server Component Next throws on any cookie write. That
+ * throw must not skip the signOut that follows. It only happens when a ticket is
+ * present (`clearImpersonationCookie` checks first), so it is logged. The ticket
+ * surviving in that case is not a hole — it is bound to one Supabase session
+ * (`@/lib/auth/impersonation`), and the signOut below ends that session.
+ */
+async function dropImpersonationTicket(): Promise<void> {
+  try {
+    await clearImpersonationCookie();
+  } catch (err) {
+    console.error("[session] clearing impersonation ticket on sign-out failed:", err);
+  }
 }
 
 /** Spans for the two blocking round trips every authenticated request pays for. */
@@ -181,6 +201,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
 
   if (user.deletedAt) {
     sessionEndNote().reason = "account_disabled";
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -193,6 +214,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
     if (allowPending) {
       return user;
     }
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -211,6 +233,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   // Soft-deleted already handled. Inactive non-pending users (SH/admin/legacy): sign out.
   if (!user.isActive) {
     sessionEndNote().reason = "account_disabled";
+    await dropImpersonationTicket();
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -313,7 +336,13 @@ export function isSuperAdmin(user: User): boolean {
   return user.role === "SUPER_ADMIN";
 }
 
+/**
+ * Sign out and end any impersonation with it. The ticket goes here, in the one
+ * helper, so every page that signs out through it — `/pending-approval` and
+ * `/account/created` today — is covered without repeating the rule at each site.
+ */
 export async function signOut() {
+  await dropImpersonationTicket();
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
 }

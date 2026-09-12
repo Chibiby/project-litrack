@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const SCHOOL_ID = "3f1c2b8e-7d4a-4e6b-9c1f-2a5d8e7b6c40";
+const HEAD_ID = "9c4d1f77-2b36-4a80-9d5e-61c0a7f3e8b2";
 const SCHOOL_ID_CODE = "208027";
 const VAULT_KEY = Buffer.alloc(32, 3).toString("base64");
 
@@ -56,40 +57,51 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolsList: vi.fn() }));
 
 const { sealPassword } = await import("@/lib/auth/password-vault");
-const { revealSchoolHeadPassword } = await import("@/lib/actions/school-accounts");
+const { revealSchoolHeadPassword } = await import("@/lib/actions/accounts");
 const { AUDIT_ACTIONS } = await import("@/lib/audit");
 
 const SEALED_AT = new Date("2026-09-11T04:00:00.000Z");
 
 type HeadRow = {
   id: string;
+  role: string;
+  schoolId: string;
   passwordIsSchoolId: boolean;
   passwordVaultCipher: string | null;
   passwordVaultSetAt: Date | null;
+  school: { id: string; schoolIdCode: string } | null;
 } | null;
 
 let headRow: HeadRow = null;
 
-function form(schoolId: string = SCHOOL_ID) {
+/**
+ * The console is keyed on the ACCOUNT, not the school: it lists every user in
+ * the system, and a school id cannot name a teacher.
+ */
+function form(userId: string = HEAD_ID) {
   const fd = new FormData();
-  fd.set("schoolId", schoolId);
+  fd.set("userId", userId);
   return fd;
+}
+
+function head(overrides: Partial<NonNullable<HeadRow>> = {}): HeadRow {
+  return {
+    id: "head-1",
+    role: "SCHOOL_HEAD",
+    schoolId: SCHOOL_ID,
+    passwordIsSchoolId: false,
+    passwordVaultCipher: sealPassword("Gerlita!2026"),
+    passwordVaultSetAt: SEALED_AT,
+    school: { id: SCHOOL_ID, schoolIdCode: SCHOOL_ID_CODE },
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   requireUser.mockResolvedValue({ id: "admin-1", role: "SUPER_ADMIN" });
   checkRateLimit.mockResolvedValue({ ok: true });
-  prismaMock.school.findFirst.mockResolvedValue({
-    id: SCHOOL_ID,
-    schoolIdCode: SCHOOL_ID_CODE,
-  });
-  headRow = {
-    id: "head-1",
-    passwordIsSchoolId: false,
-    passwordVaultCipher: sealPassword("Gerlita!2026"),
-    passwordVaultSetAt: SEALED_AT,
-  };
+  headRow = head();
   prismaMock.user.findFirst.mockImplementation(async () => headRow);
 });
 
@@ -134,17 +146,34 @@ describe("revealSchoolHeadPassword", () => {
     checkRateLimit.mockResolvedValueOnce({ ok: false });
     const res = await revealSchoolHeadPassword(form());
     expect(res.ok).toBe(false);
-    expect(prismaMock.school.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
+  /**
+   * The vault is SCHOOL_HEAD-only by design, and the button is simply absent on
+   * a teacher row. That is presentation. THIS is the access control: a
+   * hand-crafted POST carrying a teacher's id has to be refused by the server.
+   */
+  it("refuses a target that is not a School Head, with the same words as 'no such account'", async () => {
+    headRow = head({ role: "TEACHER" });
+    const res = await revealSchoolHeadPassword(form());
+    expect(res).toEqual({ ok: false, error: "Account not found" });
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Super Admin target the same way", async () => {
+    headRow = head({ role: "SUPER_ADMIN" });
+    const res = await revealSchoolHeadPassword(form());
+    expect(res).toEqual({ ok: false, error: "Account not found" });
+  });
+
   it("returns the School ID, unaudited, when that is the live password", async () => {
-    headRow = {
-      id: "head-1",
+    headRow = head({
       passwordIsSchoolId: true,
       passwordVaultCipher: null,
       passwordVaultSetAt: null,
-    };
+    });
     const res = await revealSchoolHeadPassword(form());
     expect(res).toEqual({
       ok: true,
@@ -156,12 +185,7 @@ describe("revealSchoolHeadPassword", () => {
   });
 
   it("refuses when no sealed copy exists", async () => {
-    headRow = {
-      id: "head-1",
-      passwordIsSchoolId: false,
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    };
+    headRow = head({ passwordVaultCipher: null, passwordVaultSetAt: null });
     const res = await revealSchoolHeadPassword(form());
     expect(res).toEqual({
       ok: false,
@@ -171,27 +195,24 @@ describe("revealSchoolHeadPassword", () => {
   });
 
   it("refuses, rather than guessing, when the sealed copy will not open", async () => {
-    headRow = {
-      id: "head-1",
-      passwordIsSchoolId: false,
+    headRow = head({
       // The shape a key rotation leaves behind.
       passwordVaultCipher: "v1.AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA.AAAAAA",
-      passwordVaultSetAt: SEALED_AT,
-    };
+    });
     const res = await revealSchoolHeadPassword(form());
     expect(res.ok).toBe(false);
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-uuid school without touching the database", async () => {
+  it("rejects a non-uuid account without touching the database", async () => {
     const res = await revealSchoolHeadPassword(form("not-a-uuid"));
-    expect(res).toEqual({ ok: false, error: "Invalid school" });
-    expect(prismaMock.school.findFirst).not.toHaveBeenCalled();
+    expect(res).toEqual({ ok: false, error: "Invalid account" });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 
-  it("reports a school with no School Head row instead of throwing", async () => {
+  it("reports a missing account instead of throwing", async () => {
     headRow = null;
     const res = await revealSchoolHeadPassword(form());
-    expect(res).toEqual({ ok: false, error: "School Head account not found" });
+    expect(res).toEqual({ ok: false, error: "Account not found" });
   });
 });

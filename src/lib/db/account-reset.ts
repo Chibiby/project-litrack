@@ -37,7 +37,7 @@ function reasonOf(err: unknown): string {
 /**
  * Put every school's School Head password back to that school's School ID.
  *
- * Same operation the per-row Reset performs in the school-accounts console,
+ * Same operation the per-row Reset performs in the accounts console,
  * applied to every school at once, and it sets `passwordIsSchoolId` for the
  * same reason: it is the only way the console can show a working credential
  * without anyone storing a plaintext password.
@@ -54,12 +54,16 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
     where: {
       role: "SCHOOL_HEAD",
       deletedAt: null,
+      isActive: true,
       school: { deletedAt: null },
       ...(schoolId ? { schoolId } : {}),
     },
+    orderBy: [{ schoolId: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       authId: true,
+      schoolId: true,
+      createdAt: true,
       fullName: true,
       school: { select: { id: true, name: true, schoolIdCode: true } },
     },
@@ -67,8 +71,16 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
 
   const failed: BulkResult["failed"] = [];
   let processed = 0;
+  const signInHeadIds = new Set<string>();
+  const seenSchools = new Set<string>();
+  for (const head of heads) {
+    if (head.schoolId && !seenSchools.has(head.schoolId)) {
+      seenSchools.add(head.schoolId);
+      signInHeadIds.add(head.id);
+    }
+  }
 
-  await inBatches(heads, async (head) => {
+  await inBatches(heads.filter((head) => signInHeadIds.has(head.id)), async (head) => {
     const label = head.school?.name ?? head.fullName ?? head.id;
     if (!head.school) {
       failed.push({ id: head.id, label, reason: "No school attached" });

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { roleHomePath } from "@/lib/auth/roles";
 import { RELEASES, visibleFixes } from "@/lib/releases";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 
 export const metadata: Metadata = { title: "Releases · LITRACK" };
 
@@ -25,9 +26,16 @@ export const dynamic = "force-dynamic";
  */
 export default async function ReleasesPage() {
   const user = await requireUser();
+  const userName = user.fullName || `${user.firstName} ${user.lastName}`;
 
   return (
     <main id="main-content" className="min-h-screen bg-background px-4 py-10">
+      {/*
+        Reachable from inside an impersonated session via the sidebar's
+        "What's new" link and the notifications menu, not just a redirect
+        target — the banner still has to be here or the way back is lost.
+      */}
+      <ImpersonationNotice userId={user.id} accountName={userName} />
       <div className="mx-auto max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           What&apos;s new

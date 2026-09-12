@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration";
 import { loginPath } from "@/lib/auth/session-end";
+import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +46,19 @@ export default async function AccountCreatedPage() {
       })
     : null;
 
+  const userName = user.fullName || `${user.firstName} ${user.lastName}`;
+
   return (
     <main
       id="main-content"
       className="flex min-h-screen flex-col items-center justify-center bg-background p-4"
     >
+      {/*
+        Same gating as /pending-approval (role TEACHER, not yet approved and
+        active) and reachable the same way: without this an impersonating
+        admin lands here with no way back.
+      */}
+      <ImpersonationNotice userId={user.id} accountName={userName} />
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image

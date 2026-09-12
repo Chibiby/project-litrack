@@ -74,6 +74,19 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.8.0",
+    date: "2026-09-12",
+    title: "Account support is now in one place",
+    announce: false,
+    fixes: [
+      "School account support is now organized in one console, making it faster for administrators to find an account and resolve sign-in problems.",
+      {
+        text: "Super Admins can inspect account details, issue temporary passwords, and securely sign in as a teacher or School Head while troubleshooting.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "1.7.1",
     date: "2026-09-12",
     title: "Removing a teacher from a school now works",
