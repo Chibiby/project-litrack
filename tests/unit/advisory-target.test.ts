@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveAdvisoryPlacementForGrade,
   resolveAdvisoryTarget,
   NO_ADVISORY_MESSAGE,
   NOT_YOUR_ADVISORY_MESSAGE,
@@ -60,6 +61,29 @@ describe("resolveAdvisoryTarget — no advisory", () => {
       reason: "none",
       error: NO_ADVISORY_MESSAGE,
     });
+  });
+});
+
+describe("resolveAdvisoryPlacementForGrade", () => {
+  it("selects the placement named by a grade-scoped report URL", () => {
+    const gradeFive = placement({
+      gradeLevelId: "grade-g5",
+      gradeType: "G5",
+      gradeLabel: "Grade 5",
+      label: "Grade 5 · Rosal",
+    });
+
+    expect(resolveAdvisoryPlacementForGrade([placement(), gradeFive], "grade-g5")).toBe(
+      gradeFive
+    );
+  });
+
+  it("keeps the first-placement fallback for an invalid or stale URL", () => {
+    const placements = [placement(), ROSAL];
+    expect(resolveAdvisoryPlacementForGrade(placements, "grade-g9")).toBe(
+      placements[0]
+    );
+    expect(resolveAdvisoryPlacementForGrade([], "grade-g9")).toBeNull();
   });
 });
 
