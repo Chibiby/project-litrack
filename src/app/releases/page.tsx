@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth/session";
 import { roleHomePath } from "@/lib/auth/roles";
 import { RELEASES, visibleFixes } from "@/lib/releases";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export const metadata: Metadata = { title: "Releases · LITRACK" };
 
@@ -37,6 +39,12 @@ export default async function ReleasesPage() {
       */}
       <ImpersonationNotice userId={user.id} accountName={userName} />
       <div className="mx-auto max-w-2xl">
+        <Button asChild variant="ghost" className="-ml-3 mb-6 gap-2">
+          <Link href={roleHomePath(user.role)}>
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back to LITRACK
+          </Link>
+        </Button>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           What&apos;s new
         </h1>
@@ -76,14 +84,6 @@ export default async function ReleasesPage() {
             ))}
         </ol>
 
-        <p className="mt-12 text-sm">
-          <Link
-            href={roleHomePath(user.role)}
-            className="text-primary underline-offset-4 hover:underline"
-          >
-            Back to LITRACK
-          </Link>
-        </p>
       </div>
     </main>
   );
