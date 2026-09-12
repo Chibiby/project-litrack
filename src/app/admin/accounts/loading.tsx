@@ -9,7 +9,12 @@ export default function AdminAccountsLoading() {
   return (
     <RouteLoadingOverlay>
       <div className="w-full space-y-6 p-4 lg:p-6">
-        <TableSectionSkeleton rows={10} columns={6} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="skeleton-shimmer h-20 rounded-xl border" />
+          ))}
+        </div>
+        <TableSectionSkeleton rows={10} columns={7} />
       </div>
     </RouteLoadingOverlay>
   );

@@ -39,11 +39,12 @@ const prismaMock = {
   user: {
     findMany: vi.fn(async (_args: unknown) => [baseUser()]),
     count: vi.fn(async (_args: unknown) => 1),
+    groupBy: vi.fn(),
   },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-const { accountsWhere, getAccountsPage, parseAccountsParams, ACCOUNTS_PAGE_SIZE } = await import(
+const { accountsWhere, getAccountSummary, getAccountsPage, parseAccountsParams, ACCOUNTS_PAGE_SIZE } = await import(
   "@/lib/admin/accounts"
 );
 
@@ -51,6 +52,29 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.user.findMany.mockResolvedValue([baseUser()]);
   prismaMock.user.count.mockResolvedValue(1);
+  prismaMock.user.groupBy.mockResolvedValue([]);
+});
+
+describe("getAccountSummary", () => {
+  it("combines role and active-state groups in one grouped query", async () => {
+    prismaMock.user.groupBy.mockResolvedValueOnce([
+      { role: "TEACHER", isActive: true, _count: { _all: 8 } },
+      { role: "TEACHER", isActive: false, _count: { _all: 2 } },
+      { role: "SCHOOL_HEAD", isActive: true, _count: { _all: 3 } },
+      { role: "SUPER_ADMIN", isActive: true, _count: { _all: 1 } },
+    ]);
+
+    await expect(getAccountSummary()).resolves.toEqual({
+      totalCount: 14,
+      activeCount: 12,
+      inactiveCount: 2,
+      schoolHeadCount: 3,
+      teacherCount: 10,
+    });
+    expect(prismaMock.user.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ by: ["role", "isActive"], _count: { _all: true } })
+    );
+  });
 });
 
 describe("accountsWhere", () => {

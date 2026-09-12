@@ -74,6 +74,19 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.9.0",
+    date: "2026-09-12",
+    title: "A clearer account management workspace",
+    announce: true,
+    fixes: [
+      {
+        text: "Super Admins can see account totals, filter the directory, and work through account details in a clearer, more compact Accounts Management page.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "The account directory has a clearer responsive layout while keeping its existing password and troubleshooting actions.",
+    ],
+  },
+  {
     version: "1.8.2",
     date: "2026-09-12",
     title: "Teacher roster filters and reliable term reports",

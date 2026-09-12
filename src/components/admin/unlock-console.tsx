@@ -196,6 +196,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
         // dialog closed anyway. The failure is never swallowed; it just
         // surfaces on the page instead of inside the dialog it was raised in.
         setError({ message: res.error, ref: res.ref });
+        setConfirmOpen(false);
         return;
       }
       toast.success(
@@ -206,13 +207,12 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
       router.refresh();
       setConfirmOpen(false);
       setReason("");
-    } catch (err) {
+    } catch {
       // The dialog stays open on this path (unlike the `ok: false` branch
       // above, which closes it): there is no banner to bury, since the error
       // banner lives in the card behind the dialog, not inside it. A toast is
       // the only surface that reaches the user while the dialog is still up.
       toast.error("Something went wrong reopening access. Please try again.");
-      throw err;
     } finally {
       setIssuePending(false);
     }

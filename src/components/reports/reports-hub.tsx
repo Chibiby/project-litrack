@@ -293,9 +293,10 @@ export function ReportsHub({
           const Icon = t.icon;
           const active = tab === t.id;
           return (
-            <button
+            <Button
               key={t.id}
               type="button"
+              variant="ghost"
               onClick={() => setTab(t.id)}
               aria-pressed={active}
               className={cn(
@@ -307,7 +308,7 @@ export function ReportsHub({
             >
               <Icon className="h-4 w-4" aria-hidden />
               {t.label}
-            </button>
+            </Button>
           );
         })}
       </div>

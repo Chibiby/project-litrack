@@ -709,8 +709,10 @@ function BandSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={disabled}
           aria-label={label}
           title={selected ? `${selected.code} — ${selected.label}` : "Not assessed"}
@@ -723,7 +725,7 @@ function BandSelect({
             {selected ? selected.code : "—"}
           </span>
           <ChevronDown aria-hidden className="size-3 shrink-0 opacity-60" />
-        </button>
+        </Button>
       </PopoverTrigger>
       {/* Radix moves focus onto the content when it opens, so the key handler
           sits here rather than on a list that would need focusing by hand. */}

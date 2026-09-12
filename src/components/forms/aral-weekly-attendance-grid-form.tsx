@@ -767,8 +767,10 @@ function AttendanceCellPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={disabled}
           aria-label={label}
           title={note || undefined}
@@ -784,7 +786,7 @@ function AttendanceCellPicker({
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"
             />
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
         <div className="p-1">
@@ -792,9 +794,10 @@ function AttendanceCellPicker({
             Attendance
           </p>
           {PICKABLE.map((option) => (
-            <button
+            <Button
               key={option || "none"}
               type="button"
+              variant="ghost"
               onClick={() => pick(option)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
@@ -820,7 +823,7 @@ function AttendanceCellPicker({
                     : "No remarks required"}
                 </span>
               </span>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -990,13 +993,14 @@ export function BulkAttendanceActions({
 
 function BulkItem({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       className="flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
     >
       {label}
-    </button>
+    </Button>
   );
 }
 

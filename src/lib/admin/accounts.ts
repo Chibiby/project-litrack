@@ -78,6 +78,15 @@ export type AccountsParams = {
   schoolId?: string;
 };
 
+/** Small, all-account overview shown above the management list. */
+export type AccountSummary = {
+  totalCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  schoolHeadCount: number;
+  teacherCount: number;
+};
+
 const ROLE_VALUES: readonly UserRole[] = ["SUPER_ADMIN", "SCHOOL_HEAD", "TEACHER"];
 
 function isUserRole(value: string | undefined): value is UserRole {
@@ -103,6 +112,33 @@ export function accountsTotalPages(
 ): number {
   if (totalCount <= 0) return 1;
   return Math.ceil(totalCount / pageSize);
+}
+
+/**
+ * A single grouped query keeps the overview truthful without loading account
+ * rows into memory. It intentionally ignores list filters: the cards describe
+ * the full accounts directory, while the table below describes the filtered
+ * result set.
+ */
+export async function getAccountSummary(): Promise<AccountSummary> {
+  const groups = await prisma.user.groupBy({
+    by: ["role", "isActive"],
+    where: accountsWhere({}),
+    _count: { _all: true },
+  });
+
+  return groups.reduce<AccountSummary>(
+    (summary, group) => {
+      const count = group._count._all;
+      summary.totalCount += count;
+      if (group.isActive) summary.activeCount += count;
+      else summary.inactiveCount += count;
+      if (group.role === "SCHOOL_HEAD") summary.schoolHeadCount += count;
+      if (group.role === "TEACHER") summary.teacherCount += count;
+      return summary;
+    },
+    { totalCount: 0, activeCount: 0, inactiveCount: 0, schoolHeadCount: 0, teacherCount: 0 }
+  );
 }
 
 /**

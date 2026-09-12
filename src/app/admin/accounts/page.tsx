@@ -3,11 +3,12 @@ import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { TableSectionSkeleton } from "@/components/loading";
 import { AccountsTable } from "@/components/admin/accounts-table";
-import { PageTip } from "@/components/admin/page-tip";
 import {
+  getAccountSummary,
   getAccountsPage,
   parseAccountsParams,
   accountsTotalPages,
+  type AccountSummary,
   type AccountRow,
 } from "@/lib/admin/accounts";
 
@@ -25,6 +26,7 @@ async function AccountsTableBody({
   const params = parseAccountsParams(searchParams);
   let rows: AccountRow[] = [];
   let totalCount = 0;
+  let summary: AccountSummary | undefined;
   let dbAvailable = true;
 
   try {
@@ -38,6 +40,16 @@ async function AccountsTableBody({
     dbAvailable = false;
   }
 
+  if (dbAvailable) {
+    try {
+      summary = await getAccountSummary();
+    } catch (err) {
+      // The directory remains useful if its non-essential overview query is
+      // temporarily unavailable; keep its rows and account controls visible.
+      console.error("[AdminAccountsPage] failed to load account summary:", err);
+    }
+  }
+
   return (
     <>
       {!dbAvailable ? (
@@ -48,8 +60,10 @@ async function AccountsTableBody({
 
       <AccountsTable
         rows={rows}
+        summary={summary}
         list={{
           page: params.page,
+          pageSize: params.pageSize,
           totalPages: accountsTotalPages(totalCount, params.pageSize),
           totalCount,
           role: params.role ?? "",
@@ -67,9 +81,10 @@ async function AccountsTableBody({
  * (reveal / reset a password, or sign in as them). Replaces
  * `/admin/school-accounts`, which now redirects here.
  *
- * `getAccountsPage` is pinned at 3 Prisma calls regardless of row count: the
- * rows, their count, and one batch lookup for each school's sign-in head.
- * Nothing here may add a per-row query or per-row `await`.
+ * The paged list is pinned at 3 Prisma calls regardless of row count: the
+ * rows, their count, and one batch lookup for each school's sign-in head. The
+ * compact overview adds one grouped aggregate query; nothing here may add a
+ * per-row query or per-row `await`.
  */
 export default async function AdminAccountsPage({ searchParams }: PageProps) {
   const user = await requireUser("SUPER_ADMIN");
@@ -77,15 +92,11 @@ export default async function AdminAccountsPage({ searchParams }: PageProps) {
 
   return (
     <AppShell
-      title="Accounts"
-      subtitle="Every account across every school"
+      title="Accounts Management"
+      subtitle="Manage all user accounts across schools and programs"
       role={user.role}
       userName={user.fullName || user.email}
     >
-      <PageTip title="Need to help someone sign in?">
-        Search by name, email, or school. Use the account actions to inspect a profile, reset a
-        credential, or sign in as the account while troubleshooting.
-      </PageTip>
       <Suspense fallback={<TableSectionSkeleton rows={10} columns={6} />}>
         <AccountsTableBody searchParams={params} />
       </Suspense>

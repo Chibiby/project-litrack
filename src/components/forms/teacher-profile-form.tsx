@@ -1055,13 +1055,14 @@ export function TeacherProfileForm({
                 />
               ) : null}
               {ethnicity && !showSecondEthnicity ? (
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={() => setShowSecondEthnicity(true)}
                   className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                 >
                   + Add another ethnicity
-                </button>
+                </Button>
               ) : null}
               {ethnicity && showSecondEthnicity ? (
                 <div className="space-y-3">
@@ -1083,13 +1084,14 @@ export function TeacherProfileForm({
                       maxLength={80}
                     />
                   ) : null}
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     onClick={removeSecondEthnicity}
                     className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
                   >
                     Remove second ethnicity
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </div>

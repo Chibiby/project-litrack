@@ -76,9 +76,12 @@ async function pickSelect(name: string, optionText: string) {
 }
 
 async function confirmIssue() {
-  fireEvent.click(screen.getByRole("button", { name: "Reopen access" }));
-  const dialog = await screen.findByRole("alertdialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Confirm reopen" }));
+  fireEvent.change(screen.getByLabelText("Reason for revision access"), {
+    target: { value: "Correction requested by school" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Allow revision" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Confirm revision access" }));
 }
 
 describe("UnlockConsole — mode switch", () => {
@@ -87,7 +90,7 @@ describe("UnlockConsole — mode switch", () => {
 
     expect(screen.getByRole("combobox", { name: "Teacher" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Whole school" }));
+    fireEvent.click(screen.getByRole("radio", { name: "All school" }));
 
     expect(screen.queryByRole("combobox", { name: "Teacher" })).toBeNull();
 
@@ -120,7 +123,11 @@ describe("UnlockConsole — days validation", () => {
   it("refuses 0 and 91 days, and accepts 7", () => {
     render(<UnlockConsole schools={SCHOOLS} active={EMPTY_ACTIVE} />);
     const days = screen.getByLabelText("Days");
-    const trigger = screen.getByRole("button", { name: "Reopen access" });
+    const trigger = screen.getByRole("button", { name: "Allow revision" });
+
+    fireEvent.change(screen.getByLabelText("Reason for revision access"), {
+      target: { value: "Correction requested by school" },
+    });
 
     // This repo has no @testing-library/jest-dom — use native DOM assertions only.
     fireEvent.change(days, { target: { value: "0" } });
@@ -228,7 +235,7 @@ describe("UnlockConsole — action failure", () => {
 
     await waitFor(() => expect(toastFn.error).toHaveBeenCalledTimes(1));
     expect(toastFn.success).not.toHaveBeenCalled();
-    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 
   it("toasts when revokeUnlock rejects outright (dropped connection) and keeps the dialog open", async () => {
