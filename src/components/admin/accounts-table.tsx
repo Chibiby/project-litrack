@@ -171,7 +171,7 @@ export function AccountsTable({
       <Card>
         <CardContent className="pt-6">
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="grid gap-3 sm:flex sm:flex-wrap sm:items-end"
             onSubmit={(event) => {
               event.preventDefault();
               apply({ q: query.trim() || null });
@@ -184,7 +184,7 @@ export function AccountsTable({
                 onValueChange={(value) => apply({ role: value })}
                 disabled={pending}
               >
-                <SelectTrigger id="accounts-role" className="w-56">
+                <SelectTrigger id="accounts-role" className="w-full sm:w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -200,7 +200,7 @@ export function AccountsTable({
 
             <div className="space-y-2">
               <Label htmlFor="accounts-q">Search</Label>
-              <div className="relative w-64">
+              <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="accounts-q"
@@ -213,7 +213,7 @@ export function AccountsTable({
               </div>
             </div>
 
-            <Button type="submit" loading={pending} loadingText="Searching…">
+            <Button type="submit" className="w-full sm:w-auto" loading={pending} loadingText="Searching…">
               Search
             </Button>
             {list.role || list.q || list.schoolId ? (
@@ -248,7 +248,7 @@ export function AccountsTable({
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -297,6 +297,50 @@ export function AccountsTable({
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+              <div className="space-y-3 md:hidden">
+                {rows.map((row) => (
+                  <article key={row.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-medium">{row.fullName}</h3>
+                        <Badge variant="outline" className="mt-1">
+                          {USER_ROLE_LABELS[row.role]}
+                        </Badge>
+                      </div>
+                      <StatusCell row={row} />
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          School
+                        </dt>
+                        <dd className="mt-1 truncate">
+                          {row.school ? `${row.school.name} · ${row.school.schoolIdCode}` : "—"}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Sign-in
+                        </dt>
+                        <dd className="mt-1">
+                          <SignInCell row={row} />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Password
+                        </dt>
+                        <dd className="mt-1">
+                          <PasswordCell row={row} />
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 border-t pt-3">
+                      <AccountRowActions row={row} />
+                    </div>
+                  </article>
+                ))}
               </div>
               <Paginator page={list.page} pages={list.totalPages} hrefFor={hrefFor} />
             </>

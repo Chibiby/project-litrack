@@ -14,6 +14,7 @@ export type SchoolsListParams = {
   take: number;
   q: string;
   region: string;
+  status: "" | "active" | "inactive";
 };
 
 export type SchoolsListPage = {
@@ -22,20 +23,23 @@ export type SchoolsListPage = {
 };
 
 /**
- * Parse admin schools table query params (?page=&q=&region=).
+ * Parse admin schools table query params (?page=&q=&region=&status=).
  * Pure — no I/O.
  */
 export function parseSchoolsListParams(
-  searchParams: { page?: string; q?: string; region?: string },
+  searchParams: { page?: string; q?: string; region?: string; status?: string },
   pageSize: number = SCHOOLS_PAGE_SIZE
 ): SchoolsListParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const q = (searchParams.q ?? "").trim();
   const region = (searchParams.region ?? "").trim();
+  const rawStatus = (searchParams.status ?? "").trim().toLowerCase();
+  const status: SchoolsListParams["status"] =
+    rawStatus === "active" || rawStatus === "inactive" ? rawStatus : "";
   const size = pageSize > 0 ? pageSize : SCHOOLS_PAGE_SIZE;
   const skip = (page - 1) * size;
-  return { page, pageSize: size, skip, take: size, q, region };
+  return { page, pageSize: size, skip, take: size, q, region, status };
 }
 
 export function schoolsTotalPages(
@@ -46,10 +50,15 @@ export function schoolsTotalPages(
   return Math.ceil(totalCount / pageSize);
 }
 
-function schoolsWhere(params: Pick<SchoolsListParams, "q" | "region">): Prisma.SchoolWhereInput {
+function schoolsWhere(
+  params: Pick<SchoolsListParams, "q" | "region" | "status">
+): Prisma.SchoolWhereInput {
   const where: Prisma.SchoolWhereInput = { deletedAt: null };
   if (params.region) {
     where.region = params.region;
+  }
+  if (params.status) {
+    where.isActive = params.status === "active";
   }
   if (params.q) {
     where.OR = [
@@ -68,10 +77,10 @@ function schoolsWhere(params: Pick<SchoolsListParams, "q" | "region">): Prisma.S
 export function getSchoolsListPage(
   params: SchoolsListParams
 ): Promise<SchoolsListPage> {
-  const { skip, take, q, region, page, pageSize } = params;
+  const { skip, take, q, region, status, page, pageSize } = params;
   return cachedQuery(
     async () => {
-      const where = schoolsWhere({ q, region });
+      const where = schoolsWhere({ q, region, status });
       const [schools, totalCount] = await Promise.all([
         prisma.school.findMany({
           where,
@@ -107,6 +116,7 @@ export function getSchoolsListPage(
         `ps:${pageSize}`,
         `q:${q}`,
         `r:${region}`,
+        `s:${status}`,
       ],
       tags: [schoolsList],
       profile: "reference",

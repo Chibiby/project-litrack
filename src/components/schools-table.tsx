@@ -60,6 +60,7 @@ export type SchoolsTableList = {
   pageSize: number;
   q: string;
   region: string;
+  status: "" | "active" | "inactive";
 };
 
 const REGIONS = [
@@ -138,6 +139,7 @@ function hrefFor(list: SchoolsTableList, page: number): string {
   const params = new URLSearchParams();
   if (list.q) params.set("q", list.q);
   if (list.region) params.set("region", list.region);
+  if (list.status) params.set("status", list.status);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
   return qs ? `/admin/schools?${qs}` : "/admin/schools";
@@ -171,13 +173,15 @@ export function SchoolsTable({
     setSearchValue(list.q);
   }, [list.q]);
 
-  const pushList = (next: { page?: number; q?: string; region?: string }) => {
+  const pushList = (next: { page?: number; q?: string; region?: string; status?: SchoolsTableList["status"] }) => {
     const params = new URLSearchParams();
     const q = next.q !== undefined ? next.q : list.q;
     const region = next.region !== undefined ? next.region : list.region;
+    const status = next.status !== undefined ? next.status : list.status;
     const page = next.page !== undefined ? next.page : list.page;
     if (q) params.set("q", q);
     if (region) params.set("region", region);
+    if (status) params.set("status", status);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.push(qs ? `/admin/schools?${qs}` : "/admin/schools");
@@ -270,14 +274,14 @@ export function SchoolsTable({
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">
           <Select
             value={list.region || "all"}
             onValueChange={(value) =>
               pushList({ page: 1, region: value === "all" ? "" : value })
             }
           >
-            <SelectTrigger className="w-[160px]" aria-label="Filter by region">
+            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by region">
               <SelectValue placeholder="Filter by..." />
             </SelectTrigger>
             <SelectContent>
@@ -289,14 +293,44 @@ export function SchoolsTable({
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={list.status || "all"}
+            onValueChange={(value) =>
+              pushList({ page: 1, status: value === "all" ? "" : (value as "active" | "inactive") })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[140px]" aria-label="Filter by status">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() => pushList({ page: 1, q: searchValue.trim() })}
           >
             Search
           </Button>
+          {list.q || list.region || list.status ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setSearchValue("");
+                pushList({ page: 1, q: "", region: "", status: "" });
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -304,7 +338,7 @@ export function SchoolsTable({
         Showing {from} to {to} of {list.totalCount} results
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-card">
+      <div className="hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/40">
@@ -451,6 +485,118 @@ export function SchoolsTable({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="space-y-3 md:hidden">
+        {optimisticSchools.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            No schools found. Create your first school to get started.
+          </div>
+        ) : (
+          optimisticSchools.map((school) => (
+            <article key={school.id} className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/admin/schools/${school.id}`}
+                      prefetch={false}
+                      className="font-medium underline-offset-4 hover:underline"
+                    >
+                      {school.name}
+                    </Link>
+                    {school.isDemo ? (
+                      <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                        Demo
+                      </span>
+                    ) : null}
+                  </div>
+                  <code className="mt-1 inline-block rounded bg-muted px-1 py-0.5 text-xs">
+                    {school.schoolIdCode}
+                  </code>
+                </div>
+                {school.isActive ? (
+                  <Badge className="shrink-0 bg-primary/10 text-primary hover:bg-primary/10">Active</Badge>
+                ) : (
+                  <Badge variant="secondary" className="shrink-0">Inactive</Badge>
+                )}
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Region</dt>
+                  <dd className="mt-1 text-muted-foreground">{school.region || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Division</dt>
+                  <dd className="mt-1 text-muted-foreground">{school.division || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Users</dt>
+                  <dd className="mt-1"><Badge variant="secondary">{school.users}</Badge></dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Learners</dt>
+                  <dd className="mt-1"><Badge variant="outline">{school.learners}</Badge></dd>
+                </div>
+              </dl>
+              <div className="mt-4 flex flex-wrap items-center gap-1 border-t pt-3">
+                <Button asChild variant="ghost" size="sm" aria-label={`View ${school.name}`}>
+                  <Link href={`/admin/schools/${school.id}`} prefetch={false}>
+                    <Eye className="h-4 w-4" aria-hidden />
+                    <span className="sr-only">View</span>
+                  </Link>
+                </Button>
+                <SchoolActiveToggle
+                  schoolId={school.id}
+                  isActive={school.isActive}
+                  schoolName={school.name}
+                  pending={actingId === school.id}
+                  onToggle={(nextActive) => toggleActive(school, nextActive)}
+                />
+                <RegenButton
+                  schoolId={school.id}
+                  schoolName={school.name}
+                  onCredential={setCredential}
+                />
+                <ConfirmAction
+                  title="Remove this school?"
+                  description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+                  confirmLabel="Remove"
+                  variant="destructive"
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      className="text-destructive hover:text-destructive"
+                      aria-label={`Remove ${school.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </Button>
+                  }
+                  onConfirm={async () => {
+                    const fd = new FormData();
+                    fd.set("id", school.id);
+                    try {
+                      await deleteSchool(fd);
+                      toast.success("School removed");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Could not remove school");
+                      throw err;
+                    }
+                  }}
+                />
+                <Link
+                  href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+                  prefetch={true}
+                  className="ml-auto inline-flex min-h-10 items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Open as School Head
+                </Link>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       {list.totalPages > 1 ? (

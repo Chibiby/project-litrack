@@ -12,17 +12,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
 import { TableSectionSkeleton } from "@/components/loading";
 import { Plus } from "lucide-react";
+import { PageTip } from "@/components/admin/page-tip";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; q?: string; region?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; region?: string; status?: string }>;
 }
 
 async function SchoolsTableBody({
   searchParams,
 }: {
-  searchParams: { page?: string; q?: string; region?: string };
+  searchParams: { page?: string; q?: string; region?: string; status?: string };
 }) {
   const list = parseSchoolsListParams(searchParams);
   let tableData: SchoolRow[] = [];
@@ -59,6 +60,7 @@ async function SchoolsTableBody({
               pageSize: list.pageSize,
               q: list.q,
               region: list.region,
+              status: list.status,
             }}
           />
         </CardContent>
@@ -86,15 +88,11 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
         </Button>
       </div>
 
-      <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <p className="font-medium">School Head can&apos;t sign in?</p>
-        <p className="mt-1 text-amber-900/90">
-          Use the key icon on the school&apos;s row to put the School Head&apos;s password back to
-          their School ID. They sign in with the School ID straight away and can choose a private
-          password afterwards. See{" "}
-          <code className="rounded bg-amber-100 px-1 text-xs">docs/runbook.md</code>.
-        </p>
-      </div>
+      <PageTip className="mb-4" title="School Head can't sign in?">
+        Use the key icon on the school&apos;s row to put the School Head&apos;s password back to their
+        School ID. They sign in with the School ID straight away and can choose a private password
+        afterwards. See <code className="rounded bg-amber-100 px-1 text-xs">docs/runbook.md</code>.
+      </PageTip>
 
       <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
         <SchoolsTableBody searchParams={params} />

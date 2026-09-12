@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { TableSectionSkeleton } from "@/components/loading";
 import { AccountsTable } from "@/components/admin/accounts-table";
+import { PageTip } from "@/components/admin/page-tip";
 import {
   getAccountsPage,
   parseAccountsParams,
@@ -81,6 +82,10 @@ export default async function AdminAccountsPage({ searchParams }: PageProps) {
       role={user.role}
       userName={user.fullName || user.email}
     >
+      <PageTip title="Need to help someone sign in?">
+        Search by name, email, or school. Use the account actions to inspect a profile, reset a
+        credential, or sign in as the account while troubleshooting.
+      </PageTip>
       <Suspense fallback={<TableSectionSkeleton rows={10} columns={6} />}>
         <AccountsTableBody searchParams={params} />
       </Suspense>
