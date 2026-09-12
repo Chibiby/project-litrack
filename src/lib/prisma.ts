@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { getServerEnv } from "@/lib/env";
 import { resolvePooledDatabaseUrl } from "@/lib/db-url";
 
@@ -31,8 +32,26 @@ function readDatabaseUrl(): string | undefined {
 
 const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 
-function createPrismaClient() {
+// Prisma's JavaScript engine requires a driver adapter at construction time,
+// including during builds and unit tests that never issue a query. A closed
+// localhost port keeps that no-env fallback deterministic and unable to reach
+// a real database; production requests still fail through the app's normal
+// environment validation before querying it.
+const UNCONFIGURED_DATABASE_URL =
+  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
+
+export function createPrismaClient(databaseUrl = datasourceUrl) {
+  const adapter = new PrismaPg({
+    connectionString: databaseUrl ?? UNCONFIGURED_DATABASE_URL,
+    // Workers forbid reusing an I/O object from a previous request. Retire a
+    // pool connection after one use so a warm isolate cannot carry its socket
+    // into the next request; Supabase's transaction pooler handles reuse on
+    // the database side.
+    maxUses: 1,
+  });
+
   return new PrismaClient({
+    adapter,
     // Skip "query" in normal `next dev` — it floods the terminal on every
     // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
     log:
@@ -41,7 +60,6 @@ function createPrismaClient() {
           ? ["query", "error", "warn"]
           : ["error", "warn"]
         : ["error"],
-    ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
   });
 }
 

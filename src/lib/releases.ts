@@ -74,6 +74,15 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.10.1",
+    date: "2026-09-13",
+    title: "Cloudflare can reach school data again",
+    announce: true,
+    fixes: [
+      "LITRACK can connect to Supabase again after the move from Vercel to Cloudflare.",
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-09-12",
     title: "Support conversations now show real availability",

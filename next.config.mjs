@@ -1,7 +1,18 @@
+import { builtinModules } from "node:module";
+
 /** @type {import('next').NextConfig} */
 const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
+const cloudflareNodeExternals = Object.fromEntries(
+  builtinModules
+    .filter((name) => !name.startsWith("node:"))
+    .map((name) => [name, `commonjs node:${name}`]),
+);
 
 const nextConfig = {
+  // Keep standalone tracing anchored to this checkout. This matters in local
+  // git worktrees (where a parent checkout has another lockfile) and is a
+  // no-op in Cloudflare's single-repository build environment.
+  outputFileTracingRoot: process.cwd(),
   /**
    * Expose only a non-sensitive deployment target marker. Next inlines values
    * declared in `env`, which lets server instrumentation dead-code-eliminate
@@ -34,7 +45,19 @@ const nextConfig = {
    * compatible implementation if a report exercises filesystem-only pdfkit
    * paths, but it must not prevent /login from starting.
    */
-  serverExternalPackages: isCloudflareWorkersBuild ? [] : ["pdfkit"],
+  serverExternalPackages: isCloudflareWorkersBuild
+    ? ["@prisma/client", ".prisma/client", "@prisma/adapter-pg", "pg"]
+    : ["pdfkit"],
+  webpack(config, { isServer }) {
+    if (isCloudflareWorkersBuild && isServer) {
+      // `pg` keeps optional certificate/passfile support behind Node built-ins.
+      // Leave those imports for OpenNext's final workerd bundle, where
+      // `nodejs_compat` provides them, instead of asking Next's webpack pass to
+      // resolve browser shims that do not exist.
+      config.externals.push(cloudflareNodeExternals);
+    }
+    return config;
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",

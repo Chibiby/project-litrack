@@ -60,8 +60,9 @@ describe("visibleFixes", () => {
 
 describe("the committed release notes", () => {
   it("describes the support workspace and teacher presence release", () => {
-    expect(RELEASES[0].version).toBe("1.10.0");
-    const notes = RELEASES[0].fixes.map((fix) =>
+    const supportRelease = RELEASES.find((release) => release.version === "1.10.0");
+    expect(supportRelease).toBeDefined();
+    const notes = supportRelease!.fixes.map((fix) =>
       typeof fix === "string" ? fix : fix.text
     );
     expect(notes.join(" ").toLowerCase()).toContain("support");
