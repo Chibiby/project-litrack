@@ -44,6 +44,15 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.1.2",
+    date: "2026-09-12",
+    title: "End of Terms Reports opens for advised grades",
+    announce: true,
+    fixes: [
+      "Teachers with more than one advisory section can open End of Terms Reports from any of their advised grades without a Page not found error.",
+    ],
+  },
+  {
     version: "1.1.1",
     date: "2026-09-12",
     title: "More ways to find teachers",

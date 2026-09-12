@@ -19,6 +19,23 @@ export type AdvisoryPlacement = {
   label: string;
 };
 
+/**
+ * Select the advisory placement represented by a grade-scoped page URL.
+ *
+ * The sidebar can point at any grade a teacher advises. Falling back to the
+ * first placement preserves the existing refusal path for a stale or invalid
+ * URL; the page's grade-scope query still rejects that URL before rendering a
+ * sheet.
+ */
+export function resolveAdvisoryPlacementForGrade(
+  placements: AdvisoryPlacement[],
+  gradeLevelId: string
+): AdvisoryPlacement | null {
+  return placements.find((placement) => placement.gradeLevelId === gradeLevelId) ??
+    placements[0] ??
+    null;
+}
+
 export { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 
 /**

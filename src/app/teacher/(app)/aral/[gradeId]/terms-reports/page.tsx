@@ -19,6 +19,7 @@ import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { deniesAdvisoryRoster, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacements,
+  resolveAdvisoryPlacementForGrade,
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
 import {
@@ -150,10 +151,11 @@ export default async function AralGradeTermsReportsPage({
       isSuperAdmin
         ? Promise.resolve(null)
         : // The sheet renders ONE section. With several advisories it opens on
-          // the first; a section picker on the sheet is what serves the rest,
-          // and that is not part of Wave A.
-          getAdvisoryPlacements({ id: user.id, schoolId }).then(
-            (placements) => placements[0] ?? null
+          // the grade named by the URL; a section picker on the sheet is what
+          // serves multiple sections in the same grade, and that is not part
+          // of Wave A.
+          getAdvisoryPlacements({ id: user.id, schoolId }).then((placements) =>
+            resolveAdvisoryPlacementForGrade(placements, gradeId)
           ),
       prisma.gradeLevel.findFirst({
         where: gradeFilter,
