@@ -33,7 +33,7 @@ export type TermWindow = {
   /**
    * Local `YYYY-MM-DD` of the last day grades may be encoded. Equals `endKey`
    * for a derived window, and is the ONLY key `isTermLocked` consults, so a
-   * School Head can extend entry without moving the months the sheet displays.
+   * A Super Admin can extend entry without moving the months the sheet displays.
    */
   deadlineKey: string;
   /** True when a `TermWindowOverride` row supplied this window's dates. */
@@ -174,7 +174,7 @@ export function resolveTermWindow(
 }
 
 /**
- * The rule set a School Head's edit must satisfy, or `null` when it does.
+ * The rule set for an administrator's edit must satisfy, or `null` when it does.
  *
  * Validated against the EFFECTIVE three windows — derived thirds with any
  * overrides already applied — never against the stored rows alone. That is what
@@ -204,6 +204,9 @@ export function validateTermWindows(
     }
     if (w.endKey > yearEndKey) {
       return `${w.label} ends after the school year does.`;
+    }
+    if (w.deadlineKey > yearEndKey) {
+      return `${w.label}'s deadline is after the school year does.`;
     }
   }
 

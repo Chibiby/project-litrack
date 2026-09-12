@@ -98,6 +98,7 @@ export const issueUnlock = action(
         scope: data.scope,
         targetKey: data.targetKey,
         days: data.days,
+        reason: data.reason ?? null,
       });
 
       revalidateUnlockGrants({ recipientIds: [target.id] });
@@ -119,6 +120,7 @@ export const issueUnlock = action(
       scope: data.scope,
       targetKey: data.targetKey,
       days: data.days,
+      reason: data.reason ?? null,
     });
 
     revalidateUnlockGrants({ recipientIds: issued.recipientIds });

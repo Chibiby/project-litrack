@@ -130,6 +130,8 @@ export async function issueTeacherUnlock(args: {
   scope: UnlockScope;
   targetKey: string;
   days: number;
+  /** Optional for support-ticket grants; direct admin grants provide it. */
+  reason?: string | null;
   /** The ticket this grant answers, when it came from one. */
   ticketId?: string | null;
   client?: UnlockWriteClient;
@@ -147,6 +149,7 @@ export async function issueTeacherUnlock(args: {
     client = prisma,
     notifyRecipient = true,
     audit = true,
+    reason = null,
   } = args;
   const expiresAt = expiryFrom(args.days);
 
@@ -192,6 +195,7 @@ export async function issueTeacherUnlock(args: {
         targetKey,
         expiresAt: expiresAt.toISOString(),
         direct: ticketId === null,
+        ...(reason ? { reason } : {}),
       },
     });
   }
@@ -243,8 +247,10 @@ export async function issueSchoolUnlock(args: {
   scope: UnlockScope;
   targetKey: string;
   days: number;
+  /** Optional for support-ticket grants; direct admin grants provide it. */
+  reason?: string | null;
 }): Promise<IssuedSchoolUnlock> {
-  const { actorId, schoolId, scope, targetKey } = args;
+  const { actorId, schoolId, scope, targetKey, reason = null } = args;
   const expiresAt = expiryFrom(args.days);
 
   const grant = await prisma.schoolUnlockGrant.upsert({
@@ -272,6 +278,7 @@ export async function issueSchoolUnlock(args: {
       targetKey,
       expiresAt: expiresAt.toISOString(),
       recipients: recipientIds.length,
+      ...(reason ? { reason } : {}),
     },
   });
 

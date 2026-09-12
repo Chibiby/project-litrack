@@ -78,6 +78,7 @@ export async function setSubmissionLocking(
     metadata: { enabled: parsed.data.enabled },
   });
 
+  revalidatePath("/admin/submissions");
   revalidatePath("/admin/settings/submissions");
   revalidatePath("/teacher/aral", "layout");
   return { ok: true };
@@ -134,6 +135,7 @@ export async function setMonthlyReadingLevelUnlock(
     metadata: { enabled: parsed.data.enabled },
   });
 
+  revalidatePath("/admin/submissions");
   revalidatePath("/admin/settings/submissions");
   revalidatePath("/teacher/aral", "layout");
   return { ok: true };

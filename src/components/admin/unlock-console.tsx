@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/confirm-action";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { issueUnlock, revokeUnlock } from "@/lib/actions/unlock-admin";
 import type { ActiveSchoolUnlock, ActiveTeacherUnlock, UnlockTargetSchool } from "@/lib/unlock/admin-queries";
@@ -68,6 +70,7 @@ type UnlockRow = {
 type Props = {
   schools: UnlockTargetSchool[];
   active: { teacher: ActiveTeacherUnlock[]; school: ActiveSchoolUnlock[] };
+  scopes?: UnlockScope[];
 };
 
 /** How a target key reads to a person, switched on the scope that named it. */
@@ -124,7 +127,7 @@ function targetOptionsFor(scope: UnlockScope): { value: string; label: string }[
   }));
 }
 
-export function UnlockConsole({ schools, active }: Props) {
+export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unknown as UnlockScope[] }: Props) {
   const router = useRouter();
   const rows = useMemo(() => combineRows(active), [active]);
 
@@ -137,6 +140,9 @@ export function UnlockConsole({ schools, active }: Props) {
   const [daysInput, setDaysInput] = useState(String(DEFAULT_UNLOCK_DAYS));
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
   const [issuePending, setIssuePending] = useState(false);
+  const [reason, setReason] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const allowedScopes = scopes.length ? scopes : (UNLOCK_SCOPES as unknown as UnlockScope[]);
 
   const selectedSchool = schools.find((s) => s.id === schoolId);
   const selectedTeacher = selectedSchool?.teachers.find((t) => t.id === userId);
@@ -149,7 +155,7 @@ export function UnlockConsole({ schools, active }: Props) {
     daysValid &&
     !!targetKey &&
     !!schoolId &&
-    (mode === "teacher" ? !!userId : true);
+    (mode === "teacher" ? !!userId : true) && reason.trim().length >= 3;
 
   function changeScope(next: UnlockScope) {
     setScope(next);
@@ -169,7 +175,7 @@ export function UnlockConsole({ schools, active }: Props) {
         ? `all teachers at ${selectedSchool.name}`
         : `${selectedTeacher?.name ?? "the selected teacher"} at ${selectedSchool.name}`;
     const dayWord = daysNum === 1 ? "day" : "days";
-    return `Reopen ${UNLOCK_SCOPE_LABELS[scope]} for ${periodLabel(scope, targetKey)} for ${who} for ${daysNum} ${dayWord}.`;
+    return `Allow revision of ${UNLOCK_SCOPE_LABELS[scope]} for ${periodLabel(scope, targetKey)} for ${who} for ${daysNum} ${dayWord}.`;
   })();
 
   async function handleIssue() {
@@ -180,7 +186,7 @@ export function UnlockConsole({ schools, active }: Props) {
         ? { mode: "teacher" as const, userId, scope, targetKey, days: daysNum }
         : { mode: "school" as const, schoolId, scope, targetKey, days: daysNum };
     try {
-      const res = await issueUnlock(payload);
+      const res = await issueUnlock({ ...payload, reason: reason.trim() });
       if (!res.ok) {
         // Closes the confirm dialog rather than leaving it open: Radix marks
         // the rest of the page `aria-hidden` while it is open, which would
@@ -192,10 +198,12 @@ export function UnlockConsole({ schools, active }: Props) {
       }
       toast.success(
         res.data.recipients === 1
-          ? "Access reopened for 1 teacher."
-          : `Access reopened for ${res.data.recipients} teachers.`
+          ? "Revision access allowed for 1 teacher."
+          : `Revision access allowed for ${res.data.recipients} teachers.`
       );
       router.refresh();
+      setConfirmOpen(false);
+      setReason("");
     } catch (err) {
       // The dialog stays open on this path (unlike the `ok: false` branch
       // above, which closes it): there is no banner to bury, since the error
@@ -216,7 +224,7 @@ export function UnlockConsole({ schools, active }: Props) {
         setError({ message: res.error, ref: res.ref });
         return;
       }
-      toast.success("Unlock revoked.");
+      toast.success("Revision access revoked.");
       router.refresh();
     } catch (err) {
       toast.error("Something went wrong revoking this unlock. Please try again.");
@@ -229,11 +237,10 @@ export function UnlockConsole({ schools, active }: Props) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <UnlockIcon className="h-4 w-4" aria-hidden />
-          Reopen a closed window
+          Allow a revision
         </CardTitle>
         <CardDescription>
-          Grant one teacher or a whole school access to a period that has already
-          locked.
+          Grant one teacher or a whole school temporary access to a locked attendance week or reading-level month.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -310,7 +317,7 @@ export function UnlockConsole({ schools, active }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {UNLOCK_SCOPES.map((value) => (
+                {allowedScopes.map((value) => (
                   <SelectItem key={value} value={value}>
                     {UNLOCK_SCOPE_LABELS[value]}
                   </SelectItem>
@@ -361,23 +368,44 @@ export function UnlockConsole({ schools, active }: Props) {
           </div>
         </div>
 
-        <ConfirmAction
-          title="Reopen access?"
-          description={summary || "Choose a school, period and day count first."}
-          confirmLabel="Confirm reopen"
-          variant="default"
-          disabled={!canIssue || issuePending}
-          trigger={
-            <Button disabled={!canIssue || issuePending} loading={issuePending} loadingText="Reopening">
-              <ShieldCheck className="h-4 w-4" aria-hidden />
-              Reopen access
-            </Button>
-          }
-          onConfirm={handleIssue}
-        />
+        <div className="space-y-1.5">
+          <Label htmlFor="unlock-reason">Reason for revision access</Label>
+          <Textarea
+            id="unlock-reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Explain why this revision window is needed"
+            maxLength={500}
+          />
+          <p className="text-xs text-muted-foreground">Required for the audit trail.</p>
+        </div>
+
+        <Button disabled={!canIssue || issuePending} onClick={() => setConfirmOpen(true)}>
+          <ShieldCheck className="h-4 w-4" aria-hidden />
+          Allow revision
+        </Button>
+
+        <Dialog open={confirmOpen} onOpenChange={(open) => !issuePending && setConfirmOpen(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Allow this revision?</DialogTitle>
+              <DialogDescription>Review the temporary access before it is issued.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 rounded-lg bg-muted/50 p-4 text-sm">
+              <p>{summary}</p>
+              <p><strong>Expires:</strong> {expiresAt ? expiresAt.toLocaleString("en-PH", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" }) : "—"}</p>
+              <p><strong>Reason:</strong> {reason.trim() || "—"}</p>
+              <p className="text-xs text-muted-foreground">This action is recorded in the audit log.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={issuePending}>Cancel</Button>
+              <Button onClick={handleIssue} loading={issuePending} loadingText="Allowing">Confirm revision access</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold">Active unlocks</h4>
+          <h4 className="text-sm font-semibold">Active revision grants</h4>
           {rows.length === 0 ? (
             <EmptyState
               title="No unlocks are open right now"
@@ -408,7 +436,7 @@ export function UnlockConsole({ schools, active }: Props) {
                     <TableCell>{row.grantedByName ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       <ConfirmAction
-                        title="Revoke this unlock?"
+              title="Revoke this revision grant?"
                         description={`${row.who} at ${row.schoolName} will lose access to ${UNLOCK_SCOPE_LABELS[row.scope]} for ${periodLabel(row.scope, row.targetKey)} immediately.`}
                         confirmLabel="Confirm revoke"
                         variant="destructive"

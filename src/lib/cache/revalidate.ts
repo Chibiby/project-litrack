@@ -156,5 +156,6 @@ export function revalidateUnlockGrants({ recipientIds }: { recipientIds: string[
   for (const recipientId of recipientIds) {
     revalidateSupportTicket(recipientId);
   }
-  revalidatePath("/admin/settings/submissions");
+    revalidatePath("/admin/submissions");
+    revalidatePath("/admin/settings/submissions");
 }

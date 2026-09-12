@@ -238,6 +238,7 @@ export const issueUnlockSchema = z
       .int("Choose a whole number of days")
       .min(1, "Access must last at least a day")
       .max(MAX_UNLOCK_DAYS, `Access cannot last more than ${MAX_UNLOCK_DAYS} days`),
+    reason: z.string().trim().max(500, "Keep the reason under 500 characters").optional(),
   })
   .superRefine((value, ctx) => {
     const required = value.mode === "teacher" ? "userId" : "schoolId";
