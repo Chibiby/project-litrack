@@ -1,9 +1,4 @@
-import { Suspense } from "react";
-import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
-import { TableSectionSkeleton } from "@/components/loading";
-import { AdminChatBrowser } from "@/components/chat/admin-chat-browser";
-import { listAdminChatSchools } from "@/lib/chat/queries";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -20,26 +15,8 @@ export default async function AdminChatPage({
 }: {
   searchParams: Promise<{ channel?: string }>;
 }) {
-  const user = await requireUser("SUPER_ADMIN");
   const { channel } = await searchParams;
-
-  return (
-    <AppShell
-      title="School chat"
-      subtitle="Staff rooms and private questions from every school"
-      role={user.role}
-      userName={user.fullName || user.email}
-    >
-      <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
-        <ChatBrowser initialChannelId={channel} />
-      </Suspense>
-    </AppShell>
-  );
-}
-
-async function ChatBrowser({ initialChannelId }: { initialChannelId?: string }) {
-  const user = await requireUser("SUPER_ADMIN");
-  const schools = await listAdminChatSchools(user.id);
-
-  return <AdminChatBrowser schools={schools} initialChannelId={initialChannelId} />;
+  const query = new URLSearchParams({ tab: "chat" });
+  if (channel) query.set("channel", channel);
+  redirect(`/admin/support?${query.toString()}`);
 }

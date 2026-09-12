@@ -17,6 +17,7 @@ export type AdminChatSchool = {
   /** Private threads members opened with the admin team. */
   directThreads: {
     id: string;
+    memberId: string;
     memberName: string;
     memberRole: string;
     lastMessageAt: Date | null;
@@ -32,7 +33,10 @@ export type AdminChatSchool = {
  */
 export async function listAdminChatSchools(adminId: string): Promise<AdminChatSchool[]> {
   const channels = await prisma.chatChannel.findMany({
-    where: { school: { deletedAt: null } },
+    where: {
+      school: { deletedAt: null },
+      OR: [{ kind: "SCHOOL" }, { kind: "ADMIN_DIRECT", memberId: { not: null } }],
+    },
     orderBy: [{ lastMessageAt: "desc" }],
     select: {
       id: true,
@@ -41,7 +45,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
       lastMessageAt: true,
       school: { select: { name: true } },
       member: {
-        select: { firstName: true, lastName: true, fullName: true, role: true },
+        select: { id: true, firstName: true, lastName: true, fullName: true, role: true },
       },
       reads: {
         where: { userId: adminId },
@@ -71,6 +75,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
       const member = channel.member;
       entry.directThreads.push({
         id: channel.id,
+        memberId: member?.id ?? "",
         memberName:
           member?.fullName?.trim() ||
           `${member?.firstName ?? ""} ${member?.lastName ?? ""}`.trim() ||

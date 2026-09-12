@@ -38,6 +38,7 @@ type Props = {
   memberId?: string;
   /** Shown when the thread is empty, to say what this room is for. */
   emptyHint: string;
+  messageQuery?: string;
 };
 
 type MentionTarget = {
@@ -75,7 +76,7 @@ function dayLabel(date: Date): string {
   }).format(date);
 }
 
-export function ChatThread({ kind, schoolId, memberId, emptyHint }: Props) {
+export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery = "" }: Props) {
   const [channel, setChannel] = useState<ChatChannelView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -193,6 +194,10 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint }: Props) {
           )
           .slice(0, 5);
 
+  const visibleMessages = channel?.messages.filter((message) =>
+    message.body.toLowerCase().includes(messageQuery.trim().toLowerCase())
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto p-4" role="log">
@@ -204,8 +209,12 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint }: Props) {
           <p className="text-[13px] leading-relaxed text-muted-foreground">{emptyHint}</p>
         )}
 
-        {channel?.messages.map((message, index) => {
-          const previous = channel.messages[index - 1];
+        {channel && channel.messages.length > 0 && visibleMessages?.length === 0 && (
+          <p className="text-[13px] leading-relaxed text-muted-foreground">No messages match your search.</p>
+        )}
+
+        {visibleMessages?.map((message, index) => {
+          const previous = visibleMessages[index - 1];
           const showDay =
             !previous || !sameDay(new Date(previous.createdAt), new Date(message.createdAt));
           // Messenger's rule: the name appears when the speaker changes, not on

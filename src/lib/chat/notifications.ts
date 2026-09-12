@@ -52,7 +52,7 @@ export async function getChatNotifications(user: {
     // assistant panel, which has no route of its own — so the link takes them
     // to a page where the panel is reachable rather than nowhere.
     const href = isAdmin
-      ? `/admin/chat${row.channelId ? `?channel=${row.channelId}` : ""}`
+      ? `/admin/support?tab=chat${row.channelId ? `&channel=${row.channelId}` : ""}`
       : "/teacher";
 
     if (row.type === "CHAT_DIRECT_MESSAGE") {

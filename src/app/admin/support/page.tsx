@@ -2,8 +2,9 @@ import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { TableSectionSkeleton } from "@/components/loading";
-import { SupportInbox } from "@/components/support/support-inbox";
 import { listInboxTickets } from "@/lib/support/queries";
+import { listAdminChatSchools } from "@/lib/chat/queries";
+import { AdminSupportHub } from "@/components/admin/admin-support-hub";
 
 export const dynamic = "force-dynamic";
 
@@ -16,25 +17,52 @@ export const dynamic = "force-dynamic";
  * inside every action the page can call, so nothing depends on this page being
  * the only way in.
  */
-export default async function AdminSupportPage() {
+export default async function AdminSupportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; channel?: string }>;
+}) {
   const user = await requireUser("SUPER_ADMIN");
+  const { tab, channel } = await searchParams;
 
   return (
     <AppShell
-      title="Support requests"
-      subtitle="Access requests and questions from every school"
+      title="Admin Support"
+      subtitle="Chat with the division admin or review support tickets from every school."
       role={user.role}
       userName={user.fullName || user.email}
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
-        <SupportQueue />
+        <SupportQueue
+          adminId={user.id}
+          initialTab={tab === "tickets" ? "tickets" : "chat"}
+          initialChannelId={channel}
+        />
       </Suspense>
     </AppShell>
   );
 }
 
 /** Its own boundary so the queue's query does not hold up the shell. */
-async function SupportQueue() {
-  const tickets = await listInboxTickets();
-  return <SupportInbox tickets={tickets} />;
+async function SupportQueue({
+  adminId,
+  initialTab,
+  initialChannelId,
+}: {
+  adminId: string;
+  initialTab: "chat" | "tickets";
+  initialChannelId?: string;
+}) {
+  const [tickets, schools] = await Promise.all([
+    listInboxTickets(),
+    listAdminChatSchools(adminId),
+  ]);
+  return (
+    <AdminSupportHub
+      tickets={tickets}
+      schools={schools}
+      initialTab={initialTab}
+      initialChannelId={initialChannelId}
+    />
+  );
 }
