@@ -176,7 +176,7 @@ one alert email is sent per error code per 15 minutes
 (`ALERT_WINDOW` in `alert.ts`), so a sustained outage producing hundreds of
 identical events sends one email, not hundreds.
 
-## The full code table (38 codes)
+## The full code table (39 codes)
 
 Generated from `src/lib/errors/codes.ts` — that file is the source of truth;
 if this table and the code ever disagree, trust the code.
@@ -214,6 +214,7 @@ if this table and the code ever disagree, trust the code.
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |
+| `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` | 409 | user | This account can't be permanently deleted yet — a pending database update hasn't been applied. The account stays safely removed in the meantime; ask your division admin or developer to apply the update, then try again. |
 | `DB_CONFLICT` | 409 | system | This conflicts with a record that already exists. Refresh the page and check before trying again. |
 | `DB_SCHEMA_OUT_OF_DATE` | 503 | system | Couldn't {verb}: the database is missing an update this version of LITRACK needs. Trying again won't help — ask your administrator to finish the pending update. |
 | `DB_UNAVAILABLE` | 503 | system | Couldn't {verb}: the database didn't respond in time. Wait a few seconds and try again. |
@@ -228,5 +229,30 @@ supply a value: `{verb}` = "finish that", `{resource}` = "Record", `{wait}` =
 "a few minutes", `{what}` = "this", `{service}` = "A connected service",
 `{message}` = "Check the highlighted field and try again."
 
-Earlier drafts of this catalog listed 39 codes including
-`NETWORK_UNREACHABLE`; that code was unused and has been removed, leaving 38.
+An earlier draft of this catalog listed a 39th code, `NETWORK_UNREACHABLE`;
+that code was unused and was removed, before `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION`
+(below) brought the count back to 39.
+
+### `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` (transitional)
+
+`purgeRemovedTeacher` (`src/lib/actions/admin-archive.ts`) permanently deletes
+a soft-deleted teacher's `User` row. Nine "who recorded this" foreign keys
+(attendance, assessments, grades, announcements, reports, unlock grants, term
+window overrides, and others) are `ON DELETE RESTRICT` until migration
+`20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes` is
+applied. Until then, purging a teacher who ever recorded any of that fails
+with Prisma `P2003`; the action catches that specific code and throws this
+instead of letting it fall through to `INTERNAL_ERROR`.
+
+It is deliberately `severity: "user"`: an unapplied migration is an
+operational fact the Super Admin can act on (ask whoever applies migrations
+to run the pending one), not an incident — so it records no `ErrorEvent` and
+sends no alert email. The teacher's record stays soft-deleted and reachable
+from `/admin/archive`; nothing is lost, and the purge can be retried once the
+migration lands. `restoreRemovedTeacher` and the delete-learner actions are
+unaffected.
+
+Once that migration is applied in every environment this code fires in, the
+catch site and this code become dead weight and should be deleted together —
+see the comment at the catch site in `admin-archive.ts` for the exact
+migration name to check for.

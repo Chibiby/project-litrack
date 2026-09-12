@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
-import { resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { archiveRowSchema } from "@/lib/validators/admin-archive.schema";
@@ -303,9 +303,31 @@ export const purgeRemovedTeacher = action(
     // advisory/Section state to release; `purgeTeacherRecord` skips that step
     // for a null `schoolId` and still deletes the row — purging orphans is
     // the point of this page, not something to refuse.
-    const result = await prisma.$transaction((tx) =>
-      purgeTeacherRecord(tx, { teacherId: teacher.id, schoolId: teacher.schoolId })
-    );
+    let result;
+    try {
+      result = await prisma.$transaction((tx) =>
+        purgeTeacherRecord(tx, { teacherId: teacher.id, schoolId: teacher.schoolId })
+      );
+    } catch (err) {
+      // Transitional: until migration
+      // `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes`
+      // is applied, nine "who recorded this" foreign keys (attendance,
+      // assessments, grades, announcements, reports, unlock grants, term
+      // window overrides, ...) are still `ON DELETE RESTRICT`, so purging a
+      // teacher who ever recorded any of that fails with Prisma P2003. Once
+      // that migration is applied everywhere, purge always succeeds and this
+      // catch — along with the `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` code
+      // — is dead weight and can be deleted. Anything other than P2003
+      // propagates unchanged.
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code: unknown }).code)
+          : "";
+      if (code !== "P2003") throw err;
+      throw new AppError("ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION", {
+        detail: `purgeTeacherRecord P2003 for teacher ${teacher.id}`,
+      });
+    }
 
     let authDeleted = false;
     try {

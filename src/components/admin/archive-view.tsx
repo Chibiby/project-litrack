@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Archive as ArchiveIcon, ChevronLeft, ChevronRight, GraduationCap, Users } from "lucide-react";
@@ -121,6 +121,27 @@ export function ArchiveView({
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState(filters.q);
 
+  // `schools` only lists ids present in *this* filtered result, so narrowing
+  // the search can make the currently selected school disappear from the
+  // option list — which would blank the Select even though it still has a
+  // value. Accumulate every school id/name this session has seen (across
+  // filter changes) in a ref so a selection never falls out of its own
+  // dropdown; mutated during render rather than an effect since it is
+  // idempotent and must be visible in the same pass that reads it.
+  const seenSchoolsRef = useRef<Map<string, string>>(new Map());
+  for (const school of schools) seenSchoolsRef.current.set(school.id, school.name);
+  if (filters.school && !seenSchoolsRef.current.has(filters.school)) {
+    seenSchoolsRef.current.set(filters.school, filters.school);
+  }
+  const schoolOptions = useMemo(
+    () =>
+      Array.from(seenSchoolsRef.current, ([id, name]) => ({ id, name })).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ref content, keyed off the inputs that mutate it
+    [schools, filters.school]
+  );
+
   const apply = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(changes)) {
@@ -169,7 +190,7 @@ export function ArchiveView({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ANY_SCHOOL}>All schools</SelectItem>
-                  {schools.map((school) => (
+                  {schoolOptions.map((school) => (
                     <SelectItem key={school.id} value={school.id}>
                       {school.name}
                     </SelectItem>

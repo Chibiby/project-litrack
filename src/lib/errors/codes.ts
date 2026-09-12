@@ -192,6 +192,14 @@ export const ERRORS = {
     message: "Too many requests. Try again in {wait}.",
   },
 
+  // ── Archive ──────────────────────────────────────────────────────────────
+  ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION: {
+    status: 409,
+    severity: "user",
+    message:
+      "This account can't be permanently deleted yet — a pending database update hasn't been applied. The account stays safely removed in the meantime; ask your division admin or developer to apply the update, then try again.",
+  },
+
   // ── Our side ─────────────────────────────────────────────────────────────
   DB_CONFLICT: {
     status: 409,

@@ -168,6 +168,7 @@ function NavLink({
   const link = (
     <PrefetchLink
       href={item.href}
+      {...(item.heavy ? { intent: false as const } : {})}
       {...(fullPrefetch ? { prefetch: true as const } : {})}
       onClick={() => {
         // Recorded before the drawer's own close callback runs, so the highlight

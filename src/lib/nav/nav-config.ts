@@ -45,6 +45,17 @@ export interface NavItem {
    * disabled row is not access control.
    */
   unavailable?: { pill: string; reason: string };
+  /**
+   * Opts this row out of hover/focus intent-prefetch (`PrefetchLink`'s
+   * `intent` prop). Set on routes whose render is too heavy to speculate on
+   * — a mouse merely passing down the sidebar must not trigger a full
+   * server render of them. Archive is the first: it is `force-dynamic`,
+   * reads two global cross-tenant tables without their supporting indexes
+   * applied yet, and running that against the pooler's floor of 3
+   * connections starved unrelated requests in production. Ordinary click
+   * navigation is unaffected — this only removes the speculative render.
+   */
+  heavy?: true;
 }
 
 /** A labelled sidebar section. `label` omitted renders the items with no heading. */
@@ -119,7 +130,7 @@ export function getNavGroups(
             { id: "admin-chat", label: "School chat", href: "/admin/chat", icon: MessagesSquare },
             { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
             { id: "admin-errors", label: "Errors", href: "/admin/errors", icon: TriangleAlert },
-            { id: "admin-archive", label: "Archive", href: "/admin/archive", icon: Archive },
+            { id: "admin-archive", label: "Archive", href: "/admin/archive", icon: Archive, heavy: true },
             { id: "admin-database", label: "Database", href: "/admin/database", icon: Database },
           ],
         },
