@@ -74,6 +74,6 @@ export function SubmissionsConsole({ schools, years, selected, active, lockingEn
     </Card>
 
     <div className="grid gap-6 lg:grid-cols-2"><SubmissionLockingSettings enabled={lockingEnabled} /><ReadingLevelUnlockSettings enabled={readingLevelUnlockedForAll} /></div>
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Unlock className="h-5 w-5" />Revision access</CardTitle><CardDescription>Allow one teacher at a school to revise locked attendance or monthly reading-level records.</CardDescription></CardHeader><CardContent><UnlockConsole schools={schools} active={active} scopes={UNLOCK_SCOPES.filter((scope) => scope !== "TERM_GRADES")} allowSchoolAudience={false} /></CardContent></Card>
+    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Unlock className="h-5 w-5" />Revision access</CardTitle><CardDescription>Allow all teachers at the selected school, or one teacher, to revise locked attendance or monthly reading-level records.</CardDescription></CardHeader><CardContent><UnlockConsole schools={schools} active={active} scopes={UNLOCK_SCOPES.filter((scope) => scope !== "TERM_GRADES")} allowSchoolAudience initialMode="school" /></CardContent></Card>
   </div>;
 }
