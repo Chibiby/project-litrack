@@ -113,13 +113,22 @@ function tombstoneEmail(userId: string): string {
 /**
  * Remove every teacher account.
  *
- * Soft delete, not `DELETE`. Six tables point at `User` with a *required*
- * foreign key — `Attendance.recordedById`, `AttendanceDayMeta`,
- * `ReadingLevelRecord`, `TermGrade`, `Announcement.authorId`,
- * `Report.createdById` — all of which restrict on delete. A hard delete would
- * therefore either fail outright or, if the records were cleared first, destroy
- * the learner history those teachers recorded. Removing accounts must not be a
- * back door into deleting learner data.
+ * Soft delete, not `DELETE`, and deliberately so even though a hard delete
+ * would now succeed. Nine tables record who did something by pointing at
+ * `User` — `Attendance.recordedById`, `AttendanceDayMeta.recordedById`,
+ * `ReadingLevelRecord.recordedById`, `TermGrade.recordedById`,
+ * `Announcement.authorId`, `Report.createdById`, `UnlockGrant.grantedById`,
+ * `SchoolUnlockGrant.grantedById`, `TermWindowOverride.setById`. Until
+ * migration `20260912000001` those foreign keys restricted on delete and a
+ * hard delete was impossible; they are nullable with `ON DELETE SET NULL` now,
+ * so a hard delete succeeds and silently blanks the recorder on every one of
+ * those rows.
+ *
+ * That is exactly why this stays a soft delete. This function removes a whole
+ * school's teachers at once, and blanking attribution across a school's entire
+ * attendance, assessment and grade history is not something a bulk reset should
+ * do as a side effect. Permanently deleting one account, with its cost shown
+ * first, is `/admin/archive`'s job and nothing else's.
  *
  * What removal actually means here, and it is complete from every angle a user
  * can see: the Supabase auth user is deleted so the password stops working,
