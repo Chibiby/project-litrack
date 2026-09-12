@@ -1,11 +1,23 @@
 export const TEACHERS_PAGE_SIZE = 20;
 
+export const TEACHER_LIST_FILTERS = [
+  "all",
+  "non-deped-aral-volunteer",
+  "teacher",
+  "floating",
+  "multi-advisory",
+  "with-advisory",
+] as const;
+
+export type TeacherListFilter = (typeof TEACHER_LIST_FILTERS)[number];
+
 export type TeachersListParams = {
   page: number;
   pageSize: number;
   skip: number;
   take: number;
   q: string;
+  filter: TeacherListFilter;
 };
 
 /**
@@ -13,15 +25,20 @@ export type TeachersListParams = {
  * Pure — no I/O. Applies to the active-teachers bucket.
  */
 export function parseTeachersListParams(
-  searchParams: { page?: string; q?: string },
+  searchParams: { page?: string; q?: string; filter?: string },
   pageSize: number = TEACHERS_PAGE_SIZE
 ): TeachersListParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const q = (searchParams.q ?? "").trim();
+  const filter = TEACHER_LIST_FILTERS.includes(
+    searchParams.filter as TeacherListFilter
+  )
+    ? (searchParams.filter as TeacherListFilter)
+    : "all";
   const size = pageSize > 0 ? pageSize : TEACHERS_PAGE_SIZE;
   const skip = (page - 1) * size;
-  return { page, pageSize: size, skip, take: size, q };
+  return { page, pageSize: size, skip, take: size, q, filter };
 }
 
 export function teachersTotalPages(

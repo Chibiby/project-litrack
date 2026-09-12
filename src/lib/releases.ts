@@ -74,6 +74,16 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.8.2",
+    date: "2026-09-12",
+    title: "Teacher roster filters and reliable term reports",
+    announce: true,
+    fixes: [
+      "School Heads can filter the Teachers page by Non-DepEd ARAL Volunteer, Teacher, Floating, Multi advisory, or With advisory.",
+      "Teachers with more than one advisory section can open End of Terms Reports from any of their advised grades without a Page not found error.",
+    ],
+  },
+  {
     version: "1.8.1",
     date: "2026-09-12",
     title: "The account support update now appears after sign-in",

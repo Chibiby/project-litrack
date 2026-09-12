@@ -12,6 +12,8 @@ import {
   TEACHER_ROSTER_STATE,
   managedTeacherSelect,
   teacherRosterScope,
+  teacherRosterFilterWhere,
+  multiAdvisoryTeacherIds,
   teacherTabCounts,
   toManagedRow,
 } from "@/lib/teachers/roster";
@@ -36,7 +38,12 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 export const dynamic = "force-dynamic";
 
 interface TeachersPageProps {
-  searchParams: Promise<{ schoolId?: string; page?: string; q?: string }>;
+  searchParams: Promise<{
+    schoolId?: string;
+    page?: string;
+    q?: string;
+    filter?: string;
+  }>;
 }
 
 async function ActiveTeachersBody({
@@ -51,9 +58,17 @@ async function ActiveTeachersBody({
 }) {
   const { schoolId, isSuperAdminView } = view;
 
+  const filterWhere =
+    list.filter === "all"
+      ? {}
+      : list.filter === "multi-advisory"
+        ? { id: { in: await multiAdvisoryTeacherIds(schoolId) } }
+        : teacherRosterFilterWhere(list.filter);
+
   const activeWhere: Prisma.UserWhereInput = {
     ...teacherRosterScope(schoolId),
     ...TEACHER_ROSTER_STATE.active,
+    ...filterWhere,
     ...(list.q
       ? {
           OR: [
@@ -92,9 +107,11 @@ async function ActiveTeachersBody({
         },
       },
     }),
-    // Only a search narrows the list, so this round trip is only worth making
-    // then — otherwise the tab's own count already answers it.
-    list.q ? prisma.user.count({ where: activeWhere }) : null,
+    // The tab badge is unfiltered. Count again whenever search or a roster
+    // filter narrows the rows shown on this page.
+    list.q || list.filter !== "all"
+      ? prisma.user.count({ where: activeWhere })
+      : null,
   ]);
 
   const activeCount = searchCount ?? unfilteredCount;
@@ -190,10 +207,12 @@ async function ActiveTeachersBody({
           totalPages: teachersTotalPages(activeCount, list.pageSize),
           totalCount: activeCount,
           q: list.q,
+          filter: list.filter,
           basePath: SCHOOL_HEAD_ROUTES.teachers,
           searchParams: {
             schoolId: isSuperAdminView ? schoolId : undefined,
             q: list.q || undefined,
+            filter: list.filter === "all" ? undefined : list.filter,
           },
         }}
       />
