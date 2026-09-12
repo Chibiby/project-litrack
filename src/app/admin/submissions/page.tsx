@@ -17,13 +17,14 @@ export default async function AdminSubmissionsPage({ searchParams }: { searchPar
   const params = await searchParams;
   const [schools, years, active, lockingEnabled, readingLevelUnlockedForAll] = await Promise.all([
     listUnlockTargets(),
-    prisma.schoolYear.findMany({ where: { school: { deletedAt: null } }, include: { school: { select: { id: true, name: true } }, termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } } }, orderBy: [{ school: { name: "asc" } }, { startDate: "desc" }] }),
+    prisma.schoolYear.findMany({ where: { school: { deletedAt: null } }, include: { school: { select: { id: true, name: true } }, termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } } }, orderBy: [{ school: { name: "asc" } }, { isActive: "desc" }, { startDate: "desc" }] }),
     listActiveUnlocks(),
     isSubmissionLockingEnabled(),
     isMonthlyReadingLevelUnlockedForAll(),
   ]);
+  const allSelected = !params.schoolId || params.schoolId === "all";
   const selectedRow = years.find((year) => year.id === params.schoolYearId) ?? years.find((year) => year.school.id === params.schoolId) ?? years[0] ?? null;
-  const selected = selectedRow ? { id: selectedRow.id, schoolId: selectedRow.school.id, schoolName: selectedRow.school.name, label: selectedRow.label, startKey: formatLocalDateKey(selectedRow.startDate), endKey: formatLocalDateKey(selectedRow.endDate), overrides: selectedRow.termWindowOverrides } : null;
-  const yearOptions = years.map((year) => ({ id: year.id, schoolId: year.school.id, schoolName: year.school.name, label: year.label, startKey: formatLocalDateKey(year.startDate), endKey: formatLocalDateKey(year.endDate), overrides: year.termWindowOverrides }));
-  return <AppShell title="Submissions" subtitle="Control term windows and revision access across schools" role={user.role} userName={user.fullName || user.email}><SubmissionsConsole schools={schools} years={yearOptions} selected={selected} active={active} lockingEnabled={lockingEnabled} readingLevelUnlockedForAll={readingLevelUnlockedForAll} /></AppShell>;
+  const selected = selectedRow ? { id: selectedRow.id, schoolId: selectedRow.school.id, schoolName: selectedRow.school.name, label: selectedRow.label, startKey: formatLocalDateKey(selectedRow.startDate), endKey: formatLocalDateKey(selectedRow.endDate), overrides: selectedRow.termWindowOverrides, isActive: selectedRow.isActive } : null;
+  const yearOptions = years.map((year) => ({ id: year.id, schoolId: year.school.id, schoolName: year.school.name, label: year.label, startKey: formatLocalDateKey(year.startDate), endKey: formatLocalDateKey(year.endDate), overrides: year.termWindowOverrides, isActive: year.isActive }));
+  return <AppShell title="Submissions" subtitle="Control term windows and revision access across schools" role={user.role} userName={user.fullName || user.email}><SubmissionsConsole schools={schools} years={yearOptions} selected={selected} allSelected={allSelected} active={active} lockingEnabled={lockingEnabled} readingLevelUnlockedForAll={readingLevelUnlockedForAll} /></AppShell>;
 }

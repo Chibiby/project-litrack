@@ -20,63 +20,67 @@ export const updateAdminTermWindows = action(
       throw new AppError("AUTH_FORBIDDEN", { params: { what: "term window administration" }, context: { role: user.role } });
     }
     const data = parseInput(adminTermWindowsSchema, input);
-    const year = await prisma.schoolYear.findUnique({
-      where: { id: data.schoolYearId },
+    const ids = data.schoolYearIds ?? [data.schoolYearId!];
+    const years = await prisma.schoolYear.findMany({
+      where: { id: { in: ids }, school: { deletedAt: null } },
       select: {
         id: true, schoolId: true, startDate: true, endDate: true,
-        school: { select: { deletedAt: true } },
         termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } },
       },
     });
-    if (!year || year.school.deletedAt) throw resourceNotFound("School year");
+    if (years.length !== ids.length) throw resourceNotFound("School year");
 
-    const derived = getTermWindows(year.startDate);
     const submitted = new Map(data.terms.map((term) => [term.term, term]));
     if (submitted.size !== TERM_PERIODS.length || TERM_PERIODS.some((term) => !submitted.has(term))) {
       throw new AppError("VALIDATION_FAILED", { params: { message: "All three terms are required" } });
     }
-    const effective = TERM_PERIODS.map((term) => {
-      const value = submitted.get(term)!;
-      return { ...value, label: derived.find((w) => w.term === term)!.label, rangeLabel: "", isOverridden: false };
-    });
-    const validation = validateTermWindows(
-      effective,
-      formatLocalDateKey(year.startDate),
-      formatLocalDateKey(year.endDate)
-    );
-    if (validation) throw new AppError("VALIDATION_FAILED", { params: { message: validation } });
 
-    const before = getTermWindows(year.startDate, year.termWindowOverrides);
+    const plans = years.map((year) => {
+      const derived = getTermWindows(year.startDate);
+      const effective = TERM_PERIODS.map((term) => {
+        const value = submitted.get(term)!;
+        return { ...value, label: derived.find((w) => w.term === term)!.label, rangeLabel: "", isOverridden: false };
+      });
+      const validation = validateTermWindows(effective, formatLocalDateKey(year.startDate), formatLocalDateKey(year.endDate));
+      if (validation) throw new AppError("VALIDATION_FAILED", { params: { message: `${validation} (${year.id})` } });
+      return { year, derived, before: getTermWindows(year.startDate, year.termWindowOverrides) };
+    });
+
     await prisma.$transaction(async (tx) => {
-      for (const term of TERM_PERIODS) {
-        const next = submitted.get(term)!;
-        const base = derived.find((w) => w.term === term)!;
-        const isDefault = next.startKey === base.startKey && next.endKey === base.endKey && next.deadlineKey === base.deadlineKey;
-        if (isDefault) {
-          await tx.termWindowOverride.deleteMany({ where: { schoolYearId: year.id, term } });
-        } else {
-          await tx.termWindowOverride.upsert({
-            where: { schoolYearId_term: { schoolYearId: year.id, term } },
-            create: { schoolId: year.schoolId, schoolYearId: year.id, term, startKey: next.startKey, endKey: next.endKey, deadlineKey: next.deadlineKey, setById: user.id },
-            update: { schoolId: year.schoolId, startKey: next.startKey, endKey: next.endKey, deadlineKey: next.deadlineKey, setById: user.id },
-          });
+      for (const { year, derived } of plans) {
+        for (const term of TERM_PERIODS) {
+          const next = submitted.get(term)!;
+          const base = derived.find((w) => w.term === term)!;
+          const isDefault = next.startKey === base.startKey && next.endKey === base.endKey && next.deadlineKey === base.deadlineKey;
+          if (isDefault) {
+            await tx.termWindowOverride.deleteMany({ where: { schoolYearId: year.id, term } });
+          } else {
+            await tx.termWindowOverride.upsert({
+              where: { schoolYearId_term: { schoolYearId: year.id, term } },
+              create: { schoolId: year.schoolId, schoolYearId: year.id, term, startKey: next.startKey, endKey: next.endKey, deadlineKey: next.deadlineKey, setById: user.id },
+              update: { schoolId: year.schoolId, startKey: next.startKey, endKey: next.endKey, deadlineKey: next.deadlineKey, setById: user.id },
+            });
+          }
         }
       }
     });
 
-    await writeAudit({
-      userId: user.id,
-      schoolId: year.schoolId,
-      action: AUDIT_ACTIONS.TERM_WINDOW_OVERRIDE_SET,
-      resource: "SchoolYear",
-      resourceId: year.id,
-      metadata: {
-        schoolYearId: year.id,
-        before: before.map(({ term, startKey, endKey, deadlineKey }) => ({ term, startKey, endKey, deadlineKey })),
-        after: data.terms,
-      },
-    });
-    revalidateSchoolDashboard(year.schoolId);
+    for (const { year, before } of plans) {
+      await writeAudit({
+        userId: user.id,
+        schoolId: year.schoolId,
+        action: AUDIT_ACTIONS.TERM_WINDOW_OVERRIDE_SET,
+        resource: "SchoolYear",
+        resourceId: year.id,
+        metadata: {
+          schoolYearId: year.id,
+          before: before.map(({ term, startKey, endKey, deadlineKey }) => ({ term, startKey, endKey, deadlineKey })),
+          after: data.terms,
+          scope: data.schoolYearIds ? "ALL_SCHOOLS" : "SCHOOL",
+        },
+      });
+      revalidateSchoolDashboard(year.schoolId);
+    }
     revalidatePath("/admin/submissions");
     revalidatePath("/admin/settings/submissions");
     return { ok: true };
