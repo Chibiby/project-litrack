@@ -1,5 +1,19 @@
 /** @type {import('next').NextConfig} */
+const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
+
 const nextConfig = {
+  /**
+   * Expose only a non-sensitive deployment target marker. Next inlines values
+   * declared in `env`, which lets server instrumentation dead-code-eliminate
+   * Vercel-only imports from the Cloudflare/OpenNext production bundle.
+   */
+  env: {
+    LITRACK_DEPLOY_TARGET: isCloudflareWorkersBuild
+      ? "cloudflare"
+      : process.env.VERCEL === "1"
+        ? "vercel"
+        : "local",
+  },
   /**
    * Defaults to `.next`. Override with `NEXT_BUILD_DIST_DIR=.next-verify` to run
    * a verification `next build` while `next dev` is running — otherwise the two
@@ -12,17 +26,15 @@ const nextConfig = {
    */
   distDir: process.env.NEXT_BUILD_DIST_DIR || ".next",
   /**
-   * Left for Node to require at runtime instead of being bundled into the
-   * server chunk.
-   *
-   * `pdfkit` reads its font metrics and its sRGB ICC profile from files inside
-   * its own package, resolved relative to `__dirname`. Bundled, that path no
-   * longer exists and every PDF fails at draw time with an ENOENT the user
-   * sees as "Could not generate the report" — while Excel, which needs no data
-   * files, keeps working. Externalising it also keeps `fontkit`'s own binary
-   * data intact. Verified: the same code renders a valid PDF under plain Node.
+   * On Vercel/plain Node, leave pdfkit external so it can resolve its package
+   * data files relative to __dirname. Cloudflare Workers has no normal Node
+   * module/filesystem loader; leaving the package external there can make
+   * OpenNext's server bootstrap fail while resolving Node built-ins. Bundle it
+   * into the Worker instead. PDF generation itself may still need a Workers-
+   * compatible implementation if a report exercises filesystem-only pdfkit
+   * paths, but it must not prevent /login from starting.
    */
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: isCloudflareWorkersBuild ? [] : ["pdfkit"],
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
