@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
 import { resolvePooledDatabaseUrl } from "@/lib/db-url";
 
@@ -63,6 +64,23 @@ export function createPrismaClient(databaseUrl = datasourceUrl) {
   });
 }
 
+export function createPrismaProxy(getClient: () => PrismaClient): PrismaClient {
+  return new Proxy({} as PrismaClient, {
+    get(_target, property) {
+      const client = getClient();
+      const value = Reflect.get(client, property, client) as unknown;
+      return typeof value === "function" ? value.bind(client) : value;
+    },
+  });
+}
+
+// React's request cache gives each Cloudflare request its own Prisma client and
+// pool. Creating either at module scope would attach pg sockets/promises to the
+// isolate's startup context, which workerd rejects when a request later uses
+// them. Outside a React Server Component, cache() simply provides no reuse;
+// the lazy proxy still constructs the client only when a query is attempted.
+const getCloudflarePrismaClient = cache(() => createPrismaClient());
+
 /**
  * After `prisma generate` adds models, a process-global client created before
  * generate still runs but new delegates are `undefined` until recreate/restart.
@@ -87,4 +105,7 @@ function getPrismaClient(): PrismaClient {
   return client;
 }
 
-export const prisma = getPrismaClient();
+export const prisma =
+  process.env.LITRACK_DEPLOY_TARGET === "cloudflare"
+    ? createPrismaProxy(getCloudflarePrismaClient)
+    : getPrismaClient();
