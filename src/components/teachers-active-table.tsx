@@ -26,6 +26,7 @@ import {
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL } from "@/lib/teachers/floating-copy";
+import type { TeacherListFilter } from "@/lib/teachers/pagination";
 import { X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
@@ -40,6 +41,7 @@ export type TeachersListPagination = {
   totalPages: number;
   totalCount: number;
   q: string;
+  filter: TeacherListFilter;
   basePath: string;
   searchParams: Record<string, string | undefined>;
 };
@@ -359,6 +361,9 @@ function TeachersManagedTable({
    */
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState(list?.q ?? "");
+  const [filterValue, setFilterValue] = useState<TeacherListFilter>(
+    list?.filter ?? "all"
+  );
   const [optimisticRows, dispatchOptimistic] = useOptimistic(
     rows,
     (state: ActiveTeacherRow[], op: ListOptimisticOp<ActiveTeacherRow>) =>
@@ -384,6 +389,9 @@ function TeachersManagedTable({
   useEffect(() => {
     setSearchValue(list?.q ?? "");
   }, [list?.q]);
+  useEffect(() => {
+    setFilterValue(list?.filter ?? "all");
+  }, [list?.filter]);
 
   // Server data wins once it arrives; drop stale overrides.
   useEffect(() => {
@@ -440,17 +448,29 @@ function TeachersManagedTable({
 
   const displayCount = list?.totalCount ?? optimisticRows.length;
 
-  const pushListQuery = (next: { page?: number; q?: string }) => {
+  const pushListQuery = (next: {
+    page?: number;
+    q?: string;
+    filter?: TeacherListFilter;
+  }) => {
     if (!list) return;
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(list.searchParams)) {
-      if (v !== undefined && v !== "" && k !== "page" && k !== "q") {
+      if (
+        v !== undefined &&
+        v !== "" &&
+        k !== "page" &&
+        k !== "q" &&
+        k !== "filter"
+      ) {
         params.set(k, v);
       }
     }
     const q = next.q !== undefined ? next.q : list.q;
     const page = next.page !== undefined ? next.page : list.page;
+    const filter = next.filter !== undefined ? next.filter : list.filter;
     if (q) params.set("q", q);
+    if (filter !== "all") params.set("filter", filter);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.push(qs ? `${list.basePath}?${qs}` : list.basePath);
@@ -495,6 +515,30 @@ function TeachersManagedTable({
         </div>
         {list ? (
           <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
+            <div className="space-y-1">
+              <Label htmlFor="teachers-filter" className="text-xs text-muted-foreground">
+                Filter teachers
+              </Label>
+              <select
+                id="teachers-filter"
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={filterValue}
+                onChange={(e) => {
+                  const nextFilter = e.target.value as TeacherListFilter;
+                  setFilterValue(nextFilter);
+                  pushListQuery({ page: 1, filter: nextFilter });
+                }}
+              >
+                <option value="all">All active teachers</option>
+                <option value="non-deped-aral-volunteer">
+                  Non-DepEd ARAL Volunteer
+                </option>
+                <option value="teacher">Teacher</option>
+                <option value="floating">Floating</option>
+                <option value="multi-advisory">Multi advisory</option>
+                <option value="with-advisory">With advisory</option>
+              </select>
+            </div>
             <div className="min-w-[12rem] flex-1 space-y-1">
               <Label htmlFor="teachers-search" className="text-xs text-muted-foreground">
                 Search active teachers

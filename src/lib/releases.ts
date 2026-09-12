@@ -44,6 +44,15 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.1.1",
+    date: "2026-09-12",
+    title: "More ways to find teachers",
+    announce: true,
+    fixes: [
+      "School Heads can filter the Teachers page by Non-DepEd ARAL Volunteer, Teacher, Floating, Multi advisory, or With advisory.",
+    ],
+  },
+  {
     // The ten concerns raised alongside 1.0.0 — the spec calls them "the first
     // release notes", and this is the entry that announces itself. Minor, not
     // patch: several are features. Announced because they change what teachers
