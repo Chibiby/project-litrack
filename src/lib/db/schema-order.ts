@@ -57,6 +57,20 @@ export type SnapshotModel = {
    * these and leaves the rest, so a school keeps its years, grades, sections
    * and people while losing its learners and their records.
    */
+  /**
+   * False when this table is deliberately left out of snapshots and restores
+   * while staying in scope for "clear operational data". Defaults to true.
+   *
+   * The only member today is `AuditLog`, and the reason is size: 52 MB of a
+   * 111 MB database. Carrying it made a snapshot too large to build inside a
+   * Cloudflare Worker at all (error 1102, memory exhausted), and a backup that
+   * cannot be taken is worth less than one missing its audit trail.
+   *
+   * Leaving it out of `DELETE_ORDER` too means a restore no longer erases
+   * audit history, which is the better behaviour independently: the trail that
+   * records why someone restored should survive the restore.
+   */
+  inSnapshot?: boolean;
   operational: boolean;
   /**
    * How to narrow this table to one school. Required on every operational
@@ -145,7 +159,15 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // post-incident trail is worth keeping across one. Retention already bounds
   // it to ERROR_EVENT_RETENTION_DAYS, so it cannot grow a backup without limit.
   { model: "ErrorEvent", delegate: "errorEvent", operational: true, schoolScope: bySchoolId },
-  { model: "AuditLog", delegate: "auditLog", operational: true, schoolScope: bySchoolId },
+  // Out of snapshots and restores -- see `inSnapshot` above. Still operational,
+  // so "clear operational data" empties it as before.
+  {
+    model: "AuditLog",
+    delegate: "auditLog",
+    operational: true,
+    inSnapshot: false,
+    schoolScope: bySchoolId,
+  },
 ];
 
 /**
@@ -227,11 +249,25 @@ export function redactSnapshotRows(
   });
 }
 
+/**
+ * The models a snapshot carries: every model except those marked
+ * `inSnapshot: false`.
+ */
+export const SNAPSHOT_SCOPE = SNAPSHOT_MODELS.filter((m) => m.inSnapshot !== false);
+
 /** Insert order. */
-export const WRITE_ORDER = SNAPSHOT_MODELS;
+export const WRITE_ORDER = SNAPSHOT_SCOPE;
 
 /** Delete order — strictly the reverse, never a second hand-maintained list. */
-export const DELETE_ORDER = [...SNAPSHOT_MODELS].reverse();
+export const DELETE_ORDER = [...SNAPSHOT_SCOPE].reverse();
 
-/** The tables "Clear operational data" empties, in delete order. */
-export const OPERATIONAL_DELETE_ORDER = DELETE_ORDER.filter((m) => m.operational);
+/**
+ * The tables "Clear operational data" empties, in delete order.
+ *
+ * Built from every model rather than from `SNAPSHOT_SCOPE`: a table can be out
+ * of scope for backups and still be something a reset must empty. `AuditLog`
+ * is exactly that.
+ */
+export const OPERATIONAL_DELETE_ORDER = [...SNAPSHOT_MODELS]
+  .reverse()
+  .filter((m) => m.operational);

@@ -74,6 +74,16 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.12.3",
+    date: "2026-09-14",
+    title: "Nightly backups fit the new hosting",
+    announce: false,
+    fixes: [
+      "Automatic backups no longer include the activity log, which had grown large enough to stop a backup from being made at all.",
+      "Restoring a backup no longer erases the activity log, so the record of who restored what survives the restore.",
+    ],
+  },
+  {
     version: "1.12.2",
     date: "2026-09-14",
     title: "Error-record cleanup no longer waits on the backup",

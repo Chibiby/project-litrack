@@ -6,6 +6,7 @@ import {
   OPERATIONAL_DELETE_ORDER,
   redactSnapshotRows,
   SNAPSHOT_MODELS,
+  SNAPSHOT_SCOPE,
   TEACHER_GRADES_JOIN,
   WRITE_ORDER,
 } from "@/lib/db/schema-order";
@@ -14,17 +15,19 @@ import {
  * Logical snapshots of the whole database.
  *
  * Not `pg_dump`: that binary does not exist on Vercel's runtime, so a snapshot
- * here is every row of every modelled table read through Prisma and written as
- * JSON. The practical consequences, all of which the UI states plainly:
+ * here is every row of every snapshot-scoped table read through Prisma and
+ * written as JSON. The practical consequences, all of which the UI states plainly:
  *
  *  - It captures data, not schema. Restoring into a database whose migrations
  *    have moved on since the snapshot will fail on the changed table rather
  *    than silently write half a restore — `SNAPSHOT_VERSION` and the recorded
  *    migration name are what let it refuse early instead.
- *  - It holds the whole dataset in memory. Fine at this app's size (low
- *    thousands of rows); `MAX_SNAPSHOT_ROWS` is the tripwire that turns
- *    "silently truncated backup" into a loud failure if that ever stops
- *    being true.
+ *  - It holds the whole dataset in memory, which is the binding constraint on
+ *    Cloudflare Workers: an isolate has 128 MB. Production is ~111 MB across
+ *    166k rows, so `AuditLog` (52 MB of that, and append-only) is marked
+ *    `inSnapshot: false` in schema-order.ts and left out of both the snapshot
+ *    and the restore. `MAX_SNAPSHOT_ROWS` remains the tripwire that turns
+ *    "silently truncated backup" into a loud failure.
  *  - Supabase's own PITR remains the real disaster-recovery tool. This exists
  *    for the operations an admin performs deliberately: reset, restore, undo.
  */
@@ -166,7 +169,10 @@ export async function createSnapshot(): Promise<Snapshot> {
 
 export async function countAllRows(): Promise<number> {
   let total = 0;
-  for (const { delegate } of SNAPSHOT_MODELS) {
+  // SNAPSHOT_SCOPE, not every model: this guards the size of the snapshot, and
+  // counting a table the snapshot does not carry would trip the ceiling over
+  // rows that are never read.
+  for (const { delegate } of SNAPSHOT_SCOPE) {
     total += await delegateFor(prisma, delegate).count({});
   }
   return total;
@@ -208,7 +214,10 @@ export function validateSnapshot(value: unknown): { ok: true; snapshot: Snapshot
     return { ok: false, error: "That backup has no data section." };
   }
 
-  const missing = SNAPSHOT_MODELS.filter((m) => !Array.isArray(candidate.data?.[m.model])).map(
+  // SNAPSHOT_SCOPE: a backup is not incomplete for lacking a table snapshots
+  // deliberately skip. Older files that still carry one are accepted and the
+  // extra section is ignored on restore, because WRITE_ORDER never reads it.
+  const missing = SNAPSHOT_SCOPE.filter((m) => !Array.isArray(candidate.data?.[m.model])).map(
     (m) => m.model
   );
   if (missing.length > 0) {

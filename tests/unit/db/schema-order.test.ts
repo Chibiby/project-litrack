@@ -116,9 +116,20 @@ describe("write and delete ordering", () => {
     expect(position("User")).toBeLessThan(position("Section"));
   });
 
-  it("puts School first and AuditLog last", () => {
+  it("puts School first and AuditLog last in the full model list", () => {
+    expect(SNAPSHOT_MODELS[0].model).toBe("School");
+    expect(SNAPSHOT_MODELS[SNAPSHOT_MODELS.length - 1].model).toBe("AuditLog");
+  });
+
+  it("leaves AuditLog out of snapshots but still clears it on a reset", () => {
+    // AuditLog is 52 MB of a 111 MB production database and made a snapshot too
+    // large to build inside a Cloudflare Worker at all. It is excluded from the
+    // snapshot and, deliberately, from the restore's delete pass — so restoring
+    // a backup no longer erases the audit trail that records the restore.
+    expect(WRITE_ORDER.some((m) => m.model === "AuditLog")).toBe(false);
+    expect(DELETE_ORDER.some((m) => m.model === "AuditLog")).toBe(false);
+    expect(OPERATIONAL_DELETE_ORDER.some((m) => m.model === "AuditLog")).toBe(true);
     expect(WRITE_ORDER[0].model).toBe("School");
-    expect(WRITE_ORDER[WRITE_ORDER.length - 1].model).toBe("AuditLog");
   });
 });
 
