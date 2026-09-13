@@ -55,3 +55,13 @@ export function resolvePgDriverUrl(raw: string | undefined): string | undefined 
   }
   return url.toString();
 }
+
+export function resolveRuntimeDatabaseUrl(
+  deployTarget: string | undefined,
+  hyperdriveUrl: string | undefined,
+  environmentUrl: string | undefined,
+): string | undefined {
+  return deployTarget === "cloudflare" && hyperdriveUrl
+    ? hyperdriveUrl
+    : environmentUrl;
+}

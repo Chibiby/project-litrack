@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolvePgDriverUrl, resolvePooledDatabaseUrl } from "@/lib/db-url";
+import {
+  resolvePgDriverUrl,
+  resolvePooledDatabaseUrl,
+  resolveRuntimeDatabaseUrl,
+} from "@/lib/db-url";
 
 /** Same password encoding used in scripts/check-pooler-url.mjs */
 const PW = "p%40ss-w0rd%21";
@@ -76,5 +80,27 @@ describe("resolvePgDriverUrl", () => {
   it("leaves explicit certificate-verifying modes unchanged", () => {
     const input = `postgresql://postgres.ref:${PW}@db.example.com:5432/postgres?sslmode=verify-full`;
     expect(resolvePgDriverUrl(input)).toBe(input);
+  });
+});
+
+describe("resolveRuntimeDatabaseUrl", () => {
+  it("prefers the Hyperdrive binding in Cloudflare", () => {
+    expect(
+      resolveRuntimeDatabaseUrl(
+        "cloudflare",
+        "postgresql://hyperdrive/db",
+        "postgresql://environment/db",
+      ),
+    ).toBe("postgresql://hyperdrive/db");
+  });
+
+  it("uses DATABASE_URL outside Cloudflare", () => {
+    expect(
+      resolveRuntimeDatabaseUrl(
+        "vercel",
+        "postgresql://hyperdrive/db",
+        "postgresql://environment/db",
+      ),
+    ).toBe("postgresql://environment/db");
   });
 });

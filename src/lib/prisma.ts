@@ -1,8 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
-import { resolvePgDriverUrl, resolvePooledDatabaseUrl } from "@/lib/db-url";
+import {
+  resolvePgDriverUrl,
+  resolvePooledDatabaseUrl,
+  resolveRuntimeDatabaseUrl,
+} from "@/lib/db-url";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -24,11 +29,32 @@ const globalForPrisma = globalThis as unknown as {
  * Soft Supabase helpers in supabase/env.ts are unchanged for middleware.
  */
 function readDatabaseUrl(): string | undefined {
+  let environmentUrl: string | undefined;
   try {
-    return getServerEnv().DATABASE_URL;
+    environmentUrl = getServerEnv().DATABASE_URL;
   } catch {
-    return process.env.DATABASE_URL;
+    environmentUrl = process.env.DATABASE_URL;
   }
+
+  let hyperdriveUrl: string | undefined;
+  if (process.env.LITRACK_DEPLOY_TARGET === "cloudflare") {
+    try {
+      const { env } = getCloudflareContext();
+      hyperdriveUrl = (
+        env as unknown as {
+          HYPERDRIVE?: { connectionString?: string };
+        }
+      ).HYPERDRIVE?.connectionString;
+    } catch {
+      // Builds and Node-based tests do not have a Workers request context.
+    }
+  }
+
+  return resolveRuntimeDatabaseUrl(
+    process.env.LITRACK_DEPLOY_TARGET,
+    hyperdriveUrl,
+    environmentUrl,
+  );
 }
 
 const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
