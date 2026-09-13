@@ -74,6 +74,16 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.12.2",
+    date: "2026-09-14",
+    title: "Error-record cleanup no longer waits on the backup",
+    // Infrastructure only — see 1.12.1.
+    announce: false,
+    fixes: [
+      "The daily cleanup of old error records now runs even when the nightly database backup cannot finish.",
+    ],
+  },
+  {
     version: "1.12.1",
     date: "2026-09-13",
     title: "Scheduled backups and database routing restored",

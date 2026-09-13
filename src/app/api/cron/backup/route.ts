@@ -46,6 +46,27 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
     });
   }
 
+  // Housekeeping runs BEFORE the snapshot, not after it.
+  //
+  // It used to ride on the tail of a successful backup, which meant a snapshot
+  // that could not complete also silently stopped `ErrorEvent` retention. That
+  // is exactly the situation on Cloudflare today: the snapshot loads every
+  // table into one isolate and exceeds the Worker memory limit, so nothing past
+  // it ran. The two jobs are independent, so order them that way.
+  //
+  // A failed purge must still never fail a backup.
+  let errorEventsPurged: number | null = null;
+  if (kind === "daily") {
+    try {
+      errorEventsPurged = await purgeExpiredErrorEvents();
+    } catch (err) {
+      console.error(
+        "[cron/backup] ErrorEvent purge failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   // A failure here is still logged and still returns non-200 for the cron
   // dashboard — the wrapper does both — but the response no longer echoes the
   // raw error text, which could name tables and values.
@@ -63,21 +84,6 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
       bytes: saved.size,
     },
   });
-
-  // Housekeeping rides on the daily run rather than its own cron entry: one
-  // fewer schedule to keep working, and the plan's cron allowance is finite.
-  // A failed purge must never fail a backup — the backup is the important half.
-  let errorEventsPurged: number | null = null;
-  if (kind === "daily") {
-    try {
-      errorEventsPurged = await purgeExpiredErrorEvents();
-    } catch (err) {
-      console.error(
-        "[cron/backup] ErrorEvent purge failed:",
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
 
   return NextResponse.json({
     ok: true,
