@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import Link from "next/link";
+import { Archive, Search, Sparkles, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -51,6 +53,7 @@ type Props = {
   onSearchSubmit: () => void;
   /** The bulk action menu, owned by the list so it can see the selection. */
   bulkActions?: React.ReactNode;
+  archivedView?: boolean;
 };
 
 function buildHref(
@@ -115,6 +118,7 @@ export function LearnerListToolbar({
   onSearchChange,
   onSearchSubmit,
   bulkActions,
+  archivedView = false,
 }: Props) {
   const router = useRouter();
 
@@ -132,12 +136,37 @@ export function LearnerListToolbar({
         gender: nextGender !== "all" ? nextGender : undefined,
         aralStatus: nextAralStatus !== "all" ? nextAralStatus : undefined,
         perPage: perPage ? String(perPage) : undefined,
+        filter: archivedView ? "archived" : undefined,
       })
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="border-b border-border/60 p-4">
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Button asChild size="sm" variant={archivedView ? "outline" : "secondary"}>
+          <Link href={buildHref(basePath, { schoolId })}>
+            <Users className="h-4 w-4" aria-hidden />
+            Active learners
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant={archivedView ? "secondary" : "outline"}>
+          <Link
+            href={buildHref(basePath, { schoolId, filter: "archived" })}
+          >
+            <Archive className="h-4 w-4" aria-hidden />
+            Archived learners
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/teacher/aral">
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Learner Profiling
+          </Link>
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="relative w-full lg:max-w-sm">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -186,6 +215,7 @@ export function LearnerListToolbar({
         </FacetSelect>
 
         {bulkActions}
+      </div>
       </div>
     </div>
   );

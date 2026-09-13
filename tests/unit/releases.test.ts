@@ -60,13 +60,25 @@ describe("visibleFixes", () => {
 
 describe("the committed release notes", () => {
   it("describes the support email and instant conversation release", () => {
-    expect(RELEASES[0].version).toBe("1.11.0");
-    const notes = RELEASES[0].fixes.map((fix) =>
+    const release = RELEASES.find((item) => item.version === "1.11.0");
+    expect(release).toBeDefined();
+    const notes = release!.fixes.map((fix) =>
       typeof fix === "string" ? fix : fix.text
     );
     expect(notes.join(" ").toLowerCase()).toContain("support");
     expect(notes.join(" ").toLowerCase()).toContain("email");
     expect(notes.join(" ").toLowerCase()).toContain("conversation");
+  });
+
+  it("describes learner archives and the renamed profiling workspace", () => {
+    expect(RELEASES[0].version).toBe("1.12.0");
+    const notes = RELEASES[0].fixes
+      .map((fix) => (typeof fix === "string" ? fix : fix.text))
+      .join(" ")
+      .toLowerCase();
+    expect(notes).toContain("archive");
+    expect(notes).toContain("restore");
+    expect(notes).toContain("learner profiling");
   });
 
   it("announces the current release through the read-once modal", () => {

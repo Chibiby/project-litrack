@@ -40,8 +40,15 @@ const enrollRosterLearnersToAral = vi.fn(async () => ({
   ok: true,
   data: { enrolled: 1, redesignated: 0 },
 }));
+const archiveLearners = vi.fn(async () => ({
+  ok: true,
+  data: { archived: 1 },
+}));
+const restoreLearner = vi.fn(async () => ({ ok: true }));
 vi.mock("@/lib/actions/learner", () => ({
   deleteLearners: vi.fn(async () => ({ ok: true })),
+  archiveLearners: (...args: unknown[]) => archiveLearners(...(args as [])),
+  restoreLearner: (...args: unknown[]) => restoreLearner(...(args as [])),
   toggleAralLearner: vi.fn(async () => ({ ok: true })),
   enrollRosterLearnersToAral: (...args: unknown[]) =>
     enrollRosterLearnersToAral(...(args as [])),
@@ -99,7 +106,7 @@ const ROWS: LearnerListRow[] = [
   },
 ];
 
-function renderRoster(isSuperAdmin = false) {
+function renderRoster(isSuperAdmin = false, archivedView = false) {
   return render(
     <LearnerListClient
       gender="all"
@@ -111,6 +118,7 @@ function renderRoster(isSuperAdmin = false) {
       pageSize={10}
       totalCount={ROWS.length}
       q=""
+      archivedView={archivedView}
     />
   );
 }
@@ -148,6 +156,32 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("LearnerListClient — Actions column", () => {
+  it("links the roster to its archive and learner profiling workspace", () => {
+    renderRoster();
+
+    expect(
+      screen.getByRole("link", { name: "Archived learners" }).getAttribute("href")
+    ).toBe("/teacher/learners?filter=archived");
+    expect(
+      screen.getByRole("link", { name: "Learner Profiling" }).getAttribute("href")
+    ).toBe("/teacher/aral");
+  });
+
+  it("archives a selected learner instead of deleting their record", async () => {
+    renderRoster();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
+  });
+
+  it("restores a learner from the archived view", async () => {
+    renderRoster(false, true);
+    fireEvent.click(screen.getAllByRole("button", { name: /Restore/ })[0]);
+
+    expect(restoreLearner).toHaveBeenCalledTimes(1);
+  });
+
   it("carries View on every row, and the ARAL spark only where it applies", () => {
     renderRoster();
     const rows = bodyRows();

@@ -177,7 +177,8 @@ async function AralLearnersTable({
                       <Link
                         href={`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/update`}
                       >
-                        <Edit3 className="h-4 w-4" /> Update Data
+                        <Edit3 className="h-4 w-4" />
+                        {l.aralProfile ? "Update Profiling" : "Complete Profiling"}
                       </Link>
                     </Button>
                     <Button asChild size="sm" variant="outline">
@@ -247,7 +248,7 @@ export default async function AralDashboard({
   if (assignedGrades.length === 0) {
     return (
       <AppShell
-        title="ARAL Dashboard"
+        title="Learner Profiling"
         role={user.role}
         userName={user.fullName || `${user.firstName} ${user.lastName}`}
         isSuperAdminView={isSuperAdmin && !!sp.schoolId}
@@ -361,7 +362,7 @@ export default async function AralDashboard({
 
   return (
     <AppShell
-      title="ARAL Dashboard"
+      title="Learner Profiling"
       subtitle={`${aralCount} ARAL learner${aralCount === 1 ? "" : "s"}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}

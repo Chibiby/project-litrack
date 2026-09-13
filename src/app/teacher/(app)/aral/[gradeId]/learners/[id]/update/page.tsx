@@ -61,7 +61,7 @@ export default async function UpdateAralDataPage({
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/teacher/aral?grade=${gradeId}`} prefetch={true}>
-            <ArrowLeft className="h-4 w-4" /> Back to ARAL Dashboard
+            <ArrowLeft className="h-4 w-4" /> Back to Learner Profiling
           </Link>
         </Button>
       </div>

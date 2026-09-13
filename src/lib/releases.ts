@@ -74,6 +74,18 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.12.0",
+    date: "2026-09-13",
+    title: "Recoverable learner archives and profiling",
+    announce: true,
+    fixes: [
+      "Teachers now archive learners instead of deleting them, and can restore archived learners from the Learners page.",
+      "Learners removed with the previous Delete control are visible in Archived learners and can be restored.",
+      "Learner Profiling now has a dedicated Learners-page button and sidebar entry, with clearer Complete Profiling and Update Profiling actions.",
+      "The former ARAL Dashboard is now named Learner Profiling throughout the teacher workspace.",
+    ],
+  },
+  {
     version: "1.11.0",
     date: "2026-09-13",
     title: "Email support and faster conversations",

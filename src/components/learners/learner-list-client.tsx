@@ -3,7 +3,6 @@
 import {
   useEffect,
   useMemo,
-  useOptimistic,
   useRef,
   useState,
   useTransition,
@@ -43,9 +42,9 @@ import {
   type LearnerGenderFilter,
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
-import { Eye, Sparkles } from "lucide-react";
+import { Eye, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { deleteLearners } from "@/lib/actions/learner";
+import { archiveLearners, restoreLearner } from "@/lib/actions/learner";
 import { LearnerProfileModal } from "@/components/learners/learner-profile-modal";
 import {
   AssignAralTutorDialog,
@@ -53,10 +52,7 @@ import {
 } from "@/components/learners/assign-aral-tutor-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import {
-  listOptimisticReducer,
-  runOptimistic,
   settleActionResult,
-  type ListOptimisticOp,
 } from "@/lib/ui/optimistic";
 
 /*
@@ -130,9 +126,9 @@ export type LearnerListClientProps = {
   pageSize: number;
   totalCount: number;
   q: string;
+  /** Whether this is the recoverable archived-records view. */
+  archivedView?: boolean;
 };
-
-type LearnerOp = ListOptimisticOp<LearnerListRow>;
 
 const HEAD_CLASS =
   "whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
@@ -151,6 +147,7 @@ export function LearnerListClient({
   pageSize = LEARNER_LIST_DEFAULT_PAGE_SIZE,
   totalCount,
   q,
+  archivedView = false,
 }: LearnerListClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -164,10 +161,7 @@ export function LearnerListClient({
   const [aralTarget, setAralTarget] = useState<AssignAralTutorTarget | null>(
     null
   );
-  const [optimisticLearners, dispatchOptimistic] = useOptimistic(
-    learners,
-    (state: LearnerListRow[], op: LearnerOp) => listOptimisticReducer(state, op)
-  );
+  const optimisticLearners = learners;
 
   useEffect(() => {
     setInputValue(q);
@@ -235,6 +229,7 @@ export function LearnerListClient({
     perPage:
       pageSize !== LEARNER_LIST_DEFAULT_PAGE_SIZE ? String(pageSize) : undefined,
     schoolId,
+    filter: archivedView ? "archived" : undefined,
   };
 
   const selectedOnPage = visibleIds.filter((id) => selected.has(id));
@@ -255,22 +250,34 @@ export function LearnerListClient({
     });
   };
 
-  const handleBulkDelete = () =>
-    runOptimistic(startTransition, async () => {
+  const handleBulkArchive = () => {
+    startTransition(async () => {
       const ids = selectedOnPage;
       if (ids.length === 0) return;
-      for (const id of ids) dispatchOptimistic({ type: "remove", id });
 
       const fd = new FormData();
       for (const id of ids) fd.append("learnerIds", id);
-      const res = await deleteLearners(fd);
+      const res = await archiveLearners(fd);
       await settleActionResult(
         res,
-        `${ids.length} learner${ids.length === 1 ? "" : "s"} deleted`
+        `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
       );
       setSelected(new Set());
       invalidateNavWarm();
+      router.refresh();
     });
+  };
+
+  const handleRestoreOne = (id: string) => {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("id", id);
+      const res = await restoreLearner(fd);
+      await settleActionResult(res, "Learner restored");
+      invalidateNavWarm();
+      router.refresh();
+    });
+  };
 
   /** One row's spark: a learner not in ARAL yet, so this is always an enrolment. */
   const openEnrollOne = (l: LearnerListRow) =>
@@ -311,14 +318,15 @@ export function LearnerListClient({
         schoolId={schoolId}
         q={q}
         perPage={pageSize}
+        archivedView={archivedView}
         searchValue={inputValue}
         onSearchChange={handleSearchChange}
         onSearchSubmit={handleSearchSubmit}
         bulkActions={
-          isSuperAdmin ? null : (
+          isSuperAdmin || archivedView ? null : (
             <LearnerBulkActions
               selectedCount={selectedOnPage.length}
-              onDelete={handleBulkDelete}
+              onArchive={handleBulkArchive}
               onEnrollAral={openBulkAral}
               pending={pending}
             />
@@ -334,14 +342,18 @@ export function LearnerListClient({
                 ? "No matching learners"
                 : gender !== "all" || aralStatus !== "all"
                   ? "No learners match these filters"
-                  : "No learners yet"
+                  : archivedView
+                    ? "No archived learners"
+                    : "No learners yet"
             }
             description={
               q.trim()
                 ? "Try a different name search."
                 : gender !== "all" || aralStatus !== "all"
                   ? "Clear a filter to widen the list."
-                  : "Add a learner using the button above the stat cards."
+                  : archivedView
+                    ? "Learners you archive will appear here and can be restored."
+                    : "Add a learner using the button above the stat cards."
             }
           />
         </div>
@@ -350,7 +362,7 @@ export function LearnerListClient({
           <Table>
             <TableHeader>
               <TableRow>
-                {!isSuperAdmin && (
+                {!isSuperAdmin && !archivedView && (
                   <TableHead className="w-10">
                     <Checkbox
                       checked={
@@ -388,7 +400,7 @@ export function LearnerListClient({
                     data-state={isSelected ? "selected" : undefined}
                     className={l.archivedAt ? "opacity-70" : undefined}
                   >
-                    {!isSuperAdmin && (
+                    {!isSuperAdmin && !archivedView && (
                       <TableCell className="w-10">
                         <Checkbox
                           checked={isSelected}
@@ -443,7 +455,7 @@ export function LearnerListClient({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        <Button
+                        {!archivedView && <Button
                           type="button"
                           size="icon"
                           variant="outline"
@@ -454,7 +466,20 @@ export function LearnerListClient({
                           <span className="sr-only">
                             View {l.fullName}&apos;s profile
                           </span>
-                        </Button>
+                        </Button>}
+                        {!isSuperAdmin && archivedView && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={pending}
+                            onClick={() => handleRestoreOne(l.id)}
+                            aria-label={`Restore ${l.fullName}`}
+                          >
+                            <RotateCcw className="h-4 w-4" aria-hidden />
+                            Restore
+                          </Button>
+                        )}
                         {!isSuperAdmin && !l.isAralLearner && !l.archivedAt && (
                           <Button
                             type="button"

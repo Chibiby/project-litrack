@@ -70,20 +70,24 @@ function learnerListWhere(opts: {
   list: ReturnType<typeof parseLearnerListParams>;
 }): Prisma.LearnerWhereInput {
   const { assignedGradeIds, teacherId, isSuperAdmin, list } = opts;
+  const stateScope: Prisma.LearnerWhereInput =
+    list.filter === "archived"
+      ? { OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }] }
+      : { archivedAt: null, deletedAt: null };
+  const accessScope: Prisma.LearnerWhereInput = isSuperAdmin
+    ? {}
+    : teacherLearnerScope(teacherId);
   const where: Prisma.LearnerWhereInput = {
     ...gradeLevelIdWhere(list.grade, assignedGradeIds),
-    deletedAt: null,
-    // Learners in this teacher's care: advisory roster + ARAL designations.
-    ...(isSuperAdmin ? {} : teacherLearnerScope(teacherId)),
+    // Keep access and archive state in separate AND branches: both predicates
+    // contain OR clauses, and spreading either would overwrite the other.
+    AND: [accessScope, stateScope],
     ...genderWhere(list.gender),
     ...aralStatusWhere(list.aralStatus),
     ...nameSearchWhere(list.q),
   };
 
-  if (list.filter === "archived") {
-    where.archivedAt = { not: null };
-  } else {
-    where.archivedAt = null;
+  if (list.filter !== "archived") {
     // `?filter=aral` is a legacy entry point that narrows the same column the
     // ARAL facet does. Applying it unconditionally would silently overrule an
     // explicit "Not enrolled" into an empty list, so the facet wins.
@@ -172,6 +176,7 @@ async function LearnersBody({
       gender: true,
       isAralLearner: true,
       archivedAt: true,
+      deletedAt: true,
       englishReadingProfile: true,
       filipinoReadingProfile: true,
       gradeLevelId: true,
@@ -192,7 +197,7 @@ async function LearnersBody({
     gender: l.gender,
     isAralLearner: l.isAralLearner,
     hasAralProfile: l.aralProfile !== null,
-    archivedAt: l.archivedAt ? l.archivedAt.toISOString() : null,
+    archivedAt: (l.archivedAt ?? l.deletedAt)?.toISOString() ?? null,
     englishReadingProfile: l.englishReadingProfile,
     filipinoReadingProfile: l.filipinoReadingProfile,
     section: l.section,
@@ -220,6 +225,7 @@ async function LearnersBody({
       pageSize={list.pageSize}
       totalCount={totalCount}
       q={list.q}
+      archivedView={list.filter === "archived"}
     />
   );
 }

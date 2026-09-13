@@ -384,7 +384,10 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
   if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
 
   const learner = await prisma.learner.findFirst({
-    where: { id: parsed.data.id, deletedAt: null },
+    where: {
+      id: parsed.data.id,
+      OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+    },
   });
   if (!learner) return { ok: false, error: "Learner not found" };
 
@@ -396,12 +399,12 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
   if (!teacherCanAccessLearner(learner, user.id)) {
     return { ok: false, error: "Not found" };
   }
-  if (!learner.archivedAt) return { ok: false, error: "Learner is not archived" };
-
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
-      data: { archivedAt: null },
+      // `deletedAt` is also cleared so records removed by the old teacher
+      // "Delete" control reappear in the active roster after restoration.
+      data: { archivedAt: null, deletedAt: null },
     });
 
     await reactivateEnrollment(tx, learner);
@@ -428,6 +431,87 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
     teacherShell: learner.isAralLearner,
   });
   return { ok: true };
+}
+
+/** Archive a teacher's selected learners without deleting their records. */
+export async function archiveLearners(
+  formData: FormData
+): Promise<ActionResult<{ archived: number }>> {
+  const user = await requireSchoolUser("TEACHER");
+  const parsed = deleteLearnersSchema.safeParse({
+    learnerIds: formData.getAll("learnerIds").map(String),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const ids = Array.from(new Set(parsed.data.learnerIds));
+  const learners = await prisma.learner.findMany({
+    where: { id: { in: ids }, deletedAt: null, archivedAt: null },
+    select: {
+      id: true,
+      schoolId: true,
+      teacherId: true,
+      aralTeacherId: true,
+      gradeLevelId: true,
+      isAralLearner: true,
+    },
+  });
+
+  if (learners.length !== ids.length) {
+    return { ok: false, error: "Some selected learners were not found" };
+  }
+  for (const learner of learners) {
+    if (
+      learner.schoolId !== user.schoolId ||
+      !teacherCanAccessLearner(learner, user.id)
+    ) {
+      return { ok: false, error: "Not found" };
+    }
+  }
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.learner.updateMany({
+      where: { id: { in: ids } },
+      data: { archivedAt: now },
+    });
+    await tx.enrollment.updateMany({
+      where: { learnerId: { in: ids }, status: "ACTIVE" },
+      data: { status: "ARCHIVED", endedAt: now },
+    });
+  });
+
+  await writeAuditMany(
+    learners.map((learner) => ({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.LEARNER_ARCHIVE,
+      resource: "Learner",
+      resourceId: learner.id,
+      metadata: { schoolId: user.schoolId, learnerId: learner.id },
+    }))
+  );
+
+  for (const gradeId of new Set(learners.map((learner) => learner.gradeLevelId))) {
+    revalidatePath(`/teacher/grade/${gradeId}`);
+  }
+  revalidatePath("/teacher/learners");
+  revalidatePath("/teacher/aral");
+  for (const learner of learners) {
+    revalidateLearnerScoped({
+      schoolId: learner.schoolId,
+      teacherId: learner.teacherId,
+      aralTeacherId: learner.aralTeacherId,
+      adminDashboard: true,
+      teacherShell: learner.isAralLearner,
+    });
+  }
+
+  return { ok: true, data: { archived: learners.length } };
 }
 
 /**

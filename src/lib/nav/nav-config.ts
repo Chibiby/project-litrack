@@ -190,6 +190,12 @@ export function getNavGroups(
           items: [
             { id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
             learners,
+            {
+              id: "teacher-learner-profiling",
+              label: "Learner Profiling",
+              href: "/teacher/aral",
+              icon: Sparkles,
+            },
             // Per-term grades report, not an ARAL surface — it sits with the
             // roster it reports on, even though the sheet itself lives under
             // `/teacher/aral/[gradeId]/`. Same advisory gate as Learners: the

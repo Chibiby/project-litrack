@@ -349,7 +349,7 @@ describe("AppSidebar — teacher", () => {
     ).toBeNull();
   });
 
-  it("leaves the ARAL rows highlighted on their own URLs with a deep term href", () => {
+  it("highlights Learner Profiling on the shared ARAL workspace route", () => {
     // The mirror: the deep href must not steal a sibling's highlight. Two ARAL
     // grades, so both ARAL rows collapse onto /teacher/aral — a PREFIX of the
     // term sheet's href — which is the arrangement where the two can compete.
@@ -368,7 +368,7 @@ describe("AppSidebar — teacher", () => {
     );
     const current = screen.getAllByRole("link", { current: "page" });
     expect(current.length).toBeGreaterThan(0);
-    expect(current.every((el) => el.textContent?.includes("Weekly Attendance"))).toBe(
+    expect(current.every((el) => el.textContent?.includes("Learner Profiling"))).toBe(
       true
     );
     expect(

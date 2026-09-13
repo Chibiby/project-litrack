@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import {
   ArrowLeftRight,
+  Archive,
   ChevronDown,
   Download,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,11 +16,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ConfirmAction } from "@/components/confirm-action";
 
 /**
  * The roster's bulk action menu, occupying the slot the comp gives to Filter
- * and Export. Delete and Enroll in ARAL are wired; the rest are declared but
+ * and Export. Archive and Enroll in ARAL are wired; the rest are declared but
  * inert on purpose, so the menu shows where those capabilities will land
  * without pretending they work yet. Each inert row is disabled and labelled
  * "Soon" — never a silent no-op the teacher would read as a failure.
@@ -35,12 +33,12 @@ const PLANNED = [
 
 export function LearnerBulkActions({
   selectedCount,
-  onDelete,
+  onArchive,
   onEnrollAral,
   pending = false,
 }: {
   selectedCount: number;
-  onDelete: () => Promise<void> | void;
+  onArchive: () => Promise<void> | void;
   /**
    * Opens the ARAL tutor picker for the selection. The menu does not enroll by
    * itself: a learner needs a tutor before joining the program, and naming one
@@ -49,11 +47,10 @@ export function LearnerBulkActions({
   onEnrollAral: () => void;
   pending?: boolean;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const hasSelection = selectedCount > 0;
 
   return (
-    <>
+    <div className="flex flex-wrap gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -83,7 +80,7 @@ export function LearnerBulkActions({
 
           <DropdownMenuItem
             disabled={!hasSelection || pending}
-            // Same reason as Delete: Radix unmounts the trigger before the
+            // Same reason as Archive: Radix unmounts the trigger before the
             // dialog mounts, so opening on the next frame keeps focus from
             // returning to something that is no longer there.
             onSelect={(e) => {
@@ -93,20 +90,6 @@ export function LearnerBulkActions({
           >
             <Sparkles className="h-4 w-4" aria-hidden />
             Enroll in ARAL
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            disabled={!hasSelection || pending}
-            // Radix closes the menu before the dialog mounts; opening on the
-            // next frame keeps focus from returning to an unmounted trigger.
-            onSelect={(e) => {
-              e.preventDefault();
-              requestAnimationFrame(() => setConfirmOpen(true));
-            }}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden />
-            Delete
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
@@ -123,17 +106,19 @@ export function LearnerBulkActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ConfirmAction
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={`Delete ${selectedCount} learner${selectedCount === 1 ? "" : "s"}?`}
-        // Truthful about reversibility: the delete is recoverable in the
-        // database, but there is no self-service restore for a teacher yet.
-        description="They will be removed from your roster, your counts and every report. Their attendance and reading-level records are kept, but you cannot undo this yourself — tell your School Head if you remove someone by mistake."
-        confirmLabel="Delete"
-        variant="destructive"
-        onConfirm={onDelete}
-      />
-    </>
+      {hasSelection ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={onArchive}
+        >
+          <Archive className="h-4 w-4" aria-hidden />
+          Archive
+        </Button>
+      ) : null}
+
+    </div>
   );
 }

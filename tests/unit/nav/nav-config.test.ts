@@ -24,6 +24,7 @@ describe("getNavGroups — teacher", () => {
     expect(groups[0].items.map((i) => i.label)).toEqual([
       "Dashboard",
       "Learners",
+      "Learner Profiling",
       "End of Terms Reports",
     ]);
     expect(groups[1].items.map((i) => i.label)).toEqual([
@@ -31,6 +32,19 @@ describe("getNavGroups — teacher", () => {
       "Monthly Reading Level",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
+  });
+
+  it("gives the profiling workspace its own menu entry and route ownership", () => {
+    const groups = getNavGroups("TEACHER", oneAral);
+    const items = flattenNavGroups(groups);
+    const profiling = items.find((item) => item.id === "teacher-learner-profiling");
+
+    expect(profiling?.label).toBe("Learner Profiling");
+    expect(profiling?.href).toBe("/teacher/aral");
+    expect(resolveActiveItemId("/teacher/aral", items)).toBe(
+      "teacher-learner-profiling"
+    );
+    expect(resolvePageTitle("/teacher/aral", groups)).toBe("Learner Profiling");
   });
 
   it("parks nothing in the teacher nav on an href another item already serves", () => {
@@ -117,6 +131,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     expect(menu.items.map((i) => i.label)).toEqual([
       "Dashboard",
       "Learners",
+      "Learner Profiling",
       "End of Terms Reports",
     ]);
     const [ordinaryMenu] = getNavGroups("TEACHER", oneAral);
@@ -320,17 +335,17 @@ describe("getNavGroups — the term report's href", () => {
     }
 
     // Spelled out per payload, so a regression cannot be masked by "some other
-    // row won". With a fallback payload the picker route belongs to the first
-    // ARAL row; with a deep-linked one nothing owns it and the role root wins.
+    // row won". The dedicated Learner Profiling entry owns the workspace for
+    // every grade payload, while the attendance rows remain deep destinations.
     for (const grades of [[], twoAral, undefined] as (NavGrade[] | undefined)[]) {
       const items = flattenNavGroups(getNavGroups("TEACHER", grades));
       expect(resolveActiveItemId("/teacher/aral", items)).toBe(
-        "teacher-aral-attendance"
+        "teacher-learner-profiling"
       );
     }
     expect(
       resolveActiveItemId("/teacher/aral", flattenNavGroups(getNavGroups("TEACHER", oneAral)))
-    ).toBe("teacher-dashboard");
+    ).toBe("teacher-learner-profiling");
   });
 
   it("never steals the ARAL picker's header title", () => {
@@ -344,7 +359,7 @@ describe("getNavGroups — the term report's href", () => {
       );
     }
     expect(resolvePageTitle("/teacher/aral", getNavGroups("TEACHER", twoAral))).toBe(
-      "Weekly Attendance"
+      "Learner Profiling"
     );
   });
 
@@ -410,17 +425,15 @@ describe("getNavGroups — the term report's deep href", () => {
     /** Active id on `/teacher/aral` itself, per payload. */
     pickerOwner: string;
   }[] = [
-    { name: "zero ARAL grades", grades: [], aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
+    { name: "zero ARAL grades", grades: [], aralRowHref: "/teacher/aral", pickerOwner: "teacher-learner-profiling" },
     {
       name: "exactly one ARAL grade",
       grades: oneAral,
       aralRowHref: "/teacher/aral/g1/attendance",
-      // Both ARAL rows deep-link, so nothing owns the picker route and the role
-      // root wins it on prefix.
-      pickerOwner: "teacher-dashboard",
+      pickerOwner: "teacher-learner-profiling",
     },
-    { name: "two ARAL grades", grades: twoAral, aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
-    { name: "no grade argument at all", grades: undefined, aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
+    { name: "two ARAL grades", grades: twoAral, aralRowHref: "/teacher/aral", pickerOwner: "teacher-learner-profiling" },
+    { name: "no grade argument at all", grades: undefined, aralRowHref: "/teacher/aral", pickerOwner: "teacher-learner-profiling" },
   ];
 
   const itemsFor = (grades: NavGrade[] | undefined, advisoryGradeLevelId: string | null) =>
@@ -523,7 +536,7 @@ describe("getNavGroups — the term report's deep href", () => {
     });
   }
 
-  for (const { name, grades, pickerOwner } of payloads) {
+  for (const { name, grades, pickerOwner, aralRowHref } of payloads) {
     it(`does not steal an ARAL row's route with ${name}`, () => {
       // The mirror of the bug the fallback href was chosen to avoid. A deep href
       // one segment below the picker must not swallow the picker or a sibling
@@ -546,10 +559,12 @@ describe("getNavGroups — the term report's deep href", () => {
         "teacher-terms-reports"
       );
       expect(resolveActiveItemId("/teacher/aral/g1/attendance", items)).toBe(
-        "teacher-aral-attendance"
+        aralRowHref === "/teacher/aral"
+          ? "teacher-learner-profiling"
+          : "teacher-aral-attendance"
       );
       expect(resolvePageTitle("/teacher/aral/g1/attendance", groups)).toBe(
-        "Weekly Attendance"
+        aralRowHref === "/teacher/aral" ? "Learner Profiling" : "Weekly Attendance"
       );
 
       // And the neighbouring Reports route, the href this row was parked on
@@ -597,10 +612,9 @@ describe("getNavGroups — the term report's deep href", () => {
       });
       expect(resolveActiveItemId(SHEET, items), name).not.toBe("teacher-terms-reports");
       // Spelled out per payload so a regression cannot hide behind "some other
-      // row won": the ARAL rows take it when they collapse to the picker,
-      // otherwise the role root does.
+      // row won": the dedicated profiling entry owns the shared ARAL prefix.
       expect(resolveActiveItemId(SHEET, items), name).toBe(
-        aralRowHref === "/teacher/aral" ? "teacher-aral-attendance" : "teacher-dashboard"
+        "teacher-learner-profiling"
       );
     }
   });
