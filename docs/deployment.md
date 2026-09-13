@@ -86,9 +86,20 @@ Carried over from the Vercel cutover and not yet closed:
   the login throttle bounds far less than it appears to. See `docs/runbook.md`.
 - **Backups still live in Vercel Blob** (`src/lib/db/backup-store.ts`), which keeps the Vercel
   account load-bearing after the move. R2 is the obvious replacement.
+- **Scheduled backups fail: the snapshot does not fit in a Worker.** `createSnapshot`
+  materialises every table in one isolate. Production is ~111 MB across 166k rows and an
+  isolate has 128 MB, so a run ends in Cloudflare error 1102 with
+  `"outcome": "exceededMemory"` in Workers Logs. Raising `limits.cpu_ms` does not help —
+  it is memory, not CPU — and excluding `AuditLog` (47% of the data) was not enough either.
+  The fix is to stream: page rows per table, emit NDJSON through `CompressionStream('gzip')`,
+  and hand that stream to the blob store, with the restore path reading it back the same way
+  and inserting per chunk inside the existing single transaction. Until then Supabase's own
+  PITR is the only disaster recovery, which is what this module's header always said it was.
+  The daily `ErrorEvent` purge now runs before the snapshot, so retention is unaffected.
 - **Heavy report paths are unverified on Workers.** `pdfkit` is bundled into the Worker rather than
-  left external (see the comment in `next.config.mjs`), and `exceljs` exports plus the full-database
-  snapshot are large CPU jobs. `maxDuration` means nothing here; Workers enforce CPU limits instead.
+  left external (see the comment in `next.config.mjs`), and `exceljs` exports are large jobs in
+  an isolate that is capped at 128 MB. `maxDuration` means nothing here; Workers enforce CPU and
+  memory limits instead — and the backup above shows memory is the one that bites first.
 - **No `routes` in `wrangler.jsonc`.** If a custom domain serves the app, it is attached from the
   dashboard, and nothing in the repository records that.
 

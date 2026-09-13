@@ -17,10 +17,15 @@
       "id": "194a9703ac674c7a9934acaf2c677047"
     }
   ],
-  // The daily snapshot reads every table and gzips it in one pass, which blows
-  // the default 30s CPU budget (observed: Cloudflare error 1102). 5 minutes is
-  // the ceiling on Workers Paid. This is a CPU budget, not wall clock -- time spent
-  // waiting on Postgres does not count against it.
+  // Headroom for the nightly snapshot, which reads every table and gzips it.
+  // 5 minutes is the ceiling on Workers Paid; this is a CPU budget, not wall
+  // clock, so time waiting on Postgres does not count against it.
+  //
+  // Note for whoever reads this next: raising this did NOT fix the backup. The
+  // 1102 that failure returns is `exceededMemory`, not CPU — the snapshot
+  // materialises the whole dataset in a 128 MB isolate. The setting is kept
+  // because a streaming snapshot will still be a long-running job, not because
+  // it solved anything.
   "limits": {
     "cpu_ms": 300000
   },
