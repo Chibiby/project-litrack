@@ -74,6 +74,24 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.11.0",
+    date: "2026-09-13",
+    title: "Email support and faster conversations",
+    announce: true,
+    fixes: [
+      {
+        text: "Super Admins can send one email or separate private copies to multiple teachers, School Heads, or manually entered addresses from the Support workspace.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "Password-recovery messages now come from LITRACK Support and outgoing email includes the LITRACK logo and a clearer branded layout.",
+      {
+        text: "Existing support conversations open with their messages immediately instead of waiting on an extra opening step.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "The sign-in screen no longer fails to load under the local Turbopack development server.",
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-09-12",
     title: "Support conversations now show real availability",

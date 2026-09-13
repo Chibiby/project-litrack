@@ -59,13 +59,14 @@ describe("visibleFixes", () => {
 });
 
 describe("the committed release notes", () => {
-  it("describes the support workspace and teacher presence release", () => {
-    expect(RELEASES[0].version).toBe("1.10.0");
+  it("describes the support email and instant conversation release", () => {
+    expect(RELEASES[0].version).toBe("1.11.0");
     const notes = RELEASES[0].fixes.map((fix) =>
       typeof fix === "string" ? fix : fix.text
     );
     expect(notes.join(" ").toLowerCase()).toContain("support");
-    expect(notes.join(" ").toLowerCase()).toContain("last online");
+    expect(notes.join(" ").toLowerCase()).toContain("email");
+    expect(notes.join(" ").toLowerCase()).toContain("conversation");
   });
 
   it("announces the current release through the read-once modal", () => {
