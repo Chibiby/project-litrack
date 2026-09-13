@@ -1,5 +1,30 @@
+import { builtinModules } from "node:module";
+
 /** @type {import('next').NextConfig} */
+const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
+const cloudflareNodeExternals = Object.fromEntries(
+  builtinModules
+    .filter((name) => !name.startsWith("node:"))
+    .map((name) => [name, `commonjs node:${name}`]),
+);
+
 const nextConfig = {
+  // Keep standalone tracing anchored to this checkout. This matters in local
+  // git worktrees (where a parent checkout has another lockfile) and is a
+  // no-op in Cloudflare's single-repository build environment.
+  outputFileTracingRoot: process.cwd(),
+  /**
+   * Expose only a non-sensitive deployment target marker. Next inlines values
+   * declared in `env`, which lets server instrumentation dead-code-eliminate
+   * Vercel-only imports from the Cloudflare/OpenNext production bundle.
+   */
+  env: {
+    LITRACK_DEPLOY_TARGET: isCloudflareWorkersBuild
+      ? "cloudflare"
+      : process.env.VERCEL === "1"
+        ? "vercel"
+        : "local",
+  },
   /**
    * Defaults to `.next`. Override with `NEXT_BUILD_DIST_DIR=.next-verify` to run
    * a verification `next build` while `next dev` is running — otherwise the two
@@ -12,17 +37,27 @@ const nextConfig = {
    */
   distDir: process.env.NEXT_BUILD_DIST_DIR || ".next",
   /**
-   * Left for Node to require at runtime instead of being bundled into the
-   * server chunk.
-   *
-   * `pdfkit` reads its font metrics and its sRGB ICC profile from files inside
-   * its own package, resolved relative to `__dirname`. Bundled, that path no
-   * longer exists and every PDF fails at draw time with an ENOENT the user
-   * sees as "Could not generate the report" — while Excel, which needs no data
-   * files, keeps working. Externalising it also keeps `fontkit`'s own binary
-   * data intact. Verified: the same code renders a valid PDF under plain Node.
+   * On Vercel/plain Node, leave pdfkit external so it can resolve its package
+   * data files relative to __dirname. Cloudflare Workers has no normal Node
+   * module/filesystem loader; leaving the package external there can make
+   * OpenNext's server bootstrap fail while resolving Node built-ins. Bundle it
+   * into the Worker instead. PDF generation itself may still need a Workers-
+   * compatible implementation if a report exercises filesystem-only pdfkit
+   * paths, but it must not prevent /login from starting.
    */
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: isCloudflareWorkersBuild
+    ? ["@prisma/client", ".prisma/client", "@prisma/adapter-pg", "pg"]
+    : ["pdfkit"],
+  webpack(config, { isServer }) {
+    if (isCloudflareWorkersBuild && isServer) {
+      // `pg` keeps optional certificate/passfile support behind Node built-ins.
+      // Leave those imports for OpenNext's final workerd bundle, where
+      // `nodejs_compat` provides them, instead of asking Next's webpack pass to
+      // resolve browser shims that do not exist.
+      config.externals.push(cloudflareNodeExternals);
+    }
+    return config;
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",

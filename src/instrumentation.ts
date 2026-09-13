@@ -1,25 +1,39 @@
 import type { Instrumentation } from "next";
 
+/**
+ * `LITRACK_DEPLOY_TARGET` is injected by next.config.mjs and is therefore a
+ * compile-time constant in the production server bundle. OpenNext presents the
+ * app as Next.js' `nodejs` runtime, so NEXT_RUNTIME alone cannot distinguish a
+ * Cloudflare Worker from a real Node/Vercel process.
+ */
+function shouldUseVercelNodeObservability() {
+  return (
+    process.env.NEXT_RUNTIME === "nodejs" &&
+    process.env.LITRACK_DEPLOY_TARGET !== "cloudflare"
+  );
+}
+
 export async function register() {
-  // Node-runtime only. `register()` runs in every runtime, and an unguarded call
-  // compiles the whole OTel SDK into the edge middleware bundle (+58 kB gzipped) and
-  // boots it before the first cookie refresh on every fresh edge isolate. Middleware
-  // has no hand-rolled spans and no Prisma, so it gains nothing from that. The
-  // per-compilation NEXT_RUNTIME define folds this branch away in the edge build.
-  if (process.env.NEXT_RUNTIME === "nodejs") {
+  // @vercel/otel is Vercel/Node-specific. Keeping the condition compile-time
+  // visible lets the Cloudflare production build remove this import path.
+  if (shouldUseVercelNodeObservability()) {
     await import("./instrumentation.node");
   }
 }
 
 /**
- * Every uncaught server error, sent to the same place a failed action goes.
- *
- * Guarded and dynamically imported for the same reason `register()` is: the
- * reporting stack reaches Prisma, and the NEXT_RUNTIME define folds this branch
- * away in the edge build so middleware never pays for it.
+ * Every uncaught server error on Vercel/local Node is sent to the application's
+ * database-backed reporting pipeline. On Cloudflare, keep the error in Workers
+ * Logs instead of importing Vercel/Prisma observability while handling a crash.
  */
 export const onRequestError: Instrumentation.onRequestError = async (...args) => {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  if (process.env.LITRACK_DEPLOY_TARGET === "cloudflare") {
+    console.error("[request-error]", args[0]);
+    return;
+  }
+
   const { reportRequestError } = await import("./lib/errors/request-error");
   await reportRequestError(...args);
 };

@@ -32,3 +32,36 @@ export function resolvePooledDatabaseUrl(raw: string | undefined): string | unde
   }
   return url.toString();
 }
+
+/**
+ * Keep `sslmode=require` at its libpq meaning: encrypt the connection without
+ * requiring a publicly trusted certificate chain. pg 8.23 otherwise treats it
+ * as `verify-full`, while Supabase's pooler currently presents a self-signed
+ * certificate chain and terminates the Workers TLS handshake.
+ */
+export function resolvePgDriverUrl(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw;
+  }
+
+  if (url.searchParams.get("sslmode") !== "require") return raw;
+  if (!url.searchParams.has("uselibpqcompat")) {
+    url.searchParams.set("uselibpqcompat", "true");
+  }
+  return url.toString();
+}
+
+export function resolveRuntimeDatabaseUrl(
+  deployTarget: string | undefined,
+  hyperdriveUrl: string | undefined,
+  environmentUrl: string | undefined,
+): string | undefined {
+  return deployTarget === "cloudflare" && hyperdriveUrl
+    ? hyperdriveUrl
+    : environmentUrl;
+}

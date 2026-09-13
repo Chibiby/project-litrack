@@ -3,6 +3,9 @@
 
 generator client {
   provider        = "prisma-client-js"
+  // Generate the all-TypeScript query engine. Cloudflare Workers cannot load
+  // Prisma's native OpenSSL library or use its runtime code generation.
+  engineType      = "client"
   // Nested select/include otherwise costs one round trip per relation; with this
   // on the engine emits a single LATERAL join instead.
   //

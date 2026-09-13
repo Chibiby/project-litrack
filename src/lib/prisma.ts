@@ -1,6 +1,13 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
-import { resolvePooledDatabaseUrl } from "@/lib/db-url";
+import {
+  resolvePgDriverUrl,
+  resolvePooledDatabaseUrl,
+  resolveRuntimeDatabaseUrl,
+} from "@/lib/db-url";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -22,17 +29,57 @@ const globalForPrisma = globalThis as unknown as {
  * Soft Supabase helpers in supabase/env.ts are unchanged for middleware.
  */
 function readDatabaseUrl(): string | undefined {
+  let environmentUrl: string | undefined;
   try {
-    return getServerEnv().DATABASE_URL;
+    environmentUrl = getServerEnv().DATABASE_URL;
   } catch {
-    return process.env.DATABASE_URL;
+    environmentUrl = process.env.DATABASE_URL;
   }
+
+  let hyperdriveUrl: string | undefined;
+  if (process.env.LITRACK_DEPLOY_TARGET === "cloudflare") {
+    try {
+      const { env } = getCloudflareContext();
+      hyperdriveUrl = (
+        env as unknown as {
+          HYPERDRIVE?: { connectionString?: string };
+        }
+      ).HYPERDRIVE?.connectionString;
+    } catch {
+      // Builds and Node-based tests do not have a Workers request context.
+    }
+  }
+
+  return resolveRuntimeDatabaseUrl(
+    process.env.LITRACK_DEPLOY_TARGET,
+    hyperdriveUrl,
+    environmentUrl,
+  );
 }
 
 const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 
-function createPrismaClient() {
+// Prisma's JavaScript engine requires a driver adapter at construction time,
+// including during builds and unit tests that never issue a query. A closed
+// localhost port keeps that no-env fallback deterministic and unable to reach
+// a real database; production requests still fail through the app's normal
+// environment validation before querying it.
+const UNCONFIGURED_DATABASE_URL =
+  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
+
+export function createPrismaClient(databaseUrl = datasourceUrl) {
+  const adapter = new PrismaPg({
+    connectionString:
+      resolvePgDriverUrl(databaseUrl) ?? UNCONFIGURED_DATABASE_URL,
+    // Workers forbid reusing an I/O object from a previous request. Retire a
+    // pool connection after one use so a warm isolate cannot carry its socket
+    // into the next request; Supabase's transaction pooler handles reuse on
+    // the database side.
+    maxUses: 1,
+  });
+
   return new PrismaClient({
+    adapter,
     // Skip "query" in normal `next dev` — it floods the terminal on every
     // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
     log:
@@ -41,9 +88,25 @@ function createPrismaClient() {
           ? ["query", "error", "warn"]
           : ["error", "warn"]
         : ["error"],
-    ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
   });
 }
+
+export function createPrismaProxy(getClient: () => PrismaClient): PrismaClient {
+  return new Proxy({} as PrismaClient, {
+    get(_target, property) {
+      const client = getClient();
+      const value = Reflect.get(client, property, client) as unknown;
+      return typeof value === "function" ? value.bind(client) : value;
+    },
+  });
+}
+
+// React's request cache gives each Cloudflare request its own Prisma client and
+// pool. Creating either at module scope would attach pg sockets/promises to the
+// isolate's startup context, which workerd rejects when a request later uses
+// them. Outside a React Server Component, cache() simply provides no reuse;
+// the lazy proxy still constructs the client only when a query is attempted.
+const getCloudflarePrismaClient = cache(() => createPrismaClient());
 
 /**
  * After `prisma generate` adds models, a process-global client created before
@@ -69,4 +132,7 @@ function getPrismaClient(): PrismaClient {
   return client;
 }
 
-export const prisma = getPrismaClient();
+export const prisma =
+  process.env.LITRACK_DEPLOY_TARGET === "cloudflare"
+    ? createPrismaProxy(getCloudflarePrismaClient)
+    : getPrismaClient();
