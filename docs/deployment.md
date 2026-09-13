@@ -1,80 +1,104 @@
-# Deployment — Vercel + Supabase
+# Deployment — Cloudflare Workers + Supabase
 
 ## Overview
 
-LITRACK is a Next.js 14 App Router app. Production hosting target: **Vercel**. Database and Auth: **Supabase**.
+LITRACK is a Next.js 15 App Router app (React 19). Production hosting target: **Cloudflare
+Workers**, built with [OpenNext](https://opennext.js.org/cloudflare). Database and Auth:
+**Supabase**.
+
+The app was originally deployed to Vercel. `vercel.json` and the Vercel-only observability path in
+`src/instrumentation.node.ts` are still in the repository so a Vercel deploy remains possible, but
+Cloudflare is the target that is maintained. `next.config.mjs` inlines `LITRACK_DEPLOY_TARGET`
+(`cloudflare` when `WORKERS_CI=1`, else `vercel` or `local`), which is what lets the Worker bundle
+drop the Vercel-only code paths at build time.
 
 ## Preconditions
 
-1. GitHub repo connected to Vercel.
+1. GitHub repo connected to Cloudflare Workers Builds, with `WORKERS_CI=1` in the build environment.
 2. Supabase project provisioned (Auth + Postgres).
-3. Env vars configured in Vercel (same **names** as `.env.example` — never commit values).
+3. Secrets configured on the Worker (same **names** as `.env.example` — never commit values).
 4. Prisma migrations reviewed; deploy to production DB only with explicit approval.
 
-## Vercel setup
+## Cloudflare setup
 
-1. Import the repository; framework preset: Next.js.
-2. Build command uses `package.json` → `prisma generate && next build`.
-3. Add environment variables (Production / Preview as appropriate):
+1. Build command: `npm run build`. With `WORKERS_CI=1` set, `scripts/build-platform.mjs` runs
+   `opennextjs-cloudflare build`, which re-enters the same script with `OPENNEXT_INNER_BUILD=1` and
+   performs the ordinary `prisma generate && next build` inside it. Without `WORKERS_CI`, the same
+   command is a plain Next build — that is what CI and local verification run.
+2. Deploy command: `npx wrangler deploy`. Configuration lives in `wrangler.jsonc`.
+3. Bindings (`wrangler.jsonc`):
+   - `ASSETS` — static assets from `.open-next/assets`.
+   - `HYPERDRIVE` — pooled Postgres in front of Supabase. `src/lib/prisma.ts` reads its
+     `connectionString` **per request**; resolving it once at module scope silently falls back to
+     `DATABASE_URL` for the isolate's whole life, because `getCloudflareContext()` throws outside a
+     request.
+   - `triggers.crons` — scheduled backups, see below.
+   - `keep_vars: true` — a deploy does not wipe variables set from the dashboard.
+4. Secrets and variables (`npx wrangler secret put <NAME>`, or the dashboard):
    - `DATABASE_URL`, `DIRECT_URL`
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `NEXT_PUBLIC_APP_URL` (production site URL)
+   - `NEXT_PUBLIC_APP_URL` (production site URL; also the origin the cron handler calls)
    - `SYNTHETIC_EMAIL_DOMAIN`
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (required for real invite/recovery email, and for
-     server-side error alert email — see below)
+     server-side error alert email)
+   - `CRON_SECRET` — required, or scheduled backups do not run. See below.
+   - `BLOB_READ_WRITE_TOKEN` — backup storage. Still a Vercel Blob store; see "Known gaps".
    - `ERROR_ALERT_EMAIL` — comma-separated recipients for emails about server-side ("system"
      severity) failures. Alerts stay off until this and the two `RESEND_*` vars above are all
      set. At most one email per error code every 15 minutes. See `docs/errors.md`.
    - `ERROR_EVENT_RETENTION_DAYS` — optional, default 30. Days to keep rows in the `ErrorEvent`
      table before the daily backup cron (`/api/cron/backup`) purges them.
-   - `NEXT_OTEL_VERBOSE` — optional, debugging only. Read by Next.js itself, not app code;
-     set to `1` to emit verbose OpenTelemetry spans (including internal framework spans).
-     Leave unset in Production; it is very noisy.
-   - Seed vars are **not** required on Vercel unless you run seed from CI (prefer local/one-off)
-4. Deploy. Confirm build logs show Prisma generate + Next build success.
+   - Seed vars are **not** required on the Worker — run seed locally as a one-off.
+5. Deploy. Confirm build logs show OpenNext build + Prisma generate success, then
+   `npx wrangler deployments list` and `npx wrangler tail` for the live Worker.
 
-### Function region — `sin1`
+### Scheduled backups
 
-`vercel.json` pins Vercel Functions to `sin1` (Singapore). The Supabase project lives in
-`ap-southeast-1`, also Singapore, and functions default to a US region — `iad1` (Washington D.C.)
-unless changed — so without this pin every database round trip crosses the Pacific. The design spec
-puts that at roughly 200 ms per round trip (from a community AWS latency matrix, not an AWS-official
-figure), on a path that pays at least two sequential round trips per authenticated render. The
-measured baseline is what will confirm the real figure.
+Cron Triggers invoke a Worker's `scheduled()` handler; they cannot fetch a URL the way Vercel's
+`crons` did. So `wrangler.jsonc` sets `main` to `worker.js`, which wraps the generated
+`.open-next/worker.js`, and maps each cron expression onto the route that does the work:
 
-Four things to know before changing it:
+| Expression (UTC) | Manila | Route |
+| --- | --- | --- |
+| `0 16 * * *` | 00:00 daily | `/api/cron/backup?kind=daily` |
+| `30 16 * * 6` | 00:30 Sunday | `/api/cron/backup?kind=weekly` |
 
-- **This file is the only thing pinning the region.** Delete or rename it, add a per-function
-  `regions` block (which overrides the project-level setting for the functions it matches), pass
-  `--regions` to `vercel deploy`, or point the project's Root Directory somewhere other than the
-  repo root, and functions move back across the Pacific — the app keeps working and simply gets slow
-  again, with no error to notice. If page latency regresses sharply after a config change, check this
-  first. Adding a `vercel.ts` is the one path that may instead fail loudly: a project may have only
-  one config file, and Vercel does not document which wins, so expect either outcome.
-- **Compute in `sin1` costs 1.25× `iad1`,** not 1.5×: Active CPU $0.160/hr vs $0.128/hr and
-  Provisioned Memory $0.0133 vs $0.0106 per GB-hr
-  ([fluid compute pricing](https://vercel.com/docs/functions/usage-and-pricing)). CDN line items are
-  ~1.30× (Edge Requests $2.60 vs $2.00 per million; ISR / Runtime Cache writes $5.20 vs $4.00) and
-  Fast Data Transfer ~1.07× ($0.16 vs $0.15 per GB). Those are Pro on-demand rates, which are the
-  ones that apply here — `.vercel/project.json` holds a `team_` scope, and only Hobby escapes
-  regional rates by billing flat included allowances instead.
-- **Part of that premium may pay for itself; the net is unmeasured and the direction is unproven.**
-  Under fluid compute — Vercel's default billing model, though nobody has read this project's
-  setting — Active CPU is billed only while your code actually runs and pauses during I/O, while
-  Provisioned Memory bills for the whole instance lifetime *including* I/O waits. This app is
-  I/O-bound on Postgres, so today it pays memory for every cross-Pacific wait; co-locating shortens
-  those waits and so shortens the billed instance lifetime, and CPU cost rises ~25% while
-  memory-hours fall. The older duration-billed model has no such split, so none of that reasoning
-  holds there. Either way, confirm the direction against a real invoice rather than this paragraph.
-- **Keep it to exactly one region.** Hobby permits a single region, and requesting more than the plan
-  allows fails the deployment before the build starts. Do not "improve" this into a multi-region array.
+The two lists must stay in step — an expression in `wrangler.jsonc` with no entry in `worker.js`
+fires and does nothing. The route authorizes itself against `CRON_SECRET` and **fails closed**, so
+an unset secret means no backups, silently, forever. The daily run also purges expired `ErrorEvent`
+rows.
 
-The pin does **not** cover everything. Routing Middleware deploys to all regions regardless of region
-settings, and static assets come from the CDN edge — so `src/middleware.ts` runs wherever the request
-lands. That costs nothing today because `src/lib/supabase/middleware.ts` verifies JWT claims locally,
-but on a project still using legacy HS* symmetric signing keys that call falls back to a network
-`getUser()` and reaches Singapore from an unpinned region.
+Verify after a deploy: `npx wrangler tail --format pretty` and wait for a scheduled run, or trigger
+one against the deployed Worker with `curl -H "Authorization: Bearer $CRON_SECRET"
+"$NEXT_PUBLIC_APP_URL/api/cron/backup?kind=daily"`.
+
+### Known gaps
+
+Carried over from the Vercel cutover and not yet closed:
+
+- **No incremental cache.** `open-next.config.ts` is a bare `defineCloudflareConfig()` with no
+  `incrementalCache` or `tagCache`, and there is no KV/R2 binding. `cachedQuery`
+  (`src/lib/cache/unstable.ts`) therefore no longer caches across requests and the
+  `src/lib/cache/revalidate.ts` helpers are no-ops. Dashboard aggregates hit Postgres every load.
+- **Rate limiting is per-isolate.** Without `UPSTASH_REDIS_REST_URL` / `_TOKEN`,
+  `src/lib/rate-limit.ts` uses an in-memory window. Workers spread requests across many isolates, so
+  the login throttle bounds far less than it appears to. See `docs/runbook.md`.
+- **Backups still live in Vercel Blob** (`src/lib/db/backup-store.ts`), which keeps the Vercel
+  account load-bearing after the move. R2 is the obvious replacement.
+- **Heavy report paths are unverified on Workers.** `pdfkit` is bundled into the Worker rather than
+  left external (see the comment in `next.config.mjs`), and `exceljs` exports plus the full-database
+  snapshot are large CPU jobs. `maxDuration` means nothing here; Workers enforce CPU limits instead.
+- **No `routes` in `wrangler.jsonc`.** If a custom domain serves the app, it is attached from the
+  dashboard, and nothing in the repository records that.
+
+### Appendix — the Vercel `sin1` pin
+
+`vercel.json` still pins Vercel Functions to `sin1` (Singapore) because the Supabase project lives in
+`ap-southeast-1` and functions otherwise default to `iad1` (Washington D.C.), putting the Pacific in
+every database round trip. It is the only thing pinning the region, and only one region may be
+listed. This matters only if the app is deployed to Vercel again; on Cloudflare, placement is
+Cloudflare's and Hyperdrive is what shortens the database path.
 
 ## Database migrations (production)
 
@@ -115,5 +139,5 @@ Use a Supabase preview branch or a separate project for non-production. Never po
 
 ## Rollback pointers
 
-- App: redeploy previous Vercel deployment.
+- App: `npx wrangler rollback` (or redeploy a previous version from the Workers dashboard).
 - DB: Prisma has no automatic down migrations — restore from Supabase backup / PITR or ship a forward-fix migration. See `docs/runbook.md`.

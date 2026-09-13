@@ -71,8 +71,9 @@ describe("the committed release notes", () => {
   });
 
   it("describes learner archives and the renamed profiling workspace", () => {
-    expect(RELEASES[0].version).toBe("1.12.0");
-    const notes = RELEASES[0].fixes
+    const archiveRelease = RELEASES.find((item) => item.version === "1.12.0");
+    expect(archiveRelease).toBeDefined();
+    const notes = archiveRelease!.fixes
       .map((fix) => (typeof fix === "string" ? fix : fix.text))
       .join(" ")
       .toLowerCase();
@@ -81,8 +82,14 @@ describe("the committed release notes", () => {
     expect(notes).toContain("learner profiling");
   });
 
-  it("announces the current release through the read-once modal", () => {
-    expect(RELEASES[0].announce).toBe(true);
+  it("keeps the announcement decision explicit on the current release", () => {
+    // Not "the newest release is always announced": 1.12.1 restores scheduled
+    // backups and database routing, which changes nothing a teacher or School
+    // Head does, so interrupting every user with a modal would be noise. What
+    // must hold is that `announce` is a considered value rather than an
+    // omission, and that the modal path still has something to show.
+    expect(typeof RELEASES[0].announce).toBe("boolean");
+    expect(RELEASES.some((release) => release.announce)).toBe(true);
   });
 
   it("never tells a School Head that their own password can be read back", () => {

@@ -7,11 +7,13 @@ import { AppError } from "@/lib/errors/app-error";
 import { purgeExpiredErrorEvents } from "@/lib/errors/retention";
 
 /**
- * Scheduled backup endpoint, driven by the `crons` entries in `vercel.json`.
+ * Scheduled backup endpoint, driven by the `triggers.crons` entries in
+ * `wrangler.jsonc` and dispatched by the Worker's scheduled() handler in
+ * `worker.js`.
  *
  * `src/middleware.ts` returns early for every `/api/` path, so no session is
- * attached here and this route is responsible for its own authorization. Vercel
- * sends `Authorization: Bearer $CRON_SECRET` on scheduled invocations; without
+ * attached here and this route is responsible for its own authorization. The
+ * Worker sends `Authorization: Bearer $CRON_SECRET` on scheduled runs; without
  * that check the endpoint would be an unauthenticated way for anyone to force
  * repeated full-database reads.
  */

@@ -14,7 +14,7 @@ LITRACK — multi-tenant school management app for DepEd schools tracking learne
 
 ```powershell
 npm run dev          # next dev --turbopack → http://localhost:3000
-npm run build        # prisma generate && next build
+npm run build        # scripts/build-platform.mjs — OpenNext when WORKERS_CI=1, else prisma generate && next build
 npm run typecheck    # tsc --noEmit
 npm run lint         # next lint
 npm run test         # vitest run
@@ -97,7 +97,7 @@ export const doThing = action("doThing", async (formData: FormData) => {
 }, { verb: "save the thing" });
 ```
 
-Failures are thrown, never returned: `throw new AppError("CODE", { detail })`. The wrapper classifies anything else (Prisma, Supabase, bugs), records non-user errors to `ErrorEvent` + Vercel logs (+ an alert email for `system`), and returns `{ ok: false, code, error, ref?, fieldErrors? }` — `error` keeps its historical field name and is always the safe user message, so existing `toast.error(res.error)` call sites keep working. `logoutAction` is deliberately left unwrapped, because it's a `<form action={logoutAction}>` target and that requires `Promise<void>`. About 30 legacy action modules still use the old hand-rolled `{ ok: false, error }` shape and their own try/catch; they migrate to `action()` in later slices. Codes and messages live in `src/lib/errors/codes.ts`; see `docs/errors.md`.
+Failures are thrown, never returned: `throw new AppError("CODE", { detail })`. The wrapper classifies anything else (Prisma, Supabase, bugs), records non-user errors to `ErrorEvent` + platform logs (Workers Logs in production) (+ an alert email for `system`), and returns `{ ok: false, code, error, ref?, fieldErrors? }` — `error` keeps its historical field name and is always the safe user message, so existing `toast.error(res.error)` call sites keep working. `logoutAction` is deliberately left unwrapped, because it's a `<form action={logoutAction}>` target and that requires `Promise<void>`. About 30 legacy action modules still use the old hand-rolled `{ ok: false, error }` shape and their own try/catch; they migrate to `action()` in later slices. Codes and messages live in `src/lib/errors/codes.ts`; see `docs/errors.md`.
 
 Other invariants: soft delete via `deletedAt` (filter `deletedAt: null` on reads unless archived rows are wanted); `Learner`'s denormalized current grade/section pointers must stay transactionally consistent with the active `Enrollment` row; client-facing errors must be safe.
 
@@ -112,11 +112,13 @@ Every role page is `force-dynamic` (auth), so the Full Route Cache is unavailabl
 - `cachedQuery` (`src/lib/cache/unstable.ts`) wraps `unstable_cache` with key parts, tags, and a short TTL (default 60s) — used by `src/lib/dashboard/aggregates.ts`.
 - Tag strings are centralized in `src/lib/cache/tags.ts`; invalidation goes through the named helpers in `src/lib/cache/revalidate.ts` (`revalidateLearnerScoped`, `revalidateTeacherCaches`, …) rather than raw `revalidateTag` calls, because each mutation type busts a deliberately different set (e.g. only learner create/archive/import busts the admin dashboard; only ARAL-presence changes bust the teacher sidebar shell).
 
+On Cloudflare neither layer is active today: `open-next.config.ts` declares no `incrementalCache` or `tagCache` and the Worker has no KV/R2 binding, so `cachedQuery` runs its function every time and the `revalidate*` helpers are no-ops. Keep using both anyway — they are what makes wiring a cache back up a config change rather than an audit. See docs/deployment.md § Known gaps.
+
 `next.config.mjs` sets `experimental.staleTimes` (dynamic 180s / static 600s) so prefetched role routes swap without a `loading.tsx` flash. Related client-side warming lives in `src/lib/nav/warm-hrefs.ts`, `src/lib/auth/warm-routes.ts`, and `src/components/nav-prefetcher.tsx`.
 
 ### Prisma client
 
-`src/lib/prisma.ts` is a global singleton **cached in production too** (Vercel reuses warm lambdas; re-instantiating would open a new pooler pool per request). `resolvePooledDatabaseUrl` (`src/lib/db-url.ts`) rewrites a port-6543 `DATABASE_URL` to add `pgbouncer=true` and floor `connection_limit` at 3 — PgBouncer transaction mode breaks Prisma's named prepared statements (`42P05`) and `connection_limit=1` causes `P2024` under overlapping RSC navigation. Migrations use `DIRECT_URL` (port 5432) instead. Set `PRISMA_LOG_QUERIES=1` to see SQL in dev.
+Production runs on Cloudflare Workers via OpenNext, so `src/lib/prisma.ts` has two shapes, chosen by the `LITRACK_DEPLOY_TARGET` constant `next.config.mjs` inlines. On Cloudflare: one client per request through React `cache()`, behind a lazy proxy, with the pg adapter set to `maxUses: 1` — workerd rejects an I/O object carried over from a previous request. Everywhere else: a global singleton **cached in production too** (a warm Node lambda reuses the process; re-instantiating would open a new pooler pool per request). The connection URL is resolved **at call time**, never at module scope: `getCloudflareContext()` throws outside a request, and reading the `HYPERDRIVE` binding once during isolate startup silently pins that isolate to the unpooled `DATABASE_URL` forever. `resolvePooledDatabaseUrl` (`src/lib/db-url.ts`) rewrites a port-6543 `DATABASE_URL` to add `pgbouncer=true` and floor `connection_limit` at 3 — PgBouncer transaction mode breaks Prisma's named prepared statements (`42P05`) and `connection_limit=1` causes `P2024` under overlapping RSC navigation. Migrations use `DIRECT_URL` (port 5432) instead. Set `PRISMA_LOG_QUERIES=1` to see SQL in dev.
 
 ### Validation
 
@@ -140,4 +142,4 @@ Zod schemas in `src/lib/validators/*.schema.ts`, shared primitives in `common.ts
 
 ## Docs map
 
-`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Vercel + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log).
+`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Cloudflare Workers + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log).

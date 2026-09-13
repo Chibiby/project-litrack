@@ -74,6 +74,18 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.12.1",
+    date: "2026-09-13",
+    title: "Scheduled backups and database routing restored",
+    // Infrastructure only — nothing a teacher or School Head does changes, so
+    // this must not interrupt anyone with an update modal.
+    announce: false,
+    fixes: [
+      "Automatic nightly and weekly database backups run again. They stopped when the app moved to its new hosting and had not been running since.",
+      "The app reaches the database over its fast pooled connection again, which had quietly fallen back to a slower route on the new hosting.",
+    ],
+  },
+  {
     version: "1.12.0",
     date: "2026-09-13",
     title: "Recoverable learner archives and profiling",

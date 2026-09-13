@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo, IBM_Plex_Mono, Inter } from "next/font/google";
 import { Toaster } from "sonner";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SparkIntro } from "@/components/brand/spark-intro";
 import { SparkIntroScript } from "@/components/brand/spark-intro-script";
 import { ThemeProvider } from "@/components/theme/theme-provider";
@@ -86,8 +85,6 @@ export default function RootLayout({
           <SparkIntro />
           <Toaster richColors position="top-right" />
         </ThemeProvider>
-        {/* Inert until the project is linked to Vercel with Speed Insights enabled. */}
-        <SpeedInsights />
       </body>
     </html>
   );

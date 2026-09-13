@@ -146,7 +146,7 @@ What to do:
 2. Raise the limit: **Supabase Dashboard → Authentication → Rate Limits →
    "Sign in / Sign up"**. The default of 30 per 5 min is sized for one person,
    not for a division of ~330 schools logging in at the same time of morning.
-3. Set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` in Vercel if they
+3. Set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` on the Worker if they
    are unset. Without them LITRACK's own limiter degrades to a per-instance
    window (it logs `[rate-limit] … not an effective limit` once), so a retry
    loop is never stopped before it reaches Supabase.
@@ -154,8 +154,8 @@ What to do:
 Sign-in itself is made **by the browser**, not by the server action, so each
 person spends their own IP budget rather than the deployment's — see
 `src/lib/actions/login.ts`. Two paths still grant server-side and therefore
-still share the Vercel egress budget: Super Admin login, and School Heads whose
-account uses a real email address instead of the synthetic `sh@…` one.
+still share the deployment’s egress budget: Super Admin login, and School Heads
+whose account uses a real email address instead of the synthetic `sh@…` one.
 
 ## Import / export ops notes
 
@@ -221,7 +221,8 @@ change) and adding grade levels. The **School Head** button needs only a selecte
    code, severity, route, school, admin-only message, stack trace (if any),
    and user id for that one event, under an expandable **Details** section.
 2. If nothing matches — the row aged out, or the event fired before the
-   `ErrorEvent` migration was applied — search the Vercel runtime logs for
+   `ErrorEvent` migration was applied — search the Workers logs (`npx wrangler
+   tail`, or Workers Logs in the dashboard) for
    the reference instead. Every recorded event is also written as a JSON
    line tagged `"tag": "litrack.error"`, and that line is written before the
    database insert, so it survives even a database outage.
@@ -235,7 +236,7 @@ change) and adding grade levels. The **School Head** button needs only a selecte
    blank field) aren't recorded here at all.
 5. A failure email only reaches you if `ERROR_ALERT_EMAIL` is set (along
    with `RESEND_API_KEY` / `RESEND_FROM_EMAIL`) — without it, this page and
-   the Vercel logs are the only way to learn about a `system` failure. At
+   the Workers logs are the only way to learn about a `system` failure. At
    most one email per error code is sent every 15 minutes, so a sustained
    outage won't flood the inbox.
 

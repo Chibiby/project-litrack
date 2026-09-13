@@ -1,6 +1,6 @@
 {
   "name": "litrack",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -54,7 +54,6 @@
     "@vercel/blob": "^2.8.0",
     "@vercel/functions": "^3.9.5",
     "@vercel/otel": "^2.1.3",
-    "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",

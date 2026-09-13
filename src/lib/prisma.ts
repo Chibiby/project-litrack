@@ -57,7 +57,6 @@ function readDatabaseUrl(): string | undefined {
   );
 }
 
-const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 
 // Prisma's JavaScript engine requires a driver adapter at construction time,
 // including during builds and unit tests that never issue a query. A closed
@@ -67,7 +66,18 @@ const datasourceUrl = resolvePooledDatabaseUrl(readDatabaseUrl());
 const UNCONFIGURED_DATABASE_URL =
   "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
 
-export function createPrismaClient(databaseUrl = datasourceUrl) {
+/**
+ * Resolve the connection URL at call time, never at module evaluation.
+ *
+ * On Cloudflare, `getCloudflareContext()` only has a value inside a request.
+ * Reading it once at module scope resolved the Hyperdrive binding during
+ * isolate startup, where it throws, and the caught failure silently pinned the
+ * isolate to the plain `DATABASE_URL` for its whole life. Each request now
+ * resolves its own URL, so Hyperdrive is actually used.
+ */
+export function createPrismaClient(
+  databaseUrl = resolvePooledDatabaseUrl(readDatabaseUrl()),
+) {
   const adapter = new PrismaPg({
     connectionString:
       resolvePgDriverUrl(databaseUrl) ?? UNCONFIGURED_DATABASE_URL,

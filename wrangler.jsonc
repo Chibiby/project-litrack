@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "project-litrack",
-  "main": ".open-next/worker.js",
+  // Wraps `.open-next/worker.js` so the Worker also answers Cron Triggers.
+  // See worker.js — the cron expressions below must match its CRON_ROUTES map.
+  "main": "worker.js",
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
@@ -15,6 +17,10 @@
       "id": "194a9703ac674c7a9934acaf2c677047"
     }
   ],
+  // Replaces the `crons` block in vercel.json. Times are UTC; Manila is UTC+8.
+  "triggers": {
+    "crons": ["0 16 * * *", "30 16 * * 6"]
+  },
   "observability": {
     "enabled": true
   }
