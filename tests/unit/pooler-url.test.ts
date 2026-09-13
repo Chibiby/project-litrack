@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePooledDatabaseUrl } from "@/lib/db-url";
+import { resolvePgDriverUrl, resolvePooledDatabaseUrl } from "@/lib/db-url";
 
 /** Same password encoding used in scripts/check-pooler-url.mjs */
 const PW = "p%40ss-w0rd%21";
@@ -61,5 +61,20 @@ describe("resolvePooledDatabaseUrl", () => {
     expect(resolvePooledDatabaseUrl(undefined)).toBeUndefined();
     expect(resolvePooledDatabaseUrl("")).toBe("");
     expect(resolvePooledDatabaseUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+describe("resolvePgDriverUrl", () => {
+  it("uses libpq-compatible sslmode=require for Supabase pooler certificates", () => {
+    const input = `postgresql://postgres.ref:${PW}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require`;
+    const out = resolvePgDriverUrl(input)!;
+
+    expect(out).toContain("sslmode=require");
+    expect(out).toContain("uselibpqcompat=true");
+  });
+
+  it("leaves explicit certificate-verifying modes unchanged", () => {
+    const input = `postgresql://postgres.ref:${PW}@db.example.com:5432/postgres?sslmode=verify-full`;
+    expect(resolvePgDriverUrl(input)).toBe(input);
   });
 });

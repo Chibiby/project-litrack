@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
-import { resolvePooledDatabaseUrl } from "@/lib/db-url";
+import { resolvePgDriverUrl, resolvePooledDatabaseUrl } from "@/lib/db-url";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -43,7 +43,8 @@ const UNCONFIGURED_DATABASE_URL =
 
 export function createPrismaClient(databaseUrl = datasourceUrl) {
   const adapter = new PrismaPg({
-    connectionString: databaseUrl ?? UNCONFIGURED_DATABASE_URL,
+    connectionString:
+      resolvePgDriverUrl(databaseUrl) ?? UNCONFIGURED_DATABASE_URL,
     // Workers forbid reusing an I/O object from a previous request. Retire a
     // pool connection after one use so a warm isolate cannot carry its socket
     // into the next request; Supabase's transaction pooler handles reuse on
