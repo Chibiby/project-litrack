@@ -85,7 +85,17 @@ function scanFile(rel: string, text: string): Offense[] {
     const lineNo = idx + 1;
     if (!line.startsWith("export")) continue;
 
-    // Erased before runtime; never crosses the "use server" boundary.
+    // Turbopack 15.5 can retain a type-only re-export from a server-action
+    // module and evaluate the missing binding at runtime. Local declarations
+    // remain erased, but re-exported types belong in a plain shared module.
+    if (/^export\s+type\s*\{/.test(line)) {
+      offenses.push({
+        line: lineNo,
+        message: `type re-export "${line.trim()}" is unsafe in a Turbopack server-action module; import the type from its plain defining module instead.`,
+      });
+      continue;
+    }
+    // Local type declarations are erased before runtime.
     if (/^export\s+(type|interface)\b/.test(line)) continue;
 
     // Re-export forms put a runtime binding on the module's surface, and we

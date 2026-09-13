@@ -65,7 +65,6 @@ type BeginLoginSuccess =
 
 export type BeginLoginResult = BeginLoginSuccess | ActionFailure;
 export type FinishLoginResult = { ok: true; redirectTo: string } | ActionFailure;
-export type { LoginFailureReason };
 
 /** Attempts the browser may report per address, so the audit trail cannot be flooded. */
 const REPORT_RATE = { limit: 30, windowMs: 10 * 60 * 1000 } as const;
