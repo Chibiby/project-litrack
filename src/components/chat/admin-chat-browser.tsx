@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChatThread } from "@/components/chat/chat-thread";
+import type { ChatChannelView } from "@/lib/actions/chat";
 import { PresenceLabel } from "@/components/chat/presence-label";
 import { cn } from "@/lib/utils";
 import type { AdminChatSchool } from "@/lib/chat/queries";
@@ -20,7 +21,7 @@ import type { AdminChatSchool } from "@/lib/chat/queries";
 type Filter = "all" | "school" | "admin" | "unread";
 
 type Selected =
-  | { kind: "SCHOOL"; schoolId: string; label: string }
+  | { kind: "SCHOOL"; schoolId: string; channelId: string; label: string }
   | {
       kind: "ADMIN_DIRECT";
       schoolId: string;
@@ -44,10 +45,12 @@ export function AdminChatBrowser({
   schools,
   initialChannelId,
   onSelectChannel,
+  initialChannel,
 }: {
   schools: AdminChatSchool[];
   initialChannelId?: string;
   onSelectChannel?: (channelId: string) => void;
+  initialChannel?: ChatChannelView | null;
 }) {
   const initial = findInitial(schools, initialChannelId);
   const [selected, setSelected] = useState<Selected | null>(initial);
@@ -65,7 +68,7 @@ export function AdminChatBrowser({
         : undefined;
     setSelected(
       conversation.kind === "SCHOOL"
-        ? { kind: "SCHOOL", schoolId: conversation.schoolId, label: conversation.label }
+        ? { kind: "SCHOOL", schoolId: conversation.schoolId, channelId: conversation.id, label: conversation.label }
         : {
             kind: "ADMIN_DIRECT",
             schoolId: conversation.schoolId,
@@ -256,6 +259,8 @@ export function AdminChatBrowser({
               <ChatThread
                 key={selected.kind === "SCHOOL" ? `s:${selected.schoolId}` : `d:${selected.channelId}`}
                 kind={selected.kind}
+                channelId={selected.channelId}
+                initialChannel={initialChannel?.id === selected.channelId ? initialChannel : null}
                 schoolId={selected.schoolId}
                 memberId={selected.kind === "ADMIN_DIRECT" ? selected.memberId : undefined}
                 messageQuery={messageQuery}
@@ -321,7 +326,7 @@ function findInitial(schools: AdminChatSchool[], channelId?: string): Selected |
   if (!channelId) return null;
   for (const school of schools) {
     if (school.staffRoom?.id === channelId) {
-      return { kind: "SCHOOL", schoolId: school.schoolId, label: school.schoolName };
+      return { kind: "SCHOOL", schoolId: school.schoolId, channelId: school.staffRoom.id, label: school.schoolName };
     }
     const thread = school.directThreads.find((item) => item.id === channelId);
     if (thread) {

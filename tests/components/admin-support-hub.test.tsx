@@ -15,6 +15,9 @@ vi.mock("@/components/chat/admin-chat-browser", () => ({
 vi.mock("@/components/support/support-inbox", () => ({
   SupportInbox: () => <div data-testid="support-inbox">Ticket queue</div>,
 }));
+vi.mock("@/components/admin/admin-email-composer", () => ({
+  AdminEmailComposer: () => <div>Email composer</div>,
+}));
 
 import { AdminSupportHub } from "@/components/admin/admin-support-hub";
 
@@ -54,5 +57,13 @@ describe("AdminSupportHub", () => {
     vi.advanceTimersByTime(30_000);
 
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the email workspace from a routed third tab", () => {
+    render(<AdminSupportHub schools={[]} tickets={[]} emailRecipients={[]} emailConfigured />);
+    fireEvent.click(screen.getByRole("tab", { name: "Email" }));
+    expect(screen.getByRole("tab", { name: "Email" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Email composer")).not.toBeNull();
+    expect(replace).toHaveBeenCalledWith("/admin/support?tab=email", { scroll: false });
   });
 });

@@ -36,6 +36,7 @@ import {
   readImpersonationContext,
 } from "@/lib/auth/impersonation";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
+import { sendPasswordRecoveryEmail } from "@/lib/auth/recovery-email";
 import {
   warmAdminRoutes,
   warmSchoolHeadRoutes,
@@ -876,11 +877,9 @@ export const requestPasswordReset = action(
         select: { id: true, schoolId: true, isActive: true, deletedAt: true },
       });
       if (existing && existing.isActive && !existing.deletedAt) {
-        const supabase = await createSupabaseServerClient();
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${appUrl()}/auth/reset`,
-        });
-        if (error) {
+        try {
+          await sendPasswordRecoveryEmail(email, `${appUrl()}/auth/reset`);
+        } catch (error) {
           // The person must still see "sent" — telling them it failed would
           // tell a stranger the account exists. But a mail sender that has
           // stopped working is otherwise invisible to everyone, which is how
@@ -888,7 +887,7 @@ export const requestPasswordReset = action(
           reportError(
             new AppError("AUTH_EMAIL_SEND_FAILED", {
               cause: error,
-              detail: `resetPasswordForEmail failed: ${error.message}`,
+              detail: "Password recovery email delivery failed",
               context: { reason: "reset_email_failed", schoolId: existing.schoolId },
             }),
             {

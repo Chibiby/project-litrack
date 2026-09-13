@@ -5,6 +5,9 @@ import { TableSectionSkeleton } from "@/components/loading";
 import { listInboxTickets } from "@/lib/support/queries";
 import { listAdminChatSchools } from "@/lib/chat/queries";
 import { AdminSupportHub } from "@/components/admin/admin-support-hub";
+import { listAdminEmailRecipients } from "@/lib/admin-email/queries";
+import { isEmailConfigured } from "@/lib/email";
+import { readChannel } from "@/lib/actions/chat";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +38,7 @@ export default async function AdminSupportPage({
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
         <SupportQueue
           adminId={user.id}
-          initialTab={tab === "tickets" ? "tickets" : "chat"}
+          initialTab={tab === "tickets" || tab === "email" ? tab : "chat"}
           initialChannelId={channel}
         />
       </Suspense>
@@ -50,19 +53,25 @@ async function SupportQueue({
   initialChannelId,
 }: {
   adminId: string;
-  initialTab: "chat" | "tickets";
+  initialTab: "chat" | "tickets" | "email";
   initialChannelId?: string;
 }) {
-  const [tickets, schools] = await Promise.all([
+  const [tickets, schools, emailRecipients] = await Promise.all([
     listInboxTickets(),
     listAdminChatSchools(adminId),
+    listAdminEmailRecipients(),
   ]);
+  const knownChannel = initialChannelId && schools.some((school) => school.staffRoom?.id === initialChannelId || school.directThreads.some((thread) => thread.id === initialChannelId));
+  const initialRead = knownChannel && initialChannelId ? await readChannel({ channelId: initialChannelId }) : null;
   return (
     <AdminSupportHub
       tickets={tickets}
       schools={schools}
       initialTab={initialTab}
       initialChannelId={initialChannelId}
+      emailRecipients={emailRecipients}
+      emailConfigured={isEmailConfigured()}
+      initialChannel={initialRead?.ok ? initialRead.data ?? null : null}
     />
   );
 }

@@ -33,6 +33,9 @@ const POLL_MS = 6000;
 
 type Props = {
   kind: ChatChannelKind;
+  /** Existing channels can skip the create/open round trip. */
+  channelId?: string;
+  initialChannel?: ChatChannelView | null;
   /** Admin only: whose school, and whose private thread. */
   schoolId?: string;
   memberId?: string;
@@ -76,8 +79,8 @@ function dayLabel(date: Date): string {
   }).format(date);
 }
 
-export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery = "" }: Props) {
-  const [channel, setChannel] = useState<ChatChannelView | null>(null);
+export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId, emptyHint, messageQuery = "" }: Props) {
+  const [channel, setChannel] = useState<ChatChannelView | null>(initialChannel ?? null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -86,7 +89,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
 
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const channelIdRef = useRef<string | null>(null);
+  const channelIdRef = useRef<string | null>(channelId ?? initialChannel?.id ?? null);
   /**
    * Newest message id already rendered, so a poll can tell "changed" cheaply.
    * `undefined` means nothing has been rendered yet — distinct from `null`,
@@ -94,7 +97,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
    * messages stuck on "Opening the conversation…" forever, because its newest
    * id matches the initial value and the first read never reaches state.
    */
-  const latestRef = useRef<string | null | undefined>(undefined);
+  const latestRef = useRef<string | null | undefined>(initialChannel ? initialChannel.messages.at(-1)?.id ?? null : undefined);
 
   const refresh = useCallback(async (channelId: string, markRead: boolean) => {
     const result = await readChannel({ channelId });
@@ -112,6 +115,15 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
   // a school with no staff room yet gets one the moment somebody looks.
   useEffect(() => {
     let cancelled = false;
+    if (channelId) {
+      channelIdRef.current = channelId;
+      if (!initialChannel || initialChannel.id !== channelId) void refresh(channelId, true);
+      else void markChannelRead({ channelId });
+      void listMentionTargets({ channelId }).then((people) => {
+        if (!cancelled && people.ok && people.data) setTargets(people.data);
+      });
+      return () => { cancelled = true; };
+    }
     void openChannel({ kind, schoolId, memberId }).then(async (result) => {
       if (cancelled) return;
       if (!result.ok || !result.data) {
@@ -126,7 +138,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
     return () => {
       cancelled = true;
     };
-  }, [kind, schoolId, memberId, refresh]);
+  }, [kind, channelId, initialChannel, schoolId, memberId, refresh]);
 
   // Poll only while the tab is visible. A backgrounded phone should not be
   // making a request every six seconds on a teacher's mobile data.
@@ -202,7 +214,7 @@ export function ChatThread({ kind, schoolId, memberId, emptyHint, messageQuery =
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/15 p-4 sm:p-5" role="log">
         {channel === null && !error && (
-          <p className="text-[13px] text-muted-foreground">Opening the conversation…</p>
+          <div aria-label="Loading conversation" className="space-y-3"><div className="h-12 w-2/3 animate-pulse rounded-lg bg-muted" /><div className="ml-auto h-12 w-1/2 animate-pulse rounded-lg bg-muted" /></div>
         )}
 
         {channel?.messages.length === 0 && (
