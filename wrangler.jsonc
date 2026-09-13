@@ -17,6 +17,13 @@
       "id": "194a9703ac674c7a9934acaf2c677047"
     }
   ],
+  // The daily snapshot reads every table and gzips it in one pass, which blows
+  // the default 30s CPU budget (observed: Cloudflare error 1102). 5 minutes is
+  // the ceiling on Workers Paid. This is a CPU budget, not wall clock -- time spent
+  // waiting on Postgres does not count against it.
+  "limits": {
+    "cpu_ms": 300000
+  },
   // Replaces the `crons` block in vercel.json. Times are UTC; Manila is UTC+8.
   "triggers": {
     "crons": ["0 16 * * *", "30 16 * * 6"]
