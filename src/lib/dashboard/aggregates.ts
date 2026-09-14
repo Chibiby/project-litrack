@@ -12,7 +12,7 @@ import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
-import { COMPLETE_ASSESSMENT_WHERE } from "@/lib/aral/reading-level-progress";
+import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
 import {
   adminDashboard,
   schoolsList,
@@ -348,10 +348,15 @@ export async function getSchoolHeadCharts(schoolId: string) {
       const enMap = new Map<string, number>();
       const filMap = new Map<string, number>();
       for (const row of learnersWithProfiles) {
-        enMap.set(
-          row.englishReadingProfile,
-          (enMap.get(row.englishReadingProfile) ?? 0) + row._count._all
-        );
+        // `englishReadingProfile` is null for Grade 1/Grade 2 (never collected)
+        // and for anyone not yet assessed — neither belongs in a distribution of
+        // recorded English bands.
+        if (row.englishReadingProfile) {
+          enMap.set(
+            row.englishReadingProfile,
+            (enMap.get(row.englishReadingProfile) ?? 0) + row._count._all
+          );
+        }
         filMap.set(
           row.filipinoReadingProfile,
           (filMap.get(row.filipinoReadingProfile) ?? 0) + row._count._all
@@ -760,7 +765,7 @@ export async function getTeacherReadingOverview(opts: TeacherOpts) {
     async () => {
       const grades = await prisma.gradeLevel.findMany({
         where: teacherGradeFilter(opts),
-        select: { id: true },
+        select: { id: true, type: true },
       });
       const gradeIds = grades.map((g) => g.id);
 
@@ -793,13 +798,22 @@ export async function getTeacherReadingOverview(opts: TeacherOpts) {
               by: ["learnerId"],
               where: {
                 weekStart: { gte: start, lt: end },
-                ...COMPLETE_ASSESSMENT_WHERE,
-                learner: {
-                  gradeLevelId: { in: gradeIds },
-                  deletedAt: null,
-                  isAralLearner: true,
-                  ...careFilter,
-                },
+                // `AND`, not a merged spread: `completeAssessmentWhereForGrades`
+                // sets its own `learner` key (to route each row to its grade's
+                // language rule), which a plain object spread would clobber
+                // against the `learner` key below depending on how many grade
+                // shapes it produced.
+                AND: [
+                  completeAssessmentWhereForGrades(grades),
+                  {
+                    learner: {
+                      gradeLevelId: { in: gradeIds },
+                      deletedAt: null,
+                      isAralLearner: true,
+                      ...careFilter,
+                    },
+                  },
+                ],
               },
             })
             .then((rows) => rows.length),

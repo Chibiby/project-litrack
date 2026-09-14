@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { nonEmpty } from "./common";
+import { LEARNER_AGE_RANGE, nonEmpty } from "./common";
 import { ethnicityFields, refineEthnicityPair } from "./ethnicity";
 
 const READING_PROFILE = [
@@ -7,6 +7,12 @@ const READING_PROFILE = [
   "FRUSTRATION_HIGH_EMERGENT",
   "INSTRUCTIONAL_DEVELOPING",
   "INDEPENDENT_GRADE_READY",
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a).
+  "CANNOT_NAME_SOUND_LETTERS",
+  "LETTER_LEVEL",
+  "CV_BLENDING",
+  "CVC_BLENDING",
 ] as const;
 
 const FRUSTRATION_SUBTYPE = ["DECODING", "COMPREHENSION_ALL", "COMPREHENSION_CRITICAL"] as const;
@@ -50,7 +56,7 @@ const optionalTransferDetails = z
 
 function refineFrustrationSubtypes(
   data: {
-    englishReadingProfile: (typeof READING_PROFILE)[number];
+    englishReadingProfile?: (typeof READING_PROFILE)[number];
     englishFrustrationSubtypes: (typeof FRUSTRATION_SUBTYPE)[number][];
     filipinoReadingProfile: (typeof READING_PROFILE)[number];
     filipinoFrustrationSubtypes: (typeof FRUSTRATION_SUBTYPE)[number][];
@@ -114,11 +120,14 @@ export const learnerImportRowSchema = z
     firstName: nonEmpty("First name required").max(80),
     middleName: optionalMiddleName,
     lastName: nonEmpty("Last name required").max(80),
-    age: z.coerce.number().int().min(3).max(25),
+    age: z.coerce.number().int().min(LEARNER_AGE_RANGE.min).max(LEARNER_AGE_RANGE.max),
     gender: z.enum(["MALE", "FEMALE"]),
     // Both slots. A file may name one ethnicity, two, or none at all.
     ...ethnicityFields,
-    englishReadingProfile: z.enum(READING_PROFILE),
+    // Structurally optional: Grade 1/Grade 2 stop collecting English (see
+    // docs/reading-policy-spec.md section 4a). Whether it is required for the
+    // import's target grade is an action-level invariant, not a Zod one.
+    englishReadingProfile: optionalEnum(READING_PROFILE),
     englishFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),
     filipinoReadingProfile: z.enum(READING_PROFILE),
     filipinoFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),

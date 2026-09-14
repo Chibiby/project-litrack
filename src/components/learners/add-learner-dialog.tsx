@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { AdvisoryChooser } from "@/components/learners/advisory-chooser";
 import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 import { Plus, UserRoundPlus } from "lucide-react";
 
@@ -27,31 +28,56 @@ const LearnerForm = dynamic(
 );
 
 type Props = {
-  /** Every section this teacher advises. One shows a static placement line in
-   * the form; several turn it into a required picker. */
+  /** Every section this teacher advises. Step one always asks which one, even
+   * when there is only one to pick (owner decision — see advisory-chooser.tsx). */
   placements: AdvisoryPlacement[];
   /** Lets the roster header square off the right edge for its split control. */
   triggerClassName?: string;
 };
 
+/** The pre-selected default for a one-advisory teacher; empty for everyone else. */
+function initialSectionId(placements: AdvisoryPlacement[]): string {
+  return placements.length === 1 ? placements[0].sectionId : "";
+}
+
 /**
- * Add learner — a dialog whose only job is adding, so nothing here branches on
- * an edit mode. The form is divided into four collapsible sections with a
- * completion bar; the dialog contributes the header and lets the form own the
- * scrolling body and the footer, which is why DialogContent is a bare flex
- * column with no padding of its own.
+ * Add learner — two steps in one dialog: which advisory section the learner
+ * joins, then the Section A + B form for it. One `Dialog` spans both steps
+ * (rather than nesting a second) so focus stays trapped in a single modal
+ * across the hand-off, and the form only ever mounts once a placement is
+ * confirmed — it never asks again.
  *
- * Defers the heavy LearnerForm chunk until the teacher opens "Add learner".
+ * Defers the heavy LearnerForm chunk until the teacher reaches step two.
  */
 export function AddLearnerDialog({
   placements,
   triggerClassName,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const single = placements.length === 1 ? placements[0] : undefined;
+  const [step, setStep] = useState<"choose" | "form">("choose");
+  const [selectedSectionId, setSelectedSectionId] = useState(() =>
+    initialSectionId(placements)
+  );
+
+  const selectedPlacement = placements.find(
+    (p) => p.sectionId === selectedSectionId
+  );
+
+  function resetChooser() {
+    setStep("choose");
+    setSelectedSectionId(initialSectionId(placements));
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    // Reset on close (cancel or ✕) so a reopen never carries a stale pick —
+    // and on open, since `initialSectionId` may have changed if the teacher's
+    // advisories changed between visits.
+    if (!next) resetChooser();
+  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button
           type="button"
@@ -70,20 +96,36 @@ export function AddLearnerDialog({
           <div className="min-w-0">
             <DialogTitle>Add new learner</DialogTitle>
             <DialogDescription className="mt-0.5">
-              {single
-                ? `Create a Section A + B profile for ${single.gradeLabel}${
-                    single.sectionName ? ` · ${single.sectionName}` : ""
-                  }.`
-                : "Create a Section A + B profile, then choose which of your advisory sections this learner joins."}
+              {step === "choose"
+                ? "Choose which of your advisory sections this learner joins."
+                : selectedPlacement
+                  ? `Create a Section A + B profile for ${selectedPlacement.gradeLabel} · ${selectedPlacement.sectionName}.`
+                  : "Create a Section A + B profile."}
             </DialogDescription>
           </div>
         </header>
 
-        {open ? (
-          <LearnerForm
+        {open && step === "choose" ? (
+          <AdvisoryChooser
             placements={placements}
-            onCreated={() => setOpen(false)}
-            onCancel={() => setOpen(false)}
+            selectedSectionId={selectedSectionId}
+            onSelectedSectionIdChange={setSelectedSectionId}
+            onContinue={() => setStep("form")}
+            onCancel={() => handleOpenChange(false)}
+          />
+        ) : null}
+
+        {open && step === "form" && selectedPlacement ? (
+          <LearnerForm
+            gradeLevelId={selectedPlacement.gradeLevelId}
+            gradeType={selectedPlacement.gradeType}
+            sectionId={selectedPlacement.sectionId}
+            placement={{
+              gradeLabel: selectedPlacement.gradeLabel,
+              sectionName: selectedPlacement.sectionName,
+            }}
+            onCreated={() => handleOpenChange(false)}
+            onCancel={() => handleOpenChange(false)}
           />
         ) : null}
       </DialogContent>

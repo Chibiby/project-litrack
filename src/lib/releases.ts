@@ -74,6 +74,23 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.14.0",
+    date: "2026-09-14",
+    title: "New reading levels for Kinder to Grade 2 and Senior High",
+    announce: true,
+    fixes: [
+      "Kinder, Grade 1 and Grade 2 now record reading as Level 0 to Level 3: cannot name and sound letters, letter level, CV blending, and CVC blending.",
+      "Grade 1 and Grade 2 are assessed in Filipino only, and their monthly reading is no longer marked incomplete for a missing English level.",
+      "Grade 11 and Grade 12 choose from Independent Level, Instructional Level and Frustration Level.",
+      "Writing is no longer asked for in monthly reading or on the learner form. Writing already saved is kept.",
+      "Adding a learner now starts by choosing which of your advisory sections they join, with grade and section shown together.",
+      "Learners can be enrolled up to age 70.",
+      "Overweight is now a nutritional status option.",
+      "Your dashboard shows the Pending Profiles count again.",
+      "Learners with a reading level from before these changes can still be edited without re-assessing them.",
+    ],
+  },
+  {
     version: "1.13.0",
     date: "2026-09-14",
     title: "Advising more than one section works properly",
@@ -86,7 +103,7 @@ export const RELEASES: readonly Release[] = [
       "Learner Profiling has been taken out of the side menu, and the Complete Profiling and Update Profiling buttons, the profile status columns and the Pending Profiles card have gone with it. Nothing you have already saved was deleted.",
       "Weekly attendance, monthly reading level, ARAL enrolment and End of Terms Reports all work without an ARAL profile, and no longer ask you to fill one in first.",
       "Floating teachers keep their ARAL work. Only the class roster and the end-of-term sheet are closed to them, and both now say so in place.",
-      "The suggestion list that appears when you type @ in a message is now a proper button, so it reads correctly to a screen reader and matches the rest of the app.",
+      "The suggestion list that appears when you mention someone in a message is now a proper button, so it reads correctly to a screen reader and matches the rest of the app.",
     ],
   },
   {

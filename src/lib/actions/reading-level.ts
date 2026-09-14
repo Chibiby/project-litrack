@@ -24,6 +24,7 @@ import {
   nextMonthStart,
 } from "@/lib/month-range";
 import { resolveMonthlyReadingLevelWindow } from "@/lib/unlock/reading-level-window";
+import { allowedReadingValuesForGrade } from "@/lib/reading/policy";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -40,7 +41,6 @@ type RawReadingLevelRow = {
   filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
-  writingLevel: string | null;
   notes: string | null;
 };
 
@@ -156,7 +156,10 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
 
 /**
  * Upsert one month's reading levels for many ARAL learners.
- * Input: `{ monthStart, entries: [{ learnerId, englishProfile, filipinoProfile, wordRecognitionLevel, readingComprehensionLevel, writingLevel?, notes? }] }`
+ * Input: `{ monthStart, entries: [{ learnerId, englishProfile, filipinoProfile, wordRecognitionLevel, readingComprehensionLevel, notes? }] }`
+ * (`writingLevel` is no longer collected here; an existing row's historical
+ * value survives because the upsert never names that column — see the SET
+ * list below and docs/reading-policy-spec.md section 4c.)
  * `monthStart` is coerced and normalized to the 1st of the month.
  *
  * The stored column is still `weekStart`. The ARAL reading level is assessed
@@ -213,7 +216,13 @@ export async function bulkRecordMonthlyReadingLevel(
       deletedAt: null,
       isAralLearner: true,
     },
-    select: { id: true, gradeLevelId: true, teacherId: true, aralTeacherId: true },
+    select: {
+      id: true,
+      gradeLevelId: true,
+      teacherId: true,
+      aralTeacherId: true,
+      gradeLevel: { select: { type: true } },
+    },
   });
 
   if (learners.length !== learnerIds.length) {
@@ -224,6 +233,63 @@ export async function bulkRecordMonthlyReadingLevel(
   }
 
   const byId = new Map(learners.map((l) => [l.id, l]));
+
+  // The grid resubmits every ON-SCREEN row with any value on each save
+  // (`hasAnyValue`), not just the row the teacher actually edited — so an
+  // untouched legacy row prefilled from a stored out-of-policy value (e.g. a
+  // K/G1/G2 learner still holding a pre-rubric CRLA band) rides along on an
+  // unrelated save of a different learner in the same month/grade. Without
+  // this carve-out that legacy value fails the allowed-set check below and
+  // aborts the WHOLE batch, blocking a save that never touched it — the same
+  // regression as `updateLearner` (docs/reading-policy-spec.md decision I),
+  // just at batch scope instead of per-field. Load whatever is already stored
+  // for these learners within this month's range (same predicate
+  // `fetchAralReadingLevelForMonth` prefills the grid from, latest row per
+  // learner) so an unchanged legacy value can be told apart from a genuinely
+  // new out-of-policy write. Skipped on a clears-only save (no entries) — a
+  // clear never carries a reading value to validate, so there is nothing to
+  // compare against.
+  const existingById = new Map<string, { englishProfile: string | null; filipinoProfile: string | null }>();
+  if (entryIds.length > 0) {
+    const nextMonthForLookup = nextMonthStart(monthStart);
+    const existingRows = await prisma.readingLevelRecord.findMany({
+      where: {
+        learnerId: { in: entryIds },
+        weekStart: { gte: monthStart, lt: nextMonthForLookup },
+      },
+      orderBy: [{ weekStart: "asc" }, { updatedAt: "asc" }],
+      select: { learnerId: true, englishProfile: true, filipinoProfile: true },
+    });
+    for (const row of existingRows) existingById.set(row.learnerId, row); // last write (ascending order) wins, same as the grid's own prefill reduce
+  }
+
+  // Each entry's values must be valid for the learner's OWN current grade — a
+  // teacher advising both a Kinder and a Grade 5 section saves both grids
+  // through this one action, and the two rows must not be allowed to bleed
+  // into each other's rubric. A value outside that set is still accepted when
+  // it is byte-identical to what is already stored for this learner this
+  // month (untouched legacy row); only a value that is both out-of-policy AND
+  // changed is rejected.
+  for (const entry of parsed.data.entries) {
+    const learner = byId.get(entry.learnerId);
+    if (!learner) continue;
+    const allowed = allowedReadingValuesForGrade(learner.gradeLevel.type);
+    const existingRow = existingById.get(entry.learnerId);
+    if (
+      entry.englishProfile &&
+      entry.englishProfile !== existingRow?.englishProfile &&
+      !allowed.includes(entry.englishProfile)
+    ) {
+      return { ok: false, error: "Invalid English reading level for this grade" };
+    }
+    if (
+      entry.filipinoProfile &&
+      entry.filipinoProfile !== existingRow?.filipinoProfile &&
+      !allowed.includes(entry.filipinoProfile)
+    ) {
+      return { ok: false, error: "Invalid Filipino reading level for this grade" };
+    }
+  }
 
   // Dedupe on the conflict tuple BEFORE the statement is built. The old array
   // form ran one `upsert` per entry serially, so a duplicated learner was a
@@ -245,7 +311,6 @@ export async function bulkRecordMonthlyReadingLevel(
       filipinoProfile: entry.filipinoProfile ?? null,
       wordRecognitionLevel: entry.wordRecognitionLevel ?? null,
       readingComprehensionLevel: entry.readingComprehensionLevel ?? null,
-      writingLevel: entry.writingLevel ?? null,
       notes: entry.notes ?? null,
     });
   }
@@ -283,7 +348,6 @@ export async function bulkRecordMonthlyReadingLevel(
               ${r.filipinoProfile}::text::"ReadingProfile",
               ${r.wordRecognitionLevel}::text::"WeeklyWordRecognitionLevel",
               ${r.readingComprehensionLevel}::text::"WeeklyReadingComprehensionLevel",
-              ${r.writingLevel}::text::"WeeklyWritingLevel",
               ${r.notes}::text,
               ${user.id}::text,
               ${now}::timestamp(3)
@@ -301,16 +365,16 @@ export async function bulkRecordMonthlyReadingLevel(
         const written = await tx.$queryRaw<{ id: string }[]>`
           INSERT INTO "ReadingLevelRecord" (
             "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
-            "wordRecognitionLevel", "readingComprehensionLevel", "writingLevel",
+            "wordRecognitionLevel", "readingComprehensionLevel",
             "notes", "recordedById", "updatedAt"
           )
           SELECT v."id", v."learnerId", v."weekStart", v."englishProfile",
                  v."filipinoProfile", v."wordRecognitionLevel",
-                 v."readingComprehensionLevel", v."writingLevel", v."notes",
+                 v."readingComprehensionLevel", v."notes",
                  v."recordedById", v."updatedAt"
           FROM (VALUES ${values}) AS v (
             "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
-            "wordRecognitionLevel", "readingComprehensionLevel", "writingLevel",
+            "wordRecognitionLevel", "readingComprehensionLevel",
             "notes", "recordedById", "updatedAt"
           )
           JOIN "Learner" l
@@ -323,7 +387,6 @@ export async function bulkRecordMonthlyReadingLevel(
             "filipinoProfile" = EXCLUDED."filipinoProfile",
             "wordRecognitionLevel" = EXCLUDED."wordRecognitionLevel",
             "readingComprehensionLevel" = EXCLUDED."readingComprehensionLevel",
-            "writingLevel" = EXCLUDED."writingLevel",
             "notes" = EXCLUDED."notes",
             "recordedById" = EXCLUDED."recordedById",
             "updatedAt" = EXCLUDED."updatedAt"

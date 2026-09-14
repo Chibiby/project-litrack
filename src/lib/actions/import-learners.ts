@@ -171,6 +171,11 @@ export async function previewLearnerImport(input: {
     existingKeys,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
+    // Keyed off the resolved target grade, never a grade the file names —
+    // `assertTeacherGradeAccess` already loaded and authorized it above
+    // (docs/reading-policy-spec.md section 4a). Must match `commitLearnerImport`
+    // exactly, or preview can pass rows that commit then rejects.
+    gradeType: grade.type,
   });
   return {
     ok: true,
@@ -224,6 +229,10 @@ export async function commitLearnerImport(input: {
     existingKeys,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
+    // Keyed off the resolved target grade, never a grade the file names —
+    // `assertTeacherGradeAccess` already loaded and authorized it above
+    // (docs/reading-policy-spec.md section 4a).
+    gradeType: grade.type,
   });
   const toInsert: LearnerImportRow[] = [];
   let skippedDuplicate = 0;

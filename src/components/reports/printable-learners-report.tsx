@@ -163,10 +163,9 @@ export function PrintableLearnersReport({
                   {l.section ? ` · ${l.section.name}` : ""}
                 </td>
                 <td className="py-1.5 pr-2">
-                  {labelReadingProfile(
-                    l.englishReadingProfile,
-                    l.gradeLevel.type
-                  )}
+                  {l.englishReadingProfile
+                    ? labelReadingProfile(l.englishReadingProfile, l.gradeLevel.type)
+                    : "—"}
                 </td>
                 <td className="py-1.5 pr-2">
                   {labelReadingProfile(

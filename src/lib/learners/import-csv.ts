@@ -23,6 +23,7 @@ import {
 } from "@/lib/validators/learner-import.schema";
 import { learnerDuplicateKey } from "@/lib/learners/normalize";
 import { formatPersonName } from "@/lib/names";
+import { languagesForGrade, allowedReadingValuesForGrade } from "@/lib/reading/policy";
 
 /** Canonical CSV headers (Section A + B + optional section + isAralLearner). */
 export const LEARNER_CSV_HEADERS = [
@@ -60,38 +61,51 @@ export function normalizeLearnerCsvHeader(header: string): string {
 
 /**
  * CSV template. When `gradeType` is known, example profile cells use that band’s
- * human labels; otherwise enum codes (always accepted on import).
+ * human labels; otherwise enum codes (always accepted on import). Grades that
+ * don't collect English (Grade 1/Grade 2) drop the `englishReadingProfile`
+ * column entirely, matching what the manual form does for the same grade
+ * (docs/reading-policy-spec.md section 4a).
  */
 export function learnerCsvTemplate(gradeType?: string | null): string {
   const profileLabels = gradeType
     ? readingProfileLabelsForGradeType(gradeType)
     : null;
-  const header = LEARNER_CSV_HEADERS.join(",");
-  const example = [
-    "Ana",
-    "M",
-    "Santos",
-    "10",
-    "FEMALE",
-    "BISAYA",
-    "",
+  const collectsEnglish = gradeType ? languagesForGrade(gradeType).includes("ENGLISH") : true;
+
+  const row: Record<LearnerCsvHeader, string> = {
+    firstName: "Ana",
+    middleName: "M",
+    lastName: "Santos",
+    age: "10",
+    gender: "FEMALE",
+    ethnicity: "BISAYA",
+    ethnicityOther: "",
     // secondaryEthnicity / secondaryEthnicityOther: optional, blank in the
     // example so nobody reads the second slot as something they must fill.
-    "",
-    "",
-    "",
-    profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
-    "",
-    profileLabels?.INDEPENDENT_GRADE_READY ?? "INDEPENDENT_GRADE_READY",
-    "",
-    "FOUR_PS",
-    "SECONDARY_GRADUATE",
-    "WALKING",
-    "LESS_THAN_1KM",
-    "NONE",
-    "",
-    "false",
-  ].join(",");
+    secondaryEthnicity: "",
+    secondaryEthnicityOther: "",
+    section: "",
+    englishReadingProfile:
+      profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
+    englishFrustrationSubtypes: "",
+    filipinoReadingProfile:
+      profileLabels?.INDEPENDENT_GRADE_READY ?? "INDEPENDENT_GRADE_READY",
+    filipinoFrustrationSubtypes: "",
+    governmentBenefits: "FOUR_PS",
+    parentEducation: "SECONDARY_GRADUATE",
+    modeOfTransportation: "WALKING",
+    distanceHomeToSchool: "LESS_THAN_1KM",
+    previousTransfers: "NONE",
+    transferDetails: "",
+    isAralLearner: "false",
+  };
+
+  const headers = collectsEnglish
+    ? LEARNER_CSV_HEADERS
+    : LEARNER_CSV_HEADERS.filter((h) => h !== "englishReadingProfile");
+
+  const header = headers.join(",");
+  const example = headers.map((h) => row[h]).join(",");
   return `${header}\n${example}\n`;
 }
 
@@ -262,6 +276,14 @@ export type ValidateImportRowsOptions = {
    * Matching is case-insensitive.
    */
   sectionNames?: string[];
+  /**
+   * The import's target grade type — never read from the file. When supplied,
+   * each row's `englishReadingProfile`/`filipinoReadingProfile` is checked
+   * against that grade's reading policy (presence and allowed values), the
+   * same action-level invariant `createLearner`/`updateLearner` enforce
+   * (docs/reading-policy-spec.md section 4a).
+   */
+  gradeType?: string;
 };
 
 /**
@@ -305,6 +327,20 @@ export function validateImportRows(
     }
 
     const data = parsed.data;
+
+    if (options.gradeType) {
+      const readingErrors = validateReadingProfileForGrade(data, options.gradeType);
+      if (readingErrors.length > 0) {
+        results.push({
+          rowNumber,
+          ok: false,
+          errors: readingErrors,
+          rawPreview: [mapped.firstName, mapped.lastName, mapped.age].filter(Boolean).join(" "),
+        });
+        return;
+      }
+    }
+
     const key = learnerDuplicateKey(data.firstName, data.lastName, data.age);
     let duplicateWarning = false;
 
@@ -340,6 +376,35 @@ export function validateImportRows(
   });
 
   return results;
+}
+
+/**
+ * Same action-level invariant `createLearner`/`updateLearner` enforce
+ * (docs/reading-policy-spec.md section 4a), applied per CSV row at commit
+ * time, keyed off the import's resolved target grade — never a grade named in
+ * the file.
+ */
+function validateReadingProfileForGrade(
+  data: { englishReadingProfile?: string; filipinoReadingProfile: string },
+  gradeType: string
+): string[] {
+  const errors: string[] = [];
+  const collectsEnglish = languagesForGrade(gradeType).includes("ENGLISH");
+  const allowed = allowedReadingValuesForGrade(gradeType);
+
+  if (collectsEnglish && !data.englishReadingProfile) {
+    errors.push("English reading level is required");
+  }
+  if (!collectsEnglish && data.englishReadingProfile) {
+    errors.push("English reading level is not collected for this grade");
+  }
+  if (data.englishReadingProfile && !allowed.includes(data.englishReadingProfile)) {
+    errors.push("Invalid English reading level for this grade");
+  }
+  if (!allowed.includes(data.filipinoReadingProfile)) {
+    errors.push("Invalid Filipino reading level for this grade");
+  }
+  return errors;
 }
 
 /** Resolve a section name against a list of {id,name} for the import grade. */

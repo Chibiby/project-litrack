@@ -103,16 +103,29 @@ describe("ARAL Profile — nothing asks anyone to complete one", () => {
     expect(read("src/app/teacher/(app)/learners/page.tsx")).not.toContain("aralProfile");
   });
 
-  it("has no Pending Profiles card on either dashboard", () => {
-    expect(read("src/components/dashboard/teacher/dashboard-body.tsx")).not.toMatch(
-      /Pending Profiles/
-    );
-    expect(read("src/lib/dashboard/teacher-overview.ts")).not.toContain(
+  it("has a read-only Pending Profiles card on the teacher dashboard only (docs/aral-profile.md exception, restored 2026-09-14)", () => {
+    // Project-owner-approved exception: the teacher dashboard keeps a
+    // read-only "Pending Profiles" count. It must carry no call to action —
+    // no `action` prop / link / button wired to the ARAL Profile form.
+    const teacherDashboard = read("src/components/dashboard/teacher/dashboard-body.tsx");
+    expect(teacherDashboard).toMatch(/Pending Profiles/);
+    expect(teacherDashboard).toContain("pendingAralProfiles");
+    const cardStart = teacherDashboard.indexOf('title="Pending Profiles"');
+    const cardEnd = teacherDashboard.indexOf("/>", cardStart);
+    const pendingCard = teacherDashboard.slice(cardStart, cardEnd);
+    expect(pendingCard).not.toContain("action={{");
+    expect(pendingCard).not.toContain("href=");
+
+    expect(read("src/lib/dashboard/teacher-overview.ts")).toContain(
       "pendingAralProfiles"
     );
+
+    // The School Head dashboard's equivalent nudge is NOT part of the
+    // exception and stays removed.
     const schoolHead = read("src/components/dashboard/school-head-dashboard-sections.tsx");
     expect(schoolHead).not.toContain("pendingAralProfiles");
     expect(schoolHead).not.toMatch(/still need Sections/);
+    expect(schoolHead).not.toMatch(/Pending Profiles/);
   });
 
   it("does not prompt for a missing profile on the learner surfaces", () => {

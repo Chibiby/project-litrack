@@ -86,17 +86,17 @@ describe("learnerCreateSchema", () => {
     expect(falseVal.success && falseVal.data.confirmDuplicate).toBe(false);
   });
 
-  it("enforces age bounds 3–25", () => {
+  it("enforces age bounds 3–70 (docs/reading-policy-spec.md — the ceiling moved from 25)", () => {
     expect(learnerCreateSchema.safeParse({ ...validBase, age: 2 }).success).toBe(
       false
     );
     expect(learnerCreateSchema.safeParse({ ...validBase, age: 3 }).success).toBe(
       true
     );
-    expect(learnerCreateSchema.safeParse({ ...validBase, age: 25 }).success).toBe(
+    expect(learnerCreateSchema.safeParse({ ...validBase, age: 70 }).success).toBe(
       true
     );
-    expect(learnerCreateSchema.safeParse({ ...validBase, age: 26 }).success).toBe(
+    expect(learnerCreateSchema.safeParse({ ...validBase, age: 71 }).success).toBe(
       false
     );
   });
@@ -110,13 +110,22 @@ describe("learnerCreateSchema", () => {
         .success
     ).toBe(false);
 
-    for (const band of ["SEVERELY_WASTED", "WASTED", "NORMAL", "OBESE"]) {
+    for (const band of ["SEVERELY_WASTED", "WASTED", "NORMAL", "OVERWEIGHT", "OBESE"]) {
       expect(
         learnerCreateSchema.safeParse({ ...validBase, nutritionalStatus: band })
           .success,
         band
       ).toBe(true);
     }
+  });
+
+  it("accepts the new OVERWEIGHT nutritional status band (docs/reading-policy-spec.md)", () => {
+    const result = learnerCreateSchema.safeParse({
+      ...validBase,
+      nutritionalStatus: "OVERWEIGHT",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.nutritionalStatus).toBe("OVERWEIGHT");
   });
 
   it("rejects invalid gender", () => {
@@ -296,6 +305,25 @@ describe("learnerUpdateSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect("gradeLevelId" in result.data).toBe(false);
+    }
+  });
+
+  it("enforces age bounds 3–70 on update too", () => {
+    expect(learnerUpdateSchema.safeParse({ ...updateBase, age: 2 }).success).toBe(false);
+    expect(learnerUpdateSchema.safeParse({ ...updateBase, age: 70 }).success).toBe(true);
+    expect(learnerUpdateSchema.safeParse({ ...updateBase, age: 71 }).success).toBe(false);
+  });
+
+  it("accepts OVERWEIGHT and omits englishReadingProfile without failing (structurally optional — docs/reading-policy-spec.md section 4a)", () => {
+    expect(
+      learnerUpdateSchema.safeParse({ ...updateBase, nutritionalStatus: "OVERWEIGHT" }).success
+    ).toBe(true);
+
+    const { englishReadingProfile: _omitted, ...withoutEnglish } = updateBase;
+    const result = learnerUpdateSchema.safeParse(withoutEnglish);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.englishReadingProfile).toBeUndefined();
     }
   });
 });

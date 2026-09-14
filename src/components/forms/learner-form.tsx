@@ -16,13 +16,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
   FormProgressBar,
@@ -44,12 +37,17 @@ import {
   ETHNICITY_LABELS,
   NUTRITIONAL_STATUS_LABELS,
   isEarlyGradeReadingBand,
-  readingProfileLabelsForGradeType,
+  labelReadingProfile,
   toOptions,
 } from "@/lib/constants/enum-labels";
+import {
+  isReadingValueAllowedForGrade,
+  languagesForGrade,
+  readingProfileOptionsForGrade,
+} from "@/lib/reading/policy";
+import { LEARNER_AGE_RANGE } from "@/lib/validators/common";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
-import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 
 /*
  * The learner form, in four collapsible sections with a completion bar.
@@ -65,12 +63,12 @@ import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 /**
  * Where the learner sits.
  *
- * Add mode with one advisory: shown, never chosen — the teacher's only section is
- * the only place a new learner can go. Add mode with several advisories: a
- * required picker over exactly those sections, so the choice can never land
- * outside them. Edit mode: the learner's current placement, always shown as a
- * line of text — moving a learner between sections is the School Head's transfer
- * flow, not a side effect of correcting a spelling.
+ * Create mode: resolved before this form ever mounts, by the advisory chooser
+ * step (`src/components/learners/advisory-chooser.tsx`) — the form always
+ * receives exactly one placement and shows it as a confirmed line of text, never
+ * a picker. Edit mode: the learner's current placement, shown the same way —
+ * moving a learner between sections is the School Head's transfer flow, not a
+ * side effect of correcting a spelling.
  *
  * The free-form grade selects this replaces were the bug: the grade list was
  * built from every grade the teacher touched (advisory *and* ARAL designations)
@@ -94,7 +92,8 @@ export type LearnerFormDefaults = {
   ethnicityOther?: string | null;
   secondaryEthnicity?: string | null;
   secondaryEthnicityOther?: string | null;
-  englishReadingProfile?: string;
+  /** Null when the learner's grade doesn't collect English (Grade 1/Grade 2). */
+  englishReadingProfile?: string | null;
   englishFrustrationSubtypes?: string[];
   filipinoReadingProfile?: string;
   filipinoFrustrationSubtypes?: string[];
@@ -109,26 +108,22 @@ export type LearnerFormDefaults = {
 type LearnerFormProps = {
   /**
    * The grade the learner belongs to. Submitted so the server can reject a stale
-   * client, not chosen here — see {@link LearnerFormPlacement}. Edit mode always
-   * passes this; create mode passes it only alongside a single-item
-   * {@link LearnerFormProps.placements} (or omits `placements` altogether).
+   * client, not chosen here — see {@link LearnerFormPlacement}.
    */
   gradeLevelId?: string;
-  /** Drives the reading-band labels, which differ for the early grades. */
+  /** Drives the reading-band options/labels, which differ by grade (section 2). */
   gradeType?: string;
+  /**
+   * Create mode only: the section id the advisory chooser resolved. Submitted
+   * alongside `gradeLevelId` so the server can reject a stale client; the real
+   * placement is re-derived and re-checked server-side on every submit.
+   */
+  sectionId?: string;
   /**
    * The placement line. Without it the header falls back to the grade type's
    * label, which is all a caller that cannot name the section has to show.
    */
   placement?: LearnerFormPlacement;
-  /**
-   * Create mode only: every section the teacher advises. One entry reproduces
-   * the old static line (and still posts its `sectionId`); more than one swaps
-   * the line for a required "Grade & section" picker limited to exactly these
-   * sections, and `gradeLevelId`/`gradeType`/`placement` above are ignored in
-   * favor of whichever placement is chosen.
-   */
-  placements?: AdvisoryPlacement[];
   mode?: "create" | "edit";
   defaultValues?: LearnerFormDefaults;
   submitLabel?: string;
@@ -144,6 +139,27 @@ type LearnerFormProps = {
 };
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
+
+/**
+ * Grade-in-policy options, plus — edit mode only — the learner's own stored
+ * value appended when it falls outside the grade's current allowed set (e.g.
+ * a Kinder learner still holding a pre-rubric CRLA band). That value is never
+ * relabeled as one of the new rubric levels; `labelReadingProfile` gives it
+ * its own honest label. Never appended in create mode, and never for a value
+ * already in policy — see docs/reading-policy-spec.md decision I and the
+ * server-side carve-out in `updateLearner` this makes reachable.
+ */
+function optionsWithLegacyValue(
+  gradeType: string | undefined,
+  isEdit: boolean,
+  storedValue: string | null | undefined
+): { value: string; label: string }[] {
+  const base = readingProfileOptionsForGrade(gradeType ?? "");
+  if (isEdit && storedValue && !isReadingValueAllowedForGrade(storedValue, gradeType ?? "")) {
+    return [...base, { value: storedValue, label: labelReadingProfile(storedValue, gradeType) }];
+  }
+  return base;
+}
 
 /**
  * The four groups the DepEd form divides into, and what each owes the server.
@@ -176,7 +192,19 @@ export const LEARNER_FORM_SECTIONS: readonly FormSectionDef[] = [
     key: "reading",
     title: "Reading levels",
     hint: "English and Filipino bands from the latest assessment",
-    requiredFields: () => ["englishReadingProfile", "filipinoReadingProfile"],
+    // Grade-aware: Grade 1/Grade 2 stop collecting an English level (section
+    // 4a), so English only counts as required when the hidden `gradeType`
+    // field (set from the resolved placement, never chosen here) says the
+    // grade collects it. A snapshot with no `gradeType` at all — every fixture
+    // in this file's own unit tests — falls through to `languagesForGrade("")`,
+    // which is both languages, i.e. today's G3-G10 behaviour, unchanged.
+    requiredFields: (values: FormValues) => {
+      const fields = ["filipinoReadingProfile"];
+      if (languagesForGrade(values.gradeType ?? "").includes("ENGLISH")) {
+        fields.unshift("englishReadingProfile");
+      }
+      return fields;
+    },
   },
   {
     key: "household",
@@ -198,8 +226,8 @@ export const LEARNER_FORM_SECTIONS: readonly FormSectionDef[] = [
 export function LearnerForm({
   gradeLevelId,
   gradeType,
+  sectionId,
   placement,
-  placements,
   mode = "create",
   defaultValues,
   submitLabel,
@@ -266,41 +294,37 @@ export function LearnerForm({
   const label = submitLabel ?? (isEdit ? "Save changes" : "Add learner");
   const idPrefix = isEdit ? "learner-edit" : "learner-add";
 
-  // Edit mode never picks a placement — `placements` is a create-mode-only prop.
-  const advisoryPlacements = isEdit ? [] : placements ?? [];
-  const singlePlacement =
-    advisoryPlacements.length === 1 ? advisoryPlacements[0] : undefined;
-  const isMultiAdvisory = advisoryPlacements.length > 1;
+  // Both modes now resolve to exactly one placement before this form mounts —
+  // create mode via the advisory chooser step (add-learner-dialog.tsx), edit
+  // mode via the learner's own row. Nothing here picks between several.
+  const effectiveGradeLevelId = gradeLevelId;
+  const effectiveSectionId = sectionId;
+  const selectedGradeType = gradeType;
+  const displayPlacement = placement;
 
-  const [selectedSectionId, setSelectedSectionId] = useState("");
-  const [sectionError, setSectionError] = useState(false);
-  const chosenPlacement = isMultiAdvisory
-    ? advisoryPlacements.find((p) => p.sectionId === selectedSectionId)
-    : undefined;
-
-  const effectiveGradeLevelId =
-    singlePlacement?.gradeLevelId ?? chosenPlacement?.gradeLevelId ?? gradeLevelId;
-  const effectiveSectionId = singlePlacement?.sectionId ?? chosenPlacement?.sectionId;
-  const selectedGradeType =
-    singlePlacement?.gradeType ?? chosenPlacement?.gradeType ?? gradeType;
-  // Memoized because it is a fresh object literal on every render, and
-  // `gradeLabel` below depends on it — without this the label's useMemo would
-  // recompute on every keystroke in the form.
-  const activePlacement = singlePlacement ?? chosenPlacement;
-  const displayPlacement: LearnerFormPlacement | undefined = useMemo(
-    () =>
-      activePlacement
-        ? {
-            gradeLabel: activePlacement.gradeLabel,
-            sectionName: activePlacement.sectionName,
-          }
-        : placement,
-    [activePlacement, placement]
+  const includesEnglish = useMemo(
+    () => languagesForGrade(selectedGradeType ?? "").includes("ENGLISH"),
+    [selectedGradeType]
   );
 
-  const readingProfileOptions = useMemo(
-    () => toOptions(readingProfileLabelsForGradeType(selectedGradeType)),
-    [selectedGradeType]
+  const englishReadingProfileOptions = useMemo(
+    () =>
+      optionsWithLegacyValue(
+        selectedGradeType,
+        isEdit,
+        defaultValues?.englishReadingProfile
+      ),
+    [selectedGradeType, isEdit, defaultValues?.englishReadingProfile]
+  );
+
+  const filipinoReadingProfileOptions = useMemo(
+    () =>
+      optionsWithLegacyValue(
+        selectedGradeType,
+        isEdit,
+        defaultValues?.filipinoReadingProfile
+      ),
+    [selectedGradeType, isEdit, defaultValues?.filipinoReadingProfile]
   );
 
   const frustrationHint = selectedGradeType && isEarlyGradeReadingBand(selectedGradeType)
@@ -349,19 +373,6 @@ export function LearnerForm({
     if (!form) return;
     refreshValues();
 
-    // The picker is a Radix trigger, not a native form control, so constraint
-    // validation below never sees it — check it first, in the same "open the
-    // section, then focus" shape the native checks use below.
-    if (isMultiAdvisory && !selectedSectionId) {
-      event.preventDefault();
-      setSectionError(true);
-      setOpenSection(LEARNER_FORM_SECTIONS[0].key);
-      requestAnimationFrame(() => {
-        document.getElementById(`${idPrefix}-section-picker`)?.focus();
-      });
-      return;
-    }
-
     const invalid = Array.from(form.elements).find(
       (el) =>
         typeof (el as HTMLInputElement).checkValidity === "function" &&
@@ -393,9 +404,8 @@ export function LearnerForm({
 
   function handleSubmit(fd: FormData) {
     // Sent so the server can reject a stale client rather than silently rerouting
-    // the learner; the placement itself is derived server-side from the advisory.
-    // `handleSubmitClick` refuses to reach here with an unset picker, so this is
-    // always defined by the time a create-mode submit lands.
+    // the learner; the placement itself is re-derived and re-checked server-side
+    // from the teacher's current advisories on every submit.
     if (effectiveGradeLevelId) fd.set("gradeLevelId", effectiveGradeLevelId);
     // Explicit even for a single advisory — harmless, and it means the server
     // never has to special-case "no section named" from "only one to choose".
@@ -405,6 +415,17 @@ export function LearnerForm({
     }
     if (duplicatePending) {
       fd.set("confirmDuplicate", "true");
+    }
+    // Client-only hint for the completion bar (section 21's grade-aware
+    // required-field count) — never read server-side, so it never leaves the
+    // browser.
+    fd.delete("gradeType");
+    // The whole English block is unmounted below when the grade doesn't
+    // collect it, so there is normally no control to strip — this is belt and
+    // braces for a stale default value that somehow still reached the DOM.
+    if (!includesEnglish) {
+      fd.delete("englishReadingProfile");
+      fd.delete("englishFrustrationSubtypes[]");
     }
     // Strip frustration subtypes when not Frustration (client + server refine)
     if (englishProfile !== FRUSTRATION) {
@@ -451,8 +472,6 @@ export function LearnerForm({
         setPreviousTransfers("");
         setEthnicity("");
         setEthnicityOther("");
-        setSelectedSectionId("");
-        setSectionError(false);
         removeSecondEthnicity();
         setOpenSection(LEARNER_FORM_SECTIONS[0].key);
         refreshValues();
@@ -518,8 +537,8 @@ export function LearnerForm({
               id="age"
               name="age"
               type="number"
-              min={3}
-              max={25}
+              min={LEARNER_AGE_RANGE.min}
+              max={LEARNER_AGE_RANGE.max}
               required
               defaultValue={defaultValues?.age ?? ""}
             />
@@ -642,100 +661,54 @@ export function LearnerForm({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {isEdit ? "Placement" : "Joining"}
           </p>
-          {isMultiAdvisory ? (
-            <div className="mt-2 space-y-1">
-              <Label htmlFor={`${idPrefix}-section-picker`}>
-                Grade & section *
-              </Label>
-              <Select
-                value={selectedSectionId}
-                onValueChange={(value) => {
-                  setSelectedSectionId(value);
-                  setSectionError(false);
-                }}
-              >
-                <SelectTrigger
-                  id={`${idPrefix}-section-picker`}
-                  aria-invalid={sectionError}
-                  aria-describedby={
-                    sectionError ? `${idPrefix}-section-error` : undefined
-                  }
-                >
-                  <SelectValue placeholder="Choose a grade & section" />
-                </SelectTrigger>
-                <SelectContent>
-                  {advisoryPlacements.map((p) => (
-                    <SelectItem key={p.sectionId} value={p.sectionId}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {sectionError ? (
-                <p
-                  id={`${idPrefix}-section-error`}
-                  role="alert"
-                  className="text-xs font-medium text-destructive"
-                >
-                  Choose which of your advisory sections this learner joins.
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  You advise {advisoryPlacements.length} sections — pick where
-                  this learner joins.
-                </p>
-              )}
-            </div>
-          ) : (
-            <>
-              <p className="mt-1 text-sm font-semibold text-foreground">
-                {gradeLabel}
-                {displayPlacement?.sectionName ? (
-                  <>
-                    <span className="px-1.5 font-normal text-muted-foreground">·</span>
-                    {displayPlacement.sectionName}
-                  </>
-                ) : null}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {isEdit
-                  ? "Moving a learner between sections is a transfer — ask your School Head."
-                  : "New learners join your advisory section."}
-              </p>
-            </>
-          )}
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {gradeLabel}
+            {displayPlacement?.sectionName ? (
+              <>
+                <span className="px-1.5 font-normal text-muted-foreground">·</span>
+                {displayPlacement.sectionName}
+              </>
+            ) : null}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isEdit
+              ? "Moving a learner between sections is a transfer — ask your School Head."
+              : "New learners join the section chosen in the previous step."}
+          </p>
         </div>
       </>
     ),
 
     reading: (
       <>
-        <div>
-          <p className="mb-2 text-sm font-medium">Reading Level (English) *</p>
-          <FieldRadioGroup
-            name="englishReadingProfile"
-            options={readingProfileOptions}
-            value={englishProfile}
-            onValueChange={setEnglishProfile}
-            defaultValue={defaultValues?.englishReadingProfile}
-          />
-          {englishProfile === FRUSTRATION ? (
-            <div className="mt-2">
-              <p className="mb-1 text-xs text-muted-foreground">{frustrationHint}</p>
-              <FieldCheckboxList
-                name="englishFrustrationSubtypes"
-                options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
-                defaultValues={defaultValues?.englishFrustrationSubtypes ?? []}
-              />
-            </div>
-          ) : null}
-        </div>
+        {includesEnglish ? (
+          <div>
+            <p className="mb-2 text-sm font-medium">Reading Level (English) *</p>
+            <FieldRadioGroup
+              name="englishReadingProfile"
+              options={englishReadingProfileOptions}
+              value={englishProfile}
+              onValueChange={setEnglishProfile}
+              defaultValue={defaultValues?.englishReadingProfile ?? undefined}
+            />
+            {englishProfile === FRUSTRATION ? (
+              <div className="mt-2">
+                <p className="mb-1 text-xs text-muted-foreground">{frustrationHint}</p>
+                <FieldCheckboxList
+                  name="englishFrustrationSubtypes"
+                  options={toOptions(FRUSTRATION_SUBTYPE_LABELS)}
+                  defaultValues={defaultValues?.englishFrustrationSubtypes ?? []}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-        <div className="border-t border-border/60 pt-4">
+        <div className={includesEnglish ? "border-t border-border/60 pt-4" : undefined}>
           <p className="mb-2 text-sm font-medium">Reading Level (Filipino) *</p>
           <FieldRadioGroup
             name="filipinoReadingProfile"
-            options={readingProfileOptions}
+            options={filipinoReadingProfileOptions}
             value={filipinoProfile}
             onValueChange={setFilipinoProfile}
             defaultValue={defaultValues?.filipinoReadingProfile}
@@ -861,6 +834,13 @@ export function LearnerForm({
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
+      {/* Read by `LEARNER_FORM_SECTIONS`'s "reading" requiredFields (section
+          21) so the completion bar can tell whether English is required
+          without threading `selectedGradeType` through a static, module-scope
+          field list. Stripped from the FormData before it reaches the server
+          — see `handleSubmit` — since the grade context there must come from
+          the resolved advisory, never a client-submitted field. */}
+      <input type="hidden" name="gradeType" value={selectedGradeType ?? ""} />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
         {/* Add only. An existing row already satisfies every requirement, so a
             bar in edit mode would sit at 100% and mean nothing; the section

@@ -322,25 +322,28 @@ describe("readingLevelMonthlyBulkSchema", () => {
     expect(res.data.monthStart.getDate()).toBe(1);
   });
 
-  it("accepts the same entry fields as the weekly bulk schema", () => {
+  it("accepts the same entry fields as the weekly bulk schema, minus writingLevel (docs/reading-policy-spec.md section 4c — monthly no longer collects it)", () => {
     const res = readingLevelMonthlyBulkSchema.safeParse({
       monthStart: "2026-08-01",
-      entries: [{ ...entry, writingLevel: "LEVEL_2", notes: "  Reads aloud  " }],
+      entries: [{ ...entry, notes: "  Reads aloud  " }],
     });
     expect(res.success).toBe(true);
     if (!res.success) return;
-    expect(res.data.entries[0]?.writingLevel).toBe("LEVEL_2");
+    expect(res.data.entries[0]).not.toHaveProperty("writingLevel");
     expect(res.data.entries[0]?.notes).toBe("Reads aloud");
   });
 
-  it("treats an empty writing level as unset rather than invalid", () => {
+  it("silently drops a submitted writingLevel key instead of rejecting the row — the field no longer exists on this schema", () => {
+    // A stale client (still holding the previous grid bundle) may still post
+    // this key. It must not fail the whole row: the schema simply has no
+    // field to bind it to, so it is stripped like any other unrecognized key.
     const res = readingLevelMonthlyBulkSchema.safeParse({
       monthStart: "2026-08-01",
-      entries: [{ ...entry, writingLevel: "" }],
+      entries: [{ ...entry, writingLevel: "LEVEL_2" }],
     });
     expect(res.success).toBe(true);
     if (!res.success) return;
-    expect(res.data.entries[0]?.writingLevel).toBeUndefined();
+    expect(res.data.entries[0]).not.toHaveProperty("writingLevel");
   });
 
   it("accepts an entry missing WR or RC — the monthly sheet stores partial rows", () => {

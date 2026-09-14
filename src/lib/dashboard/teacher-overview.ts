@@ -14,7 +14,7 @@ import {
   monthBounds,
   type TeacherOpts,
 } from "@/lib/dashboard/aggregates";
-import { COMPLETE_ASSESSMENT_WHERE } from "@/lib/aral/reading-level-progress";
+import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
 
 /**
  * Everything the teacher dashboard renders, in one cached snapshot.
@@ -53,6 +53,7 @@ export type TeacherOverview = {
   gradeCount: number;
   totalLearners: number;
   aralLearners: number;
+  pendingAralProfiles: number;
 
   attendance: {
     present: number;
@@ -125,6 +126,7 @@ export async function getTeacherOverview(
         gradeCount: grades.length,
         totalLearners: 0,
         aralLearners: 0,
+        pendingAralProfiles: 0,
         attendance: {
           present: 0,
           late: 0,
@@ -160,6 +162,7 @@ export async function getTeacherOverview(
       const [
         totalLearners,
         aralLearners,
+        pendingAralProfiles,
         attendanceGroups,
         readingAssessed,
         readingSubmitted,
@@ -168,6 +171,9 @@ export async function getTeacherOverview(
       ] = await Promise.all([
         prisma.learner.count({ where: learnerWhere }),
         prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
+        prisma.learner.count({
+          where: { ...learnerWhere, isAralLearner: true, aralProfile: null },
+        }),
         prisma.attendance.groupBy({
           by: ["status"],
           where: {
@@ -185,13 +191,22 @@ export async function getTeacherOverview(
             by: ["learnerId"],
             where: {
               weekStart: { gte: monthStart, lt: monthEnd },
-              ...COMPLETE_ASSESSMENT_WHERE,
-              learner: {
-                gradeLevelId: { in: gradeIds },
-                deletedAt: null,
-                isAralLearner: true,
-                ...careFilter,
-              },
+              // `AND`, not a merged spread: `completeAssessmentWhereForGrades`
+              // sets its own `learner` key (to route each row to its grade's
+              // language rule), which a plain object spread would clobber
+              // against the `learner` key below depending on how many grade
+              // shapes it produced.
+              AND: [
+                completeAssessmentWhereForGrades(grades),
+                {
+                  learner: {
+                    gradeLevelId: { in: gradeIds },
+                    deletedAt: null,
+                    isAralLearner: true,
+                    ...careFilter,
+                  },
+                },
+              ],
             },
           })
           .then((rows) => rows.length),
@@ -256,6 +271,7 @@ export async function getTeacherOverview(
         gradeCount: grades.length,
         totalLearners,
         aralLearners,
+        pendingAralProfiles,
         attendance: {
           present,
           late,

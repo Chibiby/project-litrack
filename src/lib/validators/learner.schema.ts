@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { nonEmpty } from "./common";
+import { LEARNER_AGE_RANGE, nonEmpty } from "./common";
 import { ethnicityFields, refineEthnicityPair } from "./ethnicity";
 
 const READING_PROFILE = [
@@ -7,6 +7,12 @@ const READING_PROFILE = [
   "FRUSTRATION_HIGH_EMERGENT",
   "INSTRUCTIONAL_DEVELOPING",
   "INDEPENDENT_GRADE_READY",
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a).
+  "CANNOT_NAME_SOUND_LETTERS",
+  "LETTER_LEVEL",
+  "CV_BLENDING",
+  "CVC_BLENDING",
 ] as const;
 
 const FRUSTRATION_SUBTYPE = ["DECODING", "COMPREHENSION_ALL", "COMPREHENSION_CRITICAL"] as const;
@@ -22,7 +28,7 @@ const TRANSPORTATION = ["WALKING", "MOTORCYCLE", "BUS_JEEP_CAR"] as const;
 const DISTANCE = ["LESS_THAN_1KM", "ONE_TO_FIVE_KM", "MORE_THAN_5KM"] as const;
 const TRANSFERS = ["NONE", "ONE", "MULTIPLE"] as const;
 
-const NUTRITIONAL_STATUS = ["SEVERELY_WASTED", "WASTED", "NORMAL", "OBESE"] as const;
+const NUTRITIONAL_STATUS = ["SEVERELY_WASTED", "WASTED", "NORMAL", "OVERWEIGHT", "OBESE"] as const;
 
 const optionalMiddleName = z
   .string()
@@ -63,7 +69,7 @@ const optionalTransferDetails = z
 /** Frustration subtypes only when Frustration/High Emergent is selected (L-A4/L-A5). */
 function refineFrustrationSubtypes<
   T extends {
-    englishReadingProfile: (typeof READING_PROFILE)[number];
+    englishReadingProfile?: (typeof READING_PROFILE)[number];
     englishFrustrationSubtypes: (typeof FRUSTRATION_SUBTYPE)[number][];
     filipinoReadingProfile: (typeof READING_PROFILE)[number];
     filipinoFrustrationSubtypes: (typeof FRUSTRATION_SUBTYPE)[number][];
@@ -124,7 +130,7 @@ const sectionAFields = {
   firstName: nonEmpty("First name required").max(80),
   middleName: optionalMiddleName,
   lastName: nonEmpty("Last name required").max(80),
-  age: z.coerce.number().int().min(3).max(25),
+  age: z.coerce.number().int().min(LEARNER_AGE_RANGE.min).max(LEARNER_AGE_RANGE.max),
   gender: z.enum(["MALE", "FEMALE"]),
   // Required here, nullable in the database: learners rostered before this field
   // existed — and every CSV import, which does not collect it — have none, and
@@ -135,7 +141,11 @@ const sectionAFields = {
   // Both ethnicity slots at once. The rules live in ./ethnicity because the
   // CSV import and the teacher profile ask the same question the same way.
   ...ethnicityFields,
-  englishReadingProfile: z.enum(READING_PROFILE),
+  // Structurally optional: Grade 1/Grade 2 stop collecting English (see
+  // docs/reading-policy-spec.md section 4a). Whether it is required for a
+  // given grade is an action-level invariant, not a Zod one — see
+  // `src/lib/actions/learner.ts`.
+  englishReadingProfile: optionalEnum(READING_PROFILE),
   englishFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),
   filipinoReadingProfile: z.enum(READING_PROFILE),
   filipinoFrustrationSubtypes: z.array(z.enum(FRUSTRATION_SUBTYPE)).default([]),

@@ -52,3 +52,24 @@ holds that line.
 
 Re-add navigation and calls to action. The schema, the validator, the action and
 the route are all still in place, so nothing needs a migration.
+
+## Exception: the teacher dashboard's Pending Profiles count
+
+One piece of what the dormancy pass removed was put back by explicit project-owner
+approval on 2026-09-14: the "Pending Profiles" stat card on the teacher dashboard
+(`src/components/dashboard/teacher/dashboard-body.tsx`), backed by the
+`pendingAralProfiles` count in `src/lib/dashboard/teacher-overview.ts`. It shows how
+many of a teacher's ARAL learners have no `AralProfile` row.
+
+This is a read-only number, not a call to action. The card has no `action` prop, no
+link, and no button — nothing on it leads to a profile form. No workflow reads
+`pendingAralProfiles` to gate, block, or nudge anything; it is display only. The
+School Head dashboard's equivalent nudge stays removed, as does every other
+Profiling entry point this document lists under "What was removed".
+
+Because it was restored deliberately and stays inert, this card must not be swept
+up in a future dormancy cleanup. If the ARAL Profile is fully revived, treat this
+card as already handled; if the ARAL Profile is ever deleted outright rather than
+left dormant, this card and its query must be removed at the same time (it would
+otherwise reference a model that no longer exists), but it is not part of routine
+"finish removing dormant Profile references" work.

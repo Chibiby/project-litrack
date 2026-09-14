@@ -275,7 +275,9 @@ export default async function LearnerDetailPage({
             <div>
               <p className="text-muted-foreground">English reading</p>
               <p className="font-medium">
-                {readingLabels[learner.englishReadingProfile]}
+                {learner.englishReadingProfile
+                  ? readingLabels[learner.englishReadingProfile]
+                  : "—"}
               </p>
               {learner.englishFrustrationSubtypes.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-0.5">

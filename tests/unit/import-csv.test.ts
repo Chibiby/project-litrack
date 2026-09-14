@@ -35,13 +35,29 @@ describe("learnerCsvTemplate", () => {
   });
 
   it("emits band labels in the example row when grade type is known", () => {
-    const k3 = learnerCsvTemplate("G2");
-    expect(k3).toContain(READING_PROFILE_LABELS_K3.INSTRUCTIONAL_DEVELOPING);
-    expect(k3).toContain(READING_PROFILE_LABELS_K3.INDEPENDENT_GRADE_READY);
-
     const g4 = learnerCsvTemplate("G7");
+    expect(g4).toContain("englishReadingProfile");
     expect(g4).toContain(READING_PROFILE_LABELS_G4_PLUS.INSTRUCTIONAL_DEVELOPING);
     expect(g4).toContain(READING_PROFILE_LABELS_G4_PLUS.INDEPENDENT_GRADE_READY);
+
+    // G2 no longer collects English (docs/reading-policy-spec.md section 4a),
+    // so the englishReadingProfile column — and its example label — is gone
+    // entirely, not merely blank. The Filipino example still uses the K3-style
+    // label: the template's hardcoded example VALUE is an original-four enum
+    // member, and value-first label dispatch (section 2, decision I) only
+    // gives an early-rubric grade the rubric label for a rubric-member value.
+    const g2 = learnerCsvTemplate("G2");
+    expect(g2).not.toContain("englishReadingProfile");
+    expect(g2).not.toContain(READING_PROFILE_LABELS_K3.INSTRUCTIONAL_DEVELOPING);
+    expect(g2).toContain(READING_PROFILE_LABELS_K3.INDEPENDENT_GRADE_READY);
+  });
+
+  it("drops the englishReadingProfile column for Grade 1/Grade 2 but keeps it for Kinder and Grade 3+", () => {
+    expect(learnerCsvTemplate("G1")).not.toContain("englishReadingProfile");
+    expect(learnerCsvTemplate("G2")).not.toContain("englishReadingProfile");
+    expect(learnerCsvTemplate("KINDER")).toContain("englishReadingProfile");
+    expect(learnerCsvTemplate("G3")).toContain("englishReadingProfile");
+    expect(learnerCsvTemplate()).toContain("englishReadingProfile");
   });
 });
 
@@ -234,6 +250,11 @@ describe("learnerImportRowSchema", () => {
       englishFrustrationSubtypes: ["DECODING"],
     });
     expect(r.success).toBe(false);
+  });
+
+  it("accepts age 70 and rejects age 71 (docs/reading-policy-spec.md — the ceiling moved from 25)", () => {
+    expect(learnerImportRowSchema.safeParse({ ...valid, age: 70 }).success).toBe(true);
+    expect(learnerImportRowSchema.safeParse({ ...valid, age: 71 }).success).toBe(false);
   });
 });
 

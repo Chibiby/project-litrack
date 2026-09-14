@@ -38,6 +38,7 @@ import {
 } from "@/lib/teachers/advisory";
 import { isEligibleAralTutor } from "@/lib/teachers/aral-tutor";
 import { notifyAralAssigned } from "@/lib/notifications";
+import { languagesForGrade, allowedReadingValuesForGrade } from "@/lib/reading/policy";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
@@ -117,6 +118,26 @@ export async function createLearner(
     return { ok: false, error: "You are not assigned to this grade level" };
   }
 
+  // English is only collected for grades whose policy includes it (Kinder, G3+);
+  // Grade 1/Grade 2 never collect it. Reject rather than silently drop or ignore,
+  // so a stale client's mismatched payload is visible instead of quietly wrong.
+  const collectsEnglish = languagesForGrade(advisory.gradeType).includes("ENGLISH");
+  if (collectsEnglish && !parsed.data.englishReadingProfile) {
+    return { ok: false, error: "English reading level is required" };
+  }
+  if (!collectsEnglish && parsed.data.englishReadingProfile) {
+    return { ok: false, error: "English reading level is not collected for this grade" };
+  }
+  if (
+    parsed.data.englishReadingProfile &&
+    !allowedReadingValuesForGrade(advisory.gradeType).includes(parsed.data.englishReadingProfile)
+  ) {
+    return { ok: false, error: "Invalid English reading level for this grade" };
+  }
+  if (!allowedReadingValuesForGrade(advisory.gradeType).includes(parsed.data.filipinoReadingProfile)) {
+    return { ok: false, error: "Invalid Filipino reading level for this grade" };
+  }
+
   // Canonical casing is applied before the duplicate probe and before the write, so
   // a hand-typed "juan dela cruz" and an imported "JUAN DELA CRUZ" land as one value.
   const firstName = formatPersonName(parsed.data.firstName);
@@ -172,7 +193,9 @@ export async function createLearner(
         gender: parsed.data.gender,
         nutritionalStatus: parsed.data.nutritionalStatus,
         ...ethnicityColumns(parsed.data),
-        englishReadingProfile: parsed.data.englishReadingProfile,
+        ...(collectsEnglish
+          ? { englishReadingProfile: parsed.data.englishReadingProfile }
+          : {}),
         englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
         filipinoReadingProfile: parsed.data.filipinoReadingProfile,
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
@@ -236,6 +259,7 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.id, deletedAt: null },
+    include: { gradeLevel: { select: { type: true } } },
   });
   if (!learner) return { ok: false, error: "Learner not found" };
 
@@ -246,6 +270,38 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
   }
   if (!teacherCanAccessLearner(learner, user.id)) {
     return { ok: false, error: "Not found" };
+  }
+
+  // Grade comes from the learner's real, current, DB-stored grade — never the
+  // edit form's own state, which never carries a gradeLevelId in the first place.
+  const collectsEnglish = languagesForGrade(learner.gradeLevel.type).includes("ENGLISH");
+  if (collectsEnglish && !parsed.data.englishReadingProfile) {
+    return { ok: false, error: "English reading level is required" };
+  }
+  if (!collectsEnglish && parsed.data.englishReadingProfile) {
+    return { ok: false, error: "English reading level is not collected for this grade" };
+  }
+  // A legacy value outside the grade's current allowed set (e.g. a pre-rubric
+  // K/1/2 band, or a retired SHS Non-Decoder) must stay editable for every
+  // OTHER field on the row (decision I, docs/reading-policy-spec.md section 2:
+  // "legacy rows render raw and unchanged; nothing is converted or
+  // reinterpreted"). A submitted value is accepted when it is either in policy
+  // for this grade, or byte-identical to what is already stored — only a value
+  // that is both out-of-policy AND changed gets rejected. This carve-out is
+  // update-only: `createLearner` has no stored value to compare against, so
+  // every value there must be in policy.
+  if (
+    parsed.data.englishReadingProfile &&
+    parsed.data.englishReadingProfile !== learner.englishReadingProfile &&
+    !allowedReadingValuesForGrade(learner.gradeLevel.type).includes(parsed.data.englishReadingProfile)
+  ) {
+    return { ok: false, error: "Invalid English reading level for this grade" };
+  }
+  if (
+    parsed.data.filipinoReadingProfile !== learner.filipinoReadingProfile &&
+    !allowedReadingValuesForGrade(learner.gradeLevel.type).includes(parsed.data.filipinoReadingProfile)
+  ) {
+    return { ok: false, error: "Invalid Filipino reading level for this grade" };
   }
 
   // Placement is not editable here. The edit form no longer offers a section, and
@@ -278,7 +334,13 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         age: parsed.data.age,
         gender: parsed.data.gender,
         nutritionalStatus: parsed.data.nutritionalStatus,
-        englishReadingProfile: parsed.data.englishReadingProfile,
+        // Omitted (not set to null) when the grade doesn't collect English — this
+        // is what keeps a Grade 1/Grade 2 edit from ever touching a value that may
+        // have carried over from Kinder, or from clobbering what a previous edit
+        // already left alone (docs/reading-policy-spec.md section 4a).
+        ...(collectsEnglish
+          ? { englishReadingProfile: parsed.data.englishReadingProfile }
+          : {}),
         englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
         filipinoReadingProfile: parsed.data.filipinoReadingProfile,
         filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,

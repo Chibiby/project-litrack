@@ -25,3 +25,5 @@ export function isValidEmail(raw: string): boolean {
 }
 
 export const optionalString = z.string().trim().optional().or(z.literal("").transform(() => undefined));
+
+export const LEARNER_AGE_RANGE = { min: 3, max: 70 } as const;

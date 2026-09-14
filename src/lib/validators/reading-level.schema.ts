@@ -8,6 +8,12 @@ const READING_PROFILE = [
   "FRUSTRATION_HIGH_EMERGENT",
   "INSTRUCTIONAL_DEVELOPING",
   "INDEPENDENT_GRADE_READY",
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a).
+  "CANNOT_NAME_SOUND_LETTERS",
+  "LETTER_LEVEL",
+  "CV_BLENDING",
+  "CVC_BLENDING",
 ] as const;
 
 const WEEKLY_WORD_RECOGNITION_LEVEL = [
@@ -143,7 +149,11 @@ const monthlyBulkEntryFields = z
       .nullish()
       .transform((v) => v ?? undefined)
       .or(z.literal("").transform(() => undefined)),
-    writingLevel: writingLevelField,
+    // No `writingLevel` field: the grid no longer collects it, and an
+    // existing row's historical `writingLevel` must never be nulled by an
+    // unrelated save (docs/reading-policy-spec.md section 4c) — that is
+    // enforced at the upsert (`bulkRecordMonthlyReadingLevel`) by omitting
+    // the column from the update, not here.
     notes: notesField,
   })
   .superRefine((entry, ctx) => {
@@ -158,7 +168,6 @@ const monthlyBulkEntryFields = z
       entry.filipinoProfile === undefined &&
       entry.wordRecognitionLevel === undefined &&
       entry.readingComprehensionLevel === undefined &&
-      entry.writingLevel === undefined &&
       !entry.notes;
     if (allAbsent) {
       ctx.addIssue({

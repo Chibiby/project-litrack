@@ -32,7 +32,12 @@ async function resolveGradeLearnerWhere(input: {
   gender?: string;
   schoolId?: string;
 }): Promise<
-  | { ok: true; learnerWhere: Prisma.LearnerWhereInput }
+  | {
+      ok: true;
+      learnerWhere: Prisma.LearnerWhereInput;
+      /** Raw `GradeLevelType` of the one grade in scope — reading-policy grade context. */
+      gradeType: string;
+    }
   | { ok: false; error: string }
 > {
   const user = await requireUser("TEACHER");
@@ -52,7 +57,7 @@ async function resolveGradeLearnerWhere(input: {
 
   const grade = await prisma.gradeLevel.findFirst({
     where: gradeFilter,
-    select: { id: true },
+    select: { id: true, type: true },
   });
   if (!grade) return { ok: false, error: "Grade not found" };
 
@@ -60,6 +65,7 @@ async function resolveGradeLearnerWhere(input: {
 
   return {
     ok: true,
+    gradeType: grade.type,
     learnerWhere: {
       gradeLevelId: grade.id,
       isAralLearner: true,
@@ -201,6 +207,7 @@ export async function fetchAralReadingLevelForMonth(input: {
       learnerWhere: resolved.learnerWhere,
       monthStart,
       monthEnd,
+      grades: [{ id: input.gradeId, type: resolved.gradeType }],
     }),
   ]);
 

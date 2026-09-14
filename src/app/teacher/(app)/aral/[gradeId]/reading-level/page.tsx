@@ -259,6 +259,10 @@ async function AralMonthlyReadingLevelGrid({
       learnerWhere,
       monthStart,
       monthEnd,
+      // The server-loaded grade already in scope, never `?section=`/a client
+      // param — the language policy this feeds (docs/reading-policy-spec.md
+      // section 4b) must not trust anything the URL could carry.
+      grades: [{ id: grade.id, type: grade.type }],
       // Already counted above for the pager; the same `where` twice in one
       // request is a wasted round trip.
       total: totalCount,

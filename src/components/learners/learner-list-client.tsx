@@ -94,7 +94,8 @@ export type LearnerListRow = {
   gender: keyof typeof GENDER_LABELS;
   isAralLearner: boolean;
   archivedAt: string | null;
-  englishReadingProfile: string;
+  /** Null when the learner's grade doesn't collect English (Grade 1/Grade 2). */
+  englishReadingProfile: string | null;
   filipinoReadingProfile: string;
   section: { id: string; name: string } | null;
   /** Grade owning this learner — used for the detail link in multi-advisory lists. */

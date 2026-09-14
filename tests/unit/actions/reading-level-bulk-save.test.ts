@@ -105,6 +105,15 @@ const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
 const CROSS_TENANT_LEARNER = "learner-other-school";
 
 /**
+ * Grade type each fake learner sits in, for the `allowedReadingValuesForGrade`
+ * check the action runs per entry. Defaults to a STANDARD grade (both
+ * languages, the original four values) so every pre-existing test above keeps
+ * exercising the write path unchanged; a test that cares about a specific
+ * grade's policy (the early rubric, SHS) overrides its own learner's entry.
+ */
+let learnerGradeTypes: Record<string, string>;
+
+/**
  * Two tenants in one table. Modelled so an UNSCOPED query returns the cross-tenant
  * row, exactly as Postgres would: drop `schoolId: user.schoolId` from the action and
  * the row comes back, the save proceeds, and the refusal test goes red.
@@ -126,10 +135,26 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
       gradeLevelId: GRADE_ID,
       teacherId: TEACHER_ID,
       aralTeacherId: null,
+      gradeLevel: { type: learnerGradeTypes[r.id] ?? "G7" },
     }));
 });
 
 const learnerUpdate = vi.fn();
+
+/**
+ * Rows already stored for this learner this month — what the action reads to
+ * tell an untouched legacy out-of-policy value apart from a genuinely new,
+ * invalid one (docs/reading-policy-spec.md decision I, batch scope). Empty by
+ * default; a legacy-carve-out test seeds it with the value it wants "already
+ * stored".
+ */
+let existingReadingLevelRows: {
+  learnerId: string;
+  englishProfile: string | null;
+  filipinoProfile: string | null;
+}[];
+
+const readingLevelRecordFindMany = vi.fn(async (_args?: unknown) => existingReadingLevelRows);
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -142,6 +167,9 @@ vi.mock("@/lib/prisma", () => ({
       // / `filipinoReadingProfile` are owned by the learner form and CSV import, and
       // a monthly reading-level save (upsert or clear) must never touch them.
       update: (...a: unknown[]) => learnerUpdate(...(a as [never])),
+    },
+    readingLevelRecord: {
+      findMany: (...a: unknown[]) => readingLevelRecordFindMany(...(a as [never])),
     },
   },
 }));
@@ -224,6 +252,8 @@ beforeEach(() => {
   learnerIds = ["learner-a", "learner-b"];
   rawCalls = [];
   dropOneReturnedRow = false;
+  learnerGradeTypes = {};
+  existingReadingLevelRows = [];
   resolveMonthlyReadingLevelWindow.mockResolvedValue({
     writable: true,
     reason: "in-window",
@@ -390,10 +420,13 @@ describe("bulkRecordMonthlyReadingLevel — partial rows reach SQL as NULL", () 
     expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
     expect(rawCalls).toHaveLength(1);
     expect(rawCalls[0].sql).toContain("INSERT INTO");
-    // wordRecognitionLevel, readingComprehensionLevel, writingLevel, notes are
-    // all absent — four NULL binds, two of which (word recognition, reading
-    // comprehension) were REQUIRED enums before this change.
-    expect(rawCalls[0].params.filter((p) => p === null)).toHaveLength(4);
+    // wordRecognitionLevel, readingComprehensionLevel and notes are all
+    // absent — three NULL binds, two of which (word recognition, reading
+    // comprehension) were REQUIRED enums before this change. `writingLevel`
+    // is not a fourth: it is no longer named anywhere in this statement at
+    // all (docs/reading-policy-spec.md section 4c), so there is no bind for
+    // it to contribute, null or otherwise.
+    expect(rawCalls[0].params.filter((p) => p === null)).toHaveLength(3);
   });
 });
 
@@ -534,5 +567,113 @@ describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
     await post([entry("learner-a")]);
 
     expect(writeAudit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — writingLevel preservation (docs/reading-policy-spec.md section 4c)", () => {
+  it("never names writingLevel in the upsert, so an existing row's historical value survives untouched", async () => {
+    // The whole fix is an omission: `writingLevel` is absent from both the
+    // INSERT column list and the DO UPDATE SET list, so Postgres's
+    // ON CONFLICT DO UPDATE leaves whatever an existing row already had. A
+    // reintroduced `"writingLevel" = EXCLUDED."writingLevel"` would null every
+    // legacy writing value on the very next unrelated save and this goes red.
+    const res = await post([entry("learner-a")]);
+
+    expect(res.ok).toBe(true);
+    expect(rawCalls[0].sql).toContain("INSERT INTO");
+    expect(rawCalls[0].sql).not.toContain("writingLevel");
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — clear is a full hard delete (owner decision, not a soft clear)", () => {
+  it("issues exactly one DELETE per clear, no UPDATE, and no writingLevel filter", async () => {
+    // The spec's original design (docs/reading-policy-spec.md section 4c/§9.2)
+    // proposed an UPDATE-then-conditional-DELETE so a legacy writingLevel
+    // would survive a clear. The project owner decided against that for this
+    // action: "Clear row" hard-deletes the whole row, writingLevel included —
+    // there is one statement per clear, and it is unconditional on writingLevel.
+    const res = await post([], "2026-08-15", ["learner-a"]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 0, cleared: 1 } });
+    expect(rawCalls).toHaveLength(1);
+    expect(rawCalls[0].sql).toContain('DELETE FROM "ReadingLevelRecord"');
+    expect(rawCalls[0].sql).not.toContain("UPDATE");
+    expect(rawCalls[0].sql).not.toContain("writingLevel");
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed this session)", () => {
+  it("accepts a stored-but-now-out-of-policy value when it is UNCHANGED", async () => {
+    // learner-a sits in Grade 1, which now only accepts the early rubric —
+    // but already holds a pre-rubric CRLA band this month. Resubmitting that
+    // SAME value (the grid resubmits every on-screen row on every save,
+    // untouched or not) must not fail the whole batch.
+    learnerGradeTypes = { "learner-a": "G1" };
+    existingReadingLevelRows = [
+      { learnerId: "learner-a", englishProfile: null, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" },
+    ];
+
+    const res = await post([
+      entry("learner-a", {
+        englishProfile: undefined,
+        filipinoProfile: "INSTRUCTIONAL_DEVELOPING",
+      }),
+    ]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+  });
+
+  it("still rejects the same out-of-policy value when it is CHANGED", async () => {
+    // Same learner, same stored legacy value — but this save tries to WRITE a
+    // different out-of-policy value, which must still be refused.
+    learnerGradeTypes = { "learner-a": "G1" };
+    existingReadingLevelRows = [
+      { learnerId: "learner-a", englishProfile: null, filipinoProfile: "NON_DECODER_LOW_EMERGENT" },
+    ];
+
+    const res = await post([
+      entry("learner-a", {
+        englishProfile: undefined,
+        // Different legacy value than what is stored, and still not in the
+        // Grade 1 rubric -- must be refused, not silently let through.
+        filipinoProfile: "INSTRUCTIONAL_DEVELOPING",
+      }),
+    ]);
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Invalid Filipino reading level for this grade",
+    });
+  });
+
+  it("still rejects a genuinely new out-of-policy value with no existing row to compare against", async () => {
+    learnerGradeTypes = { "learner-a": "G1" };
+    existingReadingLevelRows = [];
+
+    const res = await post([
+      entry("learner-a", {
+        englishProfile: undefined,
+        filipinoProfile: "INDEPENDENT_GRADE_READY",
+      }),
+    ]);
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Invalid Filipino reading level for this grade",
+    });
+  });
+
+  it("accepts a value that is genuinely in-policy for the learner's grade", async () => {
+    learnerGradeTypes = { "learner-a": "G1" };
+    existingReadingLevelRows = [];
+
+    const res = await post([
+      entry("learner-a", {
+        englishProfile: undefined,
+        filipinoProfile: "CVC_BLENDING",
+      }),
+    ]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
   });
 });

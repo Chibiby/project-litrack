@@ -25,6 +25,16 @@ const BAND_TONE: Record<string, string> = {
     "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
   INDEPENDENT_GRADE_READY:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a) — same weakest-to-strongest ramp as the four bands above.
+  CANNOT_NAME_SOUND_LETTERS:
+    "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+  LETTER_LEVEL:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+  CV_BLENDING:
+    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
+  CVC_BLENDING:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
 };
 
 const PILL_BASE =
@@ -38,10 +48,15 @@ export function ReadingBandPill({
   gradeType,
   className,
 }: {
-  profile: string;
+  /** Null for a grade that doesn't collect this language (Grade 1/Grade 2 English). */
+  profile: string | null;
   gradeType: string | null | undefined;
   className?: string;
 }) {
+  if (profile == null) {
+    return <span className={cn("text-xs text-muted-foreground", className)}>—</span>;
+  }
+
   const labels = readingProfileLabelsForGradeType(gradeType);
   const label = labels[profile as keyof typeof labels] ?? profile;
 

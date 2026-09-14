@@ -202,10 +202,9 @@ async function buildLearnersWorkbook(
       secondaryEthnicityOther: l.secondaryEthnicityOther ?? "",
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
-      english: labelReadingProfile(
-        l.englishReadingProfile,
-        l.gradeLevel.type
-      ),
+      english: l.englishReadingProfile
+        ? labelReadingProfile(l.englishReadingProfile, l.gradeLevel.type)
+        : "",
       filipino: labelReadingProfile(
         l.filipinoReadingProfile,
         l.gradeLevel.type
@@ -440,7 +439,7 @@ export type PrintableReportLearner = {
   fullName: string;
   age: number;
   gender: string;
-  englishReadingProfile: string;
+  englishReadingProfile: string | null;
   filipinoReadingProfile: string;
   isAralLearner: boolean;
   gradeLevel: { type: string };

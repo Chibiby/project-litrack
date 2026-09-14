@@ -33,13 +33,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { LearnerAvatar } from "@/components/learners/learner-avatar";
 import {
-  READING_PROFILE_LABELS_G4_PLUS,
-  READING_PROFILE_LABELS_K3,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
-  WEEKLY_WRITING_LEVEL_LABELS,
   isEarlyGradeReadingBand,
 } from "@/lib/constants/enum-labels";
+import {
+  isReadingRecordComplete,
+  languagesForGrade,
+  readingProfileOptionsForGrade,
+} from "@/lib/reading/policy";
 import { cn } from "@/lib/utils";
 import { bulkRecordMonthlyReadingLevel } from "@/lib/actions/reading-level";
 
@@ -82,7 +84,15 @@ function rampTone(index: number, count: number): string {
   return TONE_RAMP[slot];
 }
 
-/** Short codes for the badge face. The dropdown always carries the full label. */
+/**
+ * Short codes for the badge face. The dropdown always carries the full label.
+ *
+ * The K3 and G4+ maps cover the SAME four legacy `ReadingProfile` values under
+ * their two label sets (a Grade 3 sheet reads "Low Emergent", a Grade 5 sheet
+ * "Non-decoder" — see `readingProfileLabelsForGradeType`); the rubric map
+ * covers the four DISJOINT Kinder/Grade 1/Grade 2 values, so there is no
+ * collision merging them in `profileBandFor` below.
+ */
 const PROFILE_CODES_K3: Record<string, string> = {
   NON_DECODER_LOW_EMERGENT: "LE",
   FRUSTRATION_HIGH_EMERGENT: "HE",
@@ -95,6 +105,13 @@ const PROFILE_CODES_G4_PLUS: Record<string, string> = {
   INSTRUCTIONAL_DEVELOPING: "IP",
   INDEPENDENT_GRADE_READY: "IPR",
 };
+/** Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md section 2a). */
+const PROFILE_CODES_EARLY_RUBRIC: Record<string, string> = {
+  CANNOT_NAME_SOUND_LETTERS: "L0",
+  LETTER_LEVEL: "L1",
+  CV_BLENDING: "L2",
+  CVC_BLENDING: "L3",
+};
 const LEVEL_CODES: Record<string, string> = {
   LEVEL_0: "L0",
   LEVEL_1: "L1",
@@ -106,12 +123,6 @@ const LEVEL_CODES: Record<string, string> = {
 };
 
 /** Low → high. The enum-label maps list `LEVEL_0` last; the scale starts there. */
-const PROFILE_ORDER = [
-  "NON_DECODER_LOW_EMERGENT",
-  "FRUSTRATION_HIGH_EMERGENT",
-  "INSTRUCTIONAL_DEVELOPING",
-  "INDEPENDENT_GRADE_READY",
-];
 const WORD_RECOGNITION_ORDER = [
   "LEVEL_0",
   "LEVEL_1",
@@ -121,7 +132,6 @@ const WORD_RECOGNITION_ORDER = [
   "LEVEL_5",
 ];
 const READING_COMPREHENSION_ORDER = ["LEVEL_0", "LEVEL_1", "LEVEL_2", "LEVEL_3"];
-const WRITING_ORDER = WORD_RECOGNITION_ORDER;
 
 type BandOption = { value: string; code: string; label: string; tone: string };
 
@@ -161,27 +171,28 @@ const READING_COMPREHENSION_BAND = buildBand(
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   true
 );
-const WRITING_BAND = buildBand(
-  WRITING_ORDER,
-  LEVEL_CODES,
-  WEEKLY_WRITING_LEVEL_LABELS,
-  true
-);
 
 /**
- * The reading profile scale for this grade only. A Grade 3 sheet shows the
- * Kinder–G3 wording and a Grade 5 sheet the G4-and-up wording; showing both at
- * once is how the comp reads, but on a page pinned to one grade the other band is
- * just noise a teacher has to filter out.
+ * The reading profile scale for this grade only, from the shared policy
+ * module (`readingProfileOptionsForGrade`, docs/reading-policy-spec.md
+ * section 3) rather than a hardcoded four-value order — Kinder/Grade 1/Grade 2
+ * show the new letter/word rubric, Grade 11/Grade 12 the restricted SHS three,
+ * everything else the original four. A Grade 3 sheet still shows the
+ * Kinder–G3 wording and a Grade 5 sheet the G4-and-up wording (`isEarlyGradeReadingBand`
+ * is unchanged) — showing every grade's band at once is how the comp reads,
+ * but on a page pinned to one grade the others are just noise to filter out.
  */
 function profileBandFor(gradeType: string): BandOption[] {
-  const early = isEarlyGradeReadingBand(gradeType);
-  return buildBand(
-    PROFILE_ORDER,
-    early ? PROFILE_CODES_K3 : PROFILE_CODES_G4_PLUS,
-    early ? READING_PROFILE_LABELS_K3 : READING_PROFILE_LABELS_G4_PLUS,
-    false
-  );
+  const options = readingProfileOptionsForGrade(gradeType);
+  const legacyCodes = isEarlyGradeReadingBand(gradeType)
+    ? PROFILE_CODES_K3
+    : PROFILE_CODES_G4_PLUS;
+  return options.map((option, index) => ({
+    value: option.value,
+    code: PROFILE_CODES_EARLY_RUBRIC[option.value] ?? legacyCodes[option.value] ?? option.value,
+    label: option.label,
+    tone: rampTone(index, options.length),
+  }));
 }
 
 export type MonthlyReadingLevelGridLearner = {
@@ -195,6 +206,13 @@ export type MonthlyReadingLevelGridExisting = {
   filipinoProfile: string | null;
   wordRecognitionLevel: string | null;
   readingComprehensionLevel: string | null;
+  /**
+   * Preserved column, no longer collected or shown here (docs/reading-policy-spec.md
+   * section 4c) — kept on the wire shape because the query behind it still
+   * selects the real DB value, but nothing in this file reads it. See
+   * `existingHasVisibleRow` for why a row whose only stored value is this one
+   * must not count as data this grid put there.
+   */
   writingLevel: string | null;
   notes: string | null;
 };
@@ -202,7 +220,7 @@ export type MonthlyReadingLevelGridExisting = {
 export type AralMonthlyReadingLevelGridFormHandle = { save: () => void };
 
 type ReadingLevelProgress = {
-  /** All four required fields set — this learner is assessed for the month. */
+  /** Every field this grade requires is set — this learner is assessed for the month. */
   completed: number;
   /** Something entered, but not enough to save. */
   partial: number;
@@ -214,7 +232,6 @@ type RowState = {
   filipinoProfile: string;
   wordRecognitionLevel: string;
   readingComprehensionLevel: string;
-  writingLevel: string;
   notes: string;
 };
 
@@ -223,25 +240,29 @@ const EMPTY_ROW: RowState = {
   filipinoProfile: "",
   wordRecognitionLevel: "",
   readingComprehensionLevel: "",
-  writingLevel: "",
   notes: "",
 };
 
 /**
- * Writing level is deliberately NOT required: the column is nullable, rows
- * predating it have none, and a teacher may have reading data before writing is
- * assessed. It still counts toward `hasAnyValue`, so a row where writing is the
- * only entry prompts for the four required fields rather than saving silently.
+ * Grade-aware completeness, delegated to the shared policy module
+ * (`isReadingRecordComplete`, docs/reading-policy-spec.md section 3) instead
+ * of a hardcoded four-field check — Grade 1/Grade 2 no longer collect English,
+ * so their rows are complete without it.
  */
-function isRowComplete(row: RowState | undefined): boolean {
-  return (
-    !!row?.englishProfile &&
-    !!row.filipinoProfile &&
-    !!row.wordRecognitionLevel &&
-    !!row.readingComprehensionLevel
+function isRowComplete(row: RowState | undefined, gradeType: string): boolean {
+  if (!row) return false;
+  return isReadingRecordComplete(
+    {
+      englishProfile: row.englishProfile || null,
+      filipinoProfile: row.filipinoProfile || null,
+      wordRecognitionLevel: row.wordRecognitionLevel || null,
+      readingComprehensionLevel: row.readingComprehensionLevel || null,
+    },
+    gradeType
   );
 }
 
+/** Presence, not completeness — grade-independent, unlike `isRowComplete` above. */
 function hasAnyValue(row: RowState | undefined): boolean {
   if (!row) return false;
   return (
@@ -249,8 +270,23 @@ function hasAnyValue(row: RowState | undefined): boolean {
     !!row.filipinoProfile ||
     !!row.wordRecognitionLevel ||
     !!row.readingComprehensionLevel ||
-    !!row.writingLevel ||
     !!row.notes.trim()
+  );
+}
+
+/**
+ * Whether an existing DB row carries anything this grid could have written —
+ * i.e. anything other than a preserved legacy `writingLevel`. Governs
+ * `hadRecord` (see its own doc comment): a row that fails this can never enter
+ * `clears`, because this UI cannot see what it would be clearing.
+ */
+function existingHasVisibleRow(row: MonthlyReadingLevelGridExisting): boolean {
+  return (
+    row.englishProfile != null ||
+    row.filipinoProfile != null ||
+    row.wordRecognitionLevel != null ||
+    row.readingComprehensionLevel != null ||
+    !!row.notes?.trim()
   );
 }
 
@@ -268,7 +304,6 @@ function toRows(
           filipinoProfile: found.filipinoProfile ?? "",
           wordRecognitionLevel: found.wordRecognitionLevel ?? "",
           readingComprehensionLevel: found.readingComprehensionLevel ?? "",
-          writingLevel: found.writingLevel ?? "",
           notes: found.notes ?? "",
         }
       : { ...EMPTY_ROW };
@@ -282,12 +317,16 @@ function toRows(
  * counted, and labelling these two differently ("on this page" vs "this month")
  * is what keeps them from reading as a contradiction.
  */
-function countRows(rows: Record<string, RowState>, ids: string[]): ReadingLevelProgress {
+function countRows(
+  rows: Record<string, RowState>,
+  ids: string[],
+  gradeType: string
+): ReadingLevelProgress {
   let completed = 0;
   let partial = 0;
   for (const id of ids) {
     const row = rows[id];
-    if (isRowComplete(row)) completed += 1;
+    if (isRowComplete(row, gradeType)) completed += 1;
     else if (hasAnyValue(row)) partial += 1;
   }
   return {
@@ -331,22 +370,33 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
   const [rows, setRows] = useState(() => toRows(learners, existing));
 
   const profileBand = useMemo(() => profileBandFor(gradeType), [gradeType]);
+  const includesEnglish = useMemo(
+    () => languagesForGrade(gradeType).includes("ENGLISH"),
+    [gradeType]
+  );
   const learnerIds = useMemo(() => learners.map((l) => l.id), [learners]);
-  const progress = useMemo(() => countRows(rows, learnerIds), [rows, learnerIds]);
+  const progress = useMemo(
+    () => countRows(rows, learnerIds, gradeType),
+    [rows, learnerIds, gradeType]
+  );
   /**
-   * Learners who have a stored row for this month. Emptying one of THESE rows
-   * means "delete what's there" (`clears`); emptying a row that was never
-   * stored means nothing changed, so it is sent nowhere. Re-seeded whenever a
-   * new `existing` prop arrives (e.g. after `router.refresh()`), and updated
-   * locally on a successful save so a second save before the refresh lands
-   * still sees the first save's effect — mirroring how the weekly grid moves
-   * its `initial` baseline forward with `setInitial(rows)`.
+   * Learners who have a stored row for this month with data this grid can
+   * actually see (`existingHasVisibleRow`) — never a row whose only stored
+   * value is a legacy `writingLevel`, which this UI cannot show or clear
+   * (docs/reading-policy-spec.md section 4c). Emptying one of THESE rows means
+   * "delete what's there" (`clears`); emptying a row that was never stored, or
+   * one that was already writing-only, means nothing visible changed, so it is
+   * sent nowhere. Re-seeded whenever a new `existing` prop arrives (e.g. after
+   * `router.refresh()`), and updated locally on a successful save so a second
+   * save before the refresh lands still sees the first save's effect —
+   * mirroring how the weekly grid moves its `initial` baseline forward with
+   * `setInitial(rows)`.
    */
   const [hadRecord, setHadRecord] = useState(
-    () => new Set(existing.map((r) => r.learnerId))
+    () => new Set(existing.filter(existingHasVisibleRow).map((r) => r.learnerId))
   );
   useEffect(() => {
-    setHadRecord(new Set(existing.map((r) => r.learnerId)));
+    setHadRecord(new Set(existing.filter(existingHasVisibleRow).map((r) => r.learnerId)));
   }, [existing]);
 
   useEffect(() => {
@@ -379,7 +429,6 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
           filipinoProfile: row.filipinoProfile || undefined,
           wordRecognitionLevel: row.wordRecognitionLevel || undefined,
           readingComprehensionLevel: row.readingComprehensionLevel || undefined,
-          writingLevel: row.writingLevel || undefined,
           notes: row.notes.trim() || undefined,
         };
       });
@@ -443,15 +492,17 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
             <span className="font-medium">{learner.fullName}</span>
           </span>
         </TableCell>
-        <TableCell>
-          <BandSelect
-            options={profileBand}
-            value={row.englishProfile}
-            disabled={readOnly || pending}
-            label={`${learner.fullName} — English reading level`}
-            onChange={(v) => setField(learner.id, "englishProfile", v)}
-          />
-        </TableCell>
+        {includesEnglish ? (
+          <TableCell>
+            <BandSelect
+              options={profileBand}
+              value={row.englishProfile}
+              disabled={readOnly || pending}
+              label={`${learner.fullName} — English reading level`}
+              onChange={(v) => setField(learner.id, "englishProfile", v)}
+            />
+          </TableCell>
+        ) : null}
         <TableCell>
           <BandSelect
             options={profileBand}
@@ -477,15 +528,6 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
             disabled={readOnly || pending}
             label={`${learner.fullName} — reading comprehension level`}
             onChange={(v) => setField(learner.id, "readingComprehensionLevel", v)}
-          />
-        </TableCell>
-        <TableCell>
-          <BandSelect
-            options={WRITING_BAND}
-            value={row.writingLevel}
-            disabled={readOnly || pending}
-            label={`${learner.fullName} — writing level`}
-            onChange={(v) => setField(learner.id, "writingLevel", v)}
           />
         </TableCell>
         <TableCell>
@@ -538,11 +580,10 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
             <TableRow>
               <TableHead className="w-10">#</TableHead>
               <TableHead className="min-w-[200px]">Learner</TableHead>
-              <ScaleHead title="English" sub="Reading Level" />
+              {includesEnglish ? <ScaleHead title="English" sub="Reading Level" /> : null}
               <ScaleHead title="Filipino" sub="Reading Level" />
               <ScaleHead title="Word Recognition" sub="Level" />
               <ScaleHead title="Reading Comprehension" sub="Level" />
-              <ScaleHead title="Writing" sub="Level" />
               <TableHead className="w-24 text-center">Remarks</TableHead>
               <TableHead className="w-12 text-center">Actions</TableHead>
             </TableRow>

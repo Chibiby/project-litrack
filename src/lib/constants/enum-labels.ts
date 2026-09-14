@@ -38,6 +38,35 @@ export const READING_PROFILE_LABELS = {
   FRUSTRATION_HIGH_EMERGENT: "Frustration / High Emergent",
   INSTRUCTIONAL_DEVELOPING: "Instructional / Developing or Transitioning",
   INDEPENDENT_GRADE_READY: "Independent / Grade-level Ready",
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a). Flat map so `src/lib/reports/queries.ts`'s ungrouped lookup
+  // resolves these values without itself changing.
+  CANNOT_NAME_SOUND_LETTERS: "Level 0 - Cannot name and sound letters",
+  LETTER_LEVEL: "Level 1 - Letter Level",
+  CV_BLENDING: "Level 2 - CV blending",
+  CVC_BLENDING: "Level 3 - CVC blending",
+} as const;
+
+/** Kinder/Grade 1/Grade 2 letter/word rubric labels (docs/reading-policy-spec.md section 2a). */
+export const EARLY_RUBRIC_LABELS = {
+  CANNOT_NAME_SOUND_LETTERS: "Level 0 - Cannot name and sound letters",
+  LETTER_LEVEL: "Level 1 - Letter Level",
+  CV_BLENDING: "Level 2 - CV blending",
+  CVC_BLENDING: "Level 3 - CVC blending",
+} as const;
+
+/**
+ * Grade 11/Grade 12 label set — a restricted view of the original four
+ * `ReadingProfile` members, no new enum members (docs/reading-policy-spec.md
+ * section 2b). `NON_DECODER_LOW_EMERGENT` has no entry here on purpose: it is
+ * not offered to SHS going forward, but a legacy G11/G12 row may still hold
+ * it — `readingProfileLabelsForGradeType` falls back to
+ * `READING_PROFILE_LABELS_G4_PLUS` for that one value.
+ */
+export const READING_PROFILE_LABELS_SHS = {
+  FRUSTRATION_HIGH_EMERGENT: "Frustration Level",
+  INSTRUCTIONAL_DEVELOPING: "Instructional Level",
+  INDEPENDENT_GRADE_READY: "Independent Level",
 } as const;
 
 /** Weekly ARAL word recognition levels (ReadingLevelRecord). */
@@ -98,13 +127,30 @@ export function isEarlyGradeReadingBand(type: string): boolean {
   return EARLY_GRADE_TYPES.has(type);
 }
 
+const SHS_READING_GRADE_TYPES = new Set(["G11", "G12"]);
+
+/**
+ * Label map for a grade, value-first-safe: always merges in
+ * `EARLY_RUBRIC_LABELS` first so a promoted learner's old K/1/2 rubric value
+ * still resolves to its rubric label under any later grade (docs/reading-policy-spec.md
+ * section 2, decision I) — the grade-specific labels spread on top never
+ * define those four keys, so they can never shadow them.
+ *
+ * G11/G12 layer `READING_PROFILE_LABELS_SHS` on top of
+ * `READING_PROFILE_LABELS_G4_PLUS`, so the three renamed levels get their SHS
+ * label while `NON_DECODER_LOW_EMERGENT` — not offered to SHS going forward,
+ * but still held by legacy rows — falls back to "Non-decoder".
+ */
 export function readingProfileLabelsForGradeType(
   type: string | null | undefined
-): typeof READING_PROFILE_LABELS_K3 | typeof READING_PROFILE_LABELS_G4_PLUS {
-  if (type && isEarlyGradeReadingBand(type)) {
-    return READING_PROFILE_LABELS_K3;
-  }
-  return READING_PROFILE_LABELS_G4_PLUS;
+): Record<string, string> {
+  const original: Record<string, string> =
+    type && SHS_READING_GRADE_TYPES.has(type)
+      ? { ...READING_PROFILE_LABELS_G4_PLUS, ...READING_PROFILE_LABELS_SHS }
+      : type && isEarlyGradeReadingBand(type)
+        ? READING_PROFILE_LABELS_K3
+        : READING_PROFILE_LABELS_G4_PLUS;
+  return { ...EARLY_RUBRIC_LABELS, ...original };
 }
 
 /** Band label when grade type is known; combined slash labels when not. */
@@ -114,7 +160,7 @@ export function labelReadingProfile(
 ): string {
   if (gradeType) {
     const labels = readingProfileLabelsForGradeType(gradeType);
-    return labels[key as keyof typeof labels] ?? key;
+    return labels[key] ?? key;
   }
   return (
     READING_PROFILE_LABELS[key as keyof typeof READING_PROFILE_LABELS] ?? key
@@ -282,6 +328,7 @@ export const NUTRITIONAL_STATUS_LABELS = {
   SEVERELY_WASTED: "Severely Wasted",
   WASTED: "Wasted",
   NORMAL: "Normal",
+  OVERWEIGHT: "Overweight",
   OBESE: "Obese",
 } as const;
 

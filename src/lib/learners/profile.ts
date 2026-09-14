@@ -76,7 +76,8 @@ export type LearnerProfileData = {
   ethnicityOther: string | null;
   secondaryEthnicity: string | null;
   secondaryEthnicityOther: string | null;
-  englishReadingProfile: string;
+  /** Null when the learner's grade doesn't collect English (Grade 1/Grade 2). */
+  englishReadingProfile: string | null;
   filipinoReadingProfile: string;
   englishFrustrationSubtypes: string[];
   filipinoFrustrationSubtypes: string[];

@@ -16,6 +16,7 @@ function overview(over: Partial<TeacherOverview> = {}): TeacherOverview {
     gradeCount: 1,
     totalLearners: 15,
     aralLearners: 14,
+    pendingAralProfiles: 1,
     attendance: {
       present: 18,
       late: 0,

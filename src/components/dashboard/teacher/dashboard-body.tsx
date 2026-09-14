@@ -7,7 +7,7 @@ import { Surface } from "@/components/ui/surface";
 import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { GradeLevelBarChart } from "@/components/dashboard/lazy-charts";
-import { GraduationCap, Sparkles, Users } from "lucide-react";
+import { GraduationCap, Sparkles, UserRoundCheck, Users } from "lucide-react";
 import { GreetingHeader } from "./greeting-header";
 import { StatCard, StatCardRow } from "./stat-cards";
 import { AttendanceOverviewPanel, ReadingOverviewPanel } from "./overview-panels";
@@ -171,6 +171,13 @@ export async function TeacherDashboardBody({
             label: "View ARAL learners",
             href: aralRosterHref(data.primaryAralGradeId),
           }}
+        />
+        <StatCard
+          title="Pending Profiles"
+          value={data.pendingAralProfiles}
+          hint="Without ARAL profile"
+          icon={UserRoundCheck}
+          tone="primary"
         />
       </StatCardRow>
 

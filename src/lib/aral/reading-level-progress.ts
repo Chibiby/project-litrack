@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
 
 export type MonthlyAssessmentProgress = {
   /** Learners in the filtered set with a complete assessment saved this month. */
@@ -7,24 +8,6 @@ export type MonthlyAssessmentProgress = {
   /** Learners in the filtered set. */
   total: number;
 };
-
-/**
- * Completeness predicate for a `ReadingLevelRecord`, shared by every "assessed"
- * counter (the monthly grid progress bar, the admin dashboard aggregate, and the
- * teacher overview). Mirrors `isRowComplete` in the monthly grid: all four
- * required scales set. `englishProfile` and `filipinoProfile` became nullable so
- * a partially-filled row can be saved — a row existing no longer implies either
- * is set, so both must be checked explicitly alongside the two level columns.
- * `writingLevel` and `notes` are excluded on purpose: both are nullable in the
- * schema and optional in the grid, so they are not part of what "assessed"
- * means. Define this once so the three call sites cannot drift.
- */
-export const COMPLETE_ASSESSMENT_WHERE = {
-  englishProfile: { not: null },
-  filipinoProfile: { not: null },
-  wordRecognitionLevel: { not: null },
-  readingComprehensionLevel: { not: null },
-} satisfies Prisma.ReadingLevelRecordWhereInput;
 
 /**
  * Grade-wide monthly assessment progress for one filtered learner set.
@@ -44,6 +27,13 @@ export async function countMonthlyAssessmentProgress(args: {
   monthStart: Date;
   monthEnd: Date;
   /**
+   * Grades in scope for this progress count. `completeAssessmentWhereForGrades`
+   * partitions these by `languagesForGrade`, so a Grade 1/Grade 2 learner's
+   * "assessed" no longer requires an English value that grade never collects
+   * (docs/reading-policy-spec.md section 4b).
+   */
+  grades: { id: string; type: string }[];
+  /**
    * The filtered learner count, when the caller already has it. The page needs
    * the same number to size its pager, and counting it twice against identical
    * `where` input is a wasted round trip; the fetch action has no such count and
@@ -56,8 +46,12 @@ export async function countMonthlyAssessmentProgress(args: {
     prisma.readingLevelRecord.findMany({
       where: {
         weekStart: { gte: args.monthStart, lt: args.monthEnd },
-        ...COMPLETE_ASSESSMENT_WHERE,
-        learner: args.learnerWhere,
+        // `AND`, not a spread merge: `completeAssessmentWhereForGrades` may itself
+        // set a `learner` key (to route each row to the right grade's language
+        // rule), and merging that into the same object as `learner:
+        // args.learnerWhere` would let one silently clobber the other depending
+        // on how many grade shapes it produced.
+        AND: [completeAssessmentWhereForGrades(args.grades), { learner: args.learnerWhere }],
       },
       select: { learnerId: true },
       // A learner can hold more than one row in a month (a legacy weekly row plus

@@ -77,6 +77,7 @@ enum NutritionalStatus {
   SEVERELY_WASTED
   WASTED
   NORMAL
+  OVERWEIGHT
   OBESE
 }
 
@@ -92,6 +93,14 @@ enum ReadingProfile {
   FRUSTRATION_HIGH_EMERGENT
   INSTRUCTIONAL_DEVELOPING
   INDEPENDENT_GRADE_READY
+  // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
+  // section 2a). Only ever written by K/1/2 collection; label dispatch is
+  // value-first, so these render the same rubric label regardless of the
+  // learner's current grade.
+  CANNOT_NAME_SOUND_LETTERS
+  LETTER_LEVEL
+  CV_BLENDING
+  CVC_BLENDING
 }
 
 // Weekly ARAL word-recognition level (not AralProfile.wordRecognition).
@@ -1016,7 +1025,11 @@ model Learner {
   /// Free text only when secondaryEthnicity = OTHER.
   secondaryEthnicityOther String?
 
-  englishReadingProfile       ReadingProfile
+  // Nullable: Grade 1 and Grade 2 stop collecting an English reading level
+  // (Kinder and Grade 3+ are unaffected). Required-in-practice enforcement for
+  // the grades that still collect it is an action-level invariant, not a
+  // Prisma/Zod one — see docs/reading-policy-spec.md section 4a.
+  englishReadingProfile       ReadingProfile?
   englishFrustrationSubtypes  FrustrationSubtype[]
   filipinoReadingProfile      ReadingProfile
   filipinoFrustrationSubtypes FrustrationSubtype[]
