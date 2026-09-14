@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -37,7 +36,7 @@ import {
   type LearnerListGradeFilter,
   type LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
-import { BookOpen, CalendarDays, Edit3, Sparkles } from "lucide-react";
+import { BookOpen, CalendarDays, Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +98,6 @@ async function AralLearnersTable({
       age: true,
       gradeLevelId: true,
       section: { select: { id: true, name: true } },
-      aralProfile: { select: { id: true, updatedAt: true } },
     },
     orderBy: { fullName: "asc" },
     skip,
@@ -138,8 +136,6 @@ async function AralLearnersTable({
                 <TableHead>Age</TableHead>
                 {showGradeColumn && <TableHead>Grade</TableHead>}
                 {showSection && <TableHead>Section</TableHead>}
-                <TableHead>Profile complete?</TableHead>
-                <TableHead>Last update</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -162,30 +158,12 @@ async function AralLearnersTable({
                       {l.section?.name ?? "—"}
                     </TableCell>
                   )}
-                  <TableCell>
-                    {l.aralProfile ? (
-                      <Badge variant="violet">Complete</Badge>
-                    ) : (
-                      <Badge variant="outline">Pending</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
-                    {l.aralProfile?.updatedAt.toLocaleDateString() ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button asChild size="sm">
-                      <Link
-                        href={`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/update`}
-                      >
-                        <Edit3 className="h-4 w-4" />
-                        {l.aralProfile ? "Update Profiling" : "Complete Profiling"}
-                      </Link>
-                    </Button>
+                  <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link
                         href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`}
                       >
-                        Profile
+                        View learner
                       </Link>
                     </Button>
                   </TableCell>
@@ -248,7 +226,7 @@ export default async function AralDashboard({
   if (assignedGrades.length === 0) {
     return (
       <AppShell
-        title="Learner Profiling"
+        title="ARAL Program"
         role={user.role}
         userName={user.fullName || `${user.firstName} ${user.lastName}`}
         isSuperAdminView={isSuperAdmin && !!sp.schoolId}
@@ -362,7 +340,7 @@ export default async function AralDashboard({
 
   return (
     <AppShell
-      title="Learner Profiling"
+      title="ARAL Program"
       subtitle={`${aralCount} ARAL learner${aralCount === 1 ? "" : "s"}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}

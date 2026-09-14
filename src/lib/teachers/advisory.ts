@@ -20,20 +20,64 @@ export type AdvisoryPlacement = {
 };
 
 /**
- * Select the advisory placement represented by a grade-scoped page URL.
+ * What a grade-scoped advisory page should do with the URL it was given.
  *
- * The sidebar can point at any grade a teacher advises. Falling back to the
- * first placement preserves the existing refusal path for a stale or invalid
- * URL; the page's grade-scope query still rejects that URL before rendering a
- * sheet.
+ * Multi-advisory means a teacher can hold sections in several grades AND
+ * several sections inside one grade, so a grade id alone is not always enough
+ * to name one section. Falling back to "the first placement" — which is what
+ * this used to do — silently opened someone else's class: the teacher saw a
+ * roster, believed it was the one they asked for, and encoded into it.
+ *
+ * Four answers, because the four situations want four different pages:
+ *
+ * - **none** — the teacher advises nothing anywhere.
+ * - **elsewhere** — they advise, but not in this grade. Send them to the
+ *   chooser rather than to a sheet they did not ask for.
+ * - **choose** — this grade holds several of their sections and the URL named
+ *   none of them (or named one they do not hold). Ask; never guess.
+ * - **placement** — exactly one section is in scope, so the page can render.
  */
-export function resolveAdvisoryPlacementForGrade(
+export type AdvisoryGradeScope =
+  | { kind: "placement"; placement: AdvisoryPlacement }
+  | { kind: "choose"; options: AdvisoryPlacement[] }
+  | { kind: "elsewhere"; options: AdvisoryPlacement[] }
+  | { kind: "none" };
+
+export function resolveAdvisoryGradeScope(
   placements: AdvisoryPlacement[],
-  gradeLevelId: string
-): AdvisoryPlacement | null {
-  return placements.find((placement) => placement.gradeLevelId === gradeLevelId) ??
-    placements[0] ??
-    null;
+  gradeLevelId: string,
+  requestedSectionId?: string | null
+): AdvisoryGradeScope {
+  if (placements.length === 0) return { kind: "none" };
+
+  const inGrade = placements.filter((p) => p.gradeLevelId === gradeLevelId);
+  if (inGrade.length === 0) return { kind: "elsewhere", options: placements };
+
+  if (requestedSectionId) {
+    const match = inGrade.find((p) => p.sectionId === requestedSectionId);
+    // A section id that is not one of theirs *in this grade* reads the same as
+    // one that does not exist: ask again rather than confirm or deny it.
+    if (match) return { kind: "placement", placement: match };
+    return inGrade.length === 1
+      ? { kind: "placement", placement: inGrade[0] }
+      : { kind: "choose", options: inGrade };
+  }
+
+  if (inGrade.length === 1) return { kind: "placement", placement: inGrade[0] };
+  return { kind: "choose", options: inGrade };
+}
+
+/**
+ * The distinct grades a teacher advises in, in placement order.
+ *
+ * The sidebar and the dashboard both deep-link into a grade-scoped sheet, and
+ * both may only do so when the destination is unambiguous. Keeping the rule
+ * here means they cannot come to disagree about what "unambiguous" means.
+ */
+export function advisoryGradeLevelIds(
+  placements: { gradeLevelId: string }[]
+): string[] {
+  return [...new Set(placements.map((p) => p.gradeLevelId))];
 }
 
 export { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";

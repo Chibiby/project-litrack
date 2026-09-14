@@ -5,7 +5,7 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 /**
  * Task 7: the profiling wizard stops locking a volunteer into a separate step
  * flow, and gives DepEd teachers the mutually exclusive `Floating teacher` /
- * `Multi-grade advisory` checkboxes that decide `advisoryMode` once, at
+ * `Multi-advisory` checkboxes that decide `advisoryMode` once, at
  * profiling. Edit mode (Settings) shows Designation and Teaching Assignment
  * read-only instead.
  */
@@ -65,6 +65,16 @@ const GRADE_LEVELS = [
       { id: "33333333-3333-4333-8333-333333333333", name: "Ilang-Ilang", takenByOther: false },
     ],
   },
+  // A SECOND grade, so multi-advisory can be exercised across grade levels —
+  // the case a single-grade fixture cannot tell apart from single-advisory.
+  {
+    id: "grade-g4",
+    type: "G4",
+    sections: [
+      { id: "44444444-4444-4444-8444-444444444444", name: "Mabini", takenByOther: false },
+      { id: "55555555-5555-4555-8555-555555555555", name: "Rizal", takenByOther: false },
+    ],
+  },
 ];
 
 /** A profile that clears every per-step check up through Training, so the
@@ -103,27 +113,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("teacher profiling — advisory mode checkboxes", () => {
-  it("keeps Floating teacher and Multi-grade advisory mutually exclusive", async () => {
+  it("keeps Floating teacher and Multi-advisory mutually exclusive", async () => {
     render(<TeacherProfileForm defaultValues={BASE_DEFAULTS} gradeLevels={GRADE_LEVELS} />);
     await goToAssignmentStep();
 
     const floating = () => screen.getByRole("checkbox", { name: "Floating teacher" });
-    const multiGrade = () => screen.getByRole("checkbox", { name: "Multi-grade advisory" });
+    const multiGrade = () => screen.getByRole("checkbox", { name: "Multi-advisory" });
 
     fireEvent.click(floating());
     await waitFor(() => expect(floating().getAttribute("aria-checked")).toBe("true"));
 
     fireEvent.click(multiGrade());
     await waitFor(() => expect(multiGrade().getAttribute("aria-checked")).toBe("true"));
-    // Checking Multi-grade after Floating leaves only Multi-grade checked.
+    // Checking Multi-advisory after Floating leaves only Multi-advisory checked.
     expect(floating().getAttribute("aria-checked")).toBe("false");
   });
 
-  it("adds up to 2 extra section rows for Multi-grade advisory, then hides Add another section", async () => {
+  it("adds up to 2 extra section rows for Multi-advisory, then hides Add another section", async () => {
     render(<TeacherProfileForm defaultValues={BASE_DEFAULTS} gradeLevels={GRADE_LEVELS} />);
     await goToAssignmentStep();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Multi-grade advisory" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Multi-advisory" }));
 
     const addButton = () => screen.getByRole("button", { name: "Add another section" });
     expect(addButton()).toBeTruthy();
@@ -136,6 +146,30 @@ describe("teacher profiling — advisory mode checkboxes", () => {
     // 3 rows total: the primary grade/section picker plus these 2 extras.
     expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Add another section" })).toBeNull();
+  });
+
+  it("gives each extra advisory its OWN grade picker, not the first one's grade", async () => {
+    // The heart of multi-advisory: a teacher's three sections need not share a
+    // grade. One grade picker at the top with section-only rows beneath it would
+    // silently make them share one, and a Grade 3 / Grade 4 adviser could not
+    // finish profiling at all.
+    render(<TeacherProfileForm defaultValues={BASE_DEFAULTS} gradeLevels={GRADE_LEVELS} />);
+    await goToAssignmentStep();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Multi-advisory" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add another section" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add another section" }));
+
+    // Two extra rows, each with its own Grade Level control alongside its
+    // Section control — not one shared grade for all three.
+    expect(screen.getAllByLabelText("Grade Level")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Section")).toHaveLength(2);
+    // Numbered from the first advisory, so "Advisory section 2" is the second
+    // section a teacher holds rather than the second extra one.
+    expect(screen.getByText("Advisory section 2")).toBeTruthy();
+    expect(screen.getByText("Advisory section 3")).toBeTruthy();
+    // And the copy tells them the grades may differ, so nobody assumes otherwise.
+    expect(screen.getByText(/They can be in different grade levels./)).toBeTruthy();
   });
 
   it("removes the section pickers for the Non-DepEd ARAL Volunteer designation", async () => {
@@ -164,7 +198,7 @@ describe("teacher profiling — edit mode", () => {
     );
 
     expect(screen.queryByRole("checkbox", { name: "Floating teacher" })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: "Multi-grade advisory" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Multi-advisory" })).toBeNull();
     expect(screen.getAllByText(/Ask your School Head to change this\./).length).toBeGreaterThan(0);
   });
 
@@ -207,7 +241,7 @@ describe("buildPayload — a designation change cannot leave a stale mode behind
     highestTrainingLevel: "DIVISION",
   };
 
-  it("keeps a Multi-grade teacher's extra sections", () => {
+  it("keeps a multi-advisory teacher's extra sections", () => {
     const payload = buildPayload(multiGrade);
     expect(payload.advisoryMode).toBe("MULTI_GRADE");
     expect(payload.additionalSectionIds).toEqual(multiGrade.additionalSectionIds);

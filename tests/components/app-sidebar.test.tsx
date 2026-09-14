@@ -54,7 +54,7 @@ function renderTeacherSidebar(props?: {
    * here by default so the shared cases exercise the resolver-href fallback;
    * pass it to get the grade-scoped sheet href.
    */
-  advisoryGradeLevelId?: string | null;
+  advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   /** Desktop rail. Spread after the default so `false` collapses it. */
   expanded?: boolean;
 }) {
@@ -279,7 +279,7 @@ describe("AppSidebar — teacher", () => {
     // href regressing to the ARAL picker (`aralHref` falls back to /teacher/aral,
     // which this row precedes in the list and would therefore hijack).
     //
-    // This render passes NO `advisoryGradeLevelId`, so what it pins is the
+    // This render passes NO `advisoryPlacements`, so what it pins is the
     // fallback branch: the sheet itself lives at
     // /teacher/aral/[gradeId]/terms-reports, and with no advised grade reaching
     // the shell — the teacher advises no section, or the layout's context read
@@ -306,7 +306,7 @@ describe("AppSidebar — teacher", () => {
     // getNavGroups because the failure this catches is the advisory grade
     // stopping at the shell — the config would still be correct while every
     // teacher's sidebar shipped the resolver href.
-    renderTeacherSidebar({ advisoryGradeLevelId: "g1" });
+    renderTeacherSidebar({ advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
     const link = screen.getAllByRole("link", { name: "End of Terms Reports" })[0];
     // A real anchor, not the inert div: the deep branch must not tip the row into
     // the `unavailable` treatment on its way through.
@@ -331,7 +331,7 @@ describe("AppSidebar — teacher", () => {
     // longest-prefix fell through to /teacher and the sidebar lit up Dashboard on
     // a page titled "End of Terms Reports — Grade 3".
     pathname.value = "/teacher/aral/g1/terms-reports";
-    renderTeacherSidebar({ advisoryGradeLevelId: "g1" });
+    renderTeacherSidebar({ advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
 
     const current = screen.getAllByRole("link", { current: "page" });
     expect(current.length).toBeGreaterThan(0);
@@ -349,7 +349,7 @@ describe("AppSidebar — teacher", () => {
     ).toBeNull();
   });
 
-  it("highlights Learner Profiling on the shared ARAL workspace route", () => {
+  it("does not steal the shared ARAL workspace route's highlight", () => {
     // The mirror: the deep href must not steal a sibling's highlight. Two ARAL
     // grades, so both ARAL rows collapse onto /teacher/aral — a PREFIX of the
     // term sheet's href — which is the arrangement where the two can compete.
@@ -362,15 +362,18 @@ describe("AppSidebar — teacher", () => {
           { id: "g1", label: "Grade 3", hasAral: true },
           { id: "g2", label: "Grade 4", hasAral: true },
         ]}
-        advisoryGradeLevelId="g1"
+        advisoryPlacements={[{ sectionId: "s1", gradeLevelId: "g1" }]}
         expanded
       />
     );
+    // Both ARAL rows collapse onto /teacher/aral with two ARAL grades, and with
+    // Learner Profiling gone they are the only rows that name it. What matters is
+    // that the term sheet's deep href does not steal the picker's highlight.
     const current = screen.getAllByRole("link", { current: "page" });
     expect(current.length).toBeGreaterThan(0);
-    expect(current.every((el) => el.textContent?.includes("Learner Profiling"))).toBe(
-      true
-    );
+    expect(
+      current.every((el) => el.textContent?.includes("Weekly Attendance"))
+    ).toBe(true);
     expect(
       screen
         .getAllByRole("link", { name: "End of Terms Reports" })[0]
@@ -386,7 +389,7 @@ describe("AppSidebar — teacher", () => {
     renderTeacherSidebar({
       roleLabel: "ARAL Volunteer",
       isAralVolunteer: true,
-      advisoryGradeLevelId: "g1",
+      advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }],
     });
     expect(screen.queryByRole("link", { name: "End of Terms Reports" })).toBeNull();
     expect(

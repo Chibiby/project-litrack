@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  resolveAdvisoryPlacementForGrade,
+  resolveAdvisoryGradeScope,
+  advisoryGradeLevelIds,
   resolveAdvisoryTarget,
   NO_ADVISORY_MESSAGE,
   NOT_YOUR_ADVISORY_MESSAGE,
@@ -64,26 +65,106 @@ describe("resolveAdvisoryTarget — no advisory", () => {
   });
 });
 
-describe("resolveAdvisoryPlacementForGrade", () => {
-  it("selects the placement named by a grade-scoped report URL", () => {
-    const gradeFive = placement({
-      gradeLevelId: "grade-g5",
-      gradeType: "G5",
-      gradeLabel: "Grade 5",
-      label: "Grade 5 · Rosal",
-    });
+describe("resolveAdvisoryGradeScope", () => {
+  const GRADE_FIVE = placement({
+    sectionId: "section-rosal",
+    sectionName: "Rosal",
+    gradeLevelId: "grade-g5",
+    gradeType: "G5",
+    gradeLabel: "Grade 5",
+    label: "Grade 5 · Rosal",
+  });
+  /** A second section in the SAME grade as `placement()`. */
+  const SAME_GRADE_TWIN = placement({
+    sectionId: "section-ilang",
+    sectionName: "Ilang-Ilang",
+    label: "Grade 4 · Ilang-Ilang",
+  });
 
-    expect(resolveAdvisoryPlacementForGrade([placement(), gradeFive], "grade-g5")).toBe(
-      gradeFive
+  it("resolves the one placement in the grade the URL names", () => {
+    const scope = resolveAdvisoryGradeScope([placement(), GRADE_FIVE], "grade-g5");
+    expect(scope).toEqual({ kind: "placement", placement: GRADE_FIVE });
+  });
+
+  it("works across different grades, not just the first one held", () => {
+    // The multi-advisory case the old first-placement fallback broke: a teacher
+    // advising Grade 4 and Grade 5 must reach EITHER sheet, not always Grade 4's.
+    const held = [placement(), GRADE_FIVE];
+    expect(resolveAdvisoryGradeScope(held, "grade-g4")).toEqual({
+      kind: "placement",
+      placement: placement(),
+    });
+    expect(resolveAdvisoryGradeScope(held, "grade-g5")).toEqual({
+      kind: "placement",
+      placement: GRADE_FIVE,
+    });
+  });
+
+  it("asks rather than guessing with two sections in one grade", () => {
+    // THE regression. Both sections sit in Grade 4, so a grade id alone names two
+    // sheets and picking the first would open a class nobody chose.
+    const held = [placement(), SAME_GRADE_TWIN];
+    const scope = resolveAdvisoryGradeScope(held, "grade-g4");
+    expect(scope.kind).toBe("choose");
+    expect(scope.kind === "choose" && scope.options).toEqual(held);
+  });
+
+  it("takes the section the URL names out of several in one grade", () => {
+    const held = [placement(), SAME_GRADE_TWIN];
+    expect(resolveAdvisoryGradeScope(held, "grade-g4", "section-ilang")).toEqual({
+      kind: "placement",
+      placement: SAME_GRADE_TWIN,
+    });
+  });
+
+  it("re-asks for a section that is not theirs in this grade", () => {
+    // Another teacher's section, or one in another school, must read the same as
+    // one that does not exist: ask again, never confirm it by name.
+    const held = [placement(), SAME_GRADE_TWIN];
+    expect(resolveAdvisoryGradeScope(held, "grade-g4", "section-someone-else").kind).toBe(
+      "choose"
     );
   });
 
-  it("keeps the first-placement fallback for an invalid or stale URL", () => {
-    const placements = [placement(), ROSAL];
-    expect(resolveAdvisoryPlacementForGrade(placements, "grade-g9")).toBe(
-      placements[0]
-    );
-    expect(resolveAdvisoryPlacementForGrade([], "grade-g9")).toBeNull();
+  it("ignores a foreign section id when the grade holds exactly one advisory", () => {
+    // One candidate, so there is nothing to choose between and nothing gained by
+    // refusing — the page still renders that single advisory, never a wider one.
+    expect(
+      resolveAdvisoryGradeScope([placement()], "grade-g4", "section-someone-else")
+    ).toEqual({ kind: "placement", placement: placement() });
+  });
+
+  it("sends a teacher who advises elsewhere to the chooser, not to a sheet", () => {
+    const held = [placement(), GRADE_FIVE];
+    const scope = resolveAdvisoryGradeScope(held, "grade-g9");
+    expect(scope.kind).toBe("elsewhere");
+    expect(scope.kind === "elsewhere" && scope.options).toEqual(held);
+    // And never a placement — the old fallback returned `placements[0]` here.
+    expect(scope.kind).not.toBe("placement");
+  });
+
+  it("reports none for a teacher who advises nothing at all", () => {
+    expect(resolveAdvisoryGradeScope([], "grade-g9")).toEqual({ kind: "none" });
+  });
+});
+
+describe("advisoryGradeLevelIds", () => {
+  it("de-duplicates two sections that share a grade", () => {
+    expect(
+      advisoryGradeLevelIds([
+        { gradeLevelId: "grade-g4" },
+        { gradeLevelId: "grade-g4" },
+        { gradeLevelId: "grade-g5" },
+      ])
+    ).toEqual(["grade-g4", "grade-g5"]);
+  });
+
+  it("keeps placement order and returns nothing for a floating teacher", () => {
+    expect(advisoryGradeLevelIds([{ gradeLevelId: "b" }, { gradeLevelId: "a" }])).toEqual([
+      "b",
+      "a",
+    ]);
+    expect(advisoryGradeLevelIds([])).toEqual([]);
   });
 });
 

@@ -182,8 +182,6 @@ async function LearnersBody({
       gradeLevelId: true,
       gradeLevel: { select: { type: true } },
       section: { select: { id: true, name: true } },
-      // Presence only — this drives the ARAL Profile column.
-      aralProfile: { select: { id: true } },
     },
     orderBy: { fullName: "asc" },
     skip,
@@ -196,7 +194,6 @@ async function LearnersBody({
     age: l.age,
     gender: l.gender,
     isAralLearner: l.isAralLearner,
-    hasAralProfile: l.aralProfile !== null,
     archivedAt: (l.archivedAt ?? l.deletedAt)?.toISOString() ?? null,
     englishReadingProfile: l.englishReadingProfile,
     filipinoReadingProfile: l.filipinoReadingProfile,

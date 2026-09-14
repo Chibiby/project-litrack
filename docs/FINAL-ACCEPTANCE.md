@@ -13,7 +13,7 @@ This report is honest: no fake completion of remote migrate, full multi-role bro
 
 | Area | Status |
 |------|--------|
-| Learner profiling survey (L-A…L-F) | Complete — Zod + UI + ARAL workflows; rows **VERIFIED** in traceability |
+| Learner profiling survey (L-A…L-F) | Complete — Zod + UI + ARAL workflows; rows **VERIFIED** in traceability. Sections B–E (the ARAL Profile) are dormant since 2026-09-14 — preserved but unnavigated; see `docs/aral-profile.md` |
 | Teacher / School Head profiling (P-I…P-IV) | Complete — **P-I4 VERIFIED** (read-only login email + optional `contactEmail` on profiles) |
 | Workflow gates (W-1…W-10) | Implemented; most **VERIFIED**, W-1/W-3/W-4/W-7 **DONE** (security override on School-ID-as-password documented) |
 | Auth overhaul (activation, invites, forced password change, recovery) | Done — School ID is identifier only |

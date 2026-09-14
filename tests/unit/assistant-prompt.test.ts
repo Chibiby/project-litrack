@@ -38,10 +38,6 @@ const scope: AssistantScope = {
     unmarked: 13,
   },
   readingLevel: { monthLabel: "September 2026", assessed: 0, total: 16 },
-  pendingProfiles: [
-    { label: "Asriel A.", gradeLabel: "Grade 3", sectionName: "Mango" },
-  ],
-  pendingProfilesTruncated: false,
   submissionLockingEnabled: false,
 };
 
@@ -71,7 +67,6 @@ describe("buildSystemInstruction", () => {
     const prompt = buildSystemInstruction(scope);
     expect(prompt).toContain("Malandag Central Elementary");
     expect(prompt).toContain("16");
-    expect(prompt).toContain("Asriel A.");
     expect(prompt).toContain("September 7 – September 13, 2026");
   });
 
@@ -82,11 +77,26 @@ describe("buildSystemInstruction", () => {
       ...scope,
       attendance: null,
       readingLevel: null,
-      pendingProfiles: [],
     });
     expect(empty).toContain("no records for the current week");
     expect(empty).toContain("no records for the current month");
-    expect(empty).toContain("no ARAL profile yet: none");
+  });
+
+  it("never names ARAL profiles as outstanding work", () => {
+    // The ARAL Profile is dormant, so the model must not be handed a list of
+    // learners "with no ARAL profile yet" — it would invent a task out of it and
+    // tell teachers to go and do something nobody is asking for.
+    // Asserted on the exact lines that used to describe it as work, not on the
+    // phrase "pending profile" at large: the release notes are part of this
+    // prompt and one of them is about the removal itself, which is history
+    // rather than a task the model should hand back to a teacher.
+    const prompt = buildSystemInstruction(scope);
+    expect(prompt).not.toMatch(/Learners with no ARAL profile yet/i);
+    expect(prompt).not.toMatch(/Manage profiles/i);
+    expect(prompt).not.toMatch(/still need Sections/i);
+    // The dashboard card the help index used to explain is gone too, so the
+    // model must not be able to describe a tile that is not on the screen.
+    expect(prompt).not.toMatch(/What does "Pending Profiles" mean/i);
   });
 
   it("quotes every topic the role can see, in full", () => {
@@ -165,16 +175,9 @@ describe("buildSystemInstruction", () => {
     expect(isoDates).toEqual(["2026-09-10"]);
 
     expect(prompt).not.toContain("@"); // no email address
-    expect(prompt).not.toContain("Andrews"); // the surname behind "Asriel A."
-  });
-
-  it("admits when a list was cut short", () => {
-    // A truncated list read as complete is how "you have 25 pending" becomes a
-    // confident wrong answer.
-    const truncated = buildSystemInstruction({
-      ...scope,
-      pendingProfilesTruncated: true,
-    });
-    expect(truncated).toMatch(/only the first \d+ are listed/);
+    // No learner is named at all any more: the one list that carried names was
+    // the dormant "no ARAL profile yet" queue, and it is gone.
+    expect(prompt).not.toContain("Andrews");
+    expect(prompt).not.toContain("Asriel");
   });
 });

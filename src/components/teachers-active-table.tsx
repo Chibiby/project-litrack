@@ -64,6 +64,7 @@ export type ActiveTeacherRow = {
    * of the "Edit role" button, since there is nothing yet to edit.
    */
   designation: string | null;
+  /** `MULTI_GRADE` is the stored value for what the UI calls multi-advisory. */
   advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
   /**
    * The sections this teacher advises, grade derived from each, ordered by grade
@@ -178,7 +179,7 @@ function AdvisoryCell({
 
   const atCap = held.length >= cap;
   // §5: FLOATING is a School Head's explicit choice; a teacher who merely holds
-  // no section yet (still DEFAULT/MULTI_GRADE) is Unassigned instead.
+  // no section yet (still one-advisory or multi-advisory) is Unassigned instead.
   const zeroChipLabel =
     row.advisoryMode === "FLOATING" ? FLOATING_CHIP_LABEL : UNASSIGNED_CHIP_LABEL;
 

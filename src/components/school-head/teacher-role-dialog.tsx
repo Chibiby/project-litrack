@@ -103,7 +103,7 @@ export function TeacherRoleDialog({
         fd.set("designationOther", designationOther.trim());
       }
       // A volunteer advises nothing whatever the radios last said, so a stale
-      // MULTI_GRADE must not be stored against them and resurface later.
+      // multi-advisory setting must not be stored against them and resurface later.
       fd.set(
         "advisoryMode",
         designationKind === ARAL_VOLUNTEER_DESIGNATION ? "DEFAULT" : advisoryMode

@@ -116,9 +116,9 @@ describe("TeacherRoleDialog — designation and advisory setting", () => {
     expect(within(dialog).queryByText("Advisory setting")).toBeNull();
   });
 
-  it("sends DEFAULT for a Volunteer even when the row was Multi-grade", async () => {
+  it("sends DEFAULT for a Volunteer even when the row was multi-advisory", async () => {
     // The radios hide for a Volunteer but keep their last value; a stale
-    // MULTI_GRADE stored against a volunteer would resurface if they were
+    // A multi-advisory setting stored against a volunteer would resurface if they were
     // later switched back to Teacher.
     setTeacherAdvisorySetting.mockResolvedValueOnce({ ok: true });
     render(<TeacherRoleDialog row={{ ...ROW, advisoryMode: "MULTI_GRADE" }} onSaved={vi.fn()} />);

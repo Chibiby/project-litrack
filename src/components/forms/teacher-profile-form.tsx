@@ -244,7 +244,7 @@ export function buildPayload(values: TeacherFormValues): Record<string, unknown>
     // designation changed: the card hides them, so a stale MULTI_GRADE and its
     // extra rows would fail validation on fields the volunteer can no longer see.
     advisoryMode: isVolunteer ? "DEFAULT" : values.advisoryMode,
-    // Only meaningful for Multi-grade advisory; dropped otherwise so a mode
+    // Only meaningful for Multi-advisory; dropped otherwise so a mode
     // switch cannot leave a stale list behind in the payload.
     additionalSectionIds:
       !isVolunteer && values.advisoryMode === "MULTI_GRADE"
@@ -1263,7 +1263,7 @@ export function TeacherProfileForm({
                       ? "Non-DepEd ARAL Volunteer — no teaching assignment"
                       : values.advisoryMode === "FLOATING"
                         ? "Floating teacher — no classroom section"
-                        : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-grade advisory)" : ""}`}
+                        : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-advisory)" : ""}`}
                   </span>
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   <span className="sr-only">This field cannot be changed here.</span>
@@ -1317,7 +1317,7 @@ export function TeacherProfileForm({
                         </div>
                         <div className="flex items-start gap-3">
                           <Checkbox
-                            id="advisory-multigrade"
+                            id="advisory-multi"
                             checked={field.value === "MULTI_GRADE"}
                             onCheckedChange={(checked) => {
                               const next = checked === true ? "MULTI_GRADE" : "DEFAULT";
@@ -1326,11 +1326,12 @@ export function TeacherProfileForm({
                             }}
                           />
                           <div className="space-y-1">
-                            <Label htmlFor="advisory-multigrade" className="font-medium">
-                              Multi-grade advisory
+                            <Label htmlFor="advisory-multi" className="font-medium">
+                              Multi-advisory
                             </Label>
                             <p className="text-xs text-muted-foreground">
-                              You advise up to 3 sections, in any grades.
+                              You advise up to 3 sections. They can be in
+                              different grade levels.
                             </p>
                           </div>
                         </div>
@@ -1369,7 +1370,11 @@ export function TeacherProfileForm({
                       control={form.control}
                       name="sectionId"
                       label="Section"
-                      description="The classroom section you'll advise. Sections already taken by another teacher are disabled."
+                      description={
+                        advisoryMode === "MULTI_GRADE"
+                          ? "Your first advisory section. Add the others below — they can be in other grade levels."
+                          : "The classroom section you'll advise. Sections already taken by another teacher are disabled."
+                      }
                       required
                       options={sectionOptions}
                       placeholder={
@@ -1385,7 +1390,7 @@ export function TeacherProfileForm({
                           >
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-medium">
-                                Additional section {index + 1}
+                                Advisory section {index + 2}
                               </p>
                               <Button
                                 type="button"

@@ -131,7 +131,8 @@ Zod schemas in `src/lib/validators/*.schema.ts`, shared primitives in `common.ts
 ### Domain notes
 
 - **School year / enrollment:** one active `SchoolYear` per school. `Enrollment` is the longitudinal record (learner × year × grade/section/teacher × status). Creating learners with no active year skips enrollment creation by design.
-- **ARAL:** violet is reserved as the ARAL accent (`tailwind.config.ts`); blue primary, amber secondary elsewhere. ARAL routes live under `/teacher/aral/[gradeId]` with weekly grid entry (`src/lib/actions/aral-grid.ts`).
+- **ARAL:** violet is reserved as the ARAL accent (`tailwind.config.ts`); blue primary, amber secondary elsewhere. ARAL routes live under `/teacher/aral/[gradeId]` with weekly grid entry (`src/lib/actions/aral-grid.ts`). The **ARAL Profile** (stored Sections C–D–E, `AralProfile`) is **dormant**: schema, validator, action and update route are preserved, but nothing navigates to it and no workflow may gate on it — see `docs/aral-profile.md`.
+- **Advisory:** a teacher advises 0–3 sections. `advisoryMode` is `DEFAULT` (one) · `FLOATING` (none — no roster, no end-of-term sheet, ARAL still open) · `MULTI_GRADE`. That last value is the stored spelling of what every user-facing string calls **multi-advisory**; keep the enum, never the word. Those sections need not share a grade, so nothing may derive "the teacher's grade" from the first placement — go through `getAdvisoryPlacements` and `resolveAdvisoryGradeScope` (`src/lib/teachers/advisory.ts`), which ask rather than guess when a grade holds more than one.
 - **Dates:** attendance and weekly grids key off local `YYYY-MM-DD` via `src/lib/date-keys.ts` — use `formatLocalDateKey`/`parseLocalDateKey`, never `toISOString()`, which shifts the day in UTC+8.
 - **Enum labels:** every Prisma enum's UI label lives in `src/lib/constants/enum-labels.ts`. Adding an enum value means updating that file too.
 - **Rate limiting:** `src/lib/rate-limit.ts` uses Upstash Redis when `UPSTASH_REDIS_REST_URL`/`_TOKEN` are set and silently degrades to a per-instance in-memory window otherwise. Any Redis failure must fall back, never throw.
@@ -142,4 +143,4 @@ Zod schemas in `src/lib/validators/*.schema.ts`, shared primitives in `common.ts
 
 ## Docs map
 
-`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Cloudflare Workers + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log).
+`docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Cloudflare Workers + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log) · `docs/aral-profile.md` (what is dormant, what must keep working without it).

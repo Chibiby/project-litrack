@@ -90,15 +90,36 @@ export interface NavOptions {
    */
   isFloating?: boolean;
   /**
-   * The grade level of the section this teacher advises, or `null` when they
-   * advise none. The End of Terms Reports sheet is grade-scoped
-   * (`/teacher/aral/[gradeId]/terms-reports`) but the grade is *derived* from the
-   * advised section, so the nav needs this to build a deep href that matches the
-   * URL the teacher actually lands on. Without it the row can only name the
-   * `/teacher/terms-reports` resolver, whose redirect target no item matches — so
-   * the sheet lights up `Dashboard` and takes its title from the URL instead.
+   * Every section this teacher advises, grade derived from each. The End of Terms
+   * Reports sheet is grade-scoped (`/teacher/aral/[gradeId]/terms-reports`) but
+   * the grade comes from the advised section, so the nav needs these to build a
+   * deep href that matches the URL the teacher actually lands on. Without one the
+   * row can only name the `/teacher/terms-reports` resolver, whose redirect target
+   * no item matches — so the sheet lights up `Dashboard` and takes its title from
+   * the URL instead.
+   *
+   * A list, not one grade: a multi-advisory teacher holds up to three sections,
+   * possibly in different grades. The row may only deep-link when exactly one
+   * placement exists, because with several there is no single sheet the teacher
+   * meant — see `termsReportsHref`.
    */
-  advisoryGradeLevelId?: string | null;
+  advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
+}
+
+/**
+ * Where the "End of Terms Reports" row points.
+ *
+ * Exactly one advisory section → straight to its grade-scoped sheet, which is
+ * unambiguous and saves a hop. Anything else — none, or several — goes to the
+ * `/teacher/terms-reports` resolver, which either explains why the sheet is shut
+ * or lists the advisories to pick from. Deep-linking a multi-advisory teacher
+ * would open one of their classes without their having chosen it.
+ */
+export function termsReportsHref(
+  placements: { sectionId: string; gradeLevelId: string }[] = []
+): string {
+  if (placements.length !== 1) return "/teacher/terms-reports";
+  return `/teacher/aral/${placements[0].gradeLevelId}/terms-reports`;
 }
 
 /**
@@ -190,18 +211,12 @@ export function getNavGroups(
           items: [
             { id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
             learners,
-            {
-              id: "teacher-learner-profiling",
-              label: "Learner Profiling",
-              href: "/teacher/aral",
-              icon: Sparkles,
-            },
             // Per-term grades report, not an ARAL surface — it sits with the
             // roster it reports on, even though the sheet itself lives under
             // `/teacher/aral/[gradeId]/`. Same advisory gate as Learners: the
             // sheet is a whole-class artifact only a section adviser can encode.
             //
-            // The href is built from `advisoryGradeLevelId`, NOT from
+            // The href is built from `advisoryPlacements`, NOT from
             // `aralHref(grades, "terms-reports")`: `hasAral` is the wrong axis for
             // an advisory-gated sheet, so a DepEd adviser with zero ARAL learners
             // is entitled to it and an ARAL-only tutor is not.
@@ -211,18 +226,17 @@ export function getNavGroups(
             // prefix of this href, and longest-prefix matching in
             // `resolveActiveHref` therefore still awards the sheet's URL here.
             //
-            // With no advisory grade the fallback stays `/teacher/terms-reports`
+            // With no single advisory the fallback stays `/teacher/terms-reports`
             // — a real resolver page — rather than `/teacher/aral`: a teacher with
-            // no advisory has to land somewhere that *explains* that, and parking
+            // no advisory has to land somewhere that *explains* that, one with
+            // several has to land somewhere that lets them *choose*, and parking
             // this row on the picker's href would let it steal the picker's
             // highlight, because href ties break by list order and this row
             // precedes both ARAL rows.
             {
               id: "teacher-terms-reports",
               label: "End of Terms Reports",
-              href: options.advisoryGradeLevelId
-                ? `/teacher/aral/${options.advisoryGradeLevelId}/terms-reports`
-                : "/teacher/terms-reports",
+              href: termsReportsHref(options.advisoryPlacements),
               icon: FileText,
               ...(classLock ? { unavailable: classLock } : {}),
             },

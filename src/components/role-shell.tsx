@@ -42,10 +42,11 @@ interface RoleShellProps {
    */
   isFloating?: boolean;
   /**
-   * Points the "End of Terms Reports" row at the grade-scoped sheet the teacher
-   * actually lands on; see `NavOptions.advisoryGradeLevelId`.
+   * Every advisory section this teacher holds. Points the "End of Terms Reports"
+   * row at the grade-scoped sheet the teacher
+   * actually lands on; see `NavOptions.advisoryPlacements`.
    */
-  advisoryGradeLevelId?: string | null;
+  advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   notifications?: ShellNotification[];
   /**
    * Whether a model backend is configured, read from server env by the layout.
@@ -81,7 +82,7 @@ export function RoleShell({
   roleLabel,
   isAralVolunteer,
   isFloating,
-  advisoryGradeLevelId,
+  advisoryPlacements,
   notifications,
   aiEnabled,
   lastSeenReleaseVersion,
@@ -108,7 +109,7 @@ export function RoleShell({
             roleLabel={roleLabel}
             isAralVolunteer={isAralVolunteer}
             isFloating={isFloating}
-            advisoryGradeLevelId={advisoryGradeLevelId}
+            advisoryPlacements={advisoryPlacements}
             expanded={expanded}
             transitionsEnabled={hydrated}
           />
@@ -130,7 +131,7 @@ export function RoleShell({
               notifications={notifications}
               isAralVolunteer={isAralVolunteer}
               isFloating={isFloating}
-              advisoryGradeLevelId={advisoryGradeLevelId}
+              advisoryPlacements={advisoryPlacements}
               expanded={expanded}
               onToggleSidebar={toggle}
             />

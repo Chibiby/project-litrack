@@ -174,7 +174,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
     body: [
       "In the weekly grid, marking a learner Absent lets you pick a reason for that day from the standard list — family emergency, financial difficulties, lack of transportation, distance from school, household chores, caring for siblings, bad weather, academic difficulties, and the rest.",
-      "The same list appears in the learner's ARAL profile under Reasons of Absenteeism, where you can tick every reason that applies to them overall, alongside Frequency of Absenteeism. The per-day reason answers \"why this day\"; the profile answers \"why this learner\".",
+      "The reason you pick answers \"why this day\" for that one learner on that one date.",
     ],
     roles: ["TEACHER"],
     routes: ["/teacher/aral"],
@@ -219,7 +219,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       "what is aral",
     ],
     body: [
-      "ARAL is the DepEd reading remediation programme this app tracks. A learner in it is marked as an ARAL learner, gets an ARAL profile, has attendance recorded weekly, and has a reading level assessed monthly.",
+      "ARAL is the DepEd reading remediation programme this app tracks. A learner in it is marked as an ARAL learner, has attendance recorded weekly, and has a reading level assessed monthly.",
       "Everything under the ARAL Program heading in the sidebar — Weekly Attendance, Monthly Reading Level — is for those learners. Learners not in ARAL still appear in your roster and reports.",
     ],
   },
@@ -320,29 +320,11 @@ export const HELP_TOPICS: HelpTopic[] = [
       "lrn",
     ],
     body: [
-      "Use the search box in the header, or open Learners for the full roster with filters. Selecting a learner opens their profile, where their details, ARAL profile and history all live.",
+      "Use the search box in the header, or open Learners for the full roster with filters. Selecting a learner opens their profile, where their details and history all live.",
       "You only ever see learners in your own school, and teachers only see the ones in their care.",
     ],
     routes: ["/teacher/learners", "/school-head"],
     action: { label: "Open Learners", href: "/teacher/learners" },
-  },
-  {
-    id: "learner-pending-profile",
-    title: "What does \"Pending Profiles\" mean?",
-    keywords: [
-      "pending",
-      "profile",
-      "incomplete",
-      "aral profile",
-      "missing",
-      "without",
-    ],
-    body: [
-      "It counts learners in the ARAL program who have no ARAL profile filled in yet. The profile is the intake survey — reading background, home environment, and the rest.",
-      "Open Manage profiles from the dashboard card to work through them.",
-    ],
-    roles: ["TEACHER"],
-    routes: ["/teacher"],
   },
   {
     id: "learner-archive",

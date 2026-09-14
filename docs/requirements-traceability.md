@@ -18,6 +18,13 @@ Each requirement maps to: Prisma model/enum · migration · validation schema ·
 | L-A6 | Government Benefits Received | Multi-select: 4Ps; IPs | VERIFIED — GovernmentBenefit FOUR_PS/IPS; FieldCheckboxList; tests |
 | L-A7 | Parents’ Educational Background | No formal Education; Elementary Level; Elementary Graduate; Secondary Level; Secondary Graduate; College Level; College Graduate | VERIFIED — ParentEducation enum + labels; FieldRadioGroup; tests |
 
+> **Sections B–E are DORMANT as of 2026-09-14.** The schema, validators, server
+> action and `/teacher/aral/[gradeId]/learners/[id]/update` route are all still
+> in place and still work — the statuses below remain accurate for what is
+> implemented. What was removed is the navigation, the calls to action and the
+> completion tracking that asked teachers to fill one in. Stored rows are
+> untouched. See `docs/aral-profile.md`.
+
 ### 1.B Attendance and School Background (ARAL additional profiling)
 | ID | Requirement | Details | Status |
 |----|-------------|---------|--------|
@@ -79,6 +86,7 @@ Each requirement maps to: Prisma model/enum · migration · validation schema ·
 | ID | Requirement | Details | Status |
 |----|-------------|---------|--------|
 | P-III1 | Most Subject Currently Handled (if Teacher) | English; Math; Science; Filipino; TLE/EPP; ARALPAN; MAPEH; TechVoc; Values Ed; ABM | VERIFIED — mostSubjectHandled required on teacherProfileSchema |
+| P-III2 | Advisory setting | One advisory section (default) · Floating teacher (no roster, no end-of-term sheet; ARAL stays open) · **Multi-advisory** (up to 3 sections, which may sit in different grade levels) | VERIFIED — `TeacherProfile.advisoryMode`; `advisoryCapFor`/`advisoryRosterDenial`; profiling wizard + School Head role dialog; `tests/unit/multi-advisory.test.ts`. The stored enum value is `MULTI_GRADE` for backward compatibility; every label reads "Multi-advisory". |
 
 ### 2.IV Training and Professional Development
 | ID | Requirement | Details | Status |

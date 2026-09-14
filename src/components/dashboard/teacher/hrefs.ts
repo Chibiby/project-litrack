@@ -18,6 +18,10 @@ export function learnerHref(gradeId: string, learnerId: string): string {
   return `/teacher/aral/${gradeId}/learners/${learnerId}`;
 }
 
-export function gradeProfilingHref(gradeId: string | null): string {
+/**
+ * The ARAL Program roster, optionally narrowed to one grade. Named for what it
+ * shows: the ARAL Profile is dormant, so this is no longer a profiling queue.
+ */
+export function aralRosterHref(gradeId: string | null): string {
   return gradeId ? `/teacher/aral?grade=${gradeId}` : "/teacher/aral";
 }

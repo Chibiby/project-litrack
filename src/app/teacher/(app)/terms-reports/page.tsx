@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/dashboard";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
@@ -10,19 +13,25 @@ import {
   TERM_SHEET_NO_ADVISORY_CARD,
   TERM_SHEET_VOLUNTEER_CARD,
 } from "@/lib/terms/gate-copy";
+import { termSheetHref } from "@/lib/terms/advisory-href";
+import { FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Fallback for the sidebar's "End of Terms Reports" row.
+ * Where the sidebar's "End of Terms Reports" row points whenever one sheet is
+ * not the obvious answer.
  *
  * The sheet itself is grade-scoped (`/teacher/aral/[gradeId]/terms-reports`) and
- * the nav normally links straight to it, using the advisory grade that rides along
- * on the shell context. This page is where the row points in the two cases the nav
- * cannot build that href for:
- *   - A teacher who advises no section: there is no grade to scope the sheet to, so
- *     they land here and get the card that explains why it is shut, rather than a
- *     deep URL that would only refuse them again.
+ * the nav links straight to it for a teacher with exactly one advisory section.
+ * This page serves the other three cases:
+ *   - A teacher who advises no section: there is no grade to scope the sheet to,
+ *     so they land here and get the card that explains why it is shut, rather
+ *     than a deep URL that would only refuse them again.
+ *   - A multi-advisory teacher: several sections, possibly in several grades, and
+ *     no way to know which one they meant. They pick. Opening the first would put
+ *     a teacher in front of a class they did not ask for, and the mistake is
+ *     invisible until somebody notices grades on the wrong roster.
  *   - A Super Admin, who advises nothing anywhere: redirected to the ARAL grade
  *     picker, carrying `?schoolId=` so they stay in the school they were viewing.
  *
@@ -82,11 +91,8 @@ export default async function TeacherTermsReportsResolverPage({
     );
   }
 
-  // The resolver page redirects into the sheet for the teacher's advisory. With
-  // several it opens the first; the sheet itself is what a section picker
-  // belongs on, and that is not part of Wave A.
-  const [advisory] = await getAdvisoryPlacements({ id: user.id, schoolId });
-  if (!advisory) {
+  const placements = await getAdvisoryPlacements({ id: user.id, schoolId });
+  if (placements.length === 0) {
     return (
       <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
         <EmptyState {...TERM_SHEET_NO_ADVISORY_CARD} />
@@ -94,5 +100,39 @@ export default async function TeacherTermsReportsResolverPage({
     );
   }
 
-  redirect(`/teacher/aral/${advisory.gradeLevelId}/terms-reports`);
+  // Exactly one advisory: nothing to choose between, so skip the hop. The sheet
+  // still names the section in its own URL, which is what a bookmark keeps.
+  if (placements.length === 1) {
+    redirect(termSheetHref(placements[0]));
+  }
+
+  return (
+    <AppShell
+      title="End of Terms Reports"
+      subtitle={`You advise ${placements.length} sections — pick the one to encode`}
+      role={user.role}
+      userName={userName}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        {placements.map((placement) => (
+          <Card key={placement.sectionId}>
+            <CardContent className="flex items-center justify-between gap-3 p-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{placement.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {placement.gradeLabel}
+                </p>
+              </div>
+              <Button asChild size="sm">
+                <Link href={termSheetHref(placement)}>
+                  <FileText className="h-4 w-4" />
+                  Open sheet
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </AppShell>
+  );
 }

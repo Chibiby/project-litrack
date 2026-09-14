@@ -257,16 +257,25 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
           <ul className="absolute bottom-full left-3 right-3 mb-1 overflow-hidden rounded-lg border bg-popover shadow-md">
             {suggestions.map((target) => (
               <li key={target.id}>
-                <button
+                {/*
+                  A mention-suggestion row, so it sets its own height rather
+                  than taking the primitive's 44px touch floor — the same
+                  carve-out the dense chips in `teachers-active-table` use:
+                  `cn` merges className last, so a caller's height wins. A
+                  44px row here would push the popover over the composer it
+                  is anchored to.
+                */}
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => applyMention(target)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] hover:bg-accent"
+                  className="h-auto w-full justify-between gap-2 rounded-none px-3 py-2 text-left text-[13px] font-normal"
                 >
                   <span className="font-medium">{target.displayName}</span>
                   <span className="text-[11px] text-muted-foreground">
                     {target.roleLabel} · @{target.username}
                   </span>
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

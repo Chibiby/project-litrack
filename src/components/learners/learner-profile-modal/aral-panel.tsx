@@ -1,5 +1,3 @@
-import { Sparkles } from "lucide-react";
-import { EmptyState } from "@/components/dashboard";
 import {
   ABSENTEEISM_LABELS,
   ABSENTEEISM_REASON_LABELS,
@@ -55,13 +53,12 @@ export function AralPanel({ learner }: { learner: LearnerProfileData }) {
         </FieldGrid>
       </InfoCard>
 
-      {!profile ? (
-        <EmptyState
-          icon={Sparkles}
-          title="ARAL profile not completed"
-          description="Sections C–E appear here after Update Data is saved on the ARAL dashboard."
-        />
-      ) : (
+      {/*
+        The stored Sections C–E profile, shown only when a row exists. The
+        create/update route is dormant, so an absent profile is an ordinary
+        state rather than an outstanding task to prompt for.
+      */}
+      {!profile ? null : (
         <>
           <InfoCard title="C. Reading behavior">
             <FieldGrid>

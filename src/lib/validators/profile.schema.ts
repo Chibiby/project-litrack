@@ -355,15 +355,16 @@ const teacherProfileObject = baseProfile
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
     /**
-     * DEFAULT = one section . FLOATING = none . MULTI_GRADE = one to three.
+     * DEFAULT = one section . FLOATING = none . MULTI_GRADE (multi-advisory) =
+     * one to three sections, which need not share a grade.
      * Only read on a teacher's FIRST save; afterwards the School Head owns it
      * (see `saveTeacherProfile`). Ignored for the volunteer designation.
      */
     advisoryMode: z.enum(["DEFAULT", "FLOATING", "MULTI_GRADE"]).default("DEFAULT"),
-    /** Multi-grades second and third sections. `sectionId` stays the first. */
+    /** Multi-advisory's second and third sections. `sectionId` stays the first. */
     additionalSectionIds: z
       .array(z.string().uuid("Invalid section"))
-      .max(2, "A multi-grade teacher advises at most 3 sections")
+      .max(2, "A multi-advisory teacher advises at most 3 sections")
       .default([]),
     yearsInService: teacherYearsInServiceSchema,
   });
@@ -412,7 +413,7 @@ export function refineTeacherAdvisory(
   if (data.advisoryMode === "DEFAULT" && extras.length > 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Tick Multi-grade advisory to add more than one section",
+      message: "Tick Multi-advisory to add more than one section",
       path: ["additionalSectionIds"],
     });
   }

@@ -74,6 +74,22 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.13.0",
+    date: "2026-09-14",
+    title: "Advising more than one section works properly",
+    announce: true,
+    fixes: [
+      "If you advise sections in more than one grade, End of Terms Reports now asks which class you mean instead of always opening the first one. Every section you advise is listed, and you can switch between them from the sheet itself.",
+      "If you advise two sections in the same grade, the sheet now names which one you are encoding, so grades can no longer land on the wrong class.",
+      "The advisory setting is now called \"Multi-advisory\" everywhere, instead of \"Multi-grade\". Your sections do not have to be in the same grade level, and the old wording suggested they did.",
+      "When you set up multi-advisory during profiling, each section now has its own grade picker, so you can pick a Grade 3 section and a Grade 4 section together.",
+      "Learner Profiling has been taken out of the side menu, and the Complete Profiling and Update Profiling buttons, the profile status columns and the Pending Profiles card have gone with it. Nothing you have already saved was deleted.",
+      "Weekly attendance, monthly reading level, ARAL enrolment and End of Terms Reports all work without an ARAL profile, and no longer ask you to fill one in first.",
+      "Floating teachers keep their ARAL work. Only the class roster and the end-of-term sheet are closed to them, and both now say so in place.",
+      "The suggestion list that appears when you type @ in a message is now a proper button, so it reads correctly to a screen reader and matches the rest of the app.",
+    ],
+  },
+  {
     version: "1.12.3",
     date: "2026-09-14",
     title: "Nightly backups fit the new hosting",

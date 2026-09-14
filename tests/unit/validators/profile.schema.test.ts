@@ -632,7 +632,10 @@ describe("teacherProfileSchema — advisory mode", () => {
 
   it("refuses a second section for a DEFAULT teacher", () => {
     const r = teacherProfileSchema.safeParse({ ...teacherBase, additionalSectionIds: [S2] });
-    expect(firstError(r)?.message).toMatch(/Multi-grade/);
+    expect(firstError(r)?.message).toMatch(/Multi-advisory/);
+    // The product term is multi-advisory everywhere a person reads it; the
+    // stored enum keeps its old spelling, and must not leak into copy.
+    expect(firstError(r)?.message).not.toMatch(/multi.?grade/i);
   });
 
   it("allows up to three sections in all for MULTI_GRADE", () => {

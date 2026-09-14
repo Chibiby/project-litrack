@@ -411,7 +411,13 @@ export default async function LearnerDetailPage({
           </CardContent>
         </Card>
 
-        {learner.isAralLearner || profile ? (
+        {/*
+          The stored Sections C–E profile, shown only when a row exists. The
+          create/update route is dormant — see docs/aral-profile.md — so an
+          absent profile is an ordinary state now, not a task: the empty card
+          that used to stand here asked for work nobody is being asked to do.
+        */}
+        {profile ? (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
@@ -419,13 +425,7 @@ export default async function LearnerDetailPage({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 text-sm">
-              {!profile ? (
-                <EmptyState
-                  title="ARAL profile not completed"
-                  description="Sections C–E appear here after Update Data is saved on the ARAL dashboard."
-                />
-              ) : (
-                <>
+              <>
                   <div>
                     <p className="font-medium mb-2">C. Reading Behavior</p>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -552,8 +552,7 @@ export default async function LearnerDetailPage({
                       </div>
                     )}
                   </div>
-                </>
-              )}
+              </>
             </CardContent>
           </Card>
         ) : null}

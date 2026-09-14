@@ -109,7 +109,7 @@ describe("retirePendingNav", () => {
 describe("optimistic highlight — teacher rail", () => {
   const items = flattenNavGroups(
     getNavGroups("TEACHER", [{ id: "g1", label: "Grade 3", hasAral: true }], {
-      advisoryGradeLevelId: "g1",
+      advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }],
     })
   );
 
@@ -147,7 +147,7 @@ describe("optimistic highlight — teacher rail", () => {
     const groups = getNavGroups(
       "TEACHER",
       [{ id: "g1", label: "Grade 3", hasAral: true }],
-      { advisoryGradeLevelId: "g1" }
+      { advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] }
     );
     const path = resolveNavPath("/teacher", {
       href: "/teacher/learners",

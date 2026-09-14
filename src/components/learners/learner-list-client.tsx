@@ -24,7 +24,6 @@ import { GENDER_LABELS } from "@/lib/constants/enum-labels";
 import { LearnerAvatar } from "@/components/learners/learner-avatar";
 import {
   AralChip,
-  AralProfilePill,
   ReadingBandPill,
 } from "@/components/learners/reading-band-pill";
 import { LearnerBulkActions } from "@/components/learners/learner-bulk-actions";
@@ -94,13 +93,11 @@ export type LearnerListRow = {
   age: number;
   gender: keyof typeof GENDER_LABELS;
   isAralLearner: boolean;
-  /** Whether a Section B–E ARAL profile has been saved for this learner. */
-  hasAralProfile: boolean;
   archivedAt: string | null;
   englishReadingProfile: string;
   filipinoReadingProfile: string;
   section: { id: string; name: string } | null;
-  /** Grade owning this learner — used for the detail link in multi-grade lists. */
+  /** Grade owning this learner — used for the detail link in multi-advisory lists. */
   gradeLevelId: string;
   gradeType: string;
 };
@@ -383,7 +380,6 @@ export function LearnerListClient({
                 {showSection && (
                   <TableHead className={HEAD_CLASS}>Section</TableHead>
                 )}
-                <TableHead className={HEAD_CLASS}>ARAL Profile</TableHead>
                 <TableHead className={HEAD_CLASS}>English Level</TableHead>
                 <TableHead className={HEAD_CLASS}>Filipino Level</TableHead>
                 <TableHead className={`${HEAD_CLASS} text-right`}>
@@ -438,9 +434,6 @@ export function LearnerListClient({
                         {l.section?.name ?? "—"}
                       </TableCell>
                     )}
-                    <TableCell>
-                      <AralProfilePill hasProfile={l.hasAralProfile} />
-                    </TableCell>
                     <TableCell>
                       <ReadingBandPill
                         profile={l.englishReadingProfile}

@@ -14,7 +14,7 @@ import { APP_VERSION, RELEASES } from "@/lib/releases";
  * Two rules it exists to enforce:
  *
  * 1. **Only the asker's own scope.** `AssistantScope` carries counts, rates and
- *    the asker's own pending learners. It has no field for another school, and
+ *    the asker's own learners. It has no field for another school, and
  *    the caller in `scope.ts` builds it from queries already filtered by
  *    `schoolId` and the teacher's learner scope. A prompt cannot leak what the
  *    type cannot hold.
@@ -61,10 +61,6 @@ export type AssistantScope = {
     unmarked: number;
   } | null;
   readingLevel: { monthLabel: string; assessed: number; total: number } | null;
-  /** Learners in the asker's scope with no ARAL profile yet. Capped. */
-  pendingProfiles: ScopeLearner[];
-  /** True when the list above was cut short, so the model does not imply it is all. */
-  pendingProfilesTruncated: boolean;
   /**
    * Whether editing deadlines are switched on right now.
    *
@@ -193,20 +189,6 @@ function scopeBlock(scope: AssistantScope): string {
       ? "Editing deadlines: ON. Past weeks and closed terms are locked, and reopening one needs a request to the division admin."
       : "Editing deadlines: OFF. Every attendance week and term grade sheet is editable right now, past ones included, and nobody needs to request access to edit one. Say so plainly if asked, even though the reference describes how locks behave when they are on."
   );
-
-  if (scope.pendingProfiles.length > 0) {
-    lines.push("Learners with no ARAL profile yet:");
-    for (const learner of scope.pendingProfiles) {
-      lines.push(
-        `  - ${learner.label} (${learner.gradeLabel}${learner.sectionName ? ` ${learner.sectionName}` : ""})`
-      );
-    }
-    if (scope.pendingProfilesTruncated) {
-      lines.push(`  - ...and more; only the first ${MAX_NAMED_LEARNERS} are listed.`);
-    }
-  } else {
-    lines.push("Learners with no ARAL profile yet: none.");
-  }
 
   return lines.join("\n");
 }

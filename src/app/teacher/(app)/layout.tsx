@@ -45,7 +45,7 @@ export default async function TeacherAppLayout({
   let roleLabel: string | undefined;
   let isAralVolunteer = false;
   let isFloating = false;
-  let advisoryGradeLevelId: string | null = null;
+  let advisoryPlacements: { sectionId: string; gradeLevelId: string }[] = [];
 
   // Layouts cannot read searchParams; super-admin school impersonation still
   // gets admin nav via role === SUPER_ADMIN. Real teachers get grade links.
@@ -76,10 +76,11 @@ export default async function TeacherAppLayout({
         hasAral: g.hasAral,
       }));
       // The "End of Terms Reports" sheet is grade-scoped but its grade comes from
-      // the advised section, so the nav needs this to point the row at the URL the
-      // teacher actually lands on. Defaults to null, so a failed read leaves that
-      // row live on the `/teacher/terms-reports` resolver rather than breaking it.
-      advisoryGradeLevelId = shell.advisoryGradeLevelId;
+      // the advised section, so the nav needs these to point the row at the URL the
+      // teacher actually lands on. Defaults to empty, so a failed read — and a
+      // multi-advisory teacher, for whom no single sheet is the answer — both leave
+      // that row on the `/teacher/terms-reports` resolver rather than guessing.
+      advisoryPlacements = shell.advisoryPlacements;
       // A Non-DepEd ARAL Volunteer holds the TEACHER role but is not a teacher,
       // and the account menu is where they see themselves named. Left undefined
       // for everyone else — and if the read above failed, the default label
@@ -120,7 +121,7 @@ export default async function TeacherAppLayout({
         roleLabel={roleLabel}
         isAralVolunteer={isAralVolunteer}
         isFloating={isFloating}
-        advisoryGradeLevelId={advisoryGradeLevelId}
+        advisoryPlacements={advisoryPlacements}
         aiEnabled={geminiConfigured()}
         trackTeacherPresence={!impersonating}
         // Not while an admin impersonates this teacher: `user` IS the teacher's

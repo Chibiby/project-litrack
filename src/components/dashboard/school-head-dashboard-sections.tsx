@@ -308,12 +308,6 @@ export async function SchoolHeadRecentActivitySection({
               ))}
             </ul>
           )}
-          {(activity?.pendingAralProfiles ?? 0) > 0 ? (
-            <p className="mt-3 text-xs text-amber-800 dark:text-amber-300">
-              {activity!.pendingAralProfiles} ARAL learner(s) still need Sections
-              B–E profiling.
-            </p>
-          ) : null}
         </CardContent>
       </Card>
     </div>

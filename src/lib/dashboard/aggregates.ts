@@ -404,9 +404,9 @@ export async function getSchoolHeadCharts(schoolId: string) {
  * running beside the cached pair instead of behind it, and the inner one is what
  * the cache entry actually holds.
  *
- * `announcements` and `pendingAralProfiles` change only through actions that call
+ * `announcements` changes only through actions that call
  * `revalidateSchoolDashboard`, so `schoolDashboard(schoolId)` is a complete
- * invalidation path for both.
+ * invalidation path for it.
  *
  * `recentAudit` is read outside the cache because it has no invalidation path at
  * all. `writeAudit` inserts the row and never revalidates a tag, and some of those
@@ -425,29 +425,20 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
   const [cached, recentAudit] = await Promise.all([
     cachedQuery(
       async () => {
-        const [announcements, pendingAralProfiles] = await Promise.all([
-          prisma.announcement.findMany({
-            where: { schoolId, deletedAt: null },
-            orderBy: { createdAt: "desc" },
-            take: 5,
-            select: { id: true, title: true, createdAt: true },
-          }),
-          prisma.learner.count({
-            where: {
-              schoolId,
-              deletedAt: null,
-              isAralLearner: true,
-              aralProfile: null,
-            },
-          }),
-        ]);
+        const announcements = await prisma.announcement.findMany({
+          where: { schoolId, deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: { id: true, title: true, createdAt: true },
+        });
 
-        return { announcements, pendingAralProfiles };
+        return { announcements };
       },
       {
-        // `-v2`: the cached value lost a field. The key parts are unchanged, so
-        // nothing would evict the old three-field entry on its own.
-        keyParts: ["school-head-recent-activity-v2", schoolId],
+        // `-v3`: the cached value lost `pendingAralProfiles` when the ARAL
+        // Profile went dormant. The key parts are otherwise unchanged, so nothing
+        // would evict the old two-field entry on its own.
+        keyParts: ["school-head-recent-activity-v3", schoolId],
         tags: [schoolDashboard(schoolId)],
         profile: "aggregate",
       }
@@ -463,7 +454,6 @@ export async function getSchoolHeadRecentActivity(schoolId: string) {
   return {
     announcements: cached.announcements,
     recentAudit,
-    pendingAralProfiles: cached.pendingAralProfiles,
   };
 }
 
@@ -519,13 +509,21 @@ export function teacherLearnerFilter(
  * the account chip says "Teacher" or "ARAL Volunteer" rides along here instead
  * of buying a third await on every /teacher navigation.
  *
- * `advisoryGradeLevelId` — the grade of the section this teacher advises, or
- * `null` — rides along for the same reason. The sidebar needs it to build the
- * "End of Terms Reports" href as a real `/teacher/aral/<gradeId>/terms-reports`
- * URL that a nav item can match, instead of pointing at a resolver route whose
- * redirect target matches nothing and leaves "Dashboard" highlighted. Fetching
- * it per-page would add a third blocking read to every /teacher navigation, so
- * it is a third promise on a query already in flight.
+ * `advisoryPlacements` — every section this teacher advises, as
+ * `{ sectionId, gradeLevelId }`, empty when they advise none — rides along for
+ * the same reason. The sidebar needs it to build the "End of Terms Reports"
+ * href as a real `/teacher/aral/<gradeId>/terms-reports` URL that a nav item can
+ * match, instead of pointing at a resolver route whose redirect target matches
+ * nothing and leaves "Dashboard" highlighted. Fetching it per-page would add a
+ * third blocking read to every /teacher navigation, so it is a third promise on
+ * a query already in flight.
+ *
+ * A LIST, never one grade: multi-advisory lets one teacher hold up to three
+ * sections, in one grade or several. Consumers decide for themselves whether a
+ * destination is unambiguous enough to deep-link into — `termsReportsHref` only
+ * does so at exactly one placement, and `resolveAdvisoryGradeScope`
+ * (`src/lib/teachers/advisory.ts`) asks rather than guesses when a grade holds
+ * more than one.
  */
 const getTeacherShellContextCached = cache(
   async (schoolId: string, teacherId: string, isSuperAdmin: boolean) => {
@@ -536,7 +534,7 @@ const getTeacherShellContextCached = cache(
         // hasAral counts ARAL learners in *this teacher's* care, so the ARAL nav
         // appears for a designated ARAL teacher and not for a teacher who merely
         // shares a grade with somebody else's ARAL learners.
-        const [grades, profile, advisorySection] = await Promise.all([
+        const [grades, profile, advisorySections] = await Promise.all([
           prisma.gradeLevel.findMany({
             where: teacherGradeFilter(opts),
             select: {
@@ -574,11 +572,16 @@ const getTeacherShellContextCached = cache(
           // into a section nobody can see. Same filter as `getAdvisoryPlacement`
           // (src/lib/teachers/advisory.ts), which the linked page re-reads —
           // the two must agree or the page refuses a link the sidebar advertises.
+          //
+          // `findMany`, not `findFirst`: multi-advisory lets one teacher hold
+          // several sections, in several grades, so a nav built from the first of
+          // them silently deep-linked every such teacher into one arbitrary class.
           isSuperAdmin
-            ? Promise.resolve(null)
-            : prisma.section.findFirst({
-                where: { adviser: { id: teacherId }, schoolId, deletedAt: null },
-                select: { gradeLevelId: true },
+            ? Promise.resolve([] as { id: string; gradeLevelId: string }[])
+            : prisma.section.findMany({
+                where: { adviserId: teacherId, schoolId, deletedAt: null },
+                select: { id: true, gradeLevelId: true },
+                orderBy: [{ gradeLevel: { type: "asc" } }, { name: "asc" }],
               }),
         ]);
 
@@ -590,12 +593,18 @@ const getTeacherShellContextCached = cache(
           })),
           designation: profile?.designation ?? null,
           advisoryMode: profile?.advisoryMode ?? null,
-          advisoryGradeLevelId: advisorySection?.gradeLevelId ?? null,
+          // Every advisory this teacher holds, not just the first. Consumers
+          // decide for themselves whether one is unambiguous enough to deep-link
+          // into — see `advisoryGradeLevelIds` and `resolveAdvisoryGradeScope`.
+          advisoryPlacements: advisorySections.map((section) => ({
+            sectionId: section.id,
+            gradeLevelId: section.gradeLevelId,
+          })),
         };
       },
       {
         keyParts: [
-          "teacher-shell-context-v6",
+          "teacher-shell-context-v7",
           schoolId,
           teacherId,
           String(isSuperAdmin),

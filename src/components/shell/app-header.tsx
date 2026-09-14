@@ -43,7 +43,7 @@ export function AppHeader({
   notifications = [],
   isAralVolunteer,
   isFloating,
-  advisoryGradeLevelId,
+  advisoryPlacements,
   expanded,
   onToggleSidebar,
 }: {
@@ -62,11 +62,12 @@ export function AppHeader({
    */
   isFloating?: boolean;
   /**
-   * Lets the "End of Terms Reports" row match the grade-scoped sheet, so the title
+   * Every advisory section this teacher holds. Lets the "End of Terms Reports"
+   * row match the grade-scoped sheet it deep-links to, so the title
    * reads the item's label instead of the URL segment; see
-   * `NavOptions.advisoryGradeLevelId`.
+   * `NavOptions.advisoryPlacements`.
    */
-  advisoryGradeLevelId?: string | null;
+  advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   expanded: boolean;
   onToggleSidebar: () => void;
 }) {
@@ -80,9 +81,9 @@ export function AppHeader({
       getNavGroups(role, grades ?? [], {
         isAralVolunteer,
         isFloating,
-        advisoryGradeLevelId,
+        advisoryPlacements,
       }),
-    [role, grades, isAralVolunteer, isFloating, advisoryGradeLevelId]
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements]
   );
   const title = resolvePageTitle(navPath, navGroups);
 

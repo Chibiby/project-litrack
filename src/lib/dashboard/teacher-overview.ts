@@ -53,7 +53,6 @@ export type TeacherOverview = {
   gradeCount: number;
   totalLearners: number;
   aralLearners: number;
-  pendingAralProfiles: number;
 
   attendance: {
     present: number;
@@ -126,7 +125,6 @@ export async function getTeacherOverview(
         gradeCount: grades.length,
         totalLearners: 0,
         aralLearners: 0,
-        pendingAralProfiles: 0,
         attendance: {
           present: 0,
           late: 0,
@@ -162,7 +160,6 @@ export async function getTeacherOverview(
       const [
         totalLearners,
         aralLearners,
-        pendingAralProfiles,
         attendanceGroups,
         readingAssessed,
         readingSubmitted,
@@ -171,9 +168,6 @@ export async function getTeacherOverview(
       ] = await Promise.all([
         prisma.learner.count({ where: learnerWhere }),
         prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
-        prisma.learner.count({
-          where: { ...learnerWhere, isAralLearner: true, aralProfile: null },
-        }),
         prisma.attendance.groupBy({
           by: ["status"],
           where: {
@@ -262,7 +256,6 @@ export async function getTeacherOverview(
         gradeCount: grades.length,
         totalLearners,
         aralLearners,
-        pendingAralProfiles,
         attendance: {
           present,
           late,

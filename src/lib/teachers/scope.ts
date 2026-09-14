@@ -81,10 +81,12 @@ export function aralLearnerScope(teacherId: string): Prisma.LearnerWhereInput {
 /**
  * `where` fragment for "grade levels this teacher advises in".
  *
- * The grade is derived from the section they advise — `User.advisorySectionId` is
- * the authoritative axis, and it is `@unique`, so this resolves to at most one
- * grade. Deliberately excludes ARAL: use it for roster operations (create/import a
- * learner, roster export) that belong to the adviser and not to an ARAL tracker.
+ * The grade is derived from the sections they advise — `Section.adviserId` is the
+ * authoritative axis. Under multi-advisory this resolves to ONE OR MORE grades:
+ * a teacher may hold up to three sections and they need not share a grade, so no
+ * caller may treat the result as a single grade. Deliberately excludes ARAL: use
+ * it for roster operations (create/import a learner, roster export) that belong
+ * to the adviser and not to an ARAL tracker.
  *
  * A teacher with no advisory section matches nothing, by design. The interface
  * says so and names the fix rather than showing a blank page.
@@ -110,8 +112,8 @@ export function teacherAdvisoryGradeScope(
  *
  * The legacy `taughtGrades` m2m mirror is NOT consulted. It is still dual-written
  * by `setTeacherAdvisory` for now, but it is no longer read for access anywhere:
- * `advisorySectionId` is `@unique` and that write strips every other section link,
- * so the mirror can only ever agree with the advisory pointer or lag behind it.
+ * `Section.adviserId` is what every access decision reads, so the mirror can only
+ * ever agree with the advisory pointers or lag behind them.
  *
  * A teacher who advises nothing and tutors nobody matches no grades. That is the
  * intended outcome, not a gap — see `teacherAdvisoryGradeScope`.
@@ -140,8 +142,11 @@ export type AdvisoryRosterDenial = "volunteer" | "floating" | null;
  * Why the class-bound surfaces (`/teacher/learners`, the End of Terms Reports
  * sheet, their sidebar rows) are closed to this user, or null when they are not.
  * A Non-DepEd ARAL Volunteer never advises; a DepEd teacher set to FLOATING has
- * declared they will not. Two facts, two sets of words, one gate. Fails open on
- * a missing mode, and never closes for a Super Admin impersonating the shell.
+ * declared they will not — a floating teacher has no advisory roster and no
+ * end-of-term workflow at all, while their ARAL tutoring stays open, because
+ * `aralLearnerScope` has never required an advisory. Two facts, two sets of
+ * words, one gate. Fails open on a missing mode, and never closes for a Super
+ * Admin impersonating the shell.
  */
 export function advisoryRosterDenial(args: {
   isSuperAdmin: boolean;

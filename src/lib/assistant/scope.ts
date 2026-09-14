@@ -8,11 +8,7 @@ import { currentMonthKey, formatMonthLabel, monthStartOf, nextMonthStart } from 
 import { getMonday } from "@/lib/utils";
 import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 import type { SchoolUser } from "@/lib/auth/session";
-import {
-  MAX_NAMED_LEARNERS,
-  learnerLabel,
-  type AssistantScope,
-} from "@/lib/assistant/prompt";
+import type { AssistantScope } from "@/lib/assistant/prompt";
 
 /**
  * The only place that decides what data the model is allowed to see.
@@ -42,7 +38,7 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
     ...(user.role === "TEACHER" ? teacherLearnerScope(user.id) : {}),
   };
 
-  const [school, learners, attendanceRows, assessedCount, pending, lockingEnabled] = await Promise.all([
+  const [school, learners, attendanceRows, assessedCount, lockingEnabled] = await Promise.all([
     prisma.school.findUnique({
       where: { id: user.schoolId },
       select: { name: true },
@@ -73,18 +69,6 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
             },
           },
         },
-      },
-    }),
-    prisma.learner.findMany({
-      where: { ...learnerWhere, isAralLearner: true, aralProfile: { is: null } },
-      // One more than the cap, purely to know whether to say "and more".
-      take: MAX_NAMED_LEARNERS + 1,
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: {
-        firstName: true,
-        lastName: true,
-        gradeLevel: { select: { type: true } },
-        section: { select: { name: true } },
       },
     }),
     // Whether deadlines are enforced at all today. The model is told this as
@@ -146,12 +130,6 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
             total: aralLearners.length,
           }
         : null,
-    pendingProfiles: pending.slice(0, MAX_NAMED_LEARNERS).map((learner) => ({
-      label: learnerLabel(learner.firstName, learner.lastName),
-      gradeLabel: GRADE_LEVEL_LABELS[learner.gradeLevel.type],
-      sectionName: learner.section?.name ?? null,
-    })),
-    pendingProfilesTruncated: pending.length > MAX_NAMED_LEARNERS,
     submissionLockingEnabled: lockingEnabled,
   };
 }

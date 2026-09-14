@@ -21,6 +21,10 @@ export const MAX_ADVISORY_SECTIONS = 3;
  * transaction, the wizard and the School Head's picker all read, so the three
  * cannot disagree. A missing mode reads as DEFAULT (a profile predating the
  * column, or a read that failed).
+ *
+ * `MULTI_GRADE` is the stored enum value for what the product calls
+ * multi-advisory. The name is historical — those sections may sit in one grade
+ * or several, and nothing here assumes either.
  */
 export function advisoryCapFor(
   designation: string | null | undefined,
@@ -42,7 +46,7 @@ export function advisoryCapReason(
   }
   if (mode === "FLOATING") return "Floating teachers don't advise a section.";
   if (mode === "MULTI_GRADE") {
-    return `Multi-grade teachers advise up to ${MAX_ADVISORY_SECTIONS} sections.`;
+    return `Multi-advisory teachers advise up to ${MAX_ADVISORY_SECTIONS} sections, in any grades.`;
   }
-  return "This teacher advises one section. Set them to Multi-grade to add more.";
+  return "This teacher advises one section. Set them to Multi-advisory to add more.";
 }

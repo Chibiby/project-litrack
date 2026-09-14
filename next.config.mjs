@@ -48,7 +48,40 @@ const nextConfig = {
   serverExternalPackages: isCloudflareWorkersBuild
     ? ["@prisma/client", ".prisma/client", "@prisma/adapter-pg", "pg"]
     : ["pdfkit"],
-  webpack(config, { isServer }) {
+  webpack(config, { isServer, nextRuntime }) {
+    /**
+     * `src/instrumentation.ts` is compiled for the EDGE runtime as well as node,
+     * and `onRequestError` reaches `src/lib/prisma.ts` through
+     * `lib/errors/request-error` → `lib/errors/report`. That import is already
+     * guarded at runtime (`NEXT_RUNTIME !== "nodejs"` returns first) and is
+     * `await import(...)`, but a guard is a check, not module-graph pruning:
+     * webpack still RESOLVES the branch, follows `pg` into its optional
+     * certificate/passfile loaders (`pg/lib/connection-parameters.js`,
+     * `pgpass`), and fails the whole build on `fs`/`path`/`stream`, which the
+     * edge target has no shim for.
+     *
+     * `serverExternalPackages` does not help — it governs the node server
+     * bundle, not the edge compile. Cutting the edge module graph at `pg` is
+     * what works, and it is safe because nothing that legitimately runs on edge
+     * touches Prisma: middleware goes through `src/lib/auth/roles.ts`, the
+     * deliberately Edge-safe half (see CLAUDE.md § Request path). If something
+     * on edge ever does import Prisma, it SHOULD fail — this alias turns a
+     * confusing `fs` resolution error into an immediate missing-module one at
+     * the real call site.
+     *
+     * The Cloudflare production build never hit this: it lists `pg` in
+     * `serverExternalPackages` and externalizes node builtins below, so the
+     * breakage only ever showed in `npm run build`, the CI gate — which has been
+     * billing-locked since 2026-08-14 and so went unnoticed.
+     */
+    if (nextRuntime === "edge") {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        pg: false,
+        pgpass: false,
+        "@prisma/adapter-pg": false,
+      };
+    }
     if (isCloudflareWorkersBuild && isServer) {
       // `pg` keeps optional certificate/passfile support behind Node built-ins.
       // Leave those imports for OpenNext's final workerd bundle, where

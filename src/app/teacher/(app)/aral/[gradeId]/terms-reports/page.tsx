@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/dashboard";
 import {
   AralTermGradesPanel,
@@ -19,9 +20,12 @@ import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { advisoryRosterDenial, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacements,
-  resolveAdvisoryPlacementForGrade,
+  resolveAdvisoryGradeScope,
+  advisoryGradeLevelIds,
+  type AdvisoryGradeScope,
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
+import { termSheetHref } from "@/lib/terms/advisory-href";
 import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
 import {
   AralEnrollAction,
@@ -139,7 +143,7 @@ export default async function AralGradeTermsReportsPage({
   // pool timeout where a card would have rendered. That is one indexed lookup
   // on a pool the rest of the page already depends on, so the trade is a rare
   // error page against a round trip on every load.
-  const [{ grades: shellGrades, designation, advisoryMode }, advisory, grade] =
+  const [{ grades: shellGrades, designation, advisoryMode }, placements, grade] =
     await Promise.all([
       // The teacher layout already awaited this exact call for this request and it
       // is React-`cache()`d on (schoolId, teacherId, isSuperAdmin), so both halves
@@ -149,20 +153,24 @@ export default async function AralGradeTermsReportsPage({
         teacherId: user.id,
         isSuperAdmin,
       }),
+      // The sheet renders ONE section. A multi-advisory teacher may hold several,
+      // in several grades and even several inside this one grade, so the whole
+      // list is read here: `?section=` names which sheet, and the rest become the
+      // grade and section switchers the teacher moves between advisories with.
       isSuperAdmin
-        ? Promise.resolve(null)
-        : // The sheet renders ONE section. With several advisories it opens on
-          // the grade named by the URL; a section picker on the sheet is what
-          // serves multiple sections in the same grade, and that is not part
-          // of Wave A.
-          getAdvisoryPlacements({ id: user.id, schoolId }).then((placements) =>
-            resolveAdvisoryPlacementForGrade(placements, gradeId)
-          ),
+        ? Promise.resolve([] as AdvisoryPlacement[])
+        : getAdvisoryPlacements({ id: user.id, schoolId }),
       prisma.gradeLevel.findFirst({
         where: gradeFilter,
         select: { id: true, type: true, schoolId: true },
       }),
     ]);
+
+  // Never by grade alone: with two advisory sections in one grade the URL has to
+  // say which, and guessing would open a class the teacher did not ask for.
+  const advisoryScope: AdvisoryGradeScope = isSuperAdmin
+    ? { kind: "none" }
+    : resolveAdvisoryGradeScope(placements, gradeId, sp.section);
 
   // A term report card is a whole-class artifact, so it belongs to the DepEd
   // teacher who advises the section. The nav renders this row inert with a
@@ -187,7 +195,7 @@ export default async function AralGradeTermsReportsPage({
     );
   }
 
-  if (!isSuperAdmin && !advisory) {
+  if (!isSuperAdmin && advisoryScope.kind === "none") {
     return (
       <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
         <EmptyState {...TERM_SHEET_NO_ADVISORY_CARD} />
@@ -196,8 +204,45 @@ export default async function AralGradeTermsReportsPage({
   }
 
   if (!grade) notFound();
-  // `advisorySectionId` is unique, so the scope above already resolves to one
-  // grade — assert the URL names that one rather than trusting it to.
+
+  // Several advisory sections in the grade the URL names, and nothing naming
+  // which. Ask. `?section=` is how the answer comes back, and every link into
+  // this page carries it — see `termSheetHref`.
+  if (advisoryScope.kind === "choose" || advisoryScope.kind === "elsewhere") {
+    const heading =
+      advisoryScope.kind === "choose"
+        ? `You advise ${advisoryScope.options.length} sections in ${GRADE_LEVEL_LABELS[grade.type]}`
+        : "Pick one of your advisory sections";
+    return (
+      <AppShell
+        title={`End of Terms Reports — ${GRADE_LEVEL_LABELS[grade.type]}`}
+        subtitle={heading}
+        role={user.role}
+        userName={userName}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {advisoryScope.options.map((option) => (
+            <Card key={option.sectionId}>
+              <CardContent className="flex items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{option.label}</p>
+                  <p className="text-xs text-muted-foreground">{option.gradeLabel}</p>
+                </div>
+                <Button asChild size="sm">
+                  <Link href={termSheetHref(option)}>Open sheet</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </AppShell>
+    );
+  }
+
+  const advisory =
+    advisoryScope.kind === "placement" ? advisoryScope.placement : null;
+  // The grade scope above already restricts to grades this teacher advises in —
+  // assert the resolved placement agrees with the URL rather than trusting it to.
   if (advisory && grade.id !== advisory.gradeLevelId) notFound();
 
   // Terms are windows over the active school year, so without one there is
@@ -253,10 +298,21 @@ export default async function AralGradeTermsReportsPage({
   }));
 
   const basePath = `/teacher/aral/${grade.id}/terms-reports`;
-  const grades = shellGrades.map((g) => ({
-    id: g.id,
-    label: GRADE_LEVEL_LABELS[g.type],
-  }));
+  // A teacher's grade switcher lists the grades they ADVISE IN, not every grade
+  // the shell knows about: the shell list is a union that also carries grades
+  // they only tutor for ARAL, and offering one of those here would switch them
+  // into a sheet the gate above then refuses. A Super Admin reads whole grades,
+  // so the shell list is right for them.
+  const grades = (
+    isSuperAdmin
+      ? shellGrades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] }))
+      : advisoryGradeLevelIds(placements).map((id) => ({
+          id,
+          label:
+            placements.find((p) => p.gradeLevelId === id)?.gradeLabel ??
+            GRADE_LEVEL_LABELS[grade.type],
+        }))
+  ).slice();
   if (!grades.some((g) => g.id === grade.id)) {
     grades.unshift({ id: grade.id, label: GRADE_LEVEL_LABELS[grade.type] });
   }
@@ -319,6 +375,18 @@ export default async function AralGradeTermsReportsPage({
           grade={grade}
           schoolYear={schoolYear}
           advisory={advisory}
+          advisorySections={
+            // The teacher's advisory sections in THIS grade, so the section
+            // control switches between advisories instead of pretending the
+            // sheet only ever has one. A single advisory here collapses it —
+            // there is nothing to switch to.
+            placements
+              .filter((placement) => placement.gradeLevelId === grade.id)
+              .map((placement) => ({
+                id: placement.sectionId,
+                name: placement.sectionName,
+              }))
+          }
           schoolId={schoolId}
           schoolIdParam={sp.schoolId}
           isSuperAdmin={isSuperAdmin}
@@ -346,6 +414,7 @@ async function AralTermGradesGrid({
   grade,
   schoolYear,
   advisory,
+  advisorySections,
   schoolId,
   schoolIdParam,
   isSuperAdmin,
@@ -360,6 +429,8 @@ async function AralTermGradesGrid({
   grade: { id: string; schoolId: string };
   schoolYear: { id: string };
   advisory: AdvisoryPlacement | null;
+  /** This teacher's advisory sections inside this grade, for the switcher. */
+  advisorySections: { id: string; name: string }[];
   schoolId: string;
   schoolIdParam?: string;
   isSuperAdmin: boolean;
@@ -434,6 +505,11 @@ async function AralTermGradesGrid({
     }),
   ]);
 
+  // A Super Admin reads the whole grade and gets its real section facet; a
+  // teacher gets their own advisories, because those are the only sections of
+  // this grade they may encode into.
+  const sectionOptions = isSuperAdmin ? gradeSections : advisorySections;
+
   const gridLearners = learners.map((l) => ({
     id: l.id,
     fullName: l.fullName,
@@ -450,13 +526,18 @@ async function AralTermGradesGrid({
     <AralTermGradesPanel
       // Remount when the term or the filtered roster changes: the panel holds
       // the cell set in state and all three are scoping inputs to it.
-      key={`${activeTerm}:${list.section}:${schoolIdParam ?? ""}`}
+      key={`${activeTerm}:${advisory?.sectionId ?? list.section}:${schoolIdParam ?? ""}`}
       gradeId={grade.id}
       grades={grades}
       basePath={basePath}
-      sections={gradeSections}
-      showSection={gradeSections.length > 0}
-      section={list.section}
+      sections={sectionOptions}
+      // A teacher sees the switcher only when this grade holds a second advisory
+      // of theirs to switch to: one advisory has nothing to choose between, and a
+      // single-option picker reads as a filter that does nothing.
+      showSection={
+        isSuperAdmin ? sectionOptions.length > 0 : sectionOptions.length > 1
+      }
+      section={advisory ? advisory.sectionId : list.section}
       schoolId={schoolIdParam}
       q={list.q}
       activeTerm={activeTerm}

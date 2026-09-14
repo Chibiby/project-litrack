@@ -182,7 +182,10 @@ export const EMPLOYMENT_TYPE_LABELS = {
 export const ADVISORY_MODE_LABELS = {
   DEFAULT: "One advisory section",
   FLOATING: "Floating teacher",
-  MULTI_GRADE: "Multi-grade advisory",
+  // The stored enum value keeps its original spelling for backward
+  // compatibility; the label is what anyone reads. "Multi-advisory" is the
+  // product term — the sections need not share a grade.
+  MULTI_GRADE: "Multi-advisory",
 } as const;
 
 export const TEACHER_POSITION_LABELS = {

@@ -67,11 +67,12 @@ interface AppSidebarProps {
    */
   isFloating?: boolean;
   /**
-   * Points the "End of Terms Reports" item at the grade-scoped sheet instead of
+   * Every advisory section this teacher holds. Points the "End of Terms Reports"
+   * item at the grade-scoped sheet — but only when there is exactly one — instead of
    * the resolver route, so the row can match its own URL; see
-   * `NavOptions.advisoryGradeLevelId`.
+   * `NavOptions.advisoryPlacements`.
    */
-  advisoryGradeLevelId?: string | null;
+  advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -241,7 +242,7 @@ export function AppSidebar({
   roleLabel: roleLabelOverride,
   isAralVolunteer,
   isFloating,
-  advisoryGradeLevelId,
+  advisoryPlacements,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
@@ -252,9 +253,9 @@ export function AppSidebar({
       getNavGroups(role, grades ?? [], {
         isAralVolunteer,
         isFloating,
-        advisoryGradeLevelId,
+        advisoryPlacements,
       }),
-    [role, grades, isAralVolunteer, isFloating, advisoryGradeLevelId]
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   // `navPath`, not `pathname`: during a click the router has not committed yet
