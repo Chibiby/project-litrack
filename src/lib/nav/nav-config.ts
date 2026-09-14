@@ -11,6 +11,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LifeBuoy,
+  ListOrdered,
   Megaphone,
   School,
   ScrollText,
@@ -173,6 +174,7 @@ export function getNavGroups(
             { id: "school-head-teachers", label: "Teachers", href: SCHOOL_HEAD_ROUTES.teachers, icon: Users },
             { id: "school-head-aral", label: "ARAL Program", href: SCHOOL_HEAD_ROUTES.aral, icon: Sparkles },
             { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
+            { id: "school-head-term-subjects", label: "Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
           ],
         },
         {

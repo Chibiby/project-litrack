@@ -17,6 +17,9 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
 import { getActiveSchoolYear } from "@/lib/cache/school-year";
+import { getSheetSubjects, healLegacyTermGrades } from "@/lib/terms/subjects-db";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import { advisoryRosterDenial, teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import {
   getAdvisoryPlacements,
@@ -473,13 +476,17 @@ async function AralTermGradesGrid({
   const page = Math.min(list.page, pageCount);
   const skip = (page - 1) * pageSize;
 
-  const [gradeSections, learners, termGrades] = await Promise.all([
+  // Seeded before the grade's TermGrade rows are read: the filter below needs
+  // the active id set, and the lazy seed only runs once per grade regardless of
+  // which of the sheet's readers hits it first.
+  const [gradeSections, subjects, learners] = await Promise.all([
     isSuperAdmin
       ? getGradeSections({
           schoolId: grade.schoolId,
           gradeLevelIds: [grade.id],
         })
       : Promise.resolve([] as { id: string; name: string }[]),
+    getSheetSubjects(prisma, { schoolId: grade.schoolId, gradeLevelId: grade.id }),
     prisma.learner.findMany({
       where: rosterWhere,
       select: {
@@ -491,19 +498,46 @@ async function AralTermGradesGrid({
       skip,
       take: pageSize,
     }),
-    // Every matching learner's cells, not just this page's: the grid keys its
-    // rows by learner id, so the wider set costs one small query and no client
-    // work. Narrowing it to the visible page would mean waiting for the roster
-    // query to name its ids, serializing two queries that run side by side.
-    prisma.termGrade.findMany({
-      where: {
-        schoolYearId: schoolYear.id,
-        term: activeTerm,
-        learner: rosterWhere,
-      },
-      select: { learnerId: true, subject: true, score: true },
-    }),
   ]);
+  const subjectIds = subjects.map((s) => s.id);
+  // Adopt scores the pre-TermSubject build saved after M1 (termSubjectId NULL)
+  // before reading, or they render as empty cells. Runs after the seed above.
+  // No-op after M2; removed with M3.
+  //
+  // Best-effort: this page only needed to READ the sheet. A failed UPDATE here
+  // must not crash a page that never asked to write — log it for an admin and
+  // render with whatever rows are already pointed at a TermSubject. The save
+  // path's heal call stays fatal; it runs inside `saveTermGrades`'s transaction
+  // for a reason documented there.
+  try {
+    await healLegacyTermGrades(prisma, {
+      schoolId: grade.schoolId,
+      gradeLevelId: grade.id,
+      schoolYearId: schoolYear.id,
+    });
+  } catch (err) {
+    reportError(classifyError(err, { verb: "adopt legacy term grades" }), {
+      route: basePath,
+      routeType: "render",
+      schoolId: grade.schoolId,
+    });
+  }
+
+  // Every matching learner's cells, not just this page's: the grid keys its
+  // rows by learner id, so the wider set costs one small query and no client
+  // work. Narrowing it to the visible page would mean waiting for the roster
+  // query to name its ids, serializing two queries that run side by side.
+  // Restricted to this grade's ACTIVE subjects: an archived column, and scores
+  // kept from a grade the learner moved out of, must not reach the sheet.
+  const termGrades = await prisma.termGrade.findMany({
+    where: {
+      schoolYearId: schoolYear.id,
+      term: activeTerm,
+      termSubjectId: { in: subjectIds },
+      learner: rosterWhere,
+    },
+    select: { learnerId: true, termSubjectId: true, score: true },
+  });
 
   // A Super Admin reads the whole grade and gets its real section facet; a
   // teacher gets their own advisories, because those are the only sections of
@@ -516,11 +550,15 @@ async function AralTermGradesGrid({
     sectionName: l.section?.name ?? null,
   }));
 
-  const initialGrades = termGrades.map((g) => ({
-    learnerId: g.learnerId,
-    subject: g.subject as string,
-    score: g.score,
-  }));
+  const initialGrades = termGrades
+    // `termSubjectId` is nullable at the column level (M1); the `in` filter
+    // above already excludes null, this narrows the type for the grid prop.
+    .filter((g): g is typeof g & { termSubjectId: string } => g.termSubjectId !== null)
+    .map((g) => ({
+      learnerId: g.learnerId,
+      termSubjectId: g.termSubjectId,
+      score: g.score,
+    }));
 
   return (
     <AralTermGradesPanel
@@ -542,6 +580,7 @@ async function AralTermGradesGrid({
       q={list.q}
       activeTerm={activeTerm}
       terms={terms}
+      subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
       learners={gridLearners}
       initialGrades={initialGrades}
       readOnly={readOnly}

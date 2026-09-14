@@ -518,6 +518,7 @@ model School {
   schoolUnlockGrants  SchoolUnlockGrant[]
   chatChannels        ChatChannel[]
   termWindowOverrides TermWindowOverride[]
+  termSubjects        TermSubject[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -886,8 +887,15 @@ model GradeLevel {
   enrollments    Enrollment[]
   teacherInvites TeacherInvite[]
   attendanceDays AttendanceDayMeta[]
+  termSubjects   TermSubject[]
 
   @@unique([schoolId, type])
+  /// Composite unique target, alongside the plain `@id`. `TermSubject`'s FK is
+  /// `[gradeLevelId, schoolId] -> [id, schoolId]` rather than plain `id` so a
+  /// subject row can never point at a grade in a different school — Postgres
+  /// requires a unique/PK target for a composite foreign key, which is the
+  /// only reason this index exists; nothing queries it directly.
+  @@unique([id, schoolId])
   @@index([deletedAt])
 }
 
@@ -1279,28 +1287,104 @@ model ReadingLevelRecord {
   @@index([recordedById])
 }
 
-/// One learner's grade in one learning area for one term of one school year.
+/// A school's editable, per-grade list of End-of-Terms sheet subjects (School
+/// Head-managed; Super Admin may also edit while viewing a school). Remove is
+/// archive (`deletedAt`) — `TermGrade` rows stay, keyed by this row's id, and
+/// are hidden everywhere an archived subject would otherwise show. Modify is
+/// rename and reorder in place, so grades never need to move between rows.
+///
+/// See docs/superpowers/specs/2026-09-14-term-subjects-management-design.md
+/// §1 for the approved design this model implements.
+model TermSubject {
+  id           String        @id @default(uuid())
+  schoolId     String
+  gradeLevelId String
+  /// Trimmed, 1-60 chars, enforced in `term-subject.schema.ts`, not here.
+  name         String
+  /// Display/order position on the sheet. Not unique — ties break on name,
+  /// then id (`orderSheetSubjects`), so a stale duplicate position can never
+  /// make the sheet un-orderable.
+  position     Int
+  /// Set ONLY on the 8 rows this migration seeds for every grade. Never shown
+  /// in the UI — it exists purely as the backfill join key from the legacy
+  /// `TermGrade.subject` column to a row here, and as the anchor that lets
+  /// the lazy per-grade reseed (`getSheetSubjects`) stay idempotent. A
+  /// School Head-created subject always has `legacyArea = NULL`.
+  legacyArea   LearningArea?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  /// Composite FK on `[gradeLevelId, schoolId] -> GradeLevel.[id, schoolId]`
+  /// — see the `@@unique([id, schoolId])` note on `GradeLevel`. This is what
+  /// keeps a subject row provably scoped to its own grade's own school
+  /// without trusting a second, separately-checkable `schoolId` column.
+  gradeLevel GradeLevel  @relation(fields: [gradeLevelId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  termGrades TermGrade[]
+  // SQL-only partial unique, alongside the index above: one active name per
+  // grade, case- and whitespace-insensitively —
+  //   CREATE UNIQUE INDEX "TermSubject_grade_active_name_unique" ON
+  //     "TermSubject"("gradeLevelId", lower(btrim("name")))
+  //     WHERE "deletedAt" IS NULL;
+  // Prisma's schema language cannot express a functional partial unique — the
+  // same reason `Enrollment_learner_active_unique` and
+  // `Section_gradeLevelId_name_folded_key` live in SQL only. PRESERVE IT when
+  // editing TermSubject migrations (docs/migrations.md).
+
+  /// At most one row per (grade, legacy area). NULLs are distinct in
+  /// Postgres, so School Head-created subjects (`legacyArea = NULL`) never
+  /// collide with each other or with a default — only the 8 seeded rows are
+  /// ever compared here.
+  @@unique([gradeLevelId, legacyArea])
+  /// The sheet read: one grade's rows, active first, in display order.
+  @@index([gradeLevelId, deletedAt, position])
+}
+
+/// One learner's grade in one subject for one term of one school year.
 /// Corrected by overwrite, never soft-deleted - hence no `deletedAt`.
 model TermGrade {
-  id           String       @id @default(uuid())
-  learnerId    String
-  schoolYearId String
-  term         TermPeriod
-  subject      LearningArea
-  score        Int // 60-100, enforced by a CHECK constraint in SQL
+  id            String        @id @default(uuid())
+  learnerId     String
+  schoolYearId  String
+  term          TermPeriod
+  /// LEGACY. Nullable as of M1 (`20260915000001_term_subject_table`): every
+  /// new write leaves this NULL and populates `termSubjectId` instead. Its
+  /// unique below is kept through M1 only because two NULL values never
+  /// compare equal in Postgres, so NULL-subject rows for the same
+  /// learner/year/term never collide against it. M2 drops that unique; M3
+  /// (owner-approved) drops this column outright.
+  subject       LearningArea?
+  /// The subject this grade is for, on the school's editable per-grade sheet
+  /// (`TermSubject`). Nullable in M1 for old rows mid-migration; tightened to
+  /// NOT NULL in M2 once the new write path is live everywhere. `NoAction`:
+  /// a subject is archived (`deletedAt`), never hard-deleted, while grades
+  /// still reference it, so no delete on `TermSubject` should ever need to
+  /// touch this table.
+  termSubjectId String?
+  score         Int // 60-100, enforced by a CHECK constraint in SQL
   /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
-  recordedById String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  recordedById  String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  recordedBy User?      @relation("TermGradeRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  learner     Learner      @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  schoolYear  SchoolYear   @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  recordedBy  User?        @relation("TermGradeRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  termSubject TermSubject? @relation(fields: [termSubjectId], references: [id], onDelete: NoAction)
 
+  /// LEGACY conflict target — kept through M1, dropped in M2. See the
+  /// `subject` column comment for why it does not block new NULL-subject rows.
   @@unique([learnerId, schoolYearId, term, subject])
+  /// The conflict target new writes upsert on.
+  @@unique([learnerId, schoolYearId, term, termSubjectId])
   @@index([schoolYearId, term])
   /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([recordedById])
+  /// FK lookup side for `termSubject`'s `NoAction` relation, and the index
+  /// `saveTermGrades`' per-subject clear (`deleteMany` by `termSubjectId`)
+  /// and `buildTermGradesTable`'s per-subject grouping both want.
+  @@index([termSubjectId])
 }
 
 /// An in-app message addressed to one user, with its own read state.

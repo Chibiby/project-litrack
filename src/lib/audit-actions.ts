@@ -145,6 +145,15 @@ export const AUDIT_ACTIONS = {
   TERM_GRADES_BULK_SAVE: "TERM_GRADES_BULK_SAVE",
   /** A term grade sheet downloaded as Excel. Counts only, no scores. */
   TERM_GRADES_EXPORT: "TERM_GRADES_EXPORT",
+  /**
+   * End of Terms sheet subject list edits (School Head, or Super Admin viewing
+   * a school). Ids, grade and subject names only — never scores.
+   */
+  TERM_SUBJECT_CREATE: "TERM_SUBJECT_CREATE",
+  TERM_SUBJECT_RENAME: "TERM_SUBJECT_RENAME",
+  TERM_SUBJECT_ARCHIVE: "TERM_SUBJECT_ARCHIVE",
+  TERM_SUBJECT_RESTORE: "TERM_SUBJECT_RESTORE",
+  TERM_SUBJECT_REORDER: "TERM_SUBJECT_REORDER",
   IMPORT_LEARNERS: "IMPORT_LEARNERS",
   EXPORT_LEARNERS_EXCEL: "EXPORT_LEARNERS_EXCEL",
   EXPORT_PRINTABLE_REPORT: "EXPORT_PRINTABLE_REPORT",

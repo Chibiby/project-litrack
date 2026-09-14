@@ -277,9 +277,13 @@ export const SUBJECT_LABELS = {
 } as const;
 
 /**
- * The learning areas an end-of-term grade sheet records. Separate from
- * `SUBJECT_LABELS`, which is a teacher-survey artifact the schema marks for
- * removal — a live feature must not depend on it.
+ * The legacy `LearningArea` labels. Since School Heads manage each grade's
+ * End of Terms subjects (`TermSubject`), these only feed the 8 DEFAULT rows a
+ * grade is seeded with (`DEFAULT_TERM_SUBJECTS` in `src/lib/terms/subjects.ts`,
+ * and the M1 migration's seed, which must match these strings). Sheets, exports
+ * and reports read subject names from `TermSubject`, never from here. Separate
+ * from `SUBJECT_LABELS`, which is a teacher-survey artifact the schema marks
+ * for removal — a live feature must not depend on it.
  */
 export const LEARNING_AREA_LABELS = {
   ENGLISH: "English",
@@ -292,7 +296,7 @@ export const LEARNING_AREA_LABELS = {
   TLE: "TLE",
 } as const;
 
-/** Column order for the term grade sheet and its export. */
+/** Position order (0-7) of the default subjects a grade is seeded with. */
 export const LEARNING_AREA_ORDER = [
   "ENGLISH",
   "FILIPINO",

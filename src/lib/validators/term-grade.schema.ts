@@ -9,9 +9,9 @@ import { z } from "zod";
  * non-nullable `Int`, so the save action deletes the row rather than writing a
  * null.
  *
- * The subject list is the JHS 8 from the approved sheet, used for every grade by
- * explicit decision. `LearningArea` in the schema is the authority; this literal
- * union mirrors it so the client can post without importing Prisma types.
+ * Subjects are the grade's School Head-managed `TermSubject` rows, posted by id.
+ * The server re-checks every id against the grade's active list, so this schema
+ * only asserts shape.
  */
 export const termGradesSaveSchema = z.object({
   gradeLevelId: z.string().min(1),
@@ -20,23 +20,14 @@ export const termGradesSaveSchema = z.object({
     .array(
       z.object({
         learnerId: z.string().min(1),
-        subject: z.enum([
-          "ENGLISH",
-          "FILIPINO",
-          "MATHEMATICS",
-          "SCIENCE",
-          "ARALING_PANLIPUNAN",
-          "EDUKASYON_SA_PAGPAPAKATAO",
-          "MAPEH",
-          "TLE",
-        ]),
+        termSubjectId: z.string().min(1),
         score: z.number().int().min(60).max(100).nullable(),
       })
     )
     .min(1)
-    // Worst legitimate payload is one full page re-typed: 100 learners x 8
-    // subjects = 800. 1000 is headroom; past that it is not a grade sheet.
-    .max(1000, "Too many cells in one save"),
+    // Worst legitimate payload is one full page re-typed: 100 learners x 15
+    // subjects (the per-grade cap) = 1500.
+    .max(1500, "Too many cells in one save"),
 });
 
 export type TermGradesSaveInput = z.infer<typeof termGradesSaveSchema>;

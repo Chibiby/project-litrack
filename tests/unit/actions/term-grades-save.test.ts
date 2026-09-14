@@ -4,20 +4,29 @@ import { getTermWindows, isTermLocked } from "@/lib/terms/windows";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
- * Action-level coverage for `saveTermGrades` â€” the only write behind the End of
+ * Action-level coverage for `saveTermGrades` — the only write behind the End of
  * Terms grade sheet.
  *
- * The design (`docs/superpowers/specs/2026-08-22-end-of-terms-reports-design.md`
- * Â§4, Â§9) lists five refusals, and every one of them is enforced here and nowhere
- * else: the grid disables its inputs and hides its Save button, but a client is
- * not an enforcement point. What is contract, and so asserted rather than
- * assumed:
+ * Subjects are now School Head-managed `TermSubject` rows, posted by id
+ * (`docs/superpowers/specs/2026-09-14-term-subjects-management-design.md`).
+ * `getSheetSubjects` is real code here, not mocked — only its leaf,
+ * `prisma.termSubject.findMany`/`.createMany`, is a fake. That keeps the real
+ * lazy-seed and ordering logic in the loop, so a fixture with zero rows would
+ * genuinely exercise the seed path the same way production does.
+ *
+ * The design lists six refusals, and every one of them is enforced here and
+ * nowhere else: the grid disables its inputs and hides its Save button, but a
+ * client is not an enforcement point. What is contract, and so asserted rather
+ * than assumed:
  *
  *   - The roster is read through `schoolId` AND the adviser's own section, so a
  *     learner from another tenant or another section cannot be graded by id. A
- *     partial match fails the WHOLE batch with one generic message â€” that is what
+ *     partial match fails the WHOLE batch with one generic message — that is what
  *     stops a probe from telling "another school's" apart from "not my section",
  *     and what stops the valid half of a poisoned batch from being written.
+ *   - Every posted `termSubjectId` must be on THIS grade's ACTIVE sheet, in THIS
+ *     school — one not in `getSheetSubjects`' result (wrong grade, wrong school,
+ *     or archived) fails the WHOLE batch, same reasoning as the roster check.
  *   - Every placement fact is re-derived server-side. The posted `gradeLevelId` is
  *     checked against the advisory, never trusted.
  *   - A locked term, a missing school year, a non-adviser and a Super Admin all
@@ -26,9 +35,10 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
  *     row carries placement, counts and learner ids only.
  *
  * Only leaf infrastructure is mocked (Prisma client, session, audit, cache). The
- * real Zod schema, the real `getAdvisoryPlacement`, the real `deniesAdvisoryRoster`
- * and the real term-window maths all run, so the `where` clauses these tests
- * inspect are the ones the action would send to Postgres.
+ * real Zod schema, the real `getAdvisoryPlacement`, the real `deniesAdvisoryRoster`,
+ * the real term-window maths and the real `getSheetSubjects`/`orderSheetSubjects`
+ * all run, so the `where` clauses these tests inspect are the ones the action
+ * would send to Postgres.
  */
 
 const TEACHER_ID = "teacher-marivic";
@@ -40,8 +50,26 @@ const GRADE_ID = "grade-g7";
 const OTHER_GRADE_ID = "grade-g8";
 const SCHOOL_YEAR_ID = "sy-2026-2027";
 
+/** This grade's active sheet, by name — stable ids reused across every test. */
+const SUBJECT_IDS: Record<string, string> = {
+  ENGLISH: "subject-english",
+  FILIPINO: "subject-filipino",
+  MATHEMATICS: "subject-mathematics",
+  SCIENCE: "subject-science",
+  ARALING_PANLIPUNAN: "subject-araling-panlipunan",
+  EDUKASYON_SA_PAGPAPAKATAO: "subject-edukasyon-sa-pagpapakatao",
+  MAPEH: "subject-mapeh",
+  TLE: "subject-tle",
+};
+/** Lives on OTHER_GRADE_ID, same school. */
+const FOREIGN_GRADE_SUBJECT_ID = "subject-other-grade";
+/** Lives on GRADE_ID, but OTHER_SCHOOL_ID. */
+const FOREIGN_SCHOOL_SUBJECT_ID = "subject-other-school";
+/** Lives on GRADE_ID/SCHOOL_ID, but archived. */
+const ARCHIVED_SUBJECT_ID = "subject-archived";
+
 /**
- * The fake clock. December 15 2026 at LOCAL noon â€” built from local fields, never
+ * The fake clock. December 15 2026 at LOCAL noon — built from local fields, never
  * a UTC instant, and deliberately mid-month: this box is UTC+8 and CI is UTC, and
  * both must resolve `schoolToday()` to the same civil day or the set of locked
  * terms changes between the two.
@@ -51,7 +79,7 @@ const SCHOOL_YEAR_ID = "sy-2026-2027";
  * the lock. The distance from either boundary is what makes it robust.
  */
 const TODAY = new Date(2026, 11, 15, 12, 0, 0);
-/** August 1 2026 â€” the approved sheet's calendar. Local midnight, no UTC instant. */
+/** August 1 2026 — the approved sheet's calendar. Local midnight, no UTC instant. */
 const SCHOOL_YEAR_START = new Date(2026, 7, 1);
 /** Open on `TODAY`. The term every non-lock test posts. */
 const OPEN_TERM = "SECOND";
@@ -91,10 +119,21 @@ type SchoolYearRow = {
   }[];
 };
 
+type TermSubjectRow = {
+  id: string;
+  schoolId: string;
+  gradeLevelId: string;
+  name: string;
+  position: number;
+  deletedAt: Date | null;
+};
+
 /** The school's learner table for one test. */
 let learners: LearnerRow[];
 let sections: SectionRow[];
 let schoolYears: SchoolYearRow[];
+/** Every `TermSubject` row the fake Prisma client knows about, live grade or not. */
+let termSubjects: TermSubjectRow[];
 /** `TeacherProfile.designation` for the caller; `null` is an ordinary DepEd teacher. */
 let designation: string | null;
 /** `TeacherProfile.advisoryMode`; `null` behaves as DEFAULT for an older row. */
@@ -121,12 +160,24 @@ function learner(overrides: Partial<LearnerRow> & { id: string }): LearnerRow {
   };
 }
 
+/** This grade's 8 default subjects, active, positions 0-7 — the sheet's shape. */
+function defaultSubjects(): TermSubjectRow[] {
+  return Object.entries(SUBJECT_IDS).map(([name, id], position) => ({
+    id,
+    schoolId: SCHOOL_ID,
+    gradeLevelId: GRADE_ID,
+    name,
+    position,
+    deletedAt: null,
+  }));
+}
+
 /**
  * Honours exactly the clauses the action supplies and no more.
  *
  * This is the load-bearing property of the fake: if the action ever drops
  * `schoolId` or `sectionId` from the roster `where`, the foreign rows below stop
- * being filtered here too, the counts agree, and the cross-tenant tests go red â€”
+ * being filtered here too, the counts agree, and the cross-tenant tests go red —
  * which is the direction a fake must fail in. A fake that hardcoded the filters
  * would keep passing after the real ones were deleted.
  */
@@ -147,6 +198,23 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
     .filter((l) => learnerMatches(l, args.where))
     .map((l) => ({ id: l.id }));
 });
+
+/**
+ * Backs `getAllTermSubjects` (`src/lib/terms/subjects-db.ts`), real code and not
+ * mocked. Only its leaf — this delegate — is a fake, so the real lazy-seed and
+ * `orderSheetSubjects` logic both run exactly as in production.
+ */
+const termSubjectFindMany = vi.fn(
+  async (args: { where: { schoolId: string; gradeLevelId: string } }) =>
+    termSubjects
+      .filter(
+        (s) =>
+          s.schoolId === args.where.schoolId && s.gradeLevelId === args.where.gradeLevelId
+      )
+      .map((s) => ({ id: s.id, name: s.name, position: s.position, deletedAt: s.deletedAt }))
+);
+/** Never expected to fire in this file: every fixture grade already has rows. */
+const termSubjectCreateMany = vi.fn(async (_args?: unknown) => ({ count: 0 }));
 
 /**
  * Backs the real `getAdvisoryPlacements`, tenant filter and soft delete
@@ -223,17 +291,17 @@ const schoolYearFindFirst = vi.fn(
  * The write surface.
  *
  * Encoded cells are no longer written through `prisma.termGrade.upsert`. They go
- * out as ONE multi-row `INSERT â€¦ ON CONFLICT DO UPDATE` per chunk, issued with
+ * out as ONE multi-row `INSERT … ON CONFLICT DO UPDATE` per chunk, issued with
  * `tx.$queryRaw`, because a per-row upsert loop could not finish a full sheet
  * inside a transaction timeout. So "wrote nothing" now means: the raw statement
  * was never issued, `deleteMany` was never called, and the transaction never
  * opened. Asserting on `upsert` would be asserting on a builder the action no
- * longer has â€” a dead assertion that reads as coverage.
+ * longer has — a dead assertion that reads as coverage.
  *
- * `queryRaw` below is not a stub. It models the tenant JOIN in the real
+ * `queryRaw` below is not a stub. It models the tenant + subject JOIN in the real
  * statement: a row comes back only if the learner it names satisfies the school,
  * grade and section ids THAT WERE ACTUALLY BOUND into the SQL. That is what makes
- * this fake fail in the right direction â€” delete `l."schoolId" = $n` from the
+ * this fake fail in the right direction — delete `l."schoolId" = $n` from the
  * action and `SCHOOL_ID` stops being bound, no rows come back, the action's own
  * `RETURNING` count check throws, and the happy path goes red. Once the Prisma
  * `where` object is gone, the bound-parameter list is the only witness that a
@@ -241,7 +309,7 @@ const schoolYearFindFirst = vi.fn(
  */
 type RawCall = { sql: string; params: unknown[] };
 let rawWrites: RawCall[];
-/** Makes the statement RETURN one row fewer than it was given â€” see the guard test. */
+/** Makes the statement RETURN one row fewer than it was given — see the guard test. */
 let dropOneReturnedRow = false;
 
 /** Prisma nests `Prisma.sql`/`Prisma.join` fragments; bound params are the leaves. */
@@ -291,6 +359,13 @@ const queryRaw = vi.fn(
 
 const termGradeDeleteMany = vi.fn(async (args: unknown) => ({ count: 1, args }));
 
+/** Backs `healLegacyTermGrades` inside the save transaction. */
+const healExecuteRaw = vi.fn(
+  async (_sql: { strings: readonly string[]; values: unknown[] }) => 0
+);
+/** Order of raw statements issued on the transaction client. */
+let txOrder: string[] = [];
+
 /**
  * The save path is an INTERACTIVE transaction now (the raw statement has to be
  * awaited, and the delete has to be ordered before it), so the callback is run
@@ -299,7 +374,14 @@ const termGradeDeleteMany = vi.fn(async (args: unknown) => ({ count: 1, args }))
 const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
   if (typeof arg === "function") {
     return (arg as (tx: unknown) => unknown)({
-      $queryRaw: (...a: unknown[]) => queryRaw(...(a as [never])),
+      $executeRaw: (...a: unknown[]) => {
+        txOrder.push("heal");
+        return healExecuteRaw(...(a as [never]));
+      },
+      $queryRaw: (...a: unknown[]) => {
+        txOrder.push("upsert");
+        return queryRaw(...(a as [never]));
+      },
       termGrade: {
         deleteMany: (...a: unknown[]) => termGradeDeleteMany(...(a as [never])),
       },
@@ -309,7 +391,7 @@ const transaction = vi.fn(async (arg: unknown, _options?: unknown) => {
 });
 
 /**
- * The two grant tables `canWriteWindow` reads from â€” left un-mocked at the
+ * The two grant tables `canWriteWindow` reads from — left un-mocked at the
  * module level so the real `canWriteWindow` runs here, exactly as the
  * "refuses a term whose months have passed" test above already depends on
  * for its fail-closed behaviour when both resolve to `null`.
@@ -334,6 +416,10 @@ vi.mock("@/lib/prisma", () => ({
     },
     schoolYear: {
       findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [never])),
+    },
+    termSubject: {
+      findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [never])),
+      createMany: (...args: unknown[]) => termSubjectCreateMany(...(args as [never])),
     },
     unlockGrant: {
       findFirst: (...args: unknown[]) => unlockGrantFindFirst(...(args as [never])),
@@ -387,7 +473,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
  *
  * This file's subject is the term deadline, so it runs in the regime where
  * deadlines are enforced. Mocked rather than left to the real reader, which
- * would reach `prisma.systemSetting` â€” absent from the Prisma mock above â€” and
+ * would reach `prisma.systemSetting` — absent from the Prisma mock above — and
  * degrade to "off", quietly turning every locked-term assertion here into a
  * test of the unlocked path. The switched-off case has its own test below.
  */
@@ -425,7 +511,7 @@ function expectNoForeignParamsBound(secrets: string[]) {
   }
 }
 
-type Entry = { learnerId: string; subject: string; score: number | null };
+type Entry = { learnerId: string; termSubjectId: string; score: number | null };
 
 function post(overrides: {
   gradeLevelId?: string;
@@ -435,7 +521,7 @@ function post(overrides: {
   return saveTermGrades({
     gradeLevelId: GRADE_ID,
     term: OPEN_TERM,
-    entries: [{ learnerId: "learner-a", subject: "ENGLISH", score: 87 }],
+    entries: [{ learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     ...overrides,
   });
 }
@@ -466,6 +552,33 @@ beforeEach(() => {
       termWindowOverrides: [],
     },
   ];
+  termSubjects = [
+    ...defaultSubjects(),
+    {
+      id: FOREIGN_GRADE_SUBJECT_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: OTHER_GRADE_ID,
+      name: "Other Grade Subject",
+      position: 0,
+      deletedAt: null,
+    },
+    {
+      id: FOREIGN_SCHOOL_SUBJECT_ID,
+      schoolId: OTHER_SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: "Other School Subject",
+      position: 0,
+      deletedAt: null,
+    },
+    {
+      id: ARCHIVED_SUBJECT_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: "Archived Subject",
+      position: 99,
+      deletedAt: new Date(2026, 8, 1),
+    },
+  ];
   designation = null;
   advisoryMode = null;
   session = {
@@ -476,6 +589,7 @@ beforeEach(() => {
   };
   learnerFindManyArgs = [];
   rawWrites = [];
+  txOrder = [];
   dropOneReturnedRow = false;
   unlockGrantFindFirst.mockResolvedValue(null);
   schoolUnlockGrantFindFirst.mockResolvedValue(null);
@@ -485,11 +599,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("saveTermGrades â€” the fixture clock", () => {
+describe("saveTermGrades — the fixture clock", () => {
   it("puts one term shut and one term open on the same day", () => {
     // Guards every other case in this file. If `schoolToday()` ever resolves to a
     // different civil day here than it does in CI, the lock assertions below
-    // would flip silently â€” so the assumption is stated once, loudly, instead of
+    // would flip silently — so the assumption is stated once, loudly, instead of
     // being spread implicitly across a dozen tests.
     const todayKey = formatLocalDateKey(schoolToday());
     expect(todayKey).toBe("2026-12-15");
@@ -503,16 +617,16 @@ describe("saveTermGrades â€” the fixture clock", () => {
   });
 });
 
-describe("saveTermGrades â€” the happy path this file's refusals are measured against", () => {
+describe("saveTermGrades — the happy path this file's refusals are measured against", () => {
   it("upserts encoded cells, deletes cleared ones, and logs no scores", async () => {
     // The control. Without it every refusal below could be passing for the wrong
-    // reason â€” a harness that can never reach the write makes "wrote nothing"
+    // reason — a harness that can never reach the write makes "wrote nothing"
     // vacuously true.
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-b", subject: "MATHEMATICS", score: 93 },
-        { learnerId: "learner-b", subject: "SCIENCE", score: null },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-b", termSubjectId: SUBJECT_IDS.MATHEMATICS, score: 93 },
+        { learnerId: "learner-b", termSubjectId: SUBJECT_IDS.SCIENCE, score: null },
       ],
     });
 
@@ -530,7 +644,8 @@ describe("saveTermGrades â€” the happy path this file's refusals are measur
       where: {
         schoolYearId: SCHOOL_YEAR_ID,
         term: OPEN_TERM,
-        OR: [{ learnerId: "learner-b", subject: "SCIENCE" }],
+        OR: [{ learnerId: "learner-b", termSubjectId: SUBJECT_IDS.SCIENCE }],
+        termSubject: { gradeLevelId: GRADE_ID, deletedAt: null },
       },
     });
 
@@ -538,11 +653,16 @@ describe("saveTermGrades â€” the happy path this file's refusals are measur
     // The conflict target IS the unique constraint, and `updatedAt` is bumped in
     // the DO UPDATE branch. Prisma's `@updatedAt` is client-side and there is no
     // database trigger, so omitting that clause would freeze the column at
-    // first-insert time forever â€” silently, with nothing to fail.
+    // first-insert time forever — silently, with nothing to fail.
     expect(sql).toContain(
-      'ON CONFLICT ("learnerId", "schoolYearId", "term", "subject") DO UPDATE'
+      'ON CONFLICT ("learnerId", "schoolYearId", "term", "termSubjectId") DO UPDATE'
     );
     expect(sql).toContain('"updatedAt" = EXCLUDED."updatedAt"');
+    // The subject JOIN — new in the TermSubject rewrite — re-checks the row's
+    // tenancy and liveness inside the statement itself, which is what catches an
+    // archive that lands mid-save.
+    expect(sql).toContain('JOIN "TermSubject" ts');
+    expect(sql).toContain('ts."deletedAt" IS NULL');
     // The school year is part of the key: a term enum carries no year, so without
     // it next year's Second Term English would collide with this one.
     expect(params).toContain(SCHOOL_YEAR_ID);
@@ -554,13 +674,16 @@ describe("saveTermGrades â€” the happy path this file's refusals are measur
     for (const id of ["learner-a", "learner-b"]) {
       expect(params).toContain(id);
     }
-    // Scores are bound values, and `recordedById` is the caller â€” never a client
+    // The posted subject ids are bound values too.
+    expect(params).toContain(SUBJECT_IDS.ENGLISH);
+    expect(params).toContain(SUBJECT_IDS.MATHEMATICS);
+    // Scores are bound values, and `recordedById` is the caller — never a client
     // -supplied id.
     expect(params).toContain(87);
     expect(params).toContain(93);
     expect(params).toContain(TEACHER_ID);
 
-    // Placement, counts and learner ids â€” and an EXACT shape, because that is the
+    // Placement, counts and learner ids — and an EXACT shape, because that is the
     // only assertion a newly added `scores` key cannot slip past.
     const audit = writeAudit.mock.calls[0][0];
     expect(audit.action).toBe("TERM_GRADES_BULK_SAVE");
@@ -607,9 +730,19 @@ describe("saveTermGrades â€” the happy path this file's refusals are measur
       archivedAt: null,
     });
   });
+
+  it("reads the sheet's subjects scoped to the school AND the advisory grade", async () => {
+    await post();
+
+    expect(termSubjectFindMany).toHaveBeenCalledTimes(1);
+    expect(termSubjectFindMany.mock.calls[0][0].where).toEqual({
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+    });
+  });
 });
 
-describe("saveTermGrades â€” refusal 1: a locked term", () => {
+describe("saveTermGrades — refusal 1: a locked term", () => {
   it("refuses a term whose months have passed", async () => {
     // The grid disables its inputs once a term closes; a stale tab does not. This
     // is the only enforcement point.
@@ -625,7 +758,7 @@ describe("saveTermGrades â€” refusal 1: a locked term", () => {
   });
 
   it("still accepts a term that has not started yet", async () => {
-    // "Not yet begun" is not "closed" â€” a teacher may encode ahead, and treating
+    // "Not yet begun" is not "closed" — a teacher may encode ahead, and treating
     // a future window as locked would shut the sheet for two thirds of the year.
     const res = await post({ term: "THIRD" });
     expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
@@ -641,8 +774,8 @@ describe("saveTermGrades â€” refusal 1: a locked term", () => {
   });
 
   /**
-   * Â§3: the programme-wide switch. With deadlines off, the same closed term the
-   * first case refuses is accepted â€” from the same teacher, with no grant
+   * §3: the programme-wide switch. With deadlines off, the same closed term the
+   * first case refuses is accepted — from the same teacher, with no grant
    * anywhere. This is the pair that proves the switch reaches this action, and
    * it fails if `canWriteWindow` is ever bypassed here.
    */
@@ -656,7 +789,7 @@ describe("saveTermGrades â€” refusal 1: a locked term", () => {
 
   it("accepts a save past the months when the head extended the deadline", async () => {
     // First Term's months ended Oct 31. The head moved entry to Dec 31, and the
-    // frozen clock is Dec 15 â€” inside the extension, past the months.
+    // frozen clock is Dec 15 — inside the extension, past the months.
     schoolYears[0].termWindowOverrides = [
       {
         term: "FIRST",
@@ -672,7 +805,7 @@ describe("saveTermGrades â€” refusal 1: a locked term", () => {
   });
 
   it("still refuses a save past the extended deadline", async () => {
-    // Extended, but only to Nov 30 â€” the clock is past that too.
+    // Extended, but only to Nov 30 — the clock is past that too.
     schoolYears[0].termWindowOverrides = [
       {
         term: "FIRST",
@@ -691,11 +824,11 @@ describe("saveTermGrades â€” refusal 1: a locked term", () => {
   });
 });
 
-describe("saveTermGrades â€” which grant table wrote the second audit row", () => {
+describe("saveTermGrades — which grant table wrote the second audit row", () => {
   // A school-wide grant lives in a DIFFERENT table (`SchoolUnlockGrant`) than a
   // personal one (`UnlockGrant`). Joining its id against `UnlockGrant` finds
-  // nothing, so the second audit row must name the right table â€” in `action`
-  // AND in `resource` â€” not just carry `grantKind` in `metadata`. Mirrors the
+  // nothing, so the second audit row must name the right table — in `action`
+  // AND in `resource` — not just carry `grantKind` in `metadata`. Mirrors the
   // pair in `tests/unit/actions/attendance-week-save.test.ts`.
   it("writes UNLOCK_GRANT_USED against UnlockGrant for a personal grant", async () => {
     unlockGrantFindFirst.mockResolvedValue({
@@ -744,13 +877,13 @@ describe("saveTermGrades â€” which grant table wrote the second audit row",
   });
 });
 
-describe("saveTermGrades â€” refusal 2: a learner outside the advisory section", () => {
+describe("saveTermGrades — refusal 2: a learner outside the advisory section", () => {
   it("refuses a real learner in another section of the same grade", async () => {
     learners.push(learner({ id: "learner-other-section", sectionId: OTHER_SECTION_ID }));
 
     const res = await post({
       entries: [
-        { learnerId: "learner-other-section", subject: "ENGLISH", score: 87 },
+        { learnerId: "learner-other-section", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
       ],
     });
 
@@ -767,7 +900,7 @@ describe("saveTermGrades â€” refusal 2: a learner outside the advisory sect
     );
 
     const res = await post({
-      entries: [{ learnerId: "learner-other-grade", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-other-grade", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
 
     expect(res.ok).toBe(false);
@@ -783,7 +916,7 @@ describe("saveTermGrades â€” refusal 2: a learner outside the advisory sect
     for (const id of ["learner-archived", "learner-deleted"]) {
       vi.clearAllMocks();
       const res = await post({
-        entries: [{ learnerId: id, subject: "ENGLISH", score: 87 }],
+        entries: [{ learnerId: id, termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
       });
       expect(res.ok).toBe(false);
       expectNoWrites();
@@ -799,8 +932,8 @@ describe("saveTermGrades â€” refusal 2: a learner outside the advisory sect
 
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-other-section", subject: "ENGLISH", score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-other-section", termSubjectId: SUBJECT_IDS.ENGLISH, score: 93 },
       ],
     });
 
@@ -809,7 +942,7 @@ describe("saveTermGrades â€” refusal 2: a learner outside the advisory sect
   });
 });
 
-describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
+describe("saveTermGrades — refusal 3: a cross-tenant learner id", () => {
   /**
    * Same grade id, same section id, different school. Contrived on purpose: it
    * leaves `schoolId` as the ONLY clause that can exclude the row, so this case
@@ -829,7 +962,7 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
     learners.push(foreign());
 
     const res = await post({
-      entries: [{ learnerId: "learner-other-school", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-other-school", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
 
     expect(res.ok).toBe(false);
@@ -843,15 +976,15 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
     learners.push(foreign(), learner({ id: "learner-near", sectionId: OTHER_SECTION_ID }));
 
     const crossTenant = await post({
-      entries: [{ learnerId: "learner-other-school", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-other-school", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
     vi.clearAllMocks();
     const crossSection = await post({
-      entries: [{ learnerId: "learner-near", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-near", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
     vi.clearAllMocks();
     const nonexistent = await post({
-      entries: [{ learnerId: "learner-does-not-exist", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-does-not-exist", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
 
     expect(crossTenant).toEqual(crossSection);
@@ -871,8 +1004,8 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
 
     await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-other-school", subject: "MATHEMATICS", score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-other-school", termSubjectId: SUBJECT_IDS.MATHEMATICS, score: 93 },
       ],
     });
 
@@ -889,7 +1022,7 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
     learners.push(foreign(), learner({ id: "learner-near", sectionId: OTHER_SECTION_ID }));
 
     const res = await post({
-      entries: [{ learnerId: "learner-a", subject: "ENGLISH", score: 87 }],
+      entries: [{ learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 }],
     });
 
     expect(res.ok).toBe(true);
@@ -910,8 +1043,8 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
 
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-other-school", subject: "MATHEMATICS", score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-other-school", termSubjectId: SUBJECT_IDS.MATHEMATICS, score: 93 },
       ],
     });
 
@@ -920,10 +1053,10 @@ describe("saveTermGrades â€” refusal 3: a cross-tenant learner id", () => {
   });
 });
 
-describe("saveTermGrades â€” refusal 4: no active school year", () => {
+describe("saveTermGrades — refusal 4: no active school year", () => {
   it("refuses when the school has no active year", async () => {
-    // A real state the schema permits â€” learner creation already skips enrolment
-    // when there is none â€” so the answer is a refusal, not orphaned rows keyed to
+    // A real state the schema permits — learner creation already skips enrolment
+    // when there is none — so the answer is a refusal, not orphaned rows keyed to
     // a year that does not exist.
     schoolYears = [];
 
@@ -970,7 +1103,7 @@ describe("saveTermGrades â€” refusal 4: no active school year", () => {
   });
 });
 
-describe("saveTermGrades â€” refusal 5: a caller who advises nothing", () => {
+describe("saveTermGrades — refusal 5: a caller who advises nothing", () => {
   it("refuses a teacher with no advisory placement", async () => {
     // Advising nothing is now a property of the SECTIONS, not of the session
     // pointer: `getAdvisoryPlacements` asks which sections name this teacher.
@@ -1034,7 +1167,7 @@ describe("saveTermGrades â€” refusal 5: a caller who advises nothing", () =
 
   it("refuses a volunteer even when they somehow hold an advisory section", async () => {
     // The designation gate runs BEFORE the placement lookup, so it cannot be
-    // routed around by data drift â€” a volunteer with a section assigned by mistake
+    // routed around by data drift — a volunteer with a section assigned by mistake
     // is still refused, and the sidebar's inert row agrees with this refusal.
     designation = ARAL_VOLUNTEER_DESIGNATION;
     session.advisorySectionId = SECTION_ID;
@@ -1049,7 +1182,80 @@ describe("saveTermGrades â€” refusal 5: a caller who advises nothing", () =
   });
 });
 
-describe("saveTermGrades â€” the two that cost nothing extra", () => {
+describe("saveTermGrades — refusal 6: a termSubjectId no longer on this grade's sheet", () => {
+  // §7 of the design: a posted subject id must be in THIS grade's ACTIVE sheet,
+  // in THIS school — anything else (wrong grade, wrong school, or archived)
+  // refuses the whole batch with one generic message, same reasoning as the
+  // roster check in refusal 2/3.
+  it("refuses a subject id that belongs to another grade of the same school", async () => {
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", termSubjectId: FOREIGN_GRADE_SUBJECT_ID, score: 87 },
+      ],
+    });
+
+    expect(res).toEqual({
+      ok: false,
+      error: "One or more subjects are no longer on this sheet. Reload the page.",
+    });
+    expectNoWrites();
+  });
+
+  it("refuses a subject id that belongs to another school entirely", async () => {
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", termSubjectId: FOREIGN_SCHOOL_SUBJECT_ID, score: 87 },
+      ],
+    });
+
+    expect(res.ok).toBe(false);
+    expect((res as { error: string }).error).toContain("no longer on this sheet");
+    expectNoWrites();
+    // And the message names nothing about the other school.
+    expect(JSON.stringify(res)).not.toContain(OTHER_SCHOOL_ID);
+  });
+
+  it("refuses an archived subject id, even though the row still physically exists", async () => {
+    const res = await post({
+      entries: [{ learnerId: "learner-a", termSubjectId: ARCHIVED_SUBJECT_ID, score: 87 }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect((res as { error: string }).error).toContain("no longer on this sheet");
+    expectNoWrites();
+  });
+
+  it("writes NOTHING for the valid half of a batch with one stale subject id", async () => {
+    // Same fail-closed shape as the roster checks: one bad subject id must not
+    // let the rest of the sheet save silently around it.
+    const res = await post({
+      entries: [
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-a", termSubjectId: ARCHIVED_SUBJECT_ID, score: 93 },
+      ],
+    });
+
+    expect(res.ok).toBe(false);
+    expectNoWrites();
+  });
+
+  it("checks subjects only after the roster has already cleared", async () => {
+    // A learner problem is reported before a subject problem is even looked at —
+    // the roster read happens first in the action, so the subject fetch never
+    // fires when the roster already refused the batch.
+    learners.push(learner({ id: "learner-other-section", sectionId: OTHER_SECTION_ID }));
+
+    await post({
+      entries: [
+        { learnerId: "learner-other-section", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+      ],
+    });
+
+    expect(termSubjectFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveTermGrades — the two that cost nothing extra", () => {
   it("refuses a Super Admin outright", async () => {
     // `requireSchoolUser("TEACHER")` passes a Super Admin by impersonation and
     // only checks that `schoolId` is non-null, so an admin row that carries one
@@ -1083,7 +1289,7 @@ describe("saveTermGrades â€” the two that cost nothing extra", () => {
     for (const score of [59, 101, 87.5]) {
       vi.clearAllMocks();
       const res = await post({
-        entries: [{ learnerId: "learner-a", subject: "ENGLISH", score }],
+        entries: [{ learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score }],
       });
       expect(res.ok).toBe(false);
       expectNoWrites();
@@ -1093,12 +1299,12 @@ describe("saveTermGrades â€” the two that cost nothing extra", () => {
 
   it("counts a repeated learner id once when checking the roster", async () => {
     // Deduped before the length comparison, or the count check would reject a
-    // learner who legitimately has eight subjects on one sheet.
+    // learner who legitimately has many subjects on one sheet.
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-a", subject: "FILIPINO", score: 93 },
-        { learnerId: "learner-a", subject: "MATHEMATICS", score: 99 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.FILIPINO, score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.MATHEMATICS, score: 99 },
       ],
     });
 
@@ -1107,19 +1313,19 @@ describe("saveTermGrades â€” the two that cost nothing extra", () => {
   });
 });
 
-describe("saveTermGrades â€” the RETURNING count guard", () => {
+describe("saveTermGrades — the RETURNING count guard", () => {
   it("refuses the whole save when the statement writes fewer rows than it was given", async () => {
     // The last defence against a silently skipped row. The JOIN drops any learner
     // that is soft-deleted, archived, or outside the caller's tenant or section, and
-    // Postgres reports NO error for that â€” the teacher would see a saved grade sheet
+    // Postgres reports NO error for that — the teacher would see a saved grade sheet
     // with one learner's marks missing. Nothing else in this file fires the branch,
     // so an inverted or deleted comparison would go unnoticed.
     dropOneReturnedRow = true;
 
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-b", subject: "MATHEMATICS", score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-b", termSubjectId: SUBJECT_IDS.MATHEMATICS, score: 93 },
       ],
     });
 
@@ -1134,7 +1340,45 @@ describe("saveTermGrades â€” the RETURNING count guard", () => {
   });
 });
 
-describe("saveTermGrades â€” the set-based write", () => {
+describe("saveTermGrades — pre-M2 legacy rows", () => {
+  it("heals legacy rows for this school+grade+year inside the transaction, before the upsert", async () => {
+    const res = await post();
+
+    expect(res.ok).toBe(true);
+    expect(healExecuteRaw).toHaveBeenCalledTimes(1);
+    const { values } = healExecuteRaw.mock.calls[0][0];
+    expect(values).toContain(SCHOOL_ID);
+    expect(values).toContain(GRADE_ID);
+    expect(values).toContain(SCHOOL_YEAR_ID);
+    expect(txOrder).toEqual(["heal", "upsert"]);
+  });
+
+  it("writes the TermSubject's legacyArea as subject, on insert AND on conflict", async () => {
+    await post();
+
+    const { sql } = rawWrites[0];
+    expect(sql).toContain('"subject"');
+    expect(sql).toContain('ts."legacyArea"');
+    expect(sql).toMatch(/"subject" = COALESCE\(EXCLUDED\."subject"/);
+  });
+
+  it("falls back to NULL only when another row already holds this legacyArea under a different termSubjectId", async () => {
+    // The guard that makes it safe to write `ts."legacyArea"` at all: without it, a
+    // learner who moved grades mid-term (or a legacy row the heal above had to
+    // skip) could collide on `TermGrade_learnerId_schoolYearId_term_subject_key`.
+    // Deleting the `IS DISTINCT FROM` clause, or the `EXISTS` it guards, would still
+    // satisfy the previous test — this one is what actually pins the fallback.
+    await post();
+
+    const { sql } = rawWrites[0];
+    const normalized = sql.replace(/\s+/g, " ");
+    expect(normalized).toMatch(
+      /CASE WHEN EXISTS \( SELECT 1 FROM "TermGrade" o WHERE o\."learnerId" = v\."learnerId" AND o\."schoolYearId" = v\."schoolYearId" AND o\."term" = v\."term" AND o\."subject" = ts\."legacyArea" AND o\."termSubjectId" IS DISTINCT FROM v\."termSubjectId" \) THEN NULL ELSE ts\."legacyArea" END/
+    );
+  });
+});
+
+describe("saveTermGrades — the set-based write", () => {
   it("dedupes a repeated conflict tuple instead of hitting Postgres 21000", async () => {
     // The serial array form made a duplicated cell a harmless last-write-wins. One
     // multi-row `ON CONFLICT DO UPDATE` raises 21000 ("cannot affect row a second
@@ -1142,8 +1386,8 @@ describe("saveTermGrades â€” the set-based write", () => {
     // statement is built. Last one wins.
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
-        { learnerId: "learner-a", subject: "ENGLISH", score: 93 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 93 },
       ],
     });
 
@@ -1157,8 +1401,8 @@ describe("saveTermGrades â€” the set-based write", () => {
   it("dedupes a repeated cleared tuple too", async () => {
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: null },
-        { learnerId: "learner-a", subject: "ENGLISH", score: null },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: null },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: null },
       ],
     });
 
@@ -1167,7 +1411,8 @@ describe("saveTermGrades â€” the set-based write", () => {
       where: {
         schoolYearId: SCHOOL_YEAR_ID,
         term: OPEN_TERM,
-        OR: [{ learnerId: "learner-a", subject: "ENGLISH" }],
+        OR: [{ learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH }],
+        termSubject: { gradeLevelId: GRADE_ID, deletedAt: null },
       },
     });
     // Nothing encoded, so no INSERT is issued at all.
@@ -1180,8 +1425,8 @@ describe("saveTermGrades â€” the set-based write", () => {
     // across the combined array would invert this.
     const res = await post({
       entries: [
-        { learnerId: "learner-a", subject: "ENGLISH", score: null },
-        { learnerId: "learner-a", subject: "ENGLISH", score: 87 },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: null },
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 87 },
       ],
     });
 
@@ -1190,24 +1435,15 @@ describe("saveTermGrades â€” the set-based write", () => {
     expect(rawWrites[0].params).toContain(87);
   });
 
-  it("accepts a full sheet â€” 100 learners x 8 subjects â€” in one transaction", async () => {
+  it("accepts a full sheet — 100 learners x 8 subjects — in one transaction", async () => {
     // The payload the cap is sized for. It must be ACCEPTED, and it must not
     // degenerate back into a statement per cell.
     learners = Array.from({ length: 100 }, (_, i) =>
       learner({ id: `learner-${i}` })
     );
-    const subjects = [
-      "ENGLISH",
-      "FILIPINO",
-      "MATHEMATICS",
-      "SCIENCE",
-      "ARALING_PANLIPUNAN",
-      "EDUKASYON_SA_PAGPAPAKATAO",
-      "MAPEH",
-      "TLE",
-    ];
+    const subjectIds = Object.values(SUBJECT_IDS);
     const entries = learners.flatMap((l) =>
-      subjects.map((subject) => ({ learnerId: l.id, subject, score: 87 }))
+      subjectIds.map((termSubjectId) => ({ learnerId: l.id, termSubjectId, score: 87 }))
     );
     expect(entries).toHaveLength(800);
 
@@ -1232,10 +1468,37 @@ describe("saveTermGrades â€” the set-based write", () => {
     expect(options.maxWait).toBeGreaterThan(2_000);
   });
 
-  it("rejects more than 1000 entries with the house error shape", async () => {
-    const entries = Array.from({ length: 1001 }, (_, i) => ({
+  it("accepts the new 1500-entry cap — 100 learners x 15 subjects, the per-grade max", async () => {
+    // The cap moved with the School Head-managed sheet: a grade can now hold up
+    // to MAX_ACTIVE_SUBJECTS_PER_GRADE (15) subjects, not the fixed 8. A payload
+    // this size must be accepted, not rejected by a schema still pinned to 1000.
+    const extraSubjects = Array.from({ length: 7 }, (_, i) => ({
+      id: `subject-extra-${i}`,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: `Extra ${i}`,
+      position: 8 + i,
+      deletedAt: null,
+    }));
+    termSubjects.push(...extraSubjects);
+    const subjectIds = [...Object.values(SUBJECT_IDS), ...extraSubjects.map((s) => s.id)];
+    expect(subjectIds).toHaveLength(15);
+
+    learners = Array.from({ length: 100 }, (_, i) => learner({ id: `learner-${i}` }));
+    const entries = learners.flatMap((l) =>
+      subjectIds.map((termSubjectId) => ({ learnerId: l.id, termSubjectId, score: 87 }))
+    );
+    expect(entries).toHaveLength(1500);
+
+    const res = await post({ entries });
+
+    expect(res).toEqual({ ok: true, data: { saved: 1500, cleared: 0 } });
+  });
+
+  it("rejects more than 1500 entries with the house error shape", async () => {
+    const entries = Array.from({ length: 1501 }, (_, i) => ({
       learnerId: `learner-${i}`,
-      subject: "ENGLISH",
+      termSubjectId: SUBJECT_IDS.ENGLISH,
       score: 87,
     }));
 

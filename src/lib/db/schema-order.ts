@@ -91,6 +91,10 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   { model: "SystemSetting", delegate: "systemSetting", operational: false },
   { model: "SchoolYear", delegate: "schoolYear", operational: false },
   { model: "GradeLevel", delegate: "gradeLevel", operational: false },
+  // After GradeLevel (composite FK) and before TermGrade (which points at it).
+  // Structural: a school's subject list is the shape of its sheets, so "clear
+  // operational data" leaves it standing, like grades and sections.
+  { model: "TermSubject", delegate: "termSubject", operational: false },
   // Before Section — `Section.adviserId` points at User since Wave A of the
   // multi-advisory change, and the old `User.advisorySectionId` foreign key was
   // dropped in that same migration precisely so this pair has one valid order

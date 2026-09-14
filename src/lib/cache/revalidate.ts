@@ -45,6 +45,21 @@ export function revalidateSchoolTeachers(schoolId: string) {
   revalidateTag(tags.schoolTeachers(schoolId));
 }
 
+/**
+ * Every teacher End of Terms sheet. A subject edit changes the columns of one
+ * grade's sheet, but the route is keyed by grade id in the URL and the page is
+ * `force-dynamic`, so busting the dynamic segment as a whole is the honest call.
+ */
+export function revalidateTermSheets() {
+  revalidatePath("/teacher/aral/[gradeId]/terms-reports", "page");
+}
+
+/** The School Head subject management page, plus every sheet it feeds. */
+export function revalidateTermSubjects() {
+  revalidatePath(SCHOOL_HEAD_ROUTES.termSubjects);
+  revalidateTermSheets();
+}
+
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {
   revalidateTag(tags.adminDashboard);

@@ -20,6 +20,7 @@ import {
   type AralTermGradesGridFormHandle,
   type TermGradesGridExisting,
   type TermGradesGridLearner,
+  type TermGradesGridSubject,
   type TermKey,
 } from "@/components/forms/aral-term-grades-grid-form";
 import { LearnerListFooter } from "@/components/learners/learner-list-footer";
@@ -74,6 +75,7 @@ type Props = {
   q: string;
   activeTerm: TermKey;
   terms: TermTabOption[];
+  subjects: TermGradesGridSubject[];
   learners: TermGradesGridLearner[];
   initialGrades: TermGradesGridExisting[];
   readOnly: boolean;
@@ -94,6 +96,7 @@ export function AralTermGradesPanel({
   q,
   activeTerm,
   terms,
+  subjects,
   learners,
   initialGrades,
   readOnly,
@@ -323,11 +326,18 @@ export function AralTermGradesPanel({
             // Remount whenever the seeded rows change: the term picks the scores,
             // and section / search / page / page size pick the learners. The grid
             // holds both its snapshot and its edits in state, so a prop change
-            // without a remount would leave a new roster reading old cells.
-            key={`${activeTerm}:${section}:${q}:${page}:${pageSize}`}
+            // without a remount would leave a new roster reading old cells. The
+            // subject ids ride along too — a rename leaves the id set alone (no
+            // remount needed), but an archive/restore/create changes which
+            // columns exist and the grid must not keep stale cells for a column
+            // that no longer renders.
+            key={`${activeTerm}:${section}:${q}:${page}:${pageSize}:${subjects
+              .map((s) => s.id)
+              .join(",")}`}
             ref={formRef}
             gradeLevelId={gradeId}
             term={activeTerm}
+            subjects={subjects}
             learners={learners}
             initialGrades={initialGrades}
             indexOffset={(page - 1) * pageSize}

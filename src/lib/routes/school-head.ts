@@ -54,6 +54,8 @@ export const SCHOOL_HEAD_ROUTES = {
   aral: "/school-head/aral",
   transfer: "/school-head/transfer",
   announcements: "/school-head/announcements",
+  /** End of Terms subject list per grade (sidebar item). */
+  termSubjects: "/school-head/term-subjects",
   reports: "/school-head/reports",
   audit: "/school-head/audit",
 

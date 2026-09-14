@@ -6,7 +6,6 @@ import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   ATTENDANCE_STATUS_LABELS,
   GRADE_LEVEL_LABELS,
-  LEARNING_AREA_LABELS,
   READING_PROFILE_LABELS,
   TERM_PERIOD_LABELS,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
@@ -14,6 +13,7 @@ import {
   WEEKLY_WRITING_LEVEL_LABELS,
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { subjectNameKey } from "@/lib/terms/subjects";
 import type { ReportFilters } from "@/lib/reports/kinds";
 import type { ReportTable } from "@/lib/reports/render";
 
@@ -233,15 +233,20 @@ export async function buildTermGradesTable(
         ? { term: filters.term as "FIRST" | "SECOND" | "THIRD" }
         : {}),
       learner: learnerWhere(scope, filters),
+      // Archived subjects are hidden everywhere, reports included. The subject
+      // row's own school is pinned too, on top of the learner's.
+      termSubject: { schoolId: scope.schoolId, deletedAt: null },
     },
     select: {
       term: true,
-      subject: true,
       score: true,
+      updatedAt: true,
+      termSubject: { select: { name: true, position: true, gradeLevelId: true } },
       learner: {
         select: {
           id: true,
           fullName: true,
+          gradeLevelId: true,
           gradeLevel: { select: { type: true } },
           section: { select: { name: true } },
         },
@@ -253,13 +258,34 @@ export async function buildTermGradesTable(
 
   // One row per learner per term, subjects across — the shape the DepEd sheet
   // is read in. A flat row-per-grade dump is unusable at a parent conference.
-  const subjects = [...new Set(rows.map((r) => r.subject))].sort();
+  //
+  // Grades may name their subjects differently, so columns group by name key
+  // (trim + lowercase) across grades, ordered by the lowest position any grade
+  // gives that name, then by name. The header is the first spelling seen.
+  const columnByKey = new Map<string, { header: string; position: number }>();
+  for (const r of rows) {
+    if (!r.termSubject) continue;
+    const key = subjectNameKey(r.termSubject.name);
+    const existing = columnByKey.get(key);
+    if (!existing) {
+      columnByKey.set(key, { header: r.termSubject.name.trim(), position: r.termSubject.position });
+    } else if (r.termSubject.position < existing.position) {
+      existing.position = r.termSubject.position;
+    }
+  }
+  const subjects = [...columnByKey.entries()]
+    .sort(
+      ([ka, a], [kb, b]) =>
+        a.position - b.position || (ka < kb ? -1 : ka > kb ? 1 : 0)
+    )
+    .map(([key]) => key);
   type Group = {
     name: string;
     grade: string;
     section: string;
     term: string;
     scores: Map<string, number>;
+    picks: Map<string, { score: number; current: boolean; updatedAt: number }>;
   };
   const groups = new Map<string, Group>();
 
@@ -274,10 +300,30 @@ export async function buildTermGradesTable(
         section: r.learner.section?.name ?? "—",
         term: TERM_PERIOD_LABELS[r.term] ?? r.term,
         scores: new Map(),
+        picks: new Map(),
       };
       groups.set(key, g);
     }
-    g.scores.set(r.subject, r.score);
+    if (!r.termSubject) continue;
+    // A learner who moved grades can hold two scores under one name key (e.g.
+    // "English" in both grades). Deterministic pick: the current grade's
+    // subject wins; otherwise the most recently updated row; ties keep the
+    // first seen.
+    const nameKey = subjectNameKey(r.termSubject.name);
+    const candidate = {
+      score: r.score,
+      current: r.termSubject.gradeLevelId === r.learner.gradeLevelId,
+      updatedAt: r.updatedAt.getTime(),
+    };
+    const held = g.picks.get(nameKey);
+    if (
+      !held ||
+      (candidate.current && !held.current) ||
+      (candidate.current === held.current && candidate.updatedAt > held.updatedAt)
+    ) {
+      g.picks.set(nameKey, candidate);
+      g.scores.set(nameKey, r.score);
+    }
   }
 
   return {
@@ -289,7 +335,7 @@ export async function buildTermGradesTable(
       { header: "Section", width: 12 },
       { header: "Term", width: 12 },
       ...subjects.map((s) => ({
-        header: LEARNING_AREA_LABELS[s] ?? s,
+        header: columnByKey.get(s)?.header ?? s,
         width: 12,
       })),
       { header: "General Average", width: 14 },

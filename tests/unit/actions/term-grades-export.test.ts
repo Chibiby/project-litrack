@@ -18,6 +18,13 @@ vi.setConfig({ testTimeout: 20_000 });
  * Reports feature, and the half `tests/unit/actions/term-grades-save.test.ts` does
  * not touch.
  *
+ * Columns now come from `getSheetSubjects` — the grade's School Head-managed,
+ * name-and-order-customisable `TermSubject` sheet — rather than a fixed 8-column
+ * `LearningArea` enum. `getSheetSubjects` is real code here (only its leaf,
+ * `prisma.termSubject.findMany`, is mocked), so an archived subject is dropped
+ * from the exported columns by the SAME real filtering logic the sheet itself
+ * uses, not by a test-only assumption.
+ *
  * Same harness shape, fixtures and fake-clock as the save suite on purpose: one
  * mental model for one module. What is DIFFERENT about export, and therefore what
  * this file exists to pin:
@@ -39,11 +46,15 @@ vi.setConfig({ testTimeout: 20_000 });
  *     query, so roster and cell tenancy cannot drift. `TermGrade` carries no
  *     `schoolId` column, so that nested clause is the whole tenant boundary for the
  *     exported cells.
+ *   - Columns follow the sheet's own custom names and its own display order —
+ *     position, then name, then id — not a fixed English/Filipino/… sequence, and
+ *     an archived subject's column and every cell under it are gone entirely.
  *
  * Only leaf infrastructure is mocked (Prisma client, session, audit, cache). The
  * real Zod schema, the real `getAdvisoryPlacement`, the real `deniesAdvisoryRoster`,
- * the real term-window maths, the real `generalAverage` and the real exceljs all
- * run — the workbook these tests read back is the bytes a teacher would download.
+ * the real term-window maths, the real `generalAverage`, the real
+ * `getSheetSubjects` and the real exceljs all run — the workbook these tests read
+ * back is the bytes a teacher would download.
  *
  * ONE deviation from the save suite, and the reason for it: the fake clock is
  * installed as `vi.useFakeTimers({ toFake: ["Date"] })` rather than bare
@@ -82,42 +93,14 @@ const OPEN_TERM = "SECOND";
 /** Closed on `TODAY` — and still exportable, which is the point. */
 const LOCKED_TERM = "FIRST";
 
-/**
- * The approved sheet's eight learning areas, in column order, hardcoded rather
- * than imported from `LEARNING_AREA_ORDER`.
- *
- * Deliberate: the design fixes this workbook to the JHS 8 for every grade, so a
- * ninth area appearing in the enum should fail this file loudly rather than be
- * absorbed into it.
- */
-const LEARNING_AREAS = [
-  "ENGLISH",
-  "FILIPINO",
-  "MATHEMATICS",
-  "SCIENCE",
-  "ARALING_PANLIPUNAN",
-  "EDUKASYON_SA_PAGPAPAKATAO",
-  "MAPEH",
-  "TLE",
-] as const;
+/** This grade's sheet, in its OWN custom names and order — not English-first. */
+const SUBJECT_MATH_ID = "subject-mathematics";
+const SUBJECT_ENGLISH_ID = "subject-english";
+const SUBJECT_ARCHIVED_ID = "subject-reading-club-archived";
 
-type LearningArea = (typeof LEARNING_AREAS)[number];
+const HEADER_ROW = ["#", "Complete Name", "Mathematics", "English", "General Average"];
 
-const HEADER_ROW = [
-  "#",
-  "Complete Name",
-  "English",
-  "Filipino",
-  "Mathematics",
-  "Science",
-  "Araling Panlipunan",
-  "Edukasyon sa Pagpapakatao",
-  "MAPEH",
-  "TLE",
-  "General Average",
-];
-
-/** `#` + name + eight areas + general average. */
+/** `#` + name + the sheet's active subjects + general average. */
 const SHEET_WIDTH = HEADER_ROW.length;
 
 type LearnerRow = {
@@ -155,11 +138,20 @@ type SchoolYearRow = {
   startDate: Date;
 };
 
+type TermSubjectRow = {
+  id: string;
+  schoolId: string;
+  gradeLevelId: string;
+  name: string;
+  position: number;
+  deletedAt: Date | null;
+};
+
 type CellRow = {
   learnerId: string;
   schoolYearId: string;
   term: string;
-  subject: LearningArea;
+  termSubjectId: string;
   score: number;
 };
 
@@ -167,6 +159,7 @@ let learners: LearnerRow[];
 let sections: SectionRow[];
 let grades: GradeRow[];
 let schoolYears: SchoolYearRow[];
+let termSubjects: TermSubjectRow[];
 let cells: CellRow[];
 /** `TeacherProfile.designation` for the caller; `null` is an ordinary DepEd teacher. */
 let designation: string | null;
@@ -185,6 +178,8 @@ let learnerFindManyArgs: {
 }[];
 /** Every `where` the action read the term cells with. */
 let cellFindManyArgs: { where: Record<string, unknown> }[];
+/** Every `where` the action read the sheet's subjects with. */
+let termSubjectFindManyArgs: { where: Record<string, unknown> }[];
 
 function learner(overrides: Partial<LearnerRow> & { id: string; fullName: string }): LearnerRow {
   return {
@@ -197,12 +192,44 @@ function learner(overrides: Partial<LearnerRow> & { id: string; fullName: string
   };
 }
 
-function cell(overrides: Partial<CellRow> & { learnerId: string; subject: LearningArea; score: number }): CellRow {
+function cell(
+  overrides: Partial<CellRow> & { learnerId: string; termSubjectId: string; score: number }
+): CellRow {
   return {
     schoolYearId: SCHOOL_YEAR_ID,
     term: OPEN_TERM,
     ...overrides,
   };
+}
+
+/** This grade's sheet: Mathematics then English (deliberately not alphabetical), plus one archived subject that must never reach the workbook. */
+function defaultSubjects(): TermSubjectRow[] {
+  return [
+    {
+      id: SUBJECT_MATH_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: "Mathematics",
+      position: 0,
+      deletedAt: null,
+    },
+    {
+      id: SUBJECT_ENGLISH_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: "English",
+      position: 1,
+      deletedAt: null,
+    },
+    {
+      id: SUBJECT_ARCHIVED_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      name: "Reading Club (Archived)",
+      position: 2,
+      deletedAt: new Date(2026, 8, 1),
+    },
+  ];
 }
 
 /**
@@ -281,18 +308,39 @@ const cellFindMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
   cellFindManyArgs.push(args);
   const where = args.where;
   const rosterWhere = where.learner as Record<string, unknown> | undefined;
+  const subjectIn = (where.termSubjectId as { in: string[] } | undefined)?.in ?? null;
   return cells
     .filter((c) => {
       if ("schoolYearId" in where && c.schoolYearId !== where.schoolYearId) return false;
       if ("term" in where && c.term !== where.term) return false;
+      if (subjectIn && !subjectIn.includes(c.termSubjectId)) return false;
       if (rosterWhere) {
         const row = learners.find((l) => l.id === c.learnerId);
         if (!row || !learnerMatches(row, rosterWhere)) return false;
       }
       return true;
     })
-    .map((c) => ({ learnerId: c.learnerId, subject: c.subject, score: c.score }));
+    .map((c) => ({ learnerId: c.learnerId, termSubjectId: c.termSubjectId, score: c.score }));
 });
+
+/**
+ * Backs `getAllTermSubjects` (`src/lib/terms/subjects-db.ts`), real code and not
+ * mocked. Only this delegate is a fake, so the real `orderSheetSubjects` logic —
+ * position, then name, then id, archived dropped — runs exactly as production.
+ */
+const termSubjectFindMany = vi.fn(
+  async (args: { where: { schoolId: string; gradeLevelId: string } }) => {
+    termSubjectFindManyArgs.push(args);
+    return termSubjects
+      .filter(
+        (s) =>
+          s.schoolId === args.where.schoolId && s.gradeLevelId === args.where.gradeLevelId
+      )
+      .map((s) => ({ id: s.id, name: s.name, position: s.position, deletedAt: s.deletedAt }));
+  }
+);
+/** Never expected to fire: every fixture grade already has rows. */
+const termSubjectCreateMany = vi.fn(async (_args?: unknown) => ({ count: 0 }));
 
 /**
  * Backs the real `getAdvisoryPlacements`, tenant filter and soft delete
@@ -384,12 +432,21 @@ const schoolYearFindFirst = vi.fn(
 const termGradeUpsert = vi.fn((args: unknown) => ({ op: "upsert", args }));
 const termGradeDeleteMany = vi.fn((args: unknown) => ({ op: "deleteMany", args }));
 const transaction = vi.fn(async (ops: unknown[]) => ops);
+/** Backs `healLegacyTermGrades`. Records call order against the cell read. */
+const readOrder: string[] = [];
+const executeRaw = vi.fn(
+  async (_sql: { strings: readonly string[]; values: unknown[] }) => {
+    readOrder.push("heal");
+    return 0;
+  }
+);
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     get $transaction() {
       return transaction;
     },
+    $executeRaw: (...args: unknown[]) => executeRaw(...(args as [never])),
     learner: {
       findMany: (...args: unknown[]) => learnerFindMany(...(args as [never])),
     },
@@ -405,6 +462,10 @@ vi.mock("@/lib/prisma", () => ({
     },
     schoolYear: {
       findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [never])),
+    },
+    termSubject: {
+      findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [never])),
+      createMany: (...args: unknown[]) => termSubjectCreateMany(...(args as [never])),
     },
     termGrade: {
       findMany: (...args: unknown[]) => cellFindMany(...(args as [never])),
@@ -449,6 +510,16 @@ const revalidateLearnerScoped = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateLearnerScoped: (...args: unknown[]) =>
     revalidateLearnerScoped(...(args as [])),
+}));
+
+/**
+ * Backs the heal failure test below. `classifyError` is real (pure, per its
+ * own file header), so only the sink is faked — same shape as the mock
+ * `login-begin.test.ts` uses for the same module.
+ */
+const reportError = vi.fn((..._args: unknown[]) => "E-TESTREF");
+vi.mock("@/lib/errors/report", () => ({
+  reportError: (...args: unknown[]) => reportError(...(args as [never])),
 }));
 
 // Imported after the mock factories above are registered.
@@ -510,12 +581,21 @@ function normalize(value: CellValue): Cell {
   return JSON.stringify(value);
 }
 
+/**
+ * `width` is a MINIMUM, not a fixed size: a grade with fewer active subjects
+ * produces a narrower header row than the fixture's usual two-subject sheet, and
+ * padding every row out to a wider fixed width would fabricate trailing nulls
+ * that were never in the workbook. Read exactly as many columns as the header
+ * row actually has, falling back to `width` only when the sheet is empty.
+ */
 function grid(sheet: Worksheet, width: number): Cell[][] {
+  const header = sheet.getRow(1);
+  const actualWidth = header.cellCount > 0 ? header.cellCount : width;
   const rows: Cell[][] = [];
   for (let r = 1; r <= sheet.rowCount; r += 1) {
     const row = sheet.getRow(r);
     rows.push(
-      Array.from({ length: width }, (_, i) => normalize(row.getCell(i + 1).value))
+      Array.from({ length: actualWidth }, (_, i) => normalize(row.getCell(i + 1).value))
     );
   }
   return rows;
@@ -549,14 +629,14 @@ async function readExport(base64: string): Promise<{
   };
 }
 
-/** One expected sheet row, in the approved column order. */
+/** One expected sheet row, in the sheet's own column order. */
 function expectedRow(
   index: number,
   fullName: string,
-  scores: Partial<Record<LearningArea, number>>,
+  scores: { math?: number; english?: number },
   average: number | null
 ): Cell[] {
-  return [index, fullName, ...LEARNING_AREAS.map((a) => scores[a] ?? null), average];
+  return [index, fullName, scores.math ?? null, scores.english ?? null, average];
 }
 
 function asSuperAdmin(schoolId: string | null = null) {
@@ -601,12 +681,15 @@ beforeEach(() => {
       startDate: SCHOOL_YEAR_START,
     },
   ];
+  termSubjects = defaultSubjects();
   // Distinctive two-digit scores that appear in no id, count or label in the audit
   // row — so `not.toContain` on the serialized metadata cannot pass by luck.
+  // A score also posted against the ARCHIVED subject, which must never surface.
   cells = [
-    cell({ learnerId: "learner-ana", subject: "ENGLISH", score: 87 }),
-    cell({ learnerId: "learner-ana", subject: "MATHEMATICS", score: 93 }),
-    cell({ learnerId: "learner-zeny", subject: "ENGLISH", score: 64 }),
+    cell({ learnerId: "learner-ana", termSubjectId: SUBJECT_ENGLISH_ID, score: 87 }),
+    cell({ learnerId: "learner-ana", termSubjectId: SUBJECT_MATH_ID, score: 93 }),
+    cell({ learnerId: "learner-zeny", termSubjectId: SUBJECT_ENGLISH_ID, score: 64 }),
+    cell({ learnerId: "learner-ana", termSubjectId: SUBJECT_ARCHIVED_ID, score: 55 }),
   ];
   designation = null;
   session = {
@@ -617,6 +700,7 @@ beforeEach(() => {
   };
   learnerFindManyArgs = [];
   cellFindManyArgs = [];
+  termSubjectFindManyArgs = [];
 });
 
 afterEach(() => {
@@ -642,7 +726,7 @@ describe("exportTermGrades — the fixture clock", () => {
   });
 });
 
-describe("exportTermGrades — a teacher's own advisory sheet", () => {
+describe("exportTermGrades — columns follow the sheet's custom names and order", () => {
   it("returns the advisory roster as a workbook, name-ordered, with averages", async () => {
     // The control every refusal below is measured against. Without it, "read
     // nothing" could be vacuously true because the harness never reaches the read.
@@ -654,12 +738,14 @@ describe("exportTermGrades — a teacher's own advisory sheet", () => {
 
     const { sheetNames, rows, info } = await readExport(file.base64);
     expect(sheetNames).toEqual(["Second Term", "Export info"]);
+    // Mathematics BEFORE English — the sheet's own position order, not alphabetical
+    // and not the old fixed English-first sequence.
     expect(rows).toEqual([
       HEADER_ROW,
       // Abad before Zabala, though Zabala was inserted first.
-      expectedRow(1, "Abad, Ana", { ENGLISH: 87, MATHEMATICS: 93 }, 90),
-      // A blank area is "not encoded", not a zero — a single 64 averages to 64.
-      expectedRow(2, "Zabala, Zeny", { ENGLISH: 64 }, 64),
+      expectedRow(1, "Abad, Ana", { math: 93, english: 87 }, 90),
+      // A blank subject is "not encoded", not a zero — a single 64 averages to 64.
+      expectedRow(2, "Zabala, Zeny", { english: 64 }, 64),
     ]);
     expect(info).toEqual([
       ["School year", SCHOOL_YEAR_LABEL],
@@ -671,6 +757,94 @@ describe("exportTermGrades — a teacher's own advisory sheet", () => {
     expectReadOnly();
   });
 
+  it("drops the archived subject's column entirely, and its scores with it", async () => {
+    const file = fileOf(await post());
+    const { rows } = await readExport(file.base64);
+
+    // Only two subject columns — Mathematics, English — never the archived third.
+    expect(rows[0]).toEqual(HEADER_ROW);
+    expect(rows[0]).not.toContain("Reading Club (Archived)");
+    // Ana's archived-subject score (55) is nowhere in the workbook, even though a
+    // TermGrade row for it exists in the fixture.
+    const bytes = JSON.stringify(rows);
+    expect(bytes).not.toContain("55");
+  });
+
+  it("scopes the subject read to the school AND the grade", async () => {
+    await post();
+
+    expect(termSubjectFindManyArgs).toHaveLength(1);
+    expect(termSubjectFindManyArgs[0].where).toEqual({
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+    });
+  });
+
+  it("adopts legacy NULL-termSubjectId scores for this school+grade+year before reading cells", async () => {
+    readOrder.length = 0;
+    const origin = cellFindMany.getMockImplementation()!;
+    cellFindMany.mockImplementationOnce(async (args) => {
+      readOrder.push("cells");
+      return origin(args);
+    });
+
+    await post();
+
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const { values } = executeRaw.mock.calls[0][0];
+    expect(values).toContain(SCHOOL_ID);
+    expect(values).toContain(GRADE_ID);
+    expect(readOrder).toEqual(["heal", "cells"]);
+  });
+
+  it("still exports when the heal UPDATE rejects, and reports the failure instead of throwing it", async () => {
+    // Export is a read. A failed best-effort UPDATE must not turn a sheet that
+    // only needed exporting into an error — see the fix on `page.tsx`'s own
+    // heal call, which this action's heal call gets the same treatment as.
+    const healError = new Error("connection terminated unexpectedly");
+    executeRaw.mockRejectedValueOnce(healError);
+
+    const file = fileOf(await post());
+
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0][0]).toMatchObject({ cause: healError });
+    expect(reportError.mock.calls[0][1]).toMatchObject({
+      userId: TEACHER_ID,
+      schoolId: SCHOOL_ID,
+    });
+    // The read still runs and still returns the real workbook — nothing about
+    // the roster, cells or filename changed because the heal failed.
+    const { rows } = await readExport(file.base64);
+    expect(rows).toEqual([
+      HEADER_ROW,
+      expectedRow(1, "Abad, Ana", { math: 93, english: 87 }, 90),
+      expectedRow(2, "Zabala, Zeny", { english: 64 }, 64),
+    ]);
+    expect(writeAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters the cell read to only the sheet's active subject ids", async () => {
+    await post();
+
+    expect(cellFindManyArgs).toHaveLength(1);
+    expect(cellFindManyArgs[0].where).toMatchObject({
+      termSubjectId: { in: [SUBJECT_MATH_ID, SUBJECT_ENGLISH_ID] },
+    });
+  });
+
+  it("still produces a header-only workbook for a grade with zero active subjects", async () => {
+    // Every subject on the grade archived — a real state a School Head can reach.
+    termSubjects = termSubjects.map((s) => ({ ...s, deletedAt: new Date(2026, 8, 1) }));
+    cells = [];
+
+    const file = fileOf(await post());
+    const { rows } = await readExport(file.base64);
+
+    expect(rows[0]).toEqual(["#", "Complete Name", "General Average"]);
+  });
+});
+
+describe("exportTermGrades — a teacher's own advisory sheet", () => {
   it("reads the roster through the school, the advisory grade AND the advisory section", async () => {
     await post();
 
@@ -697,6 +871,7 @@ describe("exportTermGrades — a teacher's own advisory sheet", () => {
     expect(cellFindManyArgs[0].where).toEqual({
       schoolYearId: SCHOOL_YEAR_ID,
       term: OPEN_TERM,
+      termSubjectId: { in: [SUBJECT_MATH_ID, SUBJECT_ENGLISH_ID] },
       learner: learnerFindManyArgs[0].where,
     });
   });
@@ -715,8 +890,8 @@ describe("exportTermGrades — a teacher's own advisory sheet", () => {
       })
     );
     cells.push(
-      cell({ learnerId: "learner-archived", subject: "SCIENCE", score: 71 }),
-      cell({ learnerId: "learner-deleted", subject: "SCIENCE", score: 72 })
+      cell({ learnerId: "learner-archived", termSubjectId: SUBJECT_MATH_ID, score: 71 }),
+      cell({ learnerId: "learner-deleted", termSubjectId: SUBJECT_MATH_ID, score: 72 })
     );
 
     const file = fileOf(await post());
@@ -773,7 +948,7 @@ describe("exportTermGrades — the teacher branch is pinned to the advisory sect
         sectionId: OTHER_SECTION_ID,
       })
     );
-    cells.push(cell({ learnerId: "learner-bea", subject: "ENGLISH", score: 78 }));
+    cells.push(cell({ learnerId: "learner-bea", termSubjectId: SUBJECT_ENGLISH_ID, score: 78 }));
   }
 
   it("ignores a posted ?section= naming another section of its own grade", async () => {
@@ -909,7 +1084,7 @@ describe("exportTermGrades — cross-tenant refusal", () => {
       })
     );
     cells.push(
-      cell({ learnerId: "learner-other-school", subject: "ENGLISH", score: 78 })
+      cell({ learnerId: "learner-other-school", termSubjectId: SUBJECT_ENGLISH_ID, score: 78 })
     );
 
     const file = fileOf(await post());
@@ -1052,6 +1227,11 @@ describe("exportTermGrades — the Super Admin branch", () => {
       deletedAt: null,
       archivedAt: null,
     });
+    // The subject read is derived from the grade too.
+    expect(termSubjectFindManyArgs[0].where).toEqual({
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+    });
 
     const { rows } = await readExport(file.base64);
     expect(rows.map((r) => r[1])).toEqual([
@@ -1173,9 +1353,9 @@ describe("exportTermGrades — a locked term still exports", () => {
     expect(isTermLocked(first, TODAY_KEY)).toBe(true);
 
     cells = [
-      cell({ learnerId: "learner-ana", subject: "ENGLISH", score: 87, term: "FIRST" }),
+      cell({ learnerId: "learner-ana", termSubjectId: SUBJECT_ENGLISH_ID, score: 87, term: "FIRST" }),
       // A Second Term cell that must NOT appear on a First Term sheet.
-      cell({ learnerId: "learner-ana", subject: "SCIENCE", score: 93 }),
+      cell({ learnerId: "learner-ana", termSubjectId: SUBJECT_MATH_ID, score: 93 }),
     ];
 
     const file = fileOf(await post({ term: LOCKED_TERM }));
@@ -1185,8 +1365,8 @@ describe("exportTermGrades — a locked term still exports", () => {
     expect(sheetNames).toEqual(["First Term", "Export info"]);
     expect(rows).toEqual([
       HEADER_ROW,
-      // English 87 from First Term; the Second Term Science 93 is filtered out.
-      expectedRow(1, "Abad, Ana", { ENGLISH: 87 }, 87),
+      // English 87 from First Term; the Second Term Math 93 is filtered out.
+      expectedRow(1, "Abad, Ana", { english: 87 }, 87),
       expectedRow(2, "Zabala, Zeny", {}, null),
     ]);
     expect(info[1]).toEqual(["Term", "First Term"]);
@@ -1238,8 +1418,12 @@ describe("exportTermGrades — the audit row", () => {
     // The PII rule, asserted over the whole serialization rather than spot-checked
     // on one key, and derived from the fixture so it cannot fall behind it. Term
     // grades are learner PII (`docs/privacy.md`); `AuditLog` gets counts only.
+    // The archived subject's cell (55) is excluded from `cells` here on purpose:
+    // it never reaches the export at all, so it cannot leak into either side of
+    // this comparison.
+    const activeCells = cells.filter((c) => c.termSubjectId !== SUBJECT_ARCHIVED_ID);
     const serialized = JSON.stringify(audit.metadata);
-    const fixtureScores = [...new Set(cells.map((c) => String(c.score)))];
+    const fixtureScores = [...new Set(activeCells.map((c) => String(c.score)))];
     expect(fixtureScores.length).toBeGreaterThan(0);
     // Two layers: substring catches a score embedded in a string
     // ("87,93,64"), token catches one stored as a number that happens not to be a

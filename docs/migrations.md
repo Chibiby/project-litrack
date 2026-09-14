@@ -60,6 +60,22 @@ CREATE UNIQUE INDEX "Enrollment_learner_active_unique"
 
 Prisma’s schema language cannot express partial unique indexes, so this lives only in the SQL migration. Keep it when editing Enrollment-related migrations.
 
+`TermSubject` has the same kind of SQL-only object, added in
+`20260915000001_term_subject_table`: one ACTIVE (non-archived) subject name per
+grade, case- and whitespace-insensitively —
+
+```sql
+CREATE UNIQUE INDEX "TermSubject_grade_active_name_unique"
+  ON "TermSubject"("gradeLevelId", lower(btrim("name")))
+  WHERE "deletedAt" IS NULL;
+```
+
+Prisma's schema language cannot express a *functional* partial unique either
+(it folds case/whitespace, not just a `WHERE`), so this too lives only in SQL.
+Keep it when editing `TermSubject`-related migrations. Same family as
+`Section_gradeLevelId_name_folded_key` and `School_name_folded_key`, which
+fold casing/whitespace the same way but are not additionally partial.
+
 ## `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes`
 
 Authored for the Global Archive (`docs/archive-purge-spec.md`, task T1), **not yet applied to production**. It does two things in one file.
@@ -110,6 +126,90 @@ column can then remain harmlessly in place (preferred). Dropping it with a later
 compensating migration is destructive because it erases last-online history and
 must be separately authorized; no automatic down migration is provided.
 
+## `20260915000001_term_subject_table` (M1 of editable End-of-Terms subjects)
+
+Authored for `docs/superpowers/specs/2026-09-14-term-subjects-management-design.md`
+§1, §2, §8. Additive-only, not yet applied to production. Adds `TermSubject`
+(the school's per-grade, editable subject list; remove = archive via
+`deletedAt`), seeds 8 default rows per `GradeLevel` (including soft-deleted and
+`FLOATING` grades) with labels byte-identical to `LEARNING_AREA_LABELS`
+(`src/lib/constants/enum-labels.ts`), adds nullable `TermGrade.termSubjectId`
+with a backfill from the existing `subject` column, and loosens
+`TermGrade.subject` to nullable. `GradeLevel` gains `@@unique([id, schoolId])`
+so `TermSubject` can carry a composite FK `[gradeLevelId, schoolId] ->
+GradeLevel.[id, schoolId]` — Postgres requires a unique target for a composite
+foreign key.
+
+**Existing rows: read but not rewritten**, except the backfill UPDATE, which
+only ever fills `termSubjectId` where it was NULL (idempotent, safe to
+re-run). The old `TermGrade_learnerId_schoolYearId_term_subject_key` unique is
+kept through M1 — once `1.15.0` is live, new code dual-writes `subject` = the
+`TermSubject` row's `legacyArea` alongside `termSubjectId`, so the old unique
+still sees a value and never collides on NULL. The one exception is a School
+Head-created custom subject, which has no `legacyArea` and so leaves
+`subject` NULL — there is no legacy value to dual-write, and that NULL is
+what makes app/DB rollback conditional (see Rollback below).
+
+**Migration window.** Whatever the OLD build (pre-`1.15.0`) writes between M1
+applying and `1.15.0` deploying lands `termSubjectId` NULL, same as any
+pre-M1 row — the old build has never heard of the column. `1.15.0` heals
+these itself, per grade, on first load/save (`healLegacyTermGrades`,
+`src/lib/terms/subjects-db.ts`), so deploy `1.15.0` promptly after M1 rather
+than treating the gap as an incident. Before M2 tightens `termSubjectId` to
+`NOT NULL`, re-run the M1 backfill with an explicit `NOT EXISTS` duplicate
+guard (same guard the app heal itself carries) rather than assuming every
+grade was opened since M1 — see `docs/migrate-checklist.md` section (o) for
+the guarded SQL and the follow-up listing query.
+
+**Backfill misses.** The M1 backfill and the pre-M2 re-run pick a row's grade
+the same way — the learner's `Enrollment` row for that `schoolYearId` if one
+exists, else current `gradeLevelId`. The app heal is narrower: it never
+consults `Enrollment`, it only matches the learner's *current*
+`gradeLevelId`, and only for the one `schoolYearId` its caller passes (every
+call site pins that to the active `SchoolYear`), so it neither reaches a
+non-active-year row nor tracks a mid-year grade move the way the
+Enrollment-aware SQL passes do. A row whose learner has no `Enrollment` for
+that `schoolYearId` *and* a NULL `Learner.gradeLevelId` cannot be resolved by
+any of the three. That is not a migration-window row; re-running anything
+never fixes it. Leave it — the score is still stored, only hidden from every
+`termSubjectId`-keyed reader — and escalate to the project owner rather than
+deleting it or guessing a grade. The diagnostic query is in
+`docs/migrate-checklist.md` section (o).
+
+**Two of its indexes take the concurrent-index carve-out** (batch 3 of
+`prisma/concurrent-indexes.sql`): the new `@@unique([learnerId, schoolYearId,
+term, termSubjectId])` and the `termSubjectId` lookup index, both on
+`TermGrade`, which already needed one CONCURRENTLY build before
+(`TermGrade_recordedById_idx`, batch 1). See `docs/migrate-checklist.md`
+section **(o)** for the human apply steps and the post-apply verification
+query (`SELECT count(*) FROM "TermGrade" WHERE "termSubjectId" IS NULL` must
+return 0). This migration is **not** index-only — it also creates a table,
+adds a column/FK and backfills — so, like batch 2, it must go through
+`prisma migrate deploy` and must **never** be `migrate resolve`d.
+
+M2 (`20260915000002_term_grade_subject_tighten`, not yet authored) re-runs the
+backfill, sets `TermGrade.termSubjectId` `NOT NULL`, and drops the old
+`subject` unique, once the code that writes only `termSubjectId` has been live
+long enough. M3 (drop `TermGrade.subject` outright) needs the project owner's
+explicit, separate sign-off before it is authored — see the spec's §0.
+
+**Rollback.** Before any rollback, app or DB, check:
+
+```sql
+SELECT count(*) FROM "TermGrade" WHERE "subject" IS NULL;
+```
+
+Reverting the app to the pre-`termSubjectId` build is safe only while that
+count is 0 (nobody has saved a score on a custom subject yet) — the reverted
+code reads only `subject`, so a NULL there is invisible to it even though
+`termSubjectId` still points at the real row. Dropping the DB objects
+themselves (the two step-6 indexes, the `termSubjectId` FK and column,
+`TermSubject`, the `GradeLevel` unique from step 1) is likewise safe only at
+count 0; at any other count it destroys the only place those custom-subject
+scores are recorded. A non-zero count is an escalation to the project owner,
+not a rollback to run — see the full walkthrough and guarded pre-M2 backfill
+in `docs/migrate-checklist.md` section (o).
+
 ## Preview features
 
 `generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.
@@ -137,12 +237,13 @@ Index-only migrations have a second, hand-applied artifact. `20260823000001_add_
 
 The split is forced, not stylistic: plain `CREATE INDEX` holds an ACCESS EXCLUSIVE lock for the whole build (blocking all reads and writes on that table), while `CREATE INDEX CONCURRENTLY` takes only SHARE UPDATE EXCLUSIVE but **cannot run inside a transaction block** — and `prisma migrate deploy` wraps every migration file in one.
 
-`prisma/concurrent-indexes.sql` now holds **two batches**, 14 indexes in total:
+`prisma/concurrent-indexes.sql` now holds **three batches**, 16 indexes in total:
 
 | Batch | Indexes | Migration | Bookkeeping after running the script |
 |---|---|---|---|
 | 1 | 12 (R6 / Phase 4) | `20260823000001_add_perf_indexes` | `migrate resolve --applied` — the carve-out |
 | 2 | `User_deletedAt_idx`, `Learner_deletedAt_idx` | `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes` | **`migrate deploy`. Never resolve.** |
+| 3 | `TermGrade_learnerId_schoolYearId_term_termSubjectId_key`, `TermGrade_termSubjectId_idx` | `20260915000001_term_subject_table` | **`migrate deploy`. Never resolve.** |
 
 **The batch 2 exception matters.** The carve-out in `docs/migrate-checklist.md` (b1) is scoped, in its own words, to *index-only* migrations, and batch 2's migration is not one: alongside the two indexes it drops `NOT NULL` on nine columns and rewrites nine foreign keys from `ON DELETE RESTRICT` to `ON DELETE SET NULL`. `resolve --applied` writes the bookkeeping row and runs no SQL, so resolving it would record it as done while silently skipping all of that — the database would keep enforcing `RESTRICT` against a `schema.prisma` that promises `SET NULL`, and a teacher purge would fail with `P2003` for a reason nothing in the code explains.
 

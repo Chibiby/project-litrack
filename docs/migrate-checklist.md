@@ -80,6 +80,11 @@ Committed migrations (apply in order via `migrate deploy`):
   `20260911000015_notification_unlock_pointers` — partial reading-level rows, the
   monthly reading-level lock, school-wide unlocks and unlock notifications. Five
   additive files, no backfill. See section **(n)** below.
+- `20260915000001_term_subject_table` — M1 of editable End-of-Terms subjects: new
+  `TermSubject` table, seeded 8 defaults per `GradeLevel`, `TermGrade.termSubjectId`
+  (nullable) with backfill, `TermGrade.subject` loosened to nullable. **Two of its
+  indexes take the concurrent-build carve-out** — see section **(o)** below and
+  `prisma/concurrent-indexes.sql` BATCH 3.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
@@ -877,6 +882,232 @@ migration 11 with `SET NOT NULL` fails once any partial row has been saved —
 check `SELECT count(*) FROM "ReadingLevelRecord" WHERE "englishProfile" IS NULL
 OR "filipinoProfile" IS NULL` first. Postgres cannot drop an enum value;
 `MONTHLY_READING_LEVEL` and `UNLOCK_GRANTED` are harmless left in place.
+
+---
+
+## (o) Editable End-of-Terms subjects, M1  —  Sep 2026
+
+`20260915000001_term_subject_table`. **Apply BEFORE the term-subjects code
+deploys.** Not urgent in the way (i)/(j)/(l) are — old code keeps reading and
+writing `TermGrade.subject` exactly as before, since this migration only adds
+nullable columns and a new table, and the code deploy that follows is
+`1.15.0`, which writes `termSubjectId` and dual-writes `subject` = the
+`TermSubject` row's `legacyArea` — **except** it leaves `subject` NULL for a
+School Head-created custom subject (no `legacyArea` to dual-write) and for the
+fallback case where another row already holds that `(learner, year, term,
+subject)` tuple under a different `termSubjectId` (a learner who moved grades
+mid-term, or a legacy row the heal had to skip) — writing the area there would
+collide with the still-live `TermGrade_learnerId_schoolYearId_term_subject_key`
+unique. Applying the migration first is still required, because `1.15.0`'s
+server actions and `getSheetSubjects` select the new columns/table
+immediately.
+
+M1 is additive; it is not the end state. **M2** (`20260915000002_term_grade_subject_tighten`,
+not yet authored) re-runs the backfill, then sets `TermGrade.termSubjectId`
+`NOT NULL` and drops the old `subject` unique — apply that only after `1.15.0`
+has been live long enough that no in-flight write still uses the old path.
+**M3** (drop `TermGrade.subject` outright) is separate and needs the project
+owner's explicit sign-off before it is even authored.
+
+### What it does
+
+| # | Statement(s) | What it does | Can it fail? |
+|---|---|---|---|
+| 1 | `ALTER TABLE "GradeLevel" ADD CONSTRAINT "GradeLevel_id_schoolId_key" UNIQUE` | Composite unique target for `TermSubject`'s FK. Catalog-only; `GradeLevel` is small (one row per school per grade type). | No. |
+| 2 | `CREATE TABLE "TermSubject"` + 3 indexes + 2 FKs | New table: the school's per-grade editable subject list. One index is the SQL-only partial unique `TermSubject_grade_active_name_unique` (case/whitespace-folded, active rows only) — **preserve it**, same rule as `Enrollment_learner_active_unique` (`docs/migrations.md`). | No. New table. |
+| 3 | `INSERT INTO "TermSubject" ... ON CONFLICT DO NOTHING` | Seeds the 8 default subjects (English, Filipino, Mathematics, Science, Araling Panlipunan, EsP, MAPEH, TLE) for **every** `GradeLevel`, including soft-deleted and `FLOATING` rows. Idempotent. | No. |
+| 4 | `ALTER TABLE "TermGrade" ADD COLUMN "termSubjectId"` + `DROP NOT NULL` on `"subject"` + FK (`NO ACTION`) | Adds the new nullable subject pointer; loosens the legacy column so new code can leave it NULL. | No. Widening only. |
+| 5 | `UPDATE "TermGrade" ...` | Backfills `termSubjectId` for every existing row from its `subject` value, scoped to the learner's grade in that school year. Only writes where `termSubjectId IS NULL` — idempotent. | No, but see the verification query below. |
+| 6 | `CREATE UNIQUE INDEX IF NOT EXISTS ...term_termSubjectId_key` + `CREATE INDEX IF NOT EXISTS ...termSubjectId_idx` | New ON CONFLICT target + FK lookup index on `TermGrade`. **Take the concurrent-build carve-out on production** — see below. | No, once built. |
+
+### Concurrent-build carve-out (step 6's two indexes)
+
+`TermGrade` already needed one CONCURRENTLY build before
+(`TermGrade_recordedById_idx`, batch 1 of `prisma/concurrent-indexes.sql`), so
+the same reasoning applies here: a plain `CREATE INDEX`/`CREATE UNIQUE INDEX`
+on a populated `TermGrade` takes ACCESS EXCLUSIVE for the whole build. Follow
+the **(b1)** carve-out procedure, but for **BATCH 3**:
+
+1. Back up (section **(a)**).
+2. `psql "$env:DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/concurrent-indexes.sql` — builds all indexes not yet present across batches 1-3; batches already taken skip harmlessly. Expect 16 valid rows in the printed table.
+3. `npx prisma migrate deploy` — **not** `migrate resolve`. `20260915000001_term_subject_table` is not index-only (it creates `TermSubject`, alters `TermGrade`, backfills every row), so it must go through `migrate deploy` the normal way; the pre-built indexes just make that deploy skip the two index builds.
+4. `npx prisma migrate status` — expect up to date.
+
+### Verification query (read-only, run after step 3 above)
+
+```sql
+SELECT count(*) FROM "TermGrade" WHERE "termSubjectId" IS NULL;
+```
+
+Expect **0**. A non-zero count means some `TermGrade` row's `subject` /
+learner-grade pairing did not match any seeded `TermSubject` row (for example
+a learner whose grade at the time no longer exists) — investigate those rows
+by id before `1.15.0` deploys; `saveTermGrades` and the term-grades export
+only ever read through `termSubjectId` once that code ships, so an unbackfilled
+row would silently stop appearing on the sheet.
+
+Also spot-check the seed landed with the labels the app expects:
+
+```sql
+SELECT "name" FROM "TermSubject" WHERE "legacyArea" IS NOT NULL ORDER BY "position" LIMIT 8;
+```
+
+Expect exactly: English, Filipino, Mathematics, Science, Araling Panlipunan,
+Edukasyon sa Pagpapakatao, MAPEH, TLE — byte-identical to `LEARNING_AREA_LABELS`
+in `src/lib/constants/enum-labels.ts`.
+
+### The migration window (M1 applied, `1.15.0` not deployed yet)
+
+Between "M1 applied" and "`1.15.0` deployed", the still-running old build keeps
+writing `TermGrade` the old way (subject-keyed, `termSubjectId` left NULL by
+definition — it does not know the column exists). That is expected and does
+not block the code deploy: `1.15.0` heals these rows itself, per grade, the
+first time anyone loads or saves that grade's sheet
+(`healLegacyTermGrades`, `src/lib/terms/subjects-db.ts`) — idempotent, and
+guarded by `NOT EXISTS` against the same
+`TermGrade_learnerId_schoolYearId_term_termSubjectId_key` unique the migration
+itself protects.
+
+**Deploy `1.15.0` promptly after M1** so that window stays short. Do not treat
+"some rows still have `termSubjectId IS NULL` right after M1" as a problem in
+isolation — it is only a problem if it is still true once you are about to
+apply M2 (which makes the column `NOT NULL`).
+
+The reports hub (`buildTermGradesTable`, `src/lib/reports/queries.ts`) never
+calls `healLegacyTermGrades` — it reads `TermGrade` straight, with no
+per-grade heal of its own. A window row in a grade nobody has opened on the
+sheet or export stays invisible there until either that grade's sheet is
+opened (which heals it) or a guarded re-run is applied. **Run the guarded
+backfill below once right after `1.15.0` deploys**, not only before M2 — it
+closes that reports-hub gap immediately instead of leaving it to whichever
+teacher happens to open a given grade first.
+
+**Before applying M2, re-run a guarded backfill** rather than assuming the
+per-grade app heal already reached every row (a grade nobody opened since M1
+never got healed). This is the same UPDATE as step 5 of M1, with an explicit
+`NOT EXISTS` duplicate guard added — the app's own heal function carries the
+same guard, for the same reason: a row could already have been healed for
+this exact target since M1 ran, and the guard is what makes a second run
+provably safe rather than merely believed safe.
+
+```sql
+UPDATE "TermGrade" tg
+SET "termSubjectId" = ts."id"
+FROM "Learner" l, "TermSubject" ts
+WHERE l."id" = tg."learnerId" AND tg."termSubjectId" IS NULL
+  AND ts."legacyArea" = tg."subject"
+  AND ts."gradeLevelId" = COALESCE(
+    (SELECT e."gradeLevelId" FROM "Enrollment" e
+      WHERE e."learnerId" = tg."learnerId" AND e."schoolYearId" = tg."schoolYearId"
+      ORDER BY (e."status" = 'ACTIVE') DESC, e."updatedAt" DESC LIMIT 1),
+    l."gradeLevelId")
+  AND NOT EXISTS (
+    SELECT 1 FROM "TermGrade" o
+    WHERE o."learnerId" = tg."learnerId"
+      AND o."schoolYearId" = tg."schoolYearId"
+      AND o."term" = tg."term"
+      AND o."termSubjectId" = ts."id"
+  );
+```
+
+Then list whatever is still unresolved:
+
+```sql
+SELECT tg."id", tg."learnerId", tg."schoolYearId", tg."term", tg."subject", l."schoolId"
+FROM "TermGrade" tg
+JOIN "Learner" l ON l."id" = tg."learnerId"
+WHERE tg."termSubjectId" IS NULL
+ORDER BY l."schoolId", tg."learnerId";
+```
+
+Zero rows means M2 is safe to apply. A non-zero list needs the diagnostic
+below before you decide what M2 does with them — most will be the "backfill
+misses" case, not a transient window row.
+
+### Backfill misses — rows no automatic pass can resolve
+
+The M1 backfill (step 5) and the guarded pre-M2 re-run above are the only
+passes that resolve a `TermGrade` row's grade via `Enrollment`: the learner's
+`Enrollment` row for that `schoolYearId` if one exists, otherwise the
+learner's *current* `Learner.gradeLevelId`.
+
+The app's per-grade heal (`healLegacyTermGrades`, `src/lib/terms/subjects-db.ts`)
+is narrower and does **not** use Enrollment at all. It matches only the
+learner's *current* `Learner.gradeLevelId`, scoped to the one `schoolYearId`
+its caller passes in — and every call site (`src/lib/actions/term-grades.ts`,
+the terms-reports page) pins that to the currently active `SchoolYear`. Two
+consequences follow:
+
+- A row belonging to a **non-active** school year is never touched by the
+  app heal, no matter how many times its grade's sheet is opened — only the
+  guarded re-run (or a fresh backfill pass) reaches it.
+- If a learner moved grade **within the current year** after the
+  pre-`termSubjectId` build recorded a score, the heal adopts that row into
+  the learner's **current** grade's `TermSubject`, not the grade the score
+  was actually recorded under — unlike the Enrollment-aware SQL passes, it
+  has no history to resolve against.
+
+A row fails **every** automatic path — M1 backfill, the guarded re-run, and
+the app heal — when the learner has **no** `Enrollment` for that school year
+**and** `Learner.gradeLevelId` is NULL — there is no grade to look a
+`TermSubject` up in, by any path, ever. This is a distinct case from the
+migration-window rows above: re-running the backfill or waiting for the app
+heal will never fix it, because there is nothing more to converge on.
+
+```sql
+SELECT tg."learnerId", tg."schoolYearId", tg."term", tg."subject", l."schoolId"
+FROM "TermGrade" tg
+JOIN "Learner" l ON l."id" = tg."learnerId"
+WHERE tg."termSubjectId" IS NULL
+  AND l."gradeLevelId" IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM "Enrollment" e
+    WHERE e."learnerId" = tg."learnerId" AND e."schoolYearId" = tg."schoolYearId"
+  )
+ORDER BY l."schoolId", tg."learnerId";
+```
+
+**Resolution: leave them, do not delete.** The score is still stored in
+`TermGrade.subject` / the row itself; it is only hidden from every
+`termSubjectId`-keyed reader (the sheet, the export, `buildTermGradesTable`).
+Hand the list to the project owner — restoring visibility means deciding
+which grade the row belongs to (an Enrollment backfill, a manual
+`Learner.gradeLevelId`, or a manual `termSubjectId` pointer), which is a
+per-learner judgment call, not something a migration should guess at.
+
+### Rollback
+
+Additive throughout except the backfill (step 5), which only ever writes
+`termSubjectId` where it was NULL and is therefore side-effect-free to leave
+in place on its own. That said, once `1.15.0` is live, new writes dual-write
+`subject` = the `TermSubject` row's `legacyArea` — **except** for a School
+Head-created custom subject, which has no `legacyArea` and so leaves
+`subject` NULL, because there is no legacy value to dual-write. Pre-`1.15.0`
+code reads and writes `subject` only, so a NULL-`subject` row is invisible to
+it.
+
+Check before any rollback, app or DB:
+
+```sql
+SELECT count(*) FROM "TermGrade" WHERE "subject" IS NULL;
+```
+
+- **Reverting the app** to the build before `termSubjectId` existed is safe
+  only while that count is 0 — i.e. nobody has yet saved a score on a custom
+  subject. A non-zero count means some scores exist only as `termSubjectId`
+  set / `subject` NULL; the reverted code cannot read `termSubjectId`, so
+  those scores go blank on the sheet the moment the revert lands, even
+  though the row and its value are still in the table.
+- **Dropping the DB objects** — the two step-6 indexes, the `termSubjectId`
+  FK and column, `TermSubject`, the `GradeLevel` unique from step 1 — is
+  likewise safe only at count 0. At any other count it destroys the only
+  place those custom-subject scores are recorded, which is unrecoverable
+  data loss, not just an app-level revert.
+
+A non-zero count is not this checklist's rollback to perform on its own:
+escalate to the project owner. Keeping the custom subjects, migrating their
+scores back onto a `legacyArea`, and accepting the loss are product
+decisions, not a SQL rollback.
 
 ---
 

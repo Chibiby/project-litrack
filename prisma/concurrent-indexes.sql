@@ -1,16 +1,23 @@
 -- PROJECT LITRACK — concurrent index builds for the EXISTING production database
--- 14 indexes across 10 tables, in two batches:
+-- 16 indexes across 10 tables, in three batches:
 --
 --   BATCH 1 (12 indexes) — R6 / Phase 4, for migration
 --     20260823000001_add_perf_indexes.
 --   BATCH 2 (2 indexes)  — the /admin/archive lists, for migration
 --     20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes.
+--   BATCH 3 (2 indexes)  — the term-subjects ON CONFLICT target and its FK
+--     lookup side on "TermGrade", for migration
+--     20260915000001_term_subject_table.
 --
--- THE TWO BATCHES HAVE DIFFERENT BOOKKEEPING. Batch 1's migration is index-only,
--- so it takes the `migrate resolve --applied` carve-out. Batch 2's migration also
+-- THE BATCHES HAVE DIFFERENT BOOKKEEPING. Batch 1's migration is index-only, so
+-- it takes the `migrate resolve --applied` carve-out. Batch 2's migration also
 -- changes nine foreign keys, so it MUST go through `migrate deploy` and must NEVER
--- be resolved. Step 5 below spells this out; getting it wrong silently skips the
--- foreign-key half. Running this file is safe and idempotent either way.
+-- be resolved. Batch 3's migration also creates "TermSubject", adds
+-- "TermGrade"."termSubjectId" and its FK, and backfills every existing row — also
+-- not index-only, so it too MUST go through `migrate deploy` and must NEVER be
+-- resolved. Step 5 below spells this out; getting it wrong silently skips the
+-- non-index half of whichever batch it is applied to. Running this file is safe
+-- and idempotent regardless of which batches a given database has already taken.
 --
 -- Run this with psql on DIRECT_URL (port 5432 / session mode) BEFORE the
 -- bookkeeping / deploy step. Sibling in spirit to prisma/rls-policies.sql: an
@@ -24,10 +31,11 @@
 --
 --   * Every other environment — CI, fresh clones, local dev, a brand-new
 --     Supabase project — takes `npx prisma migrate deploy`, which applies
---     prisma/migrations/20260823000001_add_perf_indexes/migration.sql and
+--     prisma/migrations/20260823000001_add_perf_indexes/migration.sql,
 --     .../20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/
---     migration.sql. Do NOT run this file there; on an empty or small table a
---     plain CREATE INDEX is instant and the normal path also does the migration
+--     migration.sql, and .../20260915000001_term_subject_table/migration.sql.
+--     Do NOT run this file there; on an empty or small table a plain CREATE
+--     INDEX is instant and the normal path also does the migration
 --     bookkeeping for you.
 --
 -- ============================================================================
@@ -67,14 +75,15 @@
 --      NOT the transaction pooler on 6543.
 --
 --   4. Read the validity table this file prints at the end (the VERIFY section is
---      a live SELECT, so it runs as part of step 3). Expect 14 rows, all valid.
+--      a live SELECT, so it runs as part of step 3). Expect 16 rows, all valid.
 --      Check it before step 5 — step 5 tells Prisma the DDL is done, so a
 --      silently-invalid index would go unnoticed from then on. A zero exit code
 --      is NOT sufficient evidence; look at the rows.
 --
---      Fewer than 14 rows on a database that has only ever taken batch 1 is NOT
---      a partial success — it means this file is newer than the last run. Re-run
---      it; batch 1's statements skip and batch 2's build.
+--      Fewer than 16 rows on a database that has only ever taken batch 1 (or
+--      batches 1-2) is NOT a partial success — it means this file is newer than
+--      the last run. Re-run it; the batches already taken skip and the new one
+--      builds.
 --
 --      BUT: if step 3 exited NON-ZERO, no table was printed at all. ON_ERROR_STOP=1
 --      aborts psql at the first error, and the VERIFY SELECT is the last statement
@@ -99,7 +108,7 @@
 --      error was. Conversely, a zero exit with no table in front of you means
 --      you are not looking at the end of the output, not that the query is missing.
 --
---   5. Bookkeeping — DIFFERENT FOR THE TWO BATCHES. Read both bullets.
+--   5. Bookkeeping — DIFFERENT PER BATCH. Read all three bullets.
 --
 --      BATCH 1 — record the migration as applied WITHOUT re-running its SQL:
 --        npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
@@ -126,6 +135,18 @@
 --      Read that migration's header before running it — it takes brief ACCESS
 --      EXCLUSIVE locks on nine tables and on "User", inside one transaction, so
 --      it wants a low-traffic window.
+--
+--      BATCH 3 — *** DO NOT RESOLVE. Run `npx prisma migrate deploy`. ***
+--
+--      20260915000001_term_subject_table is NOT index-only either: alongside
+--      these two indexes it creates "TermSubject", adds nullable
+--      "TermGrade"."termSubjectId" with its FK, seeds 8 default subjects per
+--      "GradeLevel", and backfills every existing "TermGrade" row. Resolving
+--      it would mark it done while silently skipping all of that, leaving
+--      "TermGrade"."termSubjectId" NULL everywhere and no "TermSubject" table
+--      for the app to read — a P2021/P2022 outage the moment the term-subjects
+--      code deploys. Running this file first only pre-builds the two indexes;
+--      `prisma migrate deploy` still applies the rest of that migration.
 --
 --   6. `npx prisma migrate status` again — expect no pending migrations.
 --
@@ -166,13 +187,15 @@
 -- batch 1 in prisma/migrations/20260823000001_add_perf_indexes/migration.sql,
 -- batch 2 in prisma/migrations/
 -- 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/
--- migration.sql — and all were
--- taken from `prisma migrate diff --script` output generated from
--- prisma/schema.prisma. That is what makes the migration's IF NOT EXISTS a real
--- safety net rather than decoration: after this file runs, the migration becomes
--- a no-op on this database. Rename an index in one file and you must rename it
--- in the other and in schema.prisma (via @@index ordering), or the two apply
--- paths diverge and you get duplicate indexes under different names.
+-- migration.sql, batch 3 in
+-- prisma/migrations/20260915000001_term_subject_table/migration.sql — and all
+-- were taken from `prisma migrate diff --script` output generated from
+-- prisma/schema.prisma. That is what makes each migration's IF NOT EXISTS a
+-- real safety net rather than decoration: after this file runs, the matching
+-- statements in the migration become no-ops on this database. Rename an index
+-- in one file and you must rename it in the other and in schema.prisma (via
+-- @@index/@@unique ordering), or the two apply paths diverge and you get
+-- duplicate indexes under different names.
 
 -- ============================================================================
 -- BATCH 1 — R6 / Phase 4 (migration 20260823000001_add_perf_indexes)
@@ -243,6 +266,29 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "User_deletedAt_idx" ON "User"("deletedA
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "Learner_deletedAt_idx" ON "Learner"("deletedAt");
 
 -- ============================================================================
+-- BATCH 3 — term-subjects (migration 20260915000001_term_subject_table)
+--
+-- These two are the reason to run this file again on a database that already
+-- took batches 1-2. Their statements above skip harmlessly.
+--
+-- REMINDER: after this file, batch 3 needs `prisma migrate deploy`, NOT
+-- `migrate resolve --applied`. Its migration also creates "TermSubject",
+-- alters "TermGrade" and backfills every existing row — see the note in
+-- APPLY ORDER step 5 above.
+-- ============================================================================
+
+-- The new ON CONFLICT target `saveTermGrades` upserts on: one row per
+-- learner/year/term/subject. "TermGrade" already needed a CONCURRENTLY build
+-- once before (TermGrade_recordedById_idx, batch 1), so this one gets the
+-- same treatment rather than an ACCESS EXCLUSIVE build on a populated table.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_learnerId_schoolYearId_term_termSubjectId_key" ON "TermGrade"("learnerId", "schoolYearId", "term", "termSubjectId");
+
+-- FK lookup side for the new "termSubjectId" -> "TermSubject" relation, and
+-- what `saveTermGrades`' per-subject clear and the reports grouping query
+-- filter on.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_termSubjectId_idx" ON "TermGrade"("termSubjectId");
+
+-- ============================================================================
 -- VERIFY — runs automatically as part of this file, BEFORE `migrate resolve`
 -- ============================================================================
 --
@@ -257,13 +303,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Learner_deletedAt_idx" ON "Learner"("de
 --
 -- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
---   Expect exactly 14 rows, every one with valid = t.
+--   Expect exactly 16 rows, every one with valid = t.
 --
---   Fewer than 14 rows => that index was never built. Re-run this whole file
+--   Fewer than 16 rows => that index was never built. Re-run this whole file
 --                         (every statement is IF NOT EXISTS-guarded). Exactly 12
---                         rows, all of them batch 1, is the expected state of a
---                         database that last ran the pre-batch-2 version of this
---                         file — the same remedy applies.
+--                         rows (batch 1 only) or 14 rows (batches 1-2) is the
+--                         expected state of a database that last ran an earlier
+--                         version of this file — the same remedy applies.
 --   valid = f          => that build FAILED. Drop it with
 --                         DROP INDEX CONCURRENTLY (see "IF A BUILD FAILS" above,
 --                         and note it needs psql for the same transaction
@@ -306,6 +352,8 @@ WHERE c.relname IN (
   'Notification_actorId_idx',
   'AuditLog_timestamp_idx',
   'User_deletedAt_idx',
-  'Learner_deletedAt_idx'
+  'Learner_deletedAt_idx',
+  'TermGrade_learnerId_schoolYearId_term_termSubjectId_key',
+  'TermGrade_termSubjectId_idx'
 )
 ORDER BY c.relname;

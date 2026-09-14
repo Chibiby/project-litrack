@@ -44,6 +44,14 @@ export interface SchoolHeadPageProps {
   tabs?: SchoolHeadTab[];
   activeTab?: string;
   /**
+   * Overrides the drill-down badge's trailing caption, which defaults to
+   * "read-only" — true for every page except this one so far. Term Subjects is
+   * the deliberate exception: a Super Admin viewing a school through
+   * `?schoolId=` may edit that school's subject list (every edit audited), so
+   * the caption there must say so instead of claiming a lock that is not real.
+   */
+  superAdminCaption?: string;
+  /**
    * Replaces the default vertical rhythm outright, e.g. for a top-level grid.
    * A replacement rather than a merge: `space-y-6` and `grid` both applying
    * would put stray top margins on every wrapped grid row.
@@ -74,6 +82,7 @@ export function SchoolHeadPage({
   callout,
   tabs,
   activeTab,
+  superAdminCaption,
   contentClassName,
   children,
 }: SchoolHeadPageProps) {
@@ -93,7 +102,7 @@ export function SchoolHeadPage({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="secondary">Super Admin view</Badge>
               <span className="text-xs text-muted-foreground">
-                {view.schoolName ?? "Unknown school"} · read-only
+                {view.schoolName ?? "Unknown school"} · {superAdminCaption ?? "read-only"}
               </span>
             </div>
           ) : null}

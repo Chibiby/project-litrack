@@ -6,13 +6,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
-import {
-  LEARNING_AREA_LABELS,
-  LEARNING_AREA_ORDER,
-} from "@/lib/constants/enum-labels";
+import { getSheetSubjects, healLegacyTermGrades } from "@/lib/terms/subjects-db";
 import { nameSearchWhere, sectionIdWhere } from "@/lib/learners/pagination";
 import {
   getAdvisoryPlacements,
@@ -52,6 +51,8 @@ const NO_SCHOOL_YEAR_MESSAGE =
 const WRONG_GRADE_MESSAGE = "You are not assigned to this grade level";
 const NOT_IN_ADVISORY_MESSAGE =
   "One or more learners are not in your advisory section";
+const STALE_SUBJECTS_MESSAGE =
+  "One or more subjects are no longer on this sheet. Reload the page.";
 
 /**
  * The gate every teacher entry point re-derives: they must be a DepEd teacher
@@ -207,13 +208,25 @@ export async function saveTermGrades(
     return { ok: false, error: NOT_IN_ADVISORY_MESSAGE };
   }
 
+  // Every posted subject must be live on THIS grade's sheet in THIS school. Fail
+  // the whole batch — same reasoning as the roster check above. The raw write
+  // re-checks inside the statement, which catches an archive mid-save.
+  const sheetSubjects = await getSheetSubjects(prisma, {
+    schoolId: user.schoolId,
+    gradeLevelId: advisory.gradeLevelId,
+  });
+  const sheetSubjectIds = new Set(sheetSubjects.map((s) => s.id));
+  if (parsed.data.entries.some((e) => !sheetSubjectIds.has(e.termSubjectId))) {
+    return { ok: false, error: STALE_SUBJECTS_MESSAGE };
+  }
+
   // Split, then dedupe WITHIN each side on the conflict tuple. Deduping across
   // the combined `entries` array would let a clear win over an encoded score and
   // invert the deliberate ordering decision below.
   const saveByTuple = new Map<string, TermGradeEntry & { score: number }>();
   const clearByTuple = new Map<string, TermGradeEntry>();
   for (const entry of parsed.data.entries) {
-    const tuple = `${entry.learnerId}:${schoolYear.id}:${parsed.data.term}:${entry.subject}`;
+    const tuple = `${entry.learnerId}:${schoolYear.id}:${parsed.data.term}:${entry.termSubjectId}`;
     if (entry.score === null) clearByTuple.set(tuple, entry);
     else saveByTuple.set(tuple, { ...entry, score: entry.score });
   }
@@ -223,6 +236,16 @@ export async function saveTermGrades(
   const now = new Date();
   try {
     await prisma.$transaction(async (tx) => {
+      // Adopt scores the pre-TermSubject build saved after M1 (termSubjectId
+      // NULL) BEFORE touching the sheet, so the clear below can reach them and
+      // the upsert conflicts on the termSubjectId unique instead of inserting a
+      // second row. No-op after M2; removed with M3.
+      await healLegacyTermGrades(tx, {
+        schoolId: user.schoolId,
+        gradeLevelId: advisory.gradeLevelId,
+        schoolYearId: schoolYear.id,
+      });
+
       // Deletions run first so that, in the impossible-but-cheap case of a cell
       // arriving twice, the encoded score wins over the clear. Already one
       // set-based statement, so it is left as Prisma rather than rewritten.
@@ -233,8 +256,11 @@ export async function saveTermGrades(
             term: parsed.data.term,
             OR: toClear.map((e) => ({
               learnerId: e.learnerId,
-              subject: e.subject,
+              termSubjectId: e.termSubjectId,
             })),
+            // Only this grade's active subjects: a clear can never reach a score
+            // stored under another grade's subject or an archived one.
+            termSubject: { gradeLevelId: advisory.gradeLevelId, deletedAt: null },
           },
         });
       }
@@ -251,7 +277,7 @@ export async function saveTermGrades(
               ${e.learnerId}::text,
               ${schoolYear.id}::text,
               ${parsed.data.term}::text::"TermPeriod",
-              ${e.subject}::text::"LearningArea",
+              ${e.termSubjectId}::text,
               ${e.score}::integer,
               ${user.id}::text,
               ${now}::timestamp(3)
@@ -264,15 +290,34 @@ export async function saveTermGrades(
         // would be the entire tenant boundary for a raw write. The `RETURNING`
         // count check below turns any excluded row into a rollback rather than a
         // partial commit.
+        //
+        // `subject` mirrors the TermSubject's `legacyArea` (NULL for a custom
+        // subject) so the previous build's client, which declares `subject`
+        // non-null, can still read these rows during a rollout or revert, and
+        // the old subject unique keeps meaning something until M2 drops it.
+        // It falls back to NULL only when ANOTHER row already holds this
+        // (learner, year, term, subject) under a different termSubjectId — a
+        // learner who moved grades mid-term, or a legacy row the heal had to
+        // skip — because writing the area there would violate
+        // "TermGrade_learnerId_schoolYearId_term_subject_key", which
+        // ON CONFLICT on the termSubjectId unique does not arbitrate.
         const written = await tx.$queryRaw<{ id: string }[]>`
           INSERT INTO "TermGrade" (
-            "id", "learnerId", "schoolYearId", "term", "subject", "score",
-            "recordedById", "updatedAt"
+            "id", "learnerId", "schoolYearId", "term", "termSubjectId", "subject",
+            "score", "recordedById", "updatedAt"
           )
-          SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."subject",
+          SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."termSubjectId",
+                 CASE WHEN EXISTS (
+                   SELECT 1 FROM "TermGrade" o
+                   WHERE o."learnerId" = v."learnerId"
+                     AND o."schoolYearId" = v."schoolYearId"
+                     AND o."term" = v."term"
+                     AND o."subject" = ts."legacyArea"
+                     AND o."termSubjectId" IS DISTINCT FROM v."termSubjectId"
+                 ) THEN NULL ELSE ts."legacyArea" END,
                  v."score", v."recordedById", v."updatedAt"
           FROM (VALUES ${values}) AS v (
-            "id", "learnerId", "schoolYearId", "term", "subject", "score",
+            "id", "learnerId", "schoolYearId", "term", "termSubjectId", "score",
             "recordedById", "updatedAt"
           )
           JOIN "Learner" l
@@ -282,8 +327,16 @@ export async function saveTermGrades(
            AND l."sectionId" = ${advisory.sectionId}
            AND l."deletedAt" IS NULL
            AND l."archivedAt" IS NULL
-          ON CONFLICT ("learnerId", "schoolYearId", "term", "subject") DO UPDATE SET
+          JOIN "TermSubject" ts
+            ON ts."id" = v."termSubjectId"
+           AND ts."schoolId" = ${user.schoolId}
+           AND ts."gradeLevelId" = ${advisory.gradeLevelId}
+           AND ts."deletedAt" IS NULL
+          ON CONFLICT ("learnerId", "schoolYearId", "term", "termSubjectId") DO UPDATE SET
             "score" = EXCLUDED."score",
+            -- Non-null EXCLUDED means no other row holds this area (checked
+            -- above), so taking it is safe; NULL keeps what the row had.
+            "subject" = COALESCE(EXCLUDED."subject", "TermGrade"."subject"),
             "recordedById" = EXCLUDED."recordedById",
             "updatedAt" = EXCLUDED."updatedAt"
           RETURNING "id"
@@ -354,11 +407,6 @@ export async function saveTermGrades(
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
 
   return { ok: true, data: { saved: toSave.length, cleared: toClear.length } };
-}
-
-/** Label for a learning area, tolerant of a key the label map has not got. */
-function learningAreaLabel(subject: string): string {
-  return (LEARNING_AREA_LABELS as Record<string, string>)[subject] ?? subject;
 }
 
 /**
@@ -458,6 +506,35 @@ export async function exportTermGrades(
   );
   if (!window) return { ok: false, error: "Invalid input" };
 
+  // Both branches above verified `gradeLevelId` belongs to `schoolId`. Seeded
+  // BEFORE the grade read so the id filter below is the sheet's real column set.
+  const subjects = await getSheetSubjects(prisma, {
+    schoolId,
+    gradeLevelId: parsed.data.gradeLevelId,
+  });
+  const subjectIds = subjects.map((s) => s.id);
+  // Same pre-M2 adoption as the save path, so a score the previous build saved
+  // is in the workbook. No-op after M2; removed with M3.
+  //
+  // Best-effort: export is a read. A failed UPDATE here must not turn a sheet
+  // that only needed exporting into an error — log it for an admin and export
+  // whatever is already pointed at a TermSubject. The save path's heal call
+  // stays fatal (it runs inside `saveTermGrades`'s transaction): a save that
+  // silently skipped adopting a legacy row could insert a second one instead.
+  try {
+    await healLegacyTermGrades(prisma, {
+      schoolId,
+      gradeLevelId: parsed.data.gradeLevelId,
+      schoolYearId: schoolYear.id,
+    });
+  } catch (err) {
+    reportError(classifyError(err, { verb: "adopt legacy term grades before export" }), {
+      route: "exportTermGrades",
+      userId: user.id,
+      schoolId,
+    });
+  }
+
   const [learners, rows] = await Promise.all([
     prisma.learner.findMany({
       where: rosterWhere,
@@ -468,20 +545,26 @@ export async function exportTermGrades(
       where: {
         schoolYearId: schoolYear.id,
         term: parsed.data.term,
+        // Active subjects of this grade only: archived columns, and scores kept
+        // from a grade the learner moved out of, stay out of the workbook.
+        termSubjectId: { in: subjectIds },
         // Tenancy rides on the same roster clause the learner query uses, so the
         // two can never disagree about which rows belong to this export.
         learner: rosterWhere,
       },
-      select: { learnerId: true, subject: true, score: true },
+      select: { learnerId: true, termSubjectId: true, score: true },
     }),
   ]);
 
   const byLearner = new Map<string, Map<string, number>>();
   for (const row of rows) {
+    if (!row.termSubjectId) continue;
     const cells = byLearner.get(row.learnerId) ?? new Map<string, number>();
-    cells.set(row.subject, row.score);
+    cells.set(row.termSubjectId, row.score);
     byLearner.set(row.learnerId, cells);
   }
+  // Prefixed so a subject id can never collide with a fixed column key.
+  const columnKey = (id: string) => `subject:${id}`;
 
   // Dynamic import keeps exceljs off every other code path in this module.
   const ExcelJS = (await import("exceljs")).default;
@@ -493,9 +576,9 @@ export async function exportTermGrades(
   sheet.columns = [
     { header: "#", key: "index", width: 6 },
     { header: "Complete Name", key: "fullName", width: 30 },
-    ...LEARNING_AREA_ORDER.map((subject) => ({
-      header: learningAreaLabel(subject),
-      key: subject,
+    ...subjects.map((subject) => ({
+      header: subject.name,
+      key: columnKey(subject.id),
       width: 16,
     })),
     { header: "General Average", key: "average", width: 18 },
@@ -504,15 +587,13 @@ export async function exportTermGrades(
 
   learners.forEach((learner, index) => {
     const cells = byLearner.get(learner.id);
-    const scores = LEARNING_AREA_ORDER.map(
-      (subject) => cells?.get(subject) ?? null
-    );
+    const scores = subjects.map((subject) => cells?.get(subject.id) ?? null);
     const row: Record<string, string | number> = {
       index: index + 1,
       fullName: learner.fullName,
     };
-    LEARNING_AREA_ORDER.forEach((subject, i) => {
-      row[subject] = scores[i] ?? "";
+    subjects.forEach((subject, i) => {
+      row[columnKey(subject.id)] = scores[i] ?? "";
     });
     row.average = generalAverage(scores) ?? "";
     sheet.addRow(row);

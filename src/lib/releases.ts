@@ -74,6 +74,19 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.15.0",
+    date: "2026-09-15",
+    title: "School Heads can now set the subjects on End of Terms Reports",
+    announce: true,
+    fixes: [
+      "School Heads have a new Term Subjects page where they can add, rename, reorder and remove the subjects on each grade's End of Terms sheet.",
+      "Each grade can have its own list of subjects. Every grade starts with the same eight subjects as before.",
+      "Removing a subject hides it from the sheet, the export, the reports and the general average. Grades already entered are kept and come back if the subject is restored.",
+      "Renaming a subject keeps every grade already entered under it.",
+      "End of Terms sheets and exports now show the subjects your School Head has set for your grade.",
+    ],
+  },
+  {
     version: "1.14.0",
     date: "2026-09-14",
     title: "New reading levels for Kinder to Grade 2 and Senior High",

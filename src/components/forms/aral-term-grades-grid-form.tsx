@@ -19,10 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  LEARNING_AREA_LABELS,
-  LEARNING_AREA_ORDER,
-} from "@/lib/constants/enum-labels";
 import { generalAverage } from "@/lib/terms/average";
 import { saveTermGrades } from "@/lib/actions/term-grades";
 import type { TermGradesSaveInput } from "@/lib/validators/term-grade.schema";
@@ -43,7 +39,8 @@ const TONE_FAILING =
 
 export type TermKey = "FIRST" | "SECOND" | "THIRD";
 
-type LearningArea = (typeof LEARNING_AREA_ORDER)[number];
+/** One column of the sheet — a School Head-managed `TermSubject`. */
+export type TermGradesGridSubject = { id: string; name: string };
 
 export type TermGradesGridLearner = {
   id: string;
@@ -53,28 +50,25 @@ export type TermGradesGridLearner = {
 
 export type TermGradesGridExisting = {
   learnerId: string;
-  subject: string;
+  termSubjectId: string;
   score: number;
 };
 
 export type AralTermGradesGridFormHandle = { save: () => void };
 
 /** A cell holds the raw input string so an emptied cell stays distinct from a 0. */
-type RowState = Partial<Record<LearningArea, string>>;
-
-function isLearningArea(value: string): value is LearningArea {
-  return LEARNING_AREA_ORDER.some((subject) => subject === value);
-}
+type RowState = Record<string, string>;
 
 function toRows(
   learners: TermGradesGridLearner[],
-  existing: TermGradesGridExisting[]
+  existing: TermGradesGridExisting[],
+  subjectIds: ReadonlySet<string>
 ): Record<string, RowState> {
   const byLearner = new Map<string, RowState>();
   for (const record of existing) {
-    if (!isLearningArea(record.subject)) continue;
+    if (!subjectIds.has(record.termSubjectId)) continue;
     const row = byLearner.get(record.learnerId) ?? {};
-    row[record.subject] = String(record.score);
+    row[record.termSubjectId] = String(record.score);
     byLearner.set(record.learnerId, row);
   }
 
@@ -85,8 +79,8 @@ function toRows(
   return init;
 }
 
-function cellValue(row: RowState | undefined, subject: LearningArea): string {
-  return row?.[subject] ?? "";
+function cellValue(row: RowState | undefined, subjectId: string): string {
+  return row?.[subjectId] ?? "";
 }
 
 /** Whole number inside the recordable range. Anything else is refused on save. */
@@ -95,10 +89,13 @@ function isValidScore(raw: string): boolean {
   return Number.isInteger(value) && value >= SCORE_MIN && value <= SCORE_MAX;
 }
 
-function rowAverage(row: RowState | undefined): number | null {
+function rowAverage(
+  row: RowState | undefined,
+  subjects: TermGradesGridSubject[]
+): number | null {
   const scores: number[] = [];
-  for (const subject of LEARNING_AREA_ORDER) {
-    const raw = cellValue(row, subject).trim();
+  for (const subject of subjects) {
+    const raw = cellValue(row, subject.id).trim();
     if (!raw || !isValidScore(raw)) continue;
     scores.push(Number(raw));
   }
@@ -108,6 +105,7 @@ function rowAverage(row: RowState | undefined): number | null {
 type Props = {
   gradeLevelId: string;
   term: TermKey;
+  subjects: TermGradesGridSubject[];
   learners: TermGradesGridLearner[];
   initialGrades: TermGradesGridExisting[];
   /** Row-number offset so numbering continues across pages. */
@@ -123,6 +121,7 @@ export const AralTermGradesGridForm = forwardRef<
   {
     gradeLevelId,
     term,
+    subjects,
     learners,
     initialGrades,
     indexOffset = 0,
@@ -133,21 +132,24 @@ export const AralTermGradesGridForm = forwardRef<
 ) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const subjectIds = new Set(subjects.map((s) => s.id));
   /**
    * What the sheet looked like when it loaded. Saves send the difference, so an
    * untouched cell is never rewritten and "No changes to save" is honest.
    */
-  const [initial, setInitial] = useState(() => toRows(learners, initialGrades));
+  const [initial, setInitial] = useState(() =>
+    toRows(learners, initialGrades, subjectIds)
+  );
   const [rows, setRows] = useState(initial);
 
   useEffect(() => {
     onSavePendingChange?.(pending);
   }, [pending, onSavePendingChange]);
 
-  function setScore(learnerId: string, subject: LearningArea, value: string) {
+  function setScore(learnerId: string, subjectId: string, value: string) {
     setRows((prev) => ({
       ...prev,
-      [learnerId]: { ...(prev[learnerId] ?? {}), [subject]: value },
+      [learnerId]: { ...(prev[learnerId] ?? {}), [subjectId]: value },
     }));
   }
 
@@ -158,19 +160,27 @@ export const AralTermGradesGridForm = forwardRef<
     const invalid: string[] = [];
 
     for (const learner of learners) {
-      for (const subject of LEARNING_AREA_ORDER) {
-        const before = cellValue(initial[learner.id], subject).trim();
-        const after = cellValue(rows[learner.id], subject).trim();
+      for (const subject of subjects) {
+        const before = cellValue(initial[learner.id], subject.id).trim();
+        const after = cellValue(rows[learner.id], subject.id).trim();
         if (before === after) continue;
         if (after === "") {
-          entries.push({ learnerId: learner.id, subject, score: null });
+          entries.push({
+            learnerId: learner.id,
+            termSubjectId: subject.id,
+            score: null,
+          });
           continue;
         }
         if (!isValidScore(after)) {
           if (!invalid.includes(learner.fullName)) invalid.push(learner.fullName);
           continue;
         }
-        entries.push({ learnerId: learner.id, subject, score: Number(after) });
+        entries.push({
+          learnerId: learner.id,
+          termSubjectId: subject.id,
+          score: Number(after),
+        });
       }
     }
 
@@ -215,6 +225,7 @@ export const AralTermGradesGridForm = forwardRef<
     readOnly,
     pending,
     learners,
+    subjects,
     initial,
     rows,
     gradeLevelId,
@@ -223,6 +234,14 @@ export const AralTermGradesGridForm = forwardRef<
   ]);
 
   useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
+
+  if (subjects.length === 0) {
+    return (
+      <p className="p-4 text-sm text-muted-foreground">
+        Your School Head has not set subjects for this grade.
+      </p>
+    );
+  }
 
   if (learners.length === 0) {
     return (
@@ -241,7 +260,7 @@ export const AralTermGradesGridForm = forwardRef<
               Learner
             </TableHead>
             <TableHead
-              colSpan={LEARNING_AREA_ORDER.length}
+              colSpan={subjects.length}
               scope="colgroup"
               className="border-l border-border/60 text-center"
             >
@@ -262,15 +281,15 @@ export const AralTermGradesGridForm = forwardRef<
           <TableRow>
             <TableHead className="w-10">#</TableHead>
             <TableHead className="min-w-[200px]">Complete Name</TableHead>
-            {LEARNING_AREA_ORDER.map((subject, index) => (
+            {subjects.map((subject, index) => (
               <TableHead
-                key={subject}
+                key={subject.id}
                 className={cn(
                   "min-w-[104px] text-center",
                   index === 0 && "border-l border-border/60"
                 )}
               >
-                {LEARNING_AREA_LABELS[subject]}
+                {subject.name}
               </TableHead>
             ))}
           </TableRow>
@@ -278,21 +297,21 @@ export const AralTermGradesGridForm = forwardRef<
         <TableBody>
           {learners.map((learner, index) => {
             const row = rows[learner.id];
-            const average = rowAverage(row);
+            const average = rowAverage(row, subjects);
             return (
               <TableRow key={learner.id}>
                 <TableCell className="text-sm text-muted-foreground tabular-nums">
                   {indexOffset + index + 1}
                 </TableCell>
                 <TableCell className="font-medium">{learner.fullName}</TableCell>
-                {LEARNING_AREA_ORDER.map((subject, subjectIndex) => {
-                  const raw = cellValue(row, subject);
+                {subjects.map((subject, subjectIndex) => {
+                  const raw = cellValue(row, subject.id);
                   const trimmed = raw.trim();
                   const valid = trimmed !== "" && isValidScore(trimmed);
                   const failing = valid && Number(trimmed) < PASSING_SCORE;
                   return (
                     <TableCell
-                      key={subject}
+                      key={subject.id}
                       className={cn(
                         subjectIndex === 0 && "border-l border-border/60"
                       )}
@@ -306,9 +325,9 @@ export const AralTermGradesGridForm = forwardRef<
                         value={raw}
                         disabled={readOnly || pending}
                         onChange={(e) =>
-                          setScore(learner.id, subject, e.target.value)
+                          setScore(learner.id, subject.id, e.target.value)
                         }
-                        aria-label={`${learner.fullName} — ${LEARNING_AREA_LABELS[subject]} grade`}
+                        aria-label={`${learner.fullName} — ${subject.name} grade`}
                         aria-invalid={trimmed !== "" && !valid}
                         title={
                           failing

@@ -9,24 +9,18 @@ import {
  * not its floor, and a 75 floor would make a failing learner unrecordable and
  * push teachers into entering a false 75. These tests pin the exact boundaries so
  * a later "tidy-up" to 75 fails loudly instead of silently.
+ *
+ * Subjects are posted by `termSubjectId` — the School Head-managed `TermSubject`
+ * row id — not the old `LearningArea` enum. The schema only asserts shape; the
+ * server re-checks every id against the grade's active list
+ * (docs/superpowers/specs/2026-09-14-term-subjects-management-design.md §5, §7).
  */
-
-const LEARNING_AREAS = [
-  "ENGLISH",
-  "FILIPINO",
-  "MATHEMATICS",
-  "SCIENCE",
-  "ARALING_PANLIPUNAN",
-  "EDUKASYON_SA_PAGPAPAKATAO",
-  "MAPEH",
-  "TLE",
-] as const;
 
 const TERMS = ["FIRST", "SECOND", "THIRD"] as const;
 
 const validEntry = {
   learnerId: "learner-1",
-  subject: "ENGLISH" as const,
+  termSubjectId: "subject-english",
   score: 90,
 };
 
@@ -48,6 +42,7 @@ describe("termGradesSaveSchema", () => {
     if (!result.success) return;
     expect(result.data.entries).toHaveLength(1);
     expect(result.data.entries[0].score).toBe(90);
+    expect(result.data.entries[0].termSubjectId).toBe("subject-english");
     expect(result.data.term).toBe("FIRST");
   });
 
@@ -79,24 +74,40 @@ describe("termGradesSaveSchema", () => {
     expect(termGradesSaveSchema.safeParse(withScore(99.999)).success).toBe(false);
   });
 
-  it("accepts the eight learning areas and rejects anything else", () => {
-    for (const subject of LEARNING_AREAS) {
+  it("accepts any non-blank termSubjectId string — the server re-checks it against the sheet", () => {
+    // The schema only asserts shape now: subjects are School Head-managed rows,
+    // not a fixed enum, so the set of legal ids cannot be known statically.
+    for (const termSubjectId of ["subject-english", "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "x"]) {
       const result = termGradesSaveSchema.safeParse({
         ...validSave,
-        entries: [{ ...validEntry, subject }],
+        entries: [{ ...validEntry, termSubjectId }],
       });
-      expect(result.success, `${subject} should be accepted`).toBe(true);
+      expect(result.success, `${termSubjectId} should be accepted`).toBe(true);
     }
+  });
 
-    // "ARALPAN" and "TECHVOC" belong to the dead teacher-survey `Subject` enum;
-    // this feature must not accept them.
-    for (const subject of ["ARALPAN", "TECHVOC", "MUSIC", "english", ""]) {
-      const result = termGradesSaveSchema.safeParse({
+  it("rejects a blank or missing termSubjectId", () => {
+    expect(
+      termGradesSaveSchema.safeParse({
         ...validSave,
-        entries: [{ ...validEntry, subject }],
-      });
-      expect(result.success, `${subject} should be rejected`).toBe(false);
-    }
+        entries: [{ ...validEntry, termSubjectId: "" }],
+      }).success
+    ).toBe(false);
+    const { termSubjectId: _drop, ...withoutSubject } = validEntry;
+    expect(
+      termGradesSaveSchema.safeParse({ ...validSave, entries: [withoutSubject] }).success
+    ).toBe(false);
+  });
+
+  it("no longer accepts the old subject enum key at all — subject is not a recognised field", () => {
+    // A stale client posting the pre-migration shape (`subject: "ENGLISH"`
+    // instead of `termSubjectId`) must fail validation, not silently pass
+    // through as an entry with no subject.
+    const legacyShaped = {
+      ...validSave,
+      entries: [{ learnerId: "learner-1", subject: "ENGLISH", score: 90 }],
+    };
+    expect(termGradesSaveSchema.safeParse(legacyShaped).success).toBe(false);
   });
 
   it("accepts the three terms and rejects anything else", () => {
@@ -141,6 +152,47 @@ describe("termGradesSaveSchema", () => {
         entries: [{ ...validEntry, learnerId: "" }],
       }).success
     ).toBe(false);
+  });
+
+  describe("the 1500-entry cap", () => {
+    // 100 learners x 15 subjects (the per-grade cap, MAX_ACTIVE_SUBJECTS_PER_GRADE)
+    // = 1500 — the worst legitimate payload is one full page re-typed at the new,
+    // higher per-grade subject cap. The old ceiling was 1000 (100 x the fixed 8
+    // learning areas); this pins the new one explicitly so a partial rebase of
+    // the schema cannot silently leave it at the old value.
+    function entriesOfLength(n: number) {
+      return Array.from({ length: n }, (_, i) => ({
+        learnerId: `learner-${i}`,
+        termSubjectId: "subject-english",
+        score: 87,
+      }));
+    }
+
+    it("accepts exactly 1500 entries", () => {
+      const result = termGradesSaveSchema.safeParse({
+        ...validSave,
+        entries: entriesOfLength(1500),
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects 1501 entries", () => {
+      const result = termGradesSaveSchema.safeParse({
+        ...validSave,
+        entries: entriesOfLength(1501),
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects the old 1000-entry payload no more strictly than 1500 does — 1200 is now legal", () => {
+      // Guards against the cap having been left at 1000 by mistake: a batch this
+      // shape must be ACCEPTED under the new limit.
+      const result = termGradesSaveSchema.safeParse({
+        ...validSave,
+        entries: entriesOfLength(1200),
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });
 

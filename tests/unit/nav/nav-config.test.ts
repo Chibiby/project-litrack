@@ -680,6 +680,7 @@ describe("getNavGroups — school head", () => {
       "Teachers",
       "ARAL Program",
       "Transfer",
+      "Term Subjects",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
       "Announcements",

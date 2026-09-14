@@ -394,8 +394,13 @@ export function AralReadingLevelSkeleton() {
 
 /**
  * End of terms reports: the term switcher, the auto-lock note, then a grouped
- * two-row header over `#`, Complete Name, the eight learning areas, and the
+ * two-row header over `#`, Complete Name, a run of subject columns, and the
  * General Average. Paginated; no trailing info cards.
+ *
+ * `dataColumns` is a fixed 8 — the School Head-managed default — even though a
+ * grade's real subject count (1–15) is read inside the `<Suspense>` boundary
+ * this skeleton stands in for and is not known yet. An approximation, not a
+ * contract: the real header replaces it as soon as the page streams in.
  */
 export function AralTermGradesSkeleton() {
   return (
