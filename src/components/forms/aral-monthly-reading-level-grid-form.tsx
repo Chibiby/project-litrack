@@ -36,6 +36,7 @@ import {
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
   isEarlyGradeReadingBand,
+  labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import {
   isReadingRecordComplete,
@@ -193,6 +194,32 @@ function profileBandFor(gradeType: string): BandOption[] {
     label: option.label,
     tone: rampTone(index, options.length),
   }));
+}
+
+/**
+ * A stored value the grade no longer offers (a Grade 1/Grade 2 row saved under
+ * the letter/word rubric before 1.16.0) is appended to that row's options
+ * under its original label, so the cell shows what is saved instead of
+ * "Not assessed" and the server-side legacy carve-out stays reachable.
+ * Mirrors `optionsWithLegacyValue` in learner-form.tsx.
+ */
+export function bandWithLegacyValue(
+  band: BandOption[],
+  storedValue: string,
+  gradeType: string
+): BandOption[] {
+  if (!storedValue || band.some((option) => option.value === storedValue)) {
+    return band;
+  }
+  return [
+    ...band,
+    {
+      value: storedValue,
+      code: PROFILE_CODES_EARLY_RUBRIC[storedValue] ?? storedValue,
+      label: labelReadingProfile(storedValue, gradeType),
+      tone: TONE_EMPTY,
+    },
+  ];
 }
 
 export type MonthlyReadingLevelGridLearner = {
@@ -495,7 +522,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
         {includesEnglish ? (
           <TableCell>
             <BandSelect
-              options={profileBand}
+              options={bandWithLegacyValue(profileBand, row.englishProfile, gradeType)}
               value={row.englishProfile}
               disabled={readOnly || pending}
               label={`${learner.fullName} — English reading level`}
@@ -505,7 +532,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
         ) : null}
         <TableCell>
           <BandSelect
-            options={profileBand}
+            options={bandWithLegacyValue(profileBand, row.filipinoProfile, gradeType)}
             value={row.filipinoProfile}
             disabled={readOnly || pending}
             label={`${learner.fullName} — Filipino reading level`}

@@ -604,11 +604,11 @@ describe("bulkRecordMonthlyReadingLevel — clear is a full hard delete (owner d
 
 describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed this session)", () => {
   it("accepts a stored-but-now-out-of-policy value when it is UNCHANGED", async () => {
-    // learner-a sits in Grade 1, which now only accepts the early rubric —
+    // learner-a sits in Kinder, which only accepts the early rubric —
     // but already holds a pre-rubric CRLA band this month. Resubmitting that
     // SAME value (the grid resubmits every on-screen row on every save,
     // untouched or not) must not fail the whole batch.
-    learnerGradeTypes = { "learner-a": "G1" };
+    learnerGradeTypes = { "learner-a": "KINDER" };
     existingReadingLevelRows = [
       { learnerId: "learner-a", englishProfile: null, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" },
     ];
@@ -626,7 +626,7 @@ describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed
   it("still rejects the same out-of-policy value when it is CHANGED", async () => {
     // Same learner, same stored legacy value — but this save tries to WRITE a
     // different out-of-policy value, which must still be refused.
-    learnerGradeTypes = { "learner-a": "G1" };
+    learnerGradeTypes = { "learner-a": "KINDER" };
     existingReadingLevelRows = [
       { learnerId: "learner-a", englishProfile: null, filipinoProfile: "NON_DECODER_LOW_EMERGENT" },
     ];
@@ -635,7 +635,7 @@ describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed
       entry("learner-a", {
         englishProfile: undefined,
         // Different legacy value than what is stored, and still not in the
-        // Grade 1 rubric -- must be refused, not silently let through.
+        // Kinder rubric -- must be refused, not silently let through.
         filipinoProfile: "INSTRUCTIONAL_DEVELOPING",
       }),
     ]);
@@ -647,7 +647,7 @@ describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed
   });
 
   it("still rejects a genuinely new out-of-policy value with no existing row to compare against", async () => {
-    learnerGradeTypes = { "learner-a": "G1" };
+    learnerGradeTypes = { "learner-a": "KINDER" };
     existingReadingLevelRows = [];
 
     const res = await post([
@@ -664,7 +664,7 @@ describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed
   });
 
   it("accepts a value that is genuinely in-policy for the learner's grade", async () => {
-    learnerGradeTypes = { "learner-a": "G1" };
+    learnerGradeTypes = { "learner-a": "KINDER" };
     existingReadingLevelRows = [];
 
     const res = await post([

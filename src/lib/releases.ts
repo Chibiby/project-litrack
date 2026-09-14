@@ -74,6 +74,20 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.16.0",
+    date: "2026-09-15",
+    title: "Grade 1 and Grade 2 reading levels match Grade 3, and teacher changes stick",
+    announce: true,
+    fixes: [
+      "Grade 1 and Grade 2 reading levels now use the same levels as Grade 3. They still record Filipino only.",
+      "Kinder reading levels are unchanged.",
+      "On the Teachers page, a teacher's advisory no longer snaps back to the old value after you change it.",
+      "A teacher you deactivate or remove no longer reappears in the list a moment later.",
+      "A declined teacher you allow to register again now leaves the Declined list right away.",
+      "The Teachers page has a new Refresh button that loads the latest teacher details without reloading the page.",
+    ],
+  },
+  {
     version: "1.15.0",
     date: "2026-09-15",
     title: "School Heads can now set the subjects on End of Terms Reports",

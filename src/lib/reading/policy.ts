@@ -21,7 +21,7 @@ import {
 
 export type ReadingLanguage = "ENGLISH" | "FILIPINO";
 
-/** Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md section 2a). */
+/** Kinder letter/word rubric (docs/reading-policy-spec.md section 2a). */
 export const EARLY_RUBRIC_VALUES = [
   "CANNOT_NAME_SOUND_LETTERS",
   "LETTER_LEVEL",
@@ -36,7 +36,7 @@ export const SHS_ALLOWED_VALUES = [
   "INDEPENDENT_GRADE_READY",
 ] as const;
 
-/** The original four members, offered unrestricted (Kinder is early-rubric-only; G3-G10/FLOATING use this set). */
+/** The original four members, offered unrestricted (G1-G10 and FLOATING; Kinder is early-rubric-only). */
 export const STANDARD_VALUES = [
   "NON_DECODER_LOW_EMERGENT",
   "FRUSTRATION_HIGH_EMERGENT",
@@ -44,7 +44,7 @@ export const STANDARD_VALUES = [
   "INDEPENDENT_GRADE_READY",
 ] as const;
 
-const EARLY_RUBRIC_GRADE_TYPES = new Set(["KINDER", "G1", "G2"]);
+const EARLY_RUBRIC_GRADE_TYPES = new Set(["KINDER"]);
 const ENGLISH_EXCLUDED_GRADE_TYPES = new Set(["G1", "G2"]);
 const SHS_GRADE_TYPES = new Set(["G11", "G12"]);
 
@@ -60,8 +60,9 @@ export function languagesForGrade(gradeType: string): ReadingLanguage[] {
 }
 
 /**
- * Kinder/G1/G2 -> the new letter/word rubric; G11/G12 -> the restricted SHS
- * three; everything else -> the original four, unrestricted.
+ * Kinder -> the letter/word rubric; G11/G12 -> the restricted SHS
+ * three; everything else (G1-G10, FLOATING) -> the original four. G1/G2 share
+ * G3's levels and labels but stay Filipino-only (languagesForGrade).
  */
 export function allowedReadingValuesForGrade(gradeType: string): readonly string[] {
   if (EARLY_RUBRIC_GRADE_TYPES.has(gradeType)) {

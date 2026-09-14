@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -27,9 +27,10 @@ import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { advisoryCapFor, advisoryCapReason } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL, UNASSIGNED_CHIP_LABEL } from "@/lib/teachers/floating-copy";
 import { removalAdvisoryNote } from "@/lib/teachers/removal-copy";
+import { resyncOverrides, signaturesFor, type RowSignatures } from "@/lib/teachers/row-resync";
 import { TeacherRoleDialog } from "@/components/school-head/teacher-role-dialog";
 import type { TeacherListFilter } from "@/lib/teachers/pagination";
-import { X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
   listOptimisticReducer,
@@ -391,6 +392,7 @@ function TeachersManagedTable({
 }) {
   const router = useRouter();
   const [, startRowTransition] = useTransition();
+  const [refreshing, startRefreshTransition] = useTransition();
   /**
    * `rowId:action` for the request in flight. A single table-wide pending flag
    * disabled every row's controls and spun none of them, so a School Head could
@@ -430,9 +432,26 @@ function TeachersManagedTable({
     setFilterValue(list?.filter ?? "all");
   }, [list?.filter]);
 
-  // Server data wins once it arrives; drop stale overrides.
+  /**
+   * Server data wins once it arrives for a row — but only for *that* row.
+   *
+   * This used to be `setAdvisoryOverrides({})` on every `[rows]` change,
+   * which cleared every row's override on *any* refresh: a different row
+   * saving, a search, a page turn, or the Refresh button below. If this
+   * row's own save had not committed and refreshed yet, that wiped its
+   * still-correct optimistic chip and snapped it back to the stale value
+   * until its own refresh eventually caught up — the production "value
+   * snaps back" bug. Comparing signatures per row means an unrelated
+   * refresh leaves an in-flight row's override alone, and only clears it
+   * once that row's own server data has actually moved.
+   */
+  const rowSignaturesRef = useRef<RowSignatures>(signaturesFor(rows));
   useEffect(() => {
-    setAdvisoryOverrides({});
+    const nextSignatures = signaturesFor(rows);
+    setAdvisoryOverrides((prev) =>
+      resyncOverrides(prev, rowSignaturesRef.current, nextSignatures)
+    );
+    rowSignaturesRef.current = nextSignatures;
   }, [rows]);
 
   const advisoryIdsFor = (row: ActiveTeacherRow): string[] =>
@@ -529,6 +548,12 @@ function TeachersManagedTable({
         res,
         isActive ? "Teacher reactivated" : "Teacher deactivated"
       );
+      // `useOptimistic`'s value reverts to the `rows` prop the moment this
+      // transition settles. Without a refresh, `rows` never moves, so the
+      // row this just removed from view reappears right after — call it
+      // inside the transition so the revert has fresh data to land on
+      // instead of the stale pre-mutation list.
+      router.refresh();
     }).finally(() => setActingKey(null));
   };
 
@@ -540,6 +565,7 @@ function TeachersManagedTable({
       fd.set("userId", row.id);
       const res = await removeTeacher(fd);
       await settleActionResult(res, "Teacher removed");
+      router.refresh();
     }).finally(() => setActingKey(null));
   };
 
@@ -553,6 +579,17 @@ function TeachersManagedTable({
           <div className="text-sm font-medium">
             {title} ({displayCount})
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            loading={refreshing}
+            loadingText="Refreshing…"
+            onClick={() => startRefreshTransition(() => router.refresh())}
+          >
+            {!refreshing ? <RefreshCw className="size-4" aria-hidden /> : null}
+            Refresh
+          </Button>
         </div>
         {list ? (
           <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
@@ -845,6 +882,7 @@ export function TeachersDeclinedTable({
   rows: DeclinedTeacherRow[];
   readOnly?: boolean;
 }) {
+  const router = useRouter();
   const [, startTransition] = useTransition();
   /** The teacher being cleared, so only their row reads as busy. */
   const [actingId, setActingId] = useState<string | null>(null);
@@ -868,6 +906,7 @@ export function TeachersDeclinedTable({
           return;
         }
         toast.success("They can register again");
+        router.refresh();
       } finally {
         setActingId(null);
       }

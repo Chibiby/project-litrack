@@ -38,7 +38,7 @@ describe("languagesForGrade", () => {
 });
 
 describe("allowedReadingValuesForGrade", () => {
-  it("pins the K/1/2 rubric set to exactly the four new members, in rubric order", () => {
+  it("pins the Kinder rubric set to exactly the four new members, in rubric order", () => {
     const expected = [
       "CANNOT_NAME_SOUND_LETTERS",
       "LETTER_LEVEL",
@@ -47,8 +47,18 @@ describe("allowedReadingValuesForGrade", () => {
     ];
     expect(EARLY_RUBRIC_VALUES).toEqual(expected);
     expect(allowedReadingValuesForGrade("KINDER")).toEqual(expected);
-    expect(allowedReadingValuesForGrade("G1")).toEqual(expected);
-    expect(allowedReadingValuesForGrade("G2")).toEqual(expected);
+  });
+
+  it("gives Grade 1 and Grade 2 the same levels and labels as Grade 3", () => {
+    for (const gradeType of ["G1", "G2"]) {
+      expect(allowedReadingValuesForGrade(gradeType), gradeType).toEqual(
+        allowedReadingValuesForGrade("G3")
+      );
+      expect(readingProfileOptionsForGrade(gradeType), gradeType).toEqual(
+        readingProfileOptionsForGrade("G3")
+      );
+      expect(isReadingValueAllowedForGrade("CV_BLENDING", gradeType), gradeType).toBe(false);
+    }
   });
 
   it("pins the SHS set to exactly three original members, excluding NON_DECODER_LOW_EMERGENT", () => {

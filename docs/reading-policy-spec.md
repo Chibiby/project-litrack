@@ -15,6 +15,8 @@ npm run build
 
 Four DepEd-driven changes land on the same surface -- the reading-level data every grade collects -- and they must not bleed into each other:
 
+> **Amended 2026-09-15 (1.15.1):** Grade 1 and Grade 2 no longer use the letter/word rubric. They record the same four levels, with the same labels, as Grade 3, and they stay Filipino-only. Only Kinder keeps the letter/word rubric. Values already saved under the rubric keep their label and stay editable, per the legacy-value rule below.
+
 - Kinder, Grade 1 and Grade 2 stop reporting the CRLA-style four-band profile (`Non-Decoder ... Independent`) and start reporting a four-level letter/word rubric (`Cannot name and sound letters ... CVC blending`).
 - Grade 1 and Grade 2 stop reporting an **English** reading level at all -- Kinder keeps both languages, Grade 3 and up are untouched.
 - Grade 11 and Grade 12 stop offering `Non-Decoder` and rename the remaining three bands (`Independent Level`, `Instructional Level`, `Frustration Level`).
