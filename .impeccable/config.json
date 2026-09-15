@@ -64,7 +64,25 @@
           "src/components/auth/auth-card.tsx"
         ],
         "createdAt": "2026-09-15T16:11:46.069Z",
-        "reason": "Owner's v2 login mockup sets the Sign In title in dark navy (indigo-950) beside a blue-to-sky button; no violet gradient or cyan-on-dark is used"
+        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/forms/login-form.tsx"
+        ],
+        "createdAt": "2026-09-15T16:22:24.577Z",
+        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/auth/login-shell.tsx"
+        ],
+        "createdAt": "2026-09-15T16:22:24.846Z",
+        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
       }
     ]
   }

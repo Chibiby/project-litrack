@@ -16,16 +16,21 @@ export function LoginShell({ children }: { children: React.ReactNode }) {
       className="relative isolate min-h-dvh overflow-x-hidden bg-sky-100"
     >
       {/* Fixed to the viewport, so a phone scrolling a tall card sees the same
-          crop rather than an ever-zooming image. */}
-      <div aria-hidden className="fixed inset-0 -z-10">
-        <Image
-          src="/brand/login-bg.webp"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[42%_center] lg:object-center"
-        />
+          crop rather than an ever-zooming image. The art is drawn 12% taller
+          than the screen and pinned to the top, which drops the building to
+          about two thirds down (the mockup) and keeps the wordmark and
+          tagline in the sky; the extra pavement falls off the bottom. */}
+      <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[112%]">
+          <Image
+            src="/brand/login-bg.webp"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-[42%_top] lg:object-top"
+          />
+        </div>
         {/* A light wash under the text, strongest where the wordmark sits. */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/15 to-transparent lg:bg-gradient-to-r lg:from-white/55 lg:via-white/10 lg:to-transparent" />
       </div>
@@ -70,7 +75,7 @@ function LoginBrand() {
 
       <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:mt-14 lg:text-[6.5rem] xl:text-[7.5rem]">
         <span className="text-indigo-950">LIT</span>
-        <span className="text-blue-600">RACK</span>
+        <span className="text-violet-600">RACK</span>
       </h1>
       <p className="mt-3 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-5 lg:text-xl xl:text-2xl">
         School reading-profiling system for the ARAL Program

@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   AUTH_LABEL,
+  AUTH_LINK,
+  AUTH_PILL,
   AUTH_PRIMARY_BUTTON,
   AuthCard,
   AuthCardHeader,
@@ -71,13 +73,12 @@ function markPostLoginSplash() {
   }
 }
 
-/** The Teachers / School Head toggle: filled blue when picked, outlined when not. */
+/** The Teachers / School Head toggle: the violet pill when picked, outlined when not. */
 const ROLE_OPTION =
   "h-12 w-full rounded-xl text-base font-medium 2xl:h-14 [&_svg]:size-5";
-const ROLE_PICKED =
-  "border-transparent bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-md shadow-blue-600/20 hover:from-blue-700 hover:to-sky-600 hover:text-white";
+const ROLE_PICKED = cn("border-transparent hover:text-white", AUTH_PILL);
 const ROLE_UNPICKED =
-  "border-slate-200 bg-card text-indigo-950 hover:bg-muted/60 hover:text-indigo-950";
+  "border-slate-200 bg-card text-indigo-950 hover:border-violet-200 hover:bg-violet-50 hover:text-indigo-950";
 
 /** The tall, icon-led trigger both pickers share on the first step. */
 const PICKER_TRIGGER =
@@ -491,7 +492,7 @@ export function LoginForm({
           <p className="text-center">
             <Link
               href="/forgot-password"
-              className="text-base font-medium text-blue-600 underline underline-offset-4 hover:text-blue-700"
+              className={cn("text-base", AUTH_LINK)}
             >
               Forgot password?
             </Link>
@@ -500,7 +501,7 @@ export function LoginForm({
           <Button
             asChild
             variant="outline"
-            className="h-12 w-full rounded-xl border-slate-200 bg-muted text-base font-medium text-indigo-950 hover:bg-border/70 hover:text-indigo-950 2xl:h-14 2xl:text-lg [&_svg]:size-5"
+            className="h-12 w-full rounded-xl border-violet-100 bg-violet-50 text-base font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 2xl:h-14 2xl:text-lg [&_svg]:size-5 [&_svg]:text-violet-600"
           >
             <Link href="/admin/login">
               <ShieldCheck aria-hidden />
@@ -561,8 +562,8 @@ export function LoginForm({
                 Sign in
               </Button>
             </form>
-            <p className="text-center text-xs text-muted-foreground">
-              <Link href="/forgot-password" className="underline hover:text-foreground">
+            <p className="text-center">
+              <Link href="/forgot-password" className={cn("text-sm", AUTH_LINK)}>
                 Forgot password?
               </Link>
             </p>
@@ -645,8 +646,8 @@ export function LoginForm({
                 >
                   Sign in
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  <Link href="/forgot-password" className="underline hover:text-foreground">
+                <p className="text-center">
+                  <Link href="/forgot-password" className={cn("text-sm", AUTH_LINK)}>
                     Forgot password?
                   </Link>
                 </p>

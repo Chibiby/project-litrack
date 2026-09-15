@@ -23,6 +23,7 @@ import { toFormData } from "@/lib/forms/to-form-data";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
 import {
   AUTH_LABEL,
+  AUTH_LINK,
   AUTH_PRIMARY_BUTTON,
   AuthCard,
   AuthCardHeader,
@@ -136,16 +137,10 @@ export function AdminLoginForm({
             Sign in
           </Button>
           <div className="flex items-center justify-center gap-6 text-base font-medium">
-            <Link
-              href="/forgot-password"
-              className="text-blue-600 underline underline-offset-4 hover:text-blue-700"
-            >
+            <Link href="/forgot-password" className={AUTH_LINK}>
               Forgot password?
             </Link>
-            <Link
-              href="/login"
-              className="text-blue-600 underline underline-offset-4 hover:text-blue-700"
-            >
+            <Link href="/login" className={AUTH_LINK}>
               School login
             </Link>
           </div>
