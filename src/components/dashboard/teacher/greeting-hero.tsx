@@ -48,18 +48,51 @@ export function GreetingHero({
 
   const greeting = greetingFor(hour);
 
+  /*
+   * The banner PNG is 2172×579 with a transparent top strip (rows 0–46) that
+   * only the character's head reaches into. The band — rows 47–578, 532px —
+   * fills this section exactly, so the image is drawn at 579/532 = 108.83% of
+   * the section's height, bottom- and right-anchored.
+   *
+   * Two layers of the same image make the head "pop out":
+   *  1. the band, clipped by a rounded, overflow-hidden box;
+   *  2. a strip 47/532 = 8.83% tall sitting directly above the section,
+   *     showing only the image's top rows — the head rising past the edge.
+   * Both layers anchor to the same right edge at the same height, so they line
+   * up pixel for pixel. On phones the art is pushed right and its left side
+   * (the handwriting) faded out, so the character sits beside the greeting
+   * without writing over it (mockup image 4).
+   */
+  const art = (
+    <Image
+      src={bannerSrc}
+      alt=""
+      aria-hidden
+      width={2172}
+      height={579}
+      priority
+      sizes="(min-width: 1024px) 80vw, 250vw"
+      className="absolute right-[-70%] top-auto h-[108.83%] w-auto max-w-none sm:right-[-40%] lg:right-0"
+    />
+  );
+
   return (
-    <section className="relative isolate overflow-hidden rounded-2xl border border-border/60 bg-violet-50/70 dark:bg-card/70 lg:border-0">
-      <Image
-        src={bannerSrc}
-        alt=""
+    <section className="relative isolate mt-6">
+      {/* Layer 1: the band. */}
+      <div
         aria-hidden
-        fill
-        priority
-        sizes="(min-width: 1280px) 70vw, 100vw"
-        className="-z-10 object-cover object-[78%_center] dark:opacity-75 lg:object-right"
-      />
-      <div className="flex min-h-[15rem] flex-col justify-center px-5 py-6 lg:min-h-[14rem] lg:px-7 lg:py-5">
+        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 [&>img]:[mask-image:linear-gradient(to_right,transparent_59%,black_64%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
+      >
+        {art}
+      </div>
+      {/* Layer 2: the head, above the band's top edge. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-full h-[8.83%] overflow-hidden [&>img]:top-0 [&>img]:h-[1232.5%] dark:[&>img]:opacity-80"
+      >
+        {art}
+      </div>
+      <div className="flex min-h-[15rem] flex-col justify-center px-5 py-6 lg:min-h-[19rem] lg:px-8 lg:py-6">
         <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
           {greeting},
         </p>
