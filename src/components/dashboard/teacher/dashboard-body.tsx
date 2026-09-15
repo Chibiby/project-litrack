@@ -164,6 +164,7 @@ export async function TeacherDashboardBody({
               hint={data.gradeCount === 1 ? "Assigned grade" : "Assigned grades"}
               icon={GraduationCap}
               tone="violet"
+              decor="wave"
               action={{ label: "View grade details", href: "/teacher/learners" }}
             />
             <StatCard
@@ -172,6 +173,7 @@ export async function TeacherDashboardBody({
               hint="All learners in your care"
               icon={Users}
               tone="amber"
+              decor="bars"
               action={{ label: "View all learners", href: "/teacher/learners" }}
             />
             <StatCard
@@ -180,6 +182,7 @@ export async function TeacherDashboardBody({
               hint="In the ARAL program"
               icon={Star}
               tone="emerald"
+              decor="sprout"
               action={{
                 label: "View ARAL learners",
                 href: aralRosterHref(data.primaryAralGradeId),
@@ -191,6 +194,7 @@ export async function TeacherDashboardBody({
               hint="Without ARAL profile"
               icon={UserRound}
               tone="primary"
+              decor="clock"
             />
           </StatCardRow>
 
