@@ -228,7 +228,7 @@ describe("teacher profiling — edit mode", () => {
 describe("buildPayload — a designation change cannot leave a stale mode behind", () => {
   const { buildPayload } = formModule;
   const multiGrade = {
-    firstName: "Juan", middleName: "", lastName: "Dela Cruz", contactNumber: "",
+    firstName: "Juan", middleName: "", lastName: "Dela Cruz", contactNumber: "", gender: undefined,
     ethnicity: undefined, ethnicityOther: "", secondaryEthnicity: undefined, secondaryEthnicityOther: "",
     designationKind: "Teacher" as const, designationOther: "", position: "TEACHER_III",
     educationalAttainment: "BACHELORS", fieldOfSpecialization: "ENGLISH", specializationOther: "",

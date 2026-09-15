@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { getSchoolName } from "@/lib/cache/school";
 import { AppShell } from "@/components/app-shell";
 import { TeacherDashboardBody } from "@/components/dashboard/teacher/dashboard-body";
@@ -30,6 +32,16 @@ export default async function TeacherDashboard({
   // for the title; AppShell ignores chrome props when already inside RoleShell.
   const schoolName = isSuperAdmin ? await getSchoolName(targetSchoolId) : null;
 
+  // Hero art follows the teacher's own profile; Super Admin gets the default.
+  const gender = isSuperAdmin
+    ? null
+    : ((
+        await prisma.teacherProfile.findUnique({
+          where: { userId: user.id },
+          select: { gender: true },
+        })
+      )?.gender ?? null);
+
   return (
     <AppShell
       // The dashboard opens with its own greeting and date, so the shell's
@@ -49,6 +61,7 @@ export default async function TeacherDashboard({
           teacherId={user.id}
           isSuperAdmin={isSuperAdmin}
           firstName={isSuperAdmin ? "Admin" : user.firstName}
+          bannerSrc={teacherBannerSrc(gender)}
           subtitle={
             isSuperAdmin
               ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`

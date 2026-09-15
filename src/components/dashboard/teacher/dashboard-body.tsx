@@ -7,12 +7,21 @@ import { Surface } from "@/components/ui/surface";
 import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { GradeLevelBarChart } from "@/components/dashboard/lazy-charts";
-import { GraduationCap, Sparkles, UserRoundCheck, Users } from "lucide-react";
-import { GreetingHeader } from "./greeting-header";
+import { pickQuote } from "@/lib/dashboard/quotes";
+import { cn } from "@/lib/utils";
+import {
+  BarChart3,
+  GraduationCap,
+  Heart,
+  Star,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { GreetingHero } from "./greeting-hero";
 import { StatCard, StatCardRow } from "./stat-cards";
 import { AttendanceOverviewPanel, ReadingOverviewPanel } from "./overview-panels";
 import { UpcomingTasksPanel, QuickActionsPanel } from "./tasks-panel";
-import { NoticeStrip } from "./notice-strip";
+import { CalendarCard } from "./calendar-card";
 import {
   aralAttendanceHref,
   aralReadingHref,
@@ -20,33 +29,21 @@ import {
 } from "./hrefs";
 
 /*
- * DIRECTION CONTRACT — teacher dashboard, seed db875848
+ * DIRECTION CONTRACT — teacher dashboard, LITRACK v2.0.0
  *
- * THESIS        The approved comp is the spec. This surface reproduces its
- *               layout exactly — four stat cards, two period panels, a grade
- *               chart beside tasks and quick actions, a closing notice strip —
- *               and adapts LITRACK's real data into it rather than composing
- *               a structure of its own.
- * OWN-WORLD     LITRACK's committed identity: blue-gray field, white Surface
- *               panels, blue primary, amber secondary, violet reserved for
- *               ARAL. Colour lives in icon tiles, badges, bar segments and
- *               links, never in a tinted card body. Inter, tabular numerals.
- * STORY         A teacher reads the week's state at a glance, sees what is
- *               outstanding, and clicks into the entry screen that clears it.
- * FIRST VIEWPORT Greeting and today's date, then the four stat cards, then the
- *               attendance and reading panels side by side.
- * FORM          Reproduction of the user-supplied comp; the pinned brief
- *               outranks the roll. Seed db875848.
- * FINISH        unreviewed and undocumented is unfinished; this build ends with
- *               the finish review, the verdict, DESIGN.md, and every shipping
- *               raster carrying its provenance
- *
- * TRUTH NOTE    The comp's "Automatic Data Lock" panel and its "Locked" task
- *               badge describe a lock/deadline model the schema does not have.
- *               Those two slots keep their position and treatment; their copy
- *               states the real recording cadence instead. Everything else on
- *               the page is backed by live data.
+ * THESIS        The owner's v2 mockups (desktop and mobile) are the spec. The
+ *               layout reproduces them — hero banner, four stat cards, two
+ *               donut panels, a calendar and tasks rail, a grade chart beside
+ *               quick actions — filled with LITRACK's real data.
+ * TRUTH NOTES   No month-over-month trend lines (nothing computes them). No
+ *               "Overdue" badge (LITRACK stores no deadline). Pending Profiles
+ *               stays read-only per docs/aral-profile.md. "Generate Report"
+ *               opens Reports, where exports live.
+ * SPEC          docs/superpowers/specs/2026-09-15-litrack-v2-teacher-dashboard-design.md
  */
+
+/** Adding a learner happens from the roster's add menu; there is no deep link to the dialog. */
+const ADD_LEARNER_HREF = "/teacher/learners";
 
 /**
  * The whole dashboard reads from one cached snapshot, so the stat cards, the
@@ -58,12 +55,15 @@ export async function TeacherDashboardBody({
   isSuperAdmin,
   firstName,
   subtitle,
+  bannerSrc,
 }: {
   schoolId: string;
   teacherId: string;
   isSuperAdmin: boolean;
   firstName: string;
   subtitle?: string;
+  /** Hero art, chosen from the teacher's profile gender by the page. */
+  bannerSrc: string;
 }) {
   let data: Awaited<ReturnType<typeof getTeacherOverview>> | null = null;
   try {
@@ -113,12 +113,14 @@ export async function TeacherDashboardBody({
   if (!isSuperAdmin && data.gradeCount === 0) {
     return (
       <>
-        <GreetingHeader
+        <GreetingHero
           firstName={firstName}
           todayKey={data.todayKey}
           subtitle={subtitle}
+          bannerSrc={bannerSrc}
+          quote={pickQuote()}
         />
-        <Surface as="section" className="px-5 py-10 text-center">
+        <Surface as="section" className="mt-4 rounded-2xl px-5 py-10 text-center">
           <h1 className="text-base font-semibold text-foreground">
             {FLOATING_TEACHER_CARD.title}
           </h1>
@@ -136,101 +138,155 @@ export async function TeacherDashboardBody({
     );
   }
 
+  const quote = pickQuote();
+
   return (
-    <>
-      <GreetingHeader
+    <div className="flex flex-col gap-4">
+      <GreetingHero
         firstName={firstName}
         todayKey={data.todayKey}
         subtitle={subtitle}
+        bannerSrc={bannerSrc}
+        quote={quote}
       />
 
-      <StatCardRow>
-        <StatCard
-          title="Your Grades"
-          value={data.gradeCount}
-          hint={data.gradeCount === 1 ? "Assigned grade" : "Assigned grades"}
-          icon={GraduationCap}
-          tone="violet"
-          action={{ label: "View grade details", href: "/teacher/learners" }}
-        />
-        <StatCard
-          title="Total Learners"
-          value={data.totalLearners}
-          hint="All learners in your care"
-          icon={Users}
-          tone="amber"
-          action={{ label: "View all learners", href: "/teacher/learners" }}
-        />
-        <StatCard
-          title="ARAL Learners"
-          value={data.aralLearners}
-          hint="In the ARAL program"
-          icon={Sparkles}
-          tone="emerald"
-          action={{
-            label: "View ARAL learners",
-            href: aralRosterHref(data.primaryAralGradeId),
-          }}
-        />
-        <StatCard
-          title="Pending Profiles"
-          value={data.pendingAralProfiles}
-          hint="Without ARAL profile"
-          icon={UserRoundCheck}
-          tone="primary"
-        />
-      </StatCardRow>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <StatCardRow>
+            <StatCard
+              title="Your Grades"
+              value={data.gradeCount}
+              hint={data.gradeCount === 1 ? "Assigned grade" : "Assigned grades"}
+              icon={GraduationCap}
+              tone="violet"
+              action={{ label: "View grade details", href: "/teacher/learners" }}
+            />
+            <StatCard
+              title="Total Learners"
+              value={data.totalLearners}
+              hint="All learners in your care"
+              icon={Users}
+              tone="amber"
+              action={{ label: "View all learners", href: "/teacher/learners" }}
+            />
+            <StatCard
+              title="ARAL Learners"
+              value={data.aralLearners}
+              hint="In the ARAL program"
+              icon={Star}
+              tone="emerald"
+              action={{
+                label: "View ARAL learners",
+                href: aralRosterHref(data.primaryAralGradeId),
+              }}
+            />
+            <StatCard
+              title="Pending Profiles"
+              value={data.pendingAralProfiles}
+              hint="Without ARAL profile"
+              icon={UserRound}
+              tone="primary"
+            />
+          </StatCardRow>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <AttendanceOverviewPanel data={data} href={attendanceHref} />
-        <ReadingOverviewPanel data={data} href={readingHref} />
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[7fr_5fr] xl:grid-cols-[8fr_4fr]">
-        <div className="flex flex-col gap-4">
-          <Surface as="section" className="flex flex-1 flex-col">
-            <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold tracking-tight text-foreground">
-                  Learners by Grade Level
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Distribution of your learners
-                </p>
-              </div>
-              <span className="shrink-0 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                {data.schoolYearLabel
-                  ? `SY ${data.schoolYearLabel}`
-                  : "No active school year"}
-              </span>
-            </div>
-            {/* min-h keeps the plot readable when the row is short; flex-1
-                lets it absorb the extra height when the task column is taller,
-                so the card never ends in a band of dead space. */}
-            <div className="min-h-[260px] flex-1 px-2 pb-4 pt-4 sm:px-4">
-              {chartData.length === 0 ? (
-                <p className="px-3 py-10 text-center text-sm leading-relaxed text-muted-foreground">
-                  Grade levels are created by your School Head. Once they exist,
-                  your learners appear here by grade.
-                </p>
-              ) : (
-                <GradeLevelBarChart data={chartData} height="100%" />
-              )}
-            </div>
-          </Surface>
-
-          <NoticeStrip />
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <AttendanceOverviewPanel data={data} href={attendanceHref} />
+            <ReadingOverviewPanel data={data} href={readingHref} />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4">
+        {/* Phones and tablets: tasks follow the panels (image 4). Desktop:
+            the rail rises into the hero's lower edge (image 3). */}
+        <aside className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-12">
+          <div className="hidden xl:block">
+            <CalendarCard todayKey={data.todayKey} quote={pickQuote()} />
+          </div>
           <UpcomingTasksPanel tasks={tasks} viewAllHref={reportsHref} />
-          <QuickActionsPanel
-            attendanceHref={attendanceHref}
-            readingHref={readingHref}
-            reportsHref={reportsHref}
-          />
+        </aside>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
+        <GradeChartCard
+          className="hidden lg:flex"
+          chartData={chartData}
+          schoolYearLabel={data.schoolYearLabel}
+          totalLearners={data.totalLearners}
+          gradeCount={data.gradeCount}
+        />
+        <QuickActionsPanel
+          attendanceHref={attendanceHref}
+          addLearnerHref={ADD_LEARNER_HREF}
+          reportsHref={reportsHref}
+        />
+      </div>
+    </div>
+  );
+}
+
+function GradeChartCard({
+  className,
+  chartData,
+  schoolYearLabel,
+  totalLearners,
+  gradeCount,
+}: {
+  className?: string;
+  chartData: { name: string; value: number }[];
+  schoolYearLabel: string | null;
+  totalLearners: number;
+  gradeCount: number;
+}) {
+  return (
+    <Surface as="section" className={cn("flex-col rounded-2xl", className)}>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+          >
+            <BarChart3 className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              Learners by Grade Level
+            </h2>
+            <p className="text-sm text-muted-foreground">Distribution of your learners</p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground">
+          {schoolYearLabel ? `SY ${schoolYearLabel}` : "No active school year"}
+        </span>
+      </div>
+      <div className="flex flex-1 flex-col gap-4 px-3 pb-4 pt-3 md:flex-row md:items-center md:px-5">
+        {/* min-h keeps the plot readable; flex-1 lets it absorb spare height. */}
+        <div className="h-[200px] min-w-0 flex-1">
+          {chartData.length === 0 ? (
+            <p className="px-3 py-10 text-center text-sm leading-relaxed text-muted-foreground">
+              Grade levels are created by your School Head. Once they exist,
+              your learners appear here by grade.
+            </p>
+          ) : (
+            <GradeLevelBarChart data={chartData} height="100%" />
+          )}
+        </div>
+        <div className="shrink-0 md:w-64">
+          <div className="flex items-center gap-3 rounded-xl bg-violet-50 p-4 dark:bg-violet-950/40">
+            <Users aria-hidden className="size-8 shrink-0 text-violet-600 dark:text-violet-300" />
+            <div>
+              <p className="text-lg font-bold text-violet-900 dark:text-violet-100">
+                {totalLearners} {totalLearners === 1 ? "learner" : "learners"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                across <span className="font-semibold text-amber-600">{gradeCount}</span> grade level(s)
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 px-1 text-sm leading-relaxed text-muted-foreground">
+            Each learner is a unique story waiting to be written.{" "}
+            <Heart aria-hidden className="inline size-3.5 fill-rose-400 text-rose-400" />
+          </p>
         </div>
       </div>
-    </>
+    </Surface>
   );
 }
