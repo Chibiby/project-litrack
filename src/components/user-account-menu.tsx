@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
-import { ChevronDown, ChevronUp, Settings, UserCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, LogOut, Settings, UserCircle } from "lucide-react";
+import { logoutAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -45,8 +46,9 @@ function initialsOf(name: string): string {
 }
 
 /**
- * Sidebar identity trigger with Profile and Settings. No Sign out here — the
- * sidebar renders its own Sign out button right under this trigger.
+ * Identity trigger with Profile and Settings. The sidebar variant has no Sign
+ * out — the sidebar renders its own button right under it. The `avatar`
+ * variant (phone top bar) adds Sign out, since the phone drawer has none.
  */
 export function UserAccountMenu({
   role,
@@ -160,6 +162,25 @@ export function UserAccountMenu({
             Settings
           </PrefetchLink>
         </DropdownMenuItem>
+
+        {/* The phone top bar is the only account surface on phones (the drawer
+            has none), so Sign out lives here for that variant. */}
+        {variant === "avatar" ? (
+          <>
+            <DropdownMenuSeparator />
+            {/* Called directly rather than via a submit button: the menu closes
+                on select and would unmount a form before it submitted. */}
+            <DropdownMenuItem
+              onSelect={() => {
+                void logoutAction();
+              }}
+              className="cursor-pointer text-red-700 focus:text-red-700 dark:text-red-400 dark:focus:text-red-400"
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              Sign out
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

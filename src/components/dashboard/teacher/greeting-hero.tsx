@@ -59,9 +59,15 @@ export function GreetingHero({
    *  2. a strip 47/532 = 8.83% tall sitting directly above the section,
    *     showing only the image's top rows — the head rising past the edge.
    * Both layers anchor to the same right edge at the same height, so they line
-   * up pixel for pixel. On phones the art is pushed right and its left side
-   * (the handwriting) faded out, so the character sits beside the greeting
-   * without writing over it (mockup image 4).
+   * up pixel for pixel.
+   *
+   * Below lg the hero is a fixed 15rem, so the art is exactly 261px tall and
+   * 980px wide, and it is placed by the character rather than by a percentage
+   * that drifts with width: the head centre sits at 72.2% of the image, so
+   * `right: calc(23% - 272px)` puts it at 77% of the hero from sm to lg, as in
+   * the mockup; the narrowest phones use 82% so the hair clears the greeting.
+   * The handwriting on the image's left is faded out so it never
+   * writes over the greeting (mockup image 4).
    */
   const art = (
     <Image
@@ -72,14 +78,14 @@ export function GreetingHero({
       height={579}
       priority
       sizes="(min-width: 1024px) 80vw, 250vw"
-      className="absolute right-[-70%] top-auto h-[108.83%] w-auto max-w-none sm:right-[-40%] lg:right-0"
+      className="absolute right-[calc(18%-272px)] top-auto h-[108.83%] w-auto max-w-none sm:right-[calc(23%-272px)] lg:right-0"
     />
   );
 
   // mt-2, not more: the head strip rises ~8.8% of the band above the
   // section, and the page padding above already gives it room.
   return (
-    <section className="relative isolate mt-2">
+    <section className="relative isolate mt-2 h-[15rem] lg:h-auto">
       {/* Layer 1: the band. */}
       <div
         aria-hidden
@@ -94,7 +100,7 @@ export function GreetingHero({
       >
         {art}
       </div>
-      <div className="flex min-h-[15rem] flex-col justify-center px-5 py-6 lg:min-h-[19rem] lg:px-8 lg:py-6">
+      <div className="flex h-full flex-col justify-center px-5 py-6 lg:min-h-[19rem] lg:px-8 lg:py-6">
         <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
           {greeting},
         </p>
@@ -104,7 +110,7 @@ export function GreetingHero({
         <h1 className="mt-0.5 text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white lg:text-5xl">
           {firstName}! <span aria-hidden>👋</span>
         </h1>
-        <p className="mt-2 max-w-[13rem] text-base leading-snug text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 line-clamp-2 max-w-[13rem] text-base leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
           {subtitle ?? "Here's what's happening with your class today."}
         </p>
         <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed text-slate-600 dark:text-slate-300 lg:block">

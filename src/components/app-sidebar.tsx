@@ -283,8 +283,14 @@ export function AppSidebar({
   const prefetchHrefs = useMemo(() => getShellWarmHrefs(role), [role]);
   const prefetchKey = `${role}:${prefetchHrefs.join("|")}`;
 
-  const renderSidebarContent = (onNavigate?: () => void, opts?: { collapsed?: boolean }) => {
+  const renderSidebarContent = (
+    onNavigate?: () => void,
+    opts?: { collapsed?: boolean; phone?: boolean }
+  ) => {
     const isCollapsed = opts?.collapsed ?? false;
+    // v2: the phone drawer carries no account block — the top bar avatar menu
+    // holds Profile, Settings and Sign out there (mockup image 4).
+    const showAccount = !opts?.phone;
 
     return (
       <div className="flex h-full flex-col bg-surface">
@@ -422,24 +428,28 @@ export function AppSidebar({
               </>
             )}
           </Link>
-          <UserAccountMenu
-            role={accountRole}
-            userName={userName}
-            roleLabel={roleLabel}
-            side="top"
-            align="start"
-            collapsed={isCollapsed}
-            className={isCollapsed ? "w-full justify-center" : "w-full justify-start"}
-          />
-          <form action={logoutAction}>
-            <SignOutButton
-              className={cn(
-                "w-full text-muted-foreground hover:text-foreground",
-                isCollapsed ? "justify-center px-2" : "justify-start px-3"
-              )}
-              iconOnly={isCollapsed}
-            />
-          </form>
+          {showAccount ? (
+            <>
+              <UserAccountMenu
+                role={accountRole}
+                userName={userName}
+                roleLabel={roleLabel}
+                side="top"
+                align="start"
+                collapsed={isCollapsed}
+                className={isCollapsed ? "w-full justify-center" : "w-full justify-start"}
+              />
+              <form action={logoutAction}>
+                <SignOutButton
+                  className={cn(
+                    "w-full text-muted-foreground hover:text-foreground",
+                    isCollapsed ? "justify-center px-2" : "justify-start px-3"
+                  )}
+                  iconOnly={isCollapsed}
+                />
+              </form>
+            </>
+          ) : null}
         </div>
       </div>
     );
@@ -475,7 +485,7 @@ export function AppSidebar({
         </SheetTrigger>
         <SheetContent side="left" className="w-64 border-r p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          {renderSidebarContent(() => setMobileOpen(false), { collapsed: false })}
+          {renderSidebarContent(() => setMobileOpen(false), { collapsed: false, phone: true })}
         </SheetContent>
       </Sheet>
     </TooltipProvider>
