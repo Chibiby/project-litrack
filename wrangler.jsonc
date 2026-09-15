@@ -22,7 +22,13 @@
     // the cached binding above can return rows about a minute old.
     {
       "binding": "HYPERDRIVE_FRESH",
-      "id": "99e5c8692aaa4961b4d980fed0ccc778"
+      "id": "99e5c8692aaa4961b4d980fed0ccc778",
+      // Local-only placeholder, never used in production. `opennextjs-cloudflare
+      // deploy` starts a local platform proxy that needs a local connection
+      // string for EVERY Hyperdrive binding; the Workers Builds env var only
+      // covers HYPERDRIVE, so without this the deploy step fails. A closed
+      // localhost port, same as UNCONFIGURED_DATABASE_URL in src/lib/prisma.ts.
+      "localConnectionString": "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured"
     }
   ],
   // Headroom for the nightly snapshot, which reads every table and gzips it.
