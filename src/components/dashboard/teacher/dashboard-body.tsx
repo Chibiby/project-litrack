@@ -150,7 +150,9 @@ export async function TeacherDashboardBody({
         quote={quote}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+      {/* Desktop: the hero art ends in a soft cloud fade, so the cards rise
+          into its lower edge instead of leaving an empty band under it. */}
+      <div className="relative z-10 grid gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
         <div className="flex min-w-0 flex-col gap-4">
           <StatCardRow>
             <StatCard
@@ -196,8 +198,8 @@ export async function TeacherDashboardBody({
         </div>
 
         {/* Phones and tablets: tasks follow the panels (image 4). Desktop:
-            the rail rises into the hero's lower edge (image 3). */}
-        <aside className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-12">
+            the rail sits a little higher than the cards (image 3). */}
+        <aside className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-4">
           <div className="hidden xl:block">
             <CalendarCard todayKey={data.todayKey} quote={pickQuote()} />
           </div>
