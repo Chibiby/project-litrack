@@ -866,6 +866,9 @@ model TeacherProfile {
   /// of eligible tutors — a non-DepEd teacher is a valid ARAL tutor, which is the
   /// whole reason the field exists.
   employmentType          EmploymentType?
+  /// Chooses the teacher dashboard banner art (MALE → male banner, else female).
+  /// Nullable: every profile saved before v2 has none, and it stays optional.
+  gender                  Gender?
 
   // II. Professional Background
   educationalAttainment  EducationalAttainment
