@@ -14,8 +14,8 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
-        /* Cover lettering on the sign-in screens (Archivo, variable width). */
-        module: ["var(--font-module)", "var(--font-inter)", "ui-sans-serif", "sans-serif"],
+        /* Storybook display lettering on the sign-in screens (Baloo 2). */
+        story: ["var(--font-story)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         background: "hsl(var(--background))",
@@ -69,6 +69,10 @@ const config: Config = {
           edge: "#7B8CA6",
           wash: "#EEF3FB",
           paper: "#FFFFFF",
+          /* Storybook tints: pale sky and pale sunshine, plus a mid sky for accents. */
+          sky: "#E3F0FD",
+          cloud: "#C7E0FA",
+          sunlight: "#FFF4C2",
         },
         violet: {
           DEFAULT: "hsl(var(--violet))",
@@ -93,14 +97,20 @@ const config: Config = {
         xl: "calc(var(--radius) + 4px)",
       },
       keyframes: {
-        /* The sign-in label turning to its next step, from an already-visible start. */
-        "module-turn": {
-          from: { opacity: "0.35", transform: "translateX(12px)" },
-          to: { opacity: "1", transform: "none" },
+        /* The sign-in card turning to its next step, from an already-visible start. */
+        "story-pop": {
+          "0%": { opacity: "0.6", transform: "translateY(6px) scale(0.985)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
+        /* A gentle nudge on the Continue button's arrow icon, on hover. */
+        "story-nudge": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "50%": { transform: "translateX(3px)" },
         },
       },
       animation: {
-        "module-turn": "module-turn 420ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "story-pop": "story-pop 260ms ease-out",
+        "story-nudge": "story-nudge 600ms ease-in-out",
       },
       boxShadow: {
         card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04)",

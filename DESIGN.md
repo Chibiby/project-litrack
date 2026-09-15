@@ -1,6 +1,6 @@
 ---
 name: LITRACK Sign-in
-description: The sign-in surface (/login, /admin/login) printed as a DepEd Self-Learning Module cover in ARAL ink.
+description: The sign-in surface (/login, /admin/login) as a warm storybook page opening on the school, in the ARAL logo inks.
 colors:
   aral-blue: "#013E88"
   aral-navy: "#12294D"
@@ -10,44 +10,48 @@ colors:
   aral-slate: "#4C6971"
   aral-edge: "#7B8CA6"
   aral-line: "#B8C6DA"
+  aral-cloud: "#C7E0FA"
+  aral-sky: "#E3F0FD"
+  aral-sunlight: "#FFF4C2"
   aral-wash: "#EEF3FB"
   aral-paper: "#FFFFFF"
 typography:
   display:
-    fontFamily: "Archivo, Inter, ui-sans-serif, sans-serif"
-    fontSize: "clamp(3.25rem, 6.6vw, 7.25rem)"
-    fontWeight: 900
+    fontFamily: "Baloo 2, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(3.5rem, 6.5vw, 6.5rem)"
+    fontWeight: 800
     lineHeight: 0.88
     letterSpacing: "-0.02em"
-    fontVariation: "\"wdth\" 112"
   title:
-    fontFamily: "Archivo, Inter, ui-sans-serif, sans-serif"
+    fontFamily: "Baloo 2, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.5rem"
     fontWeight: 800
     lineHeight: 1.33
     letterSpacing: "-0.025em"
-    fontVariation: "\"wdth\" 108"
+  action:
+    fontFamily: "Baloo 2, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 800
+    lineHeight: 1.55
+  tile:
+    fontFamily: "Baloo 2, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 700
+    lineHeight: 1.5
   foot:
-    fontFamily: "Archivo, Inter, ui-sans-serif, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: "Baloo 2, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1rem"
     fontWeight: 600
     lineHeight: 1.375
-    letterSpacing: "0.08em"
-    fontVariation: "\"wdth\" 112"
   headline:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.5rem"
+    fontSize: "1.25rem"
     fontWeight: 600
     lineHeight: 1.375
   body:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
-    lineHeight: 1.5
-  action:
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1rem"
-    fontWeight: 700
     lineHeight: 1.5
   label:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
@@ -59,15 +63,24 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.375
+  pill:
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 700
+    lineHeight: 1
 rounded:
-  box: "3px"
-  segment: "2px"
-  pip: "9999px"
+  control: "16px"
+  page-sm: "24px"
+  page: "28px"
+  pill: "9999px"
 spacing:
   label-gap: "6px"
+  tile-gap: "12px"
   stack: "20px"
-  box-inset-sm: "20px"
-  box-inset: "28px"
+  card-inset-sm: "20px"
+  card-inset: "28px"
+  card-overlap: "32px"
+  stage-gap: "40px"
   gutter-xs: "16px"
   gutter-sm: "24px"
   gutter-lg: "40px"
@@ -78,8 +91,8 @@ components:
     backgroundColor: "{colors.aral-gold}"
     textColor: "{colors.aral-navy}"
     typography: "{typography.action}"
-    rounded: "{rounded.box}"
-    height: "48px"
+    rounded: "{rounded.pill}"
+    height: "56px"
     width: "100%"
   button-primary-hover:
     backgroundColor: "{colors.aral-sun}"
@@ -87,58 +100,74 @@ components:
   button-primary-disabled:
     backgroundColor: "{colors.aral-wash}"
     textColor: "{colors.aral-slate}"
-  segment-track:
-    backgroundColor: "{colors.aral-paper}"
-    rounded: "{rounded.box}"
-    padding: "4px"
-  segment-on:
+  tile-on:
     backgroundColor: "{colors.aral-gold}"
     textColor: "{colors.aral-navy}"
-    typography: "{typography.label}"
-    rounded: "{rounded.segment}"
-    height: "40px"
-  segment-on-ink:
-    backgroundColor: "{colors.aral-navy}"
+    typography: "{typography.tile}"
+    rounded: "{rounded.control}"
+    height: "56px"
+  tile-on-ink:
+    backgroundColor: "{colors.aral-blue}"
     textColor: "{colors.aral-paper}"
-    typography: "{typography.label}"
-    rounded: "{rounded.segment}"
-    height: "40px"
-  segment-off:
-    textColor: "{colors.aral-slate}"
-    typography: "{typography.label}"
-    rounded: "{rounded.segment}"
-    height: "40px"
-  segment-off-hover:
-    backgroundColor: "{colors.aral-wash}"
+    typography: "{typography.tile}"
+    rounded: "{rounded.control}"
+    height: "56px"
+  tile-off:
+    backgroundColor: "{colors.aral-paper}"
+    textColor: "{colors.aral-navy}"
+    typography: "{typography.tile}"
+    rounded: "{rounded.control}"
+    height: "56px"
+  tile-off-hover:
+    backgroundColor: "{colors.aral-sky}"
     textColor: "{colors.aral-navy}"
   input-field:
     backgroundColor: "{colors.aral-paper}"
     textColor: "{colors.aral-navy}"
     typography: "{typography.body}"
-    rounded: "{rounded.box}"
+    rounded: "{rounded.control}"
     height: "48px"
-    padding: "0 14px"
-  label-box:
+    padding: "0 16px"
+  story-card:
     backgroundColor: "{colors.aral-paper}"
     textColor: "{colors.aral-navy}"
-    rounded: "{rounded.box}"
-    width: "464px"
+    rounded: "{rounded.page}"
+    width: "480px"
     padding: "28px"
-  label-box-header:
-    backgroundColor: "{colors.aral-navy}"
-    textColor: "{colors.aral-paper}"
+  story-card-header:
+    backgroundColor: "{colors.aral-sunlight}"
+    textColor: "{colors.aral-navy}"
     typography: "{typography.title}"
     padding: "16px 28px"
-  step-pip-current:
-    backgroundColor: "{colors.aral-paper}"
+  step-pill-current:
+    backgroundColor: "{colors.aral-gold}"
     textColor: "{colors.aral-navy}"
-    rounded: "{rounded.pip}"
-    size: "20px"
-  title-band:
+    typography: "{typography.pill}"
+    rounded: "{rounded.pill}"
+    padding: "4px 10px"
+  step-pill-done:
     backgroundColor: "{colors.aral-blue}"
     textColor: "{colors.aral-paper}"
+    typography: "{typography.pill}"
+    rounded: "{rounded.pill}"
+    padding: "4px 10px"
+  step-pill-upcoming:
+    backgroundColor: "{colors.aral-paper}"
+    textColor: "{colors.aral-slate}"
+    typography: "{typography.pill}"
+    rounded: "{rounded.pill}"
+    padding: "4px 10px"
+  title-page:
+    backgroundColor: "{colors.aral-paper}"
+    textColor: "{colors.aral-navy}"
     typography: "{typography.display}"
-  cover-foot:
+    rounded: "{rounded.page}"
+    padding: "28px 32px"
+  arch-window:
+    backgroundColor: "{colors.aral-sky}"
+    width: "264px"
+    height: "208px"
+  footer-strip:
     backgroundColor: "{colors.aral-navy}"
     textColor: "{colors.aral-paper}"
     typography: "{typography.foot}"
@@ -148,8 +177,14 @@ components:
     backgroundColor: "{colors.aral-wash}"
     textColor: "{colors.aral-navy}"
     typography: "{typography.label}"
-    rounded: "{rounded.box}"
+    rounded: "{rounded.control}"
     padding: "10px 14px"
+  notice:
+    backgroundColor: "{colors.aral-wash}"
+    textColor: "{colors.aral-navy}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    padding: "12px 16px"
   link:
     textColor: "{colors.aral-blue}"
     typography: "{typography.label}"
@@ -157,164 +192,191 @@ components:
 
 # Design System: LITRACK Sign-in
 
-> **Scope.** This document records the sign-in surface only: `/login` and `/admin/login`, built from `src/components/auth/login-shell.tsx`, `src/components/auth/auth-card.tsx`, `src/components/forms/login-form.tsx` and `src/components/forms/admin-login-form.tsx`. It does **not** describe the in-app UI. Dashboards, learners, terms reports and every other app-shell surface follow their own incumbent code-defined system (blue-gray field, white Surface panels, blue primary, amber secondary, violet reserved for ARAL; tokens in `src/app/globals.css` and `tailwind.config.ts`) until that system is documented separately. Nothing here overrides those tokens. The `aral-*` inks stay on the sign-in screens.
+> **Scope.** This document covers the sign-in surface only: `/login` and `/admin/login`. Those screens are built from `src/components/auth/login-shell.tsx`, `src/components/auth/auth-card.tsx`, `src/components/auth/story-doodles.tsx`, `src/components/forms/login-form.tsx` and `src/components/forms/admin-login-form.tsx`. It does **not** describe the in-app UI. Dashboards, learners, terms reports and every other app-shell surface keep their own system, defined in code (blue-gray field, white Surface panels, blue primary, amber secondary, violet reserved for ARAL; tokens in `src/app/globals.css` and `tailwind.config.ts`), until someone documents it separately. Nothing here overrides those tokens. The `aral-*` inks, Baloo 2 and the storybook shapes stay on the sign-in screens.
 
 ## Overview
 
-**Creative North Star: "The Self-Learning Module Cover"**
+**Creative North Star: "Storybook, warm"**
 
-Signing in opens your school's module. The screen is a printed DepEd Self-Learning Module cover in the ARAL Program's logo inks. A white masthead carries the ARAL and partner marks. A full-width royal-blue title band sets LITRACK in heavy expanded grotesque. The school illustration is the cover picture, and the sign-in form is set into the cover like the name label a learner fills in. A navy foot strip closes the cover with the agency credit. It is printed stock, not a lit screen. The inks are fixed, the corners are nearly square, the label box stands forward by overlap and a drawn navy edge rather than a shadow, and the page stays light whatever theme the app is set to (`ALWAYS_LIGHT_PATHS` in `src/lib/theme.ts`).
+Signing in feels like opening a friendly picture book from school. It is bright, rounded and chunky, and it is still plainly a teachers' tool underneath. A paper masthead carries the ARAL and partner marks. Below it, a pale-sky stage opens on the school illustration. LITRACK is lettered in rounded Baloo 2 on a paper title page with a red hand-drawn squiggle. The school's learners look out of an arched window over the art. The sign-in card rides near the top of the stage, with a pale-sunshine header and a gold Continue as its one live action. A navy strip closes the page with the agency credit.
 
-The surface rejects a frosted glass card floating over a photo. The school art is the cover picture: it sits in its own grid row, is never blurred or tinted behind the form, and the label box overlaps its edge the way a printed label overlaps cover art. Colour is flat, solid and taken from the ARAL logo, and each ink has a job. Gold is saved for what the teacher acts on next.
+The palette is the ARAL logo's inks, used lighter and more generously than before. Pale sky (`aral-sky`), cloud (`aral-cloud`) and sunlight (`aral-sunlight`) tints carry the big fields, and full-strength blue, navy and sun gold carry the ink. Depth works like a stack of picture books. Everything that stands forward has a thick navy or paper rim and a solid navy offset straight down, never a soft glow. The page stays light whatever theme the app is set to (`ALWAYS_LIGHT_PATHS` in `src/lib/theme.ts`), so its inks are literal values, not theme tokens.
 
-The label box shows the steps as fixed stations. A navy header names the step and, on the two-step school sign-in, a step rail (1 School, 2 Account) shows where the teacher is. Moving to the next step turns the label body in once rather than swapping in a new screen.
+The card shows the sign-in as a short story told in steps. The header names the step. On the two-step school sign-in, a row of pills (School, then Account) shows where the teacher is. The next step's body pops in once rather than swapping in a new screen.
 
 **Key Characteristics:**
-- Flat offset-print inks sampled from the ARAL logo, fixed on the page and never themed.
-- A royal-blue title band closed by a three-ink rule (red, navy, gold) under the cover title, the only place the ARAL letters' colours appear together.
-- Archivo, stretched wide, used only for cover lettering: the LITRACK title, the label box header and the cover foot.
-- Sun gold marks only the live choice: the picked role and the primary action.
-- One label box with 3px corners and a 2px navy printed edge. It has no shadow, ring or lift.
+- ARAL logo inks over pale sky, cloud and sunlight tints, fixed on the page and never themed.
+- Baloo 2, a rounded display face, letters LITRACK, the card title, the primary action, the choice tiles and the footer credit. Inter carries everything the teacher reads closely or types.
+- Chunky rounded forms: 16px controls, 24 to 28px pages, full-round pills and primary action.
+- Stacked-book depth: 2 to 3px navy rims with solid navy offsets straight down (3, 4 or 6px), and no blur anywhere.
+- Two authored doodles and no others: a gold sun and a red squiggle.
 
 ## Colors
 
-Full-saturation inks from the ARAL logo, laid flat on white stock. There are no gradients, and each ink has one job.
+The ARAL logo inks at full strength, over pale sky and sunshine tints. Each ink has a job, and there are no gradients on the interface.
 
 ### Primary
-- **Royal Title Blue** (aral-blue): the title band behind LITRACK, which runs the full width of the page on desktop. It is also the page's focus and selection ink, because the shell points the shared `--primary` and `--ring` at it (`213 98% 27%`). That makes it the colour of text links, the caret, field focus borders and focus rings.
+- **Royal Blue** (aral-blue): the page's focus and selection ink. The shell points the shared `--primary` and `--ring` at it (`213 98% 27%`), and it sets the caret colour, so it colours text links, field focus borders and focus rings. It also fills the picked intent tile on step two and the finished step's pill. White on blue is about 10.3:1.
 
 ### Secondary
-- **Sun Gold** (aral-gold): the live control. It fills the primary action (Continue, Sign in, Create account) and the picked role on step one (Teachers or School Head). The only decorative use is the gold third of the ARAL-letter rule.
+- **Sun Gold** (aral-gold): where the teacher is and what they do next. It fills the primary action, the picked role tile on step one and the current step's pill. It is also the face of the sun doodle.
 - **Deep Sun** (aral-sun): the primary action's hover. It is a state of gold, never a colour on its own.
 
 ### Tertiary
-- **Letter Red** (aral-red): the red third of the ARAL-letter rule. Beyond that it appears only as a 30% edge on the page-level error notice.
+- **Letter Red** (aral-red): the squiggle over LITRACK, and nothing else on the surface. Field errors use the app's own destructive red through `aria-invalid`, not this ink.
 
 ### Neutral
-- **Cover Navy** (aral-navy): all type on white stock, the label box header strip and its 2px edge, the cover foot strip, the navy third of the rule, and the picked option of any switch that is not the step-one role choice. Text on gold is navy too.
-- **Stock White** (aral-paper): the page, the masthead, the label box body, the fields, and the lettering reversed out of blue and navy.
-- **Print Slate** (aral-slate): secondary text such as field notes, placeholders (at full strength, about 5.9:1 on white), picker icons, off segments and the disabled primary's label.
-- **Edge Blue-Grey** (aral-edge): the resting boundary of every control, meaning field strokes and segment tracks. At about 3.4:1 on white it meets the 3:1 WCAG 1.4.11 asks of a control boundary.
-- **Rule Line** (aral-line): decorative hairlines only. It draws the masthead divider between the ARAL mark and the partner marks, the label box footer rule (at 60%) and the dashed empty-state box.
-- **Wash** (aral-wash): the quiet fill for the step-two context row (the chosen school with "Change school"), the off-segment hover, and the disabled primary.
+- **Story Navy** (aral-navy): all type on light grounds, the card's 3px rim and header rule, every rim on a picked or pressable object, all offset shadows, the notice rim, the doodle outlines and the footer strip. Text on gold and on sunlight is navy (about 9.9:1 and 13.1:1).
+- **Paper** (aral-paper): the masthead, the title page (at 90%), the card body, fields, off tiles, the arch window's 4px rim and the lettering reversed out of blue and navy.
+- **Sky** (aral-sky): the page ground under and around the art, the arch window's fill behind the learners, and the off tile's hover.
+- **Cloud** (aral-cloud): soft decorative rims only. It draws the masthead's 2px underline, the title page's 2px rim and the card footer's 2px dashed divider. At about 1.4:1 on white it can never mark a control.
+- **Sunlight** (aral-sunlight): the card header's ground, and only that.
+- **Slate** (aral-slate): secondary text such as field notes, placeholders (about 5.9:1 on white), picker and row icons, the upcoming step pill, the secondary footer link and the disabled primary's label.
+- **Edge Blue-Grey** (aral-edge): the resting boundary of every control: fields, pickers, off tiles, the upcoming step pill, the disabled primary and the empty-state box. At about 3.4:1 on white it meets the 3:1 WCAG 1.4.11 asks of a control boundary.
+- **Rule Line** (aral-line): the 1px divider between the ARAL mark and the partner marks in the masthead.
+- **Wash** (aral-wash): quiet fills for the step-two context row (the chosen school with "Change school"), the page-level notice and the disabled primary.
 
 ### Named Rules
-**The One Cord Rule.** Gold goes only on what the teacher can act on next: the picked role on step one and the primary action. Every other switch marks its pick in navy ink, which is why the step-two intent switch (Have an account / Create account) goes navy and leaves gold to the submit. Never use gold for decoration, headings, icons or illustration. If a surface has two gold things that are not a choice and its confirmation, one of them is wrong.
+**The Sunshine Rule.** Gold marks where the teacher is and what they press next: the current step pill, the picked role, the primary action and the sun doodle's face. A picked sub-choice (step two's Have an account / Create account) goes blue, so gold is not spent twice in one decision. Never use gold for headings, text, rims, backgrounds or illustration fills. The warm ground in the card header is Sunlight, not gold.
 
-**The Three-Ink Rule.** Red, navy and gold appear side by side exactly once, as equal thirds of the rule closing the title band: 6px on phones, 10px at `lg`. At `lg` the rule stays in the cover column and ends where the label column begins. It is the one ARAL-letter moment. Do not repeat it as a divider, a card edge or a loader.
+**The Drawn Edge Rule.** A control's resting boundary is Edge Blue-Grey. Once it is picked or pressable, the rim turns navy. Cloud and Rule Line are decoration: they rim pages, underline the masthead and divide the card footer. They are too faint (under 1.5:1) to mark something a teacher must find and press.
 
-**The Drawn Edge Rule.** A control's boundary is drawn in Edge Blue-Grey, never in Rule Line. Rule Line is too faint to mark something a teacher must find and press (about 1.7:1), so it stays on decoration.
+**The One Squiggle Rule.** Red appears once, as the hand-drawn squiggle on the title page. Do not reuse it as a divider, an underline for other headings or a loader.
 
-**The Fixed Ink Rule.** Sign-in inks are literal values in the `aral` Tailwind palette, not theme tokens. Printed stock does not change with the room, so these screens never take `.dark`.
+**The Fixed Ink Rule.** Sign-in inks are literal values in the `aral` Tailwind palette, not theme tokens. The storybook does not change with the room, so these screens never take `.dark`.
 
 ## Typography
 
-**Display Font:** Archivo, variable width axis (with Inter, then ui-sans-serif). It is loaded through `next/font` inside `LoginShell` only, so no other surface pays for it.
+**Display Font:** Baloo 2, weights 600, 700 and 800 (falling back to ui-sans-serif and system-ui). It loads through `next/font` inside `LoginShell` as `--font-story` (Tailwind `font-story`), so no other surface pays for it.
 **Body Font:** Inter (`--font-inter`, the app's face).
 
-**Character:** Archivo, stretched wide at black weight, gives the heavy grotesque of a printed DepEd cover title. Inter carries every word the teacher reads or types, so the form reads like the rest of LITRACK once they are inside.
+**Character:** Baloo 2's round, heavy letters give the book its friendly, spoken voice. Inter carries every field, label and note, so what the teacher reads closely looks like the rest of LITRACK once they are inside.
 
 ### Hierarchy
-- **Display** (Archivo 900, wdth 112, clamp 3.25rem to 7.25rem, line-height 0.88, -0.02em): the LITRACK title, reversed white on the blue band. It is used once per page.
-- **Title** (Archivo 800, wdth 108, 1.125rem on phones and 1.5rem from `sm`, tight tracking): the label box header ("Sign in", "Teacher sign in", "Super Admin sign-in"), white on navy.
-- **Foot** (Archivo 600, wdth 112, 0.75rem on phones and 0.875rem from `sm`, uppercase, 0.08em, line-height 1.375): the cover foot credit only, white on navy.
-- **Headline** (Inter 600, 1rem to 1.125rem to 1.5rem, line-height 1.375, max 30ch, balanced): the product line under the title on the band.
-- **Body** (Inter 400, 1rem): field values and the band's supporting line. The supporting line uses line-height 1.625, a 52ch measure, and is hidden on phones.
-- **Action** (Inter 700, 1rem): the primary action's label.
-- **Label** (Inter 600, 0.875rem): field labels, segment labels (1rem from `sm`), the context row, footer links, and the step rail (at 0.75rem).
+- **Display** (Baloo 2 800, line-height 0.88, -0.02em at `lg`; phones set clamp 2rem to 2.75rem at line-height 0.9 and -0.01em): LITRACK on the title page, navy. It is used once per page.
+- **Title** (Baloo 2 800, 1.25rem on phones and 1.5rem from `sm`, tight tracking): the card title ("Sign in", "Teacher sign in", "School Head sign in", "Create teacher account"), navy on sunlight, led by the sun doodle.
+- **Action** (Baloo 2 800, 1.125rem): the primary action's label.
+- **Tile** (Baloo 2 700, 1rem): the labels of the two-way choice tiles.
+- **Foot** (Baloo 2 600, 0.875rem on phones and 1rem from `sm`, sentence case): the footer credit only, white on navy.
+- **Headline** (Inter 600, 0.875rem on phones and 1.25rem at `lg`, line-height 1.375, balanced): the product line under LITRACK.
+- **Body** (Inter 400, 1rem): field values. At `lg` only, the title page's supporting line uses 1.125rem, line-height 1.625 and navy at 80% (about 7.7:1).
+- **Label** (Inter 600, 0.875rem): field labels, the context row, the notice and footer links.
 - **Note** (Inter 400, 0.875rem, line-height 1.375, slate): small print under a field.
+- **Pill** (Inter 700, 0.75rem, tabular numerals): the step pills.
 
 ### Named Rules
-**The Cover Lettering Rule.** Archivo is for lettering printed on the cover: the LITRACK title, the label box header and the cover foot. Labels, values, buttons and notes stay in Inter.
+**The Storybook Voice Rule.** Baloo 2 is for what the book says aloud: LITRACK, the card title, the primary action, the choice tiles and the footer credit. Labels, values, notes, links and step pills stay in Inter.
 
-**The Cover Foot Exception.** The only uppercase tracked line is the cover foot's agency credit, "Department of Education · Division of Sarangani". It mirrors the agency band along the bottom of a real module cover and closes the page. It labels nothing. Never place an uppercase tracked line above a heading, a field or the label box title.
+**The Sentence Case Rule.** Nothing on the surface is set in tracked uppercase, not even the footer credit. Never place an uppercase tracked line above a heading, a field or the card title.
 
 ## Layout
 
-The cover is a CSS grid. On desktop (`lg`, 1024px) it has two columns, a flexible cover column beside an auto-width label column, and three rows: the band (auto height), the picture (at least 15rem, then filling the viewport) and the foot (auto). The blue band spans both columns in row one. Its three-ink rule sits at the bottom of the same cell but only in column one. The school art spans both columns in row two, cropped with `object-cover` at 45% / 72% so the school building and flag stay in frame. The label box (29rem wide) sits in column two and spans rows one and two, starting 40px below the band's top edge, so it straddles the band and the picture. The cover foot spans both columns in row three, left-aligned.
+The page is a vertical flex column at least one viewport tall: masthead, then stage, then footer strip. The masthead, stage and footer share one page gutter so their edges line up: 16px, then 24px at `sm`, 40px at `lg`, 64px at `xl` and 96px at `2xl`. One DOM tree serves every width. Only CSS changes between phone and desktop, so the form never renders twice.
 
-Below `lg` the grid collapses to one column. The band comes first with its full-width rule, then a fixed-height picture (208px, or 240px from `sm`). The label box goes full-width in row three, pulled up 32px (40px from `sm`) so it overlaps the picture's lower edge, with 40px below it. The cover foot closes the page in row four, centred, set as two deliberate lines on phones ("Department of Education" / "Division of Sarangani") and one line joined by a middle dot from `sm`.
+**Masthead.** A paper row with 12px vertical padding and a 2px Cloud underline. It holds the ARAL mark (48, 56 or 64px tall), a 1px Rule Line divider and the partner strip (128, 160 or 208px wide), with nothing on its right.
 
-The page gutter is shared by the masthead, the band, the label column and the cover foot so their edges line up: 16px, then 24px at `sm`, 40px at `lg`, 64px at `xl` and 96px at `2xl`. The masthead is a row with 12px vertical padding holding the ARAL mark (48 / 56 / 64px), a 1px rule-line divider and the partner strip (128 / 160 / 208px wide), with nothing on its right. Inside the label box, fields stack at 20px with 6px between label and field. The box insets 20px on phones and 28px from `sm`, and a footer row sits 24px below the form behind a hairline.
+**Stage, desktop (`lg`, 1024px).** A two-column grid: a flexible title column beside a 30rem card column, with a 40px gap, 40px top padding and 48px bottom padding. The school illustration (`login-bg.webp`) fills the whole stage behind both columns, cropped with `object-cover` at 45% / 30%. The title column holds the title page (up to 36rem wide), with the arch window 40px below it (264 by 208px, or 304 by 240px at `xl`). The card sits in the second column, 24px down from the top of the stage.
+
+**Stage, phones.** One column. The illustration becomes a 224px strip (256px from `sm`) cropped at 50% / 20%, and the title column matches its height. The title page is at most 62% wide at the top left. The arch window is anchored at the bottom right of the strip (112 by 96px, or 128 by 112px from `sm`), kept clear of the zone the card overlaps. The card follows full-width and is pulled up 32px so it overlaps the bottom of the strip, with 40px below it.
+
+**Inside the card.** The header insets 20px (28px from `sm`) with 16px vertical padding. The body insets 20px by 24px on phones and 28px from `sm`. Fields stack at 20px, with 6px between label and field. Choice tiles sit in two columns with a 12px gap, and the register name fields pair up at 16px from `sm`. The footer row sits 24px below the form, behind a dashed divider with 16px above the links.
+
+**Footer strip.** Full width, navy, 12px vertical padding. On phones it is centred and set as two deliberate lines ("Department of Education" / "Division of Sarangani"). From `sm` it runs on one line joined by a middle dot, and at `lg` it is left-aligned.
 
 ## Elevation & Depth
 
-This is printed stock, so it is flat by default. Depth comes from overlap and drawn edges rather than lift. The label box sits across the band and the picture edge, and its 2px navy edge separates it from the art. It casts no shadow and has no ring. Two small soft navy shadows remain, both on controls. Neither is a glow and neither is a hard offset block.
+Depth is stacked picture books. An object that stands forward gets a rim (navy, or the arch window's paper) and a solid navy offset straight down, with no blur and no spread. Offsets get deeper with importance. The rest of the page is flat: the masthead, title page, fields, notices and footer strip cast nothing, and nothing on the surface uses backdrop blur or a coloured glow.
 
 ### Shadow Vocabulary
-- **Live control drop** (`box-shadow: 0 10px 22px -14px rgba(18,41,77,0.7)`): a short shadow under the enabled primary action. It is removed when the button is disabled.
-- **Picked seat** (`box-shadow: 0 1px 2px rgba(18,41,77,0.25)`): the barest seat under the picked option in a segment switch, gold or navy.
+- **Book stack** (`box-shadow: 0 6px 0 0 #12294D`): the sign-in card and the arch window, the two objects set on the page.
+- **Live press** (`box-shadow: 0 4px 0 0 #12294D`): the enabled primary action at rest. It deepens to `0 6px 0 0 #12294D` while the button lifts 2px on hover, and shrinks to `0 2px 0 0 #12294D` while it sinks 2px on press. It is removed when the button is disabled.
+- **Picked seat** (`box-shadow: 0 3px 0 0 #12294D`): the picked choice tile, gold or blue.
 
 ### Named Rules
-**The Printed Stock Rule.** No backdrop blur, no translucent panels, no coloured glows and no shadow on the label box. If something needs to stand forward, it overlaps and takes a drawn edge. It does not float.
+**The Stacked Book Rule.** Every shadow is a solid navy offset straight down (0 X 0 0) under an object with a drawn rim, at 3, 4 or 6px. There are no soft or blurred shadows, no glows, no sideways or diagonal offsets, and no offset under an unrimmed shape. If something new needs to stand forward, give it a rim and one of these three depths.
 
 ## Shapes
 
-The corners are nearly square. Every box uses 3px: the label box, fields and pickers, the primary action, segment tracks, the school context row, the error notice and the empty-state box. The segments inside a track use 2px. The only round forms are the 20px step pips. These radii are literal values on the sign-in constants, not the app's `--radius`, so an app radius change does not reach the cover.
+The forms are chunky and round. Controls use 16px corners: fields, pickers, choice tiles, the context row, the notice and the empty-state box. The card uses 28px. The title page uses 24px on phones and 28px at `lg`. The primary action and step pills are fully round. The arch window has a fully round top over 24px bottom corners, so it reads as an arched school window. These radii are literal values in the sign-in classes, not the app's `--radius`, so a change to the app radius does not reach the storybook.
 
-Edges are drawn, because a printed answer box has a ruled edge. The label box has a 2px navy edge and clips its navy header to its corners. Fields and segment tracks have a 1.5px Edge Blue-Grey stroke. Decorative lines use Rule Line: the 1px masthead divider, the 1px footer hairline at 60%, and the 1.5px dashed empty-state box. The rule under the band is a hard-edged bar split into thirds.
+The strokes are thick, like a picture book's outlines. The card has a 3px navy rim, and a 3px navy rule under its header. The primary action, choice tiles, step pills and notice have 2px rims. Fields have a 2px Edge Blue-Grey stroke. The arch window has a 4px paper rim. Decorative strokes are 2px Cloud (the masthead underline, the title page rim and the dashed card-footer divider) and the 1px masthead divider in Rule Line. The empty-state box is dashed 2px Edge Blue-Grey.
+
+### Doodles
+Two authored SVG motifs (`story-doodles.tsx`), both `aria-hidden` and unfocusable:
+- **Sun:** a gold disc with a 2.5px navy outline and eight round-cap navy rays. It leads every card title (28px, or 32px from `sm`). At `lg` a second sun sits on the arch window's top-right shoulder (48px). On phones that second sun is hidden, so no more than two doodles are visible at once.
+- **Squiggle:** a red hand-drawn wave at stroke width 5 with round caps, stretched above LITRACK on the title page (64 by 12px on phones, 160 by 16px at `lg`). It is used once.
 
 ## Components
 
 ### Buttons
-The one live control. The button is full-width, confident and gold.
-- **Shape:** nearly square (3px), 48px tall and full width inside the label box.
-- **Primary:** navy label on sun gold with a trailing arrow icon (20px), plus the live-control drop.
-- **Hover / Focus:** the fill deepens to Deep Sun. Focus shows a 2px royal-blue ring at a 2px offset.
-- **Disabled:** a Wash fill with a slate label and no shadow, at full opacity so the label stays readable. Continue stays disabled until a school is picked.
+The one live action: round, gold and pressable like a sticker on the page.
+- **Shape:** fully round and full width inside the card. It is 52px tall on phones and 56px from `sm`.
+- **Primary:** navy Baloo 2 label on sun gold, with a 2px navy rim, the live press offset and a trailing 20px arrow icon.
+- **Hover:** the fill deepens to Deep Sun. Under `motion-safe` the button lifts 2px as its offset deepens to 6px, and the arrow nudges 3px forward (`story-nudge`, 600ms ease-in-out). Transitions run for 150ms on transform, box-shadow and background colour.
+- **Active:** the button sinks 2px as its offset shrinks to 2px.
+- **Focus:** the shared 2px royal-blue focus ring.
+- **Disabled:** a Wash fill, a slate label and an Edge Blue-Grey rim, with no offset and no lift, at full opacity so the label stays readable. Continue stays disabled until a school is picked.
 - **Loading:** the label changes to "Signing in…" or "Creating account…". The button does not change size.
 
-### Segment switch
-A two-way choice printed as a track.
-- **Style:** a 1.5px Edge Blue-Grey track with 3px corners and 4px inner padding, holding two equal 40px segments with 2px corners. Role segments carry 18px leading icons.
-- **Role pick (step one, Teachers / School Head):** the picked segment is gold with a navy label and the picked seat. This is the choice the Continue button confirms.
-- **Intent pick (step two, Have an account / Create account):** the picked segment is navy with a white label and the picked seat, so gold stays on the submit.
-- **Off:** transparent with a slate label. On hover it takes the Wash fill with a navy label. A locked option (Teachers before the school opens to them) is disabled, and a slate note with a lock icon explains why.
+### Choice tiles
+A two-way choice set as two standalone tiles, not a track.
+- **Style:** two equal 56px tiles with a 12px gap, 16px corners, 2px rims and Baloo 2 700 labels. Role tiles carry 20px leading icons.
+- **Role pick (step one, Teachers / School Head):** the picked tile is gold, with a navy rim, a navy label and the picked seat. This is the choice Continue confirms.
+- **Intent pick (step two, Have an account / Create account):** the picked tile is royal blue, with a navy rim, a white label and the picked seat, so gold stays on the submit.
+- **Off:** paper with an Edge Blue-Grey rim and a navy label at 80%. On hover it takes the Sky fill and a blue rim at 50%. A locked option (Teachers before the school opens to them) is disabled, and a slate note with a lock icon explains why.
 
-### Label box (signature component)
-The name label set into the cover.
-- **Corner Style:** nearly square (3px) and clipped.
-- **Background:** a navy header strip (the Title style, 16px vertical padding) over a white body.
-- **Edge:** a 2px navy printed edge. It has no shadow, ring or lift (see Elevation & Depth).
-- **Internal Padding:** 20px on phones, 28px from `sm` (24px / 28px vertical in the body).
-- **Step rail:** on the school sign-in, the header's right side holds two 20px round pips with labels, all in 0.75rem type. The current pip is white with navy numerals and its label is white. Other pips are outlined in a light navy tint. A finished step shows a check instead of its number. On phones only the current step is named. Admin sign-in has one step, so it shows no rail.
-- **Step turn:** each step's body enters once with `module-turn`: 420ms, `cubic-bezier(0.16, 1, 0.3, 1)`, starting from 35% opacity and 12px to the right. Because it starts already visible, content is never hidden, and it runs only under `motion-safe`.
-- **Footer:** a hairline row with Forgot password? on the left and the other sign-in (Super Admin or School) on the right in slate.
+### Story card (signature component)
+The picture-book page the teacher fills in.
+- **Corner Style:** round (28px) and clipped. It is full width on phones and 30rem at `lg`.
+- **Background:** a Sunlight header, separated by a 3px navy rule, over a paper body.
+- **Rim and depth:** a 3px navy rim over the book-stack offset (see Elevation & Depth).
+- **Header:** the sun doodle, then the card title in Baloo 2 navy. On the school sign-in the step pills sit on the right.
+- **Step pills:** each pill is fully round with a 2px rim and 4px by 10px padding, and holds a 16px round numeral seat and a label. The current pill is gold with a navy rim, and its numeral sits on paper. A finished pill is royal blue with a navy rim, and shows a blue check on a paper seat instead of its number. An upcoming pill is paper with an Edge Blue-Grey rim and a slate label. On phones only the current step is named; the others keep their label for screen readers. Admin sign-in has one step, so it shows no pills.
+- **Step pop:** each step's body enters once with `story-pop`: 260ms ease-out, starting from 60% opacity, 6px low and at 98.5% scale. Because it starts already visible, content is never hidden, and it runs only under `motion-safe`.
+- **Footer:** a dashed Cloud divider, with Forgot password? on the left and the other sign-in (Super Admin or School) on the right in slate.
 
 ### Inputs / Fields
-Printed answer boxes.
-- **Style:** white fill, a 1.5px Edge Blue-Grey stroke, 3px corners, 48px height, 14px side padding, and navy 1rem text. Placeholders are full slate. Pickers (District, School Name) share the same box with a 20px slate leading icon and a down chevron.
+Rounded answer boxes.
+- **Style:** a paper fill, a 2px Edge Blue-Grey stroke, 16px corners, 48px height, 16px side padding and navy 1rem text. Placeholders are full slate. Pickers (District, School Name) share the same box, with a 20px slate leading icon and a down chevron.
 - **Hover:** the stroke moves toward blue (royal blue at 60%).
-- **Focus:** the stroke becomes royal blue, with a 2px royal-blue ring at a 2px offset.
-- **Error:** the stroke and ring switch to the app's destructive red through `aria-invalid`, with the message printed under the field.
+- **Focus:** the stroke becomes royal blue, with a soft 4px blue halo at 15%. The blue stroke is the actual focus indicator; the halo only softens it.
+- **Error:** the stroke and ring switch to the app's destructive red through `aria-invalid`, with the message printed under the field. Session-end errors arrive as a toast.
 
-### Context row
-On step two a Wash row (3px corners, 10px by 14px) names the chosen school in navy with a slate school icon. A "Change school" text button in royal blue returns the teacher to step one.
+### Context row and notice
+- **Context row:** on step two a Wash row (16px corners, 10px by 14px) names the chosen school in navy, with a slate school icon. A "Change school" text button in royal blue returns the teacher to step one.
+- **Notice:** a page-level message (for example, when the school list cannot load) is a Wash box with a 2px navy rim, 16px corners and navy 600 text.
+- **Empty state:** "No schools found" sits in a dashed 2px Edge Blue-Grey box in slate.
 
-### Cover foot
-A full-width navy strip that closes the cover, with 12px vertical padding and the page gutter. It carries the agency credit in the Foot style, white. It is the only uppercase tracked text on the surface (see the Cover Foot Exception).
+### Title page and arch window
+- **Title page:** paper at 90% over the art with a 2px Cloud rim, holding the squiggle, LITRACK and the product line (plus the supporting line at `lg`). It casts no shadow. The art is never blurred behind it.
+- **Arch window:** the learners (`login-learners.webp`) in a Sky-filled arch with a 4px paper rim and the book-stack offset, cropped at 50% / 85%. At `lg` a sun doodle sits on its shoulder.
 
 ### Links
-Royal blue, 600 weight, with an underline at 30% blue and a 4px offset. On hover the underline turns full blue. The secondary footer link is slate, turns navy on hover, and underlines only on hover.
+Royal blue, 600 weight, with a 2px underline at 30% blue and a 4px offset. On hover the underline turns full blue. The secondary footer link is slate, turns navy on hover, and is underlined only on hover.
+
+### Assets and provenance
+- `public/brand/login-bg.webp` (1672 by 941): the school illustration behind the stage. It arrived with the owner's v2 sign-in mockup in `6b59e7d`.
+- `public/brand/login-learners.webp` (650 by 470): a crop of the learners from the owner-supplied banner `public/brand/banner-learner.png` (2172 by 579). The crop is flattened on Sky (#E3F0FD), so its transparent areas match the arch window's fill. Re-crop from that source if the art changes, and flatten on the same ink.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** print every sign-in screen with `LoginShell` and `AuthCard`, and build their controls from the `AUTH_*` class constants in `auth-card.tsx` rather than restyling shadcn primitives inline.
-- **Do** keep gold on the live choice only: the picked role and the primary action, per the One Cord Rule. Mark any other switch's pick in navy ink (`AUTH_SEGMENT_ON_INK`).
-- **Do** close the blue band with the red / navy / gold rule, once: 6px on phones, 10px at `lg`, and confined to the cover column at `lg`.
-- **Do** keep the school art in its own grid row as the cover picture, and let the label box overlap its edge.
-- **Do** draw control boundaries in Edge Blue-Grey (1.5px) and keep Rule Line for decorative hairlines.
-- **Do** keep these paths in `ALWAYS_LIGHT_PATHS`, and repoint `--primary` and `--ring` at royal blue inside the shell so shared controls print in the cover's ink.
-- **Do** keep type on white in navy or slate, and on blue or navy in white. Put navy text on gold.
+- **Do** build every sign-in screen with `LoginShell` and `AuthCard`, and style their controls with the `AUTH_*` class constants in `auth-card.tsx` rather than restyling shadcn primitives inline.
+- **Do** keep gold on where the teacher is and what they press next (current step, picked role, primary action), per the Sunshine Rule. Mark a sub-choice's pick in royal blue (`AUTH_SEGMENT_ON_INK`).
+- **Do** give anything that stands forward a rim and one of the three navy offsets (3, 4 or 6px, straight down), per the Stacked Book Rule.
+- **Do** draw resting control boundaries in 2px Edge Blue-Grey, and turn the rim navy only when a control is picked or pressable.
+- **Do** keep pale tints (Sky, Cloud, Sunlight) for grounds and decorative rims, and full-strength inks for type, rims and the live action.
+- **Do** keep these paths in `ALWAYS_LIGHT_PATHS`, and repoint `--primary` and `--ring` at royal blue inside the shell so shared controls use the book's ink.
+- **Do** keep type on light grounds in navy or slate, and on blue or navy in white. Put navy text on gold and sunlight.
+- **Do** keep every doodle `aria-hidden`, and show no more than two at once on phones.
 
 ### Don't:
-- **Don't** apply these inks, Archivo or the cover layout to app-shell surfaces. The app has its own incumbent system in `src/app/globals.css`.
-- **Don't** put the form in a translucent or blurred panel over the photo, and don't blur or tint the school art behind it.
-- **Don't** give the label box a shadow, ring or hover lift. Its 2px navy edge is its depth.
-- **Don't** use gradients, glows or coloured shadows on interface surfaces. The school illustration is painted art and is exempt, but UI is flat ink.
-- **Don't** round corners past 3px on boxes or 2px on segments.
-- **Don't** spend violet here. Violet is the app's ARAL accent token; the cover speaks in the ARAL logo's own inks.
-- **Don't** set labels, values or buttons in Archivo, or letter the cover in a system display face.
-- **Don't** add uppercase tracked lines above headings, fields or the label box title. The cover foot credit is the only uppercase tracked text, and it is not a pattern.
-- **Don't** repeat the three-ink rule as a divider, border or progress bar.
+- **Don't** apply these inks, Baloo 2, the storybook shapes or the offset shadows to app-shell surfaces. The app has its own system in `src/app/globals.css`.
+- **Don't** blur or tint the school art, or put a control on a translucent panel over it.
+- **Don't** use soft, blurred or coloured shadows or glows, and don't offset diagonally. Depth is a solid navy offset straight down.
+- **Don't** use gradients on interface surfaces. The school illustration and the learners are painted art and are exempt.
+- **Don't** set square or near-square corners. Controls start at 16px.
+- **Don't** add doodles beyond the sun and the squiggle, or repeat the squiggle.
+- **Don't** spend violet here. Violet is the app's ARAL accent token; the storybook uses the ARAL logo's own inks.
+- **Don't** set labels, values, notes or step pills in Baloo 2, or letter the page in a system display face.
+- **Don't** add uppercase tracked lines anywhere on the surface.

@@ -1,12 +1,12 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SunDoodle } from "@/components/auth/story-doodles";
 
 /**
- * The sign-in label box: the name label printed on a DepEd module cover (see
- * LoginShell). A navy header strip names the step and, when there is more than
- * one, shows where in the order the teacher is; the white body holds the form.
- * Printed stock, so the corners stay nearly square and the depth is a soft
- * offset shadow, never a glow.
+ * The sign-in card: a friendly picture-book page. A pale-sunshine header
+ * names the step and, when there is more than one, shows where in the order
+ * the teacher is; the paper body holds the form. Rounded and chunky, with a
+ * solid navy "stacked book" offset shadow instead of a soft glow.
  */
 export function AuthCard({
   title,
@@ -24,13 +24,14 @@ export function AuthCard({
     <section
       aria-label={title}
       className={cn(
-        "w-full overflow-hidden rounded-[3px] border-2 border-aral-navy bg-aral-paper lg:w-[29rem]",
+        "w-full overflow-hidden rounded-[28px] border-[3px] border-aral-navy bg-aral-paper shadow-[0_6px_0_0_#12294D] lg:w-[30rem]",
         className
       )}
     >
-      <header className="flex items-center justify-between gap-4 bg-aral-navy px-5 py-4 sm:px-7">
-        <h2 className="min-w-0 font-module text-lg font-extrabold tracking-tight text-aral-paper [font-stretch:108%] sm:text-2xl">
-          {title}
+      <header className="flex items-center justify-between gap-4 border-b-[3px] border-aral-navy bg-aral-sunlight px-5 py-4 sm:px-7">
+        <h2 className="flex min-w-0 items-center gap-2 font-story text-xl font-extrabold tracking-tight text-aral-navy sm:text-2xl">
+          <SunDoodle className="size-7 sm:size-8" />
+          <span className="min-w-0">{title}</span>
         </h2>
         {step ? <StepRail step={step} /> : null}
       </header>
@@ -43,7 +44,7 @@ const STEPS = ["School", "Account"] as const;
 
 function StepRail({ step }: { step: 1 | 2 }) {
   return (
-    <ol className="flex shrink-0 items-center gap-3 text-xs font-semibold" aria-label="Sign-in steps">
+    <ol className="flex shrink-0 items-center gap-2" aria-label="Sign-in steps">
       {STEPS.map((label, index) => {
         const n = index + 1;
         const current = n === step;
@@ -52,13 +53,20 @@ function StepRail({ step }: { step: 1 | 2 }) {
           <li
             key={label}
             aria-current={current ? "step" : undefined}
-            className={cn("flex items-center gap-1.5", current ? "text-aral-paper" : "text-[#9FB2CF]")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1 text-xs font-bold",
+              current
+                ? "border-aral-navy bg-aral-gold text-aral-navy"
+                : done
+                  ? "border-aral-navy bg-aral-blue text-aral-paper"
+                  : "border-aral-edge bg-aral-paper text-aral-slate"
+            )}
           >
             <span
               aria-hidden
               className={cn(
-                "flex size-5 items-center justify-center rounded-full text-xs tabular-nums",
-                current ? "bg-aral-paper text-aral-navy" : "ring-1 ring-inset ring-[#9FB2CF]"
+                "flex size-4 items-center justify-center rounded-full text-xs leading-none tabular-nums",
+                current ? "bg-aral-paper text-aral-navy" : done ? "bg-aral-paper text-aral-blue" : ""
               )}
             >
               {done ? <Check className="size-3" strokeWidth={3} /> : n}
@@ -72,38 +80,39 @@ function StepRail({ step }: { step: 1 | 2 }) {
   );
 }
 
-/** Field labels in the label box. */
+/** Field labels in the card. */
 export const AUTH_LABEL = "text-sm font-semibold text-aral-navy";
 
-/** Text fields and pickers: printed answer boxes with a firm rule. */
+/** Text fields and pickers: rounded, chunky, with a friendly focus ring. */
 export const AUTH_FIELD =
-  "h-12 rounded-[3px] border-[1.5px] border-aral-edge bg-aral-paper px-3.5 sm:h-12 text-base text-aral-navy placeholder:text-aral-slate hover:border-aral-blue/60 focus-visible:border-aral-blue md:text-base";
+  "h-12 rounded-2xl border-2 border-aral-edge bg-aral-paper px-4 sm:h-12 text-base text-aral-navy placeholder:text-aral-slate hover:border-aral-blue/60 focus-visible:border-aral-blue focus-visible:ring-4 focus-visible:ring-aral-blue/15 md:text-base";
 
 /**
- * The live control. Sun gold is spent here and on the picked option only — the
- * one thing on the cover you can act on next.
+ * The primary action. Sun gold with a stacked-book offset shadow and a gentle
+ * lift on hover; the ArrowRight icon nudges forward via `group-hover`.
  */
 export const AUTH_PRIMARY_BUTTON =
-  "h-12 w-full rounded-[3px] bg-aral-gold text-base sm:h-12 font-bold text-aral-navy shadow-[0_10px_22px_-14px_rgba(18,41,77,0.7)] hover:bg-aral-sun disabled:bg-aral-wash disabled:text-aral-slate disabled:opacity-100 disabled:shadow-none [&_svg]:size-5";
+  "group h-[3.25rem] sm:h-14 w-full rounded-full border-2 border-aral-navy bg-aral-gold font-story text-lg font-extrabold text-aral-navy shadow-[0_4px_0_0_#12294D] transition-[transform,box-shadow,background-color] duration-150 hover:bg-aral-sun motion-safe:hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#12294D] active:translate-y-[2px] active:shadow-[0_2px_0_0_#12294D] disabled:bg-aral-wash disabled:text-aral-slate disabled:border-aral-edge disabled:opacity-100 disabled:shadow-none disabled:hover:translate-y-0 [&_svg]:size-5 [&_svg]:motion-safe:group-hover:animate-story-nudge";
 
-/** A two-way switch (role; sign in or create account): gold marks the pick. */
-export const AUTH_SEGMENTS = "grid grid-cols-2 gap-1 rounded-[3px] border-[1.5px] border-aral-edge p-1";
+/** A two-way switch (role; sign in or create account): two standalone tiles. */
+export const AUTH_SEGMENTS = "grid grid-cols-2 gap-3";
 export const AUTH_SEGMENT =
-  "h-10 w-full rounded-[2px] border-0 text-sm font-semibold sm:text-base [&_svg]:size-[18px]";
+  "h-14 sm:h-14 w-full rounded-2xl border-2 font-story text-base font-bold transition-colors [&_svg]:size-5";
 export const AUTH_SEGMENT_ON =
-  "bg-aral-gold text-aral-navy shadow-[0_1px_2px_rgba(18,41,77,0.25)] hover:bg-aral-gold hover:text-aral-navy";
-/** The picked intent on the teacher step-2 tabs: navy ink, gold stays reserved for the submit button. */
+  "bg-aral-gold border-aral-navy text-aral-navy shadow-[0_3px_0_0_#12294D] hover:bg-aral-gold hover:text-aral-navy";
+/** The picked intent on the teacher step-2 tabs: blue ink, gold stays reserved for the role pick and submit. */
 export const AUTH_SEGMENT_ON_INK =
-  "bg-aral-navy text-aral-paper shadow-[0_1px_2px_rgba(18,41,77,0.25)] hover:bg-aral-navy hover:text-aral-paper";
-export const AUTH_SEGMENT_OFF = "bg-transparent text-aral-slate hover:bg-aral-wash hover:text-aral-navy";
+  "bg-aral-blue border-aral-navy text-aral-paper shadow-[0_3px_0_0_#12294D] hover:bg-aral-blue hover:text-aral-paper";
+export const AUTH_SEGMENT_OFF =
+  "bg-aral-paper border-aral-edge text-aral-navy/80 hover:bg-aral-sky hover:border-aral-blue/50";
 
-/** Text links on the label box. */
+/** Text links on the card. */
 export const AUTH_LINK =
-  "font-semibold text-aral-blue underline decoration-aral-blue/30 underline-offset-4 hover:decoration-aral-blue";
+  "font-semibold text-aral-blue underline decoration-2 decoration-aral-blue/30 underline-offset-4 hover:decoration-aral-blue";
 
 /** The quiet footer row under a step: recovery and the other sign-in. */
 export const AUTH_FOOTER =
-  "mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-aral-line/60 pt-4 text-sm";
+  "mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t-2 border-dashed border-aral-cloud pt-4 text-sm";
 
-/** Turns a step's body in once, from an already-visible start. */
-export const AUTH_STEP_TURN = "motion-safe:animate-module-turn";
+/** Pops a step's body in once, from an already-visible start. */
+export const AUTH_STEP_TURN = "motion-safe:animate-story-pop";

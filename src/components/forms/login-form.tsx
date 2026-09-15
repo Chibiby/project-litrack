@@ -381,7 +381,7 @@ export function LoginForm({
       <AuthCard title="Sign in" step={1}>
         <div className={cn("space-y-5", AUTH_STEP_TURN)}>
           {notice ? (
-            <p className="rounded-[3px] border border-aral-red/30 bg-[#FDECEE] px-4 py-3 text-sm text-[#8A0215]">
+            <p className="rounded-2xl border-2 border-aral-navy bg-aral-wash px-4 py-3 text-sm font-semibold text-aral-navy">
               {notice}
             </p>
           ) : null}
@@ -415,7 +415,7 @@ export function LoginForm({
               School Name
             </Label>
             {schools.length === 0 ? (
-              <p className="rounded-[3px] border-[1.5px] border-dashed border-aral-line px-4 py-3 text-sm text-aral-slate">
+              <p className="rounded-2xl border-2 border-dashed border-aral-edge px-4 py-3 text-sm text-aral-slate">
                 No schools found. Contact admin.
               </p>
             ) : (
@@ -512,7 +512,7 @@ export function LoginForm({
   return (
     <AuthCard title={title} step={2}>
       <div key={screen} className={cn("space-y-5", AUTH_STEP_TURN)}>
-        <div className="flex items-center justify-between gap-3 rounded-[3px] bg-aral-wash px-3.5 py-2.5">
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-aral-wash px-3.5 py-2.5">
           <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-aral-navy">
             <School className="size-4 shrink-0 text-aral-slate" aria-hidden />
             <span className="truncate">{schoolName ?? "Your school"}</span>
