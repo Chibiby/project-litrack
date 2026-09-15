@@ -76,8 +76,10 @@ export function GreetingHero({
     />
   );
 
+  // mt-2, not more: the head strip rises ~8.8% of the band above the
+  // section, and the page padding above already gives it room.
   return (
-    <section className="relative isolate mt-6">
+    <section className="relative isolate mt-2">
       {/* Layer 1: the band. */}
       <div
         aria-hidden

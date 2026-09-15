@@ -45,7 +45,7 @@ export function TeacherDashboardSkeleton() {
     <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
       <span className="sr-only">Loading your dashboard</span>
 
-      <Skeleton className="h-60 w-full rounded-2xl lg:h-56" />
+      <Skeleton className="mt-2 h-60 w-full rounded-2xl lg:h-[19rem]" />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
         <div className="flex min-w-0 flex-col gap-4">
