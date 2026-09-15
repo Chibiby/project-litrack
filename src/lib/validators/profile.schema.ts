@@ -352,6 +352,8 @@ const teacherProfileObject = baseProfile
     // completed before the question existed answered neither, and re-saving
     // such a profile must not be blocked by a question nobody was shown.
     ...ethnicityFields,
+    /** Optional; only chooses the teacher dashboard banner art. */
+    gender: z.enum(["MALE", "FEMALE"]).optional(),
     currentGradeAssignment: z.enum(GRADE_LEVEL_TYPES).optional(),
     sectionId: optionalSectionId,
     /**

@@ -39,6 +39,7 @@ import {
   ENGLISH_TRAINING_LABELS,
   GRADE_LEVEL_LABELS,
   ETHNICITY_LABELS,
+  GENDER_LABELS,
   formatEthnicities,
   toOptions,
 } from "@/lib/constants/enum-labels";
@@ -63,6 +64,7 @@ const teacherWizardFormSchema = z.object({
   middleName: z.string(),
   lastName: z.string(),
   contactNumber: z.string(),
+  gender: z.string().optional(),
   ethnicity: z.string().optional(),
   ethnicityOther: z.string(),
   secondaryEthnicity: z.string().optional(),
@@ -114,6 +116,7 @@ type Defaults = Partial<{
   accountEmail: string;
   accountEmailIsSynthetic: boolean;
   contactNumber: string | null;
+  gender: string | null;
   ethnicity: string | null;
   ethnicityOther: string | null;
   secondaryEthnicity: string | null;
@@ -149,6 +152,7 @@ export type TeacherFormValues = {
   middleName: string;
   lastName: string;
   contactNumber: string;
+  gender: string | undefined;
   ethnicity: string | undefined;
   ethnicityOther: string;
   secondaryEthnicity: string | undefined;
@@ -219,6 +223,7 @@ export function buildPayload(values: TeacherFormValues): Record<string, unknown>
     middleName: values.middleName.trim() || undefined,
     lastName: values.lastName.trim(),
     contactNumber: values.contactNumber.trim() || undefined,
+    gender: values.gender || undefined,
     /*
       Two slots, and the second only carries meaning next to the first: with no
       first answer there is nothing for a second to be second to, so both are
@@ -286,6 +291,7 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
     "middleName",
     "lastName",
     "contactNumber",
+    "gender",
     "ethnicity",
     "ethnicityOther",
     "secondaryEthnicity",
@@ -326,6 +332,7 @@ const FIELD_LABELS: Partial<Record<keyof TeacherFormValues, string>> = {
   middleName: "Middle name",
   lastName: "Last name",
   contactNumber: "Contact number",
+  gender: "Gender",
   ethnicity: "Ethnicity",
   ethnicityOther: "Specify ethnicity",
   secondaryEthnicity: "Second ethnicity",
@@ -437,6 +444,7 @@ export function TeacherProfileForm({
       middleName: defaultValues.middleName ?? "",
       lastName: defaultValues.lastName ?? "",
       contactNumber: defaultValues.contactNumber ?? "",
+      gender: defaultValues.gender ?? undefined,
       ethnicity: defaultValues.ethnicity ?? undefined,
       ethnicityOther: defaultValues.ethnicityOther ?? "",
       secondaryEthnicity: defaultValues.secondaryEthnicity ?? undefined,
@@ -1034,6 +1042,17 @@ export function TeacherProfileForm({
                 description="Optional. PH number, e.g. 09171234567 or +639171234567."
               />
             </div>
+            <div className="md:max-w-sm">
+              <FormSelectField
+                control={form.control}
+                name="gender"
+                label="Gender"
+                description="Optional. Sets the artwork on your dashboard."
+                options={toOptions(GENDER_LABELS)}
+                allowEmpty
+                emptyLabel="Not specified"
+              />
+            </div>
             <div className="space-y-3 md:max-w-sm">
               <FormSelectField
                 control={form.control}
@@ -1538,6 +1557,7 @@ export function TeacherProfileForm({
                 ],
                 ["Email address", defaultValues.accountEmail ?? "—"],
                 ["Contact number", values.contactNumber || "—"],
+                ["Gender", labelOf(GENDER_LABELS, values.gender)],
                 [
                   "Ethnicity",
                   formatEthnicities(

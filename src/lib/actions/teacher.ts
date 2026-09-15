@@ -107,6 +107,8 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     designation: isFirstSave || existing.designation == null ? parsed.data.designation : existing.designation,
     advisoryMode: isFirstSave ? advisoryMode : existing.advisoryMode,
     contactNumber: parsed.data.contactNumber ?? null,
+    // Cleared in Settings has to be written as null; Prisma skips undefined.
+    gender: parsed.data.gender ?? null,
     specializationOther: parsed.data.specializationOther ?? null,
     currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
     position: parsed.data.position ?? null,

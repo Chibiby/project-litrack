@@ -792,3 +792,18 @@ describe("teacherProfileUpdateSchema — Settings saves (later saves)", () => {
     expect(invalid.success).toBe(false);
   });
 });
+
+describe("teacher profile gender (v2 dashboard banner)", () => {
+  it("accepts no gender", () => {
+    expect(teacherProfileSchema.safeParse(teacherBase).success).toBe(true);
+  });
+  it.each(["MALE", "FEMALE"] as const)("accepts %s on create and update", (g) => {
+    const created = teacherProfileSchema.safeParse({ ...teacherBase, gender: g });
+    expect(created.success && created.data.gender).toBe(g);
+    const updated = teacherProfileUpdateSchema.safeParse({ ...teacherBase, gender: g });
+    expect(updated.success && updated.data.gender).toBe(g);
+  });
+  it("rejects an unknown value", () => {
+    expect(teacherProfileSchema.safeParse({ ...teacherBase, gender: "X" }).success).toBe(false);
+  });
+});
