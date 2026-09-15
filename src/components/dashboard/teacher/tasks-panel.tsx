@@ -44,7 +44,7 @@ export function UpcomingTasksPanel({
         >
           <ClipboardCheck className="size-5" />
         </span>
-        <h2 className="flex-1 text-base font-semibold tracking-tight text-foreground sm:text-lg">
+        <h2 className="flex-1 whitespace-nowrap text-base font-semibold tracking-tight text-foreground">
           Upcoming Tasks
         </h2>
         <PrefetchLink
@@ -57,26 +57,26 @@ export function UpcomingTasksPanel({
         </PrefetchLink>
       </div>
 
-      <ul className="px-4 pb-3 pt-3 sm:px-5">
+      <ul className="px-4 pb-2 pt-2 sm:px-5">
         {tasks.map((t) => (
           <li key={t.id} className="border-b border-border/60 last:border-0">
             <PrefetchLink
               href={t.href}
               prefetch
-              className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 aria-hidden
                 className="size-5 shrink-0 rounded-full border-2 border-muted-foreground/40"
               />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-foreground">{t.label}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">{t.detail}</span>
+                <span className="block text-sm font-medium leading-snug text-foreground">{t.label}</span>
+                <span className="block text-xs text-muted-foreground">{t.detail}</span>
               </span>
               {t.badge ? (
                 <span
                   className={cn(
-                    "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums",
+                    "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
                     BADGE[t.tone]
                   )}
                 >

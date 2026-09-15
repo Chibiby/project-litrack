@@ -124,7 +124,7 @@ function PanelShell({
         <ChevronRight aria-hidden className="size-4 shrink-0 text-violet-600 lg:hidden" />
       </div>
 
-      <div className="flex-1 px-3 pt-4 sm:px-5">{children}</div>
+      <div className="flex flex-1 flex-col justify-center px-3 pt-4 sm:px-5">{children}</div>
 
       <div className="flex px-3 pb-4 pt-4 sm:px-5 sm:pb-5 lg:justify-end">
         <PrefetchLink

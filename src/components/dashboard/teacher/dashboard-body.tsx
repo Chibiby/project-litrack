@@ -152,7 +152,7 @@ export async function TeacherDashboardBody({
 
       {/* Desktop: the hero art ends in a soft cloud fade, so the cards rise
           into its lower edge instead of leaving an empty band under it. */}
-      <div className="relative z-10 grid gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+      <div className="relative z-10 grid gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-4">
           <StatCardRow>
             <StatCard
@@ -191,7 +191,9 @@ export async function TeacherDashboardBody({
             />
           </StatCardRow>
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {/* flex-1: the panels absorb any height the rail has over this column,
+              so the chart row starts right under both. */}
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:gap-4">
             <AttendanceOverviewPanel data={data} href={attendanceHref} />
             <ReadingOverviewPanel data={data} href={readingHref} />
           </div>
