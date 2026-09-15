@@ -73,8 +73,8 @@ export function TeacherDashboardSkeleton() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
-        <Skeleton className="hidden h-64 w-full rounded-2xl lg:block" />
-        <Surface as="section" className="rounded-2xl p-5">
+        <Skeleton className="order-2 h-64 w-full rounded-2xl xl:order-none" />
+        <Surface as="section" className="order-1 rounded-2xl p-5 xl:order-none">
           <Skeleton className="h-5 w-32" />
           <div className="mt-4 grid grid-cols-2 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (

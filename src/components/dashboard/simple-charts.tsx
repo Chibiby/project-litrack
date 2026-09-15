@@ -70,13 +70,23 @@ export function DashboardBarChart({
  * the ARAL accent, and zero-value grades still render their label so the
  * distribution reads against the school's whole grade ladder.
  */
+/** Phone-width axis label: "Grade 3" → "G3", "Kinder" → "K"; anything else unchanged. */
+export function shortGradeLabel(label: string): string {
+  if (label === "Kinder") return "K";
+  const m = /^Grade (\d+)$/.exec(label);
+  return m ? `G${m[1]}` : label;
+}
+
 export function GradeLevelBarChart({
   data,
   height = 260,
+  shortLabels = false,
 }: {
   data: { name: string; value: number }[];
   /** Accepts "100%" so the chart can fill a card stretched by its grid row. */
   height?: number | string;
+  /** Abbreviate axis labels so every grade fits at phone width. */
+  shortLabels?: boolean;
 }) {
   const max = Math.max(...data.map((d) => d.value), 0);
   // Round the axis up to a clean ceiling so the tallest bar never touches the
@@ -103,6 +113,7 @@ export function GradeLevelBarChart({
             tickLine={false}
             axisLine={{ stroke: "hsl(var(--border))" }}
             interval={0}
+            {...(shortLabels ? { tickFormatter: shortGradeLabel } : {})}
           />
           <YAxis
             allowDecimals={false}

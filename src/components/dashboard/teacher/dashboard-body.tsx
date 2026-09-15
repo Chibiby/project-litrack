@@ -211,17 +211,20 @@ export async function TeacherDashboardBody({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
         <GradeChartCard
-          className="hidden lg:flex"
+          // Phones and tablets: after Quick Actions. Desktop: beside it.
+          className="order-2 flex xl:order-none"
           chartData={chartData}
           schoolYearLabel={data.schoolYearLabel}
           totalLearners={data.totalLearners}
           gradeCount={data.gradeCount}
         />
-        <QuickActionsPanel
-          attendanceHref={attendanceHref}
-          addLearnerHref={ADD_LEARNER_HREF}
-          reportsHref={reportsHref}
-        />
+        <div className="order-1 xl:order-none">
+          <QuickActionsPanel
+            attendanceHref={attendanceHref}
+            addLearnerHref={ADD_LEARNER_HREF}
+            reportsHref={reportsHref}
+          />
+        </div>
       </div>
     </div>
   );
@@ -270,7 +273,14 @@ function GradeChartCard({
               your learners appear here by grade.
             </p>
           ) : (
-            <GradeLevelBarChart data={chartData} height="100%" />
+            <>
+              <div className="h-full sm:hidden">
+                <GradeLevelBarChart data={chartData} height="100%" shortLabels />
+              </div>
+              <div className="hidden h-full sm:block">
+                <GradeLevelBarChart data={chartData} height="100%" />
+              </div>
+            </>
           )}
         </div>
         <div className="shrink-0 md:w-64">
