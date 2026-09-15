@@ -74,6 +74,15 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.18.3",
+    date: "2026-09-15",
+    title: "Kindergarten gets the Grade 1 subject list",
+    announce: false,
+    fixes: [
+      "The default End of Terms subjects for Kindergarten are now the same as Grade 1: Reading and Literacy, Language, Makabansa, GMRC and Math. A school gets them when a School Head presses Reset to default.",
+    ],
+  },
+  {
     version: "1.18.2",
     date: "2026-09-15",
     title: "Default End of Terms subjects can be edited again",
