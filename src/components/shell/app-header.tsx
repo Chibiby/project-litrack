@@ -7,7 +7,6 @@ import { CalendarDays, Menu } from "lucide-react";
 import { UserAccountMenu } from "@/components/user-account-menu";
 import { roleHomePath, type AppRole } from "@/lib/auth/roles";
 import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
-import { useNavPath } from "@/components/nav/nav-path";
 import { HeaderSearch } from "@/components/shell/header-search";
 import {
   NotificationsMenu,
@@ -16,7 +15,7 @@ import {
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getNavGroups, resolvePageTitle, type NavGrade } from "@/lib/nav/nav-config";
+import { getNavGroups, type NavGrade } from "@/lib/nav/nav-config";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import type { UserRole } from "@prisma/client";
 
@@ -75,20 +74,14 @@ export function AppHeader({
    */
   isFloating?: boolean;
   /**
-   * Every advisory section this teacher holds. Lets the "End of Terms Reports"
-   * row match the grade-scoped sheet it deep-links to, so the title
-   * reads the item's label instead of the URL segment; see
+   * Every advisory section this teacher holds, so the search's page list
+   * carries the same "End of Terms Reports" target the rail does; see
    * `NavOptions.advisoryPlacements`.
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   expanded: boolean;
   onToggleSidebar: () => void;
 }) {
-  // The optimistic nav path, not the committed pathname — the same source the
-  // sidebar's highlight reads. The two are the only chrome that names the current
-  // page, and a rail that jumps to Teachers while this bar still says Dashboard
-  // is worse than both of them waiting. See `@/components/nav/nav-path`.
-  const { navPath } = useNavPath();
   const navGroups = useMemo(
     () =>
       getNavGroups(role, grades ?? [], {
@@ -98,8 +91,6 @@ export function AppHeader({
       }),
     [role, grades, isAralVolunteer, isFloating, advisoryPlacements]
   );
-  const title = resolvePageTitle(navPath, navGroups);
-
   // The pages the header search can jump to are exactly the rows this role's nav
   // renders — derived from it rather than listed again, so a nav item that is
   // hidden or made inert for a role can never be reachable through search.
@@ -115,10 +106,6 @@ export function AppHeader({
       ),
     [navGroups]
   );
-
-  // v2: the dashboard opens with its own greeting hero, so the bar carries no
-  // page title there (mockup image 3).
-  const showTitle = navPath !== roleHomePath(role as AppRole);
 
   // Today in the school's zone, e.g. "Sunday, September 13, 2026". Rendered on
   // the client, so hydration may differ by a render at midnight — hence
@@ -163,14 +150,9 @@ export function AppHeader({
           <Menu className="h-5 w-5" aria-hidden />
         </Button>
 
-        {/* Chrome label, not the page heading — AppShell's body <h1> is the
-            page's single top-level heading (spec a11y: one h1 per view). */}
-        {showTitle ? (
-          <p className="hidden truncate text-base font-semibold tracking-tight text-foreground lg:block">
-            {title}
-          </p>
-        ) : null}
-
+        {/* v2: no page title in the bar on any page. Every page names itself
+            in its own banner or heading, so the bar stays the same everywhere:
+            menu toggle, search, then notifications, theme and date. */}
         {/* The teacher target is the advisory roster, so a volunteer — or a
             floating teacher, who has declared they will not advise one — has
             nothing to search. Hidden rather than pointed at the ARAL roster,

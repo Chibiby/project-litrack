@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useState,
-  useTransition,
-} from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -20,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { generalAverage } from "@/lib/terms/average";
-import { saveTermGrades } from "@/lib/actions/term-grades";
+import { subjectAbbreviation, subjectWindow } from "@/lib/terms/sheet-view";
 import type { TermGradesSaveInput } from "@/lib/validators/term-grade.schema";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +22,8 @@ import { cn } from "@/lib/utils";
  * cell — a failing learner has to be recordable or the sheet pushes teachers to
  * enter a false 75.
  */
-const SCORE_MIN = 60;
-const SCORE_MAX = 100;
+export const SCORE_MIN = 60;
+export const SCORE_MAX = 100;
 const PASSING_SCORE = 75;
 
 /** Borrowed from the reading-level grid's ramp so the ARAL grids read as one system. */
@@ -45,7 +38,8 @@ export type TermGradesGridSubject = { id: string; name: string };
 export type TermGradesGridLearner = {
   id: string;
   fullName: string;
-  sectionName: string | null;
+  /** "3 - Atis": the Advisory / Section cell. */
+  sectionLabel: string;
 };
 
 export type TermGradesGridExisting = {
@@ -54,7 +48,15 @@ export type TermGradesGridExisting = {
   score: number;
 };
 
-export type AralTermGradesGridFormHandle = { save: () => void };
+/**
+ * The parent owns saving, because one sheet can hold several advisories and
+ * each saves as its own section. It asks each grid for its changed cells, posts
+ * them, then tells the grid those cells are now the saved state.
+ */
+export type AralTermGradesGridFormHandle = {
+  collect: () => { entries: TermGradesSaveInput["entries"]; invalid: string[] };
+  commit: () => void;
+};
 
 /** A cell holds the raw input string so an emptied cell stays distinct from a 0. */
 type RowState = Record<string, string>;
@@ -84,11 +86,12 @@ function cellValue(row: RowState | undefined, subjectId: string): string {
 }
 
 /** Whole number inside the recordable range. Anything else is refused on save. */
-function isValidScore(raw: string): boolean {
+export function isValidScore(raw: string): boolean {
   const value = Number(raw);
   return Number.isInteger(value) && value >= SCORE_MIN && value <= SCORE_MAX;
 }
 
+/** Over EVERY subject, so hiding columns never changes a learner's average. */
 function rowAverage(
   row: RowState | undefined,
   subjects: TermGradesGridSubject[]
@@ -103,253 +106,305 @@ function rowAverage(
 }
 
 type Props = {
-  gradeLevelId: string;
-  term: TermKey;
   subjects: TermGradesGridSubject[];
   learners: TermGradesGridLearner[];
   initialGrades: TermGradesGridExisting[];
-  /** Row-number offset so numbering continues across pages. */
+  /** Row-number offset so numbering continues across pages and groups. */
   indexOffset?: number;
-  readOnly?: boolean;
-  onSavePendingChange?: (pending: boolean) => void;
+  /** Inputs off: a locked term, an admin view, or a save in flight. */
+  disabled?: boolean;
+  /** Group heading ("Grade 3 - Atis"), shown when the sheet holds several. */
+  groupLabel?: string;
+  /** "First Term - 20%": the subjects header's second line. */
+  termCaption: string;
+  /**
+   * The Subject filter. Null shows every column. Hidden columns keep their
+   * edits and still count toward the general average.
+   */
+  visibleSubjectIds?: ReadonlySet<string> | null;
+  /** The phone's five-subject window, shared by every group on the sheet. */
+  subjectStep: number;
+  onNextSubjects: () => void;
 };
 
-export const AralTermGradesGridForm = forwardRef<
-  AralTermGradesGridFormHandle,
-  Props
->(function AralTermGradesGridForm(
-  {
-    gradeLevelId,
-    term,
-    subjects,
-    learners,
-    initialGrades,
-    indexOffset = 0,
-    readOnly,
-    onSavePendingChange,
-  },
-  ref
-) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const subjectIds = new Set(subjects.map((s) => s.id));
-  /**
-   * What the sheet looked like when it loaded. Saves send the difference, so an
-   * untouched cell is never rewritten and "No changes to save" is honest.
-   */
-  const [initial, setInitial] = useState(() =>
-    toRows(learners, initialGrades, subjectIds)
-  );
-  const [rows, setRows] = useState(initial);
-
-  useEffect(() => {
-    onSavePendingChange?.(pending);
-  }, [pending, onSavePendingChange]);
-
-  function setScore(learnerId: string, subjectId: string, value: string) {
-    setRows((prev) => ({
-      ...prev,
-      [learnerId]: { ...(prev[learnerId] ?? {}), [subjectId]: value },
-    }));
-  }
-
-  const handleSave = useCallback(() => {
-    if (readOnly || pending) return;
-
-    const entries: TermGradesSaveInput["entries"] = [];
-    const invalid: string[] = [];
-
-    for (const learner of learners) {
-      for (const subject of subjects) {
-        const before = cellValue(initial[learner.id], subject.id).trim();
-        const after = cellValue(rows[learner.id], subject.id).trim();
-        if (before === after) continue;
-        if (after === "") {
-          entries.push({
-            learnerId: learner.id,
-            termSubjectId: subject.id,
-            score: null,
-          });
-          continue;
-        }
-        if (!isValidScore(after)) {
-          if (!invalid.includes(learner.fullName)) invalid.push(learner.fullName);
-          continue;
-        }
-        entries.push({
-          learnerId: learner.id,
-          termSubjectId: subject.id,
-          score: Number(after),
-        });
-      }
-    }
-
-    if (invalid.length > 0) {
-      const names = invalid.slice(0, 3).join(", ");
-      const rest = invalid.length > 3 ? ` and ${invalid.length - 3} more` : "";
-      toast.error(
-        `Grades must be whole numbers from ${SCORE_MIN} to ${SCORE_MAX}. Check ${names}${rest}.`
-      );
-      return;
-    }
-
-    if (entries.length === 0) {
-      toast("No changes to save");
-      return;
-    }
-
-    startTransition(async () => {
-      const toastId = toast.loading("Saving term grades…");
-      const payload: TermGradesSaveInput = { gradeLevelId, term, entries };
-      const res = await saveTermGrades(payload);
-      if (!res.ok) {
-        toast.error(res.error, { id: toastId });
-        return;
-      }
-
-      const saved = res.data?.saved ?? 0;
-      const cleared = res.data?.cleared ?? 0;
-      toast.success(
-        cleared > 0
-          ? `Saved ${saved} grade${saved === 1 ? "" : "s"} and cleared ${cleared}`
-          : `Saved ${saved} grade${saved === 1 ? "" : "s"}`,
-        { id: toastId }
-      );
-
-      // The sheet is clean again, so the next save sends only what changes after
-      // this point rather than resending the whole term.
-      setInitial(rows);
-      router.refresh();
-    });
-  }, [
-    readOnly,
-    pending,
-    learners,
-    subjects,
-    initial,
-    rows,
-    gradeLevelId,
-    term,
-    router,
-  ]);
-
-  useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
-
-  if (subjects.length === 0) {
-    return (
-      <p className="p-4 text-sm text-muted-foreground">
-        Your School Head has not set subjects for this grade.
-      </p>
+export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, Props>(
+  function AralTermGradesGridForm(
+    {
+      subjects,
+      learners,
+      initialGrades,
+      indexOffset = 0,
+      disabled,
+      groupLabel,
+      termCaption,
+      visibleSubjectIds = null,
+      subjectStep,
+      onNextSubjects,
+    },
+    ref
+  ) {
+    const subjectIds = new Set(subjects.map((s) => s.id));
+    /**
+     * What the sheet looked like when it loaded. Saves send the difference, so an
+     * untouched cell is never rewritten and "No changes to save" is honest.
+     */
+    const [initial, setInitial] = useState(() =>
+      toRows(learners, initialGrades, subjectIds)
     );
-  }
+    const [rows, setRows] = useState(initial);
 
-  if (learners.length === 0) {
-    return (
-      <p className="p-4 text-sm text-muted-foreground">
-        No learners match this filter.
-      </p>
+    function setScore(learnerId: string, subjectId: string, value: string) {
+      setRows((prev) => ({
+        ...prev,
+        [learnerId]: { ...(prev[learnerId] ?? {}), [subjectId]: value },
+      }));
+    }
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        collect() {
+          const entries: TermGradesSaveInput["entries"] = [];
+          const invalid: string[] = [];
+          for (const learner of learners) {
+            for (const subject of subjects) {
+              const before = cellValue(initial[learner.id], subject.id).trim();
+              const after = cellValue(rows[learner.id], subject.id).trim();
+              if (before === after) continue;
+              if (after === "") {
+                entries.push({ learnerId: learner.id, termSubjectId: subject.id, score: null });
+                continue;
+              }
+              if (!isValidScore(after)) {
+                if (!invalid.includes(learner.fullName)) invalid.push(learner.fullName);
+                continue;
+              }
+              entries.push({
+                learnerId: learner.id,
+                termSubjectId: subject.id,
+                score: Number(after),
+              });
+            }
+          }
+          return { entries, invalid };
+        },
+        // The sheet is clean again, so the next save sends only what changes
+        // after this point rather than resending the whole term.
+        commit() {
+          setInitial(rows);
+        },
+      }),
+      [learners, subjects, initial, rows]
     );
-  }
 
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead colSpan={2} scope="colgroup">
-              Learner
-            </TableHead>
-            <TableHead
-              colSpan={subjects.length}
-              scope="colgroup"
-              className="border-l border-border/60 text-center"
-            >
-              <span className="block">Subjects and Grades</span>
-              <span className="block font-normal normal-case tracking-normal text-muted-foreground">
-                Scores {SCORE_MIN}–{SCORE_MAX}
-              </span>
-            </TableHead>
-            <TableHead
-              rowSpan={2}
-              scope="col"
-              className="border-l border-border/60 text-center text-violet-700 dark:text-violet-300"
-            >
-              <span className="block">General</span>
-              <span className="block">Average</span>
-            </TableHead>
-          </TableRow>
-          <TableRow>
-            <TableHead className="w-10">#</TableHead>
-            <TableHead className="min-w-[200px]">Complete Name</TableHead>
-            {subjects.map((subject, index) => (
-              <TableHead
-                key={subject.id}
-                className={cn(
-                  "min-w-[104px] text-center",
-                  index === 0 && "border-l border-border/60"
-                )}
-              >
-                {subject.name}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {learners.map((learner, index) => {
-            const row = rows[learner.id];
-            const average = rowAverage(row, subjects);
-            return (
-              <TableRow key={learner.id}>
-                <TableCell className="text-sm text-muted-foreground tabular-nums">
-                  {indexOffset + index + 1}
-                </TableCell>
-                <TableCell className="font-medium">{learner.fullName}</TableCell>
-                {subjects.map((subject, subjectIndex) => {
-                  const raw = cellValue(row, subject.id);
-                  const trimmed = raw.trim();
-                  const valid = trimmed !== "" && isValidScore(trimmed);
-                  const failing = valid && Number(trimmed) < PASSING_SCORE;
-                  return (
-                    <TableCell
-                      key={subject.id}
-                      className={cn(
-                        subjectIndex === 0 && "border-l border-border/60"
-                      )}
-                    >
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={SCORE_MIN}
-                        max={SCORE_MAX}
-                        step={1}
-                        value={raw}
-                        disabled={readOnly || pending}
-                        onChange={(e) =>
-                          setScore(learner.id, subject.id, e.target.value)
-                        }
-                        aria-label={`${learner.fullName} — ${subject.name} grade`}
-                        aria-invalid={trimmed !== "" && !valid}
-                        title={
-                          failing
-                            ? `Below the passing mark of ${PASSING_SCORE}`
-                            : undefined
-                        }
-                        className={cn(
-                          "h-8 min-w-[4.5rem] px-2 text-center tabular-nums",
-                          failing && TONE_FAILING
-                        )}
-                      />
-                    </TableCell>
-                  );
-                })}
-                <TableCell className="border-l border-border/60 text-center text-sm font-semibold tabular-nums text-violet-700 dark:text-violet-300">
-                  {average === null ? "—" : average.toFixed(2)}
-                </TableCell>
+    const shown = visibleSubjectIds
+      ? subjects.filter((s) => visibleSubjectIds.has(s.id))
+      : subjects;
+    const phoneWindow = subjectWindow(shown.length, subjectStep);
+    const phoneSubjects = shown.slice(phoneWindow.start, phoneWindow.end);
+
+    function scoreInput(
+      learner: TermGradesGridLearner,
+      subject: TermGradesGridSubject,
+      className: string,
+      placeholder?: string
+    ) {
+      const raw = cellValue(rows[learner.id], subject.id);
+      const trimmed = raw.trim();
+      const valid = trimmed !== "" && isValidScore(trimmed);
+      const failing = valid && Number(trimmed) < PASSING_SCORE;
+      return (
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={SCORE_MIN}
+          max={SCORE_MAX}
+          step={1}
+          value={raw}
+          placeholder={placeholder}
+          disabled={disabled}
+          onChange={(e) => setScore(learner.id, subject.id, e.target.value)}
+          aria-label={`${learner.fullName} — ${subject.name} grade`}
+          aria-invalid={trimmed !== "" && !valid}
+          title={failing ? `Below the passing mark of ${PASSING_SCORE}` : undefined}
+          className={cn(
+            "rounded-lg px-1 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            className,
+            failing && TONE_FAILING
+          )}
+        />
+      );
+    }
+
+    const heading = groupLabel ? (
+      <p className="border-b border-border/60 bg-violet-50/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+        {groupLabel}
+      </p>
+    ) : null;
+
+    if (subjects.length === 0) {
+      return (
+        <div>
+          {heading}
+          <p className="p-4 text-sm text-muted-foreground">
+            Your School Head has not set subjects for this grade.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {heading}
+
+        {/* Desktop (xl): the full sheet, every visible subject in one row. */}
+        <div className="hidden overflow-x-auto xl:block">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead rowSpan={2} className="w-12 text-center">
+                  #
+                </TableHead>
+                <TableHead rowSpan={2} className="min-w-[12rem]">
+                  Complete Name
+                </TableHead>
+                <TableHead rowSpan={2} className="min-w-[7rem]">
+                  <span className="block">Advisory /</span>
+                  <span className="block">Section</span>
+                </TableHead>
+                <TableHead
+                  colSpan={shown.length}
+                  scope="colgroup"
+                  className="h-auto border-l border-border/60 py-2 text-center"
+                >
+                  <span className="block">Subjects and Grades</span>
+                  <span className="block font-normal normal-case tracking-normal text-muted-foreground">
+                    {termCaption}
+                  </span>
+                </TableHead>
+                <TableHead
+                  rowSpan={2}
+                  scope="col"
+                  className="w-28 border-l border-border/60 bg-violet-50/70 text-center text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                >
+                  <span className="block">General</span>
+                  <span className="block">Average</span>
+                </TableHead>
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+              <TableRow className="hover:bg-transparent">
+                {shown.map((subject, index) => (
+                  <TableHead
+                    key={subject.id}
+                    className={cn(
+                      "h-auto min-w-[6.5rem] py-2 text-center leading-tight",
+                      index === 0 && "border-l border-border/60"
+                    )}
+                  >
+                    {subject.name}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {learners.map((learner, index) => {
+                const average = rowAverage(rows[learner.id], subjects);
+                return (
+                  <TableRow key={learner.id}>
+                    <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
+                      {indexOffset + index + 1}
+                    </TableCell>
+                    <TableCell className="font-medium">{learner.fullName}</TableCell>
+                    <TableCell className="text-muted-foreground">{learner.sectionLabel}</TableCell>
+                    {shown.map((subject, subjectIndex) => (
+                      <TableCell
+                        key={subject.id}
+                        className={cn("px-2", subjectIndex === 0 && "border-l border-border/60")}
+                      >
+                        {scoreInput(learner, subject, "h-9 w-full min-w-[4.5rem]")}
+                      </TableCell>
+                    ))}
+                    <TableCell className="border-l border-border/60 bg-violet-50/70 text-center text-base font-bold tabular-nums text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                      {average === null ? "—" : average.toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Phones and tablets: five subjects at a time; both chevrons step on. */}
+        <div className="xl:hidden">
+          <div className={cn(PHONE_ROW, "text-xs text-muted-foreground sm:text-sm")}>
+            <span className="text-center">#</span>
+            <span className="min-w-0 leading-tight">
+              <span className="block">Learner Name</span>
+              <span className="block text-[11px] italic sm:text-xs">Advisory Section</span>
+            </span>
+            <span className={cn(PHONE_SUBJECTS, "truncate")}>Subjects ({termCaption})</span>
+            <NextSubjectsButton onClick={onNextSubjects} windows={phoneWindow.windows} />
+          </div>
+          <ul>
+            {learners.map((learner, index) => (
+              <li key={learner.id} className={cn(PHONE_ROW, "last:border-b-0")}>
+                <span className="text-center text-sm tabular-nums text-muted-foreground">
+                  {indexOffset + index + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="line-clamp-2 break-words text-sm font-medium leading-snug text-blue-700 dark:text-blue-300">
+                    {learner.fullName}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {learner.sectionLabel}
+                  </span>
+                </span>
+                <span
+                  className={cn(PHONE_SUBJECTS, "grid gap-1")}
+                  style={{ gridTemplateColumns: `repeat(${Math.max(1, phoneSubjects.length)}, minmax(0, 1fr))` }}
+                >
+                  {phoneSubjects.map((subject) => (
+                    <label key={subject.id} className="flex min-w-0 flex-col items-center gap-1">
+                      <span
+                        className="text-[10px] font-medium uppercase text-muted-foreground"
+                        aria-hidden
+                      >
+                        {subjectAbbreviation(subject.name)}
+                      </span>
+                      {scoreInput(learner, subject, "h-9 w-full min-w-0 px-0 text-[13px] sm:text-sm", "—")}
+                    </label>
+                  ))}
+                </span>
+                <NextSubjectsButton onClick={onNextSubjects} windows={phoneWindow.windows} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+);
+
+/**
+ * The phone row: number, name, the five-subject block, the chevron. The block
+ * takes a fixed share of the row — 5 × 30px at 375px wide, enough for "100" —
+ * and the name wraps onto two lines in what is left.
+ */
+const PHONE_ROW =
+  "grid grid-cols-[1.25rem_minmax(0,1fr)_auto_1.75rem] items-center gap-2 border-b border-border/60 px-3 py-3 sm:grid-cols-[2rem_minmax(0,1fr)_auto_2rem] sm:gap-3";
+const PHONE_SUBJECTS = "w-[10.25rem] sm:w-[18rem] md:w-[24rem]";
+
+function NextSubjectsButton({ onClick, windows }: { onClick: () => void; windows: number }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-8 justify-self-end text-muted-foreground"
+      onClick={onClick}
+      disabled={windows <= 1}
+      aria-label="Next subjects"
+    >
+      <ChevronRight className="size-5" aria-hidden />
+    </Button>
   );
-});
+}

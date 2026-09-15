@@ -13,7 +13,7 @@ import {
   MAX_ADVISORY_SECTIONS,
 } from "@/lib/teachers/advisory-limits";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
-import { termSheetHref } from "@/lib/terms/advisory-href";
+import { legacyTermSheetRedirect, termSheetHref } from "@/lib/terms/advisory-href";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
@@ -97,43 +97,20 @@ describe("multi-advisory — the End of Terms Reports href", () => {
   const g5Rosal = { sectionId: "sec-rosal", gradeLevelId: "grade-g5" };
   const g4Ilang = { sectionId: "sec-ilang", gradeLevelId: "grade-g4" };
 
-  it("deep-links a teacher with exactly one advisory", () => {
-    expect(termsReportsHref([g4Sampaguita])).toBe(
-      "/teacher/aral/grade-g4/terms-reports"
-    );
-  });
-
-  it("sends a teacher with advisories in TWO grades to the chooser", () => {
-    // THE regression. The row used to carry one `advisoryGradeLevelId` off the
-    // shell, which was whichever section the query happened to return first, so
-    // a Grade 4 / Grade 5 adviser had no sidebar route to their Grade 5 sheet at
-    // all. A resolver that lists both is the honest destination.
-    expect(termsReportsHref([g4Sampaguita, g5Rosal])).toBe("/teacher/terms-reports");
-  });
-
-  it("sends a teacher with two sections in ONE grade to the chooser too", () => {
-    // Same grade, two sheets. A grade-scoped deep link cannot say which, so it
-    // must not be built — the grade id is not enough information.
-    expect(termsReportsHref([g4Sampaguita, g4Ilang])).toBe("/teacher/terms-reports");
-  });
-
-  it("falls back to the resolver for no advisory and for a failed read", () => {
-    expect(termsReportsHref([])).toBe("/teacher/terms-reports");
+  it("points every teacher at the one v2 sheet URL", () => {
+    // v2: the sheet opens on All Advisories, so no advisory count changes where
+    // the row points — one, several, or none (the page explains why it is shut).
     expect(termsReportsHref()).toBe("/teacher/terms-reports");
-    // Spelled out because a stringified empty value still looks like a deep link.
-    expect(termsReportsHref()).not.toContain("undefined");
-    expect(termsReportsHref()).not.toContain("null");
   });
 
   it("names the section in every link built for a sheet", () => {
-    // The grade rides in the path, the section in the query. Without the second
-    // half, a bookmark stops meaning one roster the moment the teacher picks up
-    // a second section in that grade.
+    // The section is what names one roster: two sections in one grade are two
+    // sheets.
     expect(termSheetHref(g4Sampaguita)).toBe(
-      "/teacher/aral/grade-g4/terms-reports?section=sec-sampaguita"
+      "/teacher/terms-reports?advisory=sec-sampaguita"
     );
     expect(termSheetHref(g4Ilang)).toBe(
-      "/teacher/aral/grade-g4/terms-reports?section=sec-ilang"
+      "/teacher/terms-reports?advisory=sec-ilang"
     );
     // Two sections in one grade produce two DIFFERENT links, which is the whole
     // point — by grade alone these two collapse into one.
@@ -141,23 +118,60 @@ describe("multi-advisory — the End of Terms Reports href", () => {
   });
 
   it("carries an extra param without losing the section", () => {
-    expect(termSheetHref(g5Rosal, { term: "SECOND" })).toContain("section=sec-rosal");
+    expect(termSheetHref(g5Rosal, { term: "SECOND" })).toContain("advisory=sec-rosal");
     expect(termSheetHref(g5Rosal, { term: "SECOND" })).toContain("term=SECOND");
     // An absent extra must not become the string "undefined" in the query.
     expect(termSheetHref(g5Rosal, { term: undefined })).toBe(
-      "/teacher/aral/grade-g5/terms-reports?section=sec-rosal"
+      "/teacher/terms-reports?advisory=sec-rosal"
     );
   });
 
-  it("keeps the deep href live and unhijacked for a single-advisory teacher", () => {
-    const items = flattenNavGroups(
-      getNavGroups("TEACHER", [{ id: "grade-g4", label: "Grade 4", hasAral: true }], {
-        advisoryPlacements: [g4Sampaguita],
-      })
-    );
-    const row = items.find((i) => i.id === "teacher-terms-reports");
-    expect(row?.href).toBe("/teacher/aral/grade-g4/terms-reports");
-    expect(row?.unavailable).toBeUndefined();
+  it("keeps the row live on the v2 URL for single- and multi-advisory teachers", () => {
+    for (const advisoryPlacements of [[g4Sampaguita], [g4Sampaguita, g5Rosal]]) {
+      const items = flattenNavGroups(
+        getNavGroups("TEACHER", [{ id: "grade-g4", label: "Grade 4", hasAral: true }], {
+          advisoryPlacements,
+        })
+      );
+      const row = items.find((i) => i.id === "teacher-terms-reports");
+      expect(row?.href).toBe("/teacher/terms-reports");
+      expect(row?.unavailable).toBeUndefined();
+    }
+  });
+
+  describe("the old grade-scoped URL", () => {
+    it("carries ?section= over as ?advisory=, with the view params", () => {
+      expect(
+        legacyTermSheetRedirect([g4Sampaguita, g4Ilang], "grade-g4", {
+          section: "sec-ilang",
+          term: "SECOND",
+          q: "ana",
+          page: "2",
+          perPage: "25",
+        })
+      ).toBe("/teacher/terms-reports?advisory=sec-ilang&term=SECOND&q=ana&page=2&perPage=25");
+    });
+
+    it("picks the grade's only advisory when no section is named", () => {
+      expect(legacyTermSheetRedirect([g4Sampaguita, g5Rosal], "grade-g5", {})).toBe(
+        "/teacher/terms-reports?advisory=sec-rosal"
+      );
+    });
+
+    it("opens All Advisories when the grade holds several, or none of theirs", () => {
+      expect(legacyTermSheetRedirect([g4Sampaguita, g4Ilang], "grade-g4", {})).toBe(
+        "/teacher/terms-reports"
+      );
+      expect(legacyTermSheetRedirect([g4Sampaguita], "grade-g9", { term: "FIRST" })).toBe(
+        "/teacher/terms-reports?term=FIRST"
+      );
+    });
+
+    it("never carries a section that is not one of theirs", () => {
+      expect(
+        legacyTermSheetRedirect([g4Sampaguita], "grade-g4", { section: "sec-someone-else" })
+      ).toBe("/teacher/terms-reports");
+    });
   });
 });
 

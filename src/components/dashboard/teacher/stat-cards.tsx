@@ -52,6 +52,15 @@ const WASH: Record<StatTone, string> = {
   pink: "from-pink-100/60 dark:from-pink-950/30",
 };
 
+/** Fill of the optional progress bar. */
+const BAR: Record<StatTone, string> = {
+  violet: "bg-violet-500",
+  amber: "bg-amber-500",
+  emerald: "bg-emerald-500",
+  primary: "bg-blue-500",
+  pink: "bg-pink-500",
+};
+
 /** Colour the decor's `currentColor` resolves to. */
 const DECOR_COLOR: Record<StatTone, string> = {
   violet: "text-violet-400 dark:text-violet-500",
@@ -163,16 +172,26 @@ export interface StatCardProps {
    */
   inlineOnPhone?: boolean;
   /**
+   * With `inlineOnPhone`: tighter padding, a smaller tile and type below sm,
+   * so a two-up phone row keeps each title on one line (the End of Terms
+   * phone mockup).
+   */
+  denseOnPhone?: boolean;
+  /**
    * Omit for a read-only figure. The roster's four cards describe the list
    * directly beneath them, so a link out of the card would only point back at
    * the page the reader is already on.
    */
   action?: { label: string; href: string };
   /**
-   * Phone-only whole-card target for a card with no `action`. Never set on a
-   * card that must stay read-only (Pending Profiles).
+   * Phone-only whole-card target for a card with no `action`.
    */
   href?: string;
+  /**
+   * 0–100. Draws a bar under the hint with the percentage beside it (the End
+   * of Terms "Grades Saved" card).
+   */
+  progress?: number;
 }
 
 export function StatCard({
@@ -183,8 +202,10 @@ export function StatCard({
   tone,
   decor,
   inlineOnPhone = false,
+  denseOnPhone = false,
   action,
   href,
+  progress,
 }: StatCardProps) {
   // Phones show no pill (image 4): the whole card is the link, marked by a
   // chevron beside the title. Desktop keeps the labelled pill (image 3).
@@ -193,36 +214,60 @@ export function StatCard({
     <Surface
       as="section"
       className={cn(
-        "relative flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br via-card via-60% to-card p-4 sm:p-5",
+        "relative flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br via-card via-60% to-card sm:p-5",
+        denseOnPhone ? "p-3" : "p-4",
         WASH[tone]
       )}
     >
       {decor ? <Decor kind={decor} tone={tone} compact={inlineOnPhone} /> : null}
 
       {inlineOnPhone ? (
-        <div className="relative flex items-start gap-3 lg:flex-col lg:gap-0">
+        <div
+          className={cn(
+            "relative flex items-start lg:flex-col lg:gap-0",
+            denseOnPhone ? "gap-2 sm:gap-3" : "gap-3"
+          )}
+        >
           <div className="flex items-center gap-3">
             <span
               aria-hidden
               className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11",
+                "flex shrink-0 items-center justify-center rounded-xl sm:size-11",
+                denseOnPhone ? "size-8 rounded-lg sm:rounded-xl" : "size-10",
                 TILE[tone]
               )}
             >
-              <Icon className="size-5" />
+              <Icon className={denseOnPhone ? "size-4 sm:size-5" : "size-5"} />
             </span>
             <h2 className="hidden min-w-0 flex-1 text-base font-semibold text-foreground lg:block">
               {title}
             </h2>
           </div>
           <div className="min-w-0">
-            <h2 className="text-[13px] font-semibold leading-snug text-foreground sm:text-sm lg:hidden">
+            <h2
+              className={cn(
+                "font-semibold leading-snug text-foreground sm:text-sm lg:hidden",
+                denseOnPhone ? "whitespace-nowrap text-xs" : "text-[13px]"
+              )}
+            >
               {title}
             </h2>
-            <p className="mt-1 text-2xl font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl lg:mt-3">
+            <p
+              className={cn(
+                "font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl lg:mt-3",
+                denseOnPhone ? "mt-0.5 text-xl" : "mt-1 text-2xl"
+              )}
+            >
               {value}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{hint}</p>
+            <p
+              className={cn(
+                "mt-0.5 text-muted-foreground sm:text-sm",
+                denseOnPhone ? "text-[11px] leading-tight" : "text-xs"
+              )}
+            >
+              {hint}
+            </p>
           </div>
         </div>
       ) : (
@@ -252,6 +297,27 @@ export function StatCard({
   
         </>
       )}
+
+      {progress !== undefined ? (
+        <div className="relative mt-3 flex items-center gap-3">
+          <div
+            role="progressbar"
+            aria-label={title}
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={cn("h-full rounded-full transition-[width]", BAR[tone])}
+              style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+            {progress}%
+          </span>
+        </div>
+      ) : null}
 
       {action ? (
         <PrefetchLink

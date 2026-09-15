@@ -135,10 +135,8 @@ describe("optimistic highlight — teacher rail", () => {
     ]);
   });
 
-  it("lights the deep terms-reports row rather than the ARAL picker", () => {
-    // The row's href is grade-scoped, and /teacher/aral is a prefix of it — so this
-    // pins that longest-prefix matching still awards the click to the sheet.
-    expect(activeDuringClick("/teacher", "/teacher/aral/g1/terms-reports")).toBe(
+  it("lights the terms-reports row on a click to its v2 URL", () => {
+    expect(activeDuringClick("/teacher", "/teacher/terms-reports")).toBe(
       "teacher-terms-reports"
     );
   });

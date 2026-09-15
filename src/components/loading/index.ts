@@ -10,10 +10,8 @@ export {
   AralGridSkeleton,
   AralAttendanceSkeleton,
   AralReadingLevelSkeleton,
-  AralTermGradesSkeleton,
   AralAttendanceRouteSkeleton,
   AralReadingLevelRouteSkeleton,
-  AralTermGradesRouteSkeleton,
 } from "./aral-grid-skeleton";
 export type {
   AralGridSkeletonProps,

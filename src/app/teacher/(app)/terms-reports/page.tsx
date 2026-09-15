@@ -1,11 +1,13 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/dashboard";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { TermsReportHero } from "@/components/terms/terms-report-hero";
+import { TermsReportBody } from "@/components/terms/terms-report-body";
+import { TermsReportBodySkeleton } from "@/components/terms/terms-report-skeleton";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
+import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
 import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
@@ -13,52 +15,52 @@ import {
   TERM_SHEET_NO_ADVISORY_CARD,
   TERM_SHEET_VOLUNTEER_CARD,
 } from "@/lib/terms/gate-copy";
-import { termSheetHref } from "@/lib/terms/advisory-href";
-import { FileText } from "lucide-react";
+import { parseLearnerListParams, parseLearnerPageSize } from "@/lib/learners/pagination";
+import { resolveSheetTerms, shortGradeLabel, type SheetScope } from "@/lib/terms/sheet-data";
+import type { SheetUrlState } from "@/lib/terms/sheet-view";
+import { CalendarX } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+const BASE_PATH = "/teacher/terms-reports";
+
 /**
- * Where the sidebar's "End of Terms Reports" row points whenever one sheet is
- * not the obvious answer.
+ * The v2 End of Terms sheet — every advisory a teacher holds, on one page.
  *
- * The sheet itself is grade-scoped (`/teacher/aral/[gradeId]/terms-reports`) and
- * the nav links straight to it for a teacher with exactly one advisory section.
- * This page serves the other three cases:
- *   - A teacher who advises no section: there is no grade to scope the sheet to,
- *     so they land here and get the card that explains why it is shut, rather
- *     than a deep URL that would only refuse them again.
- *   - A multi-advisory teacher: several sections, possibly in several grades, and
- *     no way to know which one they meant. They pick. Opening the first would put
- *     a teacher in front of a class they did not ask for, and the mistake is
- *     invisible until somebody notices grades on the wrong roster.
- *   - A Super Admin, who advises nothing anywhere: redirected to the ARAL grade
- *     picker, carrying `?schoolId=` so they stay in the school they were viewing.
+ * Opens on All Advisories. `?advisory=` narrows to one of their sections and
+ * `?section=` to a section inside the current scope; the two only ever narrow,
+ * and only to sections the teacher advises, so no URL can reach another
+ * adviser's class. Advisories in different grades render as separate groups,
+ * each with its own grade's subjects.
  *
- * The refusal cards below are the same objects the deep page renders, so the gate
- * reads identically whichever way a teacher arrives.
+ * The refusal cards are the shared objects the old grade-scoped sheet used, so a
+ * teacher who cannot encode reads the same explanation wherever they arrive.
+ * A Super Admin advises nothing, so they go to the ARAL grade picker and open a
+ * grade's sheet from there.
  */
 interface PageProps {
-  searchParams: Promise<{ schoolId?: string }>;
+  searchParams: Promise<{
+    schoolId?: string;
+    advisory?: string;
+    section?: string;
+    term?: string;
+    q?: string;
+    page?: string;
+    perPage?: string;
+  }>;
 }
 
-export default async function TeacherTermsReportsResolverPage({
-  searchParams,
-}: PageProps) {
+export default async function TeacherTermsReportsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const user = await requireUser("TEACHER");
 
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   if (!user.profileCompleted && !isSuperAdmin) redirect("/teacher/profiling");
 
-  // A Super Admin advises nothing, so there is no grade to resolve for them —
-  // they need the picker. `?schoolId=` rides along so the admin stays in the
-  // school context they were viewing.
+  // `?schoolId=` rides along so the admin stays in the school they were viewing.
   if (isSuperAdmin) {
     redirect(
-      sp.schoolId
-        ? `/teacher/aral?schoolId=${encodeURIComponent(sp.schoolId)}`
-        : "/teacher/aral"
+      sp.schoolId ? `/teacher/aral?schoolId=${encodeURIComponent(sp.schoolId)}` : "/teacher/aral"
     );
   }
 
@@ -66,73 +68,108 @@ export default async function TeacherTermsReportsResolverPage({
   if (!schoolId) redirect("/login");
 
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
+  const refuse = (card: React.ComponentProps<typeof EmptyState>) => (
+    <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
+      <EmptyState {...card} />
+    </AppShell>
+  );
 
   // React-`cache()`d on (schoolId, teacherId, isSuperAdmin) and already awaited by
   // the teacher layout for this request, so the designation costs no extra query.
-  const { designation, advisoryMode } = await getTeacherShellContext({
-    schoolId,
-    teacherId: user.id,
-    isSuperAdmin,
-  });
+  const [{ designation, advisoryMode }, placements, schoolYear] = await Promise.all([
+    getTeacherShellContext({ schoolId, teacherId: user.id, isSuperAdmin }),
+    getAdvisoryPlacements({ id: user.id, schoolId }),
+    getActiveSchoolYear(schoolId),
+  ]);
 
   const denial = advisoryRosterDenial({ isSuperAdmin, designation, advisoryMode });
-  if (denial === "floating") {
-    return (
-      <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
-        <EmptyState {...DECLARED_FLOATING_CARD} />
-      </AppShell>
-    );
-  }
-  if (denial === "volunteer") {
-    return (
-      <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
-        <EmptyState {...TERM_SHEET_VOLUNTEER_CARD} />
-      </AppShell>
-    );
+  if (denial === "floating") return refuse(DECLARED_FLOATING_CARD);
+  if (denial === "volunteer") return refuse(TERM_SHEET_VOLUNTEER_CARD);
+  if (placements.length === 0) return refuse(TERM_SHEET_NO_ADVISORY_CARD);
+
+  // Terms are windows over the active school year, so without one there is
+  // nothing to key a row to. Explain it rather than render a grid that would
+  // silently discard everything typed into it.
+  if (!schoolYear) {
+    return refuse({
+      icon: CalendarX,
+      title: "No active school year",
+      description:
+        "Term windows are derived from the active school year, so grades cannot be recorded without one. Ask your School Head to activate a school year, then come back.",
+    });
   }
 
-  const placements = await getAdvisoryPlacements({ id: user.id, schoolId });
-  if (placements.length === 0) {
-    return (
-      <AppShell title="End of Terms Reports" role={user.role} userName={userName}>
-        <EmptyState {...TERM_SHEET_NO_ADVISORY_CARD} />
-      </AppShell>
-    );
-  }
+  const { activeTerm, activeWindow, terms, readOnly } = await resolveSheetTerms({
+    schoolYear,
+    requestedTerm: sp.term,
+    viewer: { id: user.id, schoolId, isSuperAdmin },
+  });
 
-  // Exactly one advisory: nothing to choose between, so skip the hop. The sheet
-  // still names the section in its own URL, which is what a bookmark keeps.
-  if (placements.length === 1) {
-    redirect(termSheetHref(placements[0]));
-  }
+  // Only the teacher's own sections count. An unknown id falls back to All.
+  const advisory = placements.find((p) => p.sectionId === sp.advisory) ?? null;
+  const inAdvisory = advisory ? [advisory] : placements;
+  const sectionPick = inAdvisory.find((p) => p.sectionId === sp.section) ?? null;
+  const inScope = sectionPick ? [sectionPick] : inAdvisory;
+
+  const labelOf = (p: (typeof placements)[number]) => `${p.gradeLabel} - ${p.sectionName}`;
+  const scopes: SheetScope[] = inScope.map((p) => ({
+    key: p.sectionId,
+    gradeLevelId: p.gradeLevelId,
+    sectionId: p.sectionId,
+    label: labelOf(p),
+    gradeShort: shortGradeLabel(p.gradeLabel),
+    rosterWhere: {
+      schoolId,
+      gradeLevelId: p.gradeLevelId,
+      sectionId: p.sectionId,
+      deletedAt: null,
+      archivedAt: null,
+    },
+  }));
+
+  const pageSize = parseLearnerPageSize(sp.perPage);
+  const list = parseLearnerListParams(sp, pageSize);
+  const state: SheetUrlState = {
+    advisory: advisory?.sectionId ?? null,
+    section: sectionPick?.sectionId ?? "all",
+    term: activeTerm,
+    q: list.q,
+    pageSize,
+  };
+
+  // One grade in scope names the title; several read "All Advisories".
+  const scopeGrades = [...new Set(inScope.map((p) => p.gradeLabel))];
+  const title = `End of Terms Reports — ${
+    scopeGrades.length === 1 ? scopeGrades[0] : "All Advisories"
+  }`;
 
   return (
-    <AppShell
-      title="End of Terms Reports"
-      subtitle={`You advise ${placements.length} sections — pick the one to encode`}
-      role={user.role}
-      userName={userName}
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {placements.map((placement) => (
-          <Card key={placement.sectionId}>
-            <CardContent className="flex items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{placement.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {placement.gradeLabel}
-                </p>
-              </div>
-              <Button asChild size="sm">
-                <Link href={termSheetHref(placement)}>
-                  <FileText className="h-4 w-4" />
-                  Open sheet
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+    <AppShell title="End of Terms Reports" role={user.role} userName={userName} hideTitle>
+      <TermsReportHero
+        title={title}
+        subtitle={`${activeWindow.label} (${activeWindow.rangeLabel}) · SY ${schoolYear.label}`}
+        basePath={BASE_PATH}
+        state={state}
+        page={list.page}
+        terms={terms}
+      />
+
+      <Suspense key={`${activeTerm}:${state.advisory}:${state.section}`} fallback={<TermsReportBodySkeleton />}>
+        <TermsReportBody
+          schoolId={schoolId}
+          schoolYearId={schoolYear.id}
+          scopes={scopes}
+          state={state}
+          page={list.page}
+          basePath={BASE_PATH}
+          advisories={placements.map((p) => ({ id: p.sectionId, label: labelOf(p) }))}
+          sections={inAdvisory.map((p) => ({ id: p.sectionId, name: p.sectionName }))}
+          termLabel={activeWindow.label}
+          readOnly={readOnly}
+          canSave
+          exportScope={{ sectionIds: inScope.map((p) => p.sectionId) }}
+        />
+      </Suspense>
     </AppShell>
   );
 }

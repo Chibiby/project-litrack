@@ -395,243 +395,49 @@ describe("getNavGroups — the term report's href", () => {
 });
 
 /**
- * Regression cases for the OTHER branch of the same href — the deep one, built
- * from `options.advisoryPlacements` when there is exactly one of them.
- *
- * The fallback above (`/teacher/terms-reports`) is a resolver page: it looks up
- * the adviser's grade and redirects to `/teacher/aral/<gradeId>/terms-reports`.
- * After that redirect no nav item matched the URL, so longest-prefix fell all the
- * way through to the `/teacher` role root — the sidebar highlighted **Dashboard**
- * and the header titled the page **"Terms reports"** (a humanised URL segment)
- * while the page's own `<h1>` read "End of Terms Reports — Grade 7". Handing the
- * advised grade to the nav lets the row name the URL the teacher lands on.
- *
- * Every case here pins both directions, because the fix moves the row's href
- * *underneath* `/teacher/aral`: it must win its own URL, and it must still not
- * take a route the ARAL rows own when they collapse to the picker.
+ * v2: the row always points at `/teacher/terms-reports`, where the sheet itself
+ * renders (All Advisories by default). The old grade-scoped URL redirects a
+ * teacher there, so there is one URL for the rail to own, whatever the
+ * teacher's advisory count.
  */
-describe("getNavGroups — the term report's deep href", () => {
-  /** The URL the resolver redirects an adviser of grade `g1` to. */
-  const SHEET = "/teacher/aral/g1/terms-reports";
+describe("getNavGroups — the term report's v2 URL", () => {
+  const V2 = "/teacher/terms-reports";
+  const one = [{ sectionId: "s1", gradeLevelId: "g1" }];
+  const two = [...one, { sectionId: "s2", gradeLevelId: "g2" }];
 
-  /**
-   * Every grade payload the sidebar can hand in, with the ARAL rows' resulting
-   * href and who owns the bare picker route under it. `aralHref` collapses both
-   * ARAL rows onto `/teacher/aral` unless the teacher holds exactly ONE ARAL
-   * grade — and `/teacher/aral` is a prefix of SHEET, so in three of these four
-   * payloads the ARAL rows also match the sheet's URL and only longest-prefix
-   * matching awards it to the term report. This is the interaction most likely to
-   * break silently if the groups are reordered or `resolveActiveHref` is touched.
-   */
-  const payloads: {
-    name: string;
-    grades: NavGrade[] | undefined;
-    aralRowHref: string;
-    /** Active id on `/teacher/aral` itself, per payload. */
-    pickerOwner: string;
-  }[] = [
-    // `Learner Profiling` used to own `/teacher/aral`; it is gone, so the
-    // picker route falls to the first ARAL row whenever those collapse onto it,
-    // and belongs to nobody when they deep-link into a single ARAL grade.
-    { name: "zero ARAL grades", grades: [], aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
-    {
-      name: "exactly one ARAL grade",
-      grades: oneAral,
-      aralRowHref: "/teacher/aral/g1/attendance",
-      pickerOwner: "teacher-dashboard",
-    },
-    { name: "two ARAL grades", grades: twoAral, aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
-    { name: "no grade argument at all", grades: undefined, aralRowHref: "/teacher/aral", pickerOwner: "teacher-aral-attendance" },
-  ];
-
-  /** One advisory, so the row may deep-link. */
-  const advisoryIn = (gradeLevelId: string | null) =>
-    gradeLevelId ? [{ sectionId: "s1", gradeLevelId }] : [];
-
-  const itemsFor = (grades: NavGrade[] | undefined, gradeLevelId: string | null) =>
-    flattenNavGroups(
-      getNavGroups("TEACHER", grades, { advisoryPlacements: advisoryIn(gradeLevelId) })
-    );
-
-  const termsRow = (grades: NavGrade[] | undefined, gradeLevelId: string | null) =>
-    itemsFor(grades, gradeLevelId).find((i) => i.id === "teacher-terms-reports");
-
-  it("deep-links the row at the advised grade's sheet", () => {
-    expect(termsRow(oneAral, "g1")?.href).toBe("/teacher/aral/g1/terms-reports");
-    // Interpolated, not hard-coded to the fixture's id: the real value is a cuid
-    // off the shell context, and a hard-coded segment would send every teacher to
-    // one grade's sheet.
-    expect(termsRow(oneAral, "cl_grade7_xyz")?.href).toBe(
-      "/teacher/aral/cl_grade7_xyz/terms-reports"
-    );
-    // The grade comes from the ADVISED section, not from `hasAral`: a DepEd
-    // adviser with zero ARAL learners is still entitled to the sheet.
-    expect(termsRow([], "g1")?.href).toBe("/teacher/aral/g1/terms-reports");
-    // And the deep href is the only thing the option changes — it must not leak
-    // into the ARAL rows or make the row inert for an ordinary adviser.
-    expect(termsRow(oneAral, "g1")?.unavailable).toBeUndefined();
-    expect(termsRow(oneAral, "g1")?.soon).toBeUndefined();
-  });
-
-  it("keeps the resolver fallback for absent, null and undefined alike", () => {
-    // Three call shapes, one expected href. `null` and `undefined` reach the
-    // ternary differently from an omitted option, and the guard is a truthiness
-    // check — rewrite it as `!== undefined` and `null` starts building
-    // /teacher/aral/null/terms-reports, a 404 the teacher cannot get out of.
-    const shapes: [string, NavGroup[]][] = [
-      ["options omitted entirely", getNavGroups("TEACHER", oneAral)],
-      ["empty options object", getNavGroups("TEACHER", oneAral, {})],
-      ["empty placement list", getNavGroups("TEACHER", oneAral, { advisoryPlacements: [] })],
-      [
-        "explicit undefined",
-        getNavGroups("TEACHER", oneAral, { advisoryPlacements: undefined }),
-      ],
-      // The other option must not stand in for this one.
-      [
-        "only isAralVolunteer: false",
-        getNavGroups("TEACHER", oneAral, { isAralVolunteer: false }),
-      ],
-    ];
-    for (const [name, groups] of shapes) {
-      const href = flattenNavGroups(groups).find((i) => i.id === "teacher-terms-reports")
-        ?.href;
-      expect(href, name).toBe("/teacher/terms-reports");
-      // Spelled out because a stringified empty value is the failure mode that
-      // still *looks* like a deep link in a diff.
-      expect(href, name).not.toContain("null");
-      expect(href, name).not.toContain("undefined");
+  it("points the row at the v2 URL for one advisory, several, or none", () => {
+    for (const advisoryPlacements of [one, two, [], undefined]) {
+      const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { advisoryPlacements }));
+      expect(items.find((i) => i.id === "teacher-terms-reports")?.href).toBe(V2);
     }
   });
 
-  it("gives the sheet's own URL to the term report, not Dashboard", () => {
-    // THE regression. With the fallback href nothing matched this URL past the
-    // role root, so the sidebar lit up Dashboard on a page whose h1 read "End of
-    // Terms Reports — Grade 7". Both halves asserted: the positive says who owns
-    // it, the negative names the bug in the failure message.
-    const items = itemsFor(oneAral, "g1");
-    expect(resolveActiveItemId(SHEET, items)).toBe("teacher-terms-reports");
-    expect(resolveActiveItemId(SHEET, items)).not.toBe("teacher-dashboard");
-    // The href resolver underneath it, so a failure says whether the winning
-    // prefix or the id lookup broke.
-    expect(resolveActiveHref(SHEET, items)).toBe(SHEET);
+  it("owns its URL, so the rail lights the row and not Dashboard", () => {
+    const groups = getNavGroups("TEACHER", twoAral, { advisoryPlacements: two });
+    const items = flattenNavGroups(groups);
+    expect(resolveActiveItemId(V2, items)).toBe("teacher-terms-reports");
+    expect(resolvePageTitle(V2, groups)).toBe("End of Terms Reports");
   });
 
-  it("titles the sheet after the row, not after its URL segment", () => {
-    // Same regression, second symptom: the header falls back to a humanised last
-    // segment when no navigable item owns the route, so an adviser saw "Terms
-    // reports" in the chrome above an h1 reading "End of Terms Reports".
-    const groups = getNavGroups("TEACHER", oneAral, { advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
-    expect(resolvePageTitle(SHEET, groups)).toBe("End of Terms Reports");
-    expect(resolvePageTitle(SHEET, groups)).not.toBe("Terms reports");
-  });
-
-  for (const { name, grades, aralRowHref } of payloads) {
-    it(`wins the sheet's URL over the ARAL rows with ${name}`, () => {
-      const groups = getNavGroups("TEACHER", grades, { advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
-      const items = flattenNavGroups(groups);
-
-      // Assert the ARAL rows really are where we think first, otherwise the rest
-      // of this case can pass for the wrong reason — with 0 or 2+ ARAL grades
-      // they collapse onto /teacher/aral, which PREFIXES the sheet's URL.
-      expect(groups[1].items.map((i) => i.href)).toEqual([
-        aralRowHref,
-        aralRowHref.replace("attendance", "reading-level"),
-        "/teacher/aral/profiling",
-      ]);
-      if (aralRowHref === "/teacher/aral") {
-        expect(SHEET.startsWith(`${aralRowHref}/`)).toBe(true);
-      }
-
-      // Only longest-prefix matching separates them, so pin the winning href as
-      // well as the id — the term report's own href, not the picker's.
-      expect(resolveActiveHref(SHEET, items)).toBe(SHEET);
-      expect(resolveActiveItemId(SHEET, items)).toBe("teacher-terms-reports");
-      expect(resolveActiveItemId(SHEET, items)).not.toBe("teacher-aral-attendance");
-      expect(resolvePageTitle(SHEET, groups)).toBe("End of Terms Reports");
-    });
-  }
-
-  for (const { name, grades, pickerOwner, aralRowHref } of payloads) {
-    it(`does not steal an ARAL row's route with ${name}`, () => {
-      // The mirror of the bug the fallback href was chosen to avoid. A deep href
-      // one segment below the picker must not swallow the picker or a sibling
-      // grade route: this row precedes both ARAL rows, so an href tie or a
-      // sloppier match rule hands it their highlight.
-      const groups = getNavGroups("TEACHER", grades, { advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
-      const items = flattenNavGroups(groups);
-
-      expect(resolveActiveItemId("/teacher/aral", items)).not.toBe(
-        "teacher-terms-reports"
-      );
-      expect(resolveActiveItemId("/teacher/aral", items)).toBe(pickerOwner);
-      expect(resolvePageTitle("/teacher/aral", groups)).not.toBe(
-        "End of Terms Reports"
-      );
-
-      // A sibling grade-scoped page, one the teacher reaches constantly. Same
-      // /teacher/aral/g1/ parent as the sheet, and the same advised grade.
-      expect(resolveActiveItemId("/teacher/aral/g1/attendance", items)).not.toBe(
-        "teacher-terms-reports"
-      );
-      expect(resolveActiveItemId("/teacher/aral/g1/attendance", items)).toBe(
-        "teacher-aral-attendance"
-      );
-      expect(resolvePageTitle("/teacher/aral/g1/attendance", groups)).toBe(
-        "Weekly Attendance"
-      );
-
-      // And the neighbouring Reports route, the href this row was parked on
-      // before it shipped, stays with the item that serves it.
-      expect(resolveActiveItemId("/teacher/reports", items)).toBe("teacher-reports");
-      expect(resolvePageTitle("/teacher/reports", groups)).toBe("Reports");
-    });
-  }
-
-  it("leaves the resolver route unowned once the row deep-links", () => {
-    // The documented consequence of moving the href, recorded rather than
-    // asserted away: with an advised grade nothing in the nav names
-    // /teacher/terms-reports any more, so that URL falls to the role root. It is
-    // acceptable only because the page there redirects to SHEET immediately — a
-    // teacher never sees the chrome resolve on it. If that page is ever made to
-    // render in place for an adviser, this is the assertion that must change,
-    // and it should change deliberately.
-    const items = itemsFor(oneAral, "g1");
-    expect(items.some((i) => i.href === "/teacher/terms-reports")).toBe(false);
-    expect(resolveActiveItemId("/teacher/terms-reports", items)).toBe(
-      "teacher-dashboard"
+  it("does not take the ARAL picker or a grade page", () => {
+    const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { advisoryPlacements: one }));
+    expect(resolveActiveItemId("/teacher/aral/g1/attendance", items)).toBe(
+      "teacher-aral-attendance"
     );
+    expect(resolveActiveItemId("/teacher/reports", items)).toBe("teacher-reports");
   });
 
-  it("keeps a volunteer's deep-href row inert on its own URL", () => {
-    // A volunteer advises no section, so the shell should not hand one an
-    // advisory grade at all — but if it ever did, `unavailable` has to keep
-    // winning. `navigable()` drops the row, so the deep href cannot light up a
-    // div that has no tab stop and cannot be clicked. Belt and braces: the two
-    // options compose here, they do not overwrite each other.
-    for (const { name, grades, aralRowHref } of payloads) {
-      const items = flattenNavGroups(
-        getNavGroups("TEACHER", grades, {
-          isAralVolunteer: true,
-          advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }],
-        })
-      );
-      const terms = items.find((i) => i.id === "teacher-terms-reports");
-      // Deep href AND inert — the volunteer branch must not silently drop the
-      // href, and the deep branch must not silently drop the reason.
-      expect(terms?.href, name).toBe(SHEET);
-      expect(terms?.unavailable, name).toEqual({
-        pill: "DepEd only",
-        reason: "for DepEd teachers who advise a section",
-      });
-      expect(resolveActiveItemId(SHEET, items), name).not.toBe("teacher-terms-reports");
-      // Spelled out per payload so a regression cannot hide behind "some other
-      // row won": with the term row inert, the ARAL rows take the shared prefix
-      // when they collapse onto the picker, and the role root takes it when they
-      // deep-link into a single grade and nothing else names it.
-      expect(resolveActiveItemId(SHEET, items), name).toBe(
-        grades === oneAral ? "teacher-dashboard" : "teacher-aral-attendance"
-      );
-    }
+  it("keeps a volunteer's row inert on the same URL", () => {
+    const items = flattenNavGroups(
+      getNavGroups("TEACHER", oneAral, { isAralVolunteer: true, advisoryPlacements: one })
+    );
+    const terms = items.find((i) => i.id === "teacher-terms-reports");
+    expect(terms?.href).toBe(V2);
+    expect(terms?.unavailable).toEqual({
+      pill: "DepEd only",
+      reason: "for DepEd teachers who advise a section",
+    });
+    expect(resolveActiveItemId(V2, items)).not.toBe("teacher-terms-reports");
   });
 });
 

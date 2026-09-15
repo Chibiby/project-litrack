@@ -15,6 +15,12 @@ import { z } from "zod";
  */
 export const termGradesSaveSchema = z.object({
   gradeLevelId: z.string().min(1),
+  /**
+   * Which advisory section the cells belong to. Optional: a teacher with one
+   * advisory names nothing. A multi-advisory teacher's sheet sends one save per
+   * section, each naming it, so the gate resolves exactly one placement.
+   */
+  sectionId: z.string().min(1).optional(),
   term: z.enum(["FIRST", "SECOND", "THIRD"]),
   entries: z
     .array(
@@ -40,11 +46,22 @@ export type TermGradesSaveInput = z.infer<typeof termGradesSaveSchema>;
  * and a Super Admin's is derived from `gradeLevelId`, so a client-supplied one
  * would only be an attack surface.
  */
-export const termGradesExportSchema = z.object({
-  gradeLevelId: z.string().min(1),
-  term: z.enum(["FIRST", "SECOND", "THIRD"]),
-  section: z.string().optional(),
-  q: z.string().optional(),
-});
+export const termGradesExportSchema = z
+  .object({
+    /** Required for a Super Admin and for a single-sheet teacher export. */
+    gradeLevelId: z.string().min(1).optional(),
+    term: z.enum(["FIRST", "SECOND", "THIRD"]),
+    section: z.string().optional(),
+    q: z.string().optional(),
+    /**
+     * A teacher's advisory sections to export, one worksheet each (the All
+     * Advisories sheet). Every id passes the same advisory gate a single
+     * export does; a teacher advises at most three.
+     */
+    sectionIds: z.array(z.string().min(1)).min(1).max(3).optional(),
+  })
+  .refine((v) => v.gradeLevelId || v.sectionIds, {
+    message: "Invalid input",
+  });
 
 export type TermGradesExportInput = z.infer<typeof termGradesExportSchema>;

@@ -126,7 +126,7 @@ export async function saveTermGrades(
     return { ok: false, error: "Admin view is read-only" };
   }
 
-  const gate = await requireAdvisoryForTermSheet(user);
+  const gate = await requireAdvisoryForTermSheet(user, parsed.data.sectionId);
   if (!gate.ok) return gate;
   const { advisory } = gate;
 
@@ -404,6 +404,7 @@ export async function saveTermGrades(
   }
 
   revalidatePath(`/teacher/aral/${advisory.gradeLevelId}/terms-reports`);
+  revalidatePath("/teacher/terms-reports");
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
 
   return { ok: true, data: { saved: toSave.length, cleared: toClear.length } };
@@ -428,10 +429,19 @@ export async function exportTermGrades(
   }
 
   let schoolId: string;
-  let sectionId: string | null;
-  let rosterWhere: Prisma.LearnerWhereInput;
+  /**
+   * One worksheet each. A Super Admin and a single-sheet teacher export build
+   * one; a teacher's All Advisories export builds one per section.
+   */
+  const targets: {
+    gradeLevelId: string;
+    sectionId: string | null;
+    label: string;
+    rosterWhere: Prisma.LearnerWhereInput;
+  }[] = [];
 
   if (isSuperAdmin) {
+    if (!parsed.data.gradeLevelId) return { ok: false, error: "Invalid input" };
     // The school is DERIVED from the grade, never posted. A Super Admin is
     // cross-tenant by design, so resolving it this way costs no isolation and
     // keeps a client-supplied `schoolId` out of the payload entirely.
@@ -446,40 +456,56 @@ export async function exportTermGrades(
     // `"none"` is kept verbatim rather than flattened to null, so the audit row
     // distinguishes "the whole grade" from "the learners with no section" —
     // matching how `export-learners.ts` logs its own section filter.
-    sectionId = section === "all" ? null : section;
-    rosterWhere = {
-      schoolId,
+    targets.push({
       gradeLevelId: grade.id,
-      deletedAt: null,
-      archivedAt: null,
-      ...sectionIdWhere(section),
-      ...nameSearchWhere(parsed.data.q ?? ""),
-    };
+      sectionId: section === "all" ? null : section,
+      label: "",
+      rosterWhere: {
+        schoolId,
+        gradeLevelId: grade.id,
+        deletedAt: null,
+        archivedAt: null,
+        ...sectionIdWhere(section),
+        ...nameSearchWhere(parsed.data.q ?? ""),
+      },
+    });
   } else {
     if (!user.schoolId) return { ok: false, error: "Not found" };
-    const gate = await requireAdvisoryForTermSheet({
-      id: user.id,
-      schoolId: user.schoolId,
-    });
-    if (!gate.ok) return gate;
-    const { advisory } = gate;
+    const teacherSchoolId = user.schoolId;
+    schoolId = teacherSchoolId;
+    // Without `sectionIds` this is the single sheet it always was: the gate
+    // resolves the one advisory, and the posted grade must match it.
+    const requested: (string | undefined)[] = parsed.data.sectionIds
+      ? [...new Set(parsed.data.sectionIds)]
+      : [undefined];
+    for (const requestedSectionId of requested) {
+      const gate = await requireAdvisoryForTermSheet(
+        { id: user.id, schoolId: teacherSchoolId },
+        requestedSectionId
+      );
+      if (!gate.ok) return gate;
+      const { advisory } = gate;
 
-    if (parsed.data.gradeLevelId !== advisory.gradeLevelId) {
-      return { ok: false, error: WRONG_GRADE_MESSAGE };
+      if (!parsed.data.sectionIds && parsed.data.gradeLevelId !== advisory.gradeLevelId) {
+        return { ok: false, error: WRONG_GRADE_MESSAGE };
+      }
+
+      // The teacher's roster IS their advisory section, so `?section=` is not
+      // consulted — it cannot widen or redirect the export.
+      targets.push({
+        gradeLevelId: advisory.gradeLevelId,
+        sectionId: advisory.sectionId,
+        label: advisory.label,
+        rosterWhere: {
+          schoolId: teacherSchoolId,
+          gradeLevelId: advisory.gradeLevelId,
+          sectionId: advisory.sectionId,
+          deletedAt: null,
+          archivedAt: null,
+          ...nameSearchWhere(parsed.data.q ?? ""),
+        },
+      });
     }
-
-    schoolId = user.schoolId;
-    sectionId = advisory.sectionId;
-    // The teacher's roster IS their advisory section, so `?section=` is not
-    // consulted — it cannot widen or redirect the export.
-    rosterWhere = {
-      schoolId,
-      gradeLevelId: advisory.gradeLevelId,
-      sectionId: advisory.sectionId,
-      deletedAt: null,
-      archivedAt: null,
-      ...nameSearchWhere(parsed.data.q ?? ""),
-    };
   }
 
   const schoolYear = await prisma.schoolYear.findFirst({
@@ -506,63 +532,6 @@ export async function exportTermGrades(
   );
   if (!window) return { ok: false, error: "Invalid input" };
 
-  // Both branches above verified `gradeLevelId` belongs to `schoolId`. Seeded
-  // BEFORE the grade read so the id filter below is the sheet's real column set.
-  const subjects = await getSheetSubjects(prisma, {
-    schoolId,
-    gradeLevelId: parsed.data.gradeLevelId,
-  });
-  const subjectIds = subjects.map((s) => s.id);
-  // Same pre-M2 adoption as the save path, so a score the previous build saved
-  // is in the workbook. No-op after M2; removed with M3.
-  //
-  // Best-effort: export is a read. A failed UPDATE here must not turn a sheet
-  // that only needed exporting into an error — log it for an admin and export
-  // whatever is already pointed at a TermSubject. The save path's heal call
-  // stays fatal (it runs inside `saveTermGrades`'s transaction): a save that
-  // silently skipped adopting a legacy row could insert a second one instead.
-  try {
-    await healLegacyTermGrades(prisma, {
-      schoolId,
-      gradeLevelId: parsed.data.gradeLevelId,
-      schoolYearId: schoolYear.id,
-    });
-  } catch (err) {
-    reportError(classifyError(err, { verb: "adopt legacy term grades before export" }), {
-      route: "exportTermGrades",
-      userId: user.id,
-      schoolId,
-    });
-  }
-
-  const [learners, rows] = await Promise.all([
-    prisma.learner.findMany({
-      where: rosterWhere,
-      select: { id: true, fullName: true },
-      orderBy: { fullName: "asc" },
-    }),
-    prisma.termGrade.findMany({
-      where: {
-        schoolYearId: schoolYear.id,
-        term: parsed.data.term,
-        // Active subjects of this grade only: archived columns, and scores kept
-        // from a grade the learner moved out of, stay out of the workbook.
-        termSubjectId: { in: subjectIds },
-        // Tenancy rides on the same roster clause the learner query uses, so the
-        // two can never disagree about which rows belong to this export.
-        learner: rosterWhere,
-      },
-      select: { learnerId: true, termSubjectId: true, score: true },
-    }),
-  ]);
-
-  const byLearner = new Map<string, Map<string, number>>();
-  for (const row of rows) {
-    if (!row.termSubjectId) continue;
-    const cells = byLearner.get(row.learnerId) ?? new Map<string, number>();
-    cells.set(row.termSubjectId, row.score);
-    byLearner.set(row.learnerId, cells);
-  }
   // Prefixed so a subject id can never collide with a fixed column key.
   const columnKey = (id: string) => `subject:${id}`;
 
@@ -572,38 +541,110 @@ export async function exportTermGrades(
   wb.creator = "LITRACK";
   wb.created = new Date();
 
-  const sheet = wb.addWorksheet(window.label);
-  sheet.columns = [
-    { header: "#", key: "index", width: 6 },
-    { header: "Complete Name", key: "fullName", width: 30 },
-    ...subjects.map((subject) => ({
-      header: subject.name,
-      key: columnKey(subject.id),
-      width: 16,
-    })),
-    { header: "General Average", key: "average", width: 18 },
-  ];
-  sheet.getRow(1).font = { bold: true };
+  // Sheet names: the term for a single sheet, as it always was; the section
+  // label for each sheet of an All Advisories export. Excel refuses names over
+  // 31 characters or holding any of : \ / ? * [ ].
+  const sheetName = (label: string, index: number) =>
+    targets.length === 1
+      ? window.label
+      : (label.replace(/[:\\/?*[\]]/g, "-").slice(0, 28) || `Section ${index + 1}`);
 
-  learners.forEach((learner, index) => {
-    const cells = byLearner.get(learner.id);
-    const scores = subjects.map((subject) => cells?.get(subject.id) ?? null);
-    const row: Record<string, string | number> = {
-      index: index + 1,
-      fullName: learner.fullName,
-    };
-    subjects.forEach((subject, i) => {
-      row[columnKey(subject.id)] = scores[i] ?? "";
+  let learnerCount = 0;
+  let cellCount = 0;
+  for (const [index, target] of targets.entries()) {
+    // Every branch above verified `gradeLevelId` belongs to `schoolId`. Seeded
+    // BEFORE the grade read so the id filter below is the sheet's real column set.
+    const subjects = await getSheetSubjects(prisma, {
+      schoolId,
+      gradeLevelId: target.gradeLevelId,
     });
-    row.average = generalAverage(scores) ?? "";
-    sheet.addRow(row);
-  });
+    const subjectIds = subjects.map((s) => s.id);
+    // Same pre-M2 adoption as the save path, so a score the previous build saved
+    // is in the workbook. No-op after M2; removed with M3.
+    //
+    // Best-effort: export is a read. A failed UPDATE here must not turn a sheet
+    // that only needed exporting into an error — log it for an admin and export
+    // whatever is already pointed at a TermSubject. The save path's heal call
+    // stays fatal (it runs inside `saveTermGrades`'s transaction): a save that
+    // silently skipped adopting a legacy row could insert a second one instead.
+    try {
+      await healLegacyTermGrades(prisma, {
+        schoolId,
+        gradeLevelId: target.gradeLevelId,
+        schoolYearId: schoolYear.id,
+      });
+    } catch (err) {
+      reportError(classifyError(err, { verb: "adopt legacy term grades before export" }), {
+        route: "exportTermGrades",
+        userId: user.id,
+        schoolId,
+      });
+    }
+
+    const [learners, rows] = await Promise.all([
+      prisma.learner.findMany({
+        where: target.rosterWhere,
+        select: { id: true, fullName: true },
+        orderBy: { fullName: "asc" },
+      }),
+      prisma.termGrade.findMany({
+        where: {
+          schoolYearId: schoolYear.id,
+          term: parsed.data.term,
+          // Active subjects of this grade only: archived columns, and scores kept
+          // from a grade the learner moved out of, stay out of the workbook.
+          termSubjectId: { in: subjectIds },
+          // Tenancy rides on the same roster clause the learner query uses, so the
+          // two can never disagree about which rows belong to this export.
+          learner: target.rosterWhere,
+        },
+        select: { learnerId: true, termSubjectId: true, score: true },
+      }),
+    ]);
+    learnerCount += learners.length;
+    cellCount += rows.length;
+
+    const byLearner = new Map<string, Map<string, number>>();
+    for (const row of rows) {
+      if (!row.termSubjectId) continue;
+      const cells = byLearner.get(row.learnerId) ?? new Map<string, number>();
+      cells.set(row.termSubjectId, row.score);
+      byLearner.set(row.learnerId, cells);
+    }
+
+    const sheet = wb.addWorksheet(sheetName(target.label, index));
+    sheet.columns = [
+      { header: "#", key: "index", width: 6 },
+      { header: "Complete Name", key: "fullName", width: 30 },
+      ...subjects.map((subject) => ({
+        header: subject.name,
+        key: columnKey(subject.id),
+        width: 16,
+      })),
+      { header: "General Average", key: "average", width: 18 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+
+    learners.forEach((learner, index) => {
+      const cells = byLearner.get(learner.id);
+      const scores = subjects.map((subject) => cells?.get(subject.id) ?? null);
+      const row: Record<string, string | number> = {
+        index: index + 1,
+        fullName: learner.fullName,
+      };
+      subjects.forEach((subject, i) => {
+        row[columnKey(subject.id)] = scores[i] ?? "";
+      });
+      row.average = generalAverage(scores) ?? "";
+      sheet.addRow(row);
+    });
+  }
 
   const meta = wb.addWorksheet("Export info");
   meta.addRow(["School year", schoolYear.label]);
   meta.addRow(["Term", window.label]);
   meta.addRow(["Months", window.rangeLabel]);
-  meta.addRow(["Learner count", learners.length]);
+  meta.addRow(["Learner count", learnerCount]);
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
   // Local date key, not `toISOString().slice(0, 10)` — the latter names the file
@@ -612,21 +653,23 @@ export async function exportTermGrades(
     schoolToday()
   )}.xlsx`;
 
+  const single = targets.length === 1 ? targets[0] : null;
   await writeAudit({
     userId: user.id,
     schoolId,
     action: AUDIT_ACTIONS.TERM_GRADES_EXPORT,
     resource: "TermGrade",
-    resourceId: parsed.data.gradeLevelId,
+    resourceId: single ? single.gradeLevelId : (targets[0]?.gradeLevelId ?? null),
     // Counts only. The exported scores themselves stay out of `AuditLog`.
     metadata: {
       schoolId,
-      gradeLevelId: parsed.data.gradeLevelId,
-      sectionId,
+      gradeLevelId: single ? single.gradeLevelId : null,
+      sectionId: single ? single.sectionId : null,
+      ...(single ? {} : { sectionIds: targets.map((t) => t.sectionId) }),
       term: parsed.data.term,
       schoolYearId: schoolYear.id,
-      learnerCount: learners.length,
-      cellCount: rows.length,
+      learnerCount,
+      cellCount,
       role: user.role,
     },
   });

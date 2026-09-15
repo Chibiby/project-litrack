@@ -392,33 +392,6 @@ export function AralReadingLevelSkeleton() {
   );
 }
 
-/**
- * End of terms reports: the term switcher, the auto-lock note, then a grouped
- * two-row header over `#`, Complete Name, a run of subject columns, and the
- * General Average. Paginated; no trailing info cards.
- *
- * `dataColumns` is a fixed 8 — the School Head-managed default — even though a
- * grade's real subject count (1–15) is read inside the `<Suspense>` boundary
- * this skeleton stands in for and is not known yet. An approximation, not a
- * contract: the real header replaces it as soon as the page streams in.
- */
-export function AralTermGradesSkeleton() {
-  return (
-    <AralGridSkeleton
-      banner="chips"
-      header="toolbar"
-      nameWidth={200}
-      dataColumns={8}
-      dataColumnWidth={104}
-      tailColumns={1}
-      groupedHeader
-      footer
-      infoCards={0}
-      leadInfoCard
-    />
-  );
-}
-
 /** One header action pill. `tall` marks the default-size trigger (h-10 vs h-9). */
 interface AralRouteAction {
   width: number;
@@ -548,24 +521,6 @@ export function AralReadingLevelRouteSkeleton() {
       actions={[{ width: LINK_ATTENDANCE }, { width: LINK_TERMS }]}
     >
       <AralReadingLevelSkeleton />
-    </AralRouteSkeleton>
-  );
-}
-
-/** `loading.tsx` for `/teacher/aral/[gradeId]/terms-reports`. */
-export function AralTermGradesRouteSkeleton() {
-  return (
-    <AralRouteSkeleton
-      label="Loading end of terms reports"
-      titleWidth={280}
-      subtitleWidth={280}
-      actions={[
-        { width: LINK_ATTENDANCE },
-        { width: LINK_READING },
-        ACTION_ENROLL,
-      ]}
-    >
-      <AralTermGradesSkeleton />
     </AralRouteSkeleton>
   );
 }

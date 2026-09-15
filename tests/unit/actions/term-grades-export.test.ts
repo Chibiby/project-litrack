@@ -1542,3 +1542,105 @@ describe("exportTermGrades — Zod refusals", () => {
     expectRefusedBeforeReading();
   });
 });
+
+/**
+ * The v2 All Advisories export: `sectionIds` names the teacher's sections and
+ * the workbook carries one worksheet per section, each read through the same
+ * advisory gate and roster clause as a single-sheet export.
+ */
+describe("exportTermGrades — one worksheet per advisory (sectionIds)", () => {
+  const ROSAL_SUBJECT_ID = "subject-g8-science";
+
+  function addSecondAdvisory() {
+    sections.push({
+      id: OTHER_SECTION_ID,
+      name: "Rosal",
+      schoolId: SCHOOL_ID,
+      gradeLevelId: OTHER_GRADE_ID,
+      gradeType: "G8",
+      deletedAt: null,
+      adviserId: TEACHER_ID,
+    });
+    grades.push({ id: OTHER_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null });
+    termSubjects.push({
+      id: ROSAL_SUBJECT_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: OTHER_GRADE_ID,
+      name: "Science",
+      position: 0,
+      deletedAt: null,
+    });
+    learners.push(
+      learner({
+        id: "learner-rosal",
+        fullName: "Cruz, Carlo",
+        gradeLevelId: OTHER_GRADE_ID,
+        sectionId: OTHER_SECTION_ID,
+      })
+    );
+    cells.push(cell({ learnerId: "learner-rosal", termSubjectId: ROSAL_SUBJECT_ID, score: 81 }));
+  }
+
+  async function sheetsOf(base64: string) {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(base64, "base64") as unknown as ExcelLoadable);
+    return wb.worksheets.map((sheet) => ({ name: sheet.name, rows: grid(sheet, 5) }));
+  }
+
+  it("builds a worksheet per section, each with its own grade's subjects", async () => {
+    addSecondAdvisory();
+    const res = await exportTermGrades({
+      term: OPEN_TERM,
+      sectionIds: [SECTION_ID, OTHER_SECTION_ID],
+    });
+    const sheets = await sheetsOf(fileOf(res).base64);
+
+    expect(sheets.map((s) => s.name)).toEqual([
+      "Grade 7 · Sampaguita",
+      "Grade 8 · Rosal",
+      "Export info",
+    ]);
+    expect(sheets[0].rows[0]).toEqual(HEADER_ROW);
+    expect(sheets[0].rows.slice(1).map((r) => r[1])).toEqual(["Abad, Ana", "Zabala, Zeny"]);
+    expect(sheets[1].rows[0].slice(0, 4)).toEqual([
+      "#",
+      "Complete Name",
+      "Science",
+      "General Average",
+    ]);
+    expect(sheets[1].rows[1].slice(0, 4)).toEqual([1, "Cruz, Carlo", 81, 81]);
+
+    // Each roster read is pinned to its own section and grade.
+    expect(learnerFindManyArgs.map((a) => [a.where.gradeLevelId, a.where.sectionId])).toEqual([
+      [GRADE_ID, SECTION_ID],
+      [OTHER_GRADE_ID, OTHER_SECTION_ID],
+    ]);
+
+    const audit = writeAudit.mock.calls[0][0];
+    expect(audit.metadata).toMatchObject({
+      gradeLevelId: null,
+      sectionId: null,
+      sectionIds: [SECTION_ID, OTHER_SECTION_ID],
+      learnerCount: 3,
+    });
+    expectReadOnly();
+  });
+
+  it("refuses the whole export when one section is not the teacher's", async () => {
+    addSecondAdvisory();
+    sections[1].adviserId = "someone-else";
+    const res = await exportTermGrades({
+      term: OPEN_TERM,
+      sectionIds: [SECTION_ID, OTHER_SECTION_ID],
+    });
+    expect(res.ok).toBe(false);
+    expectRefusedBeforeReading();
+  });
+
+  it("refuses a payload that names neither a grade nor sections", async () => {
+    const res = await exportTermGrades({ term: OPEN_TERM });
+    expect(errorOf(res)).toBe("Invalid input");
+    expectRefusedBeforeReading();
+  });
+});

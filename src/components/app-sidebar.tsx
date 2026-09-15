@@ -68,10 +68,9 @@ interface AppSidebarProps {
    */
   isFloating?: boolean;
   /**
-   * Every advisory section this teacher holds. Points the "End of Terms Reports"
-   * item at the grade-scoped sheet — but only when there is exactly one — instead of
-   * the resolver route, so the row can match its own URL; see
-   * `NavOptions.advisoryPlacements`.
+   * Every advisory section this teacher holds, passed through to the nav; see
+   * `NavOptions.advisoryPlacements`. The End of Terms Reports row no longer
+   * depends on it (v2: one URL for every advisory).
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */

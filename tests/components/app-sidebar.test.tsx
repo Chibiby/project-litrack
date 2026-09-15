@@ -328,36 +328,22 @@ describe("AppSidebar — teacher", () => {
     expect(screen.queryByText("End of Terms Reports — soon")).toBeNull();
   });
 
-  it("deep-links End of Terms Reports at the advised grade's sheet", () => {
-    // The prop the shell now forwards. Asserted at the component and not only on
-    // getNavGroups because the failure this catches is the advisory grade
-    // stopping at the shell — the config would still be correct while every
-    // teacher's sidebar shipped the resolver href.
+  it("links End of Terms Reports at the v2 sheet URL", () => {
+    // v2: one URL for every advisory count; the sheet opens on All Advisories.
     renderTeacherSidebar({ advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
     const link = screen.getAllByRole("link", { name: "End of Terms Reports" })[0];
-    // A real anchor, not the inert div: the deep branch must not tip the row into
-    // the `unavailable` treatment on its way through.
+    // A real anchor, not the inert div.
     expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe("/teacher/aral/g1/terms-reports");
+    expect(link.getAttribute("href")).toBe("/teacher/terms-reports");
     expect(link.closest("[aria-disabled]")).toBeNull();
-    // The resolver href is gone from the sidebar in this branch — if both were
-    // present the row would be duplicated, which is how a half-applied fix looks.
-    expect(
-      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
-    ).not.toContain("/teacher/terms-reports");
-    // The ARAL rows keep their own grade-scoped hrefs; the deep term href sits
-    // one segment under /teacher/aral and must not disturb them.
+    // The ARAL rows keep their own grade-scoped hrefs.
     expect(
       screen.getAllByRole("link", { name: "Weekly Attendance" })[0].getAttribute("href")
     ).toBe("/teacher/aral/g1/attendance");
   });
 
   it("highlights End of Terms Reports, not Dashboard, on the sheet's URL", () => {
-    // The regression the deep href exists to fix, at the level the teacher sees
-    // it: after /teacher/terms-reports redirected, no item matched the URL, so
-    // longest-prefix fell through to /teacher and the sidebar lit up Dashboard on
-    // a page titled "End of Terms Reports — Grade 3".
-    pathname.value = "/teacher/aral/g1/terms-reports";
+    pathname.value = "/teacher/terms-reports";
     renderTeacherSidebar({ advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }] });
 
     const current = screen.getAllByRole("link", { current: "page" });

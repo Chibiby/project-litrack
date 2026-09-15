@@ -642,17 +642,12 @@ export function teacherLearnerFilter(
  *
  * `advisoryPlacements` — every section this teacher advises, as
  * `{ sectionId, gradeLevelId }`, empty when they advise none — rides along for
- * the same reason. The sidebar needs it to build the "End of Terms Reports"
- * href as a real `/teacher/aral/<gradeId>/terms-reports` URL that a nav item can
- * match, instead of pointing at a resolver route whose redirect target matches
- * nothing and leaves "Dashboard" highlighted. Fetching it per-page would add a
- * third blocking read to every /teacher navigation, so it is a third promise on
- * a query already in flight.
+ * the same reason: fetching it per-page would add a third blocking read to
+ * every /teacher navigation, so it is a third promise on a query already in
+ * flight.
  *
  * A LIST, never one grade: multi-advisory lets one teacher hold up to three
- * sections, in one grade or several. Consumers decide for themselves whether a
- * destination is unambiguous enough to deep-link into — `termsReportsHref` only
- * does so at exactly one placement, and `resolveAdvisoryGradeScope`
+ * sections, in one grade or several. `resolveAdvisoryGradeScope`
  * (`src/lib/teachers/advisory.ts`) asks rather than guesses when a grade holds
  * more than one.
  */

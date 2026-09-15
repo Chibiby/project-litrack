@@ -37,29 +37,16 @@ function renderHeader(
 }
 
 describe("AppHeader", () => {
-  it("shows the page title from the active nav item", () => {
-    pathname.value = "/teacher/reports";
-    renderHeader();
-    expect(screen.getByText("Reports")).not.toBeNull();
-  });
-
-  it("drops the title on the dashboard, which opens with its own greeting (v2)", () => {
-    pathname.value = "/teacher";
-    renderHeader();
-    expect(screen.queryByText("Dashboard")).toBeNull();
-  });
-
-  it("updates the title for a nested route", () => {
-    pathname.value = "/teacher/learners/abc";
-    renderHeader();
-    expect(screen.getByText("Learners")).not.toBeNull();
-  });
-
-  it("does not render the header title as a heading (the body owns the page's h1)", () => {
-    pathname.value = "/teacher";
-    renderHeader();
-    expect(screen.queryByRole("heading", { name: "Dashboard" })).toBeNull();
-  });
+  it.each(["/teacher", "/teacher/reports", "/teacher/learners", "/teacher/learners/abc"])(
+    "carries no page title on %s (v2: the page names itself)",
+    (path) => {
+      pathname.value = path;
+      renderHeader();
+      for (const label of ["Dashboard", "Reports", "Learners"]) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+    }
+  );
 
   it("renders search, notifications and the theme toggle", () => {
     pathname.value = "/teacher";
@@ -87,22 +74,6 @@ describe("AppHeader", () => {
     expect(
       screen.getByRole("button", { name: /switch to (dark|light) mode/i })
     ).not.toBeNull();
-  });
-
-  it("still names the roster page for a volunteer, whose Learners item is inert", () => {
-    // For a volunteer the Learners item is marked `unavailable`, so navigable()
-    // drops it and the title can no longer come from the nav label. It falls
-    // through to the humanised path segment — which lands on "Learners" anyway.
-    // Worth asserting through the component because both failure modes are
-    // silent: a blank chrome label, or "Dashboard" leaking in from the /teacher
-    // role-root prefix match. The volunteer can still reach this URL (dashboard
-    // cards link here), so the header must name where they are.
-    pathname.value = "/teacher/learners";
-    renderHeader(vi.fn(), { isAralVolunteer: true });
-    expect(screen.getByText("Learners")).not.toBeNull();
-    // The header carries no nav links, so the inert row's absence here is
-    // expected — the search combobox is the only volunteer-conditional control.
-    expect(screen.queryByRole("combobox")).toBeNull();
   });
 
   it("drops the search box for a floating teacher too", () => {

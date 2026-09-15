@@ -11,6 +11,51 @@
         ],
         "createdAt": "2026-08-22T13:09:18.211Z",
         "reason": "Pre-existing approved design, not this branch: .violet-section is documented in CLAUDE.md as the reserved ARAL accent, the CSS comment says 'keep for ARAL profiling', and it landed in e50221c 'rebuild the teacher dashboard to the approved design'. This branch (perf/latency-and-throughput) changes 0 lines of globals.css."
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/dashboard/teacher/greeting-hero.tsx"
+        ],
+        "createdAt": "2026-09-15T05:37:05.414Z",
+        "reason": "Owner-supplied v2 mockup and banner PNGs are lavender/sky; the gradient only fills the area the artwork does not cover, so it matches the art"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/nav/nav-highlight.tsx"
+        ],
+        "createdAt": "2026-09-15T07:01:26.943Z",
+        "reason": "Owner's v2 desktop mockup shows the active sidebar item as a violet gradient pill; this component reproduces that pill"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/shell/page-hero.tsx"
+        ],
+        "createdAt": "2026-09-15T12:14:55.965Z",
+        "reason": "Shared v2 banner extracted from greeting-hero (already sanctioned): owner-supplied mockups and banner PNGs are lavender/sky, and the gradient only fills where the art does not"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/learners/learner-list-toolbar.tsx"
+        ],
+        "createdAt": "2026-09-15T12:14:56.084Z",
+        "reason": "Owner's v2 Learners mockup shows the active tab as the same violet gradient pill as the sidebar highlight (nav-highlight.tsx, already sanctioned)"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/terms/terms-report-hero.tsx"
+        ],
+        "createdAt": "2026-09-15T14:08:43.816Z",
+        "reason": "Owner's v2 End of Terms mockup (desktop and phone) shows the active term tab as the same violet gradient pill as the sidebar highlight and Learners tabs (already sanctioned)"
       }
     ]
   }

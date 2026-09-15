@@ -220,20 +220,3 @@ export function totalPages(totalCount: number, pageSize: number = LEARNER_PAGE_S
   if (totalCount <= 0) return 1;
   return Math.ceil(totalCount / pageSize);
 }
-
-/**
- * The Advisory switcher's ‹ › step. Walks the teacher's advisories in order,
- * with "all advisories" (`null`) as the stop before the first and after the
- * last, so the arrows can always get back to the whole roster. Pure.
- */
-export function stepAdvisory(
-  advisoryIds: readonly string[],
-  current: string | null,
-  direction: 1 | -1
-): string | null {
-  if (advisoryIds.length === 0) return null;
-  const stops: (string | null)[] = [null, ...advisoryIds];
-  const at = Math.max(0, stops.indexOf(current));
-  const next = (at + direction + stops.length) % stops.length;
-  return stops[next];
-}

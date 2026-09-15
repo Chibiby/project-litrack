@@ -1,15 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Archive,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Search,
-  SlidersHorizontal,
-  Users,
-} from "lucide-react";
+import { Archive, ClipboardList, Search, SlidersHorizontal, Users } from "lucide-react";
+import { AdvisorySelect } from "@/components/learners/advisory-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +28,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   LEARNER_PAGE_SIZE_OPTIONS,
-  stepAdvisory,
   type LearnerAralStatusFilter,
   type LearnerGenderFilter,
   type LearnerListSort,
@@ -44,8 +36,8 @@ import {
 /**
  * v2 roster controls, to the owner's Learners mockups.
  *
- * `LearnerRosterNav` sits above the table panel: the three tabs, the Advisory
- * switcher and the add control. `LearnerListToolbar` is the panel's own top
+ * `LearnerRosterNav` sits above the table panel: the three tabs, the
+ * highlighted advisory dropdown and the add control. `LearnerListToolbar` is the panel's own top
  * row: search, every facet, More Filters and bulk actions. Below xl the facets
  * move into a sheet behind one filter button, as in the phone mockup.
  *
@@ -144,7 +136,7 @@ export function withSection(s: RosterUrlState, section: string): RosterUrlState 
  * Facet control: a small caption stacked over the current value, matching the
  * mockup. `line-clamp-none` undoes SelectTrigger's single-line clamp.
  */
-function FacetSelect({
+export function FacetSelect({
   id,
   label,
   value,
@@ -216,10 +208,8 @@ export function LearnerRosterNav({
     archivedView: true,
     q: "",
   });
-  const ids = advisories.map((a) => a.id);
   const go = (advisory: string | null) =>
     onNavigate(rosterHref(basePath, withAdvisory(state, advisory, advisories)));
-  const noAdvisories = advisories.length === 0;
 
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -264,57 +254,12 @@ export function LearnerRosterNav({
       </nav>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
-          <span className="shrink-0 text-sm font-medium text-foreground">
-            Advisory
-          </span>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-10 shrink-0 rounded-xl"
-              disabled={noAdvisories}
-              onClick={() => go(stepAdvisory(ids, state.advisory, -1))}
-              aria-label="Previous advisory"
-            >
-              <ChevronLeft className="size-4" aria-hidden />
-            </Button>
-            <Select
-              value={state.advisory ?? "all"}
-              onValueChange={(v) => go(v === "all" ? null : v)}
-              disabled={noAdvisories}
-            >
-              <SelectTrigger
-                aria-label="Advisory"
-                className="h-10 min-w-0 flex-1 justify-between rounded-xl font-medium sm:w-48 sm:flex-none"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {noAdvisories ? "No advisory" : "All advisories"}
-                </SelectItem>
-                {advisories.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-10 shrink-0 rounded-xl"
-              disabled={noAdvisories}
-              onClick={() => go(stepAdvisory(ids, state.advisory, 1))}
-              aria-label="Next advisory"
-            >
-              <ChevronRight className="size-4" aria-hidden />
-            </Button>
-          </div>
-        </div>
+        <AdvisorySelect
+          advisories={advisories}
+          value={state.advisory}
+          onChange={go}
+          className="w-full sm:w-56"
+        />
         {addControl ? <div className="shrink-0">{addControl}</div> : null}
       </div>
     </div>
@@ -377,22 +322,6 @@ function Facets({
         {sections.map((s) => (
           <SelectItem key={s.id} value={s.id}>
             {s.name}
-          </SelectItem>
-        ))}
-      </FacetSelect>
-      <FacetSelect
-        id={`${idPrefix}-advisory`}
-        label="Advisory"
-        value={state.advisory ?? "all"}
-        onValueChange={(v) =>
-          go(withAdvisory(state, v === "all" ? null : v, advisories))
-        }
-        className={className}
-      >
-        <SelectItem value="all">All Advisories</SelectItem>
-        {advisories.map((a) => (
-          <SelectItem key={a.id} value={a.id}>
-            {a.label}
           </SelectItem>
         ))}
       </FacetSelect>

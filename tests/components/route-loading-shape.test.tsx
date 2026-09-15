@@ -12,7 +12,7 @@
  * roster, ARAL and reports alike, so a table skeleton there rendered a table on
  * top of the dashboard.
  *
- * The three ARAL grid routes are the first kind, and they are unusual in one
+ * The two ARAL grid routes are the first kind, and they are unusual in one
  * respect: their `loading.tsx` and their page's Suspense fallback render the
  * *same* prop-less preset. That makes the strongest check available — the two
  * subtrees must be identical HTML — and the last block below does exactly that.
@@ -28,11 +28,8 @@ import TeacherDashboardLoading from "@/app/teacher/(app)/(dashboard)/loading";
 import TeacherAralAttendanceLoading from "@/app/teacher/(app)/aral/[gradeId]/attendance/loading";
 import TeacherAralReadingLevelLoading from "@/app/teacher/(app)/aral/[gradeId]/reading-level/loading";
 import TeacherAralTermsReportsLoading from "@/app/teacher/(app)/aral/[gradeId]/terms-reports/loading";
-import {
-  AralAttendanceSkeleton,
-  AralReadingLevelSkeleton,
-  AralTermGradesSkeleton,
-} from "@/components/loading";
+import TeacherTermsReportsLoading from "@/app/teacher/(app)/terms-reports/loading";
+import { AralAttendanceSkeleton, AralReadingLevelSkeleton } from "@/components/loading";
 import { clearPendingPostLoginSplash } from "@/lib/post-login-flag";
 
 afterEach(cleanup);
@@ -122,15 +119,6 @@ const ARAL_GRID_ROUTES: AralGridRoute[] = [
     footer: true,
     infoCards: 2,
   },
-  {
-    label: "end of terms reports",
-    dir: "terms-reports",
-    Boundary: TeacherAralTermsReportsLoading,
-    Fallback: AralTermGradesSkeleton,
-    presetName: "AralTermGradesSkeleton",
-    footer: true,
-    infoCards: 1,
-  },
 ];
 
 const ARAL_ROUTE_DIR = path.resolve(
@@ -181,7 +169,7 @@ function gridSkeletonOf(container: HTMLElement): HTMLElement {
 }
 
 /**
- * Footer presence × info-card count. No two of the three presets share that
+ * Footer presence × info-card count. The two presets do not share that
  * pair, which is what makes a preset wired to the wrong route visible. Column
  * counts would discriminate too, but they churn on every visual tweak.
  */
@@ -282,7 +270,7 @@ describe("ARAL grid route loading boundaries", () => {
     });
   }
 
-  it("the three presets draw three distinguishable shapes", () => {
+  it("the presets draw distinguishable shapes", () => {
     // The per-route expectations above only catch a swapped preset if no two
     // routes expect the same thing. Assert that here rather than trusting the
     // table to stay distinct.
@@ -371,4 +359,35 @@ describe("ARAL grid route title blocks", () => {
       expect(srOnly!.closest("[aria-hidden]")).toBeNull();
     });
   }
+});
+
+/**
+ * v2 End of Terms: the sheet left the ARAL grid family. Both of its URLs draw
+ * the page's own banner-and-body skeleton, gutter and busy state included, so
+ * a teacher on the v2 route and a Super Admin on the grade route see the same
+ * handover.
+ */
+describe("End of Terms route loading boundaries", () => {
+  for (const [label, Boundary] of [
+    ["/teacher/terms-reports", TeacherTermsReportsLoading],
+    ["/teacher/aral/[gradeId]/terms-reports", TeacherAralTermsReportsLoading],
+  ] as const) {
+    it(`${label} draws the gutter and announces the wait`, () => {
+      const { container } = render(<Boundary />);
+      const root = boundaryRootOf(container);
+      expect(paddingClassesOf(root)).toEqual(["p-4", "lg:p-6"]);
+      expect(root.getAttribute("aria-busy")).toBe("true");
+      expect(root.querySelector(".sr-only")?.textContent).toBe("Loading end of terms reports");
+    });
+  }
+
+  it("both pages hand Suspense the same body skeleton their boundaries draw", () => {
+    for (const page of [
+      "../../src/app/teacher/(app)/terms-reports/page.tsx",
+      "../../src/app/teacher/(app)/aral/[gradeId]/terms-reports/page.tsx",
+    ]) {
+      const source = readFileSync(path.resolve(__dirname, page), "utf8");
+      expect(source, page).toContain("fallback={<TermsReportBodySkeleton />}");
+    }
+  });
 });

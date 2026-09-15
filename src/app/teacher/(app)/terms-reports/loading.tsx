@@ -8,7 +8,7 @@ import { TermsReportRouteSkeleton } from "@/components/terms/terms-report-skelet
  * soft nav. Draws the same banner, cards and table blocks the page's own
  * Suspense fallback continues, so the handover does not change shape.
  */
-export default function TeacherAralTermsReportsLoading() {
+export default function TeacherTermsReportsLoading() {
   return (
     <RouteLoadingOverlay>
       <TermsReportRouteSkeleton />

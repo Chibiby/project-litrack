@@ -1511,3 +1511,58 @@ describe("saveTermGrades — the set-based write", () => {
     expect(learnerFindMany).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * v2: the All Advisories sheet saves one section at a time and names it. A
+ * multi-advisory teacher's save used to be refused outright ("Choose which one
+ * this belongs to") because nothing on the sheet could say which section.
+ */
+describe("saveTermGrades — a named advisory section (sectionId)", () => {
+  function addSecondAdvisoryInGrade() {
+    sections.push({
+      id: OTHER_SECTION_ID,
+      name: "Rosal",
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      gradeType: "G7",
+      deletedAt: null,
+      adviserId: TEACHER_ID,
+    });
+    learners.push(learner({ id: "learner-rosal", sectionId: OTHER_SECTION_ID }));
+  }
+
+  it("still asks which section when a multi-advisory save names none", async () => {
+    addSecondAdvisoryInGrade();
+    const res = await post();
+    expect(res.ok).toBe(false);
+    expect(learnerFindMany).not.toHaveBeenCalled();
+  });
+
+  it("saves into the section it names, through that section's roster clause", async () => {
+    addSecondAdvisoryInGrade();
+    const res = await saveTermGrades({
+      gradeLevelId: GRADE_ID,
+      sectionId: OTHER_SECTION_ID,
+      term: OPEN_TERM,
+      entries: [{ learnerId: "learner-rosal", termSubjectId: SUBJECT_IDS.ENGLISH, score: 88 }],
+    });
+    expect(res.ok).toBe(true);
+    expect(learnerFindManyArgs[0].where).toMatchObject({
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      sectionId: OTHER_SECTION_ID,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/teacher/terms-reports");
+  });
+
+  it("refuses a section the teacher does not advise", async () => {
+    const res = await saveTermGrades({
+      gradeLevelId: GRADE_ID,
+      sectionId: "section-someone-else",
+      term: OPEN_TERM,
+      entries: [{ learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, score: 88 }],
+    });
+    expect(res.ok).toBe(false);
+    expect(learnerFindMany).not.toHaveBeenCalled();
+  });
+});

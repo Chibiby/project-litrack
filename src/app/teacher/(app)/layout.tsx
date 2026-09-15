@@ -75,11 +75,8 @@ export default async function TeacherAppLayout({
         label: GRADE_LEVEL_LABELS[g.type],
         hasAral: g.hasAral,
       }));
-      // The "End of Terms Reports" sheet is grade-scoped but its grade comes from
-      // the advised section, so the nav needs these to point the row at the URL the
-      // teacher actually lands on. Defaults to empty, so a failed read — and a
-      // multi-advisory teacher, for whom no single sheet is the answer — both leave
-      // that row on the `/teacher/terms-reports` resolver rather than guessing.
+      // Passed through to the nav. Defaults to empty, so a failed read leaves
+      // the nav as it would be for a teacher with no advisory.
       advisoryPlacements = shell.advisoryPlacements;
       // A Non-DepEd ARAL Volunteer holds the TEACHER role but is not a teacher,
       // and the account menu is where they see themselves named. Left undefined

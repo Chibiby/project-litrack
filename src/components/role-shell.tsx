@@ -42,9 +42,9 @@ interface RoleShellProps {
    */
   isFloating?: boolean;
   /**
-   * Every advisory section this teacher holds. Points the "End of Terms Reports"
-   * row at the grade-scoped sheet the teacher
-   * actually lands on; see `NavOptions.advisoryPlacements`.
+   * Every advisory section this teacher holds, passed through to the nav; see
+   * `NavOptions.advisoryPlacements`. The End of Terms Reports row no longer
+   * depends on it (v2: one URL for every advisory).
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   notifications?: ShellNotification[];
