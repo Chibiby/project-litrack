@@ -74,6 +74,16 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.18.2",
+    date: "2026-09-15",
+    title: "Default End of Terms subjects can be edited again",
+    announce: true,
+    fixes: [
+      { text: "On Default Term Subjects, Add subject, Restore and the move up/down arrows work again. Before, they failed with an error.", roles: ["SUPER_ADMIN"] },
+      "The default End of Terms subjects for Grades 1 to 10 now follow the new lists. Grade 1: Reading and Literacy, Language, Makabansa, GMRC and Math. Grade 2: English, Filipino, Math, GMRC and Makabansa. Grade 3 adds Science. Grades 4 to 10: Math, Science, English, Filipino, MAPEH, Araling Panlipunan, TLE and GMRC. A school gets them when a School Head presses Reset to default.",
+    ],
+  },
+  {
     version: "1.18.1",
     date: "2026-09-15",
     title: "Teacher changes show up right away",

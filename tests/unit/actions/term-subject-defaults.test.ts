@@ -130,11 +130,11 @@ const updateMany = vi.fn(
 );
 
 /** `lockType`'s advisory lock — result ignored by the action. */
-const txQueryRaw = vi.fn(async (..._args: unknown[]) => []);
+const txExecuteRaw = vi.fn(async (..._args: unknown[]) => 1);
 
 function makeTx() {
   return {
-    $queryRaw: (...args: unknown[]) => txQueryRaw(...(args as [never])),
+    $executeRaw: (...args: unknown[]) => txExecuteRaw(...(args as [never])),
     termSubjectDefault: {
       findMany: (...args: unknown[]) => findMany(...(args as [never])),
       create: (...args: unknown[]) => create(...(args as [never])),
@@ -290,6 +290,15 @@ describe("createTermSubjectDefault", () => {
     if (res.ok) return;
     expect(res.error).toContain(`${MAX_ACTIVE_SUBJECTS_PER_GRADE}`);
     expectNoWrite();
+  });
+
+  it("takes the grade type lock with $executeRaw — $queryRaw cannot read pg_advisory_xact_lock's void result", async () => {
+    const res = await createTermSubjectDefault({ gradeLevelType: TYPE, name: "GMRC" });
+    expect(res.ok).toBe(true);
+    expect(txExecuteRaw).toHaveBeenCalledTimes(1);
+    expect(String((txExecuteRaw.mock.calls[0][0] as TemplateStringsArray).join("?"))).toContain(
+      "pg_advisory_xact_lock"
+    );
   });
 
   it("accepts exactly the 15th default for a type", async () => {

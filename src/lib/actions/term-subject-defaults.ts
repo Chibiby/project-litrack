@@ -71,9 +71,14 @@ function activeCount(rows: TermSubjectDefaultRow[]): number {
  * honest. There is no physical row shared by every default of a type (unlike
  * `GradeLevel` for a school's own subjects), so this locks on the type's hash
  * rather than `SELECT ... FOR UPDATE` on a parent row.
+ *
+ * `$executeRaw`, never `$queryRaw`: `pg_advisory_xact_lock` returns `void`,
+ * and the driver adapter cannot deserialize a `void` column (P2010 "Failed to
+ * deserialize column of type 'void'"), which failed every add, restore and
+ * reorder in production.
  */
 async function lockType(tx: Prisma.TransactionClient, gradeLevelType: string) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${gradeLevelType}))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${gradeLevelType}))`;
 }
 
 /** A default row (active or archived) by id. */
