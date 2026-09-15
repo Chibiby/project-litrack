@@ -3,8 +3,6 @@ import { aralProfileSchema } from "@/lib/validators/aral.schema";
 
 const validFull = {
   learnerId: "learner-1",
-  absenteeismFrequency: "ONE_TO_THREE_PER_MONTH" as const,
-  absenteeismOtherReason: "Illness",
   letterRecognition: "ALL_EASY" as const,
   letterSoundCorrespondence: "ACCURATE" as const,
   wordRecognition: "READS_HF_FLUENT" as const,
@@ -24,39 +22,23 @@ describe("aralProfileSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("takes the Reasons of Absenteeism multi-select alongside the free text", () => {
-    const withReasons = aralProfileSchema.safeParse({
+  it("no longer asks about absenteeism, and strips it if a stale form sends it", () => {
+    // Weekly Attendance already records every absence, so the profile does not.
+    const result = aralProfileSchema.safeParse({
       ...validFull,
-      absenteeismReasons: ["FAMILY_EMERGENCY", "BAD_WEATHER"],
+      absenteeismFrequency: "WEEKLY",
+      absenteeismOtherReason: "Illness",
+      absenteeismReasons: ["BAD_WEATHER"],
     });
-    expect(withReasons.success).toBe(true);
-    if (withReasons.success) {
-      expect(withReasons.data.absenteeismReasons).toEqual([
-        "FAMILY_EMERGENCY",
-        "BAD_WEATHER",
-      ]);
-      // The list is a companion to the free text, not a replacement: a payload
-      // carrying both keeps both.
-      expect(withReasons.data.absenteeismOtherReason).toBe("Illness");
-    }
-  });
-
-  it("defaults the reasons to an empty list and rejects an unknown one", () => {
-    const none = aralProfileSchema.safeParse(validFull);
-    expect(none.success).toBe(true);
-    if (none.success) expect(none.data.absenteeismReasons).toEqual([]);
-
-    expect(
-      aralProfileSchema.safeParse({
-        ...validFull,
-        absenteeismReasons: ["OVERSLEPT"],
-      }).success
-    ).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect("absenteeismFrequency" in result.data).toBe(false);
+    expect("absenteeismOtherReason" in result.data).toBe(false);
+    expect("absenteeismReasons" in result.data).toBe(false);
   });
 
   it("rejects invalid values for each required enum", () => {
     const cases: Array<{ field: string; value: string }> = [
-      { field: "absenteeismFrequency", value: "DAILY" },
       { field: "letterRecognition", value: "UNKNOWN" },
       { field: "letterSoundCorrespondence", value: "SOMETIMES" },
       { field: "wordRecognition", value: "FLUENT" },
@@ -96,9 +78,6 @@ describe("aralProfileSchema", () => {
     const over500 = "x".repeat(501);
     const over1000 = "y".repeat(1001);
 
-    expect(
-      aralProfileSchema.safeParse({ ...validFull, absenteeismOtherReason: over500 }).success,
-    ).toBe(false);
     expect(
       aralProfileSchema.safeParse({
         ...validFull,

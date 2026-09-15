@@ -21,8 +21,7 @@ describe("getNavGroups — teacher", () => {
     expect(groups.map((g) => g.label)).toEqual(["Learners", "ARAL Program", "Analytics"]);
     // Term reports is a per-term GRADES report, so it belongs beside the roster
     // it reports on, not under the ARAL programme.
-    // "Learner Profiling" is deliberately absent: the ARAL Profile is dormant,
-    // so nothing in the menu invites a teacher to go and fill one in.
+    // ARAL Profiling is its own page under the ARAL Program group.
     expect(groups[0].items.map((i) => i.label)).toEqual([
       "Dashboard",
       "Learners",
@@ -31,20 +30,22 @@ describe("getNavGroups — teacher", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",
+      "ARAL Profiling",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
   });
 
-  it("has no Learner Profiling row, for any grade payload", () => {
-    // The ARAL Profile is dormant: its create/update route still exists and still
-    // works if typed, but nothing may advertise it. A row here is how it would
-    // come back by accident — the row is the whole call to action.
+  it("has one ARAL Profiling row under ARAL Program, never grade-scoped", () => {
+    // One page lists every ARAL learner the teacher tutors across grades, so the
+    // href does not change with the grade payload and never collapses onto the
+    // /teacher/aral picker. The old Learner Profiling row stays gone.
     for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
-      const items = flattenNavGroups(getNavGroups("TEACHER", grades));
+      const groups = getNavGroups("TEACHER", grades);
+      const row = groups[1].items.find((item) => item.id === "teacher-aral-profiling");
+      expect(row?.href).toBe("/teacher/aral/profiling");
+      const items = flattenNavGroups(groups);
       expect(items.find((item) => item.id === "teacher-learner-profiling")).toBeUndefined();
-      expect(items.map((i) => i.label)).not.toContain("Learner Profiling");
-      // And nothing else quietly inherits the label on another id.
-      expect(items.filter((i) => /profiling/i.test(i.label))).toEqual([]);
+      expect(resolveActiveItemId("/teacher/aral/profiling", items)).toBe("teacher-aral-profiling");
     }
   });
 
@@ -199,6 +200,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",
+      "ARAL Profiling",
     ]);
     expect(groups[1].items[0].href).toBe("/teacher/aral/g1/attendance");
     expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
@@ -320,6 +322,7 @@ describe("getNavGroups — the term report's href", () => {
       expect(groups[1].items.map((i) => i.href)).toEqual([
         "/teacher/aral",
         "/teacher/aral",
+        "/teacher/aral/profiling",
       ]);
       expect(termsRow(grades)?.href).toBe("/teacher/terms-reports");
       expect(termsRow(grades)?.href).not.toBe("/teacher/aral");
@@ -533,6 +536,7 @@ describe("getNavGroups — the term report's deep href", () => {
       expect(groups[1].items.map((i) => i.href)).toEqual([
         aralRowHref,
         aralRowHref.replace("attendance", "reading-level"),
+        "/teacher/aral/profiling",
       ]);
       if (aralRowHref === "/teacher/aral") {
         expect(SHEET.startsWith(`${aralRowHref}/`)).toBe(true);

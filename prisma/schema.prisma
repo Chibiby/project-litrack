@@ -1222,7 +1222,9 @@ model AralProfile {
   learnerId String @unique
 
   // C. Reading Behavior
-  absenteeismFrequency      AbsenteeismFrequency
+  /// Nullable: the profile no longer asks about absences (Weekly Attendance
+  /// records them). Kept for profiles saved before 1.19.0; nothing writes it.
+  absenteeismFrequency      AbsenteeismFrequency?
   absenteeismOtherReason    String?
   /// Multi-select. Profiles written before this existed read back as [].
   absenteeismReasons        AbsenteeismReason[]

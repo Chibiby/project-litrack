@@ -1,75 +1,53 @@
-# ARAL Profile (Sections C–D–E) — dormant
+# ARAL Profile (Sections C–D–E)
 
 The `AralProfile` row is the stored Sections C, D and E survey for one ARAL
-learner: reading behaviour, environment, and suggested interventions. It is
-**not part of the active teacher workflow**, and has not been since the
-multi-advisory change.
+learner: reading behaviour, outside factors, and suggested interventions.
 
-Dormant means parked, not deleted. Nothing about the stored data has changed.
+It was dormant from the multi-advisory change until 1.19.0, when the project
+owner asked for it back as its own page under **ARAL Program**.
 
-## What is still there, untouched
+## Where teachers reach it
 
-- The `AralProfile` model in `prisma/schema.prisma` and every migration that
-  built it. **No rows are deleted, ever** — a school that filled these in keeps
-  them.
-- `src/lib/validators/aral.schema.ts` — `aralProfileSchema` and its tests.
-- `saveAralProfile` in `src/lib/actions/aral.ts`, with its auth, tenancy and
-  audit intact.
-- The route `/teacher/aral/[gradeId]/learners/[id]/update` and its form,
-  `src/components/forms/aral-update-form.tsx`. Typing the URL still works.
-- Read paths: the learner detail page and the learner profile modal both render
-  a saved profile when one exists, and the CSV/Excel learner export still
-  carries its columns. Archive purge and the demo teardown still count and
-  delete the rows with the learner that owns them.
+- **ARAL Profiling** (`/teacher/aral/profiling`), a row in the teacher sidebar's
+  ARAL Program group. It lists every ARAL learner the teacher is the designated
+  tutor for, across all their grades, with All / Pending / Completed tabs and a
+  Complete profile or Update profile button per learner.
+- The **Pending Profiles** card on the teacher dashboard links to the Pending
+  tab (`aralProfilingHref()` in `src/components/dashboard/teacher/hrefs.ts`).
 
-## What was removed
+Both use tutor scope (`aralLearnerScope`), because `saveAralProfile` only
+accepts the designated tutor. The card's count and the page's Pending tab must
+stay on the same scope, or they disagree.
 
-Everything that asked somebody to go and complete or update one:
+The form itself is still `/teacher/aral/[gradeId]/learners/[id]/update`
+(`src/components/forms/aral-update-form.tsx`); its back link returns to
+ARAL Profiling.
 
-- The `Learner Profiling` row in the teacher sidebar (`src/lib/nav/nav-config.ts`).
-- The `Profile complete?` / `Last update` columns and the
-  `Complete Profiling` / `Update Profiling` buttons on `/teacher/aral`, which is
-  now the ARAL Program roster and grade picker.
-- The `ARAL Profile` column on `/teacher/learners`.
-- The `Pending Profiles` tile on the teacher dashboard, and the
-  "N ARAL learner(s) still need Sections B–E profiling" line on the School Head
-  dashboard — along with the two queries behind them.
-- The "ARAL profile not completed / Sections C–E appear here after Update Data is
-  saved" empty states. A learner with no profile now shows nothing there, because
-  an absent profile is an ordinary state rather than an outstanding task.
-- The list of learners "with no ARAL profile yet" that the AI assistant used to
-  be handed as pending work, and the help topic that explained the removed
-  "Pending Profiles" card.
+## No absenteeism questions
+
+Section C no longer asks for absenteeism frequency, reasons or a specify
+field. Weekly Attendance already records every absence, so the profile does
+not count it twice.
+
+- `aralProfileSchema` has no absenteeism fields; Zod strips them if a stale
+  form sends them, so saving never overwrites an old answer.
+- `AralProfile.absenteeismFrequency` is nullable
+  (`20260915000006_aral_profile_absenteeism_optional`). Profiles saved before
+  keep their stored answers; new profiles leave the columns empty.
+- The learner detail page and the learner profile modal do not show them.
+  The learner export still carries the columns for old rows.
+
+## Still not asked for anywhere else
+
+- No Complete/Update Profiling buttons or status column on `/teacher/aral`
+  (the ARAL Program roster) or `/teacher/learners`.
+- No School Head dashboard nudge about missing profiles.
+- The AI assistant is not handed a list of missing profiles.
 
 ## What must keep working without one
 
 Weekly attendance, monthly reading level, ARAL enrolment and tutor designation,
 End of Terms Reports, and every export. None of them reads `AralProfile`, and
-none of them may be gated on it. `tests/unit/aral-profile-dormant.test.ts`
-holds that line.
-
-## Bringing it back
-
-Re-add navigation and calls to action. The schema, the validator, the action and
-the route are all still in place, so nothing needs a migration.
-
-## Exception: the teacher dashboard's Pending Profiles count
-
-One piece of what the dormancy pass removed was put back by explicit project-owner
-approval on 2026-09-14: the "Pending Profiles" stat card on the teacher dashboard
-(`src/components/dashboard/teacher/dashboard-body.tsx`), backed by the
-`pendingAralProfiles` count in `src/lib/dashboard/teacher-overview.ts`. It shows how
-many of a teacher's ARAL learners have no `AralProfile` row.
-
-This is a read-only number, not a call to action. The card has no `action` prop, no
-link, and no button — nothing on it leads to a profile form. No workflow reads
-`pendingAralProfiles` to gate, block, or nudge anything; it is display only. The
-School Head dashboard's equivalent nudge stays removed, as does every other
-Profiling entry point this document lists under "What was removed".
-
-Because it was restored deliberately and stays inert, this card must not be swept
-up in a future dormancy cleanup. If the ARAL Profile is fully revived, treat this
-card as already handled; if the ARAL Profile is ever deleted outright rather than
-left dormant, this card and its query must be removed at the same time (it would
-otherwise reference a model that no longer exists), but it is not part of routine
-"finish removing dormant Profile references" work.
+none of them may be gated on it. A learner with no profile shows nothing in its
+profile sections, because an absent profile is an ordinary state.
+`tests/unit/aral-profile-dormant.test.ts` holds these lines.

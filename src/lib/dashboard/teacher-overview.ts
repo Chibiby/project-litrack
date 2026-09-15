@@ -15,6 +15,7 @@ import {
   type TeacherOpts,
 } from "@/lib/dashboard/aggregates";
 import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
+import { aralLearnerScope } from "@/lib/teachers/scope";
 
 /**
  * Everything the teacher dashboard renders, in one cached snapshot.
@@ -171,8 +172,18 @@ export async function getTeacherOverview(
       ] = await Promise.all([
         prisma.learner.count({ where: learnerWhere }),
         prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
+        // Tutor scope, not `careFilter`: only the designated tutor can save a
+        // profile, and this number links to /teacher/aral/profiling, which lists
+        // exactly these learners on its Pending tab.
         prisma.learner.count({
-          where: { ...learnerWhere, isAralLearner: true, aralProfile: null },
+          where: {
+            gradeLevelId: { in: gradeIds },
+            deletedAt: null,
+            archivedAt: null,
+            ...(isSuperAdmin ? {} : aralLearnerScope(teacherId)),
+            isAralLearner: true,
+            aralProfile: null,
+          },
         }),
         prisma.attendance.groupBy({
           by: ["status"],

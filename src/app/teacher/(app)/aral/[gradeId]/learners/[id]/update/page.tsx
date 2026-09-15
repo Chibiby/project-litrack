@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { getAralActionWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { aralLearnerScope } from "@/lib/teachers/scope";
+import { ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +52,8 @@ export default async function UpdateAralDataPage({
 
   return (
     <AppShell
-      title={`Update Data — ${learner.fullName}`}
-      subtitle={`Additional ARAL profiling${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      title={`ARAL Profile — ${learner.fullName}`}
+      subtitle={`ARAL profile, Sections C to E${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
@@ -60,8 +61,8 @@ export default async function UpdateAralDataPage({
       <NavPrefetcher cacheKey={nestedWarmKey} hrefs={nestedWarmHrefs} />
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/teacher/aral?grade=${gradeId}`} prefetch={true}>
-            <ArrowLeft className="h-4 w-4" /> Back to Learner Profiling
+          <Link href={ARAL_PROFILING_HREF} prefetch={true}>
+            <ArrowLeft className="h-4 w-4" /> Back to ARAL Profiling
           </Link>
         </Button>
       </div>

@@ -18,9 +18,14 @@ export function learnerHref(gradeId: string, learnerId: string): string {
   return `/teacher/aral/${gradeId}/learners/${learnerId}`;
 }
 
+/** ARAL Profiling, opened on the learners who still have no profile. */
+export function aralProfilingHref(): string {
+  return "/teacher/aral/profiling?status=pending";
+}
+
 /**
- * The ARAL Program roster, optionally narrowed to one grade. Named for what it
- * shows: the ARAL Profile is dormant, so this is no longer a profiling queue.
+ * The ARAL Program roster, optionally narrowed to one grade. Profiling has its
+ * own page (`aralProfilingHref`), so this is not a profiling queue.
  */
 export function aralRosterHref(gradeId: string | null): string {
   return gradeId ? `/teacher/aral?grade=${gradeId}` : "/teacher/aral";

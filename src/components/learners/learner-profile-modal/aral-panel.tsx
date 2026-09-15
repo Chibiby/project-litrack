@@ -1,6 +1,4 @@
 import {
-  ABSENTEEISM_LABELS,
-  ABSENTEEISM_REASON_LABELS,
   CLASSROOM_ENV_LABELS,
   FURTHER_ASSESSMENT_LABELS,
   HOME_LITERACY_LABELS,
@@ -62,20 +60,6 @@ export function AralPanel({ learner }: { learner: LearnerProfileData }) {
         <>
           <InfoCard title="C. Reading behavior">
             <FieldGrid>
-              <Field label="Absenteeism">
-                {labelOf(ABSENTEEISM_LABELS, profile.absenteeismFrequency)}
-                {profile.absenteeismOtherReason ? (
-                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                    {profile.absenteeismOtherReason}
-                  </span>
-                ) : null}
-              </Field>
-              <Field label="Reasons of absenteeism">
-                {labelList(
-                  ABSENTEEISM_REASON_LABELS,
-                  profile.absenteeismReasons
-                )}
-              </Field>
               <Field label="Letter recognition">
                 {labelOf(LETTER_RECOGNITION_LABELS, profile.letterRecognition)}
               </Field>

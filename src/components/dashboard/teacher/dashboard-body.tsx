@@ -26,6 +26,7 @@ import {
   aralAttendanceHref,
   aralReadingHref,
   aralRosterHref,
+  aralProfilingHref,
 } from "./hrefs";
 
 /*
@@ -37,8 +38,8 @@ import {
  *               quick actions — filled with LITRACK's real data.
  * TRUTH NOTES   No month-over-month trend lines (nothing computes them). No
  *               "Overdue" badge (LITRACK stores no deadline). Pending Profiles
- *               stays read-only per docs/aral-profile.md. "Generate Report"
- *               opens Reports, where exports live.
+ *               opens ARAL Profiling on the learners still without one.
+ *               "Generate Report" opens Reports, where exports live.
  * SPEC          docs/superpowers/specs/2026-09-15-litrack-v2-teacher-dashboard-design.md
  */
 
@@ -195,6 +196,7 @@ export async function TeacherDashboardBody({
               icon={UserRound}
               tone="primary"
               decor="clock"
+              action={{ label: "Complete profiles", href: aralProfilingHref() }}
             />
           </StatCardRow>
 

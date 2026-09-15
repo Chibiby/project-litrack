@@ -27,8 +27,6 @@ import {
   DISTANCE_LABELS,
   TRANSFER_LABELS,
   ATTENDANCE_STATUS_LABELS,
-  ABSENTEEISM_LABELS,
-  ABSENTEEISM_REASON_LABELS,
   LETTER_RECOGNITION_LABELS,
   LETTER_SOUND_LABELS,
   WORD_RECOGNITION_LABELS,
@@ -158,9 +156,6 @@ export default async function LearnerDetailPage({
       },
       aralProfile: {
         select: {
-          absenteeismFrequency: true,
-          absenteeismOtherReason: true,
-          absenteeismReasons: true,
           letterRecognition: true,
           letterSoundCorrespondence: true,
           wordRecognition: true,
@@ -431,29 +426,6 @@ export default async function LearnerDetailPage({
                   <div>
                     <p className="font-medium mb-2">C. Reading Behavior</p>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <p className="text-muted-foreground">Absenteeism</p>
-                        <p className="font-medium">
-                          {ABSENTEEISM_LABELS[profile.absenteeismFrequency]}
-                        </p>
-                        {profile.absenteeismOtherReason && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {profile.absenteeismOtherReason}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">
-                          Reasons of absenteeism
-                        </p>
-                        <p className="font-medium">
-                          {profile.absenteeismReasons.length > 0
-                            ? profile.absenteeismReasons
-                                .map((r) => ABSENTEEISM_REASON_LABELS[r])
-                                .join("; ")
-                            : "—"}
-                        </p>
-                      </div>
                       <div>
                         <p className="text-muted-foreground">Letter recognition</p>
                         <p className="font-medium">
