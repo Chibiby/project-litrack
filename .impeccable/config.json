@@ -56,6 +56,15 @@
         ],
         "createdAt": "2026-09-15T14:08:43.816Z",
         "reason": "Owner's v2 End of Terms mockup (desktop and phone) shows the active term tab as the same violet gradient pill as the sidebar highlight and Learners tabs (already sanctioned)"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/components/auth/auth-card.tsx"
+        ],
+        "createdAt": "2026-09-15T16:11:46.069Z",
+        "reason": "Owner's v2 login mockup sets the Sign In title in dark navy (indigo-950) beside a blue-to-sky button; no violet gradient or cyan-on-dark is used"
       }
     ]
   }
