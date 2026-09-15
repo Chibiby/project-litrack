@@ -5,6 +5,7 @@ import {
   getAdminRecentSchools,
   getAdminIpAndAdvisoryMetrics,
 } from "@/lib/dashboard/aggregates";
+import { collapseKindsToOthers, topSchoolsWithIp } from "@/lib/dashboard/ip-metrics";
 import {
   Table,
   TableBody,
@@ -172,8 +173,8 @@ export async function AdminIpAdvisorySection() {
     console.error("[AdminIpAdvisorySection] failed to load:", err);
   }
 
-  const schools = data?.schools ?? [];
-  const kinds = data?.ipKinds ?? [];
+  const schools = topSchoolsWithIp(data?.schools ?? [], 5);
+  const kinds = collapseKindsToOthers(data?.ipKinds ?? [], 5);
 
   return (
     <>
@@ -197,12 +198,17 @@ export async function AdminIpAdvisorySection() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Schools"
-          description="Enrolled learners in the active school year"
+          description="Top 5 schools with IP learners, by count"
+          action={
+            <Button asChild size="sm" variant="outline">
+              <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
+            </Button>
+          }
         >
           {schools.length === 0 ? (
             <EmptyState
-              title="No data yet"
-              description="Create a school to see per-school figures."
+              title="No IP learners yet"
+              description="Appears once enrolled learners have an IP ethnicity recorded."
               icon={School}
             />
           ) : (
@@ -241,6 +247,11 @@ export async function AdminIpAdvisorySection() {
         <ChartCard
           title="IP learners by group"
           description="All schools; a learner with two IP groups counts in both"
+          action={
+            <Button asChild size="sm" variant="outline">
+              <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
+            </Button>
+          }
         >
           {kinds.length === 0 ? (
             <EmptyState

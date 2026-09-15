@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { toDateKey } from "@/lib/utils";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { collapseKindsToOthers } from "@/lib/dashboard/ip-metrics";
 
 function schoolPath(path: string, schoolId: string, isSuperAdminView: boolean) {
   return isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
@@ -238,7 +239,13 @@ export async function SchoolHeadChartsSection({
   );
 }
 
-export async function SchoolHeadIpSection({ schoolId }: { schoolId: string }) {
+export async function SchoolHeadIpSection({
+  schoolId,
+  isSuperAdminView,
+}: {
+  schoolId: string;
+  isSuperAdminView: boolean;
+}) {
   let ip: Awaited<ReturnType<typeof getSchoolHeadIpMetrics>> | null = null;
   try {
     ip = await getSchoolHeadIpMetrics(schoolId);
@@ -246,8 +253,10 @@ export async function SchoolHeadIpSection({ schoolId }: { schoolId: string }) {
     console.error("[SchoolHeadIpSection] failed to load:", err);
   }
 
-  const rows = ip?.rows ?? [];
-  const kinds = ip?.ipKinds ?? [];
+  const allRows = ip?.rows ?? [];
+  const rows = [...allRows].sort((a, b) => b.ipLearners - a.ipLearners || a.key.localeCompare(b.key)).slice(0, 5);
+  const kinds = collapseKindsToOthers(ip?.ipKinds ?? [], 5);
+  const viewAllHref = schoolPath(SCHOOL_HEAD_ROUTES.ipLearners, schoolId, isSuperAdminView);
 
   return (
     <>
@@ -264,6 +273,13 @@ export async function SchoolHeadIpSection({ schoolId }: { schoolId: string }) {
       <ChartCard
         title="IP learners"
         description={`${ip?.ipLearners ?? 0} of ${ip?.totalLearners ?? 0} enrolled learners (${ip?.ipPercent ?? "—"})`}
+        action={
+          allRows.length > 5 ? (
+            <Button asChild size="sm" variant="outline">
+              <PrefetchLink href={viewAllHref}>View all</PrefetchLink>
+            </Button>
+          ) : undefined
+        }
       >
         {rows.length === 0 ? (
           <EmptyState
@@ -301,6 +317,11 @@ export async function SchoolHeadIpSection({ schoolId }: { schoolId: string }) {
       <ChartCard
         title="IP learners by group"
         description="A learner with two IP groups counts in both"
+        action={
+          <Button asChild size="sm" variant="outline">
+            <PrefetchLink href={viewAllHref}>View all</PrefetchLink>
+          </Button>
+        }
       >
         {kinds.length === 0 ? (
           <EmptyState

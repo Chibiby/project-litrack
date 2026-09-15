@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import {
+  collapseKindsToOthers,
   formatAverage,
   formatPercent,
   safeRatio,
   shapeAdminIpMetrics,
   shapeSchoolIpMetrics,
   summarizeIpRows,
+  topSchoolsWithIp,
+  type AdminSchoolIpRow,
 } from "@/lib/dashboard/ip-metrics";
 
 const c = (n: number) => ({ _count: { _all: n } });
@@ -86,6 +89,65 @@ describe("shapeAdminIpMetrics", () => {
     expect(out.ipKinds).toEqual([
       { name: "Badjao", value: 1 },
       { name: "Maranao", value: 5 },
+    ]);
+  });
+});
+
+describe("topSchoolsWithIp", () => {
+  const row = (name: string, ipLearners: number): AdminSchoolIpRow => ({
+    schoolId: name,
+    name,
+    totalLearners: 100,
+    ipLearners,
+    ipPercent: "—",
+    activeTeachers: 1,
+    learnersPerTeacher: "—",
+  });
+
+  it("excludes zero-IP schools and sorts by count desc, name asc on ties", () => {
+    const out = topSchoolsWithIp(
+      [row("Zeta", 0), row("Beta", 5), row("Alpha", 5), row("Gamma", 9)],
+      5
+    );
+    expect(out.map((r) => r.name)).toEqual(["Gamma", "Alpha", "Beta"]);
+  });
+
+  it("caps at n", () => {
+    const rows = Array.from({ length: 7 }, (_, i) => row(`S${i}`, 7 - i));
+    expect(topSchoolsWithIp(rows, 5)).toHaveLength(5);
+  });
+});
+
+describe("collapseKindsToOthers", () => {
+  it("returns all groups untouched when exactly n", () => {
+    const kinds = [
+      { name: "A", value: 5 },
+      { name: "B", value: 4 },
+      { name: "C", value: 3 },
+      { name: "D", value: 2 },
+      { name: "E", value: 1 },
+    ];
+    expect(collapseKindsToOthers(kinds, 5)).toEqual(kinds);
+  });
+
+  it("collapses the remainder into a single Others slice summing the rest", () => {
+    const kinds = [
+      { name: "A", value: 7 },
+      { name: "B", value: 6 },
+      { name: "C", value: 5 },
+      { name: "D", value: 4 },
+      { name: "E", value: 3 },
+      { name: "F", value: 2 },
+      { name: "G", value: 1 },
+    ];
+    const out = collapseKindsToOthers(kinds, 5);
+    expect(out).toEqual([
+      { name: "A", value: 7 },
+      { name: "B", value: 6 },
+      { name: "C", value: 5 },
+      { name: "D", value: 4 },
+      { name: "E", value: 3 },
+      { name: "Others", value: 3 },
     ]);
   });
 });

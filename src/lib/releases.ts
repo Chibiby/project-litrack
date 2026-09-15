@@ -74,6 +74,18 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.18.0",
+    date: "2026-09-15",
+    title: "Shorter IP lists, a searchable tutor picker, and a new sidebar picture",
+    announce: true,
+    fixes: [
+      { text: "The dashboard now lists only the top 5 schools with IP learners. Click View all to see every school.", roles: ["SUPER_ADMIN"] },
+      { text: "The IP learners by group chart shows the 5 largest groups. Smaller groups are combined into Others, and View all lists every group.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "When you pick an ARAL tutor, you can search by name, and the list shows a scroll bar.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      "The side menu now shows an \"Every Learner, Brighter Tomorrows\" picture below the last menu button.",
+    ],
+  },
+  {
     version: "1.17.0",
     date: "2026-09-15",
     title: "Default term subjects, IP learner dashboards, and faster teacher updates",

@@ -58,6 +58,7 @@ export const SCHOOL_HEAD_ROUTES = {
   termSubjects: "/school-head/term-subjects",
   reports: "/school-head/reports",
   audit: "/school-head/audit",
+  ipLearners: "/school-head/ip-learners",
 
   /** Settings workspace root — what the sidebar and the prefetch warmer target. */
   settings: "/school-head/settings",

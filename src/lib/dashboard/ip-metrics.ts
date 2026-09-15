@@ -130,6 +130,37 @@ export function shapeAdminIpMetrics(input: {
   };
 }
 
+/**
+ * Schools with at least one IP learner, sorted by count desc (name asc on a
+ * tie), capped at `n`. Zero-IP schools are excluded rather than trailing
+ * with "0" rows the dashboard has no use for.
+ */
+export function topSchoolsWithIp(
+  rows: readonly AdminSchoolIpRow[],
+  n: number
+): AdminSchoolIpRow[] {
+  return rows
+    .filter((r) => r.ipLearners > 0)
+    .sort((a, b) => b.ipLearners - a.ipLearners || a.name.localeCompare(b.name))
+    .slice(0, n);
+}
+
+/**
+ * Top `n` IP-kind slices by count, with the remainder folded into a single
+ * "Others" slice (omitted when there is no remainder).
+ */
+export function collapseKindsToOthers(
+  kinds: readonly { name: string; value: number }[],
+  n: number
+): { name: string; value: number }[] {
+  const sorted = [...kinds].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  const top = sorted.slice(0, n);
+  const rest = sorted.slice(n);
+  if (rest.length === 0) return top;
+  const othersTotal = rest.reduce((sum, k) => sum + k.value, 0);
+  return [...top, { name: "Others", value: othersTotal }];
+}
+
 export type SectionIpRow = {
   key: string;
   grade: string;

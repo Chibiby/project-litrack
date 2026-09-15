@@ -82,7 +82,10 @@ export default async function SchoolHeadDashboard({
       </Suspense>
 
       <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
-        <SchoolHeadIpSection schoolId={view.schoolId} />
+        <SchoolHeadIpSection
+          schoolId={view.schoolId}
+          isSuperAdminView={view.isSuperAdminView}
+        />
       </Suspense>
 
       <Suspense fallback={<DualListCardSkeleton />}>

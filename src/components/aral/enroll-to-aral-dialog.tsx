@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AralTutorCombobox } from "@/components/aral/aral-tutor-combobox";
 import {
   Sheet,
   SheetContent,
@@ -23,7 +17,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { enrollLearnersToAral } from "@/lib/actions/learner";
 import { UserPlus } from "lucide-react";
 
@@ -197,36 +190,14 @@ export function EnrollToAralDialog({
         <div className="mt-4 space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="enroll-aral-tutor">ARAL tutor</Label>
-            <Select
+            <AralTutorCombobox
+              id="enroll-aral-tutor"
+              tutors={otherTutors}
+              selfId={selfId}
               value={tutorId}
               onValueChange={setTutorId}
               disabled={pending || otherTutors.length === 0}
-            >
-              <SelectTrigger id="enroll-aral-tutor">
-                {/* The trigger takes its own plain label: the option rows carry a
-                    second line and a chip, and Radix would otherwise mirror that
-                    whole block into this one-line control. */}
-                <SelectValue>
-                  {assignedToSelf ? "Myself" : (chosenName ?? "Myself")}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={selfId}>Myself</SelectItem>
-                {otherTutors.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    <span className="flex flex-col gap-0.5">
-                      <span className="flex items-center gap-1.5">
-                        <span>{t.name}</span>
-                        <EmploymentTypeChip employmentType={t.employmentType} />
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {t.advisoryLabel ?? "ARAL only"}
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             <p className="text-xs text-muted-foreground">
               {otherTutors.length === 0
                 ? "You are the only teacher who can be designated right now."

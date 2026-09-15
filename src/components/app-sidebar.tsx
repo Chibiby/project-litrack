@@ -374,6 +374,18 @@ export function AppSidebar({
               </div>
             ))}
           </nav>
+          {!isCollapsed && (
+            <div className="mt-5">
+              <Image
+                src="/brand/sidebar-motto.webp"
+                alt="Every Learner, Brighter Tomorrows — small progress every day leads to big results."
+                width={480}
+                height={525}
+                loading="lazy"
+                className="w-full h-auto rounded-lg"
+              />
+            </div>
+          )}
         </ScrollArea>
 
         <div className={cn("shrink-0 space-y-1 py-3", isCollapsed ? "px-1.5" : "px-3")}>

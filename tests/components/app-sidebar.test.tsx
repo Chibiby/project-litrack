@@ -107,6 +107,28 @@ describe("AppSidebar — teacher", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("renders the sidebar motto image below the nav items", () => {
+    renderTeacherSidebar();
+    const nav = screen.getAllByRole("navigation", { name: "Primary" })[0];
+    const motto = screen.getAllByAltText(
+      "Every Learner, Brighter Tomorrows — small progress every day leads to big results."
+    )[0];
+    expect(motto).not.toBeNull();
+    expect(motto.tagName).toBe("IMG");
+    expect(
+      nav.compareDocumentPosition(motto) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("hides the sidebar motto image on the collapsed rail", () => {
+    renderTeacherSidebar({ expanded: false });
+    expect(
+      screen.queryByAltText(
+        "Every Learner, Brighter Tomorrows — small progress every day leads to big results."
+      )
+    ).toBeNull();
+  });
+
   it("renders a log out control in the footer", () => {
     renderTeacherSidebar();
     // SignOutButton's visible label is "Sign out".
