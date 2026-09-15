@@ -66,9 +66,10 @@ export function GreetingHero({
    * that drifts with width: the head centre sits at 72.2% of the image, so
    * `right: calc(23% - 272px)` puts it at 77% of the hero from sm to lg, as in
    * the mockup; the narrowest phones use 82% so the hair clears the greeting.
-   * The handwriting (upper left of the character) is masked out there by two
-   * gradients unioned — left of 64% AND above 51% — so it never
-   * writes over the greeting (mockup image 4).
+   * The art is shown unfaded on phones, handwriting included, as in the
+   * mockup (image 4). Below 440px there is no room beside the greeting, so
+   * two unioned gradients hide just the handwriting (left of 64%, above 51%).
+   * Wide screens fade the art's left edge into the band.
    */
   const art = (
     <Image
@@ -90,7 +91,7 @@ export function GreetingHero({
       {/* Layer 1: the band. */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 [&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
+        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
       >
         {art}
       </div>
