@@ -19,10 +19,22 @@ export const DASHBOARD_QUOTES: readonly DashboardQuote[] = [
   { text: "You are planting seeds that will grow for a lifetime.", author: "Unknown" },
 ];
 
-export function pickQuote(random: () => number = Math.random): DashboardQuote {
-  const i = Math.min(
-    Math.floor(random() * DASHBOARD_QUOTES.length),
-    DASHBOARD_QUOTES.length - 1
-  );
-  return DASHBOARD_QUOTES[i];
+/** Warm lines about learners, for the v2 Learners page banner. */
+export const LEARNER_QUOTES: readonly DashboardQuote[] = [
+  { text: "A good teacher sees potential in every learner.", author: "Unknown" },
+  { text: "Every learner can grow; some just need a little more time.", author: "Unknown" },
+  { text: "Children learn more from what you are than what you teach.", author: "W.E.B. Du Bois" },
+  { text: "Every child is a different kind of flower, and all together make this world a beautiful garden.", author: "Unknown" },
+  { text: "Believe in every learner, and watch them believe in themselves.", author: "Unknown" },
+  { text: "The best way to learn is with a friendly guide beside you.", author: "Unknown" },
+  { text: "Reading is a gift that opens every door.", author: "Unknown" },
+  { text: "Each learner's small step today is a big story tomorrow.", author: "Unknown" },
+];
+
+export function pickQuote(
+  random: () => number = Math.random,
+  quotes: readonly DashboardQuote[] = DASHBOARD_QUOTES
+): DashboardQuote {
+  const i = Math.min(Math.floor(random() * quotes.length), quotes.length - 1);
+  return quotes[i];
 }

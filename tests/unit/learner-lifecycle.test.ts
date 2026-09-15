@@ -71,6 +71,7 @@ describe("parseLearnerListParams", () => {
       grade: "all",
       gender: "all",
       aralStatus: "all",
+      advisory: null,
     });
   });
 

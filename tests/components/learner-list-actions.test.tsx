@@ -121,6 +121,16 @@ function renderRoster(isSuperAdmin = false, archivedView = false) {
   );
 }
 
+/** Open a table row's ⋮ menu (Radix opens on keyboard in jsdom). */
+async function openRowMenu(name: string) {
+  const table = screen.getByRole("table");
+  const trigger = within(table).getByRole("button", {
+    name: `More actions for ${name}`,
+  });
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  return screen.findByRole("menu");
+}
+
 /** The data rows, excluding the header row. */
 function bodyRows(): HTMLElement[] {
   return screen.getAllByRole("row").slice(1);
@@ -158,11 +168,11 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
 
     expect(
-      screen.getByRole("link", { name: "Archived learners" }).getAttribute("href")
+      screen.getByRole("link", { name: "Archived Learners" }).getAttribute("href")
     ).toBe("/teacher/learners?filter=archived");
     expect(
       screen.getByRole("link", { name: "Learner Profiling" }).getAttribute("href")
-    ).toBe("/teacher/aral");
+    ).toBe("/teacher/aral/profiling");
   });
 
   it("archives a selected learner instead of deleting their record", async () => {
@@ -180,7 +190,7 @@ describe("LearnerListClient — Actions column", () => {
     expect(restoreLearner).toHaveBeenCalledTimes(1);
   });
 
-  it("carries View on every row, and the ARAL spark only where it applies", () => {
+  it("carries View on every row, and Enroll as ARAL only where it applies", async () => {
     renderRoster();
     const rows = bodyRows();
     expect(rows).toHaveLength(2);
@@ -190,34 +200,31 @@ describe("LearnerListClient — Actions column", () => {
       return cells[cells.length - 1];
     };
 
-    // Ana is not in ARAL, so enrolling her is still an option.
-    const ana = actionsOf(rows[0]);
-    expect(within(ana).getAllByRole("button")).toHaveLength(2);
-    expect(
-      within(ana).getByRole("button", { name: "View Ana Santos's profile" })
-    ).toBeTruthy();
-    expect(
-      within(ana).getByRole("button", { name: "Enroll Ana Santos as ARAL" })
-    ).toBeTruthy();
-
-    // Ben already is, so the row offers no second enrolment — changing his tutor
-    // lives on the profile dialog's ARAL tab instead.
-    const ben = actionsOf(rows[1]);
-    expect(within(ben).getAllByRole("button")).toHaveLength(1);
-    expect(
-      within(ben).getByRole("button", { name: "View Ben Cruz's profile" })
-    ).toBeTruthy();
-
     for (const row of rows) {
+      expect(within(actionsOf(row)).getAllByRole("button")).toHaveLength(2);
       expect(within(actionsOf(row)).queryAllByRole("link")).toHaveLength(0);
     }
+    expect(
+      within(actionsOf(rows[0])).getByRole("button", { name: "View Ana Santos's profile" })
+    ).toBeTruthy();
+
+    // Ana is not in ARAL, so enrolling her is still an option.
+    let menu = await openRowMenu("Ana Santos");
+    expect(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: "Archive" })).toBeTruthy();
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+
+    // Ben already is, so the menu offers no second enrolment — changing his
+    // tutor lives on the profile dialog's ARAL tab instead.
+    menu = await openRowMenu("Ben Cruz");
+    expect(within(menu).queryByRole("menuitem", { name: "Enroll as ARAL" })).toBeNull();
   });
 
   it("asks who will tutor before it enrolls anyone", async () => {
     renderRoster();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Enroll Ana Santos as ARAL" })
-    );
+    const menu = await openRowMenu("Ana Santos");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("Enroll Ana Santos in ARAL");
@@ -233,9 +240,8 @@ describe("LearnerListClient — Actions column", () => {
 
   it("enrolls with the chosen tutor once confirmed", async () => {
     renderRoster();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Enroll Ana Santos as ARAL" })
-    );
+    const menu = await openRowMenu("Ana Santos");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" }));
     const dialog = await screen.findByRole("dialog");
     await waitFor(() => within(dialog).getByRole("combobox"));
 
@@ -314,10 +320,10 @@ describe("LearnerListClient — Actions column", () => {
         within(cells[cells.length - 1]).getAllByRole("button")
       ).toHaveLength(1);
     }
-    // Super Admin views read-only, so neither the ARAL spark nor the selection
-    // checkboxes are drawn.
+    // Super Admin views read-only, so neither the row menu nor the selection
+    // checkboxes are drawn in the table.
     expect(
-      screen.queryByRole("button", { name: /Enroll .+ as ARAL/ })
+      within(screen.getByRole("table")).queryByRole("button", { name: /More actions/ })
     ).toBeNull();
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });

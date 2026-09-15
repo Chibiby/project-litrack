@@ -55,6 +55,8 @@ export type LearnerListParams = {
   grade: LearnerListGradeFilter;
   gender: LearnerGenderFilter;
   aralStatus: LearnerAralStatusFilter;
+  /** A section id the teacher advises; `null` = all advisories. Validated by the page. */
+  advisory: string | null;
 };
 
 const FILTERS: readonly LearnerListFilter[] = ["all", "aral", "archived"];
@@ -82,6 +84,7 @@ export function parseLearnerListParams(
     grade?: string;
     gender?: string;
     aralStatus?: string;
+    advisory?: string;
   },
   pageSize: number = LEARNER_PAGE_SIZE
 ): LearnerListParams {
@@ -124,6 +127,9 @@ export function parseLearnerListParams(
     ? (aralStatusRaw as LearnerAralStatusFilter)
     : "all";
 
+  const advisoryRaw = (searchParams.advisory ?? "").trim();
+  const advisory = advisoryRaw && advisoryRaw.toLowerCase() !== "all" ? advisoryRaw : null;
+
   const size = pageSize > 0 ? pageSize : LEARNER_PAGE_SIZE;
   const skip = (page - 1) * size;
 
@@ -139,6 +145,7 @@ export function parseLearnerListParams(
     grade,
     gender,
     aralStatus,
+    advisory,
   };
 }
 
@@ -212,4 +219,21 @@ export function nameSearchWhere(
 export function totalPages(totalCount: number, pageSize: number = LEARNER_PAGE_SIZE): number {
   if (totalCount <= 0) return 1;
   return Math.ceil(totalCount / pageSize);
+}
+
+/**
+ * The Advisory switcher's ‹ › step. Walks the teacher's advisories in order,
+ * with "all advisories" (`null`) as the stop before the first and after the
+ * last, so the arrows can always get back to the whole roster. Pure.
+ */
+export function stepAdvisory(
+  advisoryIds: readonly string[],
+  current: string | null,
+  direction: 1 | -1
+): string | null {
+  if (advisoryIds.length === 0) return null;
+  const stops: (string | null)[] = [null, ...advisoryIds];
+  const at = Math.max(0, stops.indexOf(current));
+  const next = (at + direction + stops.length) % stops.length;
+  return stops[next];
 }

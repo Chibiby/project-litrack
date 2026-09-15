@@ -87,14 +87,16 @@ export function LearnerListFooter({
   }
 
   return (
-    <div className="flex flex-col items-center gap-3 border-t border-border/60 px-4 py-3 text-sm md:flex-row md:justify-between">
-      <p className="text-muted-foreground">
+    <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-sm">
+      <p className="min-w-0 text-muted-foreground">
         {totalCount === 0 ? (
           "No learners to show"
         ) : (
           <>
-            Showing <span className="tabular-nums text-foreground">{from}</span>{" "}
-            to <span className="tabular-nums text-foreground">{to}</span> of{" "}
+            Showing <span className="tabular-nums text-foreground">{from}</span>
+            <span className="sm:hidden">–</span>
+            <span className="hidden sm:inline"> to </span>
+            <span className="tabular-nums text-foreground">{to}</span> of{" "}
             <span className="tabular-nums text-foreground">{totalCount}</span>{" "}
             learner{totalCount === 1 ? "" : "s"}
           </>
@@ -102,7 +104,7 @@ export function LearnerListFooter({
       </p>
 
       {totalPages > 1 ? (
-        <nav aria-label="Learner list pages" className="flex items-center gap-1">
+        <nav aria-label="Learner list pages" className="flex shrink-0 items-center gap-1">
           <Button
             asChild={page > 1}
             size="icon"
@@ -120,12 +122,15 @@ export function LearnerListFooter({
             )}
           </Button>
 
+          <span className="whitespace-nowrap px-2 tabular-nums text-foreground sm:hidden">
+            {page} / {totalPages}
+          </span>
           {pageWindow(page, totalPages).map((entry, i) =>
             entry === "gap" ? (
               <span
                 key={`gap-${i}`}
                 aria-hidden
-                className="px-1 text-muted-foreground"
+                className="hidden px-1 text-muted-foreground sm:inline"
               >
                 …
               </span>
@@ -135,7 +140,7 @@ export function LearnerListFooter({
                 asChild
                 size="icon"
                 variant={entry === page ? "default" : "outline"}
-                className={cn("h-8 w-8 tabular-nums")}
+                className={cn("hidden h-8 w-8 tabular-nums sm:inline-flex")}
                 aria-current={entry === page ? "page" : undefined}
               >
                 <Link
@@ -167,7 +172,7 @@ export function LearnerListFooter({
         </nav>
       ) : null}
 
-      <div className="flex items-center gap-2">
+      <div className="hidden items-center gap-2 md:flex">
         <label
           htmlFor="learner-rows-per-page"
           className="whitespace-nowrap text-muted-foreground"

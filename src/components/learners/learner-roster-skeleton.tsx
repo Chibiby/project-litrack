@@ -19,7 +19,7 @@ import { TableSectionSkeleton } from "@/components/loading";
  */
 function StatCardSkeleton() {
   return (
-    <Surface as="section" className="p-5" data-slot="stat-card-skeleton">
+    <Surface as="section" className="rounded-2xl p-4 sm:p-5" data-slot="stat-card-skeleton">
       <div className="flex items-center gap-3">
         <Skeleton className="size-11 rounded-xl" />
         <Skeleton className="h-4 w-28" />
@@ -33,7 +33,7 @@ function StatCardSkeleton() {
 /** The four-card row, matching StatCardRow's grid exactly. */
 export function LearnerStatCardsSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
         <StatCardSkeleton key={i} />
       ))}
@@ -55,18 +55,24 @@ export function LearnerRosterSkeleton() {
     <div className="w-full p-4 lg:p-6" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading learners</span>
 
-      <div
-        className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:mb-6"
+      {/* The v2 hero band: same box as the Learners PageHero (15rem, lg 17rem). */}
+      <Skeleton
+        className="mt-2 h-[15rem] rounded-2xl lg:h-[17rem]"
         data-slot="roster-header-skeleton"
-      >
-        <div className="min-w-0">
-          <Skeleton className="h-7 w-40 sm:h-8" />
-          <Skeleton className="mt-2 h-4 w-72 max-w-full" />
-        </div>
-        <Skeleton className="h-9 w-44 rounded-lg" />
+      />
+
+      <div className="relative z-10 mt-4 lg:-mt-14">
+        <LearnerStatCardsSkeleton />
       </div>
 
-      <LearnerStatCardsSkeleton />
+      <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:justify-between">
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-36 rounded-xl" />
+          <Skeleton className="h-10 w-40 rounded-xl" />
+          <Skeleton className="hidden h-10 w-36 rounded-xl sm:block" />
+        </div>
+        <Skeleton className="h-10 w-full rounded-xl sm:w-96" />
+      </div>
 
       <div className="mt-4">
         <LearnerTableSkeleton />

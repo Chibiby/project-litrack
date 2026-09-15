@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
@@ -37,6 +37,7 @@ import {
 } from "@/lib/teachers/floating-copy";
 import {
   aralStatusWhere,
+  sectionIdWhere,
   genderWhere,
   gradeLevelIdWhere,
   nameSearchWhere,
@@ -46,6 +47,9 @@ import {
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
 import { Sparkles } from "lucide-react";
+import { PageHero } from "@/components/shell/page-hero";
+import { LEARNER_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
+import type { AdvisoryOption } from "@/components/learners/learner-list-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +64,8 @@ interface TeacherLearnersPageProps {
     grade?: string;
     gender?: string;
     aralStatus?: string;
+    section?: string;
+    advisory?: string;
   }>;
 }
 
@@ -81,7 +87,14 @@ function learnerListWhere(opts: {
     ...gradeLevelIdWhere(list.grade, assignedGradeIds),
     // Keep access and archive state in separate AND branches: both predicates
     // contain OR clauses, and spreading either would overwrite the other.
-    AND: [accessScope, stateScope],
+    // Section and advisory both narrow `sectionId`, so they are ANDed too; the
+    // toolbar clears one when the other is picked.
+    AND: [
+      accessScope,
+      stateScope,
+      sectionIdWhere(list.section),
+      list.advisory ? { sectionId: list.advisory } : {},
+    ],
     ...genderWhere(list.gender),
     ...aralStatusWhere(list.aralStatus),
     ...nameSearchWhere(list.q),
@@ -107,6 +120,11 @@ function learnerListWhere(opts: {
  * cannot offer a placement the save would reject. A teacher who advises nothing
  * gets a disabled button carrying the server's own reason instead.
  */
+/** One placements read per request, shared by the add control and the roster. */
+const placementsFor = cache((id: string, schoolId: string) =>
+  getAdvisoryPlacements({ id, schoolId })
+);
+
 async function LearnersAddControl({
   user,
 }: {
@@ -115,7 +133,7 @@ async function LearnersAddControl({
   // The Add menu targets ONE section. A teacher with several advisories picks
   // which one in the form itself, via every placement passed down here; the
   // import link (which cannot express a choice) still targets the first.
-  const placements = await getAdvisoryPlacements(user);
+  const placements = await placementsFor(user.id, user.schoolId);
   if (placements.length === 0) {
     return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
   }
@@ -130,7 +148,9 @@ async function LearnersBody({
   isSuperAdmin,
   schoolIdParam,
   list,
+  addControl,
 }: {
+  addControl?: React.ReactNode;
   assignedGrades: { id: string; type: string }[];
   schoolId: string;
   teacherId: string;
@@ -139,16 +159,32 @@ async function LearnersBody({
   list: ReturnType<typeof parseLearnerListParams>;
 }) {
   const assignedGradeIds = assignedGrades.map((g) => g.id);
+
+  // Super Admin advises nothing; everyone else gets their advisories, kept only
+  // where the grade is one this roster lists.
+  const placements = isSuperAdmin ? [] : await placementsFor(teacherId, schoolId);
+  const advisories: AdvisoryOption[] = placements
+    .filter((p) => assignedGradeIds.includes(p.gradeLevelId))
+    .map((p) => ({
+      id: p.sectionId,
+      gradeLevelId: p.gradeLevelId,
+      label: `${p.gradeLabel} - ${p.sectionName}`,
+    }));
+  // An advisory in the URL counts only if it is really one of theirs, and it
+  // pins the grade it belongs to.
+  const advisory = advisories.find((a) => a.id === list.advisory) ?? null;
+
+  const requestedGrade = advisory ? advisory.gradeLevelId : list.grade;
   const activeGrade: LearnerListGradeFilter =
-    list.grade !== "all" && assignedGradeIds.includes(list.grade)
-      ? list.grade
+    requestedGrade !== "all" && assignedGradeIds.includes(requestedGrade)
+      ? requestedGrade
       : "all";
 
   const where = learnerListWhere({
     assignedGradeIds,
     teacherId,
     isSuperAdmin,
-    list: { ...list, grade: activeGrade },
+    list: { ...list, grade: activeGrade, advisory: advisory?.id ?? null },
   });
 
   // Section is no longer a facet, but it is still a column: this answers "does
@@ -183,7 +219,10 @@ async function LearnersBody({
       gradeLevel: { select: { type: true } },
       section: { select: { id: true, name: true } },
     },
-    orderBy: { fullName: "asc" },
+    orderBy:
+      list.sort === "age"
+        ? [{ age: "asc" }, { fullName: "asc" }]
+        : { fullName: "asc" },
     skip,
     take: list.take,
   });
@@ -211,6 +250,11 @@ async function LearnersBody({
     <LearnerListClient
       basePath="/teacher/learners"
       grade={activeGrade}
+      section={list.section}
+      advisory={advisory?.id ?? null}
+      advisories={advisories}
+      sort={list.sort}
+      addControl={addControl}
       gender={list.gender}
       aralStatus={list.aralStatus}
       grades={gradeOptions}
@@ -340,6 +384,8 @@ export default async function TeacherLearnersPage({
   }
 
   const assignedGradeIds = assignedGrades.map((g) => g.id);
+  // force-dynamic: a fresh pick per request never mismatches on hydration.
+  const quote = pickQuote(Math.random, LEARNER_QUOTES);
 
   return (
     <AppShell
@@ -349,24 +395,25 @@ export default async function TeacherLearnersPage({
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
       hideTitle
     >
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:mb-6">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            Learners
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage and view all learners in your advisory.
-            {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
-          </p>
-        </div>
-        {!isSuperAdmin ? (
-          <Suspense fallback={<Skeleton className="h-9 w-44" />}>
-            <LearnersAddControl
-              user={{ id: user.id, schoolId }}
-            />
-          </Suspense>
-        ) : null}
-      </div>
+      <PageHero
+        bannerSrc="/brand/banner-learner.png"
+        artClassName="h-[75%] right-[calc(100%-509px)] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
+        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_52%,black_55%)]"
+        headClassName="max-lg:hidden"
+        contentClassName="lg:min-h-[17rem]"
+      >
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white lg:text-5xl">
+          Learners
+        </h1>
+        <p className="mt-2 max-w-[10.5rem] text-base leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[16rem] lg:max-w-md lg:text-lg lg:text-slate-800">
+          Manage and view all learners in your advisories.
+          {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
+        </p>
+        <blockquote className="mt-3 max-w-[10.5rem] text-sm italic leading-relaxed text-slate-600 dark:text-slate-300 sm:max-w-[16rem] lg:mt-4 lg:max-w-lg">
+          &ldquo;{quote.text}&rdquo;
+          <footer className="not-italic">— {quote.author}</footer>
+        </blockquote>
+      </PageHero>
 
       {assignedGrades.length === 0 ? (
         <EmptyState
@@ -375,6 +422,8 @@ export default async function TeacherLearnersPage({
         />
       ) : (
         <>
+          {/* The cards rise into the hero's soft lower edge, as on the dashboard. */}
+          <div className="relative z-10 mt-4 lg:-mt-14">
           <Suspense fallback={<LearnerStatCardsSkeleton />}>
             <LearnerStatCards
               assignedGradeIds={assignedGradeIds}
@@ -382,6 +431,7 @@ export default async function TeacherLearnersPage({
               isSuperAdmin={isSuperAdmin}
             />
           </Suspense>
+          </div>
 
           <div className="mt-4">
             <Suspense fallback={<LearnerTableSkeleton />}>
@@ -392,6 +442,13 @@ export default async function TeacherLearnersPage({
                 isSuperAdmin={isSuperAdmin}
                 schoolIdParam={sp.schoolId}
                 list={list}
+                addControl={
+                  !isSuperAdmin ? (
+                    <Suspense fallback={<Skeleton className="h-10 w-44 rounded-xl" />}>
+                      <LearnersAddControl user={{ id: user.id, schoolId }} />
+                    </Suspense>
+                  ) : null
+                }
               />
             </Suspense>
           </div>
