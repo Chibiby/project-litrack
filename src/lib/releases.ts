@@ -74,6 +74,15 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.19.1",
+    date: "2026-09-15",
+    title: "Pages load faster",
+    announce: false,
+    fixes: [
+      "Pages open faster, especially dashboards. LITRACK now runs closer to its database and remembers dashboard totals for a short time instead of counting them again on every visit.",
+    ],
+  },
+  {
     version: "1.19.0",
     date: "2026-09-15",
     title: "ARAL Profiling is back as its own page",

@@ -112,7 +112,7 @@ Every role page is `force-dynamic` (auth), so the Full Route Cache is unavailabl
 - `cachedQuery` (`src/lib/cache/unstable.ts`) wraps `unstable_cache` with key parts, tags, and a short TTL (default 60s) — used by `src/lib/dashboard/aggregates.ts`.
 - Tag strings are centralized in `src/lib/cache/tags.ts`; invalidation goes through the named helpers in `src/lib/cache/revalidate.ts` (`revalidateLearnerScoped`, `revalidateTeacherCaches`, …) rather than raw `revalidateTag` calls, because each mutation type busts a deliberately different set (e.g. only learner create/archive/import busts the admin dashboard; only ARAL-presence changes bust the teacher sidebar shell).
 
-On Cloudflare neither layer is active today: `open-next.config.ts` declares no `incrementalCache` or `tagCache` and the Worker has no KV/R2 binding, so `cachedQuery` runs its function every time and the `revalidate*` helpers are no-ops. Keep using both anyway — they are what makes wiring a cache back up a config change rather than an audit. See docs/deployment.md § Known gaps.
+On Cloudflare both layers are backed by `open-next.config.ts`: cache entries in Workers KV (`NEXT_INC_CACHE_KV`), tag revalidations in D1 (`NEXT_TAG_CACHE_D1`). See docs/deployment.md § Data Cache and placement.
 
 `next.config.mjs` sets `experimental.staleTimes` (dynamic 180s / static 600s) so prefetched role routes swap without a `loading.tsx` flash. Related client-side warming lives in `src/lib/nav/warm-hrefs.ts`, `src/lib/auth/warm-routes.ts`, and `src/components/nav-prefetcher.tsx`.
 

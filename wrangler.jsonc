@@ -7,6 +7,29 @@
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
+  // Run the Worker next to the database. Supabase is in AWS ap-southeast-1
+  // (Singapore); a page makes many Postgres round trips, so running at the
+  // edge location nearest each user put the full user→Singapore distance into
+  // every query. This is the Cloudflare equivalent of the old Vercel `sin1` pin.
+  "placement": {
+    "mode": "targeted",
+    "region": "aws:ap-southeast-1"
+  },
+  // Next Data Cache backing for open-next.config.ts. Entries in KV, tag
+  // revalidations in D1 (table `revalidations`).
+  "kv_namespaces": [
+    {
+      "binding": "NEXT_INC_CACHE_KV",
+      "id": "f333fd7954de4e19bb2bf2d161258776"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "NEXT_TAG_CACHE_D1",
+      "database_name": "litrack-tag-cache",
+      "database_id": "0a94e4ae-55d1-4d7d-b749-2698bc1308ac"
+    }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
