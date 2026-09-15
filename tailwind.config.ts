@@ -14,8 +14,6 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
-        /* Storybook display lettering on the sign-in screens (Baloo 2). */
-        story: ["var(--font-story)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         background: "hsl(var(--background))",
@@ -55,25 +53,6 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         /* ARAL accent. DEFAULT/soft are theme-aware; numbered steps stay
            static so existing violet-200 / violet-950 utilities keep working. */
-        /* ARAL Program logo inks, sampled from public/logo.png. The sign-in
-           screens print in these (always light); the app keeps its tokens. */
-        aral: {
-          blue: "#013E88",
-          navy: "#12294D",
-          gold: "#FED110",
-          sun: "#FFBA04",
-          red: "#E90423",
-          slate: "#4C6971",
-          line: "#B8C6DA",
-          /* Field and switch edges: 3.4:1 on white, the WCAG 1.4.11 floor for input boundaries. */
-          edge: "#7B8CA6",
-          wash: "#EEF3FB",
-          paper: "#FFFFFF",
-          /* Storybook tints: pale sky and pale sunshine, plus a mid sky for accents. */
-          sky: "#E3F0FD",
-          cloud: "#C7E0FA",
-          sunlight: "#FFF4C2",
-        },
         violet: {
           DEFAULT: "hsl(var(--violet))",
           foreground: "hsl(var(--violet-foreground))",
@@ -95,22 +74,6 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
         xl: "calc(var(--radius) + 4px)",
-      },
-      keyframes: {
-        /* The sign-in card turning to its next step, from an already-visible start. */
-        "story-pop": {
-          "0%": { opacity: "0.6", transform: "translateY(6px) scale(0.985)" },
-          "100%": { opacity: "1", transform: "none" },
-        },
-        /* A gentle nudge on the Continue button's arrow icon, on hover. */
-        "story-nudge": {
-          "0%, 100%": { transform: "translateX(0)" },
-          "50%": { transform: "translateX(3px)" },
-        },
-      },
-      animation: {
-        "story-pop": "story-pop 260ms ease-out",
-        "story-nudge": "story-nudge 600ms ease-in-out",
       },
       boxShadow: {
         card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04)",

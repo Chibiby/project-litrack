@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -22,15 +22,12 @@ import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
 import {
-  AUTH_FIELD,
-  AUTH_FOOTER,
   AUTH_LABEL,
   AUTH_LINK,
   AUTH_PRIMARY_BUTTON,
-  AUTH_STEP_TURN,
   AuthCard,
+  AuthCardHeader,
 } from "@/components/auth/auth-card";
-import { cn } from "@/lib/utils";
 
 /** Mark next app shell paint to show the post-login splash (survives redirect). */
 function markPostLoginSplash() {
@@ -56,8 +53,9 @@ export function AdminLoginForm({
   });
 
   return (
-    <AuthCard title="Super Admin sign-in">
-      <div className={cn("space-y-5", AUTH_STEP_TURN)}>
+    <AuthCard>
+      <AuthCardHeader icon={ShieldCheck} title="Super Admin" subtitle="LITRACK administration" />
+      <div className="mt-6 space-y-5 2xl:mt-8">
         {notice}
         <AppForm
           form={form}
@@ -88,7 +86,7 @@ export function AdminLoginForm({
             name="username"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className={AUTH_LABEL}>
+                <FormLabel required className={AUTH_LABEL}>
                   Username
                 </FormLabel>
                 <FormControl>
@@ -103,7 +101,6 @@ export function AdminLoginForm({
                     spellCheck={false}
                     autoFocus
                     disabled={disabled || pending}
-                    className={AUTH_FIELD}
                     {...field}
                   />
                 </FormControl>
@@ -116,14 +113,13 @@ export function AdminLoginForm({
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className={AUTH_LABEL}>
+                <FormLabel required className={AUTH_LABEL}>
                   Password
                 </FormLabel>
                 <FormControl>
                   <PasswordInput
                     autoComplete="current-password"
                     disabled={disabled || pending}
-                    className={AUTH_FIELD}
                     {...field}
                   />
                 </FormControl>
@@ -139,20 +135,16 @@ export function AdminLoginForm({
             loadingText="Signing in…"
           >
             Sign in
-            <ArrowRight aria-hidden />
           </Button>
+          <div className="flex items-center justify-center gap-6 text-base font-medium">
+            <Link href="/forgot-password" className={AUTH_LINK}>
+              Forgot password?
+            </Link>
+            <Link href="/login" className={AUTH_LINK}>
+              School login
+            </Link>
+          </div>
         </AppForm>
-      </div>
-      <div className={AUTH_FOOTER}>
-        <Link href="/forgot-password" className={AUTH_LINK}>
-          Forgot password?
-        </Link>
-        <Link
-          href="/login"
-          className="font-semibold text-aral-slate underline-offset-4 hover:text-aral-navy hover:underline"
-        >
-          School sign-in
-        </Link>
       </div>
     </AuthCard>
   );

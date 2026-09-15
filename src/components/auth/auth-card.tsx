@@ -1,118 +1,67 @@
-import { Check } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SunDoodle } from "@/components/auth/story-doodles";
 
 /**
- * The sign-in card: a friendly picture-book page. A pale-sunshine header
- * names the step and, when there is more than one, shows where in the order
- * the teacher is; the paper body holds the form. Rounded and chunky, with a
- * solid navy "stacked book" offset shadow instead of a soft glow.
+ * The white card every sign-in step renders in (see LoginShell), in the v2
+ * app's colours: a lavender-to-sky wash under the header, like the page
+ * banners, and violet as the primary and focus colour — set as tokens here so
+ * the default Button variant and every input's focus ring follow it.
  */
 export function AuthCard({
-  title,
-  step,
-  children,
   className,
+  children,
 }: {
-  title: string;
-  /** Position in the two-step school sign-in; omitted where there is one step. */
-  step?: 1 | 2;
-  children: React.ReactNode;
   className?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <section
-      aria-label={title}
+    <div
       className={cn(
-        "w-full overflow-hidden rounded-[28px] border-[3px] border-aral-navy bg-aral-paper shadow-[0_6px_0_0_#12294D] lg:w-[30rem]",
+        "rounded-3xl border border-white/70 bg-card bg-gradient-to-b from-violet-50 via-sky-50/40 via-25% to-card to-50% p-6 shadow-[0_24px_60px_-20px_rgba(46,16,101,0.35)] [--primary:var(--violet)] [--ring:var(--violet)] sm:p-8 2xl:p-12",
         className
       )}
     >
-      <header className="flex items-center justify-between gap-4 border-b-[3px] border-aral-navy bg-aral-sunlight px-5 py-4 sm:px-7">
-        <h2 className="flex min-w-0 items-center gap-2 font-story text-xl font-extrabold tracking-tight text-aral-navy sm:text-2xl">
-          <SunDoodle className="size-7 sm:size-8" />
-          <span className="min-w-0">{title}</span>
-        </h2>
-        {step ? <StepRail step={step} /> : null}
-      </header>
-      <div className="px-5 py-6 sm:px-7 sm:py-7">{children}</div>
-    </section>
+      {children}
+    </div>
   );
 }
 
-const STEPS = ["School", "Account"] as const;
-
-function StepRail({ step }: { step: 1 | 2 }) {
+/** Icon tile, title and one line under it, centred at the top of the card. */
+export function AuthCardHeader({
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+}) {
   return (
-    <ol className="flex shrink-0 items-center gap-2" aria-label="Sign-in steps">
-      {STEPS.map((label, index) => {
-        const n = index + 1;
-        const current = n === step;
-        const done = n < step;
-        return (
-          <li
-            key={label}
-            aria-current={current ? "step" : undefined}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1 text-xs font-bold",
-              current
-                ? "border-aral-navy bg-aral-gold text-aral-navy"
-                : done
-                  ? "border-aral-navy bg-aral-blue text-aral-paper"
-                  : "border-aral-edge bg-aral-paper text-aral-slate"
-            )}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "flex size-4 items-center justify-center rounded-full text-xs leading-none tabular-nums",
-                current ? "bg-aral-paper text-aral-navy" : done ? "bg-aral-paper text-aral-blue" : ""
-              )}
-            >
-              {done ? <Check className="size-3" strokeWidth={3} /> : n}
-            </span>
-            {/* Phones keep the header to one line: only the current step is named. */}
-            <span className={current ? undefined : "sr-only sm:not-sr-only"}>{label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="flex flex-col items-center text-center">
+      <span
+        aria-hidden
+        className="relative flex size-16 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 2xl:size-20"
+      >
+        <Icon className="size-9 2xl:size-11" strokeWidth={1.75} />
+      </span>
+      <h2 className="mt-4 text-3xl font-bold tracking-tight text-indigo-950 2xl:text-4xl">
+        {title}
+      </h2>
+      <p className="mt-1.5 text-base text-slate-600 2xl:text-lg">{subtitle}</p>
+    </div>
   );
 }
 
-/** Field labels in the card. */
-export const AUTH_LABEL = "text-sm font-semibold text-aral-navy";
+/** Label style shared by the sign-in fields. */
+export const AUTH_LABEL = "text-base font-semibold text-indigo-950";
 
-/** Text fields and pickers: rounded, chunky, with a friendly focus ring. */
-export const AUTH_FIELD =
-  "h-12 rounded-2xl border-2 border-aral-edge bg-aral-paper px-4 sm:h-12 text-base text-aral-navy placeholder:text-aral-slate hover:border-aral-blue/60 focus-visible:border-aral-blue focus-visible:ring-4 focus-visible:ring-aral-blue/15 md:text-base";
+/** The violet gradient pill of the sidebar highlight, for the v2 sign-in controls. */
+export const AUTH_PILL = "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600";
 
-/**
- * The primary action. Sun gold with a stacked-book offset shadow and a gentle
- * lift on hover; the ArrowRight icon nudges forward via `group-hover`.
- */
+/** The large call to action ("Continue", "Sign in"). */
 export const AUTH_PRIMARY_BUTTON =
-  "group h-[3.25rem] sm:h-14 w-full rounded-full border-2 border-aral-navy bg-aral-gold font-story text-lg font-extrabold text-aral-navy shadow-[0_4px_0_0_#12294D] transition-[transform,box-shadow,background-color] duration-150 hover:bg-aral-sun motion-safe:hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_#12294D] active:translate-y-[2px] active:shadow-[0_2px_0_0_#12294D] disabled:bg-aral-wash disabled:text-aral-slate disabled:border-aral-edge disabled:opacity-100 disabled:shadow-none disabled:hover:translate-y-0 [&_svg]:size-5 [&_svg]:motion-safe:group-hover:animate-story-nudge";
+  "h-12 w-full rounded-xl text-base font-semibold 2xl:h-14 2xl:text-lg [&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600";
 
-/** A two-way switch (role; sign in or create account): two standalone tiles. */
-export const AUTH_SEGMENTS = "grid grid-cols-2 gap-3";
-export const AUTH_SEGMENT =
-  "h-14 sm:h-14 w-full rounded-2xl border-2 font-story text-base font-bold transition-colors [&_svg]:size-5";
-export const AUTH_SEGMENT_ON =
-  "bg-aral-gold border-aral-navy text-aral-navy shadow-[0_3px_0_0_#12294D] hover:bg-aral-gold hover:text-aral-navy";
-/** The picked intent on the teacher step-2 tabs: blue ink, gold stays reserved for the role pick and submit. */
-export const AUTH_SEGMENT_ON_INK =
-  "bg-aral-blue border-aral-navy text-aral-paper shadow-[0_3px_0_0_#12294D] hover:bg-aral-blue hover:text-aral-paper";
-export const AUTH_SEGMENT_OFF =
-  "bg-aral-paper border-aral-edge text-aral-navy/80 hover:bg-aral-sky hover:border-aral-blue/50";
-
-/** Text links on the card. */
+/** Text links in the card ("Forgot password?", "School login"). */
 export const AUTH_LINK =
-  "font-semibold text-aral-blue underline decoration-2 decoration-aral-blue/30 underline-offset-4 hover:decoration-aral-blue";
-
-/** The quiet footer row under a step: recovery and the other sign-in. */
-export const AUTH_FOOTER =
-  "mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t-2 border-dashed border-aral-cloud pt-4 text-sm";
-
-/** Pops a step's body in once, from an already-visible start. */
-export const AUTH_STEP_TURN = "motion-safe:animate-story-pop";
+  "font-medium text-violet-700 underline underline-offset-4 hover:text-violet-800";
