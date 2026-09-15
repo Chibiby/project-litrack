@@ -193,6 +193,10 @@ const sectionFindFirst = vi.fn(
 );
 
 vi.mock("@/lib/prisma", () => ({
+  // Same double for both clients: they differ only in Hyperdrive caching.
+  get prismaFresh(): unknown {
+    return (this as { prisma: unknown }).prisma;
+  },
   prisma: {
     get $transaction() {
       return transaction;

@@ -74,6 +74,16 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.18.1",
+    date: "2026-09-15",
+    title: "Teacher changes show up right away",
+    announce: true,
+    fixes: [
+      { text: "On the Teachers page, a changed role, grade and section, deactivation or removal now shows the moment you save. You no longer wait minutes or hard-refresh the page.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      "School Heads' changes on the Teachers page save faster, because the page no longer loads twice after each save.",
+    ],
+  },
+  {
     version: "1.18.0",
     date: "2026-09-15",
     title: "Shorter IP lists, a searchable tutor picker, and a new sidebar picture",

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { UserX } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import {
@@ -28,7 +28,7 @@ interface DeclinedTeachersPageProps {
 }
 
 async function DeclinedTeachersBody({ view }: { view: SchoolHeadView }) {
-  const declinedTeachers = await prisma.user.findMany({
+  const declinedTeachers = await prismaFresh.user.findMany({
     where: {
       ...teacherRosterScope(view.schoolId),
       ...TEACHER_ROSTER_STATE.declined,

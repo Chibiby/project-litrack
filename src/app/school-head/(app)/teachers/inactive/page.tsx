@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import {
@@ -27,7 +27,7 @@ interface InactiveTeachersPageProps {
 }
 
 async function InactiveTeachersBody({ view }: { view: SchoolHeadView }) {
-  const inactiveTeachers = await prisma.user.findMany({
+  const inactiveTeachers = await prismaFresh.user.findMany({
     where: {
       ...teacherRosterScope(view.schoolId),
       ...TEACHER_ROSTER_STATE.inactive,

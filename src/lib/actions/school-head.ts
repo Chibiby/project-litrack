@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { GradeLevelType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaFresh } from "@/lib/prisma";
 import {
   formatPersonName,
   formatOptionalPersonName,
@@ -628,7 +628,7 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
 
   const { userId } = parsed.data;
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: userId,
       schoolId: user.schoolId,
@@ -650,7 +650,7 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
   }
 
   const now = new Date();
-  await prisma.user.update({
+  await prismaFresh.user.update({
     where: { id: teacher.id },
     data: {
       isActive: true,
@@ -690,7 +690,7 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: parsed.data.userId,
       schoolId: user.schoolId,
@@ -701,7 +701,7 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
   });
   if (!teacher) return { ok: false, error: "Pending teacher not found" };
 
-  await prisma.user.update({
+  await prismaFresh.user.update({
     where: { id: teacher.id },
     data: {
       approvalStatus: "REJECTED",
@@ -738,7 +738,7 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: parsed.data.userId,
       schoolId: user.schoolId,
@@ -757,7 +757,7 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
   }
 
   try {
-    await prisma.user.delete({ where: { id: teacher.id } });
+    await prismaFresh.user.delete({ where: { id: teacher.id } });
   } catch (err) {
     console.error("[clearRejectedTeacher] prisma delete failed after auth delete:", err);
     return {
@@ -803,7 +803,7 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: parsed.data.userId,
       schoolId: user.schoolId,
@@ -815,10 +815,14 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
   if (!teacher) return { ok: false, error: "Teacher not found" };
 
   if (teacher.isActive === parsed.data.isActive) {
+    // Nothing to write, but still revalidate: the Teachers table hides the row
+    // on click and relies on this action's response for fresh rows. Without a
+    // revalidation Next sends none, and the row would stay hidden.
+    revalidateSchoolHeadTeachers(user.schoolId);
     return { ok: true };
   }
 
-  await prisma.user.update({
+  await prismaFresh.user.update({
     where: { id: teacher.id },
     data: { isActive: parsed.data.isActive },
   });
@@ -865,7 +869,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: parsed.data.userId,
       schoolId: user.schoolId,
@@ -903,7 +907,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
   const freedEmail = `${teacher.email}.deleted.${Date.now()}`;
   let released: ReleasedAdvisory;
   try {
-    released = await prisma.$transaction(async (tx) => {
+    released = await prismaFresh.$transaction(async (tx) => {
       // Sections, learners and the legacy advisory mirrors, all at once. A
       // soft-deleted teacher left naming a section would keep it out of every
       // School Head's reach — no FK action fires on a soft delete.

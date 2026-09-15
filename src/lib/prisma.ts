@@ -4,9 +4,11 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
 import {
+  pickHyperdriveUrl,
   resolvePgDriverUrl,
   resolvePooledDatabaseUrl,
   resolveRuntimeDatabaseUrl,
+  type HyperdriveEnv,
 } from "@/lib/db-url";
 
 const globalForPrisma = globalThis as unknown as {
@@ -28,7 +30,9 @@ const globalForPrisma = globalThis as unknown as {
  * load / build without full env still constructs a client (queries fail later).
  * Soft Supabase helpers in supabase/env.ts are unchanged for middleware.
  */
-function readDatabaseUrl(): string | undefined {
+function readDatabaseUrl(
+  mode: "cached" | "fresh" = "cached",
+): string | undefined {
   let environmentUrl: string | undefined;
   try {
     environmentUrl = getServerEnv().DATABASE_URL;
@@ -40,11 +44,7 @@ function readDatabaseUrl(): string | undefined {
   if (process.env.LITRACK_DEPLOY_TARGET === "cloudflare") {
     try {
       const { env } = getCloudflareContext();
-      hyperdriveUrl = (
-        env as unknown as {
-          HYPERDRIVE?: { connectionString?: string };
-        }
-      ).HYPERDRIVE?.connectionString;
+      hyperdriveUrl = pickHyperdriveUrl(env as HyperdriveEnv, mode);
     } catch {
       // Builds and Node-based tests do not have a Workers request context.
     }
@@ -117,6 +117,9 @@ export function createPrismaProxy(getClient: () => PrismaClient): PrismaClient {
 // them. Outside a React Server Component, cache() simply provides no reuse;
 // the lazy proxy still constructs the client only when a query is attempted.
 const getCloudflarePrismaClient = cache(() => createPrismaClient());
+const getCloudflareFreshPrismaClient = cache(() =>
+  createPrismaClient(resolvePooledDatabaseUrl(readDatabaseUrl("fresh"))),
+);
 
 /**
  * After `prisma generate` adds models, a process-global client created before
@@ -146,3 +149,16 @@ export const prisma =
   process.env.LITRACK_DEPLOY_TARGET === "cloudflare"
     ? createPrismaProxy(getCloudflarePrismaClient)
     : getPrismaClient();
+
+/**
+ * A client whose reads never come from Hyperdrive's query cache. Use it only
+ * where a page must show what was just written — today the School Head
+ * teachers workspace and the actions it calls. See `pickHyperdriveUrl`.
+ *
+ * Off Cloudflare there is no query cache, so this is the same client as
+ * `prisma`.
+ */
+export const prismaFresh =
+  process.env.LITRACK_DEPLOY_TARGET === "cloudflare"
+    ? createPrismaProxy(getCloudflareFreshPrismaClient)
+    : prisma;

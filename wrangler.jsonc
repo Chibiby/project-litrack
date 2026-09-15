@@ -15,6 +15,14 @@
     {
       "binding": "HYPERDRIVE",
       "id": "194a9703ac674c7a9934acaf2c677047"
+    },
+    // litrack-supabase-fresh: same database, query caching DISABLED, origin is
+    // Supabase's direct host. Read through `prismaFresh` only, by the School
+    // Head teachers workspace, which must show a save the moment it lands —
+    // the cached binding above can return rows about a minute old.
+    {
+      "binding": "HYPERDRIVE_FRESH",
+      "id": "99e5c8692aaa4961b4d980fed0ccc778"
     }
   ],
   // Headroom for the nightly snapshot, which reads every table and gzips it.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  pickHyperdriveUrl,
   resolvePgDriverUrl,
   resolvePooledDatabaseUrl,
   resolveRuntimeDatabaseUrl,
@@ -102,5 +103,34 @@ describe("resolveRuntimeDatabaseUrl", () => {
         "postgresql://environment/db",
       ),
     ).toBe("postgresql://environment/db");
+  });
+});
+
+describe("pickHyperdriveUrl", () => {
+  const env = {
+    HYPERDRIVE: { connectionString: "postgresql://cached@hyperdrive/db" },
+    HYPERDRIVE_FRESH: { connectionString: "postgresql://fresh@hyperdrive/db" },
+  };
+
+  it("uses the cached binding for ordinary reads", () => {
+    expect(pickHyperdriveUrl(env, "cached")).toBe(
+      "postgresql://cached@hyperdrive/db",
+    );
+  });
+
+  it("uses the cache-disabled binding for fresh reads", () => {
+    expect(pickHyperdriveUrl(env, "fresh")).toBe(
+      "postgresql://fresh@hyperdrive/db",
+    );
+  });
+
+  it("falls back to the cached binding when the fresh one is not bound", () => {
+    expect(pickHyperdriveUrl({ HYPERDRIVE: env.HYPERDRIVE }, "fresh")).toBe(
+      "postgresql://cached@hyperdrive/db",
+    );
+  });
+
+  it("returns undefined when no binding exists", () => {
+    expect(pickHyperdriveUrl({}, "fresh")).toBeUndefined();
   });
 });

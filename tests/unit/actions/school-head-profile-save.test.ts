@@ -42,7 +42,7 @@ const prismaMock = {
   },
 };
 
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/prisma", () => ({ prisma: prismaMock, prismaFresh: prismaMock }));
 
 const requireUser = vi.fn(async () => ({
   id: HEAD_ID,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaFresh } from "@/lib/prisma";
 import {
   formatPersonName,
   formatOptionalPersonName,
@@ -247,7 +247,7 @@ export async function setTeacherAdvisorySection(
   }
   const { teacherId, sectionId, op } = parsed.data;
 
-  const teacher = await prisma.user.findFirst({
+  const teacher = await prismaFresh.user.findFirst({
     where: {
       id: teacherId,
       schoolId: user.schoolId,
@@ -277,7 +277,7 @@ export async function setTeacherAdvisorySection(
     // same query, so the refusal below can name them. `setTeacherAdvisory`
     // would raise P2002 on its own, but a bare "that section is taken" leaves
     // the School Head with no idea whose advisory to clear.
-    const section = await prisma.section.findFirst({
+    const section = await prismaFresh.section.findFirst({
       where: { id: sectionId, schoolId: user.schoolId, deletedAt: null },
       select: {
         name: true,
@@ -299,7 +299,7 @@ export async function setTeacherAdvisorySection(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await prismaFresh.$transaction(async (tx) => {
       await setTeacherAdvisory(tx, {
         teacherId: teacher.id,
         schoolId: user.schoolId,
@@ -433,7 +433,7 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
 
   let outcome: TxOutcome;
   try {
-    outcome = (await prisma.$transaction(async (tx) => {
+    outcome = (await prismaFresh.$transaction(async (tx) => {
       // Reading and re-checking the cap inside the transaction narrows, but
       // does not close, a concurrent-add race under READ COMMITTED — closing
       // it needs a row lock here and in setTeacherAdvisory, which no

@@ -32,6 +32,13 @@ drop the Vercel-only code paths at build time.
      `connectionString` **per request**; resolving it once at module scope silently falls back to
      `DATABASE_URL` for the isolate's whole life, because `getCloudflareContext()` throws outside a
      request.
+   - `HYPERDRIVE_FRESH` — a second Hyperdrive config (`litrack-supabase-fresh`) on the same
+     database with **query caching disabled**, origin Supabase's direct host, origin connection
+     limit 5. `HYPERDRIVE` caches reads for about a minute, so a page that re-reads what it just
+     wrote showed the old value; `prismaFresh` in `src/lib/prisma.ts` connects through this
+     binding instead. Only the School Head teachers workspace (`/school-head/teachers/**`, its
+     roster helpers, and the actions it calls) uses it today. Without the binding, `prismaFresh`
+     falls back to `HYPERDRIVE`.
    - `triggers.crons` — scheduled backups, see below.
    - `keep_vars: true` — a deploy does not wipe variables set from the dashboard.
 4. Secrets and variables (`npx wrangler secret put <NAME>`, or the dashboard):

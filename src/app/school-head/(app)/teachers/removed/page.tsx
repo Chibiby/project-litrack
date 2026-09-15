@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { UserMinus } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import { removedTeacherScope, teacherTabCounts } from "@/lib/teachers/roster";
@@ -25,7 +25,7 @@ interface RemovedTeachersPageProps {
 }
 
 async function RemovedTeachersBody({ view }: { view: SchoolHeadView }) {
-  const removedTeachers = await prisma.user.findMany({
+  const removedTeachers = await prismaFresh.user.findMany({
     where: removedTeacherScope(view.schoolId),
     select: { id: true, fullName: true, email: true, deletedAt: true },
     orderBy: { deletedAt: "desc" },

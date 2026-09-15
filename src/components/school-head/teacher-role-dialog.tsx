@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +67,6 @@ export function TeacherRoleDialog({
   row: ActiveTeacherRow;
   onSaved: () => void;
 }) {
-  const router = useRouter();
   const initial = resolveDesignationKind(row.designation);
 
   const [open, setOpen] = useState(false);
@@ -122,8 +120,9 @@ export function TeacherRoleDialog({
       toast.success(`Saved ${row.fullName}'s role`);
       setOpen(false);
       setReleases(null);
+      // No `router.refresh()`: the action revalidates, so its response already
+      // carries the re-rendered roster.
       onSaved();
-      router.refresh();
     } finally {
       setPending(false);
     }

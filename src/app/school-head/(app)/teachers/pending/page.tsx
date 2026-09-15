@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import {
@@ -25,7 +25,7 @@ interface PendingTeachersPageProps {
 }
 
 async function PendingTeachersBody({ view }: { view: SchoolHeadView }) {
-  const pendingTeachers = await prisma.user.findMany({
+  const pendingTeachers = await prismaFresh.user.findMany({
     where: {
       ...teacherRosterScope(view.schoolId),
       ...TEACHER_ROSTER_STATE.pending,

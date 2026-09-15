@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import type { TeacherListFilter } from "@/lib/teachers/pagination";
@@ -52,7 +52,7 @@ export function teacherRosterFilterWhere(
 
 /** IDs of teachers holding at least two live advisory sections in this school. */
 export async function multiAdvisoryTeacherIds(schoolId: string): Promise<string[]> {
-  const grouped = await prisma.section.groupBy({
+  const grouped = await prismaFresh.section.groupBy({
     by: ["adviserId"],
     where: { schoolId, deletedAt: null, adviserId: { not: null } },
     _count: { _all: true },
@@ -180,11 +180,11 @@ export async function teacherTabCounts(
 ): Promise<TeacherTabCounts> {
   const scope = teacherRosterScope(schoolId);
   const [active, pending, inactive, declined, removed] = await Promise.all([
-    prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.active } }),
-    prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.pending } }),
-    prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.inactive } }),
-    prisma.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.declined } }),
-    prisma.user.count({ where: removedTeacherScope(schoolId) }),
+    prismaFresh.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.active } }),
+    prismaFresh.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.pending } }),
+    prismaFresh.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.inactive } }),
+    prismaFresh.user.count({ where: { ...scope, ...TEACHER_ROSTER_STATE.declined } }),
+    prismaFresh.user.count({ where: removedTeacherScope(schoolId) }),
   ]);
   return { active, pending, inactive, declined, removed };
 }

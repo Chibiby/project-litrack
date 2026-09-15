@@ -56,6 +56,34 @@ export function resolvePgDriverUrl(raw: string | undefined): string | undefined 
   return url.toString();
 }
 
+export type HyperdriveEnv = {
+  HYPERDRIVE?: { connectionString?: string };
+  HYPERDRIVE_FRESH?: { connectionString?: string };
+};
+
+/**
+ * Which Hyperdrive binding a Prisma client connects through.
+ *
+ * `HYPERDRIVE` has query caching on: a read can return rows up to about a
+ * minute old. That is fine for most pages and wrong for a screen that writes
+ * and then re-reads what it just wrote — the School Head teachers workspace
+ * showed a saved advisory or role as unchanged for a minute or more.
+ * `HYPERDRIVE_FRESH` is a second Hyperdrive config on the same database with
+ * caching disabled, which is Cloudflare's documented pattern for fresh reads.
+ *
+ * Falls back to `HYPERDRIVE` when the fresh binding is absent, so a Worker
+ * deployed without it still connects.
+ */
+export function pickHyperdriveUrl(
+  env: HyperdriveEnv,
+  mode: "cached" | "fresh",
+): string | undefined {
+  const cached = env.HYPERDRIVE?.connectionString;
+  return mode === "fresh"
+    ? (env.HYPERDRIVE_FRESH?.connectionString ?? cached)
+    : cached;
+}
+
 export function resolveRuntimeDatabaseUrl(
   deployTarget: string | undefined,
   hyperdriveUrl: string | undefined,

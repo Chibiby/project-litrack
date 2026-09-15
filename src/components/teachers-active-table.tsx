@@ -529,7 +529,10 @@ function TeachersManagedTable({
               }`
             : `Advisory removed for ${row.fullName}`
       );
-      router.refresh();
+      // No `router.refresh()` here or after the other row actions: each action
+      // calls `revalidatePath`, so its own response already carries the
+      // re-rendered page. A follow-up refresh rendered the whole roster (and
+      // every query behind it) a second time per click.
     });
   };
 
@@ -587,12 +590,6 @@ function TeachersManagedTable({
         unhideRow(row.id);
         throw err;
       }
-      // Fire-and-forget: `router.refresh()` returns void and only ever helps
-      // the *rest* of the page (counts, other tabs) catch up. The row's own
-      // visibility no longer depends on it, so a slow, uncached refresh on
-      // Cloudflare no longer reads as "unresponsive" — the row is already
-      // gone and the dialog/spinner already cleared by the time this runs.
-      router.refresh();
     }).finally(() => setActingKey(null));
   };
 
@@ -609,7 +606,6 @@ function TeachersManagedTable({
         unhideRow(row.id);
         throw err;
       }
-      router.refresh();
     }).finally(() => setActingKey(null));
   };
 
@@ -926,7 +922,6 @@ export function TeachersDeclinedTable({
   rows: DeclinedTeacherRow[];
   readOnly?: boolean;
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
   /** The teacher being cleared, so only their row reads as busy. */
   const [actingId, setActingId] = useState<string | null>(null);
@@ -950,7 +945,6 @@ export function TeachersDeclinedTable({
           return;
         }
         toast.success("They can register again");
-        router.refresh();
       } finally {
         setActingId(null);
       }

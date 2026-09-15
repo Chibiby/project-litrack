@@ -50,6 +50,10 @@ const transaction = vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => {
 });
 
 vi.mock("@/lib/prisma", () => ({
+  // Same double for both clients: they differ only in Hyperdrive caching.
+  get prismaFresh(): unknown {
+    return (this as { prisma: unknown }).prisma;
+  },
   prisma: {
     get $transaction() {
       return transaction;
@@ -225,5 +229,28 @@ describe("removeTeacher", () => {
     expect(res.ok).toBe(false);
     expect(JSON.stringify(res)).not.toContain("Section");
     expect(writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Deactivate/Reactivate hides the row on click and relies on the action's own
+ * response (it revalidates) to re-render the roster; the table no longer calls
+ * `router.refresh()`. A no-op — the teacher already has the requested state,
+ * e.g. another tab got there first — must still revalidate, or the client gets
+ * no fresh rows and the hidden row never comes back.
+ */
+describe("setTeacherActive — already in the requested state", () => {
+  it("still revalidates the Teachers workspace without writing or auditing", async () => {
+    const { setTeacherActive } = await import("@/lib/actions/school-head");
+    teacherLookup = { ...teacherLookup!, isActive: false } as NonNullable<TeacherLookup>;
+    const fd = form();
+    fd.set("isActive", "false");
+
+    const res = await setTeacherActive(fd);
+
+    expect(res).toEqual({ ok: true });
+    expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(txUserUpdates).toHaveLength(0);
   });
 });

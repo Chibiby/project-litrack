@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import {
@@ -80,7 +80,7 @@ async function ActiveTeachersBody({
   };
 
   const [activeTeachers, gradeSections, searchCount] = await Promise.all([
-    prisma.user.findMany({
+    prismaFresh.user.findMany({
       where: activeWhere,
       select: managedTeacherSelect,
       orderBy: { createdAt: "desc" },
@@ -90,7 +90,7 @@ async function ActiveTeachersBody({
     // Serves two jobs at once, which is why it replaced a pair of counts: it
     // fills the School Head's advisory picker, and its shape answers both
     // capacity questions below (any grade at all? any adviser-free section?).
-    prisma.gradeLevel.findMany({
+    prismaFresh.gradeLevel.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: {
@@ -110,7 +110,7 @@ async function ActiveTeachersBody({
     // The tab badge is unfiltered. Count again whenever search or a roster
     // filter narrows the rows shown on this page.
     list.q || list.filter !== "all"
-      ? prisma.user.count({ where: activeWhere })
+      ? prismaFresh.user.count({ where: activeWhere })
       : null,
   ]);
 

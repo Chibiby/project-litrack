@@ -76,7 +76,8 @@ describe("TeacherRoleDialog — confirm-release round trip", () => {
     });
     setTeacherAdvisorySetting.mockResolvedValueOnce({ ok: true });
 
-    render(<TeacherRoleDialog row={ROW} onSaved={vi.fn()} />);
+    const onSaved = vi.fn();
+    render(<TeacherRoleDialog row={ROW} onSaved={onSaved} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
 
     const dialog = await screen.findByRole("dialog");
@@ -97,7 +98,10 @@ describe("TeacherRoleDialog — confirm-release round trip", () => {
 
     await waitFor(() => expect(setTeacherAdvisorySetting).toHaveBeenCalledTimes(2));
     expect(formValues(setTeacherAdvisorySetting.mock.calls[1][0]).confirmRelease).toBe("true");
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    // The action revalidates, so its own response re-renders the roster. A
+    // follow-up router.refresh() rendered the whole page a second time.
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 
