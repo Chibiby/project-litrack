@@ -70,6 +70,13 @@ export function GreetingHero({
    * mockup (image 4). Below 440px there is no room beside the greeting, so
    * two unioned gradients hide just the handwriting (left of 64%, above 51%).
    * Wide screens fade the art's left edge into the band.
+   *
+   * From lg the art is zoomed 1.25× to make the character bigger without
+   * changing the section's size: it is drawn at 108.83% × 1.25 = 136.04% and
+   * top-anchored at -8.83%, so the head still rises exactly as far above the
+   * band as before and the extra height is cropped off the bottom (clouds,
+   * already under the stat cards). The head strip stays 8.83% tall, so its
+   * image is 136.04 / 8.83 = 1540.7% of the strip.
    */
   const art = (
     <Image
@@ -91,14 +98,14 @@ export function GreetingHero({
       {/* Layer 1: the band. */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
+        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 lg:[&>img]:bottom-auto lg:[&>img]:top-[-8.83%] lg:[&>img]:h-[136.04%] max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
       >
         {art}
       </div>
       {/* Layer 2: the head, above the band's top edge. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-full h-[8.83%] overflow-hidden [&>img]:top-0 [&>img]:h-[1232.5%] dark:[&>img]:opacity-80"
+        className="pointer-events-none absolute inset-x-0 bottom-full h-[8.83%] overflow-hidden [&>img]:top-0 [&>img]:h-[1232.5%] lg:[&>img]:h-[1540.7%] dark:[&>img]:opacity-80"
       >
         {art}
       </div>
