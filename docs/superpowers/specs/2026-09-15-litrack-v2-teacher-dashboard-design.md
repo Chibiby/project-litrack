@@ -38,7 +38,7 @@ v2 component tree and no feature flag.
 | --- | --- |
 | Female vs male banner | Add nullable `gender Gender?` to `TeacherProfile`, reusing the existing `Gender` enum (`MALE`/`FEMALE`). UI label "Gender". Banner is male when `gender = MALE`, female otherwise (including null). |
 | "Learner Profiling" nav item | Not added. ARAL Profile stays dormant (`docs/aral-profile.md`). |
-| "Pending Profiles — Without ARAL profile" card | Replaced by **Reading levels pending** — count of learners without a reading level recorded this month, from the existing reading overview data. Same card shape. |
+| "Pending Profiles — Without ARAL profile" card | Kept as the existing read-only card (owner exception in `docs/aral-profile.md`, approved 2026-09-14), restyled. No "Manage profiles" link — the exception forbids a call to action, and `tests/unit/aral-profile-dormant.test.ts` enforces it. |
 | "+2 this month" / "+3 this month" trend lines | Omitted. Cards keep icon, title, figure, hint, action. |
 | "Overdue" task badge | Not used. Existing honest badges ("N pending", "Complete", "Open") restyled to the image's pill look. |
 | "Generate Report" quick action | Links to the Reports page; there is no separate generation flow. |
@@ -82,7 +82,7 @@ the soft left side of the banner.
   - Hero banner spanning content column: "GOOD EVENING," eyebrow, large
     first name with wave emoji, subtitle, rotating italic quote.
   - Four stat cards: Your Grades, Total Learners, ARAL Learners,
-    Reading levels pending — each with tinted icon tile, big figure, hint,
+    Pending Profiles (read-only, no action) — each with tinted icon tile, big figure, hint,
     pill action link.
   - Attendance Overview and Reading Level Overview panels side by side, donut
     + legend + tip box + pill action.
