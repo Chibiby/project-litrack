@@ -75,3 +75,28 @@ export function resyncOverrides<T>(
   }
   return changed ? next : overrides;
 }
+
+/**
+ * Rows not currently hidden by an in-flight deactivate/remove.
+ *
+ * The hidden flag is set the instant a row's action is confirmed (or, for
+ * deactivate/remove, the instant it is clicked — see
+ * `teachers-active-table.tsx`) and lives in plain state, not `useOptimistic`.
+ * `useOptimistic` reverts to the `rows` prop the moment the transition that
+ * dispatched it settles — which, once a server action is followed by a
+ * disconnected `router.refresh()`, happens *before* the refreshed `rows`
+ * (without that row) has actually arrived. That reverts the hidden row back
+ * into view for the gap between the two, then removes it again once the
+ * refresh lands — a visible "reappears, then vanishes" flicker.
+ *
+ * Plain state has no such revert: a hidden id stays hidden across renders
+ * regardless of what triggered them, and is only pruned by `resyncOverrides`
+ * once that row's own signature has actually moved (see the "hidden-row
+ * resync" tests in `row-resync.test.ts`).
+ */
+export function visibleRows<T extends { id: string }>(
+  rows: T[],
+  hidden: Record<string, true>
+): T[] {
+  return rows.filter((row) => !(row.id in hidden));
+}

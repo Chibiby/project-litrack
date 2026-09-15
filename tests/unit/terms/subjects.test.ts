@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { LEARNING_AREA_LABELS, LEARNING_AREA_ORDER } from "@/lib/constants/enum-labels";
 import {
   DEFAULT_TERM_SUBJECTS,
+  isValidSubjectName,
   MAX_ACTIVE_SUBJECTS_PER_GRADE,
   nextPosition,
   orderSheetSubjects,
   planSubjectReorder,
+  planSubjectReset,
   subjectNameKey,
+  TERM_SHEET_GRADE_TYPES,
 } from "@/lib/terms/subjects";
 
 /**
@@ -202,5 +205,140 @@ describe("planSubjectReorder", () => {
 
   it("accepts two empty lists", () => {
     expect(planSubjectReorder([], [])).toEqual({ ok: true, updates: [] });
+  });
+});
+
+describe("isValidSubjectName — the one character rule", () => {
+  it("rejects every C0 control code point, 0 through 31", () => {
+    expect(isValidSubjectName("Read\x00ing")).toBe(false);
+    expect(isValidSubjectName("Read\x1Fing")).toBe(false);
+  });
+
+  it("accepts the boundary right above C0: U+0020 (space)", () => {
+    expect(isValidSubjectName("Reading Club")).toBe(true);
+  });
+
+  it("rejects DEL (U+007F) but accepts the code point just below and above it", () => {
+    expect(isValidSubjectName("Read\x7Fing")).toBe(false);
+    expect(isValidSubjectName("Read\x7Eing")).toBe(true); // U+007E "~"
+    expect(isValidSubjectName("Read\x80ing")).toBe(true); // U+0080, not DEL
+  });
+
+  it("accepts an empty string — blank/length rules live in the Zod schema, not here", () => {
+    expect(isValidSubjectName("")).toBe(true);
+  });
+});
+
+describe("TERM_SHEET_GRADE_TYPES", () => {
+  it("excludes FLOATING — the one GradeLevelType with no End of Terms sheet", () => {
+    expect(TERM_SHEET_GRADE_TYPES).not.toContain("FLOATING");
+  });
+
+  it("is exactly KINDER through G12, in enum declaration order", () => {
+    expect(TERM_SHEET_GRADE_TYPES).toEqual([
+      "KINDER",
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6",
+      "G7",
+      "G8",
+      "G9",
+      "G10",
+      "G11",
+      "G12",
+    ]);
+  });
+});
+
+describe("planSubjectReset", () => {
+  const active = (id: string, name: string): { id: string; name: string; deletedAt: Date | null } => ({
+    id,
+    name,
+    deletedAt: null,
+  });
+  const archived = (id: string, name: string): { id: string; name: string; deletedAt: Date | null } => ({
+    id,
+    name,
+    deletedAt: new Date(2026, 8, 1),
+  });
+
+  it("matches an existing row to a default by name key — case- and whitespace-insensitive", () => {
+    const plan = planSubjectReset(
+      [{ name: "English" }],
+      [active("row-1", "  ENGLISH  ")]
+    );
+    expect(plan).toEqual({
+      toRestore: [],
+      toReposition: [{ id: "row-1", position: 0 }],
+      toCreate: [],
+      toArchive: [],
+    });
+  });
+
+  it("prefers an ACTIVE match over an ARCHIVED match with the same name", () => {
+    const plan = planSubjectReset(
+      [{ name: "English" }],
+      [archived("archived-english", "English"), active("active-english", "English")]
+    );
+    expect(plan.toReposition).toEqual([{ id: "active-english", position: 0 }]);
+    expect(plan.toRestore).toEqual([]);
+  });
+
+  it("restores an archived row when no active row shares its name", () => {
+    const plan = planSubjectReset(
+      [{ name: "English" }],
+      [archived("archived-english", "English")]
+    );
+    expect(plan.toRestore).toEqual([{ id: "archived-english", position: 0 }]);
+    expect(plan.toReposition).toEqual([]);
+  });
+
+  it("creates a default that matches no existing row at all, active or archived", () => {
+    const plan = planSubjectReset([{ name: "Science" }], []);
+    expect(plan.toCreate).toEqual([{ name: "Science", position: 0 }]);
+  });
+
+  it("archives an active row matching no default", () => {
+    const plan = planSubjectReset([], [active("stray", "Custom Subject")]);
+    expect(plan.toArchive).toEqual(["stray"]);
+  });
+
+  it("leaves an already-archived row matching no default untouched", () => {
+    const plan = planSubjectReset([], [archived("stray-archived", "Old Custom")]);
+    expect(plan.toArchive).toEqual([]);
+    expect(plan.toRestore).toEqual([]);
+    expect(plan.toReposition).toEqual([]);
+  });
+
+  it("positions every matched or created row at the default's own index", () => {
+    const plan = planSubjectReset(
+      [{ name: "English" }, { name: "Filipino" }, { name: "Science" }],
+      [active("row-filipino", "Filipino")]
+    );
+    expect(plan.toCreate).toEqual([
+      { name: "English", position: 0 },
+      { name: "Science", position: 2 },
+    ]);
+    expect(plan.toReposition).toEqual([{ id: "row-filipino", position: 1 }]);
+  });
+
+  it("a full round trip: reposition, restore, create and archive together", () => {
+    const plan = planSubjectReset(
+      [{ name: "English" }, { name: "Science" }],
+      [
+        active("active-english", "English"),
+        archived("archived-science", "Science"),
+        active("stray-custom", "Custom Subject"),
+      ]
+    );
+    expect(plan).toEqual({
+      toRestore: [{ id: "archived-science", position: 1 }],
+      toReposition: [{ id: "active-english", position: 0 }],
+      toCreate: [],
+      toArchive: ["stray-custom"],
+    });
   });
 });

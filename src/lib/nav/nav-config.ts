@@ -148,6 +148,7 @@ export function getNavGroups(
             { id: "admin-accounts", label: "Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
             { id: "admin-transfers", label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
             { id: "admin-school-years", label: "School years", href: "/admin/school-years", icon: CalendarRange },
+            { id: "admin-term-subjects", label: "Term Subjects", href: "/admin/term-subjects", icon: ListOrdered },
             { id: "admin-submissions", label: "Submissions", href: "/admin/submissions", icon: FileCheck2 },
             { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },
             { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },

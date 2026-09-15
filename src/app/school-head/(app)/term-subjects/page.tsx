@@ -10,19 +10,28 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTermSubjects } from "@/lib/actions/term-subjects";
 import { TermSubjectsGradePicker } from "@/components/school-head/term-subjects-grade-picker";
 import { TermSubjectsManager } from "@/components/school-head/term-subjects-manager";
+import { ResetTermSubjectsButton } from "@/components/school-head/reset-term-subjects-button";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ schoolId?: string; grade?: string }>;
+  searchParams: Promise<{ schoolId?: string; grade?: string; resetVersion?: string }>;
 }
 
 async function TermSubjectsBody({
   view,
   gradeParam,
+  resetVersion,
 }: {
   view: SchoolHeadView;
   gradeParam?: string;
+  /**
+   * Bumped by `ResetTermSubjectsButton` through the URL after a successful
+   * school-wide reset, so `TermSubjectsManager` remounts (see the manager's
+   * `key` below) with the freshly-reset rows rather than keeping the
+   * `useOptimistic` state it mounted with.
+   */
+  resetVersion?: string;
 }) {
   // FLOATING carries no End of Terms sheet — see `FLOATING_GRADE` in the
   // actions module — so it is not offered as something to configure.
@@ -68,10 +77,11 @@ async function TermSubjectsBody({
         schoolIdParam={view.isSuperAdminView ? view.schoolId : undefined}
       />
       <TermSubjectsManager
-        // Remount on grade switch: the manager holds active/archived in
-        // `useOptimistic` state seeded once from props, and a new grade's rows
-        // must replace it rather than merge into it.
-        key={selected.id}
+        // Remount on grade switch, and again after a school-wide reset: the
+        // manager holds active/archived in `useOptimistic` state seeded once
+        // from props, and a new grade's rows — or a freshly-reset school's
+        // rows — must replace it rather than merge into it.
+        key={`${selected.id}:${resetVersion ?? "0"}`}
         gradeLevelId={selected.id}
         gradeLabel={selected.label}
         max={res.data.max}
@@ -95,9 +105,18 @@ export default async function TermSubjectsPage({ searchParams }: PageProps) {
       description="Set which subjects appear on each grade's End of Terms sheet."
       view={view}
       superAdminCaption="editable — every change is audited"
+      actions={
+        <ResetTermSubjectsButton
+          schoolId={view.isSuperAdminView ? view.schoolId : undefined}
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
-        <TermSubjectsBody view={view} gradeParam={sp.grade} />
+        <TermSubjectsBody
+          view={view}
+          gradeParam={sp.grade}
+          resetVersion={sp.resetVersion}
+        />
       </Suspense>
     </SchoolHeadPage>
   );

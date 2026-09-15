@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   SchoolHeadMetricsSection,
   SchoolHeadChartsSection,
+  SchoolHeadIpSection,
   SchoolHeadRecentActivitySection,
 } from "@/components/dashboard/school-head-dashboard-sections";
 import {
@@ -78,6 +79,10 @@ export default async function SchoolHeadDashboard({
         }
       >
         <SchoolHeadChartsSection schoolId={view.schoolId} />
+      </Suspense>
+
+      <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
+        <SchoolHeadIpSection schoolId={view.schoolId} />
       </Suspense>
 
       <Suspense fallback={<DualListCardSkeleton />}>

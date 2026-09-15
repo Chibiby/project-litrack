@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -27,17 +27,17 @@ import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { advisoryCapFor, advisoryCapReason } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL, UNASSIGNED_CHIP_LABEL } from "@/lib/teachers/floating-copy";
 import { removalAdvisoryNote } from "@/lib/teachers/removal-copy";
-import { resyncOverrides, signaturesFor, type RowSignatures } from "@/lib/teachers/row-resync";
+import {
+  resyncOverrides,
+  signaturesFor,
+  visibleRows,
+  type RowSignatures,
+} from "@/lib/teachers/row-resync";
 import { TeacherRoleDialog } from "@/components/school-head/teacher-role-dialog";
 import type { TeacherListFilter } from "@/lib/teachers/pagination";
 import { RefreshCw, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import {
-  listOptimisticReducer,
-  runOptimistic,
-  settleActionResult,
-  type ListOptimisticOp,
-} from "@/lib/ui/optimistic";
+import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
 
 export type TeachersListPagination = {
   page: number;
@@ -403,11 +403,30 @@ function TeachersManagedTable({
   const [filterValue, setFilterValue] = useState<TeacherListFilter>(
     list?.filter ?? "all"
   );
-  const [optimisticRows, dispatchOptimistic] = useOptimistic(
-    rows,
-    (state: ActiveTeacherRow[], op: ListOptimisticOp<ActiveTeacherRow>) =>
-      listOptimisticReducer(state, op)
-  );
+  /**
+   * Rows hidden by an in-flight (or just-confirmed) deactivate/remove.
+   *
+   * Deliberately plain state, not `useOptimistic`: `useOptimistic` reverts to
+   * the `rows` prop the instant the transition that dispatched it settles,
+   * which — once the server action is followed by a separate
+   * `router.refresh()` — happens *before* the refreshed `rows` (without this
+   * row) actually arrives. That produced a real production bug: the row
+   * reappeared for the gap between the two, then vanished again once the
+   * refresh landed, reading as "takes forever and feels broken." Plain state
+   * has no such revert; `resyncOverrides` (below) prunes an entry only once
+   * that row's own signature has actually moved — see `visibleRows` and the
+   * "hidden-row resync" tests in `row-resync.test.ts`.
+   */
+  const [hiddenIds, setHiddenIds] = useState<Record<string, true>>({});
+  const hideRow = (id: string) =>
+    setHiddenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  const unhideRow = (id: string) =>
+    setHiddenIds((prev) => {
+      if (!(id in prev)) return prev;
+      const rest = { ...prev };
+      delete rest[id];
+      return rest;
+    });
   /**
    * Row-local advisory sets, so the chips reflect a change before the refresh.
    * The whole list per row rather than one id: adding a second section leaves
@@ -449,6 +468,14 @@ function TeachersManagedTable({
   useEffect(() => {
     const nextSignatures = signaturesFor(rows);
     setAdvisoryOverrides((prev) =>
+      resyncOverrides(prev, rowSignaturesRef.current, nextSignatures)
+    );
+    // Same rule for a hidden deactivate/remove: a row that is still in `rows`
+    // (this refresh doesn't concern it) stays hidden; one whose signature has
+    // moved — in practice, disappeared, since a deactivated/removed teacher
+    // drops out of this query entirely — is unhidden because there is nothing
+    // left to hide it from.
+    setHiddenIds((prev) =>
       resyncOverrides(prev, rowSignaturesRef.current, nextSignatures)
     );
     rowSignaturesRef.current = nextSignatures;
@@ -506,6 +533,7 @@ function TeachersManagedTable({
     });
   };
 
+  const optimisticRows = visibleRows(rows, hiddenIds);
   const displayCount = list?.totalCount ?? optimisticRows.length;
 
   const pushListQuery = (next: {
@@ -538,33 +566,49 @@ function TeachersManagedTable({
 
   const onSetActive = (row: ActiveTeacherRow, isActive: boolean) => {
     setActingKey(`${row.id}:setActive`);
+    // Hidden instantly, outside the transition — a plain state update in an
+    // event handler paints before the network call even starts. See the
+    // `hiddenIds` state above for why this is not `useOptimistic`.
+    hideRow(row.id);
     return runOptimistic(startRowTransition, async () => {
-      dispatchOptimistic({ type: "remove", id: row.id });
       const fd = new FormData();
       fd.set("userId", row.id);
       fd.set("isActive", isActive ? "true" : "false");
-      const res = await setTeacherActive(fd);
-      await settleActionResult(
-        res,
-        isActive ? "Teacher reactivated" : "Teacher deactivated"
-      );
-      // `useOptimistic`'s value reverts to the `rows` prop the moment this
-      // transition settles. Without a refresh, `rows` never moves, so the
-      // row this just removed from view reappears right after — call it
-      // inside the transition so the revert has fresh data to land on
-      // instead of the stale pre-mutation list.
+      try {
+        const res = await setTeacherActive(fd);
+        await settleActionResult(
+          res,
+          isActive ? "Teacher reactivated" : "Teacher deactivated"
+        );
+      } catch (err) {
+        // The action failed (or was rejected) — nothing changed server-side,
+        // so put the row back rather than leave it hidden until some later,
+        // unrelated refresh happens to prune it.
+        unhideRow(row.id);
+        throw err;
+      }
+      // Fire-and-forget: `router.refresh()` returns void and only ever helps
+      // the *rest* of the page (counts, other tabs) catch up. The row's own
+      // visibility no longer depends on it, so a slow, uncached refresh on
+      // Cloudflare no longer reads as "unresponsive" — the row is already
+      // gone and the dialog/spinner already cleared by the time this runs.
       router.refresh();
     }).finally(() => setActingKey(null));
   };
 
   const onRemove = (row: ActiveTeacherRow) => {
     setActingKey(`${row.id}:remove`);
+    hideRow(row.id);
     return runOptimistic(startRowTransition, async () => {
-      dispatchOptimistic({ type: "remove", id: row.id });
       const fd = new FormData();
       fd.set("userId", row.id);
-      const res = await removeTeacher(fd);
-      await settleActionResult(res, "Teacher removed");
+      try {
+        const res = await removeTeacher(fd);
+        await settleActionResult(res, "Teacher removed");
+      } catch (err) {
+        unhideRow(row.id);
+        throw err;
+      }
       router.refresh();
     }).finally(() => setActingKey(null));
   };

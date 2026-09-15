@@ -24,6 +24,14 @@ const YEAR_ID = "sy-2026-2027";
 let seq = 0;
 let failOnCreate = false;
 let activeYear: { id: string } | null;
+let gradeType = "G7";
+let learnerMatches: {
+  firstName: string;
+  lastName: string;
+  age: number;
+  englishReadingProfile: string | null;
+  filipinoReadingProfile: string;
+}[] = [];
 
 const createManyAndReturn = vi.fn(
   async (args: { data: Record<string, unknown>[] }) => {
@@ -57,11 +65,13 @@ vi.mock("@/lib/prisma", () => ({
     gradeLevel: {
       findFirst: async (args: { where: Record<string, unknown> }) =>
         args.where.schoolId === SCHOOL_ID && args.where.id === GRADE_ID
-          ? { id: GRADE_ID, schoolId: SCHOOL_ID }
+          ? { id: GRADE_ID, schoolId: SCHOOL_ID, type: gradeType }
           : null,
     },
-    // No pre-existing learners, so nothing is flagged as a duplicate against the DB.
-    learner: { findMany: async () => [] },
+    // Empty by default, so nothing is flagged as a duplicate against the DB.
+    // Individual tests populate `learnerMatches` to exercise the legacy
+    // reading-profile carve-out.
+    learner: { findMany: async () => learnerMatches },
     section: { findMany: async () => [] },
     schoolYear: { findFirst: async () => activeYear },
   },
@@ -105,6 +115,8 @@ beforeEach(() => {
   seq = 0;
   failOnCreate = false;
   activeYear = { id: YEAR_ID };
+  gradeType = "G7";
+  learnerMatches = [];
 });
 
 describe("commitLearnerImport — chunked writes", () => {
@@ -271,5 +283,96 @@ describe("commitLearnerImport — ARAL designation", () => {
       null,
       TEACHER_ID,
     ]);
+  });
+});
+
+/**
+ * Grade 1/Grade 2 now use Grade 3's levels (src/lib/reading/policy.ts), so a
+ * pre-rubric value like CV_BLENDING is out of policy for "G1" even though it
+ * was a valid Kinder/Grade 1/Grade 2 rubric value in the past. Re-importing a
+ * roster CSV of already-enrolled learners must not reject their unchanged
+ * legacy value — the same carve-out `updateLearner` applies
+ * (src/lib/actions/learner.ts), matched here by the row's name+age against
+ * the DB, the same way the duplicate check already matches rows to learners.
+ */
+describe("commitLearnerImport — legacy reading profile carve-out", () => {
+  const g1Row = {
+    firstName: "Juan",
+    lastName: "Dela Cruz",
+    age: 7,
+    gender: "FEMALE",
+    filipinoReadingProfile: "CV_BLENDING",
+    parentEducation: "SECONDARY_GRADUATE",
+  };
+
+  it("imports an out-of-policy value unchanged from the matched existing learner's stored value", async () => {
+    gradeType = "G1";
+    learnerMatches = [
+      {
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        age: 7,
+        englishReadingProfile: null,
+        filipinoReadingProfile: "CV_BLENDING",
+      },
+    ];
+
+    // The row matches an existing learner by name+age, so it is also flagged
+    // as a duplicate; `allowDuplicates` is what lets a re-import through, same
+    // as any other duplicate row. What this test asserts is that the
+    // reading-profile check itself does not reject it first.
+    const res = await commitLearnerImport({
+      gradeLevelId: GRADE_ID,
+      rows: [g1Row],
+      allowDuplicates: true,
+    });
+
+    expect(res).toMatchObject({ ok: true, data: { imported: 1, skippedInvalid: 0 } });
+    const written = createManyAndReturn.mock.calls[0][0].data[0];
+    expect(written.filipinoReadingProfile).toBe("CV_BLENDING");
+  });
+
+  it("rejects an out-of-policy value that differs from the matched existing learner's stored value", async () => {
+    gradeType = "G1";
+    learnerMatches = [
+      {
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        age: 7,
+        englishReadingProfile: null,
+        // Stored value is also legacy, but a different one — the row's value
+        // changed, so the carve-out must not apply.
+        filipinoReadingProfile: "CVC_BLENDING",
+      },
+    ];
+
+    const res = await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: [g1Row] });
+
+    expect(res).toMatchObject({ ok: true, data: { imported: 0, skippedInvalid: 1 } });
+    expect(createManyAndReturn).not.toHaveBeenCalled();
+  });
+
+  it("rejects an out-of-policy value when two existing learners share the row's name and age", async () => {
+    gradeType = "G1";
+    // Twins: one holds the row's value, the other a different one. The row
+    // cannot be tied to either, so the carve-out must not apply.
+    learnerMatches = [
+      { firstName: "Juan", lastName: "Dela Cruz", age: 7, englishReadingProfile: null, filipinoReadingProfile: "CV_BLENDING" },
+      { firstName: "Juan", lastName: "Dela Cruz", age: 7, englishReadingProfile: null, filipinoReadingProfile: "CVC_BLENDING" },
+    ];
+
+    const res = await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: [g1Row], allowDuplicates: true });
+
+    expect(res).toMatchObject({ ok: true, data: { imported: 0, skippedInvalid: 1 } });
+  });
+
+  it("rejects an out-of-policy value with no matching existing learner (new row)", async () => {
+    gradeType = "G1";
+    learnerMatches = [];
+
+    const res = await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: [g1Row] });
+
+    expect(res).toMatchObject({ ok: true, data: { imported: 0, skippedInvalid: 1 } });
+    expect(createManyAndReturn).not.toHaveBeenCalled();
   });
 });

@@ -89,6 +89,14 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // conceptually part of the system's structure. Non-operational: "clear
   // operational data" must not quietly reset demo mode to its default.
   { model: "SystemSetting", delegate: "systemSetting", operational: false },
+  // Super Admin's tenant-less template of default End-of-Terms subjects, one
+  // set per GradeLevelType. Same shape as SystemSetting just above: no
+  // schoolId, no relation into the tenant graph, so its position here is
+  // unconstrained by any foreign key. Non-operational: it is the system's
+  // template, not a school's data, so "clear operational data" must not
+  // touch it, and it belongs in every snapshot precisely because it is
+  // structural rather than because any school produced it.
+  { model: "TermSubjectDefault", delegate: "termSubjectDefault", operational: false },
   { model: "SchoolYear", delegate: "schoolYear", operational: false },
   { model: "GradeLevel", delegate: "gradeLevel", operational: false },
   // After GradeLevel (composite FK) and before TermGrade (which points at it).

@@ -536,6 +536,55 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+/// Super Admin's tenant-less template of default End-of-Terms sheet subjects —
+/// ONE set per `GradeLevelType`, never per school. Same shape as
+/// `SystemSetting` above: a global operator table with no `schoolId` and no
+/// relation into the tenant graph.
+///
+/// Read ONLY by the zero-rows lazy seed in `src/lib/terms/subjects-db.ts`
+/// (`getAllTermSubjects`'s fallback path, which today seeds from the
+/// hard-coded `DEFAULT_TERM_SUBJECTS`; this table is what lets the Super
+/// Admin edit that list per grade type without a migration) and by
+/// `resetSchoolTermSubjects` (restores one school's per-grade sheet back to
+/// this template on demand).
+///
+/// `FLOATING` is deliberately never seeded here: a floating placeholder grade
+/// has no advisory section and no end-of-term sheet at all (see
+/// `AdvisoryMode.FLOATING`), so refusing it is enforced at the action/
+/// validator layer, not by a CHECK constraint on this column — the same
+/// "enforced above the database" pattern as `NutritionalStatus` on `Learner`.
+///
+/// Remove is archive (`deletedAt`), matching `TermSubject`'s own convention.
+/// A template row can be retired without touching any school's already-seeded
+/// copy, because a school's `TermSubject` rows are independent copies, not
+/// pointers back here.
+model TermSubjectDefault {
+  id             String         @id @default(uuid())
+  gradeLevelType GradeLevelType
+  /// Trimmed, non-empty — same shape as `TermSubject.name`, enforced above
+  /// the database.
+  name           String
+  /// Display/order position within one grade type's template.
+  position       Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  /// SQL-only partial unique, alongside the plain index below: one active
+  /// name per grade type, case- and whitespace-insensitively —
+  ///   CREATE UNIQUE INDEX "TermSubjectDefault_type_active_name_unique" ON
+  ///     "TermSubjectDefault"("gradeLevelType", lower(btrim("name")))
+  ///     WHERE "deletedAt" IS NULL;
+  /// Prisma's schema language cannot express a functional partial unique —
+  /// the same reason `TermSubject_grade_active_name_unique`,
+  /// `Enrollment_learner_active_unique` and
+  /// `Section_gradeLevelId_name_folded_key` live in SQL only. PRESERVE IT
+  /// when editing TermSubjectDefault migrations (docs/migrations.md).
+  /// The sheet-template read: one grade type's rows, active first, in
+  /// display order — same shape as `TermSubject_gradeLevelId_deletedAt_position_idx`.
+  @@index([gradeLevelType, deletedAt, position])
+}
+
 model SchoolYear {
   id        String   @id @default(uuid())
   schoolId  String

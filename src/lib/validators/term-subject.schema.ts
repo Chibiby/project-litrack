@@ -1,21 +1,17 @@
 import { z } from "zod";
-import { MAX_ACTIVE_SUBJECTS_PER_GRADE } from "@/lib/terms/subjects";
+import { isValidSubjectName, MAX_ACTIVE_SUBJECTS_PER_GRADE } from "@/lib/terms/subjects";
 
 /**
  * End of Terms subject management payloads. None carries a `schoolId`: the
  * school is always derived server-side from the target grade or subject row.
  */
 
-/** C0 controls and DEL. Checked by code point so the source holds no raw control bytes. */
-const hasControlChar = (v: string) =>
-  [...v].some((ch) => { const c = ch.codePointAt(0) ?? 0; return c < 32 || c === 127; });
-
 export const termSubjectNameSchema = z
   .string({ required_error: "Subject name is required" })
   .trim()
   .min(1, "Subject name is required")
   .max(60, "Subject name must be 60 characters or fewer")
-  .refine((v) => !hasControlChar(v), "Subject name contains invalid characters");
+  .refine(isValidSubjectName, "Subject name contains invalid characters");
 
 const id = z.string().min(1, "Invalid input");
 
@@ -41,6 +37,17 @@ export const reorderTermSubjectsSchema = z.object({
 
 export const termSubjectGradeSchema = z.object({ gradeLevelId: id });
 
+/**
+ * `resetSchoolTermSubjects`'s payload. `schoolId` is only ever HONOURED for a
+ * Super Admin caller — a School Head's own `resetSchoolTermSubjects` call
+ * always resets `user.schoolId`, ignoring whatever (if anything) is posted
+ * here. Optional because the School Head's own page never needs to send it.
+ */
+export const resetSchoolTermSubjectsSchema = z.object({
+  schoolId: id.optional(),
+});
+
 export type CreateTermSubjectInput = z.infer<typeof createTermSubjectSchema>;
 export type RenameTermSubjectInput = z.infer<typeof renameTermSubjectSchema>;
 export type ReorderTermSubjectsInput = z.infer<typeof reorderTermSubjectsSchema>;
+export type ResetSchoolTermSubjectsInput = z.infer<typeof resetSchoolTermSubjectsSchema>;

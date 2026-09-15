@@ -26,6 +26,14 @@ export const GradeLevelBarChart = dynamic(
   { ssr: false, loading: () => <ChartPlaceholder height="100%" /> }
 );
 
+export const DashboardPieChart = dynamic(
+  () =>
+    import("@/components/dashboard/simple-charts").then(
+      (m) => m.DashboardPieChart
+    ),
+  { ssr: false, loading: () => <ChartPlaceholder height={260} /> }
+);
+
 export const DashboardLineChart = dynamic(
   () =>
     import("@/components/dashboard/simple-charts").then(

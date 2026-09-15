@@ -154,6 +154,27 @@ export const AUDIT_ACTIONS = {
   TERM_SUBJECT_ARCHIVE: "TERM_SUBJECT_ARCHIVE",
   TERM_SUBJECT_RESTORE: "TERM_SUBJECT_RESTORE",
   TERM_SUBJECT_REORDER: "TERM_SUBJECT_REORDER",
+  /**
+   * Super Admin edits to the tenant-less per-`GradeLevelType` End of Terms
+   * subject templates (`TermSubjectDefault`). `schoolId` is always null on
+   * these rows — the table has none — and metadata carries the grade type
+   * and subject names only, the same PII rule as `TERM_SUBJECT_*` above.
+   * Editing a template affects ONLY grades seeded (or reset) afterwards; it
+   * never rewrites a school's already-seeded `TermSubject` rows.
+   */
+  TERM_SUBJECT_DEFAULT_CREATE: "TERM_SUBJECT_DEFAULT_CREATE",
+  TERM_SUBJECT_DEFAULT_RENAME: "TERM_SUBJECT_DEFAULT_RENAME",
+  TERM_SUBJECT_DEFAULT_ARCHIVE: "TERM_SUBJECT_DEFAULT_ARCHIVE",
+  TERM_SUBJECT_DEFAULT_RESTORE: "TERM_SUBJECT_DEFAULT_RESTORE",
+  TERM_SUBJECT_DEFAULT_REORDER: "TERM_SUBJECT_DEFAULT_REORDER",
+  /**
+   * A School Head's (or Super Admin viewing a school's) school-wide "Reset to
+   * default", applied to every live non-FLOATING grade at once. Metadata
+   * carries per-grade counts (created/restored/archived) — never subject
+   * names beyond what the sibling `TERM_SUBJECT_*` rows already logged for
+   * the individual writes this produced.
+   */
+  TERM_SUBJECT_RESET_SCHOOL: "TERM_SUBJECT_RESET_SCHOOL",
   IMPORT_LEARNERS: "IMPORT_LEARNERS",
   EXPORT_LEARNERS_EXCEL: "EXPORT_LEARNERS_EXCEL",
   EXPORT_PRINTABLE_REPORT: "EXPORT_PRINTABLE_REPORT",

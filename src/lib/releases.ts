@@ -74,6 +74,20 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.17.0",
+    date: "2026-09-15",
+    title: "Default term subjects, IP learner dashboards, and faster teacher updates",
+    announce: true,
+    fixes: [
+      { text: "Super Admins can set the default End of Terms subjects for each grade. New schools and resets use these subjects.", roles: ["SUPER_ADMIN"] },
+      { text: "School Heads have a new Reset to default button on the Term Subjects page. It resets every grade at once. Grades already entered are kept.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "The dashboard shows the average number of learners per active teacher: for every school on the Super Admin dashboard, and for your own school on the School Head dashboard.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "The dashboard now shows Indigenous Peoples (IP) learners: how many there are, the percentage of learners, a list, and a chart of IP groups.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "A deactivated or removed teacher now leaves the Teachers list the moment you click.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      "Re-importing Grade 1 and Grade 2 learners whose saved reading level uses the old levels no longer fails.",
+    ],
+  },
+  {
     version: "1.16.0",
     date: "2026-09-15",
     title: "Grade 1 and Grade 2 reading levels match Grade 3, and teacher changes stick",

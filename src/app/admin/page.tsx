@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   AdminMetricsSection,
   AdminChartsSection,
+  AdminIpAdvisorySection,
   AdminRecentSchoolsSection,
 } from "@/components/dashboard/admin-dashboard-sections";
 import {
@@ -47,6 +48,10 @@ export default async function AdminDashboard() {
 
       <Suspense fallback={<MetricsGridSkeleton variant="admin" />}>
         <AdminMetricsSection />
+      </Suspense>
+
+      <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
+        <AdminIpAdvisorySection />
       </Suspense>
 
       <Suspense fallback={<ChartSectionSkeleton columns={2} />}>

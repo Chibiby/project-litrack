@@ -60,6 +60,18 @@ export function revalidateTermSubjects() {
   revalidateTermSheets();
 }
 
+/**
+ * The Super Admin per-`GradeLevelType` default-subject console.
+ *
+ * Deliberately does NOT bust `revalidateTermSubjects`/`revalidateTermSheets`:
+ * editing a template affects only grades seeded or reset afterwards, never an
+ * already-seeded school's live `TermSubject` rows, so no school-facing page
+ * goes stale here.
+ */
+export function revalidateTermSubjectDefaults() {
+  revalidatePath("/admin/term-subjects");
+}
+
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {
   revalidateTag(tags.adminDashboard);

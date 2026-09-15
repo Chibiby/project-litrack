@@ -3,9 +3,12 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
+  GRADE_LEVEL_LABELS,
   READING_PROFILE_LABELS,
   labelReadingProfile,
 } from "@/lib/constants/enum-labels";
+import { IP_ETHNICITIES } from "@/lib/ip/ethnicity";
+import { shapeAdminIpMetrics, shapeSchoolIpMetrics } from "@/lib/dashboard/ip-metrics";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { formatLocalDateKey } from "@/lib/date-keys";
 import { addMonths } from "@/lib/month-range";
@@ -184,6 +187,129 @@ export async function getAdminRecentSchools() {
     {
       keyParts: ["admin-recent-schools", `demo:${demoEnabled}`],
       tags: [adminDashboard, schoolsList],
+      profile: "aggregate",
+    }
+  );
+}
+
+// ─── IP learners & learners per advisory teacher ───────────────────────────
+
+/**
+ * The learner population both new metrics count: live learners holding an
+ * ACTIVE enrollment in an active school year. A learner's ACTIVE enrollment is
+ * unique (partial index) and belongs to their school, so grouping by the
+ * learner's `schoolId` attributes each one to exactly one school.
+ */
+const ACTIVE_ENROLLED_LEARNER: Prisma.LearnerWhereInput = {
+  deletedAt: null,
+  enrollments: { some: { status: "ACTIVE", schoolYear: { isActive: true } } },
+};
+
+const IP_LEARNER: Prisma.LearnerWhereInput = {
+  OR: [
+    { ethnicity: { in: [...IP_ETHNICITIES] } },
+    { secondaryEthnicity: { in: [...IP_ETHNICITIES] } },
+  ],
+};
+
+/**
+ * Teachers counted toward the learners-per-teacher denominator: approved,
+ * active, live TEACHER-role users, scoped by school. Deliberately includes
+ * FLOATING teachers and those with no advisory section — the ratio is
+ * learners ÷ every teacher carrying a caseload, not just advisers.
+ */
+const ACTIVE_TEACHER: Prisma.UserWhereInput = {
+  role: "TEACHER",
+  approvalStatus: "APPROVED",
+  isActive: true,
+  deletedAt: null,
+};
+
+/**
+ * Super Admin: learners per active teacher and IP learners, per school and
+ * nationally. Cross-tenant by design (admin-only caller); demo tenant excluded
+ * while demo mode is off, like every other admin figure.
+ */
+export async function getAdminIpAndAdvisoryMetrics() {
+  const demoEnabled = await isDemoEnabled();
+  const schoolScope = demoSchoolFilter(demoEnabled);
+  const viaSchool = demoEnabled ? {} : ({ school: { isDemo: false } } as const);
+  return cachedQuery(
+    async () => {
+      const [schools, learnerTotals, ipRows, teacherTotals] = await Promise.all([
+        prisma.school.findMany({
+          where: { deletedAt: null, ...schoolScope },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
+        prisma.learner.groupBy({
+          by: ["schoolId"],
+          where: { ...ACTIVE_ENROLLED_LEARNER, ...viaSchool },
+          _count: { _all: true },
+        }),
+        prisma.learner.groupBy({
+          by: ["schoolId", "ethnicity", "secondaryEthnicity"],
+          where: { AND: [ACTIVE_ENROLLED_LEARNER, IP_LEARNER, viaSchool] },
+          _count: { _all: true },
+        }),
+        prisma.user.groupBy({
+          by: ["schoolId"],
+          where: { ...ACTIVE_TEACHER, ...viaSchool },
+          _count: { _all: true },
+        }),
+      ]);
+      return shapeAdminIpMetrics({ schools, learnerTotals, ipRows, teacherTotals });
+    },
+    {
+      keyParts: ["admin-ip-advisory-metrics-v2", `demo:${demoEnabled}`],
+      tags: [adminDashboard, schoolsList],
+      profile: "aggregate",
+    }
+  );
+}
+
+/** School Head: IP learners in one school, by grade/section and by kind, plus the learners-per-teacher ratio. */
+export async function getSchoolHeadIpMetrics(schoolId: string) {
+  return cachedQuery(
+    async () => {
+      const population: Prisma.LearnerWhereInput = {
+        ...ACTIVE_ENROLLED_LEARNER,
+        schoolId,
+      };
+      const [grades, sections, totals, ipRows, activeTeachers] = await Promise.all([
+        prisma.gradeLevel.findMany({
+          where: { schoolId },
+          select: { id: true, type: true },
+          orderBy: { type: "asc" },
+        }),
+        prisma.section.findMany({
+          where: { schoolId },
+          select: { id: true, name: true },
+        }),
+        prisma.learner.groupBy({
+          by: ["gradeLevelId", "sectionId"],
+          where: population,
+          _count: { _all: true },
+        }),
+        prisma.learner.groupBy({
+          by: ["gradeLevelId", "sectionId", "ethnicity", "secondaryEthnicity"],
+          where: { AND: [population, IP_LEARNER] },
+          _count: { _all: true },
+        }),
+        prisma.user.count({ where: { ...ACTIVE_TEACHER, schoolId } }),
+      ]);
+      return shapeSchoolIpMetrics({
+        grades,
+        sections,
+        gradeLabels: GRADE_LEVEL_LABELS,
+        totals,
+        ipRows,
+        activeTeachers,
+      });
+    },
+    {
+      keyParts: ["school-head-ip-metrics-v2", schoolId],
+      tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }
   );

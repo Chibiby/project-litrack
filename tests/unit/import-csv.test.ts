@@ -18,6 +18,8 @@ import {
   READING_PROFILE_LABELS_K3,
   READING_PROFILE_LABELS_G4_PLUS,
 } from "@/lib/constants/enum-labels";
+import { learnerDuplicateKey } from "@/lib/learners/normalize";
+import type { ExistingReadingProfile } from "@/lib/learners/import-csv";
 
 describe("learnerCsvTemplate", () => {
   it("includes all Section A headers and an example row", () => {
@@ -314,5 +316,68 @@ describe("validateImportRows", () => {
   it("flags within-file duplicates", () => {
     const results = validateImportRows([goodRow, { ...goodRow }]);
     expect(results.filter((r) => r.ok && r.duplicateWarning).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("validateImportRows — legacy reading profile carve-out (gradeType)", () => {
+  // Grade 1/Grade 2 now use Grade 3's levels (src/lib/reading/policy.ts), so a
+  // pre-rubric value like CV_BLENDING is out of policy for "G1" today even
+  // though it was a valid Kinder/Grade 1/Grade 2 rubric value in the past.
+  // Grade 1/Grade 2 don't collect English, so only filipinoReadingProfile is
+  // exercised here.
+  const g1Row = {
+    firstName: "Juan",
+    lastName: "Dela Cruz",
+    age: "7",
+    gender: "MALE",
+    filipinoReadingProfile: "CV_BLENDING",
+    filipinoFrustrationSubtypes: "",
+    governmentBenefits: "",
+    parentEducation: "SECONDARY_GRADUATE",
+    isAralLearner: "false",
+  };
+  const key = learnerDuplicateKey("Juan", "Dela Cruz", 7);
+
+  it("rejects an out-of-policy value with no matching existing learner (new row)", () => {
+    const results = validateImportRows([g1Row], { gradeType: "G1" });
+    expect(results[0]?.ok).toBe(false);
+    if (!results[0]?.ok) {
+      expect(results[0].errors).toContain("Invalid Filipino reading level for this grade");
+    }
+  });
+
+  it("accepts an out-of-policy value unchanged from the matched existing learner's stored value", () => {
+    const existingReadingProfiles = new Map<string, ExistingReadingProfile>([
+      [key, { englishReadingProfile: null, filipinoReadingProfile: "CV_BLENDING" }],
+    ]);
+    const results = validateImportRows([g1Row], {
+      gradeType: "G1",
+      existingReadingProfiles,
+    });
+    expect(results[0]?.ok).toBe(true);
+  });
+
+  it("rejects an out-of-policy value that differs from the matched existing learner's stored value", () => {
+    const existingReadingProfiles = new Map<string, ExistingReadingProfile>([
+      // Stored value is also legacy/out-of-policy, but a different one — the
+      // row's value changed, so the carve-out must not apply.
+      [key, { englishReadingProfile: null, filipinoReadingProfile: "CVC_BLENDING" }],
+    ]);
+    const results = validateImportRows([g1Row], {
+      gradeType: "G1",
+      existingReadingProfiles,
+    });
+    expect(results[0]?.ok).toBe(false);
+    if (!results[0]?.ok) {
+      expect(results[0].errors).toContain("Invalid Filipino reading level for this grade");
+    }
+  });
+
+  it("still accepts an in-policy value regardless of any existing match", () => {
+    const results = validateImportRows(
+      [{ ...g1Row, filipinoReadingProfile: "INDEPENDENT_GRADE_READY" }],
+      { gradeType: "G1" }
+    );
+    expect(results[0]?.ok).toBe(true);
   });
 });

@@ -6,12 +6,62 @@
  * drops archived rows and fixes one display order. See
  * docs/superpowers/specs/2026-09-14-term-subjects-management-design.md §3.
  */
+import type { GradeLevelType } from "@prisma/client";
 import {
   LEARNING_AREA_LABELS,
   LEARNING_AREA_ORDER,
 } from "@/lib/constants/enum-labels";
 
 export const MAX_ACTIVE_SUBJECTS_PER_GRADE = 15;
+
+/**
+ * Every `GradeLevelType` that has an End of Terms sheet at all — every value
+ * except `FLOATING`, which has no advisory section and so no sheet (see
+ * `AdvisoryMode.FLOATING`). Order matches the enum's own declaration in
+ * `prisma/schema.prisma`.
+ *
+ * Shared by the Super Admin default-subject validator (`gradeLevelType`
+ * enum), `resetSchoolTermSubjects` (the grades it targets), and the M1
+ * migration's own seed scope.
+ */
+export const TERM_SHEET_GRADE_TYPES = [
+  "KINDER",
+  "G1",
+  "G2",
+  "G3",
+  "G4",
+  "G5",
+  "G6",
+  "G7",
+  "G8",
+  "G9",
+  "G10",
+  "G11",
+  "G12",
+] as const satisfies readonly GradeLevelType[];
+
+/**
+ * The message shown wherever a Floating grade's End of Terms subjects are
+ * requested — `FLOATING` has no advisory section and no sheet at all (see
+ * `AdvisoryMode.FLOATING`), so every entry point refuses it with this exact
+ * sentence rather than a generic "not found".
+ */
+export const FLOATING_GRADE_MESSAGE =
+  "Floating has no End of Terms sheet, so it has no subjects.";
+
+/**
+ * A subject name's only character rule: no C0 controls or DEL. Trim/length
+ * are separate Zod checks (`.trim().min(1).max(60)`) so each has its own
+ * message; this is the one rule shared, byte-for-byte, between
+ * `term-subject.schema.ts` (School Head's per-grade subjects) and
+ * `term-subject-default.schema.ts` (Super Admin's per-type templates).
+ */
+export function isValidSubjectName(name: string): boolean {
+  return ![...name].some((ch) => {
+    const c = ch.codePointAt(0) ?? 0;
+    return c < 32 || c === 127;
+  });
+}
 
 export type LegacyLearningArea = (typeof LEARNING_AREA_ORDER)[number];
 
@@ -91,4 +141,82 @@ export function planSubjectReorder(
     ok: true,
     updates: requestedIds.map((id, position) => ({ id, position })),
   };
+}
+
+export type SubjectResetDefault = { name: string };
+export type SubjectResetExisting = { id: string; name: string; deletedAt: Date | null };
+
+export type SubjectResetPlan = {
+  /** An archived row whose name matches a default: bring it back at that default's position. */
+  toRestore: { id: string; position: number }[];
+  /** An already-active row whose name matches a default: pin it to that default's position. */
+  toReposition: { id: string; position: number }[];
+  /** A default with no matching row at all (active or archived): create it. */
+  toCreate: { name: string; position: number }[];
+  /** An active row matching no default: archive it. An already-archived row matching no default is left alone. */
+  toArchive: string[];
+}
+
+/**
+ * Plan a school-wide "Reset to default" for one grade: match `existing` rows
+ * to `defaults` by `subjectNameKey` (case- and whitespace-insensitive, the
+ * same comparison the SQL partial unique indexes use), and describe the
+ * writes that bring the grade's sheet back to the template.
+ *
+ * Matching rules:
+ * - `defaults` is already in display order; a matched row's new `position`
+ *   is its index in `defaults`.
+ * - An ACTIVE match is preferred over an ARCHIVED match with the same name —
+ *   a default is never "restored" onto an archived row while an active row
+ *   with that exact name already exists.
+ * - A default with no match at all (active or archived) is created new.
+ * - An active row matching no default is archived. An already-archived row
+ *   matching no default is left untouched — archived rows only ever move
+ *   when a default asks for them back.
+ *
+ * Pure: takes and returns plain data, no Prisma. The caller applies the plan
+ * inside its own transaction and lock.
+ */
+export function planSubjectReset(
+  defaults: readonly SubjectResetDefault[],
+  existing: readonly SubjectResetExisting[]
+): SubjectResetPlan {
+  const activeByKey = new Map<string, SubjectResetExisting>();
+  const archivedByKey = new Map<string, SubjectResetExisting>();
+  for (const row of existing) {
+    const key = subjectNameKey(row.name);
+    if (row.deletedAt === null) {
+      if (!activeByKey.has(key)) activeByKey.set(key, row);
+    } else if (!archivedByKey.has(key)) {
+      archivedByKey.set(key, row);
+    }
+  }
+
+  const matchedIds = new Set<string>();
+  const toRestore: { id: string; position: number }[] = [];
+  const toReposition: { id: string; position: number }[] = [];
+  const toCreate: { name: string; position: number }[] = [];
+
+  defaults.forEach((d, position) => {
+    const key = subjectNameKey(d.name);
+    const active = activeByKey.get(key);
+    if (active) {
+      matchedIds.add(active.id);
+      toReposition.push({ id: active.id, position });
+      return;
+    }
+    const archived = archivedByKey.get(key);
+    if (archived) {
+      matchedIds.add(archived.id);
+      toRestore.push({ id: archived.id, position });
+      return;
+    }
+    toCreate.push({ name: d.name, position });
+  });
+
+  const toArchive = existing
+    .filter((row) => row.deletedAt === null && !matchedIds.has(row.id))
+    .map((row) => row.id);
+
+  return { toRestore, toReposition, toCreate, toArchive };
 }

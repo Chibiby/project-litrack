@@ -261,6 +261,13 @@ export type ImportRowResult =
     }
   | { rowNumber: number; ok: false; errors: string[]; rawPreview: string };
 
+/** A matched existing learner's stored reading profile, for the legacy carve-out below. */
+export type ExistingReadingProfile = {
+  englishReadingProfile: string | null;
+  /** Null when the match is ambiguous (two learners share the name and age). */
+  filipinoReadingProfile: string | null;
+};
+
 export type ValidateImportRowsOptions = {
   /**
    * Existing school learners for duplicate detection (name+age).
@@ -269,6 +276,18 @@ export type ValidateImportRowsOptions = {
   existing?: { firstName: string; lastName: string; age: number }[];
   /** Precomputed `learnerDuplicateKey` set (preferred over scanning `existing`). */
   existingKeys?: Set<string> | ReadonlySet<string>;
+  /**
+   * Stored `englishReadingProfile`/`filipinoReadingProfile` for existing school
+   * learners, keyed by `learnerDuplicateKey`. Powers the legacy carve-out in
+   * `validateReadingProfileForGrade`: a row that matches an existing learner
+   * (by name+age, same match the duplicate check uses) may keep an
+   * out-of-policy value when it is unchanged from what that learner already
+   * has stored — e.g. a Grade 1/Grade 2 learner whose Filipino profile is
+   * still a pre-rubric `CV_BLENDING` now that Grade 1/Grade 2 use Grade 3's
+   * levels. A row with no match, or a changed value, is held to the grade's
+   * current policy same as before.
+   */
+  existingReadingProfiles?: ReadonlyMap<string, ExistingReadingProfile>;
   /** When true, mark duplicates as warnings but still ok (commit will skip unless allowDuplicates). */
   flagDuplicates?: boolean;
   /**
@@ -327,9 +346,17 @@ export function validateImportRows(
     }
 
     const data = parsed.data;
+    // Computed once and reused for both the reading-profile carve-out below and
+    // the duplicate check further down — both match a row to an existing
+    // learner the same way (normalized name + age).
+    const key = learnerDuplicateKey(data.firstName, data.lastName, data.age);
 
     if (options.gradeType) {
-      const readingErrors = validateReadingProfileForGrade(data, options.gradeType);
+      const readingErrors = validateReadingProfileForGrade(
+        data,
+        options.gradeType,
+        options.existingReadingProfiles?.get(key)
+      );
       if (readingErrors.length > 0) {
         results.push({
           rowNumber,
@@ -341,7 +368,6 @@ export function validateImportRows(
       }
     }
 
-    const key = learnerDuplicateKey(data.firstName, data.lastName, data.age);
     let duplicateWarning = false;
 
     if (seenInFile.has(key)) {
@@ -383,10 +409,19 @@ export function validateImportRows(
  * (docs/reading-policy-spec.md section 4a), applied per CSV row at commit
  * time, keyed off the import's resolved target grade — never a grade named in
  * the file.
+ *
+ * `existing` mirrors the update-only carve-out in `updateLearner`
+ * (src/lib/actions/learner.ts): a value outside the grade's current allowed
+ * set (e.g. a pre-rubric Grade 1/Grade 2 band now that Grade 1/Grade 2 share
+ * Grade 3's levels) is accepted when it is byte-identical to what the matched
+ * existing learner already has stored. Only a value that is both
+ * out-of-policy AND changed (or belongs to no existing learner — i.e. a new
+ * row) gets rejected.
  */
 function validateReadingProfileForGrade(
   data: { englishReadingProfile?: string; filipinoReadingProfile: string },
-  gradeType: string
+  gradeType: string,
+  existing?: ExistingReadingProfile
 ): string[] {
   const errors: string[] = [];
   const collectsEnglish = languagesForGrade(gradeType).includes("ENGLISH");
@@ -398,10 +433,17 @@ function validateReadingProfileForGrade(
   if (!collectsEnglish && data.englishReadingProfile) {
     errors.push("English reading level is not collected for this grade");
   }
-  if (data.englishReadingProfile && !allowed.includes(data.englishReadingProfile)) {
+  if (
+    data.englishReadingProfile &&
+    !allowed.includes(data.englishReadingProfile) &&
+    data.englishReadingProfile !== existing?.englishReadingProfile
+  ) {
     errors.push("Invalid English reading level for this grade");
   }
-  if (!allowed.includes(data.filipinoReadingProfile)) {
+  if (
+    !allowed.includes(data.filipinoReadingProfile) &&
+    data.filipinoReadingProfile !== existing?.filipinoReadingProfile
+  ) {
     errors.push("Invalid Filipino reading level for this grade");
   }
   return errors;

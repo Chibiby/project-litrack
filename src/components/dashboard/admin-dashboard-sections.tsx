@@ -3,7 +3,16 @@ import {
   getAdminMetricCounts,
   getAdminActivitySeries,
   getAdminRecentSchools,
+  getAdminIpAndAdvisoryMetrics,
 } from "@/lib/dashboard/aggregates";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +22,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   DashboardBarChart,
   DashboardLineChart,
+  DashboardPieChart,
 } from "@/components/dashboard/lazy-charts";
 import {
   School,
@@ -150,6 +160,100 @@ export async function AdminChartsSection() {
         )}
       </ChartCard>
     </div>
+  );
+}
+
+export async function AdminIpAdvisorySection() {
+  let data: Awaited<ReturnType<typeof getAdminIpAndAdvisoryMetrics>> | null =
+    null;
+  try {
+    data = await getAdminIpAndAdvisoryMetrics();
+  } catch (err) {
+    console.error("[AdminIpAdvisorySection] failed to load:", err);
+  }
+
+  const schools = data?.schools ?? [];
+  const kinds = data?.ipKinds ?? [];
+
+  return (
+    <>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <MetricCard
+          title="Learners per teacher"
+          value={data?.national.learnersPerTeacher ?? "—"}
+          hint={`${data?.national.totalLearners ?? 0} enrolled learners · across ${data?.national.activeTeachers ?? 0} active teachers`}
+          icon={Users}
+          tone="primary"
+        />
+        <MetricCard
+          title="IP learners"
+          value={data?.national.ipLearners ?? 0}
+          hint={`${data?.national.ipPercent ?? "—"} of enrolled learners`}
+          icon={GraduationCap}
+          tone="amber"
+        />
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Schools"
+          description="Enrolled learners in the active school year"
+        >
+          {schools.length === 0 ? (
+            <EmptyState
+              title="No data yet"
+              description="Create a school to see per-school figures."
+              icon={School}
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>School</TableHead>
+                  <TableHead className="text-right">Per teacher</TableHead>
+                  <TableHead className="text-right">IP</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">IP %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schools.map((s) => (
+                  <TableRow key={s.schoolId}>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.learnersPerTeacher}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.ipLearners}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.totalLearners}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.ipPercent}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </ChartCard>
+        <ChartCard
+          title="IP learners by group"
+          description="All schools; a learner with two IP groups counts in both"
+        >
+          {kinds.length === 0 ? (
+            <EmptyState
+              title="No data yet"
+              description="Appears once enrolled learners have an IP ethnicity recorded."
+              icon={GraduationCap}
+            />
+          ) : (
+            <DashboardPieChart data={kinds} />
+          )}
+        </ChartCard>
+      </div>
+    </>
   );
 }
 

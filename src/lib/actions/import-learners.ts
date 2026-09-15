@@ -13,6 +13,7 @@ import {
   summarizeImportResults,
   resolveSectionIdByName,
   type ImportRowResult,
+  type ExistingReadingProfile,
 } from "@/lib/learners/import-csv";
 import {
   isPossibleDuplicate,
@@ -55,12 +56,16 @@ async function assertTeacherGradeAccess(userId: string, schoolId: string, gradeL
 
 /**
  * Parse import rows and load only matching school learners for dup-check
- * (keyed by name+age) instead of a full-school findMany.
+ * (keyed by name+age) instead of a full-school findMany. Also carries each
+ * match's stored reading profile, which `validateImportRows` uses for the
+ * legacy out-of-policy carve-out (see `ExistingReadingProfile` in
+ * import-csv.ts) — preview and commit call this the same way, so they agree
+ * on which rows that carve-out applies to.
  */
-async function loadExistingDuplicateKeys(
+async function loadExistingLearnerMatches(
   schoolId: string,
   rows: Record<string, unknown>[]
-): Promise<Set<string>> {
+): Promise<Map<string, ExistingReadingProfile>> {
   const candidates: { firstName: string; lastName: string; age: number }[] = [];
   const seen = new Set<string>();
 
@@ -85,7 +90,7 @@ async function loadExistingDuplicateKeys(
     });
   }
 
-  if (candidates.length === 0) return new Set();
+  if (candidates.length === 0) return new Map();
 
   const ages = [...new Set(candidates.map((c) => c.age))];
   // Narrow by age first, then OR only the candidate name triples.
@@ -100,12 +105,36 @@ async function loadExistingDuplicateKeys(
         age: c.age,
       })),
     },
-    select: { firstName: true, lastName: true, age: true },
+    select: {
+      firstName: true,
+      lastName: true,
+      age: true,
+      englishReadingProfile: true,
+      filipinoReadingProfile: true,
+    },
   });
 
-  return new Set(
-    matches.map((m) => learnerDuplicateKey(m.firstName, m.lastName, m.age))
-  );
+  const result = new Map<string, ExistingReadingProfile>();
+  const ambiguous = new Set<string>();
+  for (const m of matches) {
+    const key = learnerDuplicateKey(m.firstName, m.lastName, m.age);
+    if (result.has(key)) {
+      // Two learners share this name and age (twins, siblings), so the row
+      // cannot be tied to one stored profile. Keep the key for duplicate
+      // flagging but offer no stored value, so the legacy carve-out never
+      // compares against the wrong learner.
+      ambiguous.add(key);
+      continue;
+    }
+    result.set(key, {
+      englishReadingProfile: m.englishReadingProfile,
+      filipinoReadingProfile: m.filipinoReadingProfile,
+    });
+  }
+  for (const key of ambiguous) {
+    result.set(key, { englishReadingProfile: null, filipinoReadingProfile: null });
+  }
+  return result;
 }
 
 /** Downloadable CSV template string (headers + example row). */
@@ -155,8 +184,8 @@ export async function previewLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const [existingKeys, gradeSections] = await Promise.all([
-    loadExistingDuplicateKeys(user.schoolId, input.rows),
+  const [existingMatches, gradeSections] = await Promise.all([
+    loadExistingLearnerMatches(user.schoolId, input.rows),
     prisma.section.findMany({
       where: {
         schoolId: user.schoolId,
@@ -168,7 +197,8 @@ export async function previewLearnerImport(input: {
   ]);
 
   const results = validateImportRows(input.rows, {
-    existingKeys,
+    existingKeys: new Set(existingMatches.keys()),
+    existingReadingProfiles: existingMatches,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
     // Keyed off the resolved target grade, never a grade the file names —
@@ -213,8 +243,8 @@ export async function commitLearnerImport(input: {
     return { ok: false, error: "Import limited to 500 rows per file" };
   }
 
-  const [existingKeys, gradeSections] = await Promise.all([
-    loadExistingDuplicateKeys(user.schoolId, input.rows),
+  const [existingMatches, gradeSections] = await Promise.all([
+    loadExistingLearnerMatches(user.schoolId, input.rows),
     prisma.section.findMany({
       where: {
         schoolId: user.schoolId,
@@ -226,7 +256,8 @@ export async function commitLearnerImport(input: {
   ]);
 
   const results = validateImportRows(input.rows, {
-    existingKeys,
+    existingKeys: new Set(existingMatches.keys()),
+    existingReadingProfiles: existingMatches,
     flagDuplicates: true,
     sectionNames: gradeSections.map((s) => s.name),
     // Keyed off the resolved target grade, never a grade the file names —

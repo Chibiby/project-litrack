@@ -11,6 +11,10 @@ import {
   LabelList,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 
 type Point = { name?: string; date?: string; value: number };
@@ -136,6 +140,51 @@ export function GradeLevelBarChart({
             />
           </Bar>
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/**
+ * Slice palette for categorical pies. Violet is deliberately absent — it is
+ * reserved for ARAL — so theme tokens lead and fixed hues fill the rest.
+ */
+const PIE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--secondary))",
+  "hsl(160 70% 40%)",
+  "hsl(350 75% 55%)",
+  "hsl(190 80% 42%)",
+  "hsl(20 85% 52%)",
+  "hsl(215 16% 47%)",
+];
+
+export function DashboardPieChart({
+  data,
+  height = 260,
+}: {
+  data: { name: string; value: number }[];
+  height?: number;
+}) {
+  return (
+    <div className="w-full" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Tooltip contentStyle={tooltipStyle} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            outerRadius="70%"
+            label={{ fontSize: 11 }}
+            isAnimationActive={false}
+          >
+            {data.map((d, i) => (
+              <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+            ))}
+          </Pie>
+        </PieChart>
       </ResponsiveContainer>
     </div>
   );

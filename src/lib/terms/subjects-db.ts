@@ -1,6 +1,6 @@
 import "server-only";
-import { Prisma, type PrismaClient } from "@prisma/client";
-import { DEFAULT_TERM_SUBJECTS, orderSheetSubjects } from "@/lib/terms/subjects";
+import { Prisma, type GradeLevelType, type PrismaClient } from "@prisma/client";
+import { orderSheetSubjects } from "@/lib/terms/subjects";
 
 type Client = PrismaClient | Prisma.TransactionClient;
 
@@ -13,15 +13,50 @@ export type TermSubjectRow = {
 
 const SELECT = { id: true, name: true, position: true, deletedAt: true } as const;
 
+export type TermSubjectDefaultRow = {
+  id: string;
+  name: string;
+  position: number;
+  deletedAt: Date | null;
+};
+
+const DEFAULT_SELECT = { id: true, name: true, position: true, deletedAt: true } as const;
+
 /**
- * Every subject row for one grade, archived included, seeding the 8 defaults
- * first when the grade has NO rows at all.
+ * One grade type's active template rows (`TermSubjectDefault`), in display
+ * order. The Super Admin's per-type template — never touches a school's own
+ * `TermSubject` rows.
+ */
+export async function getActiveDefaultsForType(
+  client: Client,
+  gradeLevelType: GradeLevelType
+): Promise<TermSubjectDefaultRow[]> {
+  const rows = await client.termSubjectDefault.findMany({
+    where: { gradeLevelType, deletedAt: null },
+    select: DEFAULT_SELECT,
+  });
+  return orderSheetSubjects(rows);
+}
+
+/**
+ * Every subject row for one grade, archived included, seeding from that
+ * grade's `GradeLevelType` template (`TermSubjectDefault`) first when the
+ * grade has NO rows at all.
  *
  * Lazy seed because grades are created from several paths and M1 only seeded
  * the grades that existed then. "Zero rows" (not "zero active") is the trigger,
  * so a head who archived every subject is never handed the defaults back.
- * `skipDuplicates` rides on `@@unique([gradeLevelId, legacyArea])`, so two
- * concurrent first reads cannot double-seed.
+ * `skipDuplicates` compiles to an untargeted `ON CONFLICT DO NOTHING`, and
+ * the SQL-only `TermSubject_grade_active_name_unique` index is what stops two
+ * concurrent first reads from double-seeding. Seeded rows carry
+ * `legacyArea = NULL`, so `@@unique([gradeLevelId, legacyArea])` no longer helps.
+ *
+ * The template read is per-`GradeLevelType`, edited by the Super Admin
+ * (`term-subject-defaults.ts`) — a zero-default type (or a grade whose id
+ * cannot be resolved, which should not happen for a caller-verified grade)
+ * seeds nothing and leaves the sheet empty; there is no further fallback.
+ * Seeded rows carry `legacyArea: null` — that join key only ever mattered for
+ * the pre-M2 backfill of rows this path never creates.
  *
  * TENANCY: `schoolId` must be the caller's already-verified school; the where
  * clause carries it, and the composite FK makes a grade/school mismatch
@@ -35,13 +70,22 @@ export async function getAllTermSubjects(
   const rows = await client.termSubject.findMany({ where, select: SELECT });
   if (rows.length > 0) return rows;
 
+  const grade = await client.gradeLevel.findFirst({
+    where: { id: gradeLevelId, schoolId },
+    select: { type: true },
+  });
+  if (!grade) return rows;
+
+  const defaults = await getActiveDefaultsForType(client, grade.type);
+  if (defaults.length === 0) return rows;
+
   await client.termSubject.createMany({
-    data: DEFAULT_TERM_SUBJECTS.map((d) => ({
+    data: defaults.map((d, position) => ({
       schoolId,
       gradeLevelId,
       name: d.name,
-      position: d.position,
-      legacyArea: d.legacyArea,
+      position,
+      legacyArea: null,
     })),
     skipDuplicates: true,
   });

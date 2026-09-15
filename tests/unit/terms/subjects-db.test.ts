@@ -22,10 +22,23 @@ type Row = {
   deletedAt: Date | null;
 };
 
+type DefaultRow = {
+  id: string;
+  gradeLevelType: string;
+  name: string;
+  position: number;
+  deletedAt: Date | null;
+};
+
 const SCHOOL_ID = "school-malandag";
 const GRADE_ID = "grade-g7";
+const GRADE_TYPE = "G7";
 
 let rows: Row[];
+/** The grade's own `GradeLevel.type`, read by the cold seed to pick a template. */
+let gradeType: string | null;
+/** The Super Admin's tenant-less per-`GradeLevelType` templates. */
+let defaultRows: DefaultRow[];
 
 const findMany = vi.fn(async (args: { where: { schoolId: string; gradeLevelId: string } }) =>
   rows
@@ -37,21 +50,25 @@ const findMany = vi.fn(async (args: { where: { schoolId: string; gradeLevelId: s
 
 const createMany = vi.fn(
   async (args: {
-    data: { schoolId: string; gradeLevelId: string; name: string; position: number; legacyArea: string }[];
+    data: { schoolId: string; gradeLevelId: string; name: string; position: number; legacyArea: string | null }[];
     skipDuplicates?: boolean;
   }) => {
     let count = 0;
     for (const d of args.data) {
       // Mirrors @@unique([gradeLevelId, legacyArea]) with skipDuplicates: true.
+      // Postgres treats every NULL as distinct in a unique index, so a
+      // `legacyArea: null` row (every row this cold path creates) never
+      // clashes with another — only a real, shared legacyArea value would.
       const clash = rows.some(
         (r) =>
           r.gradeLevelId === d.gradeLevelId &&
+          d.legacyArea !== null &&
           r.legacyArea === d.legacyArea &&
           args.skipDuplicates
       );
       if (clash) continue;
       rows.push({
-        id: `seeded-${d.legacyArea}`,
+        id: `seeded-${count}-${d.name}`,
         schoolId: d.schoolId,
         gradeLevelId: d.gradeLevelId,
         name: d.name,
@@ -65,10 +82,32 @@ const createMany = vi.fn(
   }
 );
 
+/** The cold seed's own grade-type lookup: `gradeLevel.findFirst({ where: { id, schoolId } })`. */
+const gradeLevelFindFirst = vi.fn(
+  async (args: { where: { id: string; schoolId: string } }) =>
+    args.where.id === GRADE_ID && args.where.schoolId === SCHOOL_ID && gradeType !== null
+      ? { type: gradeType }
+      : null
+);
+
+/** The Super Admin's per-`GradeLevelType` template — tenant-less, `getActiveDefaultsForType`. */
+const termSubjectDefaultFindMany = vi.fn(
+  async (args: { where: { gradeLevelType: string; deletedAt: null } }) =>
+    defaultRows
+      .filter((d) => d.gradeLevelType === args.where.gradeLevelType && d.deletedAt === null)
+      .map((d) => ({ id: d.id, name: d.name, position: d.position, deletedAt: d.deletedAt }))
+);
+
 const client = {
   termSubject: {
     findMany: (...args: unknown[]) => findMany(...(args as [never])),
     createMany: (...args: unknown[]) => createMany(...(args as [never])),
+  },
+  gradeLevel: {
+    findFirst: (...args: unknown[]) => gradeLevelFindFirst(...(args as [never])),
+  },
+  termSubjectDefault: {
+    findMany: (...args: unknown[]) => termSubjectDefaultFindMany(...(args as [never])),
   },
 } as unknown as import("@prisma/client").PrismaClient;
 
@@ -122,13 +161,28 @@ describe("healLegacyTermGrades — pre-M2 adoption of NULL-termSubjectId rows", 
   });
 });
 
+/** 8 `TermSubjectDefault` rows for `GRADE_TYPE`, named like the old M1 seed. */
+function eightDefaults(): DefaultRow[] {
+  return DEFAULT_TERM_SUBJECTS.map((d, i) => ({
+    id: `default-${d.legacyArea}`,
+    gradeLevelType: GRADE_TYPE,
+    name: d.name,
+    position: i,
+    deletedAt: null,
+  }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   rows = [];
+  gradeType = GRADE_TYPE;
+  defaultRows = [];
 });
 
 describe("getAllTermSubjects — the lazy seed", () => {
-  it("seeds the 8 defaults when a grade has zero rows at all", async () => {
+  it("seeds the grade type's 8 defaults when a grade has zero rows at all", async () => {
+    defaultRows = eightDefaults();
+
     const result = await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
 
     expect(createMany).toHaveBeenCalledTimes(1);
@@ -136,6 +190,48 @@ describe("getAllTermSubjects — the lazy seed", () => {
     expect(result.map((r) => r.name).sort()).toEqual(
       [...DEFAULT_TERM_SUBJECTS].map((d) => d.name).sort()
     );
+  });
+
+  it("seeded rows carry legacyArea: null — that join key only ever mattered for the pre-M2 backfill", async () => {
+    defaultRows = eightDefaults();
+
+    await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
+
+    const created = createMany.mock.calls[0][0] as {
+      data: { legacyArea: string | null }[];
+    };
+    expect(created.data.every((d) => d.legacyArea === null)).toBe(true);
+  });
+
+  it("reads the template for the grade's OWN GradeLevelType, not some other type", async () => {
+    gradeType = "G8";
+    defaultRows = [
+      { id: "d-g7", gradeLevelType: "G7", name: "Wrong Type", position: 0, deletedAt: null },
+      { id: "d-g8", gradeLevelType: "G8", name: "Right Type", position: 0, deletedAt: null },
+    ];
+
+    const result = await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
+
+    expect(result.map((r) => r.name)).toEqual(["Right Type"]);
+  });
+
+  it("creates no rows and returns empty when the grade's type has zero defaults", async () => {
+    defaultRows = [];
+
+    const result = await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
+
+    expect(createMany).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+
+  it("creates no rows and returns empty when the grade cannot be resolved at all", async () => {
+    gradeType = null;
+    defaultRows = eightDefaults();
+
+    const result = await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
+
+    expect(createMany).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
   });
 
   it("does NOT re-seed when every existing row is archived", async () => {
@@ -181,6 +277,7 @@ describe("getAllTermSubjects — the lazy seed", () => {
   });
 
   it("scopes the read to schoolId AND gradeLevelId — another school's or grade's rows never leak in", async () => {
+    defaultRows = eightDefaults();
     rows = [
       {
         id: "other-school",

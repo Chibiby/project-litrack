@@ -53,6 +53,12 @@ ALTER TABLE "SchoolUnlockGrant"    ENABLE ROW LEVEL SECURITY;
 -- tenant. Deny-all, same as everything else here.
 ALTER TABLE "SystemSetting"        ENABLE ROW LEVEL SECURITY;
 
+-- Super Admin's tenant-less template of default End-of-Terms subjects (one
+-- set per GradeLevelType). Carries no learner or school data, but a writable
+-- path to it from PostgREST would let an outsider rewrite what every new
+-- grade's sheet seeds with. Deny-all, same as SystemSetting above.
+ALTER TABLE "TermSubjectDefault"   ENABLE ROW LEVEL SECURITY;
+
 -- Chat. These hold free text one member of staff wrote for another, which is
 -- the most directly readable content in the database — not a code or an id, but
 -- sentences about named children. Deny-all, like everything else.

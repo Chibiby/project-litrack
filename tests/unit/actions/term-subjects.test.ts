@@ -50,6 +50,13 @@ type SubjectRow = {
 
 let grades: GradeRow[];
 let termSubjects: SubjectRow[];
+/** Super Admin's tenant-less per-`GradeLevelType` templates, keyed by type. */
+let defaultsByType: Record<
+  string,
+  { id: string; name: string; position: number; deletedAt: Date | null }[]
+>;
+/** Live/soft-deleted schools, for `resetSchoolTermSubjects`'s Super Admin path. */
+let schools: { id: string; deletedAt: Date | null }[];
 /** What `requireUser` resolves for the current test. */
 let session: { id: string; schoolId: string | null; role: "SCHOOL_HEAD" | "SUPER_ADMIN" };
 
@@ -70,6 +77,18 @@ const gradeLevelFindFirst = vi.fn(
     return found ? { id: found.id, schoolId: found.schoolId, type: found.type } : null;
   }
 );
+
+/** The Super Admin's per-`GradeLevelType` template — tenant-less. */
+const termSubjectDefaultFindMany = vi.fn(
+  async (args: { where: { gradeLevelType: string; deletedAt: null } }) =>
+    (defaultsByType[args.where.gradeLevelType] ?? []).filter((d) => d.deletedAt === null)
+);
+
+/** `resetSchoolTermSubjects`'s Super Admin liveness check. */
+const schoolFindFirst = vi.fn(async (args: { where: { id: string; deletedAt: null } }) => {
+  const found = schools.find((s) => s.id === args.where.id && s.deletedAt === null);
+  return found ? { id: found.id } : null;
+});
 
 const termSubjectFindFirst = vi.fn(
   async (args: { where: { id: string; schoolId?: string } }) => {
@@ -101,8 +120,34 @@ const termSubjectFindMany = vi.fn(
       )
       .map((s) => ({ id: s.id, name: s.name, position: s.position, deletedAt: s.deletedAt }))
 );
-/** Never expected here: every grade fixture already has rows. */
-const termSubjectCreateMany = vi.fn(async (_args?: unknown) => ({ count: 0 }));
+/**
+ * The cold-seed AND `resetSchoolTermSubjects`'s `toCreate` both land here.
+ * Pushes real rows so later reads (and tally assertions) see them.
+ */
+let nextSeededId = 0;
+const termSubjectCreateMany = vi.fn(
+  async (args: {
+    data: {
+      schoolId: string;
+      gradeLevelId: string;
+      name: string;
+      position: number;
+      legacyArea?: string | null;
+    }[];
+  }) => {
+    for (const d of args.data) {
+      termSubjects.push({
+        id: `subject-seeded-${++nextSeededId}`,
+        schoolId: d.schoolId,
+        gradeLevelId: d.gradeLevelId,
+        name: d.name,
+        position: d.position,
+        deletedAt: null,
+      });
+    }
+    return { count: args.data.length };
+  }
+);
 
 let nextCreatedId = 0;
 const termSubjectCreate = vi.fn(
@@ -147,7 +192,14 @@ const termSubjectUpdateMany = vi.fn(
   async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
     const { where, data } = args;
     const matches = termSubjects.filter((s) => {
-      if ("id" in where && s.id !== where.id) return false;
+      if ("id" in where) {
+        const idClause = where.id;
+        if (typeof idClause === "string") {
+          if (s.id !== idClause) return false;
+        } else if (idClause && typeof idClause === "object" && "in" in idClause) {
+          if (!(idClause as { in: string[] }).in.includes(s.id)) return false;
+        }
+      }
       if ("schoolId" in where && s.schoolId !== where.schoolId) return false;
       if ("gradeLevelId" in where && s.gradeLevelId !== where.gradeLevelId) return false;
       if (where.deletedAt === null && s.deletedAt !== null) return false;
@@ -192,10 +244,11 @@ const termSubjectUpdateMany = vi.fn(
 
 /**
  * `lockGrade`'s `SELECT "id" FROM "GradeLevel" ... FOR UPDATE` (result ignored
- * by the action) and `reorderTermSubjects`' own `SELECT "id" FROM "TermSubject"
+ * by the action), `reorderTermSubjects`' own `SELECT "id" FROM "TermSubject"
  * ... FOR UPDATE` (result IS the locked active-id list `planSubjectReorder`
- * compares against) share one tagged-template mock, told apart by which table
- * name the SQL text names.
+ * compares against), and `resetSchoolTermSubjects`' `SELECT "id", "type" FROM
+ * "GradeLevel" ... FOR UPDATE` (the grades it iterates) share one
+ * tagged-template mock, told apart by which table/columns the SQL text names.
  */
 const txQueryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const sql = strings.join(" ");
@@ -208,12 +261,25 @@ const txQueryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknow
       )
       .map((s) => ({ id: s.id }));
   }
+  if (sql.includes('"GradeLevel"') && sql.includes('"type"')) {
+    const [schoolId] = values as [string];
+    return grades
+      .filter((g) => g.schoolId === schoolId && g.deletedAt === null && g.type !== "FLOATING")
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((g) => ({ id: g.id, type: g.type }));
+  }
   return [];
 });
 
 function makeTx() {
   return {
     $queryRaw: (...args: unknown[]) => txQueryRaw(...(args as [never])),
+    gradeLevel: {
+      findFirst: (...args: unknown[]) => gradeLevelFindFirst(...(args as [never])),
+    },
+    termSubjectDefault: {
+      findMany: (...args: unknown[]) => termSubjectDefaultFindMany(...(args as [never])),
+    },
     termSubject: {
       findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [never])),
       createMany: (...args: unknown[]) => termSubjectCreateMany(...(args as [never])),
@@ -235,11 +301,17 @@ vi.mock("@/lib/prisma", () => ({
     gradeLevel: {
       findFirst: (...args: unknown[]) => gradeLevelFindFirst(...(args as [never])),
     },
+    termSubjectDefault: {
+      findMany: (...args: unknown[]) => termSubjectDefaultFindMany(...(args as [never])),
+    },
     termSubject: {
       findFirst: (...args: unknown[]) => termSubjectFindFirst(...(args as [never])),
       findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [never])),
       createMany: (...args: unknown[]) => termSubjectCreateMany(...(args as [never])),
       updateMany: (...args: unknown[]) => termSubjectUpdateMany(...(args as [never])),
+    },
+    school: {
+      findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [never])),
     },
   },
 }));
@@ -267,6 +339,7 @@ vi.mock("@/lib/audit", () => ({
     TERM_SUBJECT_ARCHIVE: "TERM_SUBJECT_ARCHIVE",
     TERM_SUBJECT_RESTORE: "TERM_SUBJECT_RESTORE",
     TERM_SUBJECT_REORDER: "TERM_SUBJECT_REORDER",
+    TERM_SUBJECT_RESET_SCHOOL: "TERM_SUBJECT_RESET_SCHOOL",
   },
 }));
 
@@ -282,6 +355,7 @@ const {
   archiveTermSubject,
   restoreTermSubject,
   reorderTermSubjects,
+  resetSchoolTermSubjects,
 } = await import("@/lib/actions/term-subjects");
 
 function subject(overrides: Partial<SubjectRow> & { id: string; name: string }): SubjectRow {
@@ -305,6 +379,7 @@ function expectNoWrite() {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCreatedId = 0;
+  nextSeededId = 0;
   grades = [
     { id: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "G7" },
     { id: FLOATING_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "FLOATING" },
@@ -314,6 +389,13 @@ beforeEach(() => {
   termSubjects = [
     subject({ id: "subject-english", name: "English", position: 0 }),
     subject({ id: "subject-math", name: "Mathematics", position: 1 }),
+  ];
+  // No Super Admin templates by default — the cold seed and
+  // `resetSchoolTermSubjects` tests that need one set `defaultsByType` themselves.
+  defaultsByType = {};
+  schools = [
+    { id: SCHOOL_ID, deletedAt: null },
+    { id: OTHER_SCHOOL_ID, deletedAt: null },
   ];
   session = HEAD;
 });
@@ -763,5 +845,129 @@ describe("reorderTermSubjects", () => {
     expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
     if (res.ok) return;
     expect(res.error).toContain("Floating");
+  });
+});
+
+describe("resetSchoolTermSubjects", () => {
+  it("ignores a School Head's posted schoolId — always resets the caller's OWN school", async () => {
+    session = HEAD;
+    // FLOATING and the soft-deleted grade must never be touched, and neither
+    // must the OTHER school's grade this payload tries to point at.
+    const res = await resetSchoolTermSubjects({ schoolId: OTHER_SCHOOL_ID });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Only SCHOOL_ID's own live, non-FLOATING grade (GRADE_ID) was processed.
+    expect(res.data.grades).toBe(1);
+    const audit = writeAudit.mock.calls[0][0];
+    expect(audit.schoolId).toBe(SCHOOL_ID);
+  });
+
+  it("honours a Super Admin's posted schoolId", async () => {
+    session = ADMIN;
+
+    const res = await resetSchoolTermSubjects({ schoolId: OTHER_SCHOOL_ID });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.grades).toBe(1); // FOREIGN_GRADE_ID, OTHER_SCHOOL_ID's only live non-FLOATING grade
+    const audit = writeAudit.mock.calls[0][0];
+    expect(audit.schoolId).toBe(OTHER_SCHOOL_ID);
+    expect(audit.action).toBe("TERM_SUBJECT_RESET_SCHOOL");
+  });
+
+  it("refuses a missing school (Super Admin) as NOT_FOUND, writing nothing", async () => {
+    session = ADMIN;
+
+    const res = await resetSchoolTermSubjects({ schoolId: "school-does-not-exist" });
+
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(revalidateTermSubjects).not.toHaveBeenCalled();
+  });
+
+  it("refuses a soft-deleted school (Super Admin) as NOT_FOUND, writing nothing", async () => {
+    session = ADMIN;
+    schools.push({ id: "school-removed", deletedAt: new Date(2026, 8, 1) });
+
+    const res = await resetSchoolTermSubjects({ schoolId: "school-removed" });
+
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("restores an archived subject that matches a default, keeping its own id", async () => {
+    termSubjects = [
+      subject({ id: "subject-english", name: "English", position: 0 }),
+      subject({
+        id: "archived-science",
+        name: "Science",
+        position: 5,
+        deletedAt: new Date(2026, 8, 1),
+      }),
+    ];
+    defaultsByType["G7"] = [
+      { id: "d-english", name: "English", position: 0, deletedAt: null },
+      { id: "d-science", name: "Science", position: 1, deletedAt: null },
+    ];
+
+    const res = await resetSchoolTermSubjects({});
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data).toMatchObject({ grades: 1, created: 0, restored: 1, archived: 0 });
+    const restored = termSubjects.find((s) => s.id === "archived-science")!;
+    expect(restored.deletedAt).toBeNull();
+    expect(restored.position).toBe(1);
+  });
+
+  it("archives an active subject matching no default, scoped by schoolId in the where", async () => {
+    termSubjects = [subject({ id: "subject-custom", name: "Custom Subject", position: 0 })];
+    defaultsByType["G7"] = [];
+
+    const res = await resetSchoolTermSubjects({});
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data).toMatchObject({ grades: 1, created: 0, restored: 0, archived: 1 });
+    expect(termSubjects.find((s) => s.id === "subject-custom")!.deletedAt).toBeInstanceOf(Date);
+
+    const archiveCall = termSubjectUpdateMany.mock.calls.find(
+      (c) => (c[0].where as { id?: { in?: string[] } }).id?.in?.includes("subject-custom")
+    );
+    expect(archiveCall).toBeTruthy();
+    expect(archiveCall![0].where).toMatchObject({ schoolId: SCHOOL_ID });
+  });
+
+  it("returns tallies across create, reposition and archive together", async () => {
+    // Existing: English (active, matches), Mathematics (active, unmatched).
+    // Defaults: English (matches active), Science (matches nothing → create).
+    defaultsByType["G7"] = [
+      { id: "d-english", name: "English", position: 0, deletedAt: null },
+      { id: "d-science", name: "Science", position: 1, deletedAt: null },
+    ];
+
+    const res = await resetSchoolTermSubjects({});
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data).toEqual({ grades: 1, created: 1, restored: 0, archived: 1 });
+  });
+
+  it("writes one audit row carrying the tallies", async () => {
+    defaultsByType["G7"] = [
+      { id: "d-english", name: "English", position: 0, deletedAt: null },
+    ];
+
+    const res = await resetSchoolTermSubjects({});
+
+    expect(res.ok).toBe(true);
+    expect(writeAudit).toHaveBeenCalledTimes(1);
+    const audit = writeAudit.mock.calls[0][0];
+    expect(audit.action).toBe("TERM_SUBJECT_RESET_SCHOOL");
+    expect(audit.resource).toBe("School");
+    expect(audit.resourceId).toBe(SCHOOL_ID);
+    expect(audit.metadata).toMatchObject({ grades: 1, actorRole: "SCHOOL_HEAD" });
+    expect(revalidateTermSubjects).toHaveBeenCalledTimes(1);
   });
 });
