@@ -11,8 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { FieldRadioGroup, FieldCheckboxList } from "./profile-shared";
 import {
-  ABSENTEEISM_LABELS,
-  ABSENTEEISM_REASON_LABELS,
   LETTER_RECOGNITION_LABELS,
   LETTER_SOUND_LABELS,
   WORD_RECOGNITION_LABELS,
@@ -27,9 +25,6 @@ import {
 import { saveAralProfile } from "@/lib/actions/aral";
 
 type Defaults = Partial<{
-  absenteeismFrequency: string;
-  absenteeismOtherReason: string | null;
-  absenteeismReasons: string[];
   letterRecognition: string;
   letterSoundCorrespondence: string;
   wordRecognition: string;
@@ -78,28 +73,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
       <Card className="violet-section">
         <CardHeader><CardTitle className="text-base">C. Reading Behavior (Letter-to-Word Level)</CardTitle></CardHeader>
         <CardContent className="space-y-6">
-          <div>
-            <p className="text-sm font-medium mb-2">Frequency of Absenteeism *</p>
-            <FieldRadioGroup name="absenteeismFrequency" options={toOptions(ABSENTEEISM_LABELS)} defaultValue={defaultValues.absenteeismFrequency} />
-            <div className="mt-4">
-              <p className="text-sm font-medium mb-2">Reasons of Absenteeism</p>
-              <FieldCheckboxList
-                name="absenteeismReasons"
-                options={toOptions(ABSENTEEISM_REASON_LABELS)}
-                defaultValues={defaultValues.absenteeismReasons ?? []}
-              />
-            </div>
-            <div className="mt-3 space-y-1">
-              <Label htmlFor="absenteeismOtherReason">Specify reason *</Label>
-              <Input
-                id="absenteeismOtherReason"
-                name="absenteeismOtherReason"
-                required
-                defaultValue={defaultValues.absenteeismOtherReason ?? ""}
-              />
-            </div>
-          </div>
-          <Separator />
+          {/* No absenteeism questions: Weekly Attendance already records every absence. */}
           <div>
             <p className="text-sm font-medium mb-2">Letter Recognition *</p>
             <FieldRadioGroup name="letterRecognition" options={toOptions(LETTER_RECOGNITION_LABELS)} defaultValue={defaultValues.letterRecognition} />

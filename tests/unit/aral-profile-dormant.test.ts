@@ -6,19 +6,16 @@ import { aralProfileSchema } from "@/lib/validators/aral.schema";
 import { WRITE_ORDER } from "@/lib/db/schema-order";
 
 /**
- * The ARAL Profile (Sections C–D–E) is DORMANT, not deleted.
+ * The ARAL Profile (Sections C–D–E) was dormant and is back, with one entry
+ * point: the ARAL Profiling page under ARAL Program (restored 1.19.0 by
+ * project-owner request). Guarded here:
  *
- * Two opposite mistakes are guarded here, and either one loses real work:
- *
- * - **Reviving it by accident.** A nav row, a "Complete Profiling" button or a
- *   pending-count card is all it takes to put teachers back to work on a survey
- *   nobody is asking them to fill in. The call to action IS the workflow.
- * - **Deleting it.** The schema, the validator, the action and the route stay,
- *   because schools that already filled these in keep their data and the feature
- *   is meant to come back as a config change rather than a migration.
- *
- * The third claim, and the one that matters day to day: the live ARAL workflows
- * must not depend on a profile row existing. See `docs/aral-profile.md`.
+ * - **One place asks for it.** The ARAL Profiling page and the dashboard's
+ *   Pending Profiles card link to the form; the roster, the learner list and
+ *   the School Head dashboard still do not.
+ * - **No absenteeism questions.** Weekly Attendance already records absences.
+ * - **Nothing depends on it.** The live ARAL workflows must not require a
+ *   profile row. See `docs/aral-profile.md`.
  */
 
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -28,16 +25,8 @@ const read = (relative: string) =>
 
 describe("ARAL Profile — preserved, not deleted", () => {
   it("keeps the validator and its conditional rules working", () => {
-    // Parked, not broken: the schema still parses, so reviving the form needs no
-    // archaeology.
     const parsed = aralProfileSchema.safeParse({
       learnerId: "learner-1",
-      absenteeismFrequency: "ONE_TO_THREE_PER_MONTH",
-      // The conditional rule is part of what "still works" means: the frequency
-      // demands its own specify field, so a payload without it would pass for
-      // the wrong reason.
-      absenteeismOtherReason: "Illness",
-      absenteeismReasons: ["BAD_WEATHER"],
       letterRecognition: "ALL_EASY",
       letterSoundCorrespondence: "ACCURATE",
       wordRecognition: "READS_HF_FLUENT",
@@ -77,13 +66,19 @@ describe("ARAL Profile — preserved, not deleted", () => {
   });
 });
 
-describe("ARAL Profile — nothing asks anyone to complete one", () => {
-  it("has no Learner Profiling row in the teacher menu", () => {
+describe("ARAL Profile — asked for in one place only", () => {
+  it("reaches the form only through the ARAL Profiling page, not the old Learner Profiling row", () => {
     for (const grades of [[], [{ id: "g1", label: "Grade 3", hasAral: true }], undefined]) {
       const items = flattenNavGroups(getNavGroups("TEACHER", grades));
       expect(items.some((i) => i.id === "teacher-learner-profiling")).toBe(false);
-      expect(items.map((i) => i.label)).not.toContain("Learner Profiling");
+      expect(items.find((i) => i.id === "teacher-aral-profiling")?.href).toBe(
+        "/teacher/aral/profiling"
+      );
     }
+    const page = read("src/app/teacher/(app)/aral/profiling/page.tsx");
+    expect(page).toContain("learners/${l.id}/update");
+    // Same tutor scope as saveAralProfile, so no button can only fail.
+    expect(page).toContain("aralLearnerScope");
   });
 
   it("has no Complete/Update Profiling call to action on the ARAL roster", () => {
@@ -103,29 +98,26 @@ describe("ARAL Profile — nothing asks anyone to complete one", () => {
     expect(read("src/app/teacher/(app)/learners/page.tsx")).not.toContain("aralProfile");
   });
 
-  it("has a read-only Pending Profiles card on the teacher dashboard only (docs/aral-profile.md exception, restored 2026-09-14)", () => {
-    // Project-owner-approved exception: the teacher dashboard keeps a
-    // read-only "Pending Profiles" count. It must carry no call to action —
-    // no `action` prop / link / button wired to the ARAL Profile form.
+  it("links the teacher dashboard Pending Profiles card to the Pending tab of ARAL Profiling", () => {
     const teacherDashboard = read("src/components/dashboard/teacher/dashboard-body.tsx");
-    expect(teacherDashboard).toMatch(/Pending Profiles/);
-    expect(teacherDashboard).toContain("pendingAralProfiles");
     const cardStart = teacherDashboard.indexOf('title="Pending Profiles"');
     const cardEnd = teacherDashboard.indexOf("/>", cardStart);
-    const pendingCard = teacherDashboard.slice(cardStart, cardEnd);
-    expect(pendingCard).not.toContain("action={{");
-    expect(pendingCard).not.toContain("href=");
-
-    expect(read("src/lib/dashboard/teacher-overview.ts")).toContain(
-      "pendingAralProfiles"
+    expect(teacherDashboard.slice(cardStart, cardEnd)).toContain("aralProfilingHref()");
+    expect(read("src/components/dashboard/teacher/hrefs.ts")).toContain(
+      "/teacher/aral/profiling?status=pending"
     );
+    // The count uses the same tutor scope as the page it links to.
+    expect(read("src/lib/dashboard/teacher-overview.ts")).toContain("aralLearnerScope(teacherId)");
 
-    // The School Head dashboard's equivalent nudge is NOT part of the
-    // exception and stays removed.
+    // The School Head dashboard nudge stays removed.
     const schoolHead = read("src/components/dashboard/school-head-dashboard-sections.tsx");
     expect(schoolHead).not.toContain("pendingAralProfiles");
-    expect(schoolHead).not.toMatch(/still need Sections/);
     expect(schoolHead).not.toMatch(/Pending Profiles/);
+  });
+
+  it("does not ask about absenteeism — Weekly Attendance already records it", () => {
+    expect(read("src/components/forms/aral-update-form.tsx")).not.toContain("name=\"absenteeism");
+    expect(read("src/lib/validators/aral.schema.ts")).not.toMatch(/absenteeism\w*:/);
   });
 
   it("does not prompt for a missing profile on the learner surfaces", () => {

@@ -17,6 +17,7 @@ import {
   aralAttendanceHref,
   aralReadingHref,
   aralRosterHref,
+  aralProfilingHref,
 } from "./hrefs";
 
 /*
@@ -178,6 +179,7 @@ export async function TeacherDashboardBody({
           hint="Without ARAL profile"
           icon={UserRoundCheck}
           tone="primary"
+          action={{ label: "Complete profiles", href: aralProfilingHref() }}
         />
       </StatCardRow>
 

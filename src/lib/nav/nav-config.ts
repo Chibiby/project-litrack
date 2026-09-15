@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarRange,
+  ClipboardList,
   Database,
   FileBarChart,
   FileCheck2,
@@ -106,6 +107,9 @@ export interface NavOptions {
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
 }
+
+/** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
+export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 
 /**
  * Where the "End of Terms Reports" row points.
@@ -259,6 +263,15 @@ export function getNavGroups(
               label: "Monthly Reading Level",
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,
+            },
+            // One page for every ARAL learner this teacher tutors, across grades,
+            // so it is never grade-scoped and never collapses onto the picker.
+            // Longest-prefix matching still awards it over `/teacher/aral`.
+            {
+              id: "teacher-aral-profiling",
+              label: "ARAL Profiling",
+              href: ARAL_PROFILING_HREF,
+              icon: ClipboardList,
             },
           ],
         },

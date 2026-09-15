@@ -74,6 +74,17 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.19.0",
+    date: "2026-09-15",
+    title: "ARAL Profiling is back as its own page",
+    announce: true,
+    fixes: [
+      { text: "ARAL Profiling is back in the side menu under ARAL Program. It lists your ARAL learners, shows whose profile is still pending, and has a Complete profile or Update profile button for each one.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "On your dashboard, the Pending Profiles card now opens ARAL Profiling on the learners who still need a profile.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "The ARAL profile no longer asks how often a learner is absent or why. Weekly Attendance already records absences, so they are not counted twice. Answers saved before are kept.",
+    ],
+  },
+  {
     version: "1.18.3",
     date: "2026-09-15",
     title: "Kindergarten gets the Grade 1 subject list",

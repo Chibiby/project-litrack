@@ -4,46 +4,18 @@ import { nonEmpty } from "./common";
 const optionalText = (max: number) =>
   z.string().trim().max(max).optional().or(z.literal("").transform(() => undefined));
 
-/** ARAL Update Data — Sections C, D, E only (Section B lives on Learner). */
+/**
+ * ARAL Profile — Sections C, D, E only (Section B lives on Learner).
+ *
+ * No absenteeism fields: Weekly Attendance already records every absence, so
+ * the profile does not ask again. `AralProfile.absenteeism*` columns stay for
+ * profiles saved before this change; nothing writes them now. Zod strips
+ * unknown keys, so a stale client posting them cannot overwrite that history.
+ */
 export const aralProfileSchema = z
   .object({
     learnerId: nonEmpty(),
     // C
-    absenteeismFrequency: z.enum([
-      "ONE_TO_THREE_PER_MONTH",
-      "THREE_TO_FIVE_PER_MONTH",
-      "MORE_THAN_FIVE_PER_MONTH",
-      "WEEKLY",
-      "OTHER",
-    ]),
-    absenteeismOtherReason: optionalText(500),
-    // Which reasons apply, alongside how often and the free-text specify field.
-    // Optional: profiles saved before this list existed hold none, and a teacher
-    // editing one is not forced to invent a reason to save the rest of the form.
-    absenteeismReasons: z
-      .array(
-        z.enum([
-          "FAMILY_EMERGENCY",
-          "FINANCIAL_DIFFICULTIES",
-          "LACK_OF_TRANSPORTATION",
-          "DISTANCE_FROM_SCHOOL",
-          "HOUSEHOLD_CHORES",
-          "CARING_FOR_FAMILY",
-          "BAD_WEATHER",
-          "ACADEMIC_DIFFICULTIES",
-          "LACK_OF_INTEREST",
-          "BULLYING",
-          "SCHOOL_CONCERNS",
-          "GADGET_SOCIAL_MEDIA",
-          "LIVELIHOOD_WORK",
-          "FAMILY_RELOCATION",
-          "SAFETY_CONCERNS",
-          "MEDICAL_APPOINTMENTS",
-          "COMPETITIONS_ACTIVITIES",
-          "LACK_OF_SUPPLIES",
-        ])
-      )
-      .default([]),
     letterRecognition: z.enum(["ALL_EASY", "CONFUSES_SIMILAR", "STRUGGLES_RECALL", "NA"]),
     letterSoundCorrespondence: z.enum(["ACCURATE", "INCONSISTENT", "UNABLE", "NA"]),
     wordRecognition: z.enum([
@@ -68,15 +40,6 @@ export const aralProfileSchema = z
     furtherAssessmentOther: optionalText(500),
   })
   .superRefine((data, ctx) => {
-    // L-C1: Specify reason accompanies absenteeism selection (DOCX)
-    if (!data.absenteeismOtherReason?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Specify the reason for absenteeism frequency",
-        path: ["absenteeismOtherReason"],
-      });
-    }
-
     // L-E1: LSEN observations required when LSEN_OTHER selected
     if (data.suggestedInterventions.includes("LSEN_OTHER") && !data.lsenObservations?.trim()) {
       ctx.addIssue({
