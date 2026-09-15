@@ -5,13 +5,28 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  ArrowRight,
+  BookOpen,
+  Building2,
+  School,
+  ShieldCheck,
+  User,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+  AUTH_LABEL,
+  AUTH_PRIMARY_BUTTON,
+  AuthCard,
+  AuthCardHeader,
+} from "@/components/auth/auth-card";
+import { cn } from "@/lib/utils";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
 import {
   beginSchoolHeadLogin,
@@ -34,6 +49,7 @@ import {
 } from "@/lib/login/district-filter";
 
 type Screen = "select-role" | "school-head" | "teacher";
+type Role = "teacher" | "school-head";
 type TeacherIntent = "login" | "register";
 
 type SchoolWithStatus = { id: string; name: string; district: string | null; teachersOpen: boolean };
@@ -55,14 +71,30 @@ function markPostLoginSplash() {
   }
 }
 
+/** The Teachers / School Head toggle: filled blue when picked, outlined when not. */
+const ROLE_OPTION =
+  "h-12 w-full rounded-xl text-base font-medium 2xl:h-14 [&_svg]:size-5";
+const ROLE_PICKED =
+  "border-transparent bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-md shadow-blue-600/20 hover:from-blue-700 hover:to-sky-600 hover:text-white";
+const ROLE_UNPICKED =
+  "border-slate-200 bg-card text-indigo-950 hover:bg-muted/60 hover:text-indigo-950";
+
+/** The tall, icon-led trigger both pickers share on the first step. */
+const PICKER_TRIGGER =
+  "h-12 gap-3 rounded-xl border-slate-200 bg-card px-4 text-base text-indigo-950 md:text-base 2xl:h-14";
+
 export function LoginForm({
   schools,
   loginError,
+  notice,
 }: {
   schools: SchoolWithStatus[];
   loginError?: string;
+  /** A page-level problem (the school list failed to load), shown in the card. */
+  notice?: string;
 }) {
   const [screen, setScreen] = useState<Screen>("select-role");
+  const [role, setRole] = useState<Role>("teacher");
   const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
   const [district, setDistrict] = useState<string>(ALL_DISTRICTS);
@@ -95,7 +127,11 @@ export function LoginForm({
   const handleSchoolChange = (value: string) => {
     setSchoolId(value);
     const selected = schools.find((s) => s.id === value);
-    setTeachersOpen(selected?.teachersOpen ?? false);
+    const open = selected?.teachersOpen ?? false;
+    setTeachersOpen(open);
+    // Teachers cannot sign in to a school that has not opened to them yet, so
+    // the picked role moves to the one that can continue.
+    if (selected && !open) setRole("school-head");
   };
 
   const handleDistrictChange = (value: string) => {
@@ -335,15 +371,40 @@ export function LoginForm({
   };
 
   if (screen === "select-role") {
+    const teachersLocked = Boolean(schoolId) && !teachersOpen;
+    const canContinue = Boolean(schoolId) && !(role === "teacher" && teachersLocked);
+    const handleContinue = () => {
+      if (!canContinue) return;
+      if (role === "teacher") {
+        resetTeacherFlow();
+        setScreen("teacher");
+      } else {
+        setScreen("school-head");
+      }
+    };
+
     return (
-      <Card className="rounded-xl border border-border/80 shadow-sm">
-        <CardContent className="space-y-4 pt-6">
+      <AuthCard>
+        <AuthCardHeader icon={BookOpen} title="Sign In" subtitle="Access your LITRACK account" />
+        <div className="mt-6 space-y-4 2xl:mt-8 2xl:space-y-5">
+          {notice ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+              {notice}
+            </p>
+          ) : null}
           {districts.length > 0 ? (
             <div className="space-y-2">
-              <Label htmlFor="login-district">District</Label>
+              <Label htmlFor="login-district" className={AUTH_LABEL}>
+                District
+              </Label>
               <Select value={district} onValueChange={handleDistrictChange}>
-                <SelectTrigger id="login-district">
-                  <SelectValue />
+                {/* The icon sits beside the value, not wrapped with it: the
+                    trigger line-clamps its span children, which stacks them. */}
+                <SelectTrigger id="login-district" className={PICKER_TRIGGER}>
+                  <Building2 className="size-5 shrink-0 text-slate-500" aria-hidden />
+                  <span className="min-w-0 flex-1 text-left">
+                    <SelectValue />
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL_DISTRICTS}>All districts</SelectItem>
@@ -357,9 +418,11 @@ export function LoginForm({
             </div>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor="login-school">School Name</Label>
+            <Label htmlFor="login-school" className={AUTH_LABEL}>
+              School Name
+            </Label>
             {schools.length === 0 ? (
-              <p className="rounded-md border border-input bg-background p-4 text-center text-sm text-muted-foreground">
+              <p className="rounded-xl border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
                 No schools found. Contact admin.
               </p>
             ) : (
@@ -371,65 +434,111 @@ export function LoginForm({
                 placeholder="Select your school"
                 searchPlaceholder="Search schools…"
                 emptyMessage="No schools match your search."
+                leadingIcon={<School className="size-5 shrink-0 text-slate-500" aria-hidden />}
+                triggerClassName={PICKER_TRIGGER}
+                chevron="down"
               />
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <Button
-              variant="outline"
-              disabled={!schoolId || !teachersOpen}
-              onClick={() => {
-                resetTeacherFlow();
-                setScreen("teacher");
-              }}
-              title={
-                !schoolId
-                  ? "Select a school first"
-                  : !teachersOpen
-                    ? TEACHERS_UNLOCK_HELP
-                    : ""
-              }
-            >
-              Teachers
-            </Button>
-            <Button disabled={!schoolId} onClick={() => setScreen("school-head")}>
-              School Head
-            </Button>
+
+          <div className="space-y-2">
+            <div role="group" aria-label="Sign in as" className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                aria-pressed={role === "teacher"}
+                disabled={teachersLocked}
+                title={teachersLocked ? TEACHERS_UNLOCK_HELP : undefined}
+                onClick={() => setRole("teacher")}
+                className={cn(ROLE_OPTION, role === "teacher" ? ROLE_PICKED : ROLE_UNPICKED)}
+              >
+                <User aria-hidden />
+                Teachers
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                aria-pressed={role === "school-head"}
+                onClick={() => setRole("school-head")}
+                className={cn(ROLE_OPTION, role === "school-head" ? ROLE_PICKED : ROLE_UNPICKED)}
+              >
+                <Users aria-hidden />
+                School Head
+              </Button>
+            </div>
+            {teachersLocked ? (
+              <p className="text-sm text-slate-600">{TEACHERS_UNLOCK_HELP}</p>
+            ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {!schoolId
-              ? "Select a school to continue."
-              : !teachersOpen
-                ? TEACHERS_UNLOCK_HELP
-                : "Teachers can sign in or create an account. School Head approval is required for new accounts."}
-          </p>
-          <p className="text-center text-xs text-muted-foreground pt-1">
-            <Link href="/forgot-password" className="underline hover:text-foreground">
+
+          <Button
+            type="button"
+            disabled={!canContinue}
+            title={!schoolId ? "Select a school first" : undefined}
+            onClick={handleContinue}
+            className={AUTH_PRIMARY_BUTTON}
+          >
+            <ArrowRight aria-hidden />
+            Continue
+          </Button>
+
+          <div className="flex items-center gap-3 text-sm text-slate-500" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <p className="text-center">
+            <Link
+              href="/forgot-password"
+              className="text-base font-medium text-blue-600 underline underline-offset-4 hover:text-blue-700"
+            >
               Forgot password?
             </Link>
           </p>
-        </CardContent>
-      </Card>
+
+          <Button
+            asChild
+            variant="outline"
+            className="h-12 w-full rounded-xl border-slate-200 bg-muted text-base font-medium text-indigo-950 hover:bg-border/70 hover:text-indigo-950 2xl:h-14 2xl:text-lg [&_svg]:size-5"
+          >
+            <Link href="/admin/login">
+              <ShieldCheck aria-hidden />
+              Admin Login
+            </Link>
+          </Button>
+        </div>
+      </AuthCard>
     );
   }
 
+  const schoolName = schools.find((s) => s.id === schoolId)?.name;
+
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
-      <CardContent className="space-y-4 pt-6">
+    <AuthCard>
+      <div className="space-y-4">
         <Button
           type="button"
           variant="link"
           size="sm"
-          className="mb-2 h-auto p-0 text-xs text-muted-foreground"
+          className="mb-1 h-auto p-0 text-sm text-slate-600 hover:text-indigo-950"
           onClick={goBackToSchoolSelect}
         >
           ← Change school
         </Button>
+        {schoolName ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-slate-600">
+            <School className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{schoolName}</span>
+          </p>
+        ) : null}
 
         {screen === "school-head" ? (
           <>
             <form action={handleSchoolHeadSubmit} className="space-y-4">
-              <h2 className="text-lg font-semibold">School Head sign in</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
+                School Head sign in
+              </h2>
               <div className="space-y-2">
                 <Label htmlFor="password">School ID or password</Label>
                 <PasswordInput
@@ -445,7 +554,7 @@ export function LoginForm({
               </div>
               <Button
                 type="submit"
-                className="w-full"
+                className={AUTH_PRIMARY_BUTTON}
                 loading={pending}
                 loadingText="Signing in…"
               >
@@ -460,7 +569,7 @@ export function LoginForm({
           </>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
               {teacherIntent === "login" ? "Teacher sign in" : "Create teacher account"}
             </h2>
             {teacherIntent === "register" ? (
@@ -530,7 +639,7 @@ export function LoginForm({
                 </div>
                 <Button
                   type="submit"
-                  className="w-full"
+                  className={AUTH_PRIMARY_BUTTON}
                   loading={pending}
                   loadingText="Signing in…"
                 >
@@ -635,7 +744,7 @@ export function LoginForm({
                 </div>
                 <Button
                   type="submit"
-                  className="w-full"
+                  className={AUTH_PRIMARY_BUTTON}
                   loading={pending}
                   loadingText="Creating account…"
                 >
@@ -645,7 +754,7 @@ export function LoginForm({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </AuthCard>
   );
 }

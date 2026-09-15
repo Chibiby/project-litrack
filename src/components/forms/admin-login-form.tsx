@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
+import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -21,6 +21,12 @@ import { loginAdmin } from "@/lib/actions/auth";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
+import {
+  AUTH_LABEL,
+  AUTH_PRIMARY_BUTTON,
+  AuthCard,
+  AuthCardHeader,
+} from "@/components/auth/auth-card";
 
 /** Mark next app shell paint to show the post-login splash (survives redirect). */
 function markPostLoginSplash() {
@@ -31,7 +37,14 @@ function markPostLoginSplash() {
   }
 }
 
-export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
+export function AdminLoginForm({
+  disabled = false,
+  notice,
+}: {
+  disabled?: boolean;
+  /** Session-ended or configuration notes, shown under the card's title. */
+  notice?: React.ReactNode;
+}) {
   const [pending, startTransition] = useTransition();
   const form = useAppForm<AdminLoginInput>({
     schema: adminLoginSchema,
@@ -39,11 +52,13 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
-      <CardContent className="pt-6">
+    <AuthCard>
+      <AuthCardHeader icon={ShieldCheck} title="Super Admin" subtitle="LITRACK administration" />
+      <div className="mt-6 space-y-5 2xl:mt-8">
+        {notice}
         <AppForm
           form={form}
-          className="space-y-4"
+          className="space-y-5"
           onSubmit={(values) => {
             startTransition(async () => {
               try {
@@ -70,7 +85,9 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
             name="username"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>Username</FormLabel>
+                <FormLabel required className={AUTH_LABEL}>
+                  Username
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="text"
@@ -95,7 +112,9 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>Password</FormLabel>
+                <FormLabel required className={AUTH_LABEL}>
+                  Password
+                </FormLabel>
                 <FormControl>
                   <PasswordInput
                     autoComplete="current-password"
@@ -109,20 +128,29 @@ export function AdminLoginForm({ disabled = false }: { disabled?: boolean }) {
           />
           <Button
             type="submit"
-            className="w-full"
+            className={AUTH_PRIMARY_BUTTON}
             disabled={disabled}
             loading={pending}
             loadingText="Signing in…"
           >
             Sign in
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            <Link href="/forgot-password" className="underline hover:text-foreground">
+          <div className="flex items-center justify-center gap-6 text-base font-medium">
+            <Link
+              href="/forgot-password"
+              className="text-blue-600 underline underline-offset-4 hover:text-blue-700"
+            >
               Forgot password?
             </Link>
-          </p>
+            <Link
+              href="/login"
+              className="text-blue-600 underline underline-offset-4 hover:text-blue-700"
+            >
+              School login
+            </Link>
+          </div>
         </AppForm>
-      </CardContent>
-    </Card>
+      </div>
+    </AuthCard>
   );
 }

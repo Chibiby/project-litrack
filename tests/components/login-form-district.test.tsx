@@ -68,11 +68,36 @@ describe("LoginForm district filter", () => {
     expect(schoolTrigger().textContent).toContain("Alabel Central ES");
   });
 
-  it("disables both role buttons until a school is selected", () => {
+  it("picks Teachers by default and holds Continue until a school is selected", () => {
     render(<LoginForm schools={SCHOOLS} />);
     // This repo has no @testing-library/jest-dom — use native DOM assertions only.
-    expect(screen.getByRole("button", { name: "School Head" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "Teachers" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Teachers" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "School Head" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Continue" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("opens the teacher sign-in once a school is picked and Continue is pressed", () => {
+    render(<LoginForm schools={SCHOOLS} />);
+    openSchoolList();
+    fireEvent.click(screen.getByText("Alabel Central ES"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByText("Teacher sign in")).toBeTruthy();
+  });
+
+  it("moves to School Head and locks Teachers for a school not yet open to teachers", () => {
+    render(<LoginForm schools={SCHOOLS} />);
+    openSchoolList();
+    fireEvent.click(screen.getByText("Banlibato IS"));
+    const teachers = screen.getByRole("button", { name: "Teachers" });
+    expect(teachers.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "School Head" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/Teachers unlock once the School Head/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("links to the Super Admin sign-in from the card", () => {
+    render(<LoginForm schools={SCHOOLS} />);
+    expect(screen.getByRole("link", { name: "Admin Login" }).getAttribute("href")).toBe("/admin/login");
   });
 
   it("shows the School ID first-time copy on the School Head screen", () => {
@@ -80,6 +105,7 @@ describe("LoginForm district filter", () => {
     openSchoolList();
     fireEvent.click(screen.getByText("Alabel Central ES"));
     fireEvent.click(screen.getByRole("button", { name: "School Head" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByLabelText("School ID or password")).toBeTruthy();
     expect(screen.getByText(/First time signing in\? Enter your School ID/)).toBeTruthy();
   });

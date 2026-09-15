@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,9 @@ export function SearchableSelect({
   emptyMessage = "No results found.",
   disabled = false,
   id,
+  leadingIcon,
+  triggerClassName,
+  chevron = "up-down",
 }: {
   options: SearchableOption[];
   value: string;
@@ -68,6 +71,11 @@ export function SearchableSelect({
   emptyMessage?: string;
   disabled?: boolean;
   id?: string;
+  /** Drawn before the value, e.g. a building for a school picker. */
+  leadingIcon?: React.ReactNode;
+  triggerClassName?: string;
+  /** "down" matches a Radix Select trigger beside it. */
+  chevron?: "up-down" | "down";
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -153,11 +161,19 @@ export function SearchableSelect({
             "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
             "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            !selected && "text-muted-foreground"
+            !selected && "text-muted-foreground",
+            triggerClassName
           )}
         >
-          <span className="truncate text-left">{selected?.label ?? placeholder}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden />
+          <span className="flex min-w-0 items-center gap-3">
+            {leadingIcon}
+            <span className="truncate text-left">{selected?.label ?? placeholder}</span>
+          </span>
+          {chevron === "down" ? (
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden />
+          ) : (
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">

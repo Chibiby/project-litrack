@@ -1,4 +1,4 @@
-import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
+import { ALWAYS_LIGHT_PATHS, DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
 
 /**
  * Blocking inline script that applies the stored theme before first paint.
@@ -9,14 +9,17 @@ import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
  * do not add `defer` or `async`, and do not move it below <body> content.
  *
  * Deliberately does NOT consult prefers-color-scheme: light is the default
- * regardless of OS (spec R9).
+ * regardless of OS (spec R9). The sign-in pages (ALWAYS_LIGHT_PATHS) stay
+ * light — the inline copy of `isAlwaysLightPath`.
  */
 export function ThemeScript() {
   const js = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
     THEME_STORAGE_KEY
   )});if(t!=="dark"&&t!=="light")t=${JSON.stringify(
     DEFAULT_THEME
-  )};if(t==="dark")document.documentElement.classList.add("dark");}catch(e){}})();`;
+  )};var p=location.pathname;if(p.length>1)p=p.replace(/\\/+$/,"");if(t==="dark"&&${JSON.stringify(
+    ALWAYS_LIGHT_PATHS
+  )}.indexOf(p)<0)document.documentElement.classList.add("dark");}catch(e){}})();`;
 
   return <script dangerouslySetInnerHTML={{ __html: js }} />;
 }
