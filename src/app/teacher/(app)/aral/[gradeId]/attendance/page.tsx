@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { AttendanceHero } from "@/components/aral/attendance-hero";
 import { AralWeeklyAttendancePanel } from "@/components/aral/aral-weekly-attendance-panel";
 import { AralAttendanceSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -105,6 +106,38 @@ export default async function AralGradeWeeklyAttendancePage({
     linkSuffix ? `?${linkSuffix}` : ""
   }`;
 
+  // `hideTitle` drops `AppShell`'s title-line actions slot entirely, so these
+  // buttons — unchanged from the pre-hero header — render as their own row
+  // beneath the hero instead.
+  const headerActions = (
+    <>
+      <Button asChild size="sm" variant="outline">
+        <Link href={readingHref}>
+          <BookOpen className="h-4 w-4" />
+          Monthly reading level
+        </Link>
+      </Button>
+      <Button asChild size="sm" variant="outline">
+        <Link href={termsReportsHref}>
+          <FileText className="h-4 w-4" />
+          End of terms reports
+        </Link>
+      </Button>
+      {!isSuperAdmin && (
+        // Its own boundary: the sheet's candidate and tutor lists are two
+        // more queries, and the cross-links above have no reason to wait on
+        // a control the teacher has not opened yet.
+        <Suspense fallback={<AralEnrollActionFallback />}>
+          <AralEnrollAction
+            gradeId={grade.id}
+            schoolId={grade.schoolId}
+            teacherId={user.id}
+          />
+        </Suspense>
+      )}
+    </>
+  );
+
   return (
     <AppShell
       title={`Weekly Attendance — ${GRADE_LEVEL_LABELS[grade.type]}`}
@@ -112,35 +145,17 @@ export default async function AralGradeWeeklyAttendancePage({
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
-      actions={
-        <>
-          <Button asChild size="sm" variant="outline">
-            <Link href={readingHref}>
-              <BookOpen className="h-4 w-4" />
-              Monthly reading level
-            </Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link href={termsReportsHref}>
-              <FileText className="h-4 w-4" />
-              End of terms reports
-            </Link>
-          </Button>
-          {!isSuperAdmin && (
-            // Its own boundary: the sheet's candidate and tutor lists are two
-            // more queries, and the cross-links above have no reason to wait on
-            // a control the teacher has not opened yet.
-            <Suspense fallback={<AralEnrollActionFallback />}>
-              <AralEnrollAction
-                gradeId={grade.id}
-                schoolId={grade.schoolId}
-                teacherId={user.id}
-              />
-            </Suspense>
-          )}
-        </>
-      }
+      hideTitle
     >
+      <AttendanceHero
+        title={`Weekly Attendance — ${GRADE_LEVEL_LABELS[grade.type]}`}
+        subtitle={`Week of ${formatWeekRange(weekKey)}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      />
+
+      <div className="mb-4 flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        {headerActions}
+      </div>
+
       <Suspense fallback={<AralAttendanceSkeleton />}>
         <AralWeeklyAttendanceGrid
           user={user}

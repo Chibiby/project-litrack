@@ -7,10 +7,10 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AralDateNav } from "@/components/aral/date-nav";
-import {
-  AralFilterPopover,
-  type AralGradeOption,
-} from "@/components/aral/aral-filter-popover";
+import { type AralGradeOption } from "@/components/aral/aral-filter-popover";
+import { AralGradeSelect, AralSectionSelect } from "@/components/aral/aral-scope-select";
+import { AttendanceWeekStats } from "@/components/aral/attendance-week-stats";
+import { computeWeekStats } from "@/lib/attendance/week-stats";
 import {
   AralWeeklyAttendanceGridForm,
   BulkAttendanceActions,
@@ -212,6 +212,16 @@ export function AralWeeklyAttendancePanel({
   const deadlineLabel = formatLongDate(picked.deadline);
   const canSave = !readOnly && !picked.locked && learners.length > 0;
 
+  // The cards track the week currently loaded in the grid, not the one the
+  // picker shows mid-fetch, so the numbers only change once the new week's
+  // records have actually arrived.
+  const weekStats = computeWeekStats({
+    learnerCount: learners.length,
+    records: existing,
+    holidayKeys,
+    weekStartKey: loadedWeek,
+  });
+
   // Weeks the picker offers: this week back through the history, newest first,
   // plus whatever week is on screen if the prev/next buttons walked outside it.
   const weekOptions = weekPickerKeys(
@@ -222,6 +232,8 @@ export function AralWeeklyAttendancePanel({
 
   return (
     <>
+      <AttendanceWeekStats stats={weekStats} />
+
       <section
         className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
         aria-label="Week status"
@@ -295,18 +307,33 @@ export function AralWeeklyAttendancePanel({
           options={weekOptions}
           snapToMonday
           pending={loading}
+          filter={
+            grades.length > 1 || showSection ? (
+              <>
+                <AralGradeSelect
+                  gradeId={gradeId}
+                  grades={grades}
+                  schoolId={schoolId}
+                  pathForGrade={(id) => `/teacher/aral/${id}/attendance`}
+                  preserveParams={{ week: pickerWeek }}
+                  className="w-full sm:w-56"
+                />
+                {showSection ? (
+                  <AralSectionSelect
+                    gradeId={gradeId}
+                    section={section}
+                    sections={sections}
+                    schoolId={schoolId}
+                    pathForGrade={(id) => `/teacher/aral/${id}/attendance`}
+                    preserveParams={{ week: pickerWeek }}
+                    className="w-full sm:w-48"
+                  />
+                ) : null}
+              </>
+            ) : undefined
+          }
           actions={
             <>
-              <AralFilterPopover
-                gradeId={gradeId}
-                grades={grades}
-                section={section}
-                sections={sections}
-                showSection={showSection}
-                schoolId={schoolId}
-                pathForGrade={(id) => `/teacher/aral/${id}/attendance`}
-                preserveParams={{ week: pickerWeek }}
-              />
               {canSave ? (
                 <>
                   <BulkAttendanceActions
