@@ -77,7 +77,8 @@ describe("AppSidebar — teacher", () => {
 
   it("renders both section headings", () => {
     renderTeacherSidebar();
-    expect(screen.getAllByText("Menu").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Learners").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Analytics").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ARAL Program").length).toBeGreaterThan(0);
   });
 
@@ -203,7 +204,11 @@ describe("AppSidebar — teacher", () => {
 
     // aria-disabled is what tells assistive tech the row is inert; a plain div
     // with no href is what keeps a keyboard from landing on a dead end.
-    const row = screen.getAllByText("Learners")[0].closest("[aria-disabled]");
+    // The group heading also reads "Learners" (v2), so find the row, not the heading.
+    const row = screen
+      .getAllByText("Learners")
+      .map((el) => el.closest("[aria-disabled]"))
+      .find(Boolean);
     expect(row).not.toBeNull();
     expect(row?.getAttribute("aria-disabled")).toBe("true");
     expect(row?.tagName).toBe("DIV");
@@ -229,10 +234,10 @@ describe("AppSidebar — teacher", () => {
     // same shaped menu as the DepEd teacher beside them.
     const navText =
       screen.getAllByRole("navigation", { name: "Primary" })[0].textContent ?? "";
-    expect(navText.indexOf("Dashboard")).toBeLessThan(navText.indexOf("Learners"));
-    expect(navText.indexOf("Learners")).toBeLessThan(
-      navText.indexOf("End of Terms Reports")
-    );
+    // The group heading now also reads "Learners" (v2), so find the row after Dashboard.
+    const rowAt = navText.indexOf("Learners", navText.indexOf("Dashboard"));
+    expect(navText.indexOf("Dashboard")).toBeLessThan(rowAt);
+    expect(rowAt).toBeLessThan(navText.indexOf("End of Terms Reports"));
 
     // jsdom does not compute text-transform, so the class is the only observable
     // proof that an unavailability pill is NOT upper-cased. It names a thing, and
@@ -502,7 +507,11 @@ describe("AppSidebar — teacher", () => {
       screen.getAllByRole("link").map((el) => el.getAttribute("href"))
     ).not.toContain("/teacher/learners");
 
-    const row = screen.getAllByText("Learners")[0].closest("[aria-disabled]");
+    // The group heading also reads "Learners" (v2), so find the row, not the heading.
+    const row = screen
+      .getAllByText("Learners")
+      .map((el) => el.closest("[aria-disabled]"))
+      .find(Boolean);
     expect(row).not.toBeNull();
     expect(row?.getAttribute("aria-disabled")).toBe("true");
 

@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { Menu } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { CalendarDays, Menu } from "lucide-react";
+import { UserAccountMenu } from "@/components/user-account-menu";
+import { roleHomePath, type AppRole } from "@/lib/auth/roles";
+import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
 import { useNavPath } from "@/components/nav/nav-path";
 import { HeaderSearch } from "@/components/shell/header-search";
 import {
@@ -39,6 +44,9 @@ const SEARCH_PLACEHOLDER: Record<UserRole, string> = {
  */
 export function AppHeader({
   role,
+  userName,
+  schoolName,
+  roleLabel,
   grades,
   notifications = [],
   isAralVolunteer,
@@ -48,6 +56,11 @@ export function AppHeader({
   onToggleSidebar,
 }: {
   role: UserRole;
+  /** Phone top bar only: avatar initials and account menu (v2). */
+  userName?: string;
+  /** Phone top bar only: shown under the wordmark (v2). */
+  schoolName?: string;
+  roleLabel?: string;
   grades?: NavGrade[];
   notifications?: ShellNotification[];
   /**
@@ -103,11 +116,41 @@ export function AppHeader({
     [navGroups]
   );
 
+  // v2: the dashboard opens with its own greeting hero, so the bar carries no
+  // page title there (mockup image 3).
+  const showTitle = navPath !== roleHomePath(role as AppRole);
+
+  // Today in the school's zone, e.g. "Sunday, September 13, 2026". Rendered on
+  // the client, so hydration may differ by a render at midnight — hence
+  // suppressHydrationWarning on the element.
+  const todayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: SCHOOL_TIME_ZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
+
   return (
     <header className="sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header">
       <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
         {/* Mobile: spacer for the floating Sheet trigger. Desktop: collapse toggle. */}
         <div className="w-8 shrink-0 lg:hidden" />
+
+        {/* Phone brand block (mockup image 4): logo, wordmark and school. */}
+        <Link
+          href={roleHomePath(role)}
+          aria-label="LITRACK home"
+          className="flex min-w-0 flex-1 items-center justify-center gap-2 lg:hidden"
+        >
+          <Image src="/logo.png" alt="" width={30} height={40} className="h-9 w-auto shrink-0" />
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="text-base font-extrabold tracking-tight text-foreground">LITRACK</span>
+            {schoolName ? (
+              <span className="truncate text-xs text-muted-foreground">{schoolName}</span>
+            ) : null}
+          </span>
+        </Link>
         <Button
           type="button"
           variant="ghost"
@@ -122,17 +165,17 @@ export function AppHeader({
 
         {/* Chrome label, not the page heading — AppShell's body <h1> is the
             page's single top-level heading (spec a11y: one h1 per view). */}
-        <p className="truncate text-base font-semibold tracking-tight text-foreground">
-          {title}
-        </p>
-
-        <div className="flex-1" />
+        {showTitle ? (
+          <p className="hidden truncate text-base font-semibold tracking-tight text-foreground lg:block">
+            {title}
+          </p>
+        ) : null}
 
         {/* The teacher target is the advisory roster, so a volunteer — or a
             floating teacher, who has declared they will not advise one — has
             nothing to search. Hidden rather than pointed at the ARAL roster,
             which does not read `?q=` — a box that silently drops the query is
-            worse than no box. The flex-1 spacer above absorbs the width.
+            worse than no box. The flex-1 spacer after it absorbs the width.
             Deliberately not symmetric with the nav, which keeps `Learners` as an
             inert row: a labelled row can carry the reason it is shut, an empty
             input cannot, and typing into one only to be turned away is a worse
@@ -142,15 +185,36 @@ export function AppHeader({
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
             pages={searchPages}
-            className="hidden w-full max-w-xs sm:block"
+            className="hidden w-full max-w-xl lg:block"
           />
         )}
 
-        <NotificationsMenu notifications={notifications} />
+        <div className="hidden flex-1 lg:block" />
+        <div className="hidden lg:contents">
+          <NotificationsMenu notifications={notifications} />
+          <ThemeToggle />
+          <Separator orientation="vertical" className="h-6" />
+          <p
+            className="hidden items-center gap-2 whitespace-nowrap text-sm font-medium text-foreground xl:flex"
+            suppressHydrationWarning
+          >
+            <CalendarDays aria-hidden className="size-4 text-muted-foreground" />
+            {todayLabel}
+          </p>
+        </div>
 
-        <Separator orientation="vertical" className="hidden h-6 sm:block" />
-
-        <ThemeToggle />
+        {/* Phone: account avatar in place of the desktop cluster (image 4). */}
+        {userName ? (
+          <UserAccountMenu
+            role={role as AppRole}
+            userName={userName}
+            roleLabel={roleLabel ?? role.toLowerCase().replaceAll("_", " ")}
+            variant="avatar"
+            className="lg:hidden"
+          />
+        ) : (
+          <div className="w-8 shrink-0 lg:hidden" />
+        )}
       </div>
     </header>
   );

@@ -33,14 +33,15 @@ export default async function TeacherDashboard({
   const schoolName = isSuperAdmin ? await getSchoolName(targetSchoolId) : null;
 
   // Hero art follows the teacher's own profile; Super Admin gets the default.
+  // Artwork must never take the dashboard down: any read failure (including a
+  // database the gender migration has not reached yet) falls back to the
+  // default banner.
   const gender = isSuperAdmin
     ? null
-    : ((
-        await prisma.teacherProfile.findUnique({
-          where: { userId: user.id },
-          select: { gender: true },
-        })
-      )?.gender ?? null);
+    : await prisma.teacherProfile
+        .findUnique({ where: { userId: user.id }, select: { gender: true } })
+        .then((p) => p?.gender ?? null)
+        .catch(() => null);
 
   return (
     <AppShell

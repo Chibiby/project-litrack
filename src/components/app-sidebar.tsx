@@ -180,30 +180,32 @@ function NavLink({
       aria-label={collapsed ? item.label : undefined}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "relative flex items-center rounded-lg text-sm font-medium transition-colors",
-        collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
+        "relative flex items-center rounded-xl text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-2 py-3" : "gap-3 px-3.5 py-3",
         isActive
           ? // Violet now means "the page you are on *or on your way to*" —
             // `isActive` is resolved from the optimistic nav path, so a clicked
             // row takes this treatment in the same frame as the click rather
             // than several hundred milliseconds later. The spinning icon inside
             // is what still distinguishes the two.
-            "bg-violet-soft text-violet-soft-foreground"
+            //
+            // v2: the filled violet pill from the redesign mockup.
+            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
           : // The row a click cannot light this way: one whose navigation was
             // started by something other than its own record — a link the
             // provider never saw, or a sidebar mounted with no provider at all.
             // A mouse user is already sitting on it, so `hover:` has that
             // covered; this is what a keyboard user gets for a row activated by
             // Enter, which would otherwise change nothing but its icon.
-            "text-muted-foreground hover:bg-muted hover:text-foreground has-[[data-nav-pending]]:bg-muted has-[[data-nav-pending]]:text-foreground"
+            "text-foreground/80 hover:bg-muted hover:text-foreground has-[[data-nav-pending]]:bg-muted has-[[data-nav-pending]]:text-foreground"
       )}
     >
       <NavLinkIcon
         icon={item.icon}
         onSettled={onSettled}
         className={cn(
-          "h-4 w-4 shrink-0",
-          isActive ? "text-violet-soft-foreground" : "text-muted-foreground"
+          "h-[1.125rem] w-[1.125rem] shrink-0",
+          isActive ? "text-white" : "text-foreground/70"
         )}
       />
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
@@ -312,13 +314,13 @@ export function AppSidebar({
               alt="ARAL Program logo"
               width={36}
               height={48}
-              className="h-10 w-auto shrink-0"
+              className="h-12 w-auto shrink-0"
             />
             {!isCollapsed && (
               <div className="flex min-w-0 flex-col">
-                <span className="text-sm font-bold tracking-tight text-foreground">LITRACK</span>
+                <span className="text-lg font-extrabold leading-tight tracking-tight text-foreground">LITRACK</span>
                 {schoolName && (
-                  <span className="max-w-[150px] truncate text-xs text-muted-foreground">
+                  <span className="max-w-[160px] truncate text-sm text-muted-foreground">
                     {schoolName}
                   </span>
                 )}
@@ -355,7 +357,7 @@ export function AppSidebar({
             {navGroups.map((group, groupIndex) => (
               <div key={group.label ?? `group-${groupIndex}`} className="space-y-1">
                 {group.label && !isCollapsed ? (
-                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                  <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {group.label}
                   </p>
                 ) : null}

@@ -210,7 +210,7 @@ export function getNavGroups(
       };
       return [
         {
-          label: "Menu",
+          label: "Learners",
           items: [
             { id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
             learners,
@@ -263,6 +263,7 @@ export function getNavGroups(
           ],
         },
         {
+          label: "Analytics",
           items: [{ id: "teacher-reports", label: "Reports", href: "/teacher/reports", icon: FileBarChart }],
         },
       ];

@@ -38,9 +38,15 @@ function renderHeader(
 
 describe("AppHeader", () => {
   it("shows the page title from the active nav item", () => {
+    pathname.value = "/teacher/reports";
+    renderHeader();
+    expect(screen.getByText("Reports")).not.toBeNull();
+  });
+
+  it("drops the title on the dashboard, which opens with its own greeting (v2)", () => {
     pathname.value = "/teacher";
     renderHeader();
-    expect(screen.getByText("Dashboard")).not.toBeNull();
+    expect(screen.queryByText("Dashboard")).toBeNull();
   });
 
   it("updates the title for a nested route", () => {

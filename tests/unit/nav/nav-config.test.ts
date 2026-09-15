@@ -18,7 +18,7 @@ const twoAral = [
 describe("getNavGroups — teacher", () => {
   it("splits nav into MENU, ARAL PROGRAM and a trailing ungrouped item", () => {
     const groups = getNavGroups("TEACHER", oneAral);
-    expect(groups.map((g) => g.label)).toEqual(["Menu", "ARAL Program", undefined]);
+    expect(groups.map((g) => g.label)).toEqual(["Learners", "ARAL Program", "Analytics"]);
     // Term reports is a per-term GRADES report, so it belongs beside the roster
     // it reports on, not under the ARAL programme.
     // "Learner Profiling" is deliberately absent: the ARAL Profile is dormant,
@@ -128,7 +128,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     // presence: the row must sit where it always sat, otherwise a volunteer and a
     // DepEd teacher looking at the same screen see two different menus.
     const [menu] = volunteer();
-    expect(menu.label).toBe("Menu");
+    expect(menu.label).toBe("Learners");
     expect(menu.items.map((i) => i.label)).toEqual([
       "Dashboard",
       "Learners",
@@ -195,7 +195,7 @@ describe("getNavGroups — ARAL volunteer", () => {
 
   it("keeps the ARAL group — that is the volunteer's actual roster", () => {
     const groups = volunteer();
-    expect(groups.map((g) => g.label)).toEqual(["Menu", "ARAL Program", undefined]);
+    expect(groups.map((g) => g.label)).toEqual(["Learners", "ARAL Program", "Analytics"]);
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",

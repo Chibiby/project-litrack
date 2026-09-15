@@ -127,6 +127,9 @@ export function RoleShell({
                 then page content on the workspace ground with gutters. */}
             <AppHeader
               role={role}
+              userName={userName}
+              schoolName={schoolName}
+              roleLabel={roleLabel}
               grades={grades}
               notifications={notifications}
               isAralVolunteer={isAralVolunteer}

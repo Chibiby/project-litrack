@@ -33,6 +33,15 @@ interface UserAccountMenuProps {
   align?: "start" | "end" | "center";
   /** Icons-only trigger for the collapsed desktop sidebar. */
   collapsed?: boolean;
+  /** `avatar`: initials circle and chevron, for the phone top bar (v2). */
+  variant?: "default" | "avatar";
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase() || "?";
 }
 
 /**
@@ -47,11 +56,26 @@ export function UserAccountMenu({
   side = "bottom",
   align = "end",
   collapsed = false,
+  variant = "default",
 }: UserAccountMenuProps) {
   const [open, setOpen] = useState(false);
   const Chevron = open ? ChevronUp : ChevronDown;
 
-  const trigger = (
+  const trigger = variant === "avatar" ? (
+    <Button
+      variant="ghost"
+      className={cn("h-auto shrink-0 gap-1 rounded-full p-0.5 hover:bg-muted", className)}
+      aria-label={`Account menu, ${userName}`}
+    >
+      <span
+        aria-hidden
+        className="flex size-10 items-center justify-center rounded-full bg-violet-200 text-sm font-semibold text-violet-800 dark:bg-violet-900/60 dark:text-violet-100"
+      >
+        {initialsOf(userName)}
+      </span>
+      <Chevron className="h-4 w-4 text-muted-foreground" aria-hidden />
+    </Button>
+  ) : (
     <Button
       variant="ghost"
       className={cn(
