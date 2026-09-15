@@ -7,7 +7,7 @@ import { Surface } from "@/components/ui/surface";
 import { FLOATING_TEACHER_CARD } from "@/lib/teachers/floating-copy";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { GradeLevelBarChart } from "@/components/dashboard/lazy-charts";
-import { pickQuote } from "@/lib/dashboard/quotes";
+import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
@@ -139,6 +139,9 @@ export async function TeacherDashboardBody({
   }
 
   const quote = pickQuote();
+  // The calendar shows the next quote in the list, so it never repeats the hero.
+  const calendarQuote =
+    DASHBOARD_QUOTES[(DASHBOARD_QUOTES.indexOf(quote) + 1) % DASHBOARD_QUOTES.length];
 
   return (
     <div className="flex flex-col gap-4">
@@ -203,7 +206,7 @@ export async function TeacherDashboardBody({
             the rail sits a little higher than the cards (image 3). */}
         <aside className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-4">
           <div className="hidden xl:block">
-            <CalendarCard todayKey={data.todayKey} quote={pickQuote()} />
+            <CalendarCard todayKey={data.todayKey} quote={calendarQuote} />
           </div>
           <UpcomingTasksPanel tasks={tasks} viewAllHref={reportsHref} />
         </aside>

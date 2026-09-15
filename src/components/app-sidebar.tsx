@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { NavLinkIcon } from "@/components/nav/nav-link-icon";
+import { NavHighlight } from "@/components/nav/nav-highlight";
 import { useNavPath } from "@/components/nav/nav-path";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -179,8 +180,9 @@ function NavLink({
       }}
       aria-label={collapsed ? item.label : undefined}
       aria-current={isActive ? "page" : undefined}
+      data-nav-active={isActive ? "true" : undefined}
       className={cn(
-        "relative flex items-center rounded-xl text-sm font-medium transition-colors",
+        "relative z-10 flex items-center rounded-xl text-sm font-medium transition-colors",
         collapsed ? "justify-center px-2 py-3" : "gap-3 px-3.5 py-3",
         isActive
           ? // Violet now means "the page you are on *or on your way to*" —
@@ -190,7 +192,9 @@ function NavLink({
             // is what still distinguishes the two.
             //
             // v2: the filled violet pill from the redesign mockup.
-            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
+            // Once <NavHighlight> has positioned the sliding pill it sets
+            // data-slide on the nav and this row drops its own copy.
+            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30 group-data-[slide=on]/nav:bg-none group-data-[slide=on]/nav:shadow-none"
           : // The row a click cannot light this way: one whose navigation was
             // started by something other than its own record — a link the
             // provider never saw, or a sidebar mounted with no provider at all.
@@ -359,7 +363,7 @@ export function AppSidebar({
         </div>
 
         <ScrollArea className={cn("flex-1 pb-5 pt-2", isCollapsed ? "px-1.5" : "px-3")}>
-          <nav aria-label="Primary" className="space-y-5">
+          <nav aria-label="Primary" className="group/nav relative space-y-5">
             {navGroups.map((group, groupIndex) => (
               <div key={group.label ?? `group-${groupIndex}`} className="space-y-1">
                 {group.label && !isCollapsed ? (
@@ -381,6 +385,7 @@ export function AppSidebar({
                 ))}
               </div>
             ))}
+            <NavHighlight activeKey={activeItemId} collapsed={isCollapsed} />
           </nav>
           {!isCollapsed && (
             <div className="mt-5">
