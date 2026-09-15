@@ -66,7 +66,8 @@ export function GreetingHero({
    * that drifts with width: the head centre sits at 72.2% of the image, so
    * `right: calc(23% - 272px)` puts it at 77% of the hero from sm to lg, as in
    * the mockup; the narrowest phones use 82% so the hair clears the greeting.
-   * The handwriting on the image's left is faded out so it never
+   * The handwriting (upper left of the character) is masked out there by two
+   * gradients unioned — left of 64% AND above 51% — so it never
    * writes over the greeting (mockup image 4).
    */
   const art = (
@@ -89,7 +90,7 @@ export function GreetingHero({
       {/* Layer 1: the band. */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 [&>img]:[mask-image:linear-gradient(to_right,transparent_59%,black_64%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
+        className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 [&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80"
       >
         {art}
       </div>
