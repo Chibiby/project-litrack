@@ -97,7 +97,7 @@ describe("LoginForm district filter", () => {
 
   it("links to the Super Admin sign-in from the card", () => {
     render(<LoginForm schools={SCHOOLS} />);
-    expect(screen.getByRole("link", { name: "Admin Login" }).getAttribute("href")).toBe("/admin/login");
+    expect(screen.getByRole("link", { name: "Super Admin sign-in" }).getAttribute("href")).toBe("/admin/login");
   });
 
   it("shows the School ID first-time copy on the School Head screen", () => {

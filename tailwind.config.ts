@@ -14,6 +14,8 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        /* Cover lettering on the sign-in screens (Archivo, variable width). */
+        module: ["var(--font-module)", "var(--font-inter)", "ui-sans-serif", "sans-serif"],
       },
       colors: {
         background: "hsl(var(--background))",
@@ -53,6 +55,21 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         /* ARAL accent. DEFAULT/soft are theme-aware; numbered steps stay
            static so existing violet-200 / violet-950 utilities keep working. */
+        /* ARAL Program logo inks, sampled from public/logo.png. The sign-in
+           screens print in these (always light); the app keeps its tokens. */
+        aral: {
+          blue: "#013E88",
+          navy: "#12294D",
+          gold: "#FED110",
+          sun: "#FFBA04",
+          red: "#E90423",
+          slate: "#4C6971",
+          line: "#B8C6DA",
+          /* Field and switch edges: 3.4:1 on white, the WCAG 1.4.11 floor for input boundaries. */
+          edge: "#7B8CA6",
+          wash: "#EEF3FB",
+          paper: "#FFFFFF",
+        },
         violet: {
           DEFAULT: "hsl(var(--violet))",
           foreground: "hsl(var(--violet-foreground))",
@@ -74,6 +91,16 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
         xl: "calc(var(--radius) + 4px)",
+      },
+      keyframes: {
+        /* The sign-in label turning to its next step, from an already-visible start. */
+        "module-turn": {
+          from: { opacity: "0.35", transform: "translateX(12px)" },
+          to: { opacity: "1", transform: "none" },
+        },
+      },
+      animation: {
+        "module-turn": "module-turn 420ms cubic-bezier(0.16, 1, 0.3, 1)",
       },
       boxShadow: {
         card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04)",

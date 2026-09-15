@@ -5,15 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
-import {
-  ArrowRight,
-  BookOpen,
-  Building2,
-  School,
-  ShieldCheck,
-  User,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Building2, Lock, School, ShieldCheck, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -21,12 +13,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
+  AUTH_FIELD,
+  AUTH_FOOTER,
   AUTH_LABEL,
   AUTH_LINK,
-  AUTH_PILL,
   AUTH_PRIMARY_BUTTON,
+  AUTH_SEGMENT,
+  AUTH_SEGMENT_OFF,
+  AUTH_SEGMENT_ON,
+  AUTH_SEGMENT_ON_INK,
+  AUTH_SEGMENTS,
+  AUTH_STEP_TURN,
   AuthCard,
-  AuthCardHeader,
 } from "@/components/auth/auth-card";
 import { cn } from "@/lib/utils";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
@@ -73,16 +71,11 @@ function markPostLoginSplash() {
   }
 }
 
-/** The Teachers / School Head toggle: the violet pill when picked, outlined when not. */
-const ROLE_OPTION =
-  "h-12 w-full rounded-xl text-base font-medium 2xl:h-14 [&_svg]:size-5";
-const ROLE_PICKED = cn("border-transparent hover:text-white", AUTH_PILL);
-const ROLE_UNPICKED =
-  "border-slate-200 bg-card text-indigo-950 hover:border-violet-200 hover:bg-violet-50 hover:text-indigo-950";
+/** The icon-led pickers on the first step share the printed field box. */
+const PICKER_TRIGGER = cn(AUTH_FIELD, "gap-3");
 
-/** The tall, icon-led trigger both pickers share on the first step. */
-const PICKER_TRIGGER =
-  "h-12 gap-3 rounded-xl border-slate-200 bg-card px-4 text-base text-indigo-950 md:text-base 2xl:h-14";
+/** A step's small print under a field. */
+const FIELD_NOTE = "text-sm leading-snug text-aral-slate";
 
 export function LoginForm({
   schools,
@@ -385,16 +378,15 @@ export function LoginForm({
     };
 
     return (
-      <AuthCard>
-        <AuthCardHeader icon={BookOpen} title="Sign In" subtitle="Access your LITRACK account" />
-        <div className="mt-6 space-y-4 2xl:mt-8 2xl:space-y-5">
+      <AuthCard title="Sign in" step={1}>
+        <div className={cn("space-y-5", AUTH_STEP_TURN)}>
           {notice ? (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+            <p className="rounded-[3px] border border-aral-red/30 bg-[#FDECEE] px-4 py-3 text-sm text-[#8A0215]">
               {notice}
             </p>
           ) : null}
           {districts.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="login-district" className={AUTH_LABEL}>
                 District
               </Label>
@@ -402,7 +394,7 @@ export function LoginForm({
                 {/* The icon sits beside the value, not wrapped with it: the
                     trigger line-clamps its span children, which stacks them. */}
                 <SelectTrigger id="login-district" className={PICKER_TRIGGER}>
-                  <Building2 className="size-5 shrink-0 text-slate-500" aria-hidden />
+                  <Building2 className="size-5 shrink-0 text-aral-slate" aria-hidden />
                   <span className="min-w-0 flex-1 text-left">
                     <SelectValue />
                   </span>
@@ -418,12 +410,12 @@ export function LoginForm({
               </Select>
             </div>
           ) : null}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="login-school" className={AUTH_LABEL}>
               School Name
             </Label>
             {schools.length === 0 ? (
-              <p className="rounded-xl border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
+              <p className="rounded-[3px] border-[1.5px] border-dashed border-aral-line px-4 py-3 text-sm text-aral-slate">
                 No schools found. Contact admin.
               </p>
             ) : (
@@ -435,40 +427,49 @@ export function LoginForm({
                 placeholder="Select your school"
                 searchPlaceholder="Search schools…"
                 emptyMessage="No schools match your search."
-                leadingIcon={<School className="size-5 shrink-0 text-slate-500" aria-hidden />}
+                leadingIcon={<School className="size-5 shrink-0 text-aral-slate" aria-hidden />}
                 triggerClassName={PICKER_TRIGGER}
                 chevron="down"
               />
             )}
           </div>
 
-          <div className="space-y-2">
-            <div role="group" aria-label="Sign in as" className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <p id="login-role-label" className={AUTH_LABEL}>
+              Sign in as
+            </p>
+            <div role="group" aria-labelledby="login-role-label" className={AUTH_SEGMENTS}>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 aria-pressed={role === "teacher"}
                 disabled={teachersLocked}
                 title={teachersLocked ? TEACHERS_UNLOCK_HELP : undefined}
                 onClick={() => setRole("teacher")}
-                className={cn(ROLE_OPTION, role === "teacher" ? ROLE_PICKED : ROLE_UNPICKED)}
+                className={cn(AUTH_SEGMENT, role === "teacher" ? AUTH_SEGMENT_ON : AUTH_SEGMENT_OFF)}
               >
                 <User aria-hidden />
                 Teachers
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 aria-pressed={role === "school-head"}
                 onClick={() => setRole("school-head")}
-                className={cn(ROLE_OPTION, role === "school-head" ? ROLE_PICKED : ROLE_UNPICKED)}
+                className={cn(
+                  AUTH_SEGMENT,
+                  role === "school-head" ? AUTH_SEGMENT_ON : AUTH_SEGMENT_OFF
+                )}
               >
                 <Users aria-hidden />
                 School Head
               </Button>
             </div>
             {teachersLocked ? (
-              <p className="text-sm text-slate-600">{TEACHERS_UNLOCK_HELP}</p>
+              <p className={cn(FIELD_NOTE, "flex items-start gap-2 pt-1")}>
+                <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {TEACHERS_UNLOCK_HELP}
+              </p>
             ) : null}
           </div>
 
@@ -479,140 +480,131 @@ export function LoginForm({
             onClick={handleContinue}
             className={AUTH_PRIMARY_BUTTON}
           >
-            <ArrowRight aria-hidden />
             Continue
+            <ArrowRight aria-hidden />
           </Button>
+        </div>
 
-          <div className="flex items-center gap-3 text-sm text-slate-500" aria-hidden>
-            <span className="h-px flex-1 bg-border" />
-            or
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <p className="text-center">
-            <Link
-              href="/forgot-password"
-              className={cn("text-base", AUTH_LINK)}
-            >
-              Forgot password?
-            </Link>
-          </p>
-
-          <Button
-            asChild
-            variant="outline"
-            className="h-12 w-full rounded-xl border-violet-100 bg-violet-50 text-base font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 2xl:h-14 2xl:text-lg [&_svg]:size-5 [&_svg]:text-violet-600"
+        <div className={AUTH_FOOTER}>
+          <Link href="/forgot-password" className={AUTH_LINK}>
+            Forgot password?
+          </Link>
+          <Link
+            href="/admin/login"
+            className="inline-flex items-center gap-1.5 font-semibold text-aral-slate underline-offset-4 hover:text-aral-navy hover:underline"
           >
-            <Link href="/admin/login">
-              <ShieldCheck aria-hidden />
-              Admin Login
-            </Link>
-          </Button>
+            <ShieldCheck className="size-4" aria-hidden />
+            Super Admin sign-in
+          </Link>
         </div>
       </AuthCard>
     );
   }
 
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
+  const title =
+    screen === "school-head"
+      ? "School Head sign in"
+      : teacherIntent === "login"
+        ? "Teacher sign in"
+        : "Create teacher account";
 
   return (
-    <AuthCard>
-      <div className="space-y-4">
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          className="mb-1 h-auto p-0 text-sm text-slate-600 hover:text-indigo-950"
-          onClick={goBackToSchoolSelect}
-        >
-          ← Change school
-        </Button>
-        {schoolName ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-slate-600">
-            <School className="size-4 shrink-0" aria-hidden />
-            <span className="truncate">{schoolName}</span>
+    <AuthCard title={title} step={2}>
+      <div key={screen} className={cn("space-y-5", AUTH_STEP_TURN)}>
+        <div className="flex items-center justify-between gap-3 rounded-[3px] bg-aral-wash px-3.5 py-2.5">
+          <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-aral-navy">
+            <School className="size-4 shrink-0 text-aral-slate" aria-hidden />
+            <span className="truncate">{schoolName ?? "Your school"}</span>
           </p>
-        ) : null}
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto shrink-0 p-0 text-sm font-semibold text-aral-blue sm:h-auto"
+            onClick={goBackToSchoolSelect}
+          >
+            Change school
+          </Button>
+        </div>
 
         {screen === "school-head" ? (
-          <>
-            <form action={handleSchoolHeadSubmit} className="space-y-4">
-              <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
-                School Head sign in
-              </h2>
-              <div className="space-y-2">
-                <Label htmlFor="password">School ID or password</Label>
-                <PasswordInput
-                  id="password"
-                  name="password"
-                  required
-                  autoFocus
-                  autoComplete="current-password"
-                />
-                <p className="text-xs text-muted-foreground">
-                  First time signing in? Enter your School ID. You&apos;ll choose your own password next.
-                </p>
-              </div>
-              <Button
-                type="submit"
-                className={AUTH_PRIMARY_BUTTON}
-                loading={pending}
-                loadingText="Signing in…"
-              >
-                Sign in
-              </Button>
-            </form>
-            <p className="text-center">
-              <Link href="/forgot-password" className={cn("text-sm", AUTH_LINK)}>
-                Forgot password?
-              </Link>
-            </p>
-          </>
-        ) : (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
-              {teacherIntent === "login" ? "Teacher sign in" : "Create teacher account"}
-            </h2>
-            {teacherIntent === "register" ? (
-              <p className="text-xs text-muted-foreground">
-                Set your password now — no verification code needed. Your School Head approves the
-                account before you can sign in.
+          <form action={handleSchoolHeadSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className={AUTH_LABEL}>
+                School ID or password
+              </Label>
+              <PasswordInput
+                id="password"
+                name="password"
+                required
+                autoFocus
+                autoComplete="current-password"
+                className={AUTH_FIELD}
+              />
+              <p className={FIELD_NOTE}>
+                First time signing in? Enter your School ID. You&apos;ll choose your own password next.
               </p>
-            ) : null}
-
-            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
+            </div>
+            <Button
+              type="submit"
+              className={AUTH_PRIMARY_BUTTON}
+              loading={pending}
+              loadingText="Signing in…"
+            >
+              Sign in
+              <ArrowRight aria-hidden />
+            </Button>
+          </form>
+        ) : (
+          <div className="space-y-5">
+            <div className={AUTH_SEGMENTS}>
               <Button
                 type="button"
-                size="sm"
-                variant={teacherIntent === "login" ? "default" : "ghost"}
-                className="w-full"
+                variant="ghost"
+                aria-pressed={teacherIntent === "login"}
+                className={cn(
+                  AUTH_SEGMENT,
+                  teacherIntent === "login" ? AUTH_SEGMENT_ON_INK : AUTH_SEGMENT_OFF
+                )}
                 disabled={pending}
                 onClick={() => switchTeacherIntent("login")}
               >
-                Sign in
+                Have an account
               </Button>
               <Button
                 type="button"
-                size="sm"
-                variant={teacherIntent === "register" ? "default" : "ghost"}
-                className="w-full"
+                variant="ghost"
+                aria-pressed={teacherIntent === "register"}
+                className={cn(
+                  AUTH_SEGMENT,
+                  teacherIntent === "register" ? AUTH_SEGMENT_ON_INK : AUTH_SEGMENT_OFF
+                )}
                 disabled={pending}
                 onClick={() => switchTeacherIntent("register")}
               >
                 Create account
               </Button>
             </div>
+            {teacherIntent === "register" ? (
+              <p className={FIELD_NOTE}>
+                Set your password now — no verification code needed. Your School Head approves the
+                account before you can sign in.
+              </p>
+            ) : null}
 
             {teacherIntent === "login" ? (
               <form
-                className="space-y-4"
+                className="space-y-5"
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleTeacherLogin();
                 }}
               >
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className={AUTH_LABEL}>
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     name="email"
@@ -624,10 +616,13 @@ export function LoginForm({
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={pending}
                     placeholder="you@school.edu"
+                    className={AUTH_FIELD}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="teacherPassword">Password</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="teacherPassword" className={AUTH_LABEL}>
+                    Password
+                  </Label>
                   <PasswordInput
                     id="teacherPassword"
                     name="password"
@@ -636,6 +631,7 @@ export function LoginForm({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={pending}
+                    className={AUTH_FIELD}
                   />
                 </div>
                 <Button
@@ -645,12 +641,8 @@ export function LoginForm({
                   loadingText="Signing in…"
                 >
                   Sign in
+                  <ArrowRight aria-hidden />
                 </Button>
-                <p className="text-center">
-                  <Link href="/forgot-password" className={cn("text-sm", AUTH_LINK)}>
-                    Forgot password?
-                  </Link>
-                </p>
               </form>
             ) : (
               <form
@@ -660,36 +652,46 @@ export function LoginForm({
                   handleRegisterTeacher();
                 }}
               >
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First name</Label>
-                  <Input
-                    id="firstName"
-                    name="firstName"
-                    required
-                    autoFocus
-                    autoComplete="given-name"
-                    autoCapitalize="words"
-                    maxLength={100}
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    disabled={pending}
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="firstName" className={AUTH_LABEL}>
+                      First name
+                    </Label>
+                    <Input
+                      id="firstName"
+                      name="firstName"
+                      required
+                      autoFocus
+                      autoComplete="given-name"
+                      autoCapitalize="words"
+                      maxLength={100}
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={pending}
+                      className={AUTH_FIELD}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="middleName" className={AUTH_LABEL}>
+                      Middle name (optional)
+                    </Label>
+                    <Input
+                      id="middleName"
+                      name="middleName"
+                      autoComplete="additional-name"
+                      autoCapitalize="words"
+                      maxLength={100}
+                      value={middleName}
+                      onChange={(e) => setMiddleName(e.target.value)}
+                      disabled={pending}
+                      className={AUTH_FIELD}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="middleName">Middle name (optional)</Label>
-                  <Input
-                    id="middleName"
-                    name="middleName"
-                    autoComplete="additional-name"
-                    autoCapitalize="words"
-                    maxLength={100}
-                    value={middleName}
-                    onChange={(e) => setMiddleName(e.target.value)}
-                    disabled={pending}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last name</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lastName" className={AUTH_LABEL}>
+                    Last name
+                  </Label>
                   <Input
                     id="lastName"
                     name="lastName"
@@ -700,10 +702,13 @@ export function LoginForm({
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     disabled={pending}
+                    className={AUTH_FIELD}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="registerEmail">Email</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="registerEmail" className={AUTH_LABEL}>
+                    Email
+                  </Label>
                   <Input
                     id="registerEmail"
                     name="email"
@@ -714,10 +719,13 @@ export function LoginForm({
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={pending}
                     placeholder="you@school.edu"
+                    className={AUTH_FIELD}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="registerPassword">Password</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="registerPassword" className={AUTH_LABEL}>
+                    Password
+                  </Label>
                   <PasswordInput
                     id="registerPassword"
                     name="password"
@@ -727,11 +735,14 @@ export function LoginForm({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={pending}
+                    className={AUTH_FIELD}
                   />
-                  <p className="text-xs text-muted-foreground">{PASSWORD_HINT}</p>
+                  <p className={FIELD_NOTE}>{PASSWORD_HINT}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword" className={AUTH_LABEL}>
+                    Confirm password
+                  </Label>
                   <PasswordInput
                     id="confirmPassword"
                     name="confirmPassword"
@@ -741,21 +752,31 @@ export function LoginForm({
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     disabled={pending}
+                    className={AUTH_FIELD}
                   />
                 </div>
                 <Button
                   type="submit"
-                  className={AUTH_PRIMARY_BUTTON}
+                  className={cn(AUTH_PRIMARY_BUTTON, "mt-1")}
                   loading={pending}
                   loadingText="Creating account…"
                 >
                   Create account
+                  <ArrowRight aria-hidden />
                 </Button>
               </form>
             )}
           </div>
         )}
       </div>
+
+      {screen === "school-head" || teacherIntent === "login" ? (
+        <div className={AUTH_FOOTER}>
+          <Link href="/forgot-password" className={AUTH_LINK}>
+            Forgot password?
+          </Link>
+        </div>
+      ) : null}
     </AuthCard>
   );
 }

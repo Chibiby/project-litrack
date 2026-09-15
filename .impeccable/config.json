@@ -58,31 +58,14 @@
         "reason": "Owner's v2 End of Terms mockup (desktop and phone) shows the active term tab as the same violet gradient pill as the sidebar highlight and Learners tabs (already sanctioned)"
       },
       {
-        "rule": "ai-color-palette",
+        "rule": "design-system-font-size",
         "value": "*",
         "files": [
-          "src/components/auth/auth-card.tsx"
+          "src/components/forms/aral-term-grades-grid-form.tsx",
+          "src/components/terms/**"
         ],
-        "createdAt": "2026-09-15T16:11:46.069Z",
-        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
-      },
-      {
-        "rule": "ai-color-palette",
-        "value": "*",
-        "files": [
-          "src/components/forms/login-form.tsx"
-        ],
-        "createdAt": "2026-09-15T16:22:24.577Z",
-        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
-      },
-      {
-        "rule": "ai-color-palette",
-        "value": "*",
-        "files": [
-          "src/components/auth/login-shell.tsx"
-        ],
-        "createdAt": "2026-09-15T16:22:24.846Z",
-        "reason": "Owner chose the v2 in-app violet for the sign-in screens (2026-09-16): the same violet-600 to violet-500 pill as the sanctioned sidebar highlight (nav-highlight.tsx) and the lavender-to-sky wash of the sanctioned page-hero.tsx"
+        "createdAt": "2026-09-15T17:17:09.827Z",
+        "reason": "DESIGN.md documents only the sign-in surface (/login, /admin/login); app-shell surfaces follow their own code-defined system (globals.css, tailwind.config.ts) until documented separately, so its type ramp does not govern them"
       }
     ]
   }

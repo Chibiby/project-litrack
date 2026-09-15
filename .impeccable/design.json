@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-16T00:00:00.000Z",
+  "title": "Design System: LITRACK Sign-in",
+  "extensions": {
+    "scope": "Sign-in surface only (/login, /admin/login). App-shell surfaces follow their incumbent code-defined system in src/app/globals.css and tailwind.config.ts until documented separately.",
+    "colorMeta": {
+      "aral-blue": {
+        "role": "primary",
+        "displayName": "Royal Title Blue",
+        "canonical": "oklch(37.8% 0.136 257.5)",
+        "tonalRamp": ["#000A21", "#02224E", "#043C82", "#255CA8", "#4880D0", "#6CA6F9", "#ABCDFD", "#E5EFFF"]
+      },
+      "aral-gold": {
+        "role": "secondary",
+        "displayName": "Sun Gold",
+        "canonical": "oklch(87.4% 0.177 92.8)",
+        "tonalRamp": ["#100B00", "#2D2301", "#4D3E03", "#705B07", "#997E14", "#C4A111", "#F1C618", "#FFEEB9"]
+      },
+      "aral-sun": {
+        "role": "secondary",
+        "displayName": "Deep Sun",
+        "canonical": "oklch(83.1% 0.171 81.5)",
+        "tonalRamp": ["#120900", "#312101", "#543B02", "#795705", "#A47811", "#D2990C", "#FDBF3E", "#FFECCB"]
+      },
+      "aral-red": {
+        "role": "tertiary",
+        "displayName": "Letter Red",
+        "canonical": "oklch(58.9% 0.238 25.8)",
+        "tonalRamp": ["#1E0001", "#4B0105", "#7C000D", "#B10218", "#ED1227", "#FB756C", "#FEB5AE", "#FFE9E6"]
+      },
+      "aral-navy": {
+        "role": "neutral",
+        "displayName": "Cover Navy",
+        "canonical": "oklch(28.4% 0.072 259.1)",
+        "tonalRamp": ["#000923", "#0C2346", "#274066", "#445E86", "#6681AC", "#89A6D2", "#AFCCFA", "#E5EFFF"]
+      },
+      "aral-paper": {
+        "role": "neutral",
+        "displayName": "Stock White",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": ["#0B0B0B", "#242424", "#404040", "#5D5D5D", "#808080", "#A4A4A4", "#CACACA", "#EEEEEE"]
+      },
+      "aral-slate": {
+        "role": "neutral",
+        "displayName": "Print Slate",
+        "canonical": "oklch(50.1% 0.036 216.6)",
+        "tonalRamp": ["#000E12", "#0C282F", "#29454C", "#46636B", "#68868E", "#8CABB3", "#B1D1DA", "#D4F5FE"]
+      },
+      "aral-edge": {
+        "role": "neutral",
+        "displayName": "Edge Blue-Grey",
+        "canonical": "oklch(63.5% 0.043 260)",
+        "tonalRamp": ["#060C19", "#1C2637", "#374254", "#546074", "#7B8CA6", "#9AA9C0", "#C0CCDD", "#E6EEFA"]
+      },
+      "aral-line": {
+        "role": "neutral",
+        "displayName": "Rule Line",
+        "canonical": "oklch(82.2% 0.032 257.2)",
+        "tonalRamp": ["#040B18", "#1A2534", "#354051", "#525F70", "#748194", "#98A6B9", "#BECCE0", "#E5EFFF"]
+      },
+      "aral-wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "oklch(96.3% 0.012 259.8)",
+        "tonalRamp": ["#080B10", "#21242A", "#3C4046", "#5A5E65", "#7C8088", "#A0A5AC", "#C6CBD3", "#EAEFF7"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Cover Title", "purpose": "LITRACK on the blue band, once per page." },
+      "title": { "displayName": "Label Title", "purpose": "The label box header strip, white on navy." },
+      "foot": { "displayName": "Cover Foot", "purpose": "The agency credit on the navy foot strip only; uppercase, 0.75rem on phones, 0.875rem from sm." },
+      "headline": { "displayName": "Band Line", "purpose": "The product line under the cover title." },
+      "body": { "displayName": "Body", "purpose": "Field values and the band's supporting line." },
+      "action": { "displayName": "Action", "purpose": "The primary action's label." },
+      "label": { "displayName": "Label", "purpose": "Field and segment labels, the context row, footer links, the step rail at 0.75rem." },
+      "note": { "displayName": "Small Print", "purpose": "Notes under a field, in slate." }
+    },
+    "strokes": [
+      { "name": "label-edge", "value": "2px solid #12294D", "purpose": "The label box's printed edge; its only depth cue besides overlap." },
+      { "name": "control-edge", "value": "1.5px solid #7B8CA6", "purpose": "Resting boundary of fields, pickers and segment tracks (about 3.4:1 on white)." },
+      { "name": "hairline", "value": "1px solid #B8C6DA", "purpose": "Decorative only: masthead divider, label box footer rule (at 60%)." },
+      { "name": "empty-box", "value": "1.5px dashed #B8C6DA", "purpose": "The no-schools empty state; decorative, not a control." }
+    ],
+    "shadows": [
+      { "name": "live-control-drop", "value": "0 10px 22px -14px rgba(18,41,77,0.7)", "purpose": "Under the enabled primary action; removed when disabled." },
+      { "name": "picked-seat", "value": "0 1px 2px rgba(18,41,77,0.25)", "purpose": "Seat under the picked option of a segment switch, gold or navy." }
+    ],
+    "motion": [
+      { "name": "module-turn", "value": "420ms cubic-bezier(0.16, 1, 0.3, 1); from opacity 0.35, translateX(12px) to opacity 1, none", "purpose": "A step's label body turning in once, from an already-visible start; motion-safe only." },
+      { "name": "state-colors", "value": "150ms color/background-color/border-color", "purpose": "Hover and pick changes on buttons, segments and fields." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one live control on the cover (Continue, Sign in, Create account): gold, full width, 3px corners, navy label with a trailing arrow. Shown enabled and disabled.",
+      "html": "<div class=\"ds-stage\"><button class=\"ds-btn-primary\">Continue <svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button><button class=\"ds-btn-primary\" disabled>Continue <svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button></div>",
+      "css": ".ds-stage{display:grid;gap:12px;width:360px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;} .ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;height:48px;border:0;border-radius:3px;background:#FED110;color:#12294D;font-size:1rem;font-weight:700;box-shadow:0 10px 22px -14px rgba(18,41,77,0.7);cursor:pointer;transition:background-color .15s;} .ds-btn-primary:hover{background:#FFBA04;} .ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #013E88;} .ds-btn-primary:disabled{background:#EEF3FB;color:#4C6971;box-shadow:none;cursor:not-allowed;}"
+    },
+    {
+      "name": "Segment Switch",
+      "kind": "chip",
+      "refersTo": "segment-on",
+      "description": "A two-way choice printed as a track. The step-one role pick is gold (the choice Continue confirms); the step-two intent pick is navy ink so gold stays on the submit.",
+      "html": "<div class=\"ds-seg-stage\"><div class=\"ds-segments\" role=\"group\" aria-label=\"Sign in as\"><button class=\"ds-seg ds-seg-on\" aria-pressed=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\"/><circle cx=\"12\" cy=\"7\" r=\"4\"/></svg>Teachers</button><button class=\"ds-seg ds-seg-off\" aria-pressed=\"false\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>School Head</button></div><div class=\"ds-segments\" role=\"group\" aria-label=\"Account\"><button class=\"ds-seg ds-seg-ink\" aria-pressed=\"true\">Have an account</button><button class=\"ds-seg ds-seg-off\" aria-pressed=\"false\">Create account</button></div></div>",
+      "css": ".ds-seg-stage{display:grid;gap:16px;width:360px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;} .ds-segments{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1.5px solid #7B8CA6;border-radius:3px;background:#FFFFFF;} .ds-seg{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;border:0;border-radius:2px;font-size:1rem;font-weight:600;cursor:pointer;transition:background-color .15s,color .15s;} .ds-seg-on{background:#FED110;color:#12294D;box-shadow:0 1px 2px rgba(18,41,77,0.25);} .ds-seg-ink{background:#12294D;color:#FFFFFF;box-shadow:0 1px 2px rgba(18,41,77,0.25);} .ds-seg-off{background:transparent;color:#4C6971;} .ds-seg-off:hover{background:#EEF3FB;color:#12294D;} .ds-seg:focus-visible{outline:none;box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #013E88;}"
+    },
+    {
+      "name": "Printed Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "A printed answer box: white, 1.5px Edge Blue-Grey stroke (about 3.4:1), 3px corners, 48px tall, Inter 600 label above at a 6px gap, full-slate placeholder.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Email</span><input class=\"ds-input\" type=\"email\" placeholder=\"you@school.edu\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;width:360px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;} .ds-field-label{font-size:.875rem;font-weight:600;color:#12294D;} .ds-input{height:48px;padding:0 14px;border:1.5px solid #7B8CA6;border-radius:3px;background:#FFFFFF;color:#12294D;font-size:1rem;caret-color:#013E88;transition:border-color .15s;} .ds-input::placeholder{color:#4C6971;} .ds-input:hover{border-color:rgba(1,62,136,0.6);} .ds-input:focus-visible{border-color:#013E88;outline:none;box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #013E88;}"
+    },
+    {
+      "name": "Label Box",
+      "kind": "card",
+      "refersTo": "label-box",
+      "description": "The sign-in label set into the cover: navy Archivo header with the step rail, white body, 2px navy printed edge, clipped 3px corners, no shadow, hairline footer.",
+      "html": "<section class=\"ds-labelbox\" aria-label=\"Teacher sign in\"><header class=\"ds-labelbox-head\"><h2 class=\"ds-labelbox-title\">Teacher sign in</h2><ol class=\"ds-rail\" aria-label=\"Sign-in steps\"><li class=\"ds-rail-item\"><span class=\"ds-pip\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg></span>School</li><li class=\"ds-rail-item ds-rail-current\" aria-current=\"step\"><span class=\"ds-pip ds-pip-current\">2</span>Account</li></ol></header><div class=\"ds-labelbox-body\"><p class=\"ds-note\">First time signing in? Enter your School ID. You'll choose your own password next.</p><div class=\"ds-footer\"><a class=\"ds-link\" href=\"#\">Forgot password?</a></div></div></section>",
+      "css": ".ds-labelbox{width:464px;overflow:hidden;border:2px solid #12294D;border-radius:3px;background:#FFFFFF;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#12294D;} .ds-labelbox-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 28px;background:#12294D;} .ds-labelbox-title{margin:0;font-family:Archivo,Inter,ui-sans-serif,sans-serif;font-stretch:108%;font-size:1.5rem;font-weight:800;letter-spacing:-0.025em;color:#FFFFFF;} .ds-rail{display:flex;gap:12px;margin:0;padding:0;list-style:none;font-size:.75rem;font-weight:600;} .ds-rail-item{display:flex;align-items:center;gap:6px;color:#9FB2CF;} .ds-rail-current{color:#FFFFFF;} .ds-pip{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;box-shadow:inset 0 0 0 1px #9FB2CF;font-size:.75rem;font-variant-numeric:tabular-nums;} .ds-pip-current{background:#FFFFFF;color:#12294D;box-shadow:none;} .ds-labelbox-body{padding:28px;} .ds-note{margin:0;font-size:.875rem;line-height:1.375;color:#4C6971;} .ds-footer{margin-top:24px;padding-top:16px;border-top:1px solid rgba(184,198,218,0.6);font-size:.875rem;} .ds-link{font-weight:600;color:#013E88;text-decoration:underline;text-decoration-color:rgba(1,62,136,0.3);text-underline-offset:4px;} .ds-link:hover{text-decoration-color:#013E88;} .ds-link:focus-visible{outline:none;box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #013E88;border-radius:2px;}"
+    },
+    {
+      "name": "Title Band",
+      "kind": "custom",
+      "refersTo": "title-band",
+      "description": "The cover's royal-blue title band with LITRACK in Archivo black, closed by the one three-ink ARAL-letter rule (6px on phones, 10px at lg, cover column only at lg).",
+      "html": "<div class=\"ds-band\"><div class=\"ds-band-ink\"><h1 class=\"ds-band-title\">LITRACK</h1><p class=\"ds-band-line\">School reading-profiling system for the ARAL Program</p></div><div class=\"ds-rule\" aria-hidden=\"true\"><span></span><span></span><span></span></div></div>",
+      "css": ".ds-band{width:640px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#013E88;} .ds-band-ink{padding:48px 40px 56px;} .ds-band-title{margin:0;font-family:Archivo,Inter,ui-sans-serif,sans-serif;font-stretch:112%;font-size:5rem;font-weight:900;line-height:.88;letter-spacing:-0.02em;color:#FFFFFF;} .ds-band-line{margin:20px 0 0;max-width:30ch;font-size:1.5rem;font-weight:600;line-height:1.375;color:#FFFFFF;} .ds-rule{display:flex;height:10px;} .ds-rule span{flex:1;} .ds-rule span:nth-child(1){background:#E90423;} .ds-rule span:nth-child(2){background:#12294D;} .ds-rule span:nth-child(3){background:#FED110;}"
+    },
+    {
+      "name": "Cover Foot",
+      "kind": "custom",
+      "refersTo": "cover-foot",
+      "description": "The full-width navy strip closing the cover with the agency credit in Archivo expanded caps; the only uppercase tracked line on the surface. Desktop form shown (one line, left-aligned); phones centre it on two lines.",
+      "html": "<footer class=\"ds-foot\"><span>Department of Education &middot; Division of Sarangani</span></footer>",
+      "css": ".ds-foot{width:640px;padding:12px 40px;background:#12294D;color:#FFFFFF;font-family:Archivo,Inter,ui-sans-serif,sans-serif;font-stretch:112%;font-size:.875rem;font-weight:600;line-height:1.375;letter-spacing:.08em;text-transform:uppercase;text-align:left;}"
+    },
+    {
+      "name": "School Context Row",
+      "kind": "custom",
+      "refersTo": "context-row",
+      "description": "Step two's wash row naming the chosen school, with Change school back to step one.",
+      "html": "<div class=\"ds-context\"><p class=\"ds-context-name\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#4C6971\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 22v-4a2 2 0 1 0-4 0v4\"/><path d=\"m18 10 4 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8l4-2\"/><path d=\"M18 5v17\"/><path d=\"m4 6 8-4 8 4\"/><path d=\"M6 5v17\"/><circle cx=\"12\" cy=\"9\" r=\"2\"/></svg><span>A F. Dela Cruz ES</span></p><button class=\"ds-context-change\">Change school</button></div>",
+      "css": ".ds-context{display:flex;align-items:center;justify-content:space-between;gap:12px;width:360px;padding:10px 14px;border-radius:3px;background:#EEF3FB;font-family:Inter,ui-sans-serif,system-ui,sans-serif;} .ds-context-name{display:flex;align-items:center;gap:8px;min-width:0;margin:0;font-size:.875rem;font-weight:600;color:#12294D;} .ds-context-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .ds-context-change{flex-shrink:0;border:0;padding:0;background:none;font-size:.875rem;font-weight:600;color:#013E88;cursor:pointer;} .ds-context-change:hover{text-decoration:underline;text-underline-offset:4px;} .ds-context-change:focus-visible{outline:none;box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #013E88;border-radius:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Self-Learning Module Cover",
+    "overview": "Signing in opens your school's module. The screen is a printed DepEd Self-Learning Module cover in the ARAL Program's logo inks. A white masthead carries the ARAL and partner marks. A full-width royal-blue title band sets LITRACK in heavy expanded grotesque. The school illustration is the cover picture, and the sign-in form is set into the cover like the name label a learner fills in. A navy foot strip closes the cover with the agency credit. It is printed stock, not a lit screen. The inks are fixed, the corners are nearly square, the label box stands forward by overlap and a drawn navy edge rather than a shadow, and the page stays light whatever theme the app is set to (`ALWAYS_LIGHT_PATHS` in `src/lib/theme.ts`).\n\nThe surface rejects a frosted glass card floating over a photo. The school art is the cover picture: it sits in its own grid row, is never blurred or tinted behind the form, and the label box overlaps its edge the way a printed label overlaps cover art. Colour is flat, solid and taken from the ARAL logo, and each ink has a job. Gold is saved for what the teacher acts on next.\n\nThe label box shows the steps as fixed stations. A navy header names the step and, on the two-step school sign-in, a step rail (1 School, 2 Account) shows where the teacher is. Moving to the next step turns the label body in once rather than swapping in a new screen.",
+    "keyCharacteristics": [
+      "Flat offset-print inks sampled from the ARAL logo, fixed on the page and never themed.",
+      "A royal-blue title band closed by a three-ink rule (red, navy, gold) under the cover title, the only place the ARAL letters' colours appear together.",
+      "Archivo, stretched wide, used only for cover lettering: the LITRACK title, the label box header and the cover foot.",
+      "Sun gold marks only the live choice: the picked role and the primary action.",
+      "One label box with 3px corners and a 2px navy printed edge. It has no shadow, ring or lift."
+    ],
+    "rules": [
+      {
+        "name": "The One Cord Rule",
+        "body": "Gold goes only on what the teacher can act on next: the picked role on step one and the primary action. Every other switch marks its pick in navy ink, which is why the step-two intent switch (Have an account / Create account) goes navy and leaves gold to the submit. Never use gold for decoration, headings, icons or illustration. If a surface has two gold things that are not a choice and its confirmation, one of them is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three-Ink Rule",
+        "body": "Red, navy and gold appear side by side exactly once, as equal thirds of the rule closing the title band: 6px on phones, 10px at `lg`. At `lg` the rule stays in the cover column and ends where the label column begins. It is the one ARAL-letter moment. Do not repeat it as a divider, a card edge or a loader.",
+        "section": "colors"
+      },
+      {
+        "name": "The Drawn Edge Rule",
+        "body": "A control's boundary is drawn in Edge Blue-Grey, never in Rule Line. Rule Line is too faint to mark something a teacher must find and press (about 1.7:1), so it stays on decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed Ink Rule",
+        "body": "Sign-in inks are literal values in the `aral` Tailwind palette, not theme tokens. Printed stock does not change with the room, so these screens never take `.dark`.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cover Lettering Rule",
+        "body": "Archivo is for lettering printed on the cover: the LITRACK title, the label box header and the cover foot. Labels, values, buttons and notes stay in Inter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Cover Foot Exception",
+        "body": "The only uppercase tracked line is the cover foot's agency credit, \"Department of Education · Division of Sarangani\". It mirrors the agency band along the bottom of a real module cover and closes the page. It labels nothing. Never place an uppercase tracked line above a heading, a field or the label box title.",
+        "section": "typography"
+      },
+      {
+        "name": "The Printed Stock Rule",
+        "body": "No backdrop blur, no translucent panels, no coloured glows and no shadow on the label box. If something needs to stand forward, it overlaps and takes a drawn edge. It does not float.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** print every sign-in screen with `LoginShell` and `AuthCard`, and build their controls from the `AUTH_*` class constants in `auth-card.tsx` rather than restyling shadcn primitives inline.",
+      "**Do** keep gold on the live choice only: the picked role and the primary action, per the One Cord Rule. Mark any other switch's pick in navy ink (`AUTH_SEGMENT_ON_INK`).",
+      "**Do** close the blue band with the red / navy / gold rule, once: 6px on phones, 10px at `lg`, and confined to the cover column at `lg`.",
+      "**Do** keep the school art in its own grid row as the cover picture, and let the label box overlap its edge.",
+      "**Do** draw control boundaries in Edge Blue-Grey (1.5px) and keep Rule Line for decorative hairlines.",
+      "**Do** keep these paths in `ALWAYS_LIGHT_PATHS`, and repoint `--primary` and `--ring` at royal blue inside the shell so shared controls print in the cover's ink.",
+      "**Do** keep type on white in navy or slate, and on blue or navy in white. Put navy text on gold."
+    ],
+    "donts": [
+      "**Don't** apply these inks, Archivo or the cover layout to app-shell surfaces. The app has its own incumbent system in `src/app/globals.css`.",
+      "**Don't** put the form in a translucent or blurred panel over the photo, and don't blur or tint the school art behind it.",
+      "**Don't** give the label box a shadow, ring or hover lift. Its 2px navy edge is its depth.",
+      "**Don't** use gradients, glows or coloured shadows on interface surfaces. The school illustration is painted art and is exempt, but UI is flat ink.",
+      "**Don't** round corners past 3px on boxes or 2px on segments.",
+      "**Don't** spend violet here. Violet is the app's ARAL accent token; the cover speaks in the ARAL logo's own inks.",
+      "**Don't** set labels, values or buttons in Archivo, or letter the cover in a system display face.",
+      "**Don't** add uppercase tracked lines above headings, fields or the label box title. The cover foot credit is the only uppercase tracked text, and it is not a pattern.",
+      "**Don't** repeat the three-ink rule as a divider, border or progress bar."
+    ]
+  }
+}
