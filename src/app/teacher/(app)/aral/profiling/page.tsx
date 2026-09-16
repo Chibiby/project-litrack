@@ -2,27 +2,34 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { BookOpen, Heart } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { EmptyState } from "@/components/dashboard";
+import { Surface } from "@/components/ui/surface";
 import { TableSectionSkeleton } from "@/components/loading";
-import { LearnerPagination } from "@/components/learners/learner-pagination";
+import { ProfilingHero } from "@/components/aral/profiling-hero";
+import { ProfilingStatCards } from "@/components/aral/profiling-stat-cards";
+import { ProfilingToolbar } from "@/components/aral/profiling-toolbar";
+import { ProfilingList, type ProfilingListRow } from "@/components/aral/profiling-list";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 import { aralLearnerScope } from "@/lib/teachers/scope";
-import { LEARNER_PAGE_SIZE, totalPages } from "@/lib/learners/pagination";
+import { getGradeSections } from "@/lib/cache/grade-sections";
+import {
+  LEARNER_PAGE_SIZE,
+  totalPages,
+  nameSearchWhere,
+  sectionIdWhere,
+  type LearnerListSectionFilter,
+} from "@/lib/learners/pagination";
+import {
+  computeProfilingStats,
+  parseProfilingStatus,
+  PROFILING_STATUSES,
+  PROFILING_STATUS_LABELS,
+  type ProfilingStatusFilter,
+} from "@/lib/aral/profiling-stats";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -37,31 +44,31 @@ export const dynamic = "force-dynamic";
  * scope, so the card and the Pending tab here always agree.
  */
 
-const STATUSES = ["all", "pending", "completed"] as const;
-type ProfilingStatus = (typeof STATUSES)[number];
-
-const STATUS_LABELS: Record<ProfilingStatus, string> = {
-  all: "All",
-  pending: "Pending",
-  completed: "Completed",
-};
-
-function parseStatus(raw: string | undefined): ProfilingStatus {
-  return STATUSES.includes(raw as ProfilingStatus) ? (raw as ProfilingStatus) : "all";
-}
-
-function statusWhere(status: ProfilingStatus): Prisma.LearnerWhereInput {
+function statusWhere(status: ProfilingStatusFilter): Prisma.LearnerWhereInput {
   if (status === "pending") return { aralProfile: null };
   if (status === "completed") return { aralProfile: { isNot: null } };
   return {};
 }
 
-function statusHref(status: ProfilingStatus, schoolId?: string): string {
+function statusHref(
+  status: ProfilingStatusFilter,
+  extra: { schoolId?: string; q?: string; section?: string }
+): string {
   const qs = new URLSearchParams();
   if (status !== "all") qs.set("status", status);
-  if (schoolId) qs.set("schoolId", schoolId);
+  if (extra.schoolId) qs.set("schoolId", extra.schoolId);
+  if (extra.q) qs.set("q", extra.q);
+  if (extra.section && extra.section !== "all") qs.set("section", extra.section);
   const s = qs.toString();
   return s ? `${ARAL_PROFILING_HREF}?${s}` : ARAL_PROFILING_HREF;
+}
+
+/** "all"/"none"/section id, same parsing as `parseLearnerListParams`'s `section`. */
+function parseSectionFilter(raw: string | undefined): LearnerListSectionFilter {
+  const trimmed = (raw ?? "").trim();
+  const lower = trimmed.toLowerCase();
+  if (!trimmed || lower === "all") return "all";
+  return lower === "none" ? "none" : trimmed;
 }
 
 const dateFormat = new Intl.DateTimeFormat("en-PH", {
@@ -72,10 +79,16 @@ const dateFormat = new Intl.DateTimeFormat("en-PH", {
 });
 
 interface PageProps {
-  searchParams: Promise<{ schoolId?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    schoolId?: string;
+    status?: string;
+    page?: string;
+    q?: string;
+    section?: string;
+  }>;
 }
 
-async function ProfilingTable({
+async function ProfilingRows({
   where,
   totalCount,
   page,
@@ -83,14 +96,18 @@ async function ProfilingTable({
   status,
   canEdit,
   schoolIdParam,
+  q,
+  sectionParam,
 }: {
   where: Prisma.LearnerWhereInput;
   totalCount: number;
   page: number;
   pages: number;
-  status: ProfilingStatus;
+  status: ProfilingStatusFilter;
   canEdit: boolean;
   schoolIdParam?: string;
+  q: string;
+  sectionParam?: string;
 }) {
   const learners = await prisma.learner.findMany({
     relationLoadStrategy: "join",
@@ -108,86 +125,29 @@ async function ProfilingTable({
     take: LEARNER_PAGE_SIZE,
   });
 
+  const rows: ProfilingListRow[] = learners.map((l) => ({
+    id: l.id,
+    fullName: l.fullName,
+    gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+    sectionName: l.section?.name ?? null,
+    done: l.aralProfile !== null,
+    lastUpdatedDisplay: l.aralProfile ? dateFormat.format(l.aralProfile.updatedAt) : "—",
+    updateHref: `/teacher/aral/${l.gradeLevelId}/learners/${l.id}/update`,
+  }));
+
   return (
-    <Card>
-      <CardContent className="p-0">
-        {totalCount === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              title={
-                status === "pending"
-                  ? "Every ARAL learner has a profile"
-                  : status === "completed"
-                    ? "No completed profiles yet"
-                    : "No ARAL learners"
-              }
-              description={
-                status === "all"
-                  ? "Learners you tutor in the ARAL program appear here."
-                  : "Switch tabs to see the other learners."
-              }
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Learner</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Profile</TableHead>
-                  <TableHead>Last updated</TableHead>
-                  {canEdit && <TableHead className="text-right">Action</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {learners.map((l) => {
-                  const done = l.aralProfile !== null;
-                  return (
-                    <TableRow key={l.id}>
-                      <TableCell className="font-medium">{l.fullName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {l.section?.name ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={done ? "violet" : "outline"}>
-                          {done ? "Completed" : "Pending"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {l.aralProfile ? dateFormat.format(l.aralProfile.updatedAt) : "—"}
-                      </TableCell>
-                      {canEdit && (
-                        <TableCell className="text-right">
-                          <Button asChild size="sm" variant={done ? "outline" : "default"}>
-                            <Link href={`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/update`}>
-                              {done ? "Update profile" : "Complete profile"}
-                            </Link>
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-        <LearnerPagination
-          basePath={ARAL_PROFILING_HREF}
-          page={page}
-          totalPages={pages}
-          searchParams={{
-            status: status !== "all" ? status : undefined,
-            schoolId: schoolIdParam,
-          }}
-        />
-      </CardContent>
-    </Card>
+    <ProfilingList
+      rows={rows}
+      totalCount={totalCount}
+      page={page}
+      pageSize={LEARNER_PAGE_SIZE}
+      totalPages={pages}
+      status={status}
+      canEdit={canEdit}
+      schoolIdParam={schoolIdParam}
+      q={q}
+      sectionParam={sectionParam}
+    />
   );
 }
 
@@ -201,7 +161,10 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
   const schoolId = (isSuperAdmin ? sp.schoolId : user.schoolId) ?? user.schoolId;
   if (!schoolId) redirect("/login");
 
-  const status = parseStatus(sp.status);
+  const status = parseProfilingStatus(sp.status);
+  const q = (sp.q ?? "").trim();
+  const sectionFilter = parseSectionFilter(sp.section);
+
   const baseWhere: Prisma.LearnerWhereInput = {
     schoolId,
     isAralLearner: true,
@@ -210,67 +173,135 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
     ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
   };
 
-  const [allCount, pendingCount] = await Promise.all([
-    prisma.learner.count({ where: baseWhere }),
-    prisma.learner.count({ where: { ...baseWhere, aralProfile: null } }),
-  ]);
-  const counts: Record<ProfilingStatus, number> = {
+  const filterWhere: Prisma.LearnerWhereInput = {
+    ...nameSearchWhere(q),
+    ...sectionIdWhere(sectionFilter),
+  };
+  const listWhere: Prisma.LearnerWhereInput = {
+    ...baseWhere,
+    ...filterWhere,
+    ...statusWhere(status),
+  };
+
+  const [allCount, pendingCount, filteredTotalCount, latestProfile, gradeIdRows] =
+    await Promise.all([
+      prisma.learner.count({ where: baseWhere }),
+      prisma.learner.count({ where: { ...baseWhere, aralProfile: null } }),
+      prisma.learner.count({ where: listWhere }),
+      prisma.aralProfile.findFirst({
+        where: { learner: baseWhere },
+        orderBy: { updatedAt: "desc" },
+        select: { updatedAt: true },
+      }),
+      prisma.learner.findMany({
+        where: baseWhere,
+        select: { gradeLevelId: true },
+        distinct: ["gradeLevelId"],
+      }),
+    ]);
+
+  const counts: Record<ProfilingStatusFilter, number> = {
     all: allCount,
     pending: pendingCount,
     completed: allCount - pendingCount,
   };
 
-  const totalCount = counts[status];
-  const pages = totalPages(totalCount, LEARNER_PAGE_SIZE);
+  const sections =
+    gradeIdRows.length > 0
+      ? await getGradeSections({
+          schoolId,
+          gradeLevelIds: gradeIdRows.map((g) => g.gradeLevelId),
+        })
+      : [];
+
+  const stats = computeProfilingStats({
+    total: allCount,
+    pending: pendingCount,
+    lastUpdatedAt: latestProfile?.updatedAt ?? null,
+  });
+
+  const pages = totalPages(filteredTotalCount, LEARNER_PAGE_SIZE);
   const rawPage = Number.parseInt(sp.page ?? "1", 10);
   const page = Math.min(Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1, pages);
+
+  const subtitle = `${pendingCount} of ${allCount} ARAL learner${allCount === 1 ? "" : "s"} still need a profile${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`;
 
   return (
     <AppShell
       title="ARAL Profiling"
-      subtitle={`${pendingCount} of ${allCount} ARAL learner${allCount === 1 ? "" : "s"} still need a profile${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      subtitle={subtitle}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
+      hideTitle
     >
-      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        Sections C to E: reading behavior, outside factors and suggested
-        interventions. Absences are not asked here, because Weekly Attendance
-        already records them.
-      </p>
+      <ProfilingHero title="ARAL Profiling" subtitle={subtitle} />
 
-      <nav aria-label="Profile status" className="mb-4 flex flex-wrap gap-2">
-        {STATUSES.map((s) => (
-          <Link
-            key={s}
-            href={statusHref(s, sp.schoolId)}
-            aria-current={s === status ? "page" : undefined}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
-              s === status
-                ? "border-violet bg-violet-soft text-violet"
-                : "border-border text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {STATUS_LABELS[s]}
-            <span className="rounded-md bg-muted px-1.5 text-xs tabular-nums text-foreground">
-              {counts[s]}
-            </span>
-          </Link>
-        ))}
-      </nav>
+      <div className="mb-4">
+        <ProfilingStatCards stats={stats} />
+      </div>
 
-      <Suspense key={`${status}:${page}`} fallback={<TableSectionSkeleton rows={8} columns={6} />}>
-        <ProfilingTable
-          where={{ ...baseWhere, ...statusWhere(status) }}
-          totalCount={totalCount}
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <nav aria-label="Profile status" className="flex flex-wrap gap-2">
+          {PROFILING_STATUSES.map((s) => (
+            <Link
+              key={s}
+              href={statusHref(s, { schoolId: sp.schoolId, q, section: sectionFilter })}
+              aria-current={s === status ? "page" : undefined}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                s === status
+                  ? "border-violet bg-violet-soft text-violet"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {PROFILING_STATUS_LABELS[s]}
+              <span className="rounded-md bg-muted px-1.5 text-xs tabular-nums text-foreground">
+                {counts[s]}
+              </span>
+            </Link>
+          ))}
+        </nav>
+
+        <ProfilingToolbar q={q} section={sectionFilter} sections={sections} status={status} />
+      </div>
+
+      <Suspense
+        key={`${status}:${page}:${q}:${sectionFilter}`}
+        fallback={<TableSectionSkeleton rows={8} columns={7} />}
+      >
+        <ProfilingRows
+          where={listWhere}
+          totalCount={filteredTotalCount}
           page={page}
           pages={pages}
           status={status}
           canEdit={!isSuperAdmin}
           schoolIdParam={sp.schoolId}
+          q={q}
+          sectionParam={sectionFilter !== "all" ? sectionFilter : undefined}
         />
       </Suspense>
+
+      <Surface as="section" className="mt-4 flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+            <BookOpen className="size-4" aria-hidden />
+          </span>
+          <h2 className="text-sm font-semibold text-foreground sm:text-base">
+            About ARAL Profiling
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Sections C to E cover reading behavior, outside factors and suggested
+          interventions for every ARAL learner. Absences are not asked here —
+          Weekly Attendance already records them.
+        </p>
+        <p className="flex items-center gap-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+          Same Learners, Brighter Tomorrows
+          <Heart className="size-3 shrink-0 fill-current" aria-hidden />
+        </p>
+      </Surface>
     </AppShell>
   );
 }

@@ -11,12 +11,15 @@ export function AralPageHero({
   eyebrowIcon: EyebrowIcon,
   title,
   subtitle,
+  /** Extra explanatory line under the subtitle, same text column as the rest. */
+  description,
   tagline = "Together for Brighter Learners!",
 }: {
   eyebrow: string;
   eyebrowIcon: LucideIcon;
   title: string;
   subtitle: string;
+  description?: string;
   /** Set to `null` to omit the tagline line entirely. */
   tagline?: string | null;
 }) {
@@ -39,6 +42,11 @@ export function AralPageHero({
       <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
         {subtitle}
       </p>
+      {description ? (
+        <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-base">
+          {description}
+        </p>
+      ) : null}
       {tagline != null ? (
         <p className="mt-1 flex items-center gap-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {tagline}
