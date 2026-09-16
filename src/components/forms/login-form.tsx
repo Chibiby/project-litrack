@@ -387,14 +387,14 @@ export function LoginForm({
     return (
       <AuthCard>
         <AuthCardHeader icon={BookOpen} title="Sign In" subtitle="Access your LITRACK account" />
-        <div className="mt-6 space-y-4 2xl:mt-8 2xl:space-y-5">
+        <div className="mt-6 2xl:mt-8">
           {notice ? (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+            <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 2xl:mb-6">
               {notice}
             </p>
           ) : null}
           {districts.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="login-district" className={AUTH_LABEL}>
                 District
               </Label>
@@ -418,7 +418,7 @@ export function LoginForm({
               </Select>
             </div>
           ) : null}
-          <div className="space-y-2">
+          <div className={cn("space-y-1.5", districts.length > 0 && "mt-3")}>
             <Label htmlFor="login-school" className={AUTH_LABEL}>
               School Name
             </Label>
@@ -442,7 +442,7 @@ export function LoginForm({
             )}
           </div>
 
-          <div className="space-y-2">
+          <div className="mt-6 space-y-2 2xl:mt-7">
             <div role="group" aria-label="Sign in as" className="grid grid-cols-2 gap-3">
               <Button
                 type="button"
@@ -477,22 +477,22 @@ export function LoginForm({
             disabled={!canContinue}
             title={!schoolId ? "Select a school first" : undefined}
             onClick={handleContinue}
-            className={AUTH_PRIMARY_BUTTON}
+            className={cn(AUTH_PRIMARY_BUTTON, "mt-6 2xl:mt-7")}
           >
             <ArrowRight aria-hidden />
             Continue
           </Button>
 
-          <div className="flex items-center gap-3 text-sm text-slate-500" aria-hidden>
+          <div className="mt-6 flex items-center gap-3 text-sm text-slate-500 2xl:mt-7" aria-hidden>
             <span className="h-px flex-1 bg-border" />
             or
             <span className="h-px flex-1 bg-border" />
           </div>
 
-          <p className="text-center">
+          <p className="mt-4 text-center">
             <Link
               href="/forgot-password"
-              className={cn("text-base", AUTH_LINK)}
+              className={cn("text-sm", AUTH_LINK)}
             >
               Forgot password?
             </Link>
@@ -501,7 +501,7 @@ export function LoginForm({
           <Button
             asChild
             variant="outline"
-            className="h-12 w-full rounded-xl border-violet-100 bg-violet-50 text-base font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 2xl:h-14 2xl:text-lg [&_svg]:size-5 [&_svg]:text-violet-600"
+            className="mt-3 h-10 w-full rounded-xl border-violet-100 bg-violet-50 text-sm font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 2xl:h-11 2xl:text-base [&_svg]:size-4 [&_svg]:text-violet-600"
           >
             <Link href="/admin/login">
               <ShieldCheck aria-hidden />

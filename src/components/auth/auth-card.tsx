@@ -44,23 +44,23 @@ export function AuthCardHeader({
       >
         <Icon className="size-9 2xl:size-11" strokeWidth={1.75} />
       </span>
-      <h2 className="mt-4 text-3xl font-bold tracking-tight text-indigo-950 2xl:text-4xl">
+      <h2 className="mt-5 text-3xl font-bold tracking-tight text-indigo-950 2xl:mt-6 2xl:text-4xl">
         {title}
       </h2>
-      <p className="mt-1.5 text-base text-slate-600 2xl:text-lg">{subtitle}</p>
+      <p className="mt-2 text-base text-slate-600 2xl:mt-2.5 2xl:text-lg">{subtitle}</p>
     </div>
   );
 }
 
 /** Label style shared by the sign-in fields. */
-export const AUTH_LABEL = "text-base font-semibold text-indigo-950";
+export const AUTH_LABEL = "text-sm font-medium text-indigo-950 2xl:text-base";
 
 /** The violet gradient pill of the sidebar highlight, for the v2 sign-in controls. */
 export const AUTH_PILL = "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600";
 
 /** The large call to action ("Continue", "Sign in"). */
 export const AUTH_PRIMARY_BUTTON =
-  "h-12 w-full rounded-xl text-base font-semibold 2xl:h-14 2xl:text-lg [&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600";
+  "h-12 w-full rounded-xl text-base font-bold 2xl:h-14 2xl:text-lg [&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600";
 
 /** Text links in the card ("Forgot password?", "School login"). */
 export const AUTH_LINK =
