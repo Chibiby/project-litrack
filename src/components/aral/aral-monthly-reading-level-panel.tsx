@@ -26,8 +26,12 @@ import {
   type MonthlyReadingLevelGridLearner,
 } from "@/components/forms/aral-monthly-reading-level-grid-form";
 import { LearnerListFooter } from "@/components/learners/learner-list-footer";
+import { ReadingLevelStatCards } from "@/components/aral/reading-level-stat-cards";
+import type { StatTone } from "@/components/dashboard/teacher/stat-cards";
+import { ReadingLevelLegend } from "@/components/aral/reading-level-legend";
 import { fetchAralReadingLevelForMonth } from "@/lib/actions/aral-grid";
 import type { MonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
+import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
 import { parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import {
   currentMonthKey,
@@ -87,7 +91,15 @@ function monthStatus(
   }
 ): {
   label: string;
-  pill: string;
+  /**
+   * Colour cue for the Monthly Status stat card, carrying what the old status
+   * pill carried: Open is emerald, Past due amber, Upcoming primary, Reopened
+   * violet, and Locked the neutral tone — a closed month is the absence of a
+   * state, not another colour, which is how the weekly attendance panel marks
+   * its locked week too. The label text, not the colour, is what tells a
+   * reader it isn't "Open".
+   */
+  tone: StatTone;
   body: string;
   locked: boolean;
 } {
@@ -96,17 +108,14 @@ function monthStatus(
     if (lockState.unlockedMonths.includes(monthKey)) {
       return {
         label: "Reopened",
-        pill: "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-800/70 dark:bg-violet-950 dark:text-violet-200",
+        tone: "violet",
         body: "Editing had closed for this month, but your division admin reopened it.",
         locked: false,
       };
     }
     return {
       label: "Locked",
-      // Theme tokens, not literal slate: a neutral "closed" state has to follow
-      // the theme, and the weekly attendance panel renders its locked state the
-      // same way (`bg-muted-foreground`). `no-hardcoded-colors` enforces this.
-      pill: "border-border bg-muted text-muted-foreground",
+      tone: "neutral",
       body: `Editing closed on ${formatMonthDeadlineLongDate(monthKey)}.`,
       locked: true,
     };
@@ -118,7 +127,7 @@ function monthStatus(
   if (monthKey < current) {
     return {
       label: "Past due",
-      pill: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800/70 dark:bg-amber-950 dark:text-amber-200",
+      tone: "amber",
       body: `Was due ${monthEnd}. Still open for editing.`,
       locked: false,
     };
@@ -126,7 +135,7 @@ function monthStatus(
   if (monthKey > current) {
     return {
       label: "Upcoming",
-      pill: "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800/70 dark:bg-sky-950 dark:text-sky-200",
+      tone: "primary",
       body: `Due ${monthEnd}. You can assess ahead.`,
       locked: false,
     };
@@ -135,7 +144,7 @@ function monthStatus(
   const daysLeft = daysLeftInMonth(monthKey);
   return {
     label: "Open",
-    pill: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800/70 dark:bg-emerald-950 dark:text-emerald-200",
+    tone: "emerald",
     body:
       daysLeft <= 0
         ? `Due today, ${monthEnd}.`
@@ -229,9 +238,12 @@ export function AralMonthlyReadingLevelPanel({
   // gap between the two while a fetch is in flight.
   const status = monthStatus(pickerMonth, lockState);
   const gridLocked = monthStatus(loadedMonth, lockState).locked;
-  const pending = progress.total - progress.completed;
-  const percent =
-    progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const stats = computeReadingLevelStats({
+    total: progress.total,
+    completed: progress.completed,
+    records: existing,
+    gradeType,
+  });
 
   const filterParams = {
     schoolId,
@@ -346,72 +358,15 @@ export function AralMonthlyReadingLevelPanel({
 
   return (
     <>
-      <section
-        className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
-        aria-label="Monthly assessment status"
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Eyebrow>Monthly status</Eyebrow>
-              <span
-                className={cn(
-                  "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-                  status.pill
-                )}
-              >
-                {status.label}
-              </span>
-            </div>
-            <p className="mt-1.5 text-sm leading-relaxed text-violet-900/75 dark:text-violet-100/75">
-              {status.body}
-            </p>
-          </div>
-
-          <div className="min-w-0">
-            <Eyebrow>Progress</Eyebrow>
-            <p className="mt-1.5 text-sm font-semibold text-violet-900 dark:text-violet-100">
-              <span className="tabular-nums">{progress.completed}</span> /{" "}
-              <span className="tabular-nums">{progress.total}</span> learners
-              assessed
-              <span className="ml-2 font-normal text-violet-900/70 tabular-nums dark:text-violet-100/70">
-                {percent}%
-              </span>
-            </p>
-            <div
-              role="progressbar"
-              aria-valuenow={percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`${progress.completed} of ${progress.total} learners assessed in ${formatMonthLabel(pickerMonth)}`}
-              className="mt-2 h-2 w-full overflow-hidden rounded-full bg-violet-200/80 dark:bg-violet-900/70"
-            >
-              <div
-                className="h-full rounded-full bg-violet-600 transition-[width] duration-500 dark:bg-violet-400"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-1">
-            <StatTile
-              value={progress.completed}
-              label="Completed"
-              tone="text-emerald-700 dark:text-emerald-300"
-            />
-            <StatTile
-              value={pending}
-              label="Pending"
-              tone="text-amber-700 dark:text-amber-300"
-            />
-            <StatTile
-              value={progress.total}
-              label="Learners"
-              tone="text-violet-800 dark:text-violet-200"
-            />
-          </div>
-        </div>
-      </section>
+      <div className="mb-4">
+        <ReadingLevelStatCards
+          stats={stats}
+          statusLabel={status.label}
+          statusBody={status.body}
+          statusTone={status.tone}
+          monthLabel={formatMonthLabel(pickerMonth)}
+        />
+      </div>
 
       <Card>
         <AralDateNav
@@ -521,6 +476,10 @@ export function AralMonthlyReadingLevelPanel({
             </div>
           )}
 
+          <div className="px-4">
+            <ReadingLevelLegend gradeType={gradeType} />
+          </div>
+
           <LearnerListFooter
             basePath={basePath}
             page={page}
@@ -554,33 +513,6 @@ export function AralMonthlyReadingLevelPanel({
         />
       </div>
     </>
-  );
-}
-
-function Eyebrow({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-[11px] font-semibold uppercase tracking-wide text-violet-700/80 dark:text-violet-300/80">
-      {children}
-    </span>
-  );
-}
-
-function StatTile({
-  value,
-  label,
-  tone,
-}: {
-  value: number;
-  label: string;
-  tone: string;
-}) {
-  return (
-    <div className="min-w-[5.25rem] flex-1 rounded-lg border border-violet-200/80 bg-background/70 px-3 py-2 dark:border-violet-900/60 dark:bg-violet-950/40">
-      <p className={cn("text-xl font-semibold tabular-nums leading-tight", tone)}>
-        {value}
-      </p>
-      <p className="text-xs text-violet-900/70 dark:text-violet-100/70">{label}</p>
-    </div>
   );
 }
 

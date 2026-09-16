@@ -13,7 +13,19 @@ import { ArrowRight, ChevronRight, type LucideIcon } from "lucide-react";
  * that the figure is still the loudest thing on the card.
  */
 
-export type StatTone = "violet" | "amber" | "emerald" | "primary" | "pink";
+export type StatTone =
+  | "violet"
+  | "amber"
+  | "emerald"
+  | "primary"
+  | "pink"
+  /**
+   * A closed or dormant figure — a locked month, a window that has shut. Theme
+   * tokens rather than a colour, because "no longer active" is the absence of a
+   * state, and the weekly attendance panel already marks its locked week the
+   * same way (`bg-muted-foreground`).
+   */
+  | "neutral";
 
 /** Decorative art drawn behind the card's right side. Purely visual. */
 export type StatDecor = "wave" | "bars" | "sprout" | "clock" | "people";
@@ -25,6 +37,7 @@ const TILE: Record<StatTone, string> = {
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
   primary: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
   pink: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-200",
+  neutral: "bg-muted text-muted-foreground",
 };
 
 const LINK: Record<StatTone, string> = {
@@ -33,6 +46,7 @@ const LINK: Record<StatTone, string> = {
   emerald: "text-emerald-700 dark:text-emerald-400",
   primary: "text-blue-700 dark:text-blue-400",
   pink: "text-pink-700 dark:text-pink-400",
+  neutral: "text-muted-foreground",
 };
 
 const PILL: Record<StatTone, string> = {
@@ -41,6 +55,7 @@ const PILL: Record<StatTone, string> = {
   emerald: "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50",
   primary: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50",
   pink: "bg-pink-100 text-pink-800 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-200 dark:hover:bg-pink-900/50",
+  neutral: "bg-muted text-muted-foreground hover:bg-muted/80",
 };
 
 /** The card's wash: its tone in the top-left corner, fading to the surface. */
@@ -50,6 +65,7 @@ const WASH: Record<StatTone, string> = {
   emerald: "from-emerald-100/60 dark:from-emerald-950/30",
   primary: "from-blue-100/60 dark:from-blue-950/30",
   pink: "from-pink-100/60 dark:from-pink-950/30",
+  neutral: "from-muted/70 dark:from-muted/40",
 };
 
 /** Fill of the optional progress bar. */
@@ -59,6 +75,7 @@ const BAR: Record<StatTone, string> = {
   emerald: "bg-emerald-500",
   primary: "bg-blue-500",
   pink: "bg-pink-500",
+  neutral: "bg-muted-foreground",
 };
 
 /** Colour the decor's `currentColor` resolves to. */
@@ -68,6 +85,7 @@ const DECOR_COLOR: Record<StatTone, string> = {
   emerald: "text-emerald-300 dark:text-emerald-600",
   primary: "text-blue-400 dark:text-blue-400",
   pink: "text-pink-300 dark:text-pink-500",
+  neutral: "text-muted-foreground/40",
 };
 
 function Decor({
@@ -192,6 +210,20 @@ export interface StatCardProps {
    * of Terms "Grades Saved" card).
    */
   progress?: number;
+  /**
+   * The progressbar's `aria-label`, when `progress` is set. Falls back to
+   * `title` so every caller that predates this prop is unchanged. Pass the
+   * specific figure/period a sighted reader sees next to the bar (e.g. "6 of
+   * 10 learners assessed in October") rather than letting a screen reader
+   * hear only the card's static title.
+   */
+  progressLabel?: string;
+  /**
+   * Extra classes for the figure. For a value that can run long (a rubric
+   * label rather than a number), pass a smaller size so it wraps instead of
+   * overflowing the card.
+   */
+  valueClassName?: string;
 }
 
 export function StatCard({
@@ -206,6 +238,8 @@ export function StatCard({
   action,
   href,
   progress,
+  progressLabel,
+  valueClassName,
 }: StatCardProps) {
   // Phones show no pill (image 4): the whole card is the link, marked by a
   // chevron beside the title. Desktop keeps the labelled pill (image 3).
@@ -254,8 +288,9 @@ export function StatCard({
             </h2>
             <p
               className={cn(
-                "font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl lg:mt-3",
-                denseOnPhone ? "mt-0.5 text-xl" : "mt-1 text-2xl"
+                "break-words font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl lg:mt-3",
+                denseOnPhone ? "mt-0.5 text-xl" : "mt-1 text-2xl",
+                valueClassName
               )}
             >
               {value}
@@ -290,7 +325,12 @@ export function StatCard({
           ) : null}
         </div>
   
-        <p className="relative mt-3 text-3xl font-extrabold tabular-nums tracking-tight text-foreground">
+        <p
+          className={cn(
+            "relative mt-3 break-words text-3xl font-extrabold tabular-nums tracking-tight text-foreground",
+            valueClassName
+          )}
+        >
           {value}
         </p>
         <p className="relative mt-0.5 text-sm text-muted-foreground">{hint}</p>
@@ -302,7 +342,7 @@ export function StatCard({
         <div className="relative mt-3 flex items-center gap-3">
           <div
             role="progressbar"
-            aria-label={title}
+            aria-label={progressLabel ?? title}
             aria-valuenow={progress}
             aria-valuemin={0}
             aria-valuemax={100}

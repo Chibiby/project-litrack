@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { AralPageHero } from "@/components/aral/aral-page-hero";
 import { AralMonthlyReadingLevelPanel } from "@/components/aral/aral-monthly-reading-level-panel";
 import { AralReadingLevelSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -29,7 +30,7 @@ import {
   nextMonthStart,
 } from "@/lib/month-range";
 import { readMonthlyReadingLevelLockState } from "@/lib/unlock/reading-level-window";
-import { CalendarCheck, FileText } from "lucide-react";
+import { BookOpen, CalendarCheck, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -113,34 +114,56 @@ export default async function AralGradeReadingLevelPage({
     linkSuffix ? `?${linkSuffix}` : ""
   }`;
 
+  const title = `Monthly Reading Level — ${GRADE_LEVEL_LABELS[grade.type]}`;
+  const subtitle = `${formatMonthLabel(monthKey)} assessment${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`;
+
+  // `hideTitle` drops `AppShell`'s title-line actions slot entirely, so these
+  // buttons — the reciprocal of the attendance page's "Monthly reading level"
+  // cross-link — render as their own row beneath the hero instead. Below `sm`
+  // the visible label shortens so the row stays one compact line instead of
+  // stacking full-width blocks; the sr-only span keeps the same accessible
+  // name at every width.
+  const headerActions = (
+    <>
+      <Button asChild size="sm" variant="outline">
+        <Link href={attendanceHref}>
+          <CalendarCheck className="h-4 w-4" />
+          <span className="sr-only">Weekly attendance</span>
+          <span aria-hidden className="sm:hidden">Attendance</span>
+          <span aria-hidden className="hidden sm:inline">Weekly attendance</span>
+        </Link>
+      </Button>
+      <Button asChild size="sm" variant="outline">
+        <Link href={termsReportsHref}>
+          <FileText className="h-4 w-4" />
+          <span className="sr-only">End of terms reports</span>
+          <span aria-hidden className="sm:hidden">Term reports</span>
+          <span aria-hidden className="hidden sm:inline">End of terms reports</span>
+        </Link>
+      </Button>
+    </>
+  );
+
   return (
     <AppShell
-      title={`Monthly Reading Level — ${GRADE_LEVEL_LABELS[grade.type]}`}
-      subtitle={`${formatMonthLabel(monthKey)} assessment${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
+      title={title}
+      subtitle={subtitle}
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
-      actions={
-        // The reciprocal of the attendance page's "Monthly reading level", so it
-        // sits in the same slot with the same treatment — the pair is one
-        // workspace with two views, and a cross-link that moves between the
-        // header and the body reads as two unrelated controls.
-        <>
-          <Button asChild size="sm" variant="outline">
-            <Link href={attendanceHref}>
-              <CalendarCheck className="h-4 w-4" />
-              Weekly attendance
-            </Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link href={termsReportsHref}>
-              <FileText className="h-4 w-4" />
-              End of terms reports
-            </Link>
-          </Button>
-        </>
-      }
+      hideTitle
     >
+      <AralPageHero
+        eyebrow="Monthly Reading Level"
+        eyebrowIcon={BookOpen}
+        title={title}
+        subtitle={subtitle}
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 sm:justify-end">
+        {headerActions}
+      </div>
+
       <Suspense fallback={<AralReadingLevelSkeleton />}>
         <AralMonthlyReadingLevelGrid
           user={user}
