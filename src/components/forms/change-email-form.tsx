@@ -23,13 +23,16 @@ import {
 import { changeEmailAction } from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
+import { cn } from "@/lib/utils";
 
 type Props = {
   currentEmail: string;
   isSynthetic?: boolean;
+  /** Extra card classes, e.g. the teacher Settings v2 radius. */
+  className?: string;
 };
 
-export function ChangeEmailForm({ currentEmail, isSynthetic }: Props) {
+export function ChangeEmailForm({ currentEmail, isSynthetic, className }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const synthetic = isSynthetic ?? isSyntheticEmail(currentEmail);
@@ -44,7 +47,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic }: Props) {
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
+    <Card className={cn("rounded-xl border border-border/80 shadow-sm", className)}>
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Change email</h2>
         <div className="space-y-1.5">

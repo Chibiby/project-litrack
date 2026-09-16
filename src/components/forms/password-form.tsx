@@ -27,6 +27,7 @@ import {
   skipPasswordChange,
 } from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
+import { cn } from "@/lib/utils";
 
 type Mode = "set" | "change" | "reset";
 
@@ -35,7 +36,16 @@ const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
 type ChangeValues = ChangePasswordInput;
 type SetValues = SetPasswordInput;
 
-export function PasswordForm({ mode, allowSkip = true }: { mode: Mode; allowSkip?: boolean }) {
+export function PasswordForm({
+  mode,
+  allowSkip = true,
+  className,
+}: {
+  mode: Mode;
+  allowSkip?: boolean;
+  /** Extra card classes (`change` only), e.g. the teacher Settings v2 radius. */
+  className?: string;
+}) {
   const [pending, startTransition] = useTransition();
 
   const title =
@@ -47,7 +57,12 @@ export function PasswordForm({ mode, allowSkip = true }: { mode: Mode; allowSkip
 
   if (mode === "change") {
     return (
-      <PasswordFormChange title={title} pending={pending} startTransition={startTransition} />
+      <PasswordFormChange
+        title={title}
+        pending={pending}
+        startTransition={startTransition}
+        className={className}
+      />
     );
   }
 
@@ -66,10 +81,12 @@ function PasswordFormChange({
   title,
   pending,
   startTransition,
+  className,
 }: {
   title: string;
   pending: boolean;
   startTransition: React.TransitionStartFunction;
+  className?: string;
 }) {
   const form = useAppForm<ChangeValues>({
     schema: changePasswordSchema,
@@ -81,7 +98,7 @@ function PasswordFormChange({
   });
 
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
+    <Card className={cn("rounded-xl border border-border/80 shadow-sm", className)}>
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">{title}</h2>
         <AppForm

@@ -87,23 +87,23 @@ function useReliableFormDirty<TFieldValues extends FieldValues>(
       return;
     }
 
-    const sync = () => {
+    // Access isDirty so RHF enables dirty tracking; still OR with valuesDiff
+    // because useFormState subscriptions alone can miss wizard field edits.
+    const sync = (rhfDirty: boolean = form.formState.isDirty) => {
       const defaults = form.control._defaultValues;
       const valuesDirty =
         stableSerialize(form.getValues()) !== stableSerialize(defaults);
-      // Access isDirty so RHF enables dirty tracking; still OR with valuesDiff
-      // because useFormState subscriptions alone can miss wizard field edits.
-      const rhfDirty = form.formState.isDirty;
       setDirty(Boolean(rhfDirty || valuesDirty));
     };
 
     sync();
 
     // Public subscribe enables `_proxySubscribeFormState.isDirty` so RHF
-    // actually updates isDirty on change.
+    // actually updates isDirty on change. Its payload's isDirty is current;
+    // `form.formState` is last render's snapshot, still true inside `reset()`.
     const unsubscribe = form.subscribe({
       formState: { isDirty: true, values: true },
-      callback: sync,
+      callback: (state) => sync(state.isDirty),
     });
     const watchSub = form.watch(() => sync());
 

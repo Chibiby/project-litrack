@@ -215,7 +215,7 @@ describe("teacher profiling — edit mode", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
     await waitFor(() => expect(saveTeacherProfile).toHaveBeenCalledTimes(1));
     // Not blocked by "Select a section" / "Select a grade level" — the create

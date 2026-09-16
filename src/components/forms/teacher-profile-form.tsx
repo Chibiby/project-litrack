@@ -4,10 +4,23 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { toast } from "sonner";
-import { AlertCircle, Lock, X } from "lucide-react";
+import {
+  AlertCircle,
+  BookOpenCheck,
+  Briefcase,
+  Camera,
+  GraduationCap,
+  Lock,
+  Save,
+  Trash2,
+  UserRound,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -321,6 +334,10 @@ const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
 /** Anchor for the server-error banner, so a failed save can scroll itself into view. */
 const SAVE_ERROR_ID = "teacher-profile-save-error";
 
+/** The Settings header's Save Changes sits outside the form and targets it by id. */
+const EDIT_FORM_ID = "teacher-profile-edit-form";
+const PHOTO_SOON_ID = "teacher-profile-photo-soon";
+
 /**
  * Field → the label the teacher actually sees above it. A summary that lists
  * three bare "Required" lines names nothing; with these it names the fields,
@@ -386,8 +403,11 @@ export function TeacherProfileForm({
   presentation = "wizard",
   gradeLevels,
   registeredAsAralVolunteer = false,
+  summary,
 }: {
   defaultValues: Defaults;
+  /** Edit only: rendered between the Cancel / Save Changes row and the form. */
+  summary?: React.ReactNode;
   /** `wizard` = onboarding steps; `edit` = flat settings profile (no Review). */
   presentation?: "wizard" | "edit";
   /**
@@ -939,7 +959,19 @@ export function TeacherProfileForm({
     ? "Synthetic login identity — not used for email recovery."
     : undefined;
 
-  const sections = (
+  /**
+   * Settings Cancel: back to the last saved values. `reset()` with no argument
+   * restores RHF's defaults, which `markFormClean` moves forward after each
+   * successful save, and the unsaved guard's dirty check clears with it.
+   */
+  function cancelEdits() {
+    form.reset();
+    setSaveError(null);
+    yearsInServiceTouchedRef.current = false;
+    setShowSecondEthnicity(Boolean(form.getValues("secondaryEthnicity")));
+  }
+
+  const feedback = (
     <>
       {saveError ? (
         <div
@@ -989,42 +1021,419 @@ export function TeacherProfileForm({
               }
         }
       />
-      {isEdit || step === 0 ? (
+    </>
+  );
+
+  const firstNameField = (
+    <FormTextField
+      control={form.control}
+      name="firstName"
+      label="First name"
+      required
+      maxLength={100}
+      autoComplete="given-name"
+      autoCapitalize="words"
+    />
+  );
+  const middleNameField = (
+    <FormTextField
+      control={form.control}
+      name="middleName"
+      label="Middle name"
+      maxLength={100}
+      autoComplete="additional-name"
+      autoCapitalize="words"
+      description="Optional"
+    />
+  );
+  const lastNameField = (
+    <FormTextField
+      control={form.control}
+      name="lastName"
+      label="Last name"
+      required
+      maxLength={100}
+      autoComplete="family-name"
+      autoCapitalize="words"
+    />
+  );
+  const contactNumberField = (
+    <FormTextField
+      control={form.control}
+      name="contactNumber"
+      label="Contact number"
+      type="tel"
+      autoComplete="tel"
+      inputMode="tel"
+      description="Optional. PH number, e.g. 09171234567 or +639171234567."
+    />
+  );
+  const genderField = (
+    <FormSelectField
+      control={form.control}
+      name="gender"
+      label="Gender"
+      description="Optional. Sets the artwork on your dashboard."
+      options={toOptions(GENDER_LABELS)}
+      allowEmpty
+      emptyLabel="Not specified"
+    />
+  );
+  const ethnicityFields = (
+    <>
+      <FormSelectField
+        control={form.control}
+        name="ethnicity"
+        label="Ethnicity"
+        description="Optional."
+        options={toOptions(ETHNICITY_LABELS)}
+        allowEmpty
+        emptyLabel="Not specified"
+        onValueChange={changeEthnicity}
+      />
+      {ethnicity === "OTHER" ? (
+        <FormTextField
+          control={form.control}
+          name="ethnicityOther"
+          label="Please specify"
+          required
+          maxLength={80}
+        />
+      ) : null}
+      {ethnicity && !showSecondEthnicity ? (
+        <Button
+          type="button"
+          variant="link"
+          onClick={() => setShowSecondEthnicity(true)}
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          + Add another ethnicity
+        </Button>
+      ) : null}
+      {ethnicity && showSecondEthnicity ? (
+        <div className="space-y-3">
+          <FormSelectField
+            control={form.control}
+            name="secondaryEthnicity"
+            label="Second ethnicity"
+            description="Optional."
+            options={secondEthnicityOptions}
+            allowEmpty
+            emptyLabel="Not specified"
+          />
+          {secondaryEthnicity === "OTHER" ? (
+            <FormTextField
+              control={form.control}
+              name="secondaryEthnicityOther"
+              label="Please specify"
+              required
+              maxLength={80}
+            />
+          ) : null}
+          <Button
+            type="button"
+            variant="link"
+            onClick={removeSecondEthnicity}
+            className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Remove second ethnicity
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+  const professionalFields = (
+    <>
+      <FormSelectField
+        control={form.control}
+        name="educationalAttainment"
+        label="Highest Educational Attainment"
+        required
+        options={toOptions(EDUCATIONAL_ATTAINMENT_LABELS)}
+      />
+      <FormSelectField
+        control={form.control}
+        name="fieldOfSpecialization"
+        label="Field of Specialization"
+        required
+        options={toOptions(SPECIALIZATION_LABELS)}
+        onValueChange={(v) => {
+          if (v !== "OTHERS") form.setValue("specializationOther", "");
+        }}
+      />
+      {specialization === "OTHERS" ? (
+        <FormTextField
+          control={form.control}
+          name="specializationOther"
+          label="Specify specialization"
+          required
+        />
+      ) : null}
+      <FormYesNoPills
+        control={form.control}
+        name="yearsInServiceApplicable"
+        label="Do you have a specific number of years in service?"
+        onValueChange={() => {
+          yearsInServiceTouchedRef.current = true;
+        }}
+      />
+      {yearsInServiceApplicable !== false ? (
+        <FormTextField
+          control={form.control}
+          name="yearsInService"
+          label="Years in Service"
+          required
+          type="number"
+          inputMode="numeric"
+          min={YEARS_IN_SERVICE_MIN}
+          max={YEARS_IN_SERVICE_MAX}
+          step={1}
+          description={`Whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}.`}
+          placeholder="e.g. 5"
+        />
+      ) : null}
+    </>
+  );
+  const trainingFields = (
+    <>
+      <FormYesNoPills
+        control={form.control}
+        name="hasReadingTraining"
+        label="Trainings related to literacy/reading?"
+        required
+        onValueChange={(yes) => {
+          if (!yes) form.setValue("readingTrainings", []);
+        }}
+      />
+      {hasReading === true ? (
+        <FormCheckboxChips
+          control={form.control}
+          name="readingTrainings"
+          label="Recent reading trainings (last 5y)"
+          required
+          options={toOptions(READING_TRAINING_LABELS)}
+          description={'"None at all" cannot be combined with other options.'}
+        />
+      ) : null}
+      <FormYesNoPills
+        control={form.control}
+        name="hasEnglishTraining"
+        label="Trainings related to English Curriculum?"
+        required
+        onValueChange={(yes) => {
+          if (!yes) form.setValue("englishTrainings", []);
+        }}
+      />
+      {hasEnglish === true ? (
+        <FormCheckboxChips
+          control={form.control}
+          name="englishTrainings"
+          label="Recent English trainings (last 5y)"
+          required
+          options={toOptions(ENGLISH_TRAINING_LABELS)}
+          description={'"None at all" cannot be combined with other options.'}
+        />
+      ) : null}
+      <FormSelectField
+        control={form.control}
+        name="highestTrainingLevel"
+        label="Highest level of trainings attended"
+        required
+        options={toOptions(TRAINING_LEVEL_LABELS)}
+      />
+    </>
+  );
+
+  if (isEdit) {
+    const initials =
+      [values.firstName, values.lastName]
+        .map((part) => part.trim().charAt(0))
+        .join("")
+        .toUpperCase() || "?";
+
+    return (
+      <>
+        <div className="grid grid-cols-2 gap-2 max-lg:order-first sm:flex sm:justify-end">
+          <Button type="button" variant="outline" onClick={cancelEdits} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form={EDIT_FORM_ID}
+            loading={pending}
+            loadingText="Saving…"
+            className="sm:min-w-[9.5rem]"
+          >
+            <Save aria-hidden />
+            Save Changes
+          </Button>
+        </div>
+        {summary}
+        <AppForm
+          id={EDIT_FORM_ID}
+          form={form}
+          enableUnsavedGuard
+          unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
+          onSubmit={() => {
+            void handleSave();
+          }}
+          className="space-y-6"
+        >
+          {feedback}
+          <div className="grid items-start gap-6 xl:grid-cols-2">
+            <div className="flex flex-col gap-6">
+              <SettingsFormCard title="Personal Information" icon={UserRound}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                    {firstNameField}
+                    {middleNameField}
+                    {lastNameField}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="teacher-account-email">Email address</Label>
+                      <div className="relative">
+                        <Input
+                          id="teacher-account-email"
+                          value={defaultValues.accountEmail ?? ""}
+                          readOnly
+                          disabled
+                          className="bg-muted pr-9"
+                        />
+                        <Lock
+                          aria-hidden
+                          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        />
+                      </div>
+                      {accountHint ? (
+                        <p className="text-xs text-muted-foreground">{accountHint}</p>
+                      ) : null}
+                    </div>
+                    {contactNumberField}
+                    {/*
+                      Not in the mockup — kept next to Contact number, the
+                      most natural slot for an existing field with no
+                      dedicated row of its own.
+                    */}
+                    {genderField}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-3">{ethnicityFields}</div>
+                    {/*
+                      Read-only in Settings: a School Head owns designation
+                      changes once profiling is done, same as the Teaching
+                      Assignment card below. Locked, not hidden — the value
+                      stays visible.
+                    */}
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-medium">Designation</p>
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                        <span className="text-sm font-medium">
+                          {designationKind === "__OTHER__"
+                            ? values.designationOther || "—"
+                            : designationKind || "—"}
+                        </span>
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                        <span className="sr-only">This field cannot be changed here.</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Ask your School Head to change this.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </SettingsFormCard>
+
+              <SettingsFormCard title="Teaching assignment" icon={Briefcase}>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <span className="text-sm font-medium">
+                      {designationKind === ARAL_VOLUNTEER_DESIGNATION
+                        ? "Non-DepEd ARAL Volunteer — no teaching assignment"
+                        : values.advisoryMode === "FLOATING"
+                          ? "Floating teacher — no classroom section"
+                          : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-advisory)" : ""}`}
+                    </span>
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    <span className="sr-only">This field cannot be changed here.</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Ask your School Head to change this.
+                  </p>
+                </div>
+              </SettingsFormCard>
+            </div>
+
+            <div className="flex flex-col gap-6">
+              <SettingsFormCard title="Profile Photo & Identity" icon={Camera}>
+                <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
+                  <span
+                    aria-hidden
+                    className="flex size-24 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold tracking-tight text-primary ring-4 ring-primary/5"
+                  >
+                    {initials}
+                  </span>
+                  <div className="min-w-0 space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      A friendly face helps build a stronger learning community
+                    </p>
+                    <p className="text-xs text-muted-foreground">JPG, PNG or WEBP. Max 5MB.</p>
+                    <div className="flex flex-wrap justify-center gap-2 pt-1 sm:justify-start">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        aria-describedby={PHOTO_SOON_ID}
+                      >
+                        <Camera aria-hidden />
+                        Change Photo
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled
+                        aria-describedby={PHOTO_SOON_ID}
+                      >
+                        <Trash2 aria-hidden />
+                        Remove
+                      </Button>
+                    </div>
+                    <p id={PHOTO_SOON_ID} className="text-xs text-muted-foreground">
+                      Photo upload is coming soon.
+                    </p>
+                  </div>
+                </div>
+              </SettingsFormCard>
+
+              <SettingsFormCard title="Professional Background" icon={GraduationCap}>
+                <div className="space-y-6">{professionalFields}</div>
+              </SettingsFormCard>
+
+              <SettingsFormCard title="Training" icon={BookOpenCheck}>
+                <div className="space-y-6">{trainingFields}</div>
+              </SettingsFormCard>
+            </div>
+          </div>
+        </AppForm>
+      </>
+    );
+  }
+
+  const sections = (
+    <>
+      {feedback}
+      {step === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {isEdit ? "Account" : `${stepNumeral(0)}. Respondent Information`}
-            </CardTitle>
+            <CardTitle className="text-base">{`${stepNumeral(0)}. Respondent Information`}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
-              <FormTextField
-                control={form.control}
-                name="firstName"
-                label="First name"
-                required
-                maxLength={100}
-                autoComplete="given-name"
-                autoCapitalize="words"
-              />
-              <FormTextField
-                control={form.control}
-                name="middleName"
-                label="Middle name"
-                maxLength={100}
-                autoComplete="additional-name"
-                autoCapitalize="words"
-                description="Optional"
-              />
-              <FormTextField
-                control={form.control}
-                name="lastName"
-                label="Last name"
-                required
-                maxLength={100}
-                autoComplete="family-name"
-                autoCapitalize="words"
-              />
+              {firstNameField}
+              {middleNameField}
+              {lastNameField}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <ReadOnlyField
@@ -1032,110 +1441,10 @@ export function TeacherProfileForm({
                 value={defaultValues.accountEmail ?? ""}
                 hint={accountHint}
               />
-              <FormTextField
-                control={form.control}
-                name="contactNumber"
-                label="Contact number"
-                type="tel"
-                autoComplete="tel"
-                inputMode="tel"
-                description="Optional. PH number, e.g. 09171234567 or +639171234567."
-              />
+              {contactNumberField}
             </div>
-            <div className="md:max-w-sm">
-              <FormSelectField
-                control={form.control}
-                name="gender"
-                label="Gender"
-                description="Optional. Sets the artwork on your dashboard."
-                options={toOptions(GENDER_LABELS)}
-                allowEmpty
-                emptyLabel="Not specified"
-              />
-            </div>
-            <div className="space-y-3 md:max-w-sm">
-              <FormSelectField
-                control={form.control}
-                name="ethnicity"
-                label="Ethnicity"
-                description="Optional."
-                options={toOptions(ETHNICITY_LABELS)}
-                allowEmpty
-                emptyLabel="Not specified"
-                onValueChange={changeEthnicity}
-              />
-              {ethnicity === "OTHER" ? (
-                <FormTextField
-                  control={form.control}
-                  name="ethnicityOther"
-                  label="Please specify"
-                  required
-                  maxLength={80}
-                />
-              ) : null}
-              {ethnicity && !showSecondEthnicity ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={() => setShowSecondEthnicity(true)}
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  + Add another ethnicity
-                </Button>
-              ) : null}
-              {ethnicity && showSecondEthnicity ? (
-                <div className="space-y-3">
-                  <FormSelectField
-                    control={form.control}
-                    name="secondaryEthnicity"
-                    label="Second ethnicity"
-                    description="Optional."
-                    options={secondEthnicityOptions}
-                    allowEmpty
-                    emptyLabel="Not specified"
-                  />
-                  {secondaryEthnicity === "OTHER" ? (
-                    <FormTextField
-                      control={form.control}
-                      name="secondaryEthnicityOther"
-                      label="Please specify"
-                      required
-                      maxLength={80}
-                    />
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="link"
-                    onClick={removeSecondEthnicity}
-                    className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
-                  >
-                    Remove second ethnicity
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-            {isEdit ? (
-              /*
-                Read-only in Settings: a School Head owns designation changes
-                once profiling is done, same as the Teaching Assignment card
-                below. Locked, not hidden — the value stays visible.
-              */
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">Designation</p>
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <span className="text-sm font-medium">
-                    {designationKind === "__OTHER__"
-                      ? values.designationOther || "—"
-                      : designationKind || "—"}
-                  </span>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  <span className="sr-only">This field cannot be changed here.</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Ask your School Head to change this.
-                </p>
-              </div>
-            ) : (
+            <div className="md:max-w-sm">{genderField}</div>
+            <div className="space-y-3 md:max-w-sm">{ethnicityFields}</div>
             <FormOptionPills
               control={form.control}
               name="designationKind"
@@ -1173,8 +1482,7 @@ export function TeacherProfileForm({
                 }
               }}
             />
-            )}
-            {!isEdit && designationKind === "__OTHER__" ? (
+            {designationKind === "__OTHER__" ? (
               <FormTextField
                 control={form.control}
                 name="designationOther"
@@ -1182,7 +1490,7 @@ export function TeacherProfileForm({
                 required
               />
             ) : null}
-            {!isEdit && designationKind === "Teacher" ? (
+            {designationKind === "Teacher" ? (
               <FormSelectField
                 control={form.control}
                 name="position"
@@ -1192,7 +1500,7 @@ export function TeacherProfileForm({
                 placeholder="Select Teacher I–VII"
               />
             ) : null}
-            {!isEdit && designationKind === "Master Teacher" ? (
+            {designationKind === "Master Teacher" ? (
               <FormSelectField
                 control={form.control}
                 name="position"
@@ -1206,92 +1514,22 @@ export function TeacherProfileForm({
         </Card>
       ) : null}
 
-      {isEdit || step === 1 ? (
+      {step === 1 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {isEdit ? "Professional background" : `${stepNumeral(1)}. Professional Background`}
-            </CardTitle>
+            <CardTitle className="text-base">{`${stepNumeral(1)}. Professional Background`}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <FormSelectField
-              control={form.control}
-              name="educationalAttainment"
-              label="Highest Educational Attainment"
-              required
-              options={toOptions(EDUCATIONAL_ATTAINMENT_LABELS)}
-            />
-            <FormSelectField
-              control={form.control}
-              name="fieldOfSpecialization"
-              label="Field of Specialization"
-              required
-              options={toOptions(SPECIALIZATION_LABELS)}
-              onValueChange={(v) => {
-                if (v !== "OTHERS") form.setValue("specializationOther", "");
-              }}
-            />
-            {specialization === "OTHERS" ? (
-              <FormTextField
-                control={form.control}
-                name="specializationOther"
-                label="Specify specialization"
-                required
-              />
-            ) : null}
-            <FormYesNoPills
-              control={form.control}
-              name="yearsInServiceApplicable"
-              label="Do you have a specific number of years in service?"
-              onValueChange={() => {
-                yearsInServiceTouchedRef.current = true;
-              }}
-            />
-            {yearsInServiceApplicable !== false ? (
-              <FormTextField
-                control={form.control}
-                name="yearsInService"
-                label="Years in Service"
-                required
-                type="number"
-                inputMode="numeric"
-                min={YEARS_IN_SERVICE_MIN}
-                max={YEARS_IN_SERVICE_MAX}
-                step={1}
-                description={`Whole number from ${YEARS_IN_SERVICE_MIN} to ${YEARS_IN_SERVICE_MAX}.`}
-                placeholder="e.g. 5"
-              />
-            ) : null}
-          </CardContent>
+          <CardContent className="space-y-6">{professionalFields}</CardContent>
         </Card>
       ) : null}
 
-      {isEdit || step === 2 ? (
+      {step === 2 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {isEdit ? "Teaching assignment" : `${stepNumeral(2)}. Teaching Assignment`}
-            </CardTitle>
+            <CardTitle className="text-base">{`${stepNumeral(2)}. Teaching Assignment`}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {isEdit ? (
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <span className="text-sm font-medium">
-                    {designationKind === ARAL_VOLUNTEER_DESIGNATION
-                      ? "Non-DepEd ARAL Volunteer — no teaching assignment"
-                      : values.advisoryMode === "FLOATING"
-                        ? "Floating teacher — no classroom section"
-                        : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-advisory)" : ""}`}
-                  </span>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  <span className="sr-only">This field cannot be changed here.</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Ask your School Head to change this.
-                </p>
-              </div>
-            ) : designationKind === ARAL_VOLUNTEER_DESIGNATION ? (
+            {designationKind === ARAL_VOLUNTEER_DESIGNATION ? (
               <p
                 aria-disabled="true"
                 className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
@@ -1482,64 +1720,16 @@ export function TeacherProfileForm({
         </Card>
       ) : null}
 
-      {isEdit || step === 3 ? (
+      {step === 3 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {isEdit ? "Training" : `${stepNumeral(3)}. Training & Professional Development`}
-            </CardTitle>
+            <CardTitle className="text-base">{`${stepNumeral(3)}. Training & Professional Development`}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <FormYesNoPills
-              control={form.control}
-              name="hasReadingTraining"
-              label="Trainings related to literacy/reading?"
-              required
-              onValueChange={(yes) => {
-                if (!yes) form.setValue("readingTrainings", []);
-              }}
-            />
-            {hasReading === true ? (
-              <FormCheckboxChips
-                control={form.control}
-                name="readingTrainings"
-                label="Recent reading trainings (last 5y)"
-                required
-                options={toOptions(READING_TRAINING_LABELS)}
-                description={'"None at all" cannot be combined with other options.'}
-              />
-            ) : null}
-            <FormYesNoPills
-              control={form.control}
-              name="hasEnglishTraining"
-              label="Trainings related to English Curriculum?"
-              required
-              onValueChange={(yes) => {
-                if (!yes) form.setValue("englishTrainings", []);
-              }}
-            />
-            {hasEnglish === true ? (
-              <FormCheckboxChips
-                control={form.control}
-                name="englishTrainings"
-                label="Recent English trainings (last 5y)"
-                required
-                options={toOptions(ENGLISH_TRAINING_LABELS)}
-                description={'"None at all" cannot be combined with other options.'}
-              />
-            ) : null}
-            <FormSelectField
-              control={form.control}
-              name="highestTrainingLevel"
-              label="Highest level of trainings attended"
-              required
-              options={toOptions(TRAINING_LEVEL_LABELS)}
-            />
-          </CardContent>
+          <CardContent className="space-y-6">{trainingFields}</CardContent>
         </Card>
       ) : null}
 
-      {!isEdit && step === 4 ? (
+      {step === 4 ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{stepNumeral(4)}. Review & Submit</CardTitle>
@@ -1667,33 +1857,19 @@ export function TeacherProfileForm({
       enableUnsavedGuard
       unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
       onSubmit={() => {
-        void (isEdit ? handleSave() : handleContinue());
+        void handleContinue();
       }}
       className="space-y-6"
     >
-      {isEdit ? (
-        <div className="space-y-6">
-          {sections}
-          <Button
-            type="submit"
-            loading={pending}
-            loadingText="Saving…"
-            className="min-w-[7.5rem]"
-          >
-            Save profile
-          </Button>
-        </div>
-      ) : (
-        <ProfileWizardChrome
-          steps={wizardSteps}
-          currentStep={visiblePositionOf(step, false)}
-          pending={pending}
-          onBack={() => setStep((s) => previousTeacherStep(s, false))}
-          onContinue={() => void handleContinue()}
-        >
-          {sections}
-        </ProfileWizardChrome>
-      )}
+      <ProfileWizardChrome
+        steps={wizardSteps}
+        currentStep={visiblePositionOf(step, false)}
+        pending={pending}
+        onBack={() => setStep((s) => previousTeacherStep(s, false))}
+        onContinue={() => void handleContinue()}
+      >
+        {sections}
+      </ProfileWizardChrome>
     </AppForm>
   );
 }
@@ -1724,5 +1900,31 @@ function ReviewBlock({
         ))}
       </dl>
     </div>
+  );
+}
+
+/** A v2 Settings section: icon tile and title over the card body. */
+function SettingsFormCard({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader className="flex-row items-center gap-3 space-y-0 p-5">
+        <span
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+        >
+          <Icon className="size-4" />
+        </span>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-5 pt-0">{children}</CardContent>
+    </Card>
   );
 }

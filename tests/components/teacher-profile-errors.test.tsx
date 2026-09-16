@@ -127,7 +127,7 @@ describe("teacher profiling — unfilled fields", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
     await waitFor(() => {
       expect(
@@ -157,7 +157,7 @@ describe("teacher profiling — the save itself fails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
     await waitFor(() => expect(saveTeacherProfile).toHaveBeenCalled());
     // The reason a retry is pointless has to still be readable a minute later,
@@ -178,7 +178,7 @@ describe("teacher profiling — the save itself fails", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(screen.getByText("Invalid section selected.")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss this message" }));
