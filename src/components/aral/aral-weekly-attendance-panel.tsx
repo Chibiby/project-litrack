@@ -232,13 +232,22 @@ export function AralWeeklyAttendancePanel({
 
   return (
     <>
-      <AttendanceWeekStats stats={weekStats} />
+      <div className="mb-4">
+        <AttendanceWeekStats stats={weekStats} />
+      </div>
 
       <section
         className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
         aria-label="Week status"
       >
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div
+          className={cn(
+            "grid gap-3 sm:gap-4 sm:grid-cols-3",
+            // With locking off there are only two panels; two-up on a phone
+            // matches the mockup instead of stacking a row each.
+            lockingEnabled ? "grid-cols-1" : "grid-cols-2"
+          )}
+        >
           <BannerItem
             icon={
               <span
@@ -428,10 +437,10 @@ function BannerItem({
     <div className="flex gap-2.5">
       <span className="text-violet-700 dark:text-violet-200">{icon}</span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+        <p className="text-xs font-semibold text-violet-900 dark:text-violet-100 sm:text-sm">
           {title}
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-violet-900/75 dark:text-violet-100/75">
+        <p className="mt-0.5 text-xs leading-snug text-violet-900/75 dark:text-violet-100/75 sm:text-sm sm:leading-relaxed">
           {body}
         </p>
       </div>

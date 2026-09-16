@@ -108,19 +108,25 @@ export default async function AralGradeWeeklyAttendancePage({
 
   // `hideTitle` drops `AppShell`'s title-line actions slot entirely, so these
   // buttons — unchanged from the pre-hero header — render as their own row
-  // beneath the hero instead.
+  // beneath the hero instead. Below `sm` the visible label shortens so the
+  // row stays one compact line instead of stacking full-width blocks; the
+  // sr-only span keeps the same accessible name at every width.
   const headerActions = (
     <>
       <Button asChild size="sm" variant="outline">
         <Link href={readingHref}>
           <BookOpen className="h-4 w-4" />
-          Monthly reading level
+          <span className="sr-only">Monthly reading level</span>
+          <span aria-hidden className="sm:hidden">Reading level</span>
+          <span aria-hidden className="hidden sm:inline">Monthly reading level</span>
         </Link>
       </Button>
       <Button asChild size="sm" variant="outline">
         <Link href={termsReportsHref}>
           <FileText className="h-4 w-4" />
-          End of terms reports
+          <span className="sr-only">End of terms reports</span>
+          <span aria-hidden className="sm:hidden">Term reports</span>
+          <span aria-hidden className="hidden sm:inline">End of terms reports</span>
         </Link>
       </Button>
       {!isSuperAdmin && (
@@ -152,7 +158,7 @@ export default async function AralGradeWeeklyAttendancePage({
         subtitle={`Week of ${formatWeekRange(weekKey)}${isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}`}
       />
 
-      <div className="mb-4 flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+      <div className="mb-4 flex flex-wrap items-center gap-2 sm:justify-end">
         {headerActions}
       </div>
 
