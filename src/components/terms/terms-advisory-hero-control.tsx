@@ -16,6 +16,11 @@ import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
  * combined grid, so picking a Kinder section navigates away to its own route
  * instead of narrowing this sheet. Both optional and unused by any other
  * caller of this control.
+ *
+ * A non-empty `kinderSectionIds` also means this teacher's advisories mix
+ * Kindergarten with other grades, so the dropdown drops "All advisories" too
+ * (owner decision) — `page.tsx` defaults such a teacher's scope to their
+ * non-Kinder advisory instead, via `resolveAdvisoryTarget`.
  */
 export function TermsAdvisoryHeroControl({
   basePath,
@@ -32,6 +37,7 @@ export function TermsAdvisoryHeroControl({
 }) {
   const router = useRouter();
   const kinderSet = kinderSectionIds ? new Set(kinderSectionIds) : null;
+  const isMixed = Boolean(kinderSectionIds && kinderSectionIds.length > 0);
   return (
     <AdvisorySelect
       advisories={advisories}
@@ -48,6 +54,7 @@ export function TermsAdvisoryHeroControl({
           scroll: false,
         });
       }}
+      showAllOption={!isMixed}
       className="h-9 w-32 text-xs sm:h-10 sm:w-44 sm:text-sm lg:h-11 lg:w-56"
     />
   );

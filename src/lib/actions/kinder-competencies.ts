@@ -91,8 +91,10 @@ async function requireKinderAdvisory(
  * locked column touched".
  *
  * Tenancy: the learner load is the boundary. `prisma.learner.findFirst`
- * filtered by `schoolId` AND the resolved advisory's `gradeLevelId`/
- * `sectionId`, `deletedAt`/`archivedAt` null; a miss is a generic not-found.
+ * filtered by `schoolId` AND the resolved advisory's `sectionId`,
+ * `deletedAt`/`archivedAt` null; a miss is a generic not-found. No
+ * `gradeLevelId`: a section belongs to one school and one grade, and the
+ * learner's denormalized grade pointer can drift from it.
  */
 export const saveKinderCompetencies = action(
   "saveKinderCompetencies",
@@ -212,11 +214,15 @@ export const saveKinderCompetencies = action(
       });
     }
 
+    // Deliberately NOT gated on `gradeLevelId`: it is a denormalized pointer
+    // on `Learner` that can drift from the section's own grade (CLAUDE.md). A
+    // section belongs to exactly one school (`Section.schoolId`), so
+    // `schoolId` + `sectionId` is already a complete tenancy boundary — this
+    // matches the identity `/teacher/learners` uses to list the same roster.
     const learner = await prisma.learner.findFirst({
       where: {
         id: parsed.learnerId,
         schoolId: user.schoolId,
-        gradeLevelId: advisory.gradeLevelId,
         sectionId: advisory.sectionId,
         deletedAt: null,
         archivedAt: null,
@@ -347,6 +353,15 @@ export const exportKinderChecklist = action(
     // boundary, and nothing re-checks it afterwards: for the two admin
     // branches the scope is read off the learner row itself, so a second
     // lookup filtered by those same values could never fail.
+    //
+    // The Kindergarten check reads the SECTION's grade type, not the
+    // learner's own `gradeLevelId` pointer: that pointer is denormalized and
+    // can drift from the section it is rostered in (CLAUDE.md), and the
+    // section is what decides which End-of-Term report the learner actually
+    // gets. A learner with no section yet (floating, `sectionId: null`) has
+    // no section to ask, so its own `gradeLevel.type` is the only signal —
+    // same fallback the teacher branch has no need for, since a floating
+    // learner can never match an advisory's `sectionId` anyway.
     const learnerSelect = {
       id: true,
       fullName: true,
@@ -354,7 +369,13 @@ export const exportKinderChecklist = action(
       gradeLevelId: true,
       sectionId: true,
       gradeLevel: { select: { type: true } },
+      section: { select: { gradeLevel: { select: { type: true } } } },
     } as const;
+
+    const effectiveGradeType = (target: {
+      gradeLevel: { type: string };
+      section: { gradeLevel: { type: string } } | null;
+    }): string => target.section?.gradeLevel.type ?? target.gradeLevel.type;
 
     if (isSuperAdmin) {
       // The school is DERIVED from the learner, never posted — same reasoning
@@ -363,7 +384,7 @@ export const exportKinderChecklist = action(
         where: { id: parsed.learnerId, deletedAt: null, archivedAt: null },
         select: learnerSelect,
       });
-      if (!target || !isKinderGradeType(target.gradeLevel.type)) {
+      if (!target || !isKinderGradeType(effectiveGradeType(target))) {
         throw resourceNotFound("Learner");
       }
       schoolId = target.schoolId;
@@ -384,7 +405,7 @@ export const exportKinderChecklist = action(
         },
         select: learnerSelect,
       });
-      if (!target || !isKinderGradeType(target.gradeLevel.type)) {
+      if (!target || !isKinderGradeType(effectiveGradeType(target))) {
         throw resourceNotFound("Learner");
       }
       schoolId = target.schoolId;
@@ -402,12 +423,14 @@ export const exportKinderChecklist = action(
       sectionId = advisory.sectionId;
       // The teacher branch's scope comes from the advisory, not the learner,
       // so this lookup is a real boundary: a learner outside the section the
-      // teacher advises is a miss.
+      // teacher advises is a miss. Deliberately NOT gated on `gradeLevelId`:
+      // it is a denormalized pointer on `Learner` that can drift from the
+      // section's own grade, and a section belongs to exactly one school, so
+      // `schoolId` + `sectionId` is already complete.
       const target = await prisma.learner.findFirst({
         where: {
           id: parsed.learnerId,
           schoolId,
-          gradeLevelId,
           sectionId,
           deletedAt: null,
           archivedAt: null,

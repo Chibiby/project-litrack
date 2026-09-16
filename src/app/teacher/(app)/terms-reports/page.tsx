@@ -21,6 +21,7 @@ import type { SheetUrlState } from "@/lib/terms/sheet-view";
 import { splitByKinderGradeType } from "@/lib/terms/kinder-checklist-view";
 import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
 import { KINDER_TERMS_REPORTS_PATH, kinderChecklistHref } from "@/components/terms/kinder-route";
+import { resolveMixedAdvisoryDefault } from "@/components/terms/default-advisory";
 import { CalendarX } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -130,7 +131,18 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
       kinderChecklistHref({ schoolId: sp.schoolId ?? null, advisory: requestedAdvisory.sectionId })
     );
   }
-  const advisory = requestedAdvisory;
+  // A teacher whose advisories mix Kindergarten with other grades gets no
+  // "All advisories" default (owner decision — `TermsAdvisoryHeroControl`
+  // hides that option for the same condition): default their scope to their
+  // first non-Kinder advisory via `resolveMixedAdvisoryDefault`, in the same
+  // order the hero dropdown lists it, so the selection shown and the sheet
+  // rendered can never disagree — even with two or more non-Kinder
+  // advisories, where nothing may fall back to a combined "All Advisories"
+  // view for this teacher.
+  let advisory = requestedAdvisory;
+  if (!advisory && kinderPlacements.length > 0) {
+    advisory = resolveMixedAdvisoryDefault(numericPlacements);
+  }
   const inAdvisory = advisory ? [advisory] : numericPlacements;
   const sectionPick = inAdvisory.find((p) => p.sectionId === sp.section) ?? null;
   const inScope = sectionPick ? [sectionPick] : inAdvisory;

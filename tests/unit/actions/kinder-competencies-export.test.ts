@@ -36,7 +36,14 @@ type LearnerRow = {
   schoolId: string;
   gradeLevelId: string;
   sectionId: string | null;
+  /** The learner's own (denormalized, can-drift) `gradeLevel.type`. */
   gradeType: string;
+  /**
+   * The grade type of the section named by `sectionId` — the source of truth
+   * once a learner has a section. Defaults to `gradeType` so most fixtures
+   * don't need to think about drift; a drift test overrides it independently.
+   */
+  sectionGradeType?: string;
   deletedAt: Date | null;
   archivedAt: Date | null;
 };
@@ -103,6 +110,9 @@ const learnerFindFirst = vi.fn(
         gradeLevelId: found.gradeLevelId,
         sectionId: found.sectionId,
         gradeLevel: { type: found.gradeType },
+        section: found.sectionId
+          ? { gradeLevel: { type: found.sectionGradeType ?? found.gradeType } }
+          : null,
       };
     }
     return { id: found.id, fullName: found.fullName };
@@ -237,6 +247,25 @@ describe("exportKinderChecklist — teacher branch (unchanged)", () => {
 
     expect(res.ok).toBe(false);
   });
+
+  it("still exports a learner whose gradeLevelId pointer has drifted from the advisory section's grade", async () => {
+    // Same school and section as the advisory (`KINDER_SECTION_ID`), but the
+    // denormalized `gradeLevelId`/`gradeType` name a different grade. The
+    // Learners page (schoolId + sectionId only) would still list this
+    // learner; the export must agree instead of treating the drift as a miss.
+    learners = [
+      learner({
+        id: "learner-nico",
+        fullName: "Reyes, Nico",
+        gradeLevelId: NON_KINDER_GRADE_ID,
+        gradeType: "G1",
+      }),
+    ];
+
+    const file = fileOf(await post());
+
+    expect(file.filename).toMatch(/^litrack-kinder-checklist-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
 });
 
 describe("exportKinderChecklist — School Head branch (new)", () => {
@@ -286,6 +315,43 @@ describe("exportKinderChecklist — School Head branch (new)", () => {
         fullName: "Reyes, Nico",
         gradeLevelId: NON_KINDER_GRADE_ID,
         gradeType: "G1",
+        sectionId: null,
+      }),
+    ];
+
+    const res = await post();
+
+    expect(errorOf(res)).toBe("Learner not found. It may have been deleted or moved.");
+  });
+
+  it("exports a learner whose gradeLevelId pointer has drifted, using the section's grade type", async () => {
+    // The learner's own pointer says G1, but the section it is actually
+    // rostered in is still Kindergarten — the section is the source of truth
+    // for which report the learner gets.
+    learners = [
+      learner({
+        id: "learner-nico",
+        fullName: "Reyes, Nico",
+        gradeLevelId: NON_KINDER_GRADE_ID,
+        gradeType: "G1",
+        sectionId: KINDER_SECTION_ID,
+        sectionGradeType: "KINDER",
+      }),
+    ];
+
+    const file = fileOf(await post());
+
+    expect(file.filename).toMatch(/^litrack-kinder-checklist-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
+
+  it("refuses a learner whose section has drifted away from Kindergarten, even if the learner's own pointer still says Kinder", async () => {
+    learners = [
+      learner({
+        id: "learner-nico",
+        fullName: "Reyes, Nico",
+        gradeType: "KINDER",
+        sectionId: KINDER_SECTION_ID,
+        sectionGradeType: "G1",
       }),
     ];
 

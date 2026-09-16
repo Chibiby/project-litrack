@@ -14,6 +14,7 @@ import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
 import { TERM_SHEET_NO_ADVISORY_CARD, TERM_SHEET_VOLUNTEER_CARD } from "@/lib/terms/gate-copy";
 import { splitByKinderGradeType, mergeKinderChecklist, countTouchedCompetencies } from "@/lib/terms/kinder-checklist-view";
 import { loadKinderChecklist, kinderAdvisoryLearnerWhere } from "@/lib/terms/kinder-sheet-data";
+import { resolveDefaultKinderLearnerId, kinderLearnerPosition } from "@/components/terms/kinder-default-learner";
 import { getTermWindows, isTermLocked } from "@/lib/terms/windows";
 import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { readUnlockState } from "@/lib/unlock/grants";
@@ -73,7 +74,7 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
   if (denial === "volunteer") return refuse(TERM_SHEET_VOLUNTEER_CARD);
   if (placements.length === 0) return refuse(TERM_SHEET_NO_ADVISORY_CARD);
 
-  const { kinder: kinderPlacements } = splitByKinderGradeType(placements);
+  const { kinder: kinderPlacements, numeric: numericPlacements } = splitByKinderGradeType(placements);
   if (kinderPlacements.length === 0) {
     return refuse({
       icon: Sparkles,
@@ -136,23 +137,29 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
   const advisory = target.placement;
   const learnerWhere = kinderAdvisoryLearnerWhere(schoolId, advisory);
 
-  const [roster, checklist] = await Promise.all([
-    prisma.learner.findMany({
-      where: learnerWhere,
-      select: { id: true, fullName: true },
-      orderBy: { fullName: "asc" },
-    }),
-    sp.learner
-      ? loadKinderChecklist({
-          schoolYearId: schoolYear.id,
-          learnerId: sp.learner,
-          learnerWhere,
-        })
-      : null,
-  ]);
+  const roster = await prisma.learner.findMany({
+    where: learnerWhere,
+    select: { id: true, fullName: true },
+    orderBy: { fullName: "asc" },
+  });
+
+  // No `?learner=`, or one outside this advisory's roster: open the roster's
+  // first learner rather than the empty "Select a learner above" state the
+  // owner did not want. Still loaded through `loadKinderChecklist`'s
+  // advisory-scoped `learnerWhere` below — that `findFirst` is the tenancy
+  // boundary, not this default.
+  const learnerIdToLoad = resolveDefaultKinderLearnerId(roster, sp.learner ?? null);
+  const checklist = learnerIdToLoad
+    ? await loadKinderChecklist({
+        schoolYearId: schoolYear.id,
+        learnerId: learnerIdToLoad,
+        learnerWhere,
+      })
+    : null;
 
   const learnerId = checklist ? checklist.learner.id : null;
   const learnerName = checklist ? checklist.learner.fullName : null;
+  const learnerPosition = kinderLearnerPosition(roster, learnerId);
   const states = mergeKinderChecklist(checklist?.records ?? new Map());
   const { touched, total, pct } = countTouchedCompetencies(states);
 
@@ -174,7 +181,10 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
     t3: isClosed(windows[2]),
   };
 
-  const advisories = kinderPlacements.map((p) => ({ id: p.sectionId, label: p.label }));
+  // Every advisory the teacher holds, Kindergarten and otherwise — the hero's
+  // switcher always renders and always lists all of them (owner decision:
+  // this control is the only way back to a non-Kinder advisory from here).
+  const advisories = placements.map((p) => ({ id: p.sectionId, label: p.label }));
 
   return (
     <AppShell title="End of Terms Reports" role={user.role} userName={userName} hideTitle>
@@ -184,18 +194,20 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
         meta={`${advisory.sectionName} · SY ${schoolYear.label}`}
         advisoryLabel={advisory.label}
         learnerName={learnerName}
+        learnerPosition={learnerPosition}
+        learnerCount={roster.length}
         touched={touched}
         total={total}
         pct={pct}
         topRight={
-          advisories.length > 1 ? (
-            <KinderAdvisoryHeroControl
-              schoolId={schoolId}
-              advisories={advisories}
-              value={advisory.sectionId}
-              className="h-9 w-32 text-xs sm:h-10 sm:w-44 sm:text-sm lg:h-11 lg:w-56"
-            />
-          ) : undefined
+          <KinderAdvisoryHeroControl
+            schoolId={schoolId}
+            advisories={advisories}
+            value={advisory.sectionId}
+            numericSectionIds={numericPlacements.map((p) => p.sectionId)}
+            numericBasePath="/teacher/terms-reports"
+            className="h-9 w-32 text-xs sm:h-10 sm:w-44 sm:text-sm lg:h-11 lg:w-56"
+          />
         }
       />
 

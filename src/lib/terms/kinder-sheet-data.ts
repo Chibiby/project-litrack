@@ -24,8 +24,9 @@ import type { KinderCompetencyKey, KinderCompetencyRatingCode } from "@/lib/term
  * Tenancy + advisory scoping happens in the one `learner.findFirst` below,
  * following the exact pattern `ReadingLevelPage` already uses for a nested
  * per-learner page: the caller's `learnerWhere` MUST already carry `schoolId`,
- * `deletedAt: null` and `archivedAt: null` (and `gradeLevelId`/`sectionId` for
- * a teacher caller). A miss is `notFound()` — this is the tenancy/advisory
+ * `deletedAt: null` and `archivedAt: null` (and `sectionId` for a teacher
+ * caller — not `gradeLevelId`, a denormalized pointer that can drift from the
+ * section's own grade). A miss is `notFound()` — this is the tenancy/advisory
  * boundary, not a second check bolted on after. `KinderCompetencyRecord`
  * carries no `schoolId` of its own (see the model's own doc comment, matching
  * `TermGrade`), so this learner-first load is the only place tenancy is
@@ -97,11 +98,16 @@ export async function loadKinderChecklist(args: {
  */
 export function kinderAdvisoryLearnerWhere(
   schoolId: string,
-  advisory: Pick<AdvisoryPlacement, "gradeLevelId" | "sectionId">
+  advisory: Pick<AdvisoryPlacement, "sectionId">
 ): Prisma.LearnerWhereInput {
+  // Deliberately NOT gated on `gradeLevelId`: it is a denormalized pointer on
+  // `Learner` that can drift from the section's own grade (see CLAUDE.md).
+  // A section belongs to exactly one school (`Section.schoolId`), so
+  // `schoolId` + `sectionId` is already a complete tenancy boundary without
+  // it — requiring the pointer too just hides a learner whose pointer has
+  // drifted, which is the bug this filter existed to avoid.
   return {
     schoolId,
-    gradeLevelId: advisory.gradeLevelId,
     sectionId: advisory.sectionId,
     deletedAt: null,
     archivedAt: null,

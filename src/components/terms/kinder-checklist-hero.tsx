@@ -10,8 +10,12 @@ export interface KinderChecklistHeroProps {
   meta?: string;
   /** The resolved Kindergarten advisory's section name, or `null` before one is chosen (spec section 4's "unspecified" state). */
   advisoryLabel: string | null;
-  /** The open learner's full name, or `null` before one is picked (spec Open Question 1: no default learner). */
+  /** The open learner's full name, or `null` when the roster is empty (the page opens on the roster's first learner by default). */
   learnerName: string | null;
+  /** The open learner's 1-based position in the roster, or `null` when there is no open learner. */
+  learnerPosition?: number | null;
+  /** The roster's size, paired with `learnerPosition` for the "N of M" hint. */
+  learnerCount?: number;
   /** How many of the 62 competencies have at least one rating, per `countTouchedCompetencies` (spec section 9). */
   touched: number;
   total: number;
@@ -37,6 +41,8 @@ export function KinderChecklistHero({
   meta,
   advisoryLabel,
   learnerName,
+  learnerPosition,
+  learnerCount,
   touched,
   total,
   pct,
@@ -80,7 +86,11 @@ export function KinderChecklistHero({
           <StatCard
             title="Learner"
             value={learnerName ?? "None selected"}
-            hint="Currently open checklist"
+            hint={
+              learnerPosition && learnerCount
+                ? `${learnerPosition} of ${learnerCount}`
+                : "Currently open checklist"
+            }
             icon={Users}
             tone="primary"
             inlineOnPhone

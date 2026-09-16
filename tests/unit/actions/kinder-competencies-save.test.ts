@@ -221,18 +221,34 @@ describe("saveKinderCompetencies — authorization and tenancy", () => {
     expect(transaction).not.toHaveBeenCalled();
   });
 
-  it("scopes the learner lookup by school, grade and section", async () => {
+  it("scopes the learner lookup by school and section, not gradeLevelId", async () => {
     await post([{ competencyKey: KEY_A, t1Rating: "BEGINNING" }]);
 
     const where = (learnerFindFirst.mock.calls[0][0] as { where: Record<string, unknown> }).where;
     expect(where).toMatchObject({
       id: LEARNER_ID,
       schoolId: SCHOOL_ID,
-      gradeLevelId: KINDER_GRADE_ID,
       sectionId: KINDER_SECTION_ID,
       deletedAt: null,
       archivedAt: null,
     });
+    // The denormalized pointer on `Learner` is deliberately not part of the
+    // filter — see `Learner whose gradeLevelId has drifted` below for why.
+    expect(where).not.toHaveProperty("gradeLevelId");
+  });
+
+  it("still saves a learner whose gradeLevelId pointer has drifted from the advisory section's grade", async () => {
+    // Same school and section as the advisory, but the denormalized pointer
+    // now names a different grade — e.g. left over from a promotion that
+    // moved the section but not this one column. The Learners page (schoolId
+    // + sectionId only) would still list this learner; the checklist must
+    // agree.
+    learners = [learner({ id: LEARNER_ID, gradeLevelId: "grade-g1-drifted" })];
+
+    const res = await post([{ competencyKey: KEY_A, t1Rating: "BEGINNING" }]);
+
+    expect(res.ok).toBe(true);
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a competency key that is not in the catalog", async () => {

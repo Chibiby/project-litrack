@@ -20,18 +20,27 @@ export function AdvisorySelect({
   advisories,
   value,
   onChange,
+  showAllOption = true,
   className,
 }: {
   advisories: readonly { id: string; label: string }[];
   /** A section id, or null for All advisories. */
   value: string | null;
   onChange: (advisory: string | null) => void;
+  /**
+   * Hide the "All advisories" item and require a specific advisory. Owner
+   * decision: a teacher whose advisories mix Kindergarten with other grades
+   * has no view spanning both report shapes, so the End of Terms hero passes
+   * `false` for that teacher only. Defaults to `true`, so the Learners page
+   * and every other existing caller is unchanged.
+   */
+  showAllOption?: boolean;
   className?: string;
 }) {
   const none = advisories.length === 0;
   return (
     <Select
-      value={value ?? "all"}
+      value={value ?? (showAllOption ? "all" : "")}
       onValueChange={(v) => onChange(v === "all" ? null : v)}
       disabled={none}
     >
@@ -48,7 +57,9 @@ export function AdvisorySelect({
         </span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">{none ? "No advisory" : "All advisories"}</SelectItem>
+        {showAllOption ? (
+          <SelectItem value="all">{none ? "No advisory" : "All advisories"}</SelectItem>
+        ) : null}
         {advisories.map((a) => (
           <SelectItem key={a.id} value={a.id}>
             {a.label}
