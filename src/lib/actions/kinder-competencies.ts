@@ -148,13 +148,28 @@ export const saveKinderCompetencies = action(
       if (entry.t3Rating !== undefined) touchedTerms.add("THIRD");
     }
 
+    // The remark is one field shared by all three terms, so no single term's
+    // window owns it. It closes only when EVERY term has closed: while any one
+    // term is still open — or reopened by an unlock grant — the remark is part
+    // of an assessment that can still change. `KinderChecklistRow` disables the
+    // field on the same condition, so render and save agree.
+    const touchesRemark = parsed.entries.some((entry) => entry.remark !== undefined);
+
+    const ALL_TERMS = ["FIRST", "SECOND", "THIRD"] as const;
+    const termsToResolve = touchesRemark ? new Set<TermPeriodValue>(ALL_TERMS) : touchedTerms;
+
+    /** Per term: whether this teacher may write it right now, and why. */
+    const writable = new Map<TermPeriodValue, boolean>();
     const lockedLabels: string[] = [];
     let usedGrantId: string | null = null;
     let usedGrantKind: "user" | "school" | null = null;
-    for (const term of touchedTerms) {
+    for (const term of termsToResolve) {
       const window = resolveTermWindow(windows, term);
       if (!window) continue;
-      if (!isTermLocked(window, todayKey)) continue;
+      if (!isTermLocked(window, todayKey)) {
+        writable.set(term, true);
+        continue;
+      }
 
       const verdict = await canWriteWindow({
         userId: user.id,
@@ -163,9 +178,14 @@ export const saveKinderCompetencies = action(
         targetKey: term,
       });
       if (!verdict.writable) {
-        lockedLabels.push(window.label);
+        writable.set(term, false);
+        // Only a term the save actually writes a rating into refuses the save.
+        // A closed term the caller did not touch is just context for the
+        // remark rule below.
+        if (touchedTerms.has(term)) lockedLabels.push(window.label);
         continue;
       }
+      writable.set(term, true);
       // First grant found is what the audit row attributes the save to — same
       // "personal grant wins" rule `canWriteWindow` itself already applies per
       // term; across terms, the first touched-and-locked term's grant is as
@@ -180,6 +200,14 @@ export const saveKinderCompetencies = action(
       throw new AppError("VALIDATION_FAILED", {
         params: {
           message: `${lockedLabels.join(", ")} ${verb} closed. Its months have passed, so the checklist can no longer be changed for that term.`,
+        },
+      });
+    }
+    if (touchesRemark && ALL_TERMS.every((term) => writable.get(term) === false)) {
+      throw new AppError("VALIDATION_FAILED", {
+        params: {
+          message:
+            "Every term is closed, so remarks can no longer be changed. Ask your School Head to reopen a term if something needs correcting.",
         },
       });
     }
@@ -313,18 +341,27 @@ export const exportKinderChecklist = action(
     let schoolId: string;
     let gradeLevelId: string;
     let sectionId: string | null;
+    let learner: { id: string; fullName: string };
+
+    // Each branch resolves the learner with the filter that IS its tenancy
+    // boundary, and nothing re-checks it afterwards: for the two admin
+    // branches the scope is read off the learner row itself, so a second
+    // lookup filtered by those same values could never fail.
+    const learnerSelect = {
+      id: true,
+      fullName: true,
+      schoolId: true,
+      gradeLevelId: true,
+      sectionId: true,
+      gradeLevel: { select: { type: true } },
+    } as const;
 
     if (isSuperAdmin) {
       // The school is DERIVED from the learner, never posted — same reasoning
       // `exportTermGrades` gives for deriving it from `gradeLevelId`.
       const target = await prisma.learner.findFirst({
         where: { id: parsed.learnerId, deletedAt: null, archivedAt: null },
-        select: {
-          schoolId: true,
-          gradeLevelId: true,
-          sectionId: true,
-          gradeLevel: { select: { type: true } },
-        },
+        select: learnerSelect,
       });
       if (!target || !isKinderGradeType(target.gradeLevel.type)) {
         throw resourceNotFound("Learner");
@@ -332,6 +369,7 @@ export const exportKinderChecklist = action(
       schoolId = target.schoolId;
       gradeLevelId = target.gradeLevelId;
       sectionId = target.sectionId;
+      learner = { id: target.id, fullName: target.fullName };
     } else if (isSchoolHead) {
       if (!user.schoolId) throw resourceNotFound("Learner");
       // Tenant boundary: `schoolId: user.schoolId` from the session, not the
@@ -344,12 +382,7 @@ export const exportKinderChecklist = action(
           deletedAt: null,
           archivedAt: null,
         },
-        select: {
-          schoolId: true,
-          gradeLevelId: true,
-          sectionId: true,
-          gradeLevel: { select: { type: true } },
-        },
+        select: learnerSelect,
       });
       if (!target || !isKinderGradeType(target.gradeLevel.type)) {
         throw resourceNotFound("Learner");
@@ -357,6 +390,7 @@ export const exportKinderChecklist = action(
       schoolId = target.schoolId;
       gradeLevelId = target.gradeLevelId;
       sectionId = target.sectionId;
+      learner = { id: target.id, fullName: target.fullName };
     } else {
       if (!user.schoolId) throw resourceNotFound("Learner");
       const advisory = await requireKinderAdvisory(
@@ -366,20 +400,23 @@ export const exportKinderChecklist = action(
       schoolId = user.schoolId;
       gradeLevelId = advisory.gradeLevelId;
       sectionId = advisory.sectionId;
+      // The teacher branch's scope comes from the advisory, not the learner,
+      // so this lookup is a real boundary: a learner outside the section the
+      // teacher advises is a miss.
+      const target = await prisma.learner.findFirst({
+        where: {
+          id: parsed.learnerId,
+          schoolId,
+          gradeLevelId,
+          sectionId,
+          deletedAt: null,
+          archivedAt: null,
+        },
+        select: { id: true, fullName: true },
+      });
+      if (!target) throw resourceNotFound("Learner");
+      learner = target;
     }
-
-    const learner = await prisma.learner.findFirst({
-      where: {
-        id: parsed.learnerId,
-        schoolId,
-        gradeLevelId,
-        sectionId,
-        deletedAt: null,
-        archivedAt: null,
-      },
-      select: { id: true, fullName: true },
-    });
-    if (!learner) throw resourceNotFound("Learner");
 
     const schoolYear = await prisma.schoolYear.findFirst({
       where: { schoolId, isActive: true },
@@ -440,6 +477,25 @@ export const exportKinderChecklist = action(
 
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     const filename = `litrack-kinder-checklist-${formatLocalDateKey(schoolToday())}.xlsx`;
+
+    // Ids, counts and the caller's role only — the ratings and the remark
+    // text stay out of `AuditLog`, same rule the save path follows.
+    await writeAudit({
+      userId: user.id,
+      schoolId,
+      action: AUDIT_ACTIONS.KINDER_COMPETENCY_EXPORT,
+      resource: "KinderCompetencyRecord",
+      resourceId: learner.id,
+      metadata: {
+        schoolId,
+        gradeLevelId,
+        sectionId,
+        learnerId: learner.id,
+        schoolYearId: schoolYear.id,
+        recordCount: records.length,
+        role: user.role,
+      },
+    });
 
     return { ok: true, data: { filename, base64: buffer.toString("base64") } };
   },

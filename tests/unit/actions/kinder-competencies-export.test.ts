@@ -97,6 +97,8 @@ const learnerFindFirst = vi.fn(
     if (!found) return null;
     if (args.select.gradeLevel) {
       return {
+        id: found.id,
+        fullName: found.fullName,
         schoolId: found.schoolId,
         gradeLevelId: found.gradeLevelId,
         sectionId: found.sectionId,
@@ -161,7 +163,10 @@ vi.mock("@/lib/auth/session", () => ({
 const writeAudit = vi.fn(async (_entry?: unknown) => {});
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => writeAudit(...(args as [never])),
-  AUDIT_ACTIONS: { KINDER_COMPETENCY_BULK_SAVE: "KINDER_COMPETENCY_BULK_SAVE" },
+  AUDIT_ACTIONS: {
+    KINDER_COMPETENCY_BULK_SAVE: "KINDER_COMPETENCY_BULK_SAVE",
+    KINDER_COMPETENCY_EXPORT: "KINDER_COMPETENCY_EXPORT",
+  },
 }));
 
 const revalidatePath = vi.fn();

@@ -153,6 +153,15 @@ export const AUDIT_ACTIONS = {
    */
   KINDER_COMPETENCY_BULK_SAVE: "KINDER_COMPETENCY_BULK_SAVE",
   /**
+   * Excel download of one learner's Kindergarten checklist, by a teacher, a
+   * School Head, or a Super Admin. Recorded for the same reason
+   * `TERM_GRADES_EXPORT` is: a download takes learner assessment data out of
+   * the system, so who took it and for whom must be answerable. Metadata
+   * carries the placement, the learner id and the caller's role — never the
+   * ratings or the remark text.
+   */
+  KINDER_COMPETENCY_EXPORT: "KINDER_COMPETENCY_EXPORT",
+  /**
    * End of Terms sheet subject list edits (School Head, or Super Admin viewing
    * a school). Ids, grade and subject names only — never scores.
    */

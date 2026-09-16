@@ -48,6 +48,16 @@ export type KinderChecklistTermKey = "t1" | "t2" | "t3";
  */
 export type KinderChecklistRowLock = { t1: boolean; t2: boolean; t3: boolean };
 
+/**
+ * The remark is one field shared by all three terms, so it is not governed by
+ * any single term's window. It freezes only once every term has closed — the
+ * same rule `saveKinderCompetencies` enforces, so what renders and what saves
+ * agree.
+ */
+function isRemarkLocked(locked: KinderChecklistRowLock): boolean {
+  return locked.t1 && locked.t2 && locked.t3;
+}
+
 const RATING_NONE = "none" as const;
 
 const TERM_LABELS: Record<KinderChecklistTermKey, string> = {
@@ -159,7 +169,7 @@ export function KinderChecklistRow({
         <Input
           value={state.remark ?? ""}
           onChange={(e) => onRemarkChange(competencyKey, e.target.value)}
-          disabled={readOnly}
+          disabled={readOnly || isRemarkLocked(locked)}
           placeholder="Remarks (optional)"
           aria-label={`Remarks for ${competencyText}`}
           maxLength={500}
@@ -203,7 +213,7 @@ export function KinderChecklistCard({
       <Input
         value={state.remark ?? ""}
         onChange={(e) => onRemarkChange(competencyKey, e.target.value)}
-        disabled={readOnly}
+        disabled={readOnly || isRemarkLocked(locked)}
         placeholder="Remarks (optional)"
         aria-label={`Remarks for ${competencyText}`}
         maxLength={500}
