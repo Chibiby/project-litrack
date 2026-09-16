@@ -3,6 +3,8 @@
 import { Prisma, type GradeLevelType, type User } from "@prisma/client";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import { parseInput } from "@/lib/errors/validation";
 import { requireUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
@@ -29,6 +31,7 @@ import {
   createTermSubjectSchema,
   renameTermSubjectSchema,
   reorderTermSubjectsSchema,
+  resetAllSchoolsTermSubjectsSchema,
   resetSchoolTermSubjectsSchema,
   termSubjectGradeSchema,
   termSubjectIdSchema,
@@ -382,10 +385,90 @@ export const reorderTermSubjects = action(
   { verb: "reorder the subjects" }
 );
 
+type TermSubjectResetTally = {
+  grades: number;
+  created: number;
+  restored: number;
+  archived: number;
+};
+
 /**
- * School-wide "Reset to default": every live, non-FLOATING grade's End of
- * Terms sheet is brought back to its `GradeLevelType`'s current
- * `TermSubjectDefault` template in one transaction.
+ * The transactional core of "Reset to default" for ONE school: every live,
+ * non-FLOATING grade's End of Terms sheet is brought back to its
+ * `GradeLevelType`'s current `TermSubjectDefault` template.
+ *
+ * Module-private — callers own the transaction (and, for
+ * `resetAllSchoolsTermSubjects`, the per-school try/catch around it). Locks
+ * every live, non-FLOATING grade (including Kindergarten, so a concurrent
+ * write to it still serialises here), then drops Kindergarten before
+ * anything is read or written for it — its report is the fixed competency
+ * checklist, never a `TermSubjectDefault` template.
+ */
+async function resetTermSubjectsInSchool(
+  tx: Prisma.TransactionClient,
+  schoolId: string
+): Promise<TermSubjectResetTally> {
+  const lockedGrades = await tx.$queryRaw<{ id: string; type: string }[]>`
+    SELECT "id", "type" FROM "GradeLevel"
+    WHERE "schoolId" = ${schoolId}
+      AND "deletedAt" IS NULL
+      AND "type" != 'FLOATING'
+    ORDER BY "id"
+    FOR UPDATE
+  `;
+  const grades = lockedGrades.filter((g) => !isKinderGradeType(g.type));
+
+  let created = 0;
+  let restored = 0;
+  let archived = 0;
+
+  for (const grade of grades) {
+    const defaults = await getActiveDefaultsForType(tx, grade.type as GradeLevelType);
+    const existing = await getAllTermSubjects(tx, { schoolId, gradeLevelId: grade.id });
+    const plan = planSubjectReset(defaults, existing);
+
+    for (const u of plan.toRestore) {
+      await tx.termSubject.updateMany({
+        where: { id: u.id, schoolId, gradeLevelId: grade.id },
+        data: { deletedAt: null, position: u.position },
+      });
+    }
+    for (const u of plan.toReposition) {
+      await tx.termSubject.updateMany({
+        where: { id: u.id, schoolId, gradeLevelId: grade.id },
+        data: { position: u.position },
+      });
+    }
+    if (plan.toCreate.length > 0) {
+      await tx.termSubject.createMany({
+        data: plan.toCreate.map((c) => ({
+          schoolId,
+          gradeLevelId: grade.id,
+          name: c.name,
+          position: c.position,
+          legacyArea: null,
+        })),
+      });
+    }
+    if (plan.toArchive.length > 0) {
+      await tx.termSubject.updateMany({
+        where: { id: { in: plan.toArchive }, schoolId, gradeLevelId: grade.id },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    created += plan.toCreate.length;
+    restored += plan.toRestore.length;
+    archived += plan.toArchive.length;
+  }
+
+  return { grades: grades.length, created, restored, archived };
+}
+
+/**
+ * School-wide "Reset to default" for the caller's own (or, for a Super
+ * Admin, posted) school. See `resetTermSubjectsInSchool` for the reset
+ * itself.
  *
  * AUTH/TENANCY: `requireUser("SCHOOL_HEAD")` admits School Heads and Super
  * Admins. A School Head's target school is ALWAYS `user.schoolId` — whatever
@@ -416,68 +499,10 @@ export const resetSchoolTermSubjects = action(
       if (!school) throw resourceNotFound("School");
     }
 
-    const data = await prisma.$transaction(async (tx) => {
-      // Locks every live, non-FLOATING grade (including Kindergarten, so a
-      // concurrent write to it still serialises here), then drops
-      // Kindergarten before anything is read or written for it — its report
-      // is the fixed competency checklist, never a `TermSubjectDefault`
-      // template.
-      const lockedGrades = await tx.$queryRaw<{ id: string; type: string }[]>`
-        SELECT "id", "type" FROM "GradeLevel"
-        WHERE "schoolId" = ${schoolId}
-          AND "deletedAt" IS NULL
-          AND "type" != 'FLOATING'
-        ORDER BY "id"
-        FOR UPDATE
-      `;
-      const grades = lockedGrades.filter((g) => !isKinderGradeType(g.type));
-
-      let created = 0;
-      let restored = 0;
-      let archived = 0;
-
-      for (const grade of grades) {
-        const defaults = await getActiveDefaultsForType(tx, grade.type as GradeLevelType);
-        const existing = await getAllTermSubjects(tx, { schoolId, gradeLevelId: grade.id });
-        const plan = planSubjectReset(defaults, existing);
-
-        for (const u of plan.toRestore) {
-          await tx.termSubject.updateMany({
-            where: { id: u.id, schoolId, gradeLevelId: grade.id },
-            data: { deletedAt: null, position: u.position },
-          });
-        }
-        for (const u of plan.toReposition) {
-          await tx.termSubject.updateMany({
-            where: { id: u.id, schoolId, gradeLevelId: grade.id },
-            data: { position: u.position },
-          });
-        }
-        if (plan.toCreate.length > 0) {
-          await tx.termSubject.createMany({
-            data: plan.toCreate.map((c) => ({
-              schoolId,
-              gradeLevelId: grade.id,
-              name: c.name,
-              position: c.position,
-              legacyArea: null,
-            })),
-          });
-        }
-        if (plan.toArchive.length > 0) {
-          await tx.termSubject.updateMany({
-            where: { id: { in: plan.toArchive }, schoolId, gradeLevelId: grade.id },
-            data: { deletedAt: new Date() },
-          });
-        }
-
-        created += plan.toCreate.length;
-        restored += plan.toRestore.length;
-        archived += plan.toArchive.length;
-      }
-
-      return { grades: grades.length, created, restored, archived };
-    }, BULK_TX_OPTIONS);
+    const data = await prisma.$transaction(
+      (tx) => resetTermSubjectsInSchool(tx, schoolId),
+      BULK_TX_OPTIONS
+    );
 
     await writeAudit({
       userId: user.id,
@@ -491,4 +516,111 @@ export const resetSchoolTermSubjects = action(
     return { ok: true, data };
   },
   { verb: "reset the subjects" }
+);
+
+/**
+ * Super-Admin-only "Reset to default" for EVERY live school, reusing
+ * `resetTermSubjectsInSchool` per school.
+ *
+ * AUTH: `requireUser("SUPER_ADMIN")` plus an explicit `user.role` check —
+ * Super Admin is the only role this action ever admits, unlike the
+ * School-Head-or-Super-Admin split above.
+ *
+ * INPUT: `{ confirm: "RESET" }` only. A stray or malformed call is refused
+ * before any school is touched.
+ *
+ * EXECUTION: one `prisma.$transaction` PER SCHOOL, run sequentially — never
+ * one transaction spanning every school, which on Cloudflare's small pooler
+ * would hold locks across every tenant at once. A school whose transaction
+ * throws is counted in `failedSchools` and reported through the same
+ * `reportError` the `action()` wrapper uses for non-user errors (so it still
+ * reaches `ErrorEvent` + platform logs); the loop continues with the rest.
+ */
+export const resetAllSchoolsTermSubjects = action(
+  "resetAllSchoolsTermSubjects",
+  async (
+    input: unknown
+  ): Promise<{
+    ok: true;
+    data: {
+      schools: number;
+      grades: number;
+      created: number;
+      restored: number;
+      archived: number;
+      failedSchools: number;
+    };
+  }> => {
+    const user = await requireUser("SUPER_ADMIN");
+    if (user.role !== "SUPER_ADMIN") {
+      throw new AppError("AUTH_FORBIDDEN", {
+        params: { what: "resetting every school's subjects" },
+        context: { role: user.role },
+      });
+    }
+    parseInput(resetAllSchoolsTermSubjectsSchema, input);
+
+    const liveSchools = await prisma.school.findMany({
+      where: { deletedAt: null },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+
+    let grades = 0;
+    let created = 0;
+    let restored = 0;
+    let archived = 0;
+    let failedSchools = 0;
+
+    for (const school of liveSchools) {
+      try {
+        const result = await prisma.$transaction(
+          (tx) => resetTermSubjectsInSchool(tx, school.id),
+          BULK_TX_OPTIONS
+        );
+        grades += result.grades;
+        created += result.created;
+        restored += result.restored;
+        archived += result.archived;
+
+        await writeAudit({
+          userId: user.id,
+          schoolId: school.id,
+          action: AUDIT_ACTIONS.TERM_SUBJECT_RESET_SCHOOL,
+          resource: "School",
+          resourceId: school.id,
+          metadata: { ...result, actorRole: user.role, bulk: true },
+        });
+      } catch (err) {
+        failedSchools += 1;
+        reportError(classifyError(err, { verb: "reset every school's subjects" }), {
+          route: "resetAllSchoolsTermSubjects",
+          routeType: "action",
+          userId: user.id,
+          schoolId: school.id,
+        });
+      }
+    }
+
+    const data = {
+      schools: liveSchools.length,
+      grades,
+      created,
+      restored,
+      archived,
+      failedSchools,
+    };
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.TERM_SUBJECT_RESET_ALL_SCHOOLS,
+      resource: "School",
+      resourceId: null,
+      metadata: data,
+    });
+    revalidateTermSubjects();
+    return { ok: true, data };
+  },
+  { verb: "reset every school's subjects" }
 );

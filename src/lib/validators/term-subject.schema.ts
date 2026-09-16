@@ -47,7 +47,18 @@ export const resetSchoolTermSubjectsSchema = z.object({
   schoolId: id.optional(),
 });
 
+/**
+ * `resetAllSchoolsTermSubjects`'s payload. A server-side guard, not a UX
+ * nicety: typing the literal string is the only way this runs, so a stray
+ * call with no body (or a body carrying anything else) is refused before any
+ * school is touched.
+ */
+export const resetAllSchoolsTermSubjectsSchema = z.object({
+  confirm: z.literal("RESET", { errorMap: () => ({ message: "Invalid input" }) }),
+});
+
 export type CreateTermSubjectInput = z.infer<typeof createTermSubjectSchema>;
 export type RenameTermSubjectInput = z.infer<typeof renameTermSubjectSchema>;
 export type ReorderTermSubjectsInput = z.infer<typeof reorderTermSubjectsSchema>;
 export type ResetSchoolTermSubjectsInput = z.infer<typeof resetSchoolTermSubjectsSchema>;
+export type ResetAllSchoolsTermSubjectsInput = z.infer<typeof resetAllSchoolsTermSubjectsSchema>;

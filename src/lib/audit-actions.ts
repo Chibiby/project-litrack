@@ -191,6 +191,14 @@ export const AUDIT_ACTIONS = {
    * the individual writes this produced.
    */
   TERM_SUBJECT_RESET_SCHOOL: "TERM_SUBJECT_RESET_SCHOOL",
+  /**
+   * A Super Admin's "reset every school" run. One `TERM_SUBJECT_RESET_SCHOOL`
+   * row (with `bulk: true` in its metadata) is still written per school reset
+   * — this is the single summary row for the whole run. Metadata carries
+   * totals only (schools/grades/created/restored/archived/failedSchools),
+   * never school names or ids.
+   */
+  TERM_SUBJECT_RESET_ALL_SCHOOLS: "TERM_SUBJECT_RESET_ALL_SCHOOLS",
   IMPORT_LEARNERS: "IMPORT_LEARNERS",
   EXPORT_LEARNERS_EXCEL: "EXPORT_LEARNERS_EXCEL",
   EXPORT_PRINTABLE_REPORT: "EXPORT_PRINTABLE_REPORT",

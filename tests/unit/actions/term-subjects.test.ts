@@ -91,6 +91,11 @@ const schoolFindFirst = vi.fn(async (args: { where: { id: string; deletedAt: nul
   return found ? { id: found.id } : null;
 });
 
+/** `resetAllSchoolsTermSubjects`'s live-school listing. */
+const schoolFindMany = vi.fn(async (_args: { where: { deletedAt: null } }) =>
+  schools.filter((s) => s.deletedAt === null).map((s) => ({ id: s.id }))
+);
+
 const termSubjectFindFirst = vi.fn(
   async (args: { where: { id: string; schoolId?: string } }) => {
     const found = termSubjects.find(
@@ -251,6 +256,13 @@ const termSubjectUpdateMany = vi.fn(
  * "GradeLevel" ... FOR UPDATE` (the grades it iterates) share one
  * tagged-template mock, told apart by which table/columns the SQL text names.
  */
+/**
+ * `resetAllSchoolsTermSubjects`'s per-school-failure test sets this to a
+ * schoolId whose lock query should blow up, simulating one tenant's
+ * transaction throwing mid-run.
+ */
+let failingSchoolId: string | null = null;
+
 const txQueryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const sql = strings.join(" ");
   if (sql.includes('"TermSubject"')) {
@@ -264,6 +276,7 @@ const txQueryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknow
   }
   if (sql.includes('"GradeLevel"') && sql.includes('"type"')) {
     const [schoolId] = values as [string];
+    if (schoolId === failingSchoolId) throw new Error("boom: locked rows unavailable");
     return grades
       .filter((g) => g.schoolId === schoolId && g.deletedAt === null && g.type !== "FLOATING")
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -313,6 +326,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     school: {
       findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [never])),
+      findMany: (...args: unknown[]) => schoolFindMany(...(args as [never])),
     },
   },
 }));
@@ -341,6 +355,7 @@ vi.mock("@/lib/audit", () => ({
     TERM_SUBJECT_RESTORE: "TERM_SUBJECT_RESTORE",
     TERM_SUBJECT_REORDER: "TERM_SUBJECT_REORDER",
     TERM_SUBJECT_RESET_SCHOOL: "TERM_SUBJECT_RESET_SCHOOL",
+    TERM_SUBJECT_RESET_ALL_SCHOOLS: "TERM_SUBJECT_RESET_ALL_SCHOOLS",
   },
 }));
 
@@ -357,6 +372,7 @@ const {
   restoreTermSubject,
   reorderTermSubjects,
   resetSchoolTermSubjects,
+  resetAllSchoolsTermSubjects,
 } = await import("@/lib/actions/term-subjects");
 
 function subject(overrides: Partial<SubjectRow> & { id: string; name: string }): SubjectRow {
@@ -381,6 +397,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   nextCreatedId = 0;
   nextSeededId = 0;
+  failingSchoolId = null;
   grades = [
     { id: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "G7" },
     { id: FLOATING_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "FLOATING" },
@@ -1030,6 +1047,107 @@ describe("resetSchoolTermSubjects", () => {
     expect(audit.resource).toBe("School");
     expect(audit.resourceId).toBe(SCHOOL_ID);
     expect(audit.metadata).toMatchObject({ grades: 1, actorRole: "SCHOOL_HEAD" });
+    expect(revalidateTermSubjects).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resetAllSchoolsTermSubjects", () => {
+  it("refuses a School Head with AUTH_FORBIDDEN, and touches nothing", async () => {
+    session = HEAD;
+
+    const res = await resetAllSchoolsTermSubjects({ confirm: "RESET" });
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(schoolFindMany).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a missing or incorrect confirm, writing nothing", async () => {
+    session = ADMIN;
+
+    const missing = await resetAllSchoolsTermSubjects({});
+    expect(missing).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+
+    const wrong = await resetAllSchoolsTermSubjects({ confirm: "reset" });
+    expect(wrong).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+
+    expect(schoolFindMany).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("resets every live school via its own transaction, skips Kindergarten, and sums the counts", async () => {
+    session = ADMIN;
+    defaultsByType["G7"] = [
+      { id: "d-english", name: "English", position: 0, deletedAt: null },
+      { id: "d-science", name: "Science", position: 1, deletedAt: null },
+    ];
+    // OTHER_SCHOOL_ID's only live non-FLOATING grade is FOREIGN_GRADE_ID (G7).
+    termSubjects.push(
+      subject({
+        id: "foreign-math",
+        schoolId: OTHER_SCHOOL_ID,
+        gradeLevelId: FOREIGN_GRADE_ID,
+        name: "Mathematics",
+        position: 0,
+      })
+    );
+
+    const res = await resetAllSchoolsTermSubjects({ confirm: "RESET" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.schools).toBe(2);
+    expect(res.data.failedSchools).toBe(0);
+    // SCHOOL_ID's GRADE_ID + OTHER_SCHOOL_ID's FOREIGN_GRADE_ID — KINDER excluded.
+    expect(res.data.grades).toBe(2);
+    expect(transaction).toHaveBeenCalledTimes(2);
+
+    const perSchoolAudits = writeAudit.mock.calls.filter(
+      (c) => c[0].action === "TERM_SUBJECT_RESET_SCHOOL"
+    );
+    expect(perSchoolAudits).toHaveLength(2);
+    expect(perSchoolAudits.map((c) => c[0].schoolId).sort()).toEqual(
+      [SCHOOL_ID, OTHER_SCHOOL_ID].sort()
+    );
+    expect(perSchoolAudits.every((c) => c[0].metadata.bulk === true)).toBe(true);
+
+    const summary = writeAudit.mock.calls.find(
+      (c) => c[0].action === "TERM_SUBJECT_RESET_ALL_SCHOOLS"
+    );
+    expect(summary).toBeTruthy();
+    expect(summary![0].metadata).toMatchObject({
+      schools: 2,
+      grades: 2,
+      failedSchools: 0,
+    });
+    expect(revalidateTermSubjects).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts a failing school's transaction in failedSchools and still resets the other school", async () => {
+    session = ADMIN;
+    failingSchoolId = SCHOOL_ID;
+    defaultsByType["G7"] = [{ id: "d-english", name: "English", position: 0, deletedAt: null }];
+
+    const res = await resetAllSchoolsTermSubjects({ confirm: "RESET" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.schools).toBe(2);
+    expect(res.data.failedSchools).toBe(1);
+    // Only OTHER_SCHOOL_ID's grade got reset.
+    expect(res.data.grades).toBe(1);
+
+    const perSchoolAudits = writeAudit.mock.calls.filter(
+      (c) => c[0].action === "TERM_SUBJECT_RESET_SCHOOL"
+    );
+    expect(perSchoolAudits).toHaveLength(1);
+    expect(perSchoolAudits[0][0].schoolId).toBe(OTHER_SCHOOL_ID);
+
+    const summary = writeAudit.mock.calls.find(
+      (c) => c[0].action === "TERM_SUBJECT_RESET_ALL_SCHOOLS"
+    );
+    expect(summary![0].metadata).toMatchObject({ schools: 2, failedSchools: 1 });
     expect(revalidateTermSubjects).toHaveBeenCalledTimes(1);
   });
 });

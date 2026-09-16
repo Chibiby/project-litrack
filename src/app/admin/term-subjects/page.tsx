@@ -12,6 +12,7 @@ import {
 import { getManagedTermSubjectDefaults } from "@/lib/terms/subject-defaults-db";
 import { TermSubjectDefaultsGradeTypePicker } from "@/components/admin/term-subject-defaults-grade-type-picker";
 import { TermSubjectDefaultsManager } from "@/components/admin/term-subject-defaults-manager";
+import { ResetAllSchoolsTermSubjectsButton } from "@/components/admin/reset-all-schools-term-subjects-button";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export default async function AdminTermSubjectDefaultsPage({ searchParams }: Pag
       subtitle="New schools and resets use these subjects. Existing schools keep their own lists. Kindergarten uses the competency checklist instead, so it is not listed here."
       role={user.role}
       userName={user.fullName || user.email}
+      actions={<ResetAllSchoolsTermSubjectsButton />}
     >
       <div className="space-y-6">
         <TermSubjectDefaultsGradeTypePicker
