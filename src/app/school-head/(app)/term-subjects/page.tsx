@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getTermSubjects } from "@/lib/actions/term-subjects";
+import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
 import { TermSubjectsGradePicker } from "@/components/school-head/term-subjects-grade-picker";
 import { TermSubjectsManager } from "@/components/school-head/term-subjects-manager";
 import { ResetTermSubjectsButton } from "@/components/school-head/reset-term-subjects-button";
@@ -35,11 +36,14 @@ async function TermSubjectsBody({
 }) {
   // FLOATING carries no End of Terms sheet — see `FLOATING_GRADE` in the
   // actions module — so it is not offered as something to configure.
-  const grades = await prisma.gradeLevel.findMany({
+  // Kindergarten's report is the fixed competency checklist, not configurable
+  // subjects, so it is filtered out the same way.
+  const gradesWithFloating = await prisma.gradeLevel.findMany({
     where: { schoolId: view.schoolId, deletedAt: null, type: { not: "FLOATING" } },
     orderBy: { createdAt: "asc" },
     select: { id: true, type: true },
   });
+  const grades = gradesWithFloating.filter((g) => !isKinderGradeType(g.type));
 
   if (grades.length === 0) {
     return (
@@ -102,7 +106,7 @@ export default async function TermSubjectsPage({ searchParams }: PageProps) {
   return (
     <SchoolHeadPage
       title="Term Subjects"
-      description="Set which subjects appear on each grade's End of Terms sheet."
+      description="Set which subjects appear on each grade's End of Terms sheet. Kindergarten uses the competency checklist instead."
       view={view}
       superAdminCaption="editable — every change is audited"
       actions={

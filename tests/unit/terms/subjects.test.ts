@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { LEARNING_AREA_LABELS, LEARNING_AREA_ORDER } from "@/lib/constants/enum-labels";
+import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
 import {
   DEFAULT_TERM_SUBJECTS,
   isValidSubjectName,
+  KINDER_GRADE_MESSAGE,
   MAX_ACTIVE_SUBJECTS_PER_GRADE,
   nextPosition,
   orderSheetSubjects,
@@ -234,9 +236,16 @@ describe("TERM_SHEET_GRADE_TYPES", () => {
     expect(TERM_SHEET_GRADE_TYPES).not.toContain("FLOATING");
   });
 
-  it("is exactly KINDER through G12, in enum declaration order", () => {
+  it("excludes KINDER — Kindergarten's report is the fixed competency checklist, not configurable subjects", () => {
+    // Regression guard: a future change that re-offers Kindergarten subjects
+    // must fail here, not just in the UI. Checked through the single
+    // Kindergarten predicate, not a second hardcoded "KINDER" comparison.
+    expect(TERM_SHEET_GRADE_TYPES.some(isKinderGradeType)).toBe(false);
+    expect(TERM_SHEET_GRADE_TYPES).not.toContain("KINDER");
+  });
+
+  it("is exactly G1 through G12, in enum declaration order", () => {
     expect(TERM_SHEET_GRADE_TYPES).toEqual([
-      "KINDER",
       "G1",
       "G2",
       "G3",
@@ -250,6 +259,13 @@ describe("TERM_SHEET_GRADE_TYPES", () => {
       "G11",
       "G12",
     ]);
+  });
+});
+
+describe("KINDER_GRADE_MESSAGE", () => {
+  it("is a non-empty, user-safe sentence distinct from FLOATING_GRADE_MESSAGE", () => {
+    expect(KINDER_GRADE_MESSAGE.length).toBeGreaterThan(0);
+    expect(KINDER_GRADE_MESSAGE).toContain("competency checklist");
   });
 });
 

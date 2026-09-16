@@ -36,10 +36,14 @@ import {
  * only two readers, and both read at the moment they run, not on a change
  * feed).
  *
- * `FLOATING` is refused before it ever reaches here: `gradeLevelType` is
- * validated against `TERM_SHEET_GRADE_TYPES`
- * (`src/lib/validators/term-subject-default.schema.ts`), so a `FLOATING`
- * request fails Zod validation, not a runtime check in this file.
+ * `FLOATING` and `KINDER` are both refused before they ever reach here:
+ * `gradeLevelType` is validated against `TERM_SHEET_GRADE_TYPES`
+ * (`src/lib/validators/term-subject-default.schema.ts`), which excludes
+ * both — `FLOATING` has no advisory section, and Kindergarten's report is
+ * the fixed competency checklist, not a configurable subject template — so
+ * either fails Zod validation, not a runtime check in this file. Existing
+ * `TermSubjectDefault` rows with `gradeLevelType: "KINDER"` (seeded before
+ * this exclusion) are left in place but unreachable from every action here.
  */
 
 const NAME_TAKEN = "A subject with that name is already in this grade type's template";

@@ -30,6 +30,14 @@ describe("createTermSubjectDefaultSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("refuses KINDER — Kindergarten's report is the fixed competency checklist, not a subject template", () => {
+    const result = createTermSubjectDefaultSchema.safeParse({
+      gradeLevelType: "KINDER",
+      name: "English",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects an unknown grade level type", () => {
     const result = createTermSubjectDefaultSchema.safeParse({
       gradeLevelType: "G13",
@@ -99,6 +107,14 @@ describe("reorderTermSubjectDefaultsSchema", () => {
   it("refuses FLOATING", () => {
     const result = reorderTermSubjectDefaultsSchema.safeParse({
       gradeLevelType: "FLOATING",
+      orderedIds: ["d-1"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("refuses KINDER", () => {
+    const result = reorderTermSubjectDefaultsSchema.safeParse({
+      gradeLevelType: "KINDER",
       orderedIds: ["d-1"],
     });
     expect(result.success).toBe(false);

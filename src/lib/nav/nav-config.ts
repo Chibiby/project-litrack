@@ -58,6 +58,15 @@ export interface NavItem {
    * navigation is unaffected — this only removes the speculative render.
    */
   heavy?: true;
+  /**
+   * Extra routes this row owns, for pages that live under no row's path. A
+   * learner-scoped ARAL page sits under /teacher/aral/<gradeId>/learners/<id>/,
+   * which no ARAL row is a prefix of, so plain longest-prefix matching hands it
+   * to the role root (/teacher) and lights Dashboard up while the person is
+   * filling in an ARAL profile. A pattern match wins over every prefix match,
+   * because a row only claims a route this way deliberately.
+   */
+  alsoOwns?: RegExp;
 }
 
 /** A labelled sidebar section. `label` omitted renders the items with no heading. */
@@ -174,6 +183,7 @@ export function getNavGroups(
           items: [
             { id: "school-head-announcements", label: "Announcements", href: SCHOOL_HEAD_ROUTES.announcements, icon: Megaphone },
             { id: "school-head-reports", label: "Reports", href: SCHOOL_HEAD_ROUTES.reports, icon: FileBarChart },
+            { id: "school-head-kinder-checklist", label: "Kindergarten Checklist", href: SCHOOL_HEAD_ROUTES.kinderChecklist, icon: ClipboardList },
             { id: "school-head-audit", label: "Audit", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText },
           ],
         },
@@ -226,12 +236,14 @@ export function getNavGroups(
           items: [
             {
               id: "teacher-aral-attendance",
+              alsoOwns: /^\/teacher\/aral\/[^\/]+\/learners\/[^\/]+\/attendance(\/|$)/,
               label: "Weekly Attendance",
               href: aralHref(grades, "attendance"),
               icon: CalendarDays,
             },
             {
               id: "teacher-aral-reading-level",
+              alsoOwns: /^\/teacher\/aral\/[^\/]+\/learners\/[^\/]+\/reading-level(\/|$)/,
               label: "Monthly Reading Level",
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,
@@ -241,6 +253,7 @@ export function getNavGroups(
             // Longest-prefix matching still awards it over `/teacher/aral`.
             {
               id: "teacher-aral-profiling",
+              alsoOwns: /^\/teacher\/aral\/[^\/]+\/learners\/[^\/]+\/update(\/|$)/,
               label: "ARAL Profiling",
               href: ARAL_PROFILING_HREF,
               icon: ClipboardList,
@@ -281,7 +294,17 @@ export function resolveActiveHref(
   items: NavItem[]
 ): string | undefined {
   let best: string | undefined;
+  let bestIsClaimed = false;
   for (const item of navigable(items)) {
+    // A deliberate claim (`alsoOwns`) beats any prefix match, however long.
+    if (item.alsoOwns?.test(pathname)) {
+      if (!bestIsClaimed || item.href.length > (best?.length ?? 0)) {
+        best = item.href;
+        bestIsClaimed = true;
+      }
+      continue;
+    }
+    if (bestIsClaimed) continue;
     const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
     if (!matches) continue;
     if (!best || item.href.length > best.length) {

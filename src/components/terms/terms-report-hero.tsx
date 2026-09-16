@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileText, Lock } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
+import { TermsAdvisoryHeroControl } from "@/components/terms/terms-advisory-hero-control";
 import { cn } from "@/lib/utils";
 import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
 import type { TermPeriodValue } from "@/lib/terms/windows";
@@ -28,6 +29,9 @@ export function TermsReportHero({
   state,
   page,
   terms,
+  advisories,
+  kinderSectionIds,
+  kinderBasePath,
 }: {
   title: string;
   subtitle: string;
@@ -35,11 +39,25 @@ export function TermsReportHero({
   state: SheetUrlState;
   page: number;
   terms: TermTab[];
+  /** The teacher's advisories. Empty for a Super Admin, who advises none. */
+  advisories: readonly { id: string; label: string }[];
+  /** Section ids among `advisories` that are Kindergarten (owner decision — see `TermsAdvisoryHeroControl`). */
+  kinderSectionIds?: readonly string[];
+  kinderBasePath?: string;
 }) {
   return (
     <PageHero
       bannerSrc="/brand/banner-learner.png"
       className="h-auto"
+      topRight={
+        <TermsAdvisoryHeroControl
+          basePath={basePath}
+          state={state}
+          advisories={advisories}
+          kinderSectionIds={kinderSectionIds}
+          kinderBasePath={kinderBasePath}
+        />
+      }
       // Phones: the art is a fixed 160px tall and pushed right until the girl
       // meets the band's edge, so both children sit beside the text as in the
       // phone mockup; the handwriting fades out under the title.

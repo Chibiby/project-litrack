@@ -44,12 +44,17 @@ import {
   parseLearnerListParams,
   parseLearnerPageSize,
   totalPages,
+  LEARNER_LIST_DEFAULT_PAGE_SIZE,
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
 import { Sparkles } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
 import { LEARNER_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
-import type { AdvisoryOption } from "@/components/learners/learner-list-toolbar";
+import { AdvisoryHeroControl } from "@/components/learners/advisory-hero-control";
+import type {
+  AdvisoryOption,
+  RosterUrlState,
+} from "@/components/learners/learner-list-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +130,52 @@ const placementsFor = cache((id: string, schoolId: string) =>
   getAdvisoryPlacements({ id, schoolId })
 );
 
+/** Placements narrowed to this roster's grades, shaped for the advisory switcher. */
+function advisoryOptionsFromPlacements(
+  placements: Awaited<ReturnType<typeof getAdvisoryPlacements>>,
+  assignedGradeIds: string[]
+): AdvisoryOption[] {
+  return placements
+    .filter((p) => assignedGradeIds.includes(p.gradeLevelId))
+    .map((p) => ({
+      id: p.sectionId,
+      gradeLevelId: p.gradeLevelId,
+      label: `${p.gradeLabel} - ${p.sectionName}`,
+    }));
+}
+
+/**
+ * The advisory switcher floated in the hero's top-right corner. Its own
+ * Suspense boundary, like `LearnersAddControl`, so the hero paints before the
+ * placements read resolves.
+ */
+async function LearnersHeroAdvisory({
+  basePath,
+  urlState,
+  teacherId,
+  schoolId,
+  isSuperAdmin,
+  assignedGradeIds,
+}: {
+  basePath: string;
+  urlState: RosterUrlState;
+  teacherId: string;
+  schoolId: string;
+  isSuperAdmin: boolean;
+  assignedGradeIds: string[];
+}) {
+  const placements = isSuperAdmin ? [] : await placementsFor(teacherId, schoolId);
+  const advisories = advisoryOptionsFromPlacements(placements, assignedGradeIds);
+  const advisory = advisories.find((a) => a.id === urlState.advisory) ?? null;
+  return (
+    <AdvisoryHeroControl
+      basePath={basePath}
+      state={{ ...urlState, advisory: advisory?.id ?? null }}
+      advisories={advisories}
+    />
+  );
+}
+
 async function LearnersAddControl({
   user,
 }: {
@@ -163,13 +214,7 @@ async function LearnersBody({
   // Super Admin advises nothing; everyone else gets their advisories, kept only
   // where the grade is one this roster lists.
   const placements = isSuperAdmin ? [] : await placementsFor(teacherId, schoolId);
-  const advisories: AdvisoryOption[] = placements
-    .filter((p) => assignedGradeIds.includes(p.gradeLevelId))
-    .map((p) => ({
-      id: p.sectionId,
-      gradeLevelId: p.gradeLevelId,
-      label: `${p.gradeLabel} - ${p.sectionName}`,
-    }));
+  const advisories = advisoryOptionsFromPlacements(placements, assignedGradeIds);
   // An advisory in the URL counts only if it is really one of theirs, and it
   // pins the grade it belongs to.
   const advisory = advisories.find((a) => a.id === list.advisory) ?? null;
@@ -387,6 +432,19 @@ export default async function TeacherLearnersPage({
   // force-dynamic: a fresh pick per request never mismatches on hydration.
   const quote = pickQuote(Math.random, LEARNER_QUOTES);
 
+  const heroUrlState: RosterUrlState = {
+    q: list.q,
+    grade: list.grade,
+    section: list.section,
+    advisory: list.advisory,
+    gender: list.gender,
+    aralStatus: list.aralStatus,
+    sort: list.sort,
+    perPage: list.pageSize !== LEARNER_LIST_DEFAULT_PAGE_SIZE ? list.pageSize : undefined,
+    schoolId: sp.schoolId,
+    archivedView: list.filter === "archived",
+  };
+
   return (
     <AppShell
       title="Learners"
@@ -397,6 +455,22 @@ export default async function TeacherLearnersPage({
     >
       <PageHero
         bannerSrc="/brand/banner-learner.png"
+        topRight={
+          <Suspense
+            fallback={
+              <Skeleton className="h-9 w-32 rounded-xl sm:h-10 sm:w-44 lg:h-11 lg:w-56" />
+            }
+          >
+            <LearnersHeroAdvisory
+              basePath="/teacher/learners"
+              urlState={heroUrlState}
+              teacherId={user.id}
+              schoolId={schoolId}
+              isSuperAdmin={isSuperAdmin}
+              assignedGradeIds={assignedGradeIds}
+            />
+          </Suspense>
+        }
         artClassName="h-[75%] right-[calc(100%-509px)] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
         phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_52%,black_55%)]"
         headClassName="max-lg:hidden"

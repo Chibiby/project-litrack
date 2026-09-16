@@ -34,6 +34,7 @@ const SCHOOL_ID = "school-malandag";
 const OTHER_SCHOOL_ID = "school-kiblawan";
 const GRADE_ID = "grade-g7";
 const FLOATING_GRADE_ID = "grade-floating";
+const KINDER_GRADE_ID = "grade-kinder";
 const ARCHIVED_GRADE_ID = "grade-archived";
 /** Real grade, lives in OTHER_SCHOOL_ID. */
 const FOREIGN_GRADE_ID = "grade-kiblawan-g7";
@@ -383,6 +384,7 @@ beforeEach(() => {
   grades = [
     { id: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "G7" },
     { id: FLOATING_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "FLOATING" },
+    { id: KINDER_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null, type: "KINDER" },
     { id: ARCHIVED_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: new Date(2026, 5, 1), type: "G7" },
     { id: FOREIGN_GRADE_ID, schoolId: OTHER_SCHOOL_ID, deletedAt: null, type: "G7" },
   ];
@@ -445,6 +447,14 @@ describe("getTermSubjects", () => {
     const res = await getTermSubjects({ gradeLevelId: ARCHIVED_GRADE_ID });
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
+
+  it("refuses a KINDER grade with VALIDATION_FAILED, not NOT_FOUND", async () => {
+    const res = await getTermSubjects({ gradeLevelId: KINDER_GRADE_ID });
+
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    if (res.ok) return;
+    expect(res.error).toContain("competency checklist");
+  });
 });
 
 describe("createTermSubject — tenancy", () => {
@@ -492,6 +502,15 @@ describe("createTermSubject — grade liveness", () => {
     const res = await createTermSubject({ gradeLevelId: ARCHIVED_GRADE_ID, name: "New Subject" });
 
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expectNoWrite();
+  });
+
+  it("refuses a KINDER grade with VALIDATION_FAILED, and writes nothing", async () => {
+    const res = await createTermSubject({ gradeLevelId: KINDER_GRADE_ID, name: "New Subject" });
+
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    if (res.ok) return;
+    expect(res.error).toContain("competency checklist");
     expectNoWrite();
   });
 });
@@ -603,6 +622,18 @@ describe("renameTermSubject", () => {
     const res = await renameTermSubject({ id: "floating-subj", name: "Renamed" });
 
     expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+  });
+
+  it("refuses a subject on a KINDER grade with VALIDATION_FAILED — pre-existing rows stay put, unreachable", async () => {
+    termSubjects.push(subject({ id: "kinder-subj", gradeLevelId: KINDER_GRADE_ID, name: "Reading" }));
+
+    const res = await renameTermSubject({ id: "kinder-subj", name: "Renamed" });
+
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    if (res.ok) return;
+    expect(res.error).toContain("competency checklist");
+    // Untouched, not deleted.
+    expect(termSubjects.find((s) => s.id === "kinder-subj")?.name).toBe("Reading");
   });
 
   it("refuses renaming into another active subject's name on the same grade", async () => {
@@ -846,6 +877,17 @@ describe("reorderTermSubjects", () => {
     if (res.ok) return;
     expect(res.error).toContain("Floating");
   });
+
+  it("refuses reordering a KINDER grade with VALIDATION_FAILED", async () => {
+    const res = await reorderTermSubjects({
+      gradeLevelId: KINDER_GRADE_ID,
+      orderedIds: ["subject-english"],
+    });
+
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    if (res.ok) return;
+    expect(res.error).toContain("competency checklist");
+  });
 });
 
 describe("resetSchoolTermSubjects", () => {
@@ -894,6 +936,26 @@ describe("resetSchoolTermSubjects", () => {
 
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("skips Kindergarten entirely — locked with the other grades, but never read, created, restored or archived", async () => {
+    termSubjects.push(subject({ id: "kinder-subj", gradeLevelId: KINDER_GRADE_ID, name: "Reading" }));
+    // Even if a legacy KINDER template still exists, it must not be applied.
+    defaultsByType["KINDER"] = [
+      { id: "d-kinder", name: "Reading Readiness", position: 0, deletedAt: null },
+    ];
+
+    const res = await resetSchoolTermSubjects({});
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Only GRADE_ID (G7) counted — KINDER_GRADE_ID excluded.
+    expect(res.data.grades).toBe(1);
+    // The Kinder subject is untouched: not renamed, archived or replaced.
+    expect(termSubjects.find((s) => s.id === "kinder-subj")).toMatchObject({
+      name: "Reading",
+      deletedAt: null,
+    });
   });
 
   it("restores an archived subject that matches a default, keeping its own id", async () => {

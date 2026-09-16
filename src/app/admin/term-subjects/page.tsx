@@ -51,7 +51,9 @@ async function TermSubjectDefaultsBody({ gradeType }: { gradeType: GradeLevelTyp
 export default async function AdminTermSubjectDefaultsPage({ searchParams }: PageProps) {
   const user = await requireUser("SUPER_ADMIN");
   const sp = await searchParams;
-  const gradeType: GradeLevelType = isTermSheetGradeType(sp.type) ? sp.type : "KINDER";
+  const gradeType: GradeLevelType = isTermSheetGradeType(sp.type)
+    ? sp.type
+    : TERM_SHEET_GRADE_TYPES[0];
 
   const gradeTypeOptions = TERM_SHEET_GRADE_TYPES.map((type) => ({
     id: type,
@@ -61,7 +63,7 @@ export default async function AdminTermSubjectDefaultsPage({ searchParams }: Pag
   return (
     <AppShell
       title="Default Term Subjects"
-      subtitle="New schools and resets use these subjects. Existing schools keep their own lists."
+      subtitle="New schools and resets use these subjects. Existing schools keep their own lists. Kindergarten uses the competency checklist instead, so it is not listed here."
       role={user.role}
       userName={user.fullName || user.email}
     >

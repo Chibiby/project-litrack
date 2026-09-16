@@ -90,10 +90,6 @@ function renderPanel(overrides: Partial<Parameters<typeof TermsReportPanel>[0]> 
     <TermsReportPanel
       basePath="/teacher/terms-reports"
       state={{ advisory: null, section: "all", term: "FIRST", q: "", pageSize: 10 }}
-      advisories={[
-        { id: "atis", label: "Grade 3 - Atis" },
-        { id: "mabolo", label: "Grade 4 - Mabolo" },
-      ]}
       sections={[
         { id: "atis", name: "Atis" },
         { id: "mabolo", name: "Mabolo" },

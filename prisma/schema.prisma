@@ -461,6 +461,17 @@ enum LearningArea {
   TLE
 }
 
+/// DepEd's three-value Kindergarten competency-checklist scale: Beginning,
+/// Developing, Consistent. Rated per competency per term — see
+/// `KinderCompetencyRecord`. Full words, matching this file's other rating
+/// enums (`WeeklyWordRecognitionLevel` etc.), not the BG/DV/CO shorthand the
+/// paper form and UI display.
+enum KinderCompetencyRating {
+  BEGINNING
+  DEVELOPING
+  CONSISTENT
+}
+
 // =====================================================
 // MODELS
 // =====================================================
@@ -594,10 +605,11 @@ model SchoolYear {
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  school              School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  enrollments         Enrollment[]
-  termGrades          TermGrade[]
-  termWindowOverrides TermWindowOverride[]
+  school                  School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollments             Enrollment[]
+  termGrades              TermGrade[]
+  termWindowOverrides     TermWindowOverride[]
+  kinderCompetencyRecords KinderCompetencyRecord[]
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
@@ -755,41 +767,42 @@ model User {
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?
 
-  school                    School?              @relation(fields: [schoolId], references: [id])
-  schoolHeadProfile         SchoolHeadProfile?
-  teacherProfile            TeacherProfile?
+  school                     School?                  @relation(fields: [schoolId], references: [id])
+  schoolHeadProfile          SchoolHeadProfile?
+  teacherProfile             TeacherProfile?
   /// Authoritative. The sections this teacher advises — up to three, and the cap
   /// is enforced in `setTeacherAdvisory`, not in SQL, so the number can change
   /// without a migration. Deliberately renamed from `advisorySection`: every
   /// read site that assumed at most one now fails to compile rather than
   /// silently rendering the first of several.
-  advisorySections          Section[]            @relation("SectionAdviser")
-  taughtGrades              GradeLevel[]         @relation("TeacherGrades")
-  taughtSections            TeacherSection[]
-  managedLearners           Learner[]            @relation("TeacherLearners")
-  aralLearners              Learner[]            @relation("AralTeacherLearners")
-  recordedAttendance        Attendance[]         @relation("AttendanceRecorder")
-  recordedReadingLevels     ReadingLevelRecord[] @relation("ReadingRecorder")
-  recordedTermGrades        TermGrade[]          @relation("TermGradeRecorder")
-  recordedAttendanceDays    AttendanceDayMeta[]  @relation("AttendanceDayRecorder")
-  teacherEnrollments        Enrollment[]         @relation("TeacherEnrollments")
-  announcements             Announcement[]
-  teacherInvites            TeacherInvite[]      @relation("TeacherInviteUser")
-  notifications             Notification[]       @relation("NotificationRecipient")
-  notificationsCaused       Notification[]       @relation("NotificationActor")
-  reports                   Report[]             @relation("ReportCreator")
-  chatChannels              ChatChannel[]        @relation("ChatChannelMember")
-  chatMessages              ChatMessage[]        @relation("ChatMessageAuthor")
-  chatMentions              ChatMention[]        @relation("ChatMentionUser")
-  chatReads                 ChatRead[]           @relation("ChatReadUser")
-  supportTickets            SupportTicket[]      @relation("SupportTicketRequester")
-  supportTicketsResolved    SupportTicket[]      @relation("SupportTicketResolver")
-  unlockGrants              UnlockGrant[]        @relation("UnlockGrantUser")
-  unlockGrantsIssued        UnlockGrant[]        @relation("UnlockGrantGranter")
-  unlockGrantsRevoked       UnlockGrant[]        @relation("UnlockGrantRevoker")
-  schoolUnlockGrantsIssued  SchoolUnlockGrant[]  @relation("SchoolUnlockGrantGranter")
-  schoolUnlockGrantsRevoked SchoolUnlockGrant[]  @relation("SchoolUnlockGrantRevoker")
-  termWindowOverridesSet    TermWindowOverride[] @relation("TermWindowSetter")
+  advisorySections           Section[]                @relation("SectionAdviser")
+  taughtGrades               GradeLevel[]             @relation("TeacherGrades")
+  taughtSections             TeacherSection[]
+  managedLearners            Learner[]                @relation("TeacherLearners")
+  aralLearners               Learner[]                @relation("AralTeacherLearners")
+  recordedAttendance         Attendance[]             @relation("AttendanceRecorder")
+  recordedReadingLevels      ReadingLevelRecord[]     @relation("ReadingRecorder")
+  recordedTermGrades         TermGrade[]              @relation("TermGradeRecorder")
+  recordedKinderCompetencies KinderCompetencyRecord[] @relation("KinderCompetencyRecorder")
+  recordedAttendanceDays     AttendanceDayMeta[]      @relation("AttendanceDayRecorder")
+  teacherEnrollments         Enrollment[]             @relation("TeacherEnrollments")
+  announcements              Announcement[]
+  teacherInvites             TeacherInvite[]          @relation("TeacherInviteUser")
+  notifications              Notification[]           @relation("NotificationRecipient")
+  notificationsCaused        Notification[]           @relation("NotificationActor")
+  reports                    Report[]                 @relation("ReportCreator")
+  chatChannels               ChatChannel[]            @relation("ChatChannelMember")
+  chatMessages               ChatMessage[]            @relation("ChatMessageAuthor")
+  chatMentions               ChatMention[]            @relation("ChatMentionUser")
+  chatReads                  ChatRead[]               @relation("ChatReadUser")
+  supportTickets             SupportTicket[]          @relation("SupportTicketRequester")
+  supportTicketsResolved     SupportTicket[]          @relation("SupportTicketResolver")
+  unlockGrants               UnlockGrant[]            @relation("UnlockGrantUser")
+  unlockGrantsIssued         UnlockGrant[]            @relation("UnlockGrantGranter")
+  unlockGrantsRevoked        UnlockGrant[]            @relation("UnlockGrantRevoker")
+  schoolUnlockGrantsIssued   SchoolUnlockGrant[]      @relation("SchoolUnlockGrantGranter")
+  schoolUnlockGrantsRevoked  SchoolUnlockGrant[]      @relation("SchoolUnlockGrantRevoker")
+  termWindowOverridesSet     TermWindowOverride[]     @relation("TermWindowSetter")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1112,16 +1125,17 @@ model Learner {
   deletedAt  DateTime?
   archivedAt DateTime? // archive is distinct from soft-delete deletedAt
 
-  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  gradeLevel    GradeLevel           @relation(fields: [gradeLevelId], references: [id])
-  teacher       User?                @relation("TeacherLearners", fields: [teacherId], references: [id], onDelete: Restrict)
-  aralTeacher   User?                @relation("AralTeacherLearners", fields: [aralTeacherId], references: [id], onDelete: SetNull)
-  section       Section?             @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  enrollments   Enrollment[]
-  aralProfile   AralProfile?
-  attendances   Attendance[]
-  readingLevels ReadingLevelRecord[]
-  termGrades    TermGrade[]
+  school                  School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeLevel              GradeLevel               @relation(fields: [gradeLevelId], references: [id])
+  teacher                 User?                    @relation("TeacherLearners", fields: [teacherId], references: [id], onDelete: Restrict)
+  aralTeacher             User?                    @relation("AralTeacherLearners", fields: [aralTeacherId], references: [id], onDelete: SetNull)
+  section                 Section?                 @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  enrollments             Enrollment[]
+  aralProfile             AralProfile?
+  attendances             Attendance[]
+  readingLevels           ReadingLevelRecord[]
+  termGrades              TermGrade[]
+  kinderCompetencyRecords KinderCompetencyRecord[]
 
   @@index([schoolId, gradeLevelId, isAralLearner, deletedAt])
   @@index([teacherId])
@@ -1439,6 +1453,74 @@ model TermGrade {
   /// `saveTermGrades`' per-subject clear (`deleteMany` by `termSubjectId`)
   /// and `buildTermGradesTable`'s per-subject grouping both want.
   @@index([termSubjectId])
+}
+
+/// One Kindergarten learner's ratings for ONE competency in ONE school year.
+/// Kindergarten's End-of-Term report is a fixed DepEd checklist, not numeric
+/// subject scores like `TermGrade` — 62 competencies across four domains,
+/// each rated BG/DV/CO per term. The competency catalog itself is a CODE
+/// constant (`src/lib/terms/kinder-competencies.ts`), not a table: `competencyKey`
+/// below stores that constant's stable string key (e.g. `"I.1"`, `"IV.13a"`)
+/// as a plain column. Deliberately no FK to a catalog table — there is none.
+///
+/// THREE COLUMNS ON ONE ROW, NOT ONE ROW PER TERM: the deciding constraint is
+/// Remarks, which the owner specified as ONE optional free-text note per
+/// competency per learner, shared across all three terms — not one per term.
+/// A per-term row design has no single place to hang that remark (attach it
+/// to whichever term is rated first? duplicate it across terms and risk them
+/// drifting apart?). Three nullable rating columns on one row gives the
+/// remark exactly one home, and the row already keys uniquely on
+/// (learner, school year, competency) — one row is "this competency, this
+/// year, for this learner", and each term is simply an optional fact about
+/// it, the same shape `ReadingLevelRecord` uses for its own two nullable
+/// per-language profiles on one monthly row.
+///
+/// TENANCY: no `schoolId` column, following `TermGrade` (its nearest
+/// analogue — a per-learner, per-school-year record) rather than
+/// `TermWindowOverride`, which denormalises `schoolId` because its own write
+/// path resolves a school year WITHOUT first loading a specific learner. This
+/// table's write path always starts from one learner (the checklist is
+/// entered learner-by-learner), so `learner.schoolId` is already in hand and
+/// tenant scoping goes through `learnerId`/`schoolYearId` joins exactly like
+/// `TermGrade` does.
+model KinderCompetencyRecord {
+  id            String                  @id @default(uuid())
+  learnerId     String
+  schoolYearId  String
+  /// Stable key from the code-constant competency catalog. NOT an FK — see
+  /// the model comment. Any term may be unrated, so this row's existence
+  /// records "this competency has been touched for this learner this year",
+  /// not "every term is filled in".
+  competencyKey String
+  t1Rating      KinderCompetencyRating?
+  t2Rating      KinderCompetencyRating?
+  t3Rating      KinderCompetencyRating?
+  /// One optional note per competency per learner, shared across all three
+  /// terms — see the model comment for why that rules out a per-term row.
+  remark        String?
+  /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
+  recordedById  String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  recordedBy User?      @relation("KinderCompetencyRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  /// The conflict target the save path upserts on — one row per learner ×
+  /// school year × competency. Also serves the "whole sheet for one learner
+  /// in one year" read (`learnerId, schoolYearId` is this index's leading
+  /// pair) without a separate index, the same way `TermGrade`'s
+  /// `[learnerId, schoolYearId, term, termSubjectId]` unique doubles as its
+  /// own per-learner-per-year lookup.
+  @@unique([learnerId, schoolYearId, competencyKey])
+  /// Per-school-year progress count (e.g. "N of 62 competencies touched"
+  /// across the year's Kindergarten roster) — mirrors `TermGrade`'s
+  /// `[schoolYearId, term]` index for the equivalent schoolYearId-only scan.
+  @@index([schoolYearId])
+  /// R6-style FK lookup side — the side `SetNull` scans on a `User` delete,
+  /// same convention as `TermGrade.recordedById`'s index.
+  @@index([recordedById])
 }
 
 /// An in-app message addressed to one user, with its own read state.

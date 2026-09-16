@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Archive, ClipboardList, Search, SlidersHorizontal, Users } from "lucide-react";
-import { AdvisorySelect } from "@/components/learners/advisory-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,10 +35,12 @@ import {
 /**
  * v2 roster controls, to the owner's Learners mockups.
  *
- * `LearnerRosterNav` sits above the table panel: the three tabs, the
- * highlighted advisory dropdown and the add control. `LearnerListToolbar` is the panel's own top
- * row: search, every facet, More Filters and bulk actions. Below xl the facets
- * move into a sheet behind one filter button, as in the phone mockup.
+ * `LearnerRosterNav` sits above the table panel: the three tabs and the add
+ * control. The highlighted advisory dropdown lives in the page hero's
+ * top-right corner instead (see `TeacherLearnersPage`), not in this row.
+ * `LearnerListToolbar` is the panel's own top row: search, every facet, More
+ * Filters and bulk actions. Below xl the facets move into a sheet behind one
+ * filter button, as in the phone mockup.
  *
  * Every control writes the URL; the page re-reads it. Advisory, Grade and
  * Section all narrow the same rows, so each change settles the other two
@@ -185,18 +186,14 @@ const TAB_ON =
 export function LearnerRosterNav({
   basePath,
   state,
-  advisories,
   showProfiling,
   addControl,
-  onNavigate,
 }: {
   basePath: string;
   state: RosterUrlState;
-  advisories: readonly AdvisoryOption[];
   /** Hidden for Super Admin, who tutors nobody. */
   showProfiling: boolean;
   addControl?: React.ReactNode;
-  onNavigate: (href: string) => void;
 }) {
   const activeHref = rosterHref(basePath, {
     ...state,
@@ -208,8 +205,6 @@ export function LearnerRosterNav({
     archivedView: true,
     q: "",
   });
-  const go = (advisory: string | null) =>
-    onNavigate(rosterHref(basePath, withAdvisory(state, advisory, advisories)));
 
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -253,15 +248,7 @@ export function LearnerRosterNav({
         ) : null}
       </nav>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <AdvisorySelect
-          advisories={advisories}
-          value={state.advisory}
-          onChange={go}
-          className="w-full sm:w-56"
-        />
-        {addControl ? <div className="shrink-0">{addControl}</div> : null}
-      </div>
+      {addControl ? <div className="shrink-0">{addControl}</div> : null}
     </div>
   );
 }

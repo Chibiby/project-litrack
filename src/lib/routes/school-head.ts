@@ -57,6 +57,8 @@ export const SCHOOL_HEAD_ROUTES = {
   /** End of Terms subject list per grade (sidebar item). */
   termSubjects: "/school-head/term-subjects",
   reports: "/school-head/reports",
+  /** Read-only Kindergarten End-of-Term competency checklist, per learner. */
+  kinderChecklist: "/school-head/terms-reports/kinder",
   audit: "/school-head/audit",
   ipLearners: "/school-head/ip-learners",
 

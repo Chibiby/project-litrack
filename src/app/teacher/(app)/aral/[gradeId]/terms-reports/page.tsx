@@ -128,6 +128,7 @@ export default async function AralGradeTermsReportsPage({ params, searchParams }
         state={state}
         page={list.page}
         terms={terms}
+        advisories={[]}
       />
 
       <Suspense key={`${activeTerm}:${list.section}`} fallback={<TermsReportBodySkeleton />}>
@@ -153,7 +154,6 @@ export default async function AralGradeTermsReportsPage({ params, searchParams }
           state={state}
           page={list.page}
           basePath={basePath}
-          advisories={[]}
           sections={sections.map((s) => ({ id: s.id, name: s.name }))}
           termLabel={activeWindow.label}
           readOnly={readOnly}

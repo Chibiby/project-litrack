@@ -146,6 +146,13 @@ export const AUDIT_ACTIONS = {
   /** A term grade sheet downloaded as Excel. Counts only, no scores. */
   TERM_GRADES_EXPORT: "TERM_GRADES_EXPORT",
   /**
+   * One learner's Kindergarten competency checklist saved (one or more rows).
+   * Metadata carries the placement, learner id, competency keys touched and
+   * per-term counts — never the ratings or the remark text, which are
+   * learner assessment data and free-text PII respectively.
+   */
+  KINDER_COMPETENCY_BULK_SAVE: "KINDER_COMPETENCY_BULK_SAVE",
+  /**
    * End of Terms sheet subject list edits (School Head, or Super Admin viewing
    * a school). Ids, grade and subject names only — never scores.
    */

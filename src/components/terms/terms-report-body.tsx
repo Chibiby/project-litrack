@@ -20,7 +20,6 @@ export async function TermsReportBody({
   state,
   page,
   basePath,
-  advisories,
   sections,
   termLabel,
   readOnly,
@@ -33,7 +32,6 @@ export async function TermsReportBody({
   state: SheetUrlState;
   page: number;
   basePath: string;
-  advisories: { id: string; label: string }[];
   sections: { id: string; name: string }[];
   termLabel: string;
   readOnly: boolean;
@@ -60,7 +58,6 @@ export async function TermsReportBody({
         <TermsReportPanel
           basePath={basePath}
           state={state}
-          advisories={advisories}
           sections={sections}
           groups={data.groups}
           completionPct={stats.completionPct}

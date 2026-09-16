@@ -57,6 +57,13 @@ export interface SchoolHeadPageProps {
    * would put stray top margins on every wrapped grid row.
    */
   contentClassName?: string;
+  /**
+   * Suppresses the whole title block — title, description, the Super Admin
+   * drill-down badge, and `actions` — for a page whose own hero (e.g.
+   * `KinderChecklistHero`) already carries that content. Mirrors `AppShell`'s
+   * `hideTitle`, which drops the same slot for the same reason.
+   */
+  hideTitle?: boolean;
   children: React.ReactNode;
 }
 
@@ -84,33 +91,36 @@ export function SchoolHeadPage({
   activeTab,
   superAdminCaption,
   contentClassName,
+  hideTitle,
   children,
 }: SchoolHeadPageProps) {
   return (
     <main id="main-content" className="w-full p-4 lg:p-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            {title}
-          </h1>
-          {description ? (
-            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-          ) : null}
-          {view.isSuperAdminView ? (
-            // The school name belongs here rather than concatenated into the
-            // title, which is what every page used to do.
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Super Admin view</Badge>
-              <span className="text-xs text-muted-foreground">
-                {view.schoolName ?? "Unknown school"} · {superAdminCaption ?? "read-only"}
-              </span>
-            </div>
+      {!hideTitle ? (
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {title}
+            </h1>
+            {description ? (
+              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            ) : null}
+            {view.isSuperAdminView ? (
+              // The school name belongs here rather than concatenated into the
+              // title, which is what every page used to do.
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">Super Admin view</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {view.schoolName ?? "Unknown school"} · {superAdminCaption ?? "read-only"}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          {actions ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
           ) : null}
         </div>
-        {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
-        ) : null}
-      </div>
+      ) : null}
 
       {callout ? <div className="mb-6">{callout}</div> : null}
 

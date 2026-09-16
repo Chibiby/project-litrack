@@ -137,6 +137,15 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   },
   { model: "ReadingLevelRecord", delegate: "readingLevelRecord", operational: true, schoolScope: byLearner },
   { model: "TermGrade", delegate: "termGrade", operational: true, schoolScope: byLearner },
+  // Kindergarten's checklist-style End-of-Term record, TermGrade's nearest
+  // analogue: no schoolId column, tenancy goes through the same learnerId
+  // relation, so it takes the same scope and sits right beside it.
+  {
+    model: "KinderCompetencyRecord",
+    delegate: "kinderCompetencyRecord",
+    operational: true,
+    schoolScope: byLearner,
+  },
   { model: "Announcement", delegate: "announcement", operational: true, schoolScope: bySchoolId },
   { model: "Report", delegate: "report", operational: true, schoolScope: bySchoolId },
   { model: "SupportTicket", delegate: "supportTicket", operational: true, schoolScope: bySchoolId },

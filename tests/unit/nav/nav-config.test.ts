@@ -495,6 +495,7 @@ describe("getNavGroups — school head", () => {
     expect(groups[2].items.map((i) => i.label)).toEqual([
       "Announcements",
       "Reports",
+      "Kindergarten Checklist",
       "Audit",
     ]);
   });
@@ -599,5 +600,44 @@ describe("resolvePageTitle", () => {
 
   it("falls back to LITRACK at the root", () => {
     expect(resolvePageTitle("/", groups)).toBe("LITRACK");
+  });
+});
+
+describe("getNavGroups — learner-scoped ARAL pages", () => {
+  const items = flattenNavGroups(getNavGroups("TEACHER", oneAral));
+
+  // These three pages live under /teacher/aral/<gradeId>/learners/<id>/, which no
+  // ARAL row is a prefix of. Before `alsoOwns`, the only row matching them was the
+  // role root /teacher, so opening a learner's ARAL profile lit up Dashboard.
+  it("keeps the highlight on ARAL Profiling while a profile is being filled in", () => {
+    expect(resolveActiveItemId("/teacher/aral/g1/learners/l1/update", items)).toBe(
+      "teacher-aral-profiling"
+    );
+  });
+
+  it("keeps the highlight on the learner's weekly attendance and reading level rows", () => {
+    expect(resolveActiveItemId("/teacher/aral/g1/learners/l1/attendance", items)).toBe(
+      "teacher-aral-attendance"
+    );
+    expect(resolveActiveItemId("/teacher/aral/g1/learners/l1/reading-level", items)).toBe(
+      "teacher-aral-reading-level"
+    );
+  });
+
+  it("does not hand these routes to Dashboard", () => {
+    for (const path of [
+      "/teacher/aral/g1/learners/l1/update",
+      "/teacher/aral/g1/learners/l1/attendance",
+      "/teacher/aral/g1/learners/l1/reading-level",
+    ]) {
+      expect(resolveActiveItemId(path, items)).not.toBe("teacher-dashboard");
+    }
+  });
+
+  it("leaves the grade-scoped ARAL pages and the picker alone", () => {
+    expect(resolveActiveItemId("/teacher/aral/g1/attendance", items)).toBe(
+      "teacher-aral-attendance"
+    );
+    expect(resolveActiveItemId("/teacher/aral/profiling", items)).toBe("teacher-aral-profiling");
   });
 });

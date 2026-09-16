@@ -415,10 +415,8 @@ export function LearnerListClient({
       <LearnerRosterNav
         basePath={basePath}
         state={urlState}
-        advisories={advisories}
         showProfiling={!isSuperAdmin}
         addControl={addControl}
-        onNavigate={(href) => router.push(href)}
       />
 
       <Surface as="section" className="overflow-hidden rounded-2xl">

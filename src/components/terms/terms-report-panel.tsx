@@ -7,7 +7,6 @@ import { Download, Save, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectItem } from "@/components/ui/select";
-import { AdvisorySelect } from "@/components/learners/advisory-select";
 import { Surface } from "@/components/ui/surface";
 import { FacetSelect } from "@/components/learners/learner-list-toolbar";
 import { LearnerListFooter } from "@/components/learners/learner-list-footer";
@@ -45,8 +44,6 @@ function downloadBase64Xlsx(base64: string, filename: string) {
 type Props = {
   basePath: string;
   state: SheetUrlState;
-  /** The teacher's advisories. Empty for a Super Admin, who advises none. */
-  advisories: { id: string; label: string }[];
   /** Section facet options: the sections in the current advisory scope. */
   sections: { id: string; name: string }[];
   groups: SheetGroup[];
@@ -73,7 +70,6 @@ type Props = {
 export function TermsReportPanel({
   basePath,
   state,
-  advisories,
   sections,
   groups,
   completionPct,
@@ -122,9 +118,6 @@ export function TermsReportPanel({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => pushSearch(value), SEARCH_DEBOUNCE_MS);
   }
-
-  // Picking an advisory clears Section, which lists the new scope's sections.
-  const pickAdvisory = (advisory: string | null) => go({ ...state, advisory, section: "all" });
 
   // Subjects are named per grade, so the filter matches by name across groups.
   const subjectNames = [...new Set(groups.flatMap((g) => g.subjects.map((s) => s.name)))];
@@ -309,8 +302,8 @@ export function TermsReportPanel({
 
   return (
     <div className="flex flex-col gap-3 xl:gap-4">
-      {/* Phones and tablets, to the mockup: search and actions, then the
-          advisory dropdown on its own row. */}
+      {/* Phones and tablets, to the mockup: search and actions. The advisory
+          dropdown lives in the page hero's top-right corner instead. */}
       <Surface className="flex flex-col gap-2 rounded-2xl p-2.5 xl:hidden">
         <div className="flex items-center gap-2">
           {searchBox}
@@ -319,14 +312,6 @@ export function TermsReportPanel({
         </div>
         <div className="hidden grid-cols-2 gap-2 md:grid">{facets("phone")}</div>
       </Surface>
-      <Surface className="rounded-2xl p-2.5 xl:hidden">
-        <AdvisorySelect
-          advisories={advisories}
-          value={state.advisory}
-          onChange={pickAdvisory}
-          className="h-10 w-full"
-        />
-      </Surface>
 
       <Surface className="overflow-hidden rounded-2xl">
         {/* Desktop: one toolbar row across the top of the table. */}
@@ -334,12 +319,6 @@ export function TermsReportPanel({
           {searchBox}
           {facets("desktop")}
           <div className="ml-auto flex items-center gap-3">
-            <AdvisorySelect
-              advisories={advisories}
-              value={state.advisory}
-              onChange={pickAdvisory}
-              className="w-56"
-            />
             {exportButton}
             {saveButton}
           </div>

@@ -15,17 +15,27 @@ import {
 export const MAX_ACTIVE_SUBJECTS_PER_GRADE = 15;
 
 /**
- * Every `GradeLevelType` that has an End of Terms sheet at all — every value
- * except `FLOATING`, which has no advisory section and so no sheet (see
- * `AdvisoryMode.FLOATING`). Order matches the enum's own declaration in
- * `prisma/schema.prisma`.
+ * Every `GradeLevelType` with a configurable, numeric End of Terms subjects
+ * sheet — every value except:
+ * - `FLOATING`, which has no advisory section and so no sheet at all (see
+ *   `AdvisoryMode.FLOATING`);
+ * - `KINDER`, whose End-of-Term report is the fixed DepEd competency
+ *   checklist (`KINDER_COMPETENCY_CATALOG` in `kinder-competencies.ts`), not
+ *   a School Head/Super Admin configurable subject list. Owner decision,
+ *   2026-09: Kindergarten no longer participates in this machinery at all.
+ *
+ * Order matches the enum's own declaration in `prisma/schema.prisma`.
  *
  * Shared by the Super Admin default-subject validator (`gradeLevelType`
- * enum), `resetSchoolTermSubjects` (the grades it targets), and the M1
- * migration's own seed scope.
+ * enum) and the Super Admin default-subjects page's grade-type picker.
+ * `resetSchoolTermSubjects` filters `GradeLevel` rows directly (it needs live
+ * grades, not grade types) but applies the same two exclusions.
+ *
+ * Existing `TermSubject`/`TermSubjectDefault` rows for Kindergarten (seeded
+ * before this exclusion, e.g. release 1.18.3) are left in place — this list
+ * only controls what new surfaces offer going forward.
  */
 export const TERM_SHEET_GRADE_TYPES = [
-  "KINDER",
   "G1",
   "G2",
   "G3",
@@ -48,6 +58,17 @@ export const TERM_SHEET_GRADE_TYPES = [
  */
 export const FLOATING_GRADE_MESSAGE =
   "Floating has no End of Terms sheet, so it has no subjects.";
+
+/**
+ * The message shown wherever Kindergarten's End of Terms subjects are
+ * requested — Kindergarten's report is the fixed competency checklist, not a
+ * configurable subject list (see `TERM_SHEET_GRADE_TYPES` above). Every
+ * subject-management entry point refuses it with this exact sentence, the
+ * same defense-in-depth shape as `FLOATING_GRADE_MESSAGE`: the UI should
+ * never reach here, but every action re-checks anyway.
+ */
+export const KINDER_GRADE_MESSAGE =
+  "Kindergarten uses the competency checklist, not term subjects.";
 
 /**
  * A subject name's only character rule: no C0 controls or DEL. Trim/length

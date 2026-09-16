@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma, type GradeLevelType, type PrismaClient } from "@prisma/client";
 import { orderSheetSubjects } from "@/lib/terms/subjects";
+import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
 
 type Client = PrismaClient | Prisma.TransactionClient;
 
@@ -61,6 +62,12 @@ export async function getActiveDefaultsForType(
  * TENANCY: `schoolId` must be the caller's already-verified school; the where
  * clause carries it, and the composite FK makes a grade/school mismatch
  * impossible to insert.
+ *
+ * KINDERGARTEN: never seeded. Kindergarten's End-of-Term report is the fixed
+ * competency checklist (`isKinderGradeType`, `kinder-competencies.ts`), not
+ * `TermSubject` rows — a Kinder grade reaching this loader (it should not,
+ * per `TERM_SHEET_GRADE_TYPES`) returns whatever rows already exist (usually
+ * none) rather than seeding numeric subjects it has no sheet for.
  */
 export async function getAllTermSubjects(
   client: Client,
@@ -75,6 +82,7 @@ export async function getAllTermSubjects(
     select: { type: true },
   });
   if (!grade) return rows;
+  if (isKinderGradeType(grade.type)) return rows;
 
   const defaults = await getActiveDefaultsForType(client, grade.type);
   if (defaults.length === 0) return rows;

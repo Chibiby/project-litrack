@@ -38,6 +38,7 @@ export function PageHero({
   headClassName,
   className,
   contentClassName,
+  topRight,
   children,
 }: {
   bannerSrc: string;
@@ -49,6 +50,13 @@ export function PageHero({
   headClassName?: string;
   className?: string;
   contentClassName?: string;
+  /**
+   * A control floated in the hero's top-right corner, over the art — e.g. the
+   * advisory scope switcher. Wrapped in its own tinted, ringed surface so it
+   * stays legible over the illustration; sized down and re-anchored on the
+   * narrowest phones so it never overlaps the title.
+   */
+  topRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const art = (
@@ -99,6 +107,13 @@ export function PageHero({
       >
         {children}
       </div>
+      {topRight ? (
+        <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4 lg:right-6 lg:top-6">
+          <div className="rounded-xl border border-border/70 bg-card/95 p-1 shadow-card backdrop-blur-sm sm:rounded-2xl">
+            {topRight}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

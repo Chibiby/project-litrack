@@ -234,6 +234,20 @@ describe("getAllTermSubjects — the lazy seed", () => {
     expect(result).toEqual([]);
   });
 
+  it("never seeds a KINDER grade — Kindergarten's report is the fixed competency checklist", async () => {
+    gradeType = "KINDER";
+    // Even if a legacy KINDER template still has active default rows (e.g.
+    // from before release 1.18.3 was reverted), the lazy seed must not use
+    // them: Kindergarten has no numeric End of Terms sheet at all.
+    defaultRows = eightDefaults().map((d) => ({ ...d, gradeLevelType: "KINDER" }));
+
+    const result = await getAllTermSubjects(client, { schoolId: SCHOOL_ID, gradeLevelId: GRADE_ID });
+
+    expect(createMany).not.toHaveBeenCalled();
+    expect(termSubjectDefaultFindMany).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+
   it("does NOT re-seed when every existing row is archived", async () => {
     // A head who archived all 8 (or all of a custom set) must not get the
     // defaults handed back — "zero rows", not "zero active rows", is the

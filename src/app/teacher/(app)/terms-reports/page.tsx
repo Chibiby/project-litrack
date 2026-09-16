@@ -18,6 +18,9 @@ import {
 import { parseLearnerListParams, parseLearnerPageSize } from "@/lib/learners/pagination";
 import { resolveSheetTerms, shortGradeLabel, type SheetScope } from "@/lib/terms/sheet-data";
 import type { SheetUrlState } from "@/lib/terms/sheet-view";
+import { splitByKinderGradeType } from "@/lib/terms/kinder-checklist-view";
+import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
+import { KINDER_TERMS_REPORTS_PATH, kinderChecklistHref } from "@/components/terms/kinder-route";
 import { CalendarX } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -105,9 +108,30 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
     viewer: { id: user.id, schoolId, isSuperAdmin },
   });
 
-  // Only the teacher's own sections count. An unknown id falls back to All.
-  const advisory = placements.find((p) => p.sectionId === sp.advisory) ?? null;
-  const inAdvisory = advisory ? [advisory] : placements;
+  const { kinder: kinderPlacements, numeric: numericPlacements } =
+    splitByKinderGradeType(placements);
+
+  // A Kinder-only teacher has no numeric sheet to render at all — send them
+  // straight to the checklist (owner decision, overriding the spec's "render
+  // the numeric page with a link" behavior for the mixed case).
+  if (numericPlacements.length === 0 && kinderPlacements.length > 0) {
+    redirect(kinderChecklistHref({ schoolId: sp.schoolId ?? null, advisory: sp.advisory ?? null }));
+  }
+
+  // Only the teacher's own sections count. An unknown id falls back to the
+  // non-Kinder default — a mixed-advisory teacher never lands on a scope that
+  // silently spans both report shapes; there is no "All advisories" default
+  // that includes Kindergarten anymore. Picking a Kinder advisory from the
+  // dropdown instead navigates away entirely (`TermsAdvisoryHeroControl`'s
+  // `kinderBasePath`).
+  const requestedAdvisory = placements.find((p) => p.sectionId === sp.advisory) ?? null;
+  if (requestedAdvisory && isKinderGradeType(requestedAdvisory.gradeType)) {
+    redirect(
+      kinderChecklistHref({ schoolId: sp.schoolId ?? null, advisory: requestedAdvisory.sectionId })
+    );
+  }
+  const advisory = requestedAdvisory;
+  const inAdvisory = advisory ? [advisory] : numericPlacements;
   const sectionPick = inAdvisory.find((p) => p.sectionId === sp.section) ?? null;
   const inScope = sectionPick ? [sectionPick] : inAdvisory;
 
@@ -142,6 +166,7 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
   const title = `End of Terms Reports — ${
     scopeGrades.length === 1 ? scopeGrades[0] : "All Advisories"
   }`;
+  const advisories = placements.map((p) => ({ id: p.sectionId, label: labelOf(p) }));
 
   return (
     <AppShell title="End of Terms Reports" role={user.role} userName={userName} hideTitle>
@@ -152,6 +177,9 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
         state={state}
         page={list.page}
         terms={terms}
+        advisories={advisories}
+        kinderSectionIds={kinderPlacements.map((p) => p.sectionId)}
+        kinderBasePath={KINDER_TERMS_REPORTS_PATH}
       />
 
       <Suspense key={`${activeTerm}:${state.advisory}:${state.section}`} fallback={<TermsReportBodySkeleton />}>
@@ -162,7 +190,6 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
           state={state}
           page={list.page}
           basePath={BASE_PATH}
-          advisories={placements.map((p) => ({ id: p.sectionId, label: labelOf(p) }))}
           sections={inAdvisory.map((p) => ({ id: p.sectionId, name: p.sectionName }))}
           termLabel={activeWindow.label}
           readOnly={readOnly}

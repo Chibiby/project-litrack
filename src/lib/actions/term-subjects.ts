@@ -12,11 +12,13 @@ import { revalidateTermSubjects } from "@/lib/cache/revalidate";
 import { BULK_TX_OPTIONS } from "@/lib/db/bulk-write";
 import {
   FLOATING_GRADE_MESSAGE,
+  KINDER_GRADE_MESSAGE,
   MAX_ACTIVE_SUBJECTS_PER_GRADE,
   nextPosition,
   planSubjectReorder,
   planSubjectReset,
 } from "@/lib/terms/subjects";
+import { isKinderGradeType } from "@/lib/terms/kinder-competencies";
 import {
   getActiveDefaultsForType,
   getAllTermSubjects,
@@ -74,6 +76,9 @@ async function loadGrade(
   if (grade.type === "FLOATING") {
     throw new AppError("VALIDATION_FAILED", { params: { message: FLOATING_GRADE_MESSAGE } });
   }
+  if (isKinderGradeType(grade.type)) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: KINDER_GRADE_MESSAGE } });
+  }
   return { id: grade.id, schoolId: grade.schoolId };
 }
 
@@ -97,6 +102,9 @@ async function loadSubject(user: User, id: string) {
   if (!isSuperAdmin) assertSameSchool(user.schoolId!, subject.schoolId, "Subject");
   if (subject.gradeLevel.type === "FLOATING") {
     throw new AppError("VALIDATION_FAILED", { params: { message: FLOATING_GRADE_MESSAGE } });
+  }
+  if (isKinderGradeType(subject.gradeLevel.type)) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: KINDER_GRADE_MESSAGE } });
   }
   return subject;
 }
@@ -409,7 +417,12 @@ export const resetSchoolTermSubjects = action(
     }
 
     const data = await prisma.$transaction(async (tx) => {
-      const grades = await tx.$queryRaw<{ id: string; type: string }[]>`
+      // Locks every live, non-FLOATING grade (including Kindergarten, so a
+      // concurrent write to it still serialises here), then drops
+      // Kindergarten before anything is read or written for it — its report
+      // is the fixed competency checklist, never a `TermSubjectDefault`
+      // template.
+      const lockedGrades = await tx.$queryRaw<{ id: string; type: string }[]>`
         SELECT "id", "type" FROM "GradeLevel"
         WHERE "schoolId" = ${schoolId}
           AND "deletedAt" IS NULL
@@ -417,6 +430,7 @@ export const resetSchoolTermSubjects = action(
         ORDER BY "id"
         FOR UPDATE
       `;
+      const grades = lockedGrades.filter((g) => !isKinderGradeType(g.type));
 
       let created = 0;
       let restored = 0;

@@ -26,6 +26,25 @@ export const GRADE_LEVEL_OPTIONS = Object.entries(GRADE_LEVEL_LABELS).map(
 
 export const GENDER_LABELS = { MALE: "Male", FEMALE: "Female" } as const;
 
+/**
+ * `KinderCompetencyRating` (the Kindergarten End-of-Term competency checklist
+ * scale: Beginning / Developing / Consistent). Full-word labels, keyed by the
+ * stored enum value — matching `prisma/schema.prisma`'s own comment that the
+ * enum uses full words, not the paper form's BG/DV/CO shorthand.
+ */
+export const KINDER_COMPETENCY_RATING_LABELS = {
+  BEGINNING: "Beginning",
+  DEVELOPING: "Developing",
+  CONSISTENT: "Consistent",
+} as const;
+
+/** The short codes the checklist's on-screen rating selects show (BG/DV/CO). */
+export const KINDER_COMPETENCY_RATING_SHORT_LABELS = {
+  BEGINNING: "BG",
+  DEVELOPING: "DV",
+  CONSISTENT: "CO",
+} as const;
+
 export const ATTENDANCE_STATUS_LABELS = {
   PRESENT: "Present",
   ABSENT: "Absent",
