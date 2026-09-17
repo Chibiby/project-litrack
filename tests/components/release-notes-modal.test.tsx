@@ -29,18 +29,19 @@ vi.mock("@/lib/post-login-flag", () => ({
 
 let announce = true;
 let withWelcome = false;
+const L = (en: string) => ({ en, fil: `FIL ${en}` });
 const WELCOME: import("@/lib/releases").ReleaseWelcome = {
-  headline: "Welcome to the test app!",
-  intro: "An intro line.",
-  highlightsTitle: "What is new",
-  highlightsSubtitle: "A subtitle.",
+  headline: L("Welcome to the test app!"),
+  intro: L("An intro line."),
+  highlightsTitle: L("What is new"),
+  highlightsSubtitle: L("A subtitle."),
   highlights: [
-    { icon: "reports", tone: "emerald", title: "For everyone", body: "Card body." },
-    { icon: "schools", tone: "violet", title: "Admins only card", body: "Card body.", roles: ["SUPER_ADMIN"] },
+    { icon: "reports", tone: "emerald", title: L("For everyone"), body: L("Card body.") },
+    { icon: "schools", tone: "violet", title: L("Admins only card"), body: L("Card body."), roles: ["SUPER_ADMIN"] },
   ],
   guide: [
-    { icon: "dashboard", tone: "violet", title: "Teacher step one", body: "Step body.", roles: ["TEACHER"] },
-    { icon: "help", tone: "amber", title: "Everyone step two", body: "Step body." },
+    { icon: "dashboard", tone: "violet", title: L("Teacher step one"), body: L("Step body."), href: "/teacher", roles: ["TEACHER"] },
+    { icon: "help", tone: "amber", title: L("Everyone step two"), body: L("Step body.") },
   ],
 };
 vi.mock("@/lib/releases", async (importOriginal) => {
@@ -318,6 +319,32 @@ describe("ReleaseNotesModal — the landmark welcome", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledTimes(1));
+  });
+
+  it("opens a step's page from Show me and acknowledges", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getByRole("button", { name: /let's get started/i }));
+    const showMe = screen.getByRole("link", { name: /show me/i });
+    expect(showMe.getAttribute("href")).toBe("/teacher");
+
+    fireEvent.click(showMe);
+    await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledTimes(1));
+  });
+
+  it("reads in Filipino when chosen, and remembers it", async () => {
+    const { unmount } = render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getAllByRole("radio", { name: "Filipino" })[0]);
+    expect(await screen.findByText("FIL Welcome to the test app!")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /magsimula/i })).toBeTruthy();
+
+    unmount();
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    expect(await screen.findByText("FIL Welcome to the test app!")).toBeTruthy();
+    window.localStorage.clear();
   });
 
   it("leaves another role's steps out of the tour", async () => {

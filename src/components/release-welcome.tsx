@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -27,10 +27,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type {
+  LocalizedText,
   ReleaseGuideStep,
   ReleaseHighlight,
   ReleaseHighlightIcon,
   ReleaseHighlightTone,
+  WelcomeLocale,
 } from "@/lib/releases";
 
 const ICONS: Record<ReleaseHighlightIcon, LucideIcon> = {
@@ -79,11 +81,91 @@ const TONES: Record<ReleaseHighlightTone, { card: string; chip: string }> = {
 
 const VIOLET_BUTTON = "bg-violet text-violet-foreground hover:bg-violet/90";
 
+type UiCopy = {
+  viewChangelog: string;
+  dontShowAgain: string;
+  exploreLater: string;
+  getStarted: string;
+  quickTour: string;
+  quickTourDescription: string;
+  step: (n: number, total: number) => string;
+  back: string;
+  next: string;
+  finish: string;
+  saving: string;
+  skipTour: string;
+  showMe: string;
+  tourProgress: string;
+  language: string;
+};
+
+/** The modal's own labels. The release copy itself lives in `RELEASES`. */
+const UI: Record<WelcomeLocale, UiCopy> = {
+  en: {
+    viewChangelog: "View Changelog",
+    dontShowAgain: "Don't show this again",
+    exploreLater: "Explore Later",
+    getStarted: "Let's Get Started",
+    quickTour: "Quick tour",
+    quickTourDescription: "A few steps to find your way around Litrack v2.",
+    step: (n, total) => `Step ${n} of ${total}`,
+    back: "Back",
+    next: "Next",
+    finish: "Finish",
+    saving: "Saving…",
+    skipTour: "Skip tour",
+    showMe: "Show me",
+    tourProgress: "Tour progress",
+    language: "Language",
+  },
+  fil: {
+    viewChangelog: "Tingnan ang Changelog",
+    dontShowAgain: "Huwag ipakita muli",
+    exploreLater: "Tuklasin Mamaya",
+    getStarted: "Magsimula",
+    quickTour: "Maikling gabay",
+    quickTourDescription: "Ilang hakbang upang makilala ang Litrack v2.",
+    step: (n, total) => `Hakbang ${n} ng ${total}`,
+    back: "Bumalik",
+    next: "Susunod",
+    finish: "Tapos",
+    saving: "Sine-save…",
+    skipTour: "Laktawan",
+    showMe: "Ipakita",
+    tourProgress: "Progreso ng gabay",
+    language: "Wika",
+  },
+};
+
+const LOCALE_KEY = "litrack:welcome-locale";
+
+/** Remembered per browser as a convenience; any storage failure means English. */
+function useWelcomeLocale(): [WelcomeLocale, (next: WelcomeLocale) => void] {
+  const [locale, setLocale] = useState<WelcomeLocale>("en");
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(LOCALE_KEY) === "fil") setLocale("fil");
+    } catch {
+      // Storage blocked: stay on English.
+    }
+  }, []);
+  const choose = (next: WelcomeLocale) => {
+    setLocale(next);
+    try {
+      window.localStorage.setItem(LOCALE_KEY, next);
+    } catch {
+      // Storage blocked: the choice lasts until the modal closes.
+    }
+  };
+  return [locale, choose];
+}
+
 /**
  * The one-time LitRack v2 welcome, rendered inside the release modal's
- * `DialogContent`. Two views: the welcome itself, and a short tour behind
- * "Let's Get Started". Read-only — the only write is the acknowledgement the
- * caller runs from `onDismiss` / `onComplete`.
+ * `DialogContent`. Two views — the welcome itself, and a short tour behind
+ * "Let's Get Started" — each readable in English or Filipino. Read-only: the
+ * only write is the acknowledgement the caller runs from `onDismiss` /
+ * `onComplete`.
  */
 export function ReleaseWelcome({
   version,
@@ -101,10 +183,10 @@ export function ReleaseWelcome({
   onComplete,
 }: {
   version: string;
-  headline: string;
-  intro: string;
-  highlightsTitle: string;
-  highlightsSubtitle: string;
+  headline: LocalizedText;
+  intro: LocalizedText;
+  highlightsTitle: LocalizedText;
+  highlightsSubtitle: LocalizedText;
   highlights: ReleaseHighlight[];
   guide: ReleaseGuideStep[];
   dontShowAgain: boolean;
@@ -113,59 +195,64 @@ export function ReleaseWelcome({
   saving: boolean;
   /** "Explore Later", ✕, Escape: acknowledges only when "Don't show this again" is on. */
   onDismiss: () => void;
-  /** Finishing or skipping the tour: always acknowledges. */
+  /** Finishing, skipping, or leaving the tour for a page: always acknowledges. */
   onComplete: () => void;
 }) {
   const [step, setStep] = useState<number | null>(null);
-  const checkboxId = useId();
+  const [locale, setLocale] = useWelcomeLocale();
+  const ui = UI[locale];
+  const baseId = useId();
   const shortVersion = version.replace(/\.0$/, "");
+  const languageSwitch = <LanguageSwitch locale={locale} onChange={setLocale} label={ui.language} />;
 
   return (
-    <div className="flex max-h-[92dvh] min-h-0 flex-col">
+    <div lang={locale} className="flex max-h-[92dvh] min-h-0 flex-col">
       <WelcomeBanner
         shortVersion={shortVersion}
-        headline={headline}
-        intro={intro}
+        headline={headline[locale]}
+        intro={intro[locale]}
         compact={step !== null}
+        ui={ui}
+        languageSwitch={languageSwitch}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
         {step === null ? (
           <section
-            aria-labelledby={`${checkboxId}-new`}
+            aria-labelledby={`${baseId}-new`}
             className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6"
           >
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <div className="min-w-0">
-                <h3 id={`${checkboxId}-new`} className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
-                  {highlightsTitle}
+                <h3 id={`${baseId}-new`} className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
+                  {highlightsTitle[locale]}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{highlightsSubtitle}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{highlightsSubtitle[locale]}</p>
               </div>
               <Link
                 href="/releases"
                 onClick={onDismiss}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-violet hover:underline sm:mt-2"
               >
-                View Changelog
+                {ui.viewChangelog}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
 
             <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
               {highlights.map((h) => (
-                <li key={h.title} className={cn("flex gap-3 rounded-xl p-4", TONES[h.tone].card)}>
+                <li key={h.title.en} className={cn("flex gap-3 rounded-xl p-4", TONES[h.tone].card)}>
                   <ToneChip icon={h.icon} tone={h.tone} />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground sm:text-[15px]">{h.title}</p>
-                    <p className="mt-1 text-sm leading-snug text-muted-foreground">{h.body}</p>
+                    <p className="text-sm font-semibold text-foreground sm:text-[15px]">{h.title[locale]}</p>
+                    <p className="mt-1 text-sm leading-snug text-muted-foreground">{h.body[locale]}</p>
                   </div>
                 </li>
               ))}
             </ul>
           </section>
         ) : (
-          <GuideStep steps={guide} index={step} />
+          <GuideStep steps={guide} index={step} locale={locale} ui={ui} onShowMe={onComplete} />
         )}
 
         {error ? (
@@ -177,47 +264,47 @@ export function ReleaseWelcome({
 
       {step === null ? (
         <footer className="flex flex-col gap-3 border-t border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <label htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
+          <label htmlFor={`${baseId}-dont`} className="flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
             <Checkbox
-              id={checkboxId}
+              id={`${baseId}-dont`}
               checked={dontShowAgain}
               onCheckedChange={(v) => onDontShowAgainChange(v === true)}
               className="data-[state=checked]:border-violet data-[state=checked]:bg-violet data-[state=checked]:text-violet-foreground"
             />
-            Don&apos;t show this again
+            {ui.dontShowAgain}
           </label>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
             <Button variant="outline" onClick={onDismiss} disabled={saving} className="sm:min-w-36">
-              Explore Later
+              {ui.exploreLater}
             </Button>
             <Button
               onClick={() => setStep(0)}
               disabled={saving || guide.length === 0}
               className={cn(VIOLET_BUTTON, "sm:min-w-44")}
             >
-              Let&apos;s Get Started
+              {ui.getStarted}
               <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </footer>
       ) : (
         <footer className="flex items-center justify-between gap-3 border-t border-border px-4 py-4 sm:px-6">
-          <Button variant="ghost" onClick={onComplete} disabled={saving} className="text-muted-foreground">
-            Skip tour
+          <Button variant="ghost" onClick={onComplete} disabled={saving} className="px-2 text-muted-foreground sm:px-4">
+            {ui.skipTour}
           </Button>
           <div className="flex gap-2 sm:gap-3">
             <Button variant="outline" onClick={() => setStep(step === 0 ? null : step - 1)} disabled={saving}>
               <ArrowLeft className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Back
+              {ui.back}
             </Button>
             {step < guide.length - 1 ? (
               <Button onClick={() => setStep(step + 1)} className={VIOLET_BUTTON}>
-                Next
+                {ui.next}
                 <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
               </Button>
             ) : (
-              <Button onClick={onComplete} loading={saving} loadingText="Saving…" className={VIOLET_BUTTON}>
-                Finish
+              <Button onClick={onComplete} loading={saving} loadingText={ui.saving} className={VIOLET_BUTTON}>
+                {ui.finish}
               </Button>
             )}
           </div>
@@ -227,16 +314,58 @@ export function ReleaseWelcome({
   );
 }
 
+function LanguageSwitch({
+  locale,
+  onChange,
+  label,
+}: {
+  locale: WelcomeLocale;
+  onChange: (next: WelcomeLocale) => void;
+  label: string;
+}) {
+  const options: { value: WelcomeLocale; text: string }[] = [
+    { value: "en", text: "English" },
+    { value: "fil", text: "Filipino" },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex rounded-full border border-border bg-card/90 p-0.5 text-xs font-semibold shadow-sm backdrop-blur"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={locale === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "min-h-8 rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            locale === o.value ? "bg-violet text-violet-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {o.text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function WelcomeBanner({
   shortVersion,
   headline,
   intro,
   compact,
+  ui,
+  languageSwitch,
 }: {
   shortVersion: string;
   headline: string;
   intro: string;
   compact: boolean;
+  ui: UiCopy;
+  languageSwitch: React.ReactNode;
 }) {
   return (
     <header
@@ -255,7 +384,7 @@ function WelcomeBanner({
         height={579}
         priority
         className={cn(
-          "pointer-events-none absolute bottom-0 right-0 -z-10 h-full w-auto max-w-none object-cover object-right [mask-image:linear-gradient(to_right,transparent,black_30%)]",
+          "pointer-events-none absolute bottom-0 right-0 -z-10 h-full w-auto max-w-none object-cover object-right [mask-image:linear-gradient(to_right,transparent_40%,black_56%)]",
           compact ? "opacity-40 sm:opacity-70" : "opacity-30 sm:opacity-60 lg:opacity-100"
         )}
       />
@@ -264,7 +393,10 @@ function WelcomeBanner({
         className="absolute inset-0 -z-10 bg-gradient-to-r from-background/95 via-background/60 to-transparent lg:via-background/40"
       />
 
-      <div className="flex items-center gap-3">
+      {/* Beside the close button from sm up; under the intro on phones. */}
+      <div className="absolute right-16 top-5 hidden sm:block">{languageSwitch}</div>
+
+      <div className="flex items-center gap-3 pr-12 sm:pr-0">
         <Image src="/logo.png" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -281,51 +413,71 @@ function WelcomeBanner({
         <>
           <DialogTitle className="mt-3 flex items-center gap-2 text-lg font-bold tracking-tight text-foreground sm:text-xl">
             <Sparkles className="h-5 w-5 text-violet" aria-hidden="true" />
-            Quick tour
+            {ui.quickTour}
           </DialogTitle>
-          <DialogDescription className="sr-only">A few steps to find your way around Litrack v2.</DialogDescription>
+          <DialogDescription className="sr-only">{ui.quickTourDescription}</DialogDescription>
         </>
       ) : (
         <>
-          <DialogTitle className="mt-4 max-w-[34rem] text-3xl font-extrabold tracking-tight text-foreground sm:mt-6 sm:text-4xl lg:text-[2.75rem] lg:leading-tight [@media(max-height:800px)]:sm:mt-4 [@media(max-height:800px)]:lg:text-4xl">
+          <DialogTitle className="mt-4 max-w-[34rem] text-3xl lg:max-w-[27rem] font-extrabold tracking-tight text-foreground sm:mt-6 sm:text-4xl lg:text-[2.75rem] lg:leading-tight [@media(max-height:800px)]:sm:mt-4 [@media(max-height:800px)]:lg:text-4xl">
             {headline}
           </DialogTitle>
-          <DialogDescription className="mt-2 max-w-[28rem] text-sm leading-relaxed text-muted-foreground sm:mt-3 sm:text-base lg:text-lg">
+          <DialogDescription className="mt-2 max-w-[28rem] text-sm lg:max-w-[25rem] leading-relaxed text-muted-foreground sm:mt-3 sm:text-base">
             {intro}
           </DialogDescription>
         </>
       )}
+
+      <div className="mt-3 sm:hidden">{languageSwitch}</div>
     </header>
   );
 }
 
-function GuideStep({ steps, index }: { steps: ReleaseGuideStep[]; index: number }) {
+function GuideStep({
+  steps,
+  index,
+  locale,
+  ui,
+  onShowMe,
+}: {
+  steps: ReleaseGuideStep[];
+  index: number;
+  locale: WelcomeLocale;
+  ui: UiCopy;
+  /** Leaving for a page ends the tour, so it acknowledges like Finish. */
+  onShowMe: () => void;
+}) {
   const current = steps[index];
   if (!current) return null;
   return (
     <section aria-live="polite" className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Step {index + 1} of {steps.length}
+        {ui.step(index + 1, steps.length)}
       </p>
       <div className={cn("mt-4 flex flex-col gap-4 rounded-xl p-5 sm:flex-row sm:items-start sm:gap-5 sm:p-6", TONES[current.tone].card)}>
         <ToneChip icon={current.icon} tone={current.tone} large />
-        <div className="min-w-0">
-          <h3 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">{current.title}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">{current.body}</p>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">{current.title[locale]}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">{current.body[locale]}</p>
+          {current.href ? (
+            <Button asChild variant="outline" size="sm" className="mt-4">
+              <Link href={current.href} onClick={onShowMe}>
+                {ui.showMe}
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </div>
-      <ol className="mt-5 flex justify-center gap-1.5" aria-label="Tour progress">
+      <ol className="mt-5 flex justify-center gap-1.5" aria-label={ui.tourProgress}>
         {steps.map((s, i) => (
           <li
-            key={s.title + i}
+            key={`${s.title.en}-${i}`}
             aria-current={i === index ? "step" : undefined}
-            className={cn(
-              "h-1.5 rounded-full transition-all",
-              i === index ? "w-6 bg-violet" : "w-1.5 bg-border"
-            )}
+            className={cn("h-1.5 rounded-full transition-all", i === index ? "w-6 bg-violet" : "w-1.5 bg-border")}
           >
             <span className="sr-only">
-              Step {i + 1}: {s.title}
+              {ui.step(i + 1, steps.length)}: {s.title[locale]}
             </span>
           </li>
         ))}

@@ -93,11 +93,16 @@ export type ReleaseHighlightIcon =
 /** Tints the welcome cards use; the same families as the dashboard stat cards. */
 export type ReleaseHighlightTone = "violet" | "emerald" | "blue" | "amber" | "rose" | "purple";
 
+/** Languages the welcome can be read in. Patch notes stay English. */
+export type WelcomeLocale = "en" | "fil";
+
+export type LocalizedText = Readonly<Record<WelcomeLocale, string>>;
+
 export type ReleaseHighlight = {
   icon: ReleaseHighlightIcon;
   tone: ReleaseHighlightTone;
-  title: string;
-  body: string;
+  title: LocalizedText;
+  body: LocalizedText;
   /** Same rule as a restricted `ReleaseNote`: omit for everybody. */
   roles?: readonly ReleaseAudience[];
 };
@@ -106,18 +111,20 @@ export type ReleaseHighlight = {
 export type ReleaseGuideStep = {
   icon: ReleaseHighlightIcon;
   tone: ReleaseHighlightTone;
-  title: string;
-  body: string;
+  title: LocalizedText;
+  body: LocalizedText;
+  /** The page "Show me" opens. Omit for a step that is not about one page. */
+  href?: string;
   roles?: readonly ReleaseAudience[];
 };
 
 export type ReleaseWelcome = {
   /** Large line at the top of the modal. */
-  headline: string;
+  headline: LocalizedText;
   /** One or two sentences under the headline. */
-  intro: string;
-  highlightsTitle: string;
-  highlightsSubtitle: string;
+  intro: LocalizedText;
+  highlightsTitle: LocalizedText;
+  highlightsSubtitle: LocalizedText;
   highlights: readonly ReleaseHighlight[];
   guide: readonly ReleaseGuideStep[];
 };
@@ -133,118 +140,234 @@ export const RELEASES: readonly Release[] = [
     title: "Welcome to LitRack v2",
     announce: true,
     welcome: {
-      headline: "Welcome to Litrack v2!",
-      intro:
-        "A more modern, faster, and more complete learner profiling system — built to make teaching and learning management easier for you.",
-      highlightsTitle: "What's New in Litrack v2",
-      highlightsSubtitle: "New features and improvements to give you a better experience.",
+      headline: {
+        en: "Welcome to Litrack v2!",
+        fil: "Maligayang pagdating sa Litrack v2!",
+      },
+      intro: {
+        en: "A more modern, faster, and more complete learner profiling system — built to make teaching and learning management easier for you.",
+        fil: "Isang mas moderno, mas mabilis, at mas kumpletong sistema ng learner profiling — nilikha upang gawing mas madali ang pagtuturo at pamamahala ng pagkatuto.",
+      },
+      highlightsTitle: {
+        en: "What's New in Litrack v2",
+        fil: "Mga Bago sa Litrack v2",
+      },
+      highlightsSubtitle: {
+        en: "New features and improvements to give you a better experience.",
+        fil: "Mga bagong feature at pagpapabuti para sa mas mahusay na paggamit.",
+      },
       highlights: [
         {
           icon: "profiling",
           tone: "violet",
-          title: "Improved Learner Profiling",
-          body: "Easier and faster encoding with a cleaner, modern interface.",
+          title: {
+            en: "Improved Learner Profiling",
+            fil: "Pinahusay na Learner Profiling",
+          },
+          body: {
+            en: "Easier and faster encoding with a cleaner, modern interface.",
+            fil: "Mas madali at mas mabilis na pag-encode sa malinis at modernong anyo.",
+          },
         },
         {
           icon: "reports",
           tone: "emerald",
-          title: "Enhanced Reports",
-          body: "Generate End of Term Reports with updated formats and more options.",
+          title: {
+            en: "Enhanced Reports",
+            fil: "Mas Mahusay na mga Ulat",
+          },
+          body: {
+            en: "Generate End of Term Reports with updated formats and more options.",
+            fil: "Gumawa ng End of Term Reports gamit ang bagong format at mas maraming pagpipilian.",
+          },
         },
         {
           icon: "analytics",
           tone: "blue",
-          title: "Better Analytics",
-          body: "Visual insights to help you monitor learner progress.",
+          title: {
+            en: "Better Analytics",
+            fil: "Mas Malinaw na Datos",
+          },
+          body: {
+            en: "Visual insights to help you monitor learner progress.",
+            fil: "Mga larawan at bilang na tumutulong sa pagsubaybay sa pag-unlad ng mga mag-aaral.",
+          },
         },
         {
           icon: "mobile",
           tone: "amber",
-          title: "Mobile Friendly",
-          body: "Access key features anytime, anywhere.",
+          title: {
+            en: "Mobile Friendly",
+            fil: "Madaling Gamitin sa Phone",
+          },
+          body: {
+            en: "Access key features anytime, anywhere.",
+            fil: "Buksan ang mahahalagang bahagi anumang oras, saanman.",
+          },
         },
         {
           icon: "speed",
           tone: "rose",
-          title: "Instant Updates",
-          body: "What you save, archive or delete shows up right away.",
+          title: {
+            en: "Instant Updates",
+            fil: "Agad na Pagbabago",
+          },
+          body: {
+            en: "What you save, archive or delete shows up right away.",
+            fil: "Ang iyong sine-save, ina-archive o binubura ay agad na makikita.",
+          },
         },
         {
           icon: "workflow",
           tone: "purple",
-          title: "Streamlined Workflow",
-          body: "A smoother and more organized experience for teachers and school heads.",
+          title: {
+            en: "Streamlined Workflow",
+            fil: "Mas Maayos na Daloy ng Gawain",
+          },
+          body: {
+            en: "A smoother and more organized experience for teachers and school heads.",
+            fil: "Mas maayos at organisadong paggamit para sa mga guro at school head.",
+          },
         },
       ],
       guide: [
         {
           icon: "dashboard",
           tone: "violet",
-          title: "Start at your Dashboard",
-          body: "See your grades, learners, ARAL learners and pending profiles at a glance. Each card opens the page behind it.",
+          title: {
+            en: "Start at your Dashboard",
+            fil: "Magsimula sa iyong Dashboard",
+          },
+          body: {
+            en: "See your grades, learners, ARAL learners and pending profiles at a glance. Each card opens the page behind it.",
+            fil: "Tingnan sa isang sulyap ang iyong mga baitang, mag-aaral, ARAL learners at mga profile na hindi pa kumpleto. Bawat card ay nagbubukas ng pahina nito.",
+          },
+          href: "/teacher",
           roles: ["TEACHER"],
         },
         {
           icon: "learners",
           tone: "blue",
-          title: "Find any learner",
-          body: "On Learners, switch advisories from the banner, filter by grade, section, gender or ARAL status, and open a learner's menu to view, enroll in ARAL or archive.",
+          title: {
+            en: "Find any learner",
+            fil: "Hanapin ang anumang mag-aaral",
+          },
+          body: {
+            en: "On Learners, switch advisories from the banner, filter by grade, section, gender or ARAL status, and open a learner's menu to view, enroll in ARAL or archive.",
+            fil: "Sa Learners, pumili ng advisory sa banner, i-filter ayon sa baitang, seksyon, kasarian o ARAL status, at buksan ang menu ng mag-aaral upang tingnan, i-enroll sa ARAL o i-archive.",
+          },
+          href: "/teacher/learners",
           roles: ["TEACHER"],
         },
         {
           icon: "aral",
           tone: "emerald",
-          title: "Run the ARAL Program",
-          body: "Under ARAL Program in the side menu: record Weekly Attendance, enter the Monthly Reading Level, and complete ARAL Profiling for each learner you tutor.",
+          title: {
+            en: "Run the ARAL Program",
+            fil: "Isagawa ang ARAL Program",
+          },
+          body: {
+            en: "Under ARAL Program in the side menu: record Weekly Attendance, enter the Monthly Reading Level, and complete ARAL Profiling for each learner you tutor.",
+            fil: "Sa ARAL Program sa side menu: itala ang Weekly Attendance, ilagay ang Monthly Reading Level, at kumpletuhin ang ARAL Profiling ng bawat mag-aaral na iyong tinuturuan.",
+          },
+          href: "/teacher/aral",
           roles: ["TEACHER"],
         },
         {
           icon: "reports",
           tone: "amber",
-          title: "Finish the term",
-          body: "End of Terms Reports opens on your advisory. Kindergarten advisers rate the competency checklist instead, and both can be exported or printed.",
+          title: {
+            en: "Finish the term",
+            fil: "Tapusin ang markahan",
+          },
+          body: {
+            en: "End of Terms Reports opens on your advisory. Kindergarten advisers rate the competency checklist instead, and both can be exported or printed.",
+            fil: "Ang End of Terms Reports ay bubukas sa iyong advisory. Ang mga Kindergarten adviser ay magmamarka sa competency checklist, at parehong maaaring i-export o i-print.",
+          },
+          href: "/teacher/terms-reports",
           roles: ["TEACHER"],
         },
         {
           icon: "dashboard",
           tone: "violet",
-          title: "Start at your Dashboard",
-          body: "Your school's learners, teachers and ARAL progress at a glance.",
+          title: {
+            en: "Start at your Dashboard",
+            fil: "Magsimula sa iyong Dashboard",
+          },
+          body: {
+            en: "Your school's learners, teachers and ARAL progress at a glance.",
+            fil: "Ang mga mag-aaral, guro at ARAL progress ng iyong paaralan sa isang sulyap.",
+          },
+          href: "/school-head",
           roles: ["SCHOOL_HEAD"],
         },
         {
           icon: "teachers",
           tone: "blue",
-          title: "Manage your teachers",
-          body: "Approve new teachers, set their advisories and roles, and see changes the moment you save them.",
+          title: {
+            en: "Manage your teachers",
+            fil: "Pamahalaan ang iyong mga guro",
+          },
+          body: {
+            en: "Approve new teachers, set their advisories and roles, and see changes the moment you save them.",
+            fil: "Aprubahan ang mga bagong guro, itakda ang kanilang advisory at role, at makita ang pagbabago sa sandaling i-save.",
+          },
+          href: "/school-head/teachers",
           roles: ["SCHOOL_HEAD"],
         },
         {
           icon: "checklist",
           tone: "emerald",
-          title: "Review Kindergarten checklists",
-          body: "Open Kindergarten Checklist to view each learner's competency ratings, then export or print them.",
+          title: {
+            en: "Review Kindergarten checklists",
+            fil: "Suriin ang Kindergarten checklist",
+          },
+          body: {
+            en: "Open Kindergarten Checklist to view each learner's competency ratings, then export or print them.",
+            fil: "Buksan ang Kindergarten Checklist upang tingnan ang marka ng bawat mag-aaral sa bawat competency, at i-export o i-print ang mga ito.",
+          },
+          href: "/school-head/terms-reports/kinder",
           roles: ["SCHOOL_HEAD"],
         },
         {
           icon: "schools",
           tone: "violet",
-          title: "Oversee every school",
-          body: "Schools, accounts, submissions and audit logs are where they were. Open a school to see it as its School Head does.",
+          title: {
+            en: "Oversee every school",
+            fil: "Subaybayan ang bawat paaralan",
+          },
+          body: {
+            en: "Schools, accounts, submissions and audit logs are where they were. Open a school to see it as its School Head does.",
+            fil: "Ang mga paaralan, account, submission at audit log ay nasa dating lugar. Buksan ang isang paaralan upang makita ito gaya ng School Head.",
+          },
+          href: "/admin/schools",
           roles: ["SUPER_ADMIN"],
         },
         {
           icon: "reports",
           tone: "emerald",
-          title: "Keep term subjects in step",
-          body: "Default Term Subjects can now reset every school's End of Terms subjects in one step.",
+          title: {
+            en: "Keep term subjects in step",
+            fil: "Panatilihing magkatugma ang mga subject",
+          },
+          body: {
+            en: "Default Term Subjects can now reset every school's End of Terms subjects in one step.",
+            fil: "Sa Default Term Subjects, maaari nang ibalik sa default ang End of Terms subjects ng bawat paaralan sa isang hakbang.",
+          },
+          href: "/admin/term-subjects",
           roles: ["SUPER_ADMIN"],
         },
         {
           icon: "help",
           tone: "amber",
-          title: "Help is always nearby",
-          body: "Ask the assistant in the corner when you are stuck. These notes stay under Updates in the bell, and every release is listed on the changelog.",
+          title: {
+            en: "Help is always nearby",
+            fil: "Ang tulong ay laging malapit",
+          },
+          body: {
+            en: "Ask the assistant in the corner when you are stuck. These notes stay under Updates in the bell, and every release is listed on the changelog.",
+            fil: "Magtanong sa assistant sa sulok kung kailangan ng tulong. Ang mga tala ay nasa Updates ng bell, at ang bawat release ay nakalista sa changelog.",
+          },
         },
       ],
     },
@@ -261,6 +384,7 @@ export const RELEASES: readonly Release[] = [
       { text: "The side menu now highlights the right page when you open a learner's ARAL profile, attendance or reading level.", roles: ["TEACHER", "SUPER_ADMIN"] },
       { text: "Profile Settings have a new layout with a summary of how complete your profile is. You can add your gender, which picks your dashboard picture.", roles: ["TEACHER", "SUPER_ADMIN"] },
       "A new sign-in screen.",
+      "A welcome screen introduces LitRack v2 once, with a short tour of where things are. Read it in English or Filipino, and open any page straight from the tour.",
       "When you save, archive or delete something, the page shows the change right away instead of up to a minute later.",
       { text: "A Super Admin can reset every school's End-of-Term subjects to the defaults in one step.", roles: ["SUPER_ADMIN"] },
     ],

@@ -239,10 +239,10 @@ describe("welcomeRelease", () => {
   const landmark: Release = {
     ...rel("2.0.0"),
     welcome: {
-      headline: "h",
-      intro: "i",
-      highlightsTitle: "ht",
-      highlightsSubtitle: "hs",
+      headline: { en: "h", fil: "h" },
+      intro: { en: "i", fil: "i" },
+      highlightsTitle: { en: "ht", fil: "ht" },
+      highlightsSubtitle: { en: "hs", fil: "hs" },
       highlights: [],
       guide: [],
     },
@@ -278,6 +278,24 @@ describe("the committed v2 welcome", () => {
     for (const role of ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] as const) {
       expect(visibleHighlights(v2!.welcome!, role).length, role).toBeGreaterThan(0);
       expect(visibleGuide(v2!.welcome!, role).length, role).toBeGreaterThan(0);
+    }
+  });
+
+  it("has Filipino for every line it shows", () => {
+    const w = v2!.welcome!;
+    const texts = [w.headline, w.intro, w.highlightsTitle, w.highlightsSubtitle, ...w.highlights.flatMap((h) => [h.title, h.body]), ...w.guide.flatMap((g) => [g.title, g.body])];
+    for (const text of texts) {
+      expect(text.fil.trim(), text.en).not.toBe("");
+      expect(text.fil, text.en).not.toBe(text.en);
+    }
+  });
+
+  it("links tour steps only to pages inside the reader's own area", () => {
+    const area = { TEACHER: "/teacher", SCHOOL_HEAD: "/school-head", SUPER_ADMIN: "/admin" } as const;
+    for (const role of ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] as const) {
+      for (const step of visibleGuide(v2!.welcome!, role)) {
+        if (step.href) expect(step.href.startsWith(area[role]), step.title.en).toBe(true);
+      }
     }
   });
 
