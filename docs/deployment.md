@@ -31,7 +31,10 @@ drop the Vercel-only code paths at build time.
    - `HYPERDRIVE` — pooled Postgres in front of Supabase. `src/lib/prisma.ts` reads its
      `connectionString` **per request**; resolving it once at module scope silently falls back to
      `DATABASE_URL` for the isolate's whole life, because `getCloudflareContext()` throws outside a
-     request.
+     request. **This binding's origin is the production database.** `.env.local` has held a
+     different Supabase project, so `npx wrangler hyperdrive list` — not a local env file — is what
+     says which database production reads. See `docs/migrate-checklist.md` § (b); getting this
+     wrong took End of Terms down on 2026-09-17.
    - `HYPERDRIVE_FRESH` — a second Hyperdrive config (`litrack-supabase-fresh`) on the same
      database with **query caching disabled**, origin Supabase's direct host, origin connection
      limit 5. `HYPERDRIVE` caches reads for about a minute, so a page that re-reads what it just

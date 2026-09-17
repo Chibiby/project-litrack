@@ -124,6 +124,30 @@ because a new table's RLS is off until that file enables it.
 
 ## (b) Apply migrations with DIRECT_URL
 
+### First: confirm which database production actually reads
+
+**`.env.local` is not authoritative.** It has pointed at a Supabase project the deployed
+Worker does not use, and applying a migration there leaves production unmigrated while every
+check you run looks green. On 2026-09-17 that cost a production outage: `TermGrade.mark` was
+added to the wrong project, and every End of Terms sheet read failed with
+`The column "(not available)" does not exist in the current database` until the migration was
+applied to the real one.
+
+Production reads Postgres through the Hyperdrive binding in `wrangler.jsonc`, so the origin of
+that binding **is** the production database:
+
+```powershell
+npx wrangler hyperdrive list   # the `host` column of the config bound to HYPERDRIVE
+```
+
+Check the project ref in that host against the connection string you are about to use, and only
+then continue. Supabase's direct host (`db.<ref>.supabase.co`) is often unreachable from a
+workstation; the session-mode pooler (`aws-0-<region>.pooler.supabase.com:5432`, user
+`postgres.<ref>`) works and is still session mode, which is what migrate needs.
+
+After applying, confirm against the same database that the change is really there — a
+`migrate deploy` that reports success proves only that *some* database was migrated.
+
 From a trusted machine with production env loaded (session only — do not commit values):
 
 ```powershell
