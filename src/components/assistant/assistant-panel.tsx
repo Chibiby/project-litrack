@@ -344,16 +344,17 @@ export function AssistantPanel({
               { id: "admin", label: "Ask admin", unread: unread.admin },
             ] as const
           ).map((tab) => (
-            <button
+            <Button
               key={tab.id}
               role="tab"
               type="button"
+              variant="ghost"
               aria-selected={view === tab.id}
               onClick={() => setView(tab.id)}
               className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-colors",
+                "h-auto flex-1 justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-medium",
                 view === tab.id
-                  ? "bg-violet-soft text-violet-soft-foreground"
+                  ? "bg-violet-soft text-violet-soft-foreground hover:bg-violet-soft hover:text-violet-soft-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
@@ -364,7 +365,7 @@ export function AssistantPanel({
                   aria-label="Unread messages"
                 />
               )}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -478,15 +479,16 @@ export function AssistantPanel({
           </div>
 
           {canEscalate && !isHome && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setMode("ticket")}
-              className="flex items-center gap-2 border-t px-4 py-2.5 text-left text-[12px] font-medium text-violet transition-colors hover:bg-accent"
+              className="h-auto w-full justify-start gap-2 rounded-none border-t px-4 py-2.5 text-left text-[12px] font-medium text-violet hover:bg-accent hover:text-violet"
             >
               <LifeBuoy className="size-4 shrink-0" aria-hidden />
               Ask the division admin
               <ArrowRight className="ml-auto size-3.5 shrink-0" aria-hidden />
-            </button>
+            </Button>
           )}
 
           <form

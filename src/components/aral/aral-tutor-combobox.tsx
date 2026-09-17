@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { cn } from "@/lib/utils";
@@ -148,24 +149,26 @@ export function AralTutorCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
-        <button
+        <Button
           ref={triggerRef}
           id={baseId}
           type="button"
+          variant="outline"
           role="combobox"
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-controls={listId}
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            "h-10 w-full justify-between rounded-md border-input bg-background px-3 py-2 text-sm font-normal ring-offset-background",
+            "hover:bg-background hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50"
           )}
         >
           <span className="truncate text-left">{label}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden />
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <div className="border-b p-2">

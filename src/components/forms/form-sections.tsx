@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /*
@@ -210,16 +211,16 @@ export function FormSections({
         return (
           <section key={section.key}>
             <h3>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 id={headerId}
                 aria-expanded={isOpen}
                 aria-controls={regionId}
                 onClick={() => onOpenKeyChange(isOpen ? "" : section.key)}
                 className={cn(
-                  "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  isOpen && "bg-muted/40"
+                  "h-auto w-full justify-start gap-3 rounded-none px-4 py-3 text-left font-normal hover:bg-muted/50",
+                  isOpen && "bg-muted/40 hover:bg-muted/40"
                 )}
               >
                 <span
@@ -257,7 +258,7 @@ export function FormSections({
                   )}
                   aria-hidden
                 />
-              </button>
+              </Button>
             </h3>
 
             {/* Hidden, never unmounted: a collapsed section's answers must

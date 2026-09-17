@@ -270,13 +270,14 @@ export function TermSubjectDefaultsManager({
       </Surface>
 
       <Surface as="section">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           id={`${archivedRegionId}-trigger`}
           aria-expanded={archivedOpen}
           aria-controls={archivedRegionId}
           onClick={() => setArchivedOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+          className="h-auto w-full justify-between gap-3 rounded-none px-5 py-4 text-left font-semibold hover:bg-transparent"
         >
           <span className="text-sm font-semibold">
             Archived default subjects ({state.archived.length})
@@ -288,7 +289,7 @@ export function TermSubjectDefaultsManager({
             )}
             aria-hidden
           />
-        </button>
+        </Button>
         {archivedOpen ? (
           <SurfaceBody
             id={archivedRegionId}

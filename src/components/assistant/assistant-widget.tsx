@@ -106,17 +106,18 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
           </div>
         )}
 
-        <button
+        <Button
           ref={fabRef}
+          size="icon"
           type="button"
           onClick={() => (open ? minimize() : openPanel())}
           aria-expanded={open}
           aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
-          className="relative flex size-14 items-center justify-center rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95"
+          className="relative size-14 rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-violet focus-visible:ring-offset-background active:scale-95"
         >
           <Bot className="size-6" aria-hidden />
           <Sparkles className="absolute right-3 top-3 size-3" aria-hidden />
-        </button>
+        </Button>
       </div>
 
       {hidden && (

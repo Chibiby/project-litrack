@@ -334,19 +334,22 @@ function LanguageSwitch({
       className="inline-flex rounded-full border border-border bg-card/90 p-0.5 text-xs font-semibold shadow-sm backdrop-blur"
     >
       {options.map((o) => (
-        <button
+        <Button
           key={o.value}
           type="button"
+          variant="ghost"
           role="radio"
           aria-checked={locale === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "min-h-8 rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            locale === o.value ? "bg-violet text-violet-foreground" : "text-muted-foreground hover:text-foreground"
+            "h-auto min-h-8 rounded-full px-3",
+            locale === o.value
+              ? "bg-violet text-violet-foreground hover:bg-violet hover:text-violet-foreground"
+              : "text-muted-foreground hover:bg-transparent hover:text-foreground"
           )}
         >
           {o.text}
-        </button>
+        </Button>
       ))}
     </div>
   );
