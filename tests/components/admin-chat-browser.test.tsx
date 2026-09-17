@@ -19,6 +19,7 @@ describe("AdminChatBrowser", () => {
           {
             schoolId: "school-1",
             schoolName: "Malandag Central ES",
+            isDemoSchool: false,
             staffRoom: null,
             directThreads: [
               {
@@ -53,6 +54,7 @@ describe("AdminChatBrowser", () => {
           {
             schoolId: "school-1",
             schoolName: "Malandag Central ES",
+            isDemoSchool: false,
             staffRoom: {
               id: "school-room",
               lastMessageAt: new Date(),
@@ -67,5 +69,41 @@ describe("AdminChatBrowser", () => {
     fireEvent.click(screen.getByRole("button", { name: /Malandag Central ES/ }));
     expect(screen.getByText("School conversation")).not.toBeNull();
     expect(screen.queryByText("Online")).toBeNull();
+  });
+
+  it("marks a demo school's conversation and hides the badge for a real one", () => {
+    render(
+      <AdminChatBrowser
+        schools={[
+          {
+            schoolId: "school-1",
+            schoolName: "Malandag Central ES",
+            isDemoSchool: false,
+            staffRoom: {
+              id: "school-room",
+              lastMessageAt: new Date(),
+              unread: false,
+            },
+            directThreads: [],
+          },
+          {
+            schoolId: "school-2",
+            schoolName: "Test Lab Demo School",
+            isDemoSchool: true,
+            staffRoom: {
+              id: "demo-room",
+              lastMessageAt: new Date(),
+              unread: false,
+            },
+            directThreads: [],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getAllByText("Demo")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Test Lab Demo School/ }));
+    expect(screen.getAllByText("Demo")).toHaveLength(2);
   });
 });

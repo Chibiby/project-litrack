@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { DemoBadge } from "@/components/demo-badge";
 import {
   declineTicket,
   resolveTicket,
@@ -167,6 +168,9 @@ function TicketCard({
                 ? ` · ${USER_ROLE_LABELS[ticket.requesterRole as keyof typeof USER_ROLE_LABELS]}`
                 : ""}
               {ticket.schoolName ? ` · ${ticket.schoolName}` : ""}
+              {ticket.isDemoSchool ? (
+                <DemoBadge className="ml-1.5 align-middle" />
+              ) : null}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">

@@ -30,6 +30,8 @@ export type TicketRow = {
   resolverName: string | null;
   /** The live grant this ticket produced, when it produced one and it is still in force. */
   activeGrant: { id: string; expiresAt: Date } | null;
+  /** Whether the requester's school is the Test Lab demo tenant. */
+  isDemoSchool: boolean;
 };
 
 const TICKET_SELECT = {
@@ -45,7 +47,7 @@ const TICKET_SELECT = {
   resolvedAt: true,
   createdAt: true,
   requester: { select: { fullName: true, role: true } },
-  school: { select: { name: true } },
+  school: { select: { name: true, isDemo: true } },
   resolver: { select: { fullName: true } },
   grant: { select: { id: true, expiresAt: true, revokedAt: true } },
 } as const;
@@ -63,7 +65,7 @@ type RawTicket = {
   resolvedAt: Date | null;
   createdAt: Date;
   requester: { fullName: string; role: string } | null;
-  school: { name: string } | null;
+  school: { name: string; isDemo: boolean } | null;
   resolver: { fullName: string } | null;
   grant: { id: string; expiresAt: Date; revokedAt: Date | null } | null;
 };
@@ -91,6 +93,7 @@ function toRow(ticket: RawTicket): TicketRow {
     schoolName: ticket.school?.name ?? "",
     resolverName: ticket.resolver?.fullName ?? null,
     activeGrant: live,
+    isDemoSchool: ticket.school?.isDemo ?? false,
   };
 }
 

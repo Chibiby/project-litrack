@@ -15,19 +15,21 @@ import { Button } from "@/components/ui/button";
 import { ChatThread } from "@/components/chat/chat-thread";
 import type { ChatChannelView } from "@/lib/actions/chat";
 import { PresenceLabel } from "@/components/chat/presence-label";
+import { DemoBadge } from "@/components/demo-badge";
 import { cn } from "@/lib/utils";
 import type { AdminChatSchool } from "@/lib/chat/queries";
 
 type Filter = "all" | "school" | "admin" | "unread";
 
 type Selected =
-  | { kind: "SCHOOL"; schoolId: string; channelId: string; label: string }
+  | { kind: "SCHOOL"; schoolId: string; channelId: string; label: string; isDemoSchool: boolean }
   | {
       kind: "ADMIN_DIRECT";
       schoolId: string;
       memberId: string;
       channelId: string;
       label: string;
+      isDemoSchool: boolean;
     };
 
 type Conversation = {
@@ -39,6 +41,7 @@ type Conversation = {
   preview: string;
   lastMessageAt: Date | null;
   unread: boolean;
+  isDemoSchool: boolean;
 };
 
 export function AdminChatBrowser({
@@ -68,13 +71,20 @@ export function AdminChatBrowser({
         : undefined;
     setSelected(
       conversation.kind === "SCHOOL"
-        ? { kind: "SCHOOL", schoolId: conversation.schoolId, channelId: conversation.id, label: conversation.label }
+        ? {
+            kind: "SCHOOL",
+            schoolId: conversation.schoolId,
+            channelId: conversation.id,
+            label: conversation.label,
+            isDemoSchool: conversation.isDemoSchool,
+          }
         : {
             kind: "ADMIN_DIRECT",
             schoolId: conversation.schoolId,
             memberId: member?.memberId ?? "",
             channelId: conversation.id,
             label: conversation.label,
+            isDemoSchool: conversation.isDemoSchool,
           }
     );
     onSelectChannel?.(conversation.id);
@@ -93,6 +103,7 @@ export function AdminChatBrowser({
           preview: "Open the staff room to view messages",
           lastMessageAt: school.staffRoom.lastMessageAt,
           unread: school.staffRoom.unread,
+          isDemoSchool: school.isDemoSchool,
         });
       }
       for (const thread of school.directThreads) {
@@ -105,6 +116,7 @@ export function AdminChatBrowser({
           preview: "Private concern",
           lastMessageAt: thread.lastMessageAt,
           unread: thread.unread,
+          isDemoSchool: school.isDemoSchool,
         });
       }
     }
@@ -228,7 +240,10 @@ export function AdminChatBrowser({
                   {selected.kind === "SCHOOL" ? <Users className="size-5" aria-hidden /> : <Bell className="size-5" aria-hidden />}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-sm font-semibold">{selected.label}</h2>
+                  <h2 className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                    <span className="truncate">{selected.label}</span>
+                    {selected.isDemoSchool ? <DemoBadge /> : null}
+                  </h2>
                   {selected.kind === "ADMIN_DIRECT" ? (
                     <PresenceLabel lastOnlineAt={selectedLastOnlineAt} />
                   ) : (
@@ -310,7 +325,10 @@ function ConversationButton({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium">{conversation.label}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{conversation.label}</span>
+            {conversation.isDemoSchool ? <DemoBadge /> : null}
+          </span>
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {conversation.lastMessageAt ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(conversation.lastMessageAt) : ""}
           </span>
@@ -326,7 +344,13 @@ function findInitial(schools: AdminChatSchool[], channelId?: string): Selected |
   if (!channelId) return null;
   for (const school of schools) {
     if (school.staffRoom?.id === channelId) {
-      return { kind: "SCHOOL", schoolId: school.schoolId, channelId: school.staffRoom.id, label: school.schoolName };
+      return {
+        kind: "SCHOOL",
+        schoolId: school.schoolId,
+        channelId: school.staffRoom.id,
+        label: school.schoolName,
+        isDemoSchool: school.isDemoSchool,
+      };
     }
     const thread = school.directThreads.find((item) => item.id === channelId);
     if (thread) {
@@ -336,6 +360,7 @@ function findInitial(schools: AdminChatSchool[], channelId?: string): Selected |
         memberId: thread.memberId,
         channelId: thread.id,
         label: thread.memberName,
+        isDemoSchool: school.isDemoSchool,
       };
     }
   }

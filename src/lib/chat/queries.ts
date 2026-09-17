@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma";
 export type AdminChatSchool = {
   schoolId: string;
   schoolName: string;
+  /** Whether this school is the Test Lab demo tenant. */
+  isDemoSchool: boolean;
   /** The staff room, if it has been opened. Null before anyone has looked. */
   staffRoom: { id: string; lastMessageAt: Date | null; unread: boolean } | null;
   /** Private threads members opened with the admin team. */
@@ -44,7 +46,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
       kind: true,
       schoolId: true,
       lastMessageAt: true,
-      school: { select: { name: true } },
+      school: { select: { name: true, isDemo: true } },
       member: {
         select: {
           id: true,
@@ -68,6 +70,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
     const entry = bySchool.get(channel.schoolId) ?? {
       schoolId: channel.schoolId,
       schoolName: channel.school.name,
+      isDemoSchool: channel.school.isDemo,
       staffRoom: null,
       directThreads: [],
     };
