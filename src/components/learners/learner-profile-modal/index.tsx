@@ -281,7 +281,7 @@ export function LearnerProfileModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
-        <header className="flex items-start gap-3 border-b border-border px-5 py-4 pr-14 sm:px-6">
+        <header className="flex shrink-0 items-start gap-3 border-b border-border px-5 py-4 pr-14 sm:px-6">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             {editing ? (
               <Pencil className="h-5 w-5" aria-hidden />
@@ -358,7 +358,7 @@ export function LearnerProfileModal({
               ) : (
                 <FormSectionsSkeleton showBar={false} />
               )}
-              <footer className="flex border-t border-border bg-muted/30 px-5 py-4 sm:justify-end sm:px-6">
+              <footer className="flex shrink-0 border-t border-border bg-muted/30 px-5 py-4 sm:justify-end sm:px-6">
                 <Button
                   type="button"
                   variant="outline"
@@ -396,7 +396,7 @@ export function LearnerProfileModal({
                 while the row is still loading, disabled until it lands, so the
                 footer never swaps a lone Close for three buttons mid-load. Only a
                 failed read collapses to Close — there is nothing left to act on. */}
-            <footer className="flex flex-col gap-2 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <footer className="flex shrink-0 flex-col gap-2 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               {showActions ? (
                 <>
                   {/* Teachers cannot transfer learners — `transferLearner` is

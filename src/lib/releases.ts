@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.0.2",
+    date: "2026-09-17",
+    title: "Student Profile tabs show on phones",
+    announce: false,
+    fixes: [
+      "On phones, the Student Profile window shows its Profile, Attendance, Reading Level, Grades and ARAL Progress tabs again. Before, they were squeezed into a thin gray line.",
+    ],
+  },
+  {
     version: "2.0.1",
     date: "2026-09-17",
     title: "ARAL menu links open the right page on phones",

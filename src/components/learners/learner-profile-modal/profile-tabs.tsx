@@ -94,7 +94,9 @@ export function ProfileTabs({
       aria-label="Student profile sections"
       onKeyDown={handleKeyDown}
       className={cn(
-        "flex gap-1 overflow-x-auto border-b border-border px-2 sm:px-4",
+        // shrink-0: in the modal's column flex, overflow-x-auto lets the strip
+        // collapse to a sliver when the phone footer is tall.
+        "flex shrink-0 gap-1 overflow-x-auto border-b border-border px-2 [scrollbar-width:none] sm:px-4 [&::-webkit-scrollbar]:hidden",
         className
       )}
     >
