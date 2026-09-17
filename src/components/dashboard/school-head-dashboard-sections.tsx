@@ -75,7 +75,7 @@ export async function SchoolHeadMetricsSection({
         </Callout>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           title="Learners"
           value={metrics?.learnerCount ?? 0}
@@ -356,7 +356,7 @@ export async function SchoolHeadRecentActivitySection({
   const sh = (path: string) => schoolPath(path, schoolId, isSuperAdminView);
 
   return (
-    <div className="mb-6 grid gap-4 lg:grid-cols-2">
+    <div className="mb-6 grid gap-4 md:max-lg:grid-cols-2 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Recent notices</CardTitle>

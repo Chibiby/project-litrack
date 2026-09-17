@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.4.0",
+    date: "2026-09-18",
+    title: "Faster pages, and a better fit on tablets",
+    announce: true,
+    fixes: [
+      "Pages load faster. The pictures at the top of pages are now a fraction of their old size, so they appear sooner on slow connections.",
+      "On a tablet, the search box now shows in the top bar, dashboard cards sit three to a row, and the sign-in screen is centred. Phones and computers look the same as before.",
+      "The Assistant now loads only when you open it, so every other page starts a little quicker.",
+      { text: "The Super Admin menu and header no longer wait for chat notifications before showing.", roles: ["SUPER_ADMIN"] },
+      "LITRACK now runs on a newer version of its web framework.",
+    ],
+  },
+  {
     version: "2.3.0",
     date: "2026-09-17",
     title: "Tidier menus, and a Page Test Lab for Super Admins",

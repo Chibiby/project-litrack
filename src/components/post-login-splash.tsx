@@ -361,7 +361,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
       >
         <Image
           className={styles.programLogo}
-          src="/logo.png"
+          src="/logo.webp"
           alt="ARAL Program logo"
           width={300}
           height={400}
@@ -370,7 +370,7 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
         />
         <Image
           className={styles.aralLogo}
-          src="/aral-na-logo.png"
+          src="/aral-na-logo.webp"
           alt="ARAL na! logo"
           width={704}
           height={216}

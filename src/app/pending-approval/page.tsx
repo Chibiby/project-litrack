@@ -58,7 +58,7 @@ export default async function PendingApprovalPage() {
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image
-            src="/logo.png"
+            src="/logo.webp"
             alt="ARAL Program logo"
             width={192}
             height={256}

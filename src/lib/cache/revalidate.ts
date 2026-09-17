@@ -4,6 +4,23 @@ import * as tags from "@/lib/cache/tags";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
+ * Expire every Data Cache entry carrying `tag` immediately: the next read is a
+ * blocking miss, never a stale hit.
+ *
+ * Next 16 made `revalidateTag`'s second argument mandatory. `"max"` (the docs'
+ * recommendation) is stale-while-revalidate — a user who just saved would be
+ * served the pre-save dashboard once more — which would be a behavior change
+ * from Next 15's single-argument call. `{ expire: 0 }` is documented as
+ * identical to that old call, and unlike `updateTag` it also works outside a
+ * Server Action (these helpers are reached from non-action code too). On
+ * Cloudflare the D1 tag cache stores it as `stale = expire = now`, which
+ * `hasBeenRevalidated` treats as a miss and `isStale` does not.
+ */
+function expireTag(tag: string) {
+  revalidateTag(tag, { expire: 0 });
+}
+
+/**
  * The School Head teachers workspace — all five tab pathnames — plus this
  * school's teacher list wherever it is cached.
  *
@@ -42,7 +59,7 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
 
 /** One school's cached teacher list (ARAL tutor pickers). */
 export function revalidateSchoolTeachers(schoolId: string) {
-  revalidateTag(tags.schoolTeachers(schoolId));
+  expireTag(tags.schoolTeachers(schoolId));
 }
 
 /**
@@ -79,34 +96,34 @@ export function revalidateTermSubjectDefaults() {
  * (up to 15 minutes for a school name).
  */
 export function revalidateAllCachedData() {
-  revalidateTag(tags.allCachedData);
+  expireTag(tags.allCachedData);
 }
 
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {
-  revalidateTag(tags.adminDashboard);
+  expireTag(tags.adminDashboard);
 }
 
 /** Admin schools list (and related admin dashboard school snippets). */
 export function revalidateSchoolsList() {
-  revalidateTag(tags.schoolsList);
-  revalidateTag(tags.adminDashboard);
+  expireTag(tags.schoolsList);
+  expireTag(tags.adminDashboard);
 }
 
 /** School-scoped dashboard + school name. */
 export function revalidateSchoolDashboard(schoolId: string) {
-  revalidateTag(tags.schoolDashboard(schoolId));
-  revalidateTag(tags.schoolName(schoolId));
+  expireTag(tags.schoolDashboard(schoolId));
+  expireTag(tags.schoolName(schoolId));
 }
 
 /** Teacher dashboard metrics only (not sidebar shell). */
 export function revalidateTeacherDashboard(userId: string) {
-  revalidateTag(tags.teacherDashboard(userId));
+  expireTag(tags.teacherDashboard(userId));
 }
 
 /** Teacher sidebar shell (grade links + hasAral). */
 export function revalidateTeacherShell(userId: string) {
-  revalidateTag(tags.teacherShell(userId));
+  expireTag(tags.teacherShell(userId));
 }
 
 /**
@@ -142,7 +159,7 @@ export function revalidateLearnerScoped(opts: {
 }) {
   revalidateSchoolDashboard(opts.schoolId);
   if (opts.adminDashboard) {
-    revalidateTag(tags.adminDashboard);
+    expireTag(tags.adminDashboard);
   }
   const teacherIds = new Set(
     [opts.teacherId, opts.aralTeacherId].filter(
@@ -165,8 +182,8 @@ export function revalidateLearnerScoped(opts: {
  * list that goes stale belongs to somebody else.
  */
 export function revalidateSupportTicket(requesterId: string) {
-  revalidateTag(tags.supportInbox);
-  revalidateTag(tags.userSupportTickets(requesterId));
+  expireTag(tags.supportInbox);
+  expireTag(tags.userSupportTickets(requesterId));
 }
 
 /**

@@ -25,7 +25,7 @@ export function AralPageHero({
 }) {
   return (
     <PageHero
-      bannerSrc="/brand/banner-learner.png"
+      bannerSrc="/brand/banner-learner.webp"
       className="h-auto"
       artClassName="max-sm:!h-[160px] max-sm:right-[-118px] sm:h-[75%] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
       phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)]"

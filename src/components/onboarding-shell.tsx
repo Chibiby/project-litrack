@@ -24,7 +24,7 @@ export function OnboardingShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex w-full max-w-3xl items-center gap-4 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
               <Image
-                src="/logo.png"
+                src="/logo.webp"
                 alt="LITRACK logo"
                 width={36}
                 height={48}

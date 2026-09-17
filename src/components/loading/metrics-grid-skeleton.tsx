@@ -9,9 +9,9 @@ export type MetricsGridVariant =
   | "teacher-secondary";
 
 const gridClass: Record<MetricsGridVariant, string> = {
-  admin: "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+  admin: "mb-6 grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6",
   "school-head":
-    "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+    "mb-6 grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6",
   teacher: "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4",
   "teacher-secondary": "mb-6 grid gap-4 sm:grid-cols-2",
 };

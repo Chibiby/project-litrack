@@ -28,7 +28,9 @@ export default async function AdminLayout({
         userId={user.id}
         userName={user.fullName || user.email}
         aiEnabled={geminiConfigured()}
-        notifications={await getChatNotifications(user)}
+        // Not awaited: streamed through RoleShell/AppHeader as a promise so the
+        // sidebar and header paint before the notifications query resolves.
+        notifications={getChatNotifications(user)}
         lastSeenReleaseVersion={user.lastSeenReleaseVersion}
       >
         {children}

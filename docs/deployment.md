@@ -2,7 +2,7 @@
 
 ## Overview
 
-LITRACK is a Next.js 15 App Router app (React 19). Production hosting target: **Cloudflare
+LITRACK is a Next.js 16 App Router app (React 19). Production hosting target: **Cloudflare
 Workers**, built with [OpenNext](https://opennext.js.org/cloudflare). Database and Auth:
 **Supabase**.
 
@@ -23,8 +23,10 @@ drop the Vercel-only code paths at build time.
 
 1. Build command: `npm run build`. With `WORKERS_CI=1` set, `scripts/build-platform.mjs` runs
    `opennextjs-cloudflare build`, which re-enters the same script with `OPENNEXT_INNER_BUILD=1` and
-   performs the ordinary `prisma generate && next build` inside it. Without `WORKERS_CI`, the same
-   command is a plain Next build — that is what CI and local verification run.
+   performs the ordinary `prisma generate && next build --turbopack` inside it. Without `WORKERS_CI`,
+   the same command is a plain Next build — that is what CI and local verification run. Both use
+   Turbopack; to fall back to webpack, change that flag to `--webpack` (the `webpack()` hook in
+   `next.config.mjs` is kept for exactly that).
 2. Deploy command: `npx wrangler deploy`. Configuration lives in `wrangler.jsonc`.
 3. Bindings (`wrangler.jsonc`):
    - `ASSETS` — static assets from `.open-next/assets`.

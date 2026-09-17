@@ -454,7 +454,7 @@ export default async function TeacherLearnersPage({
       hideTitle
     >
       <PageHero
-        bannerSrc="/brand/banner-learner.png"
+        bannerSrc="/brand/banner-learner.webp"
         topRight={
           <Suspense
             fallback={

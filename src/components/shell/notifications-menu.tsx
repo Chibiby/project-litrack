@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { Bell } from "lucide-react";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { Button } from "@/components/ui/button";
@@ -142,4 +143,18 @@ export function NotificationsMenu({
       </PopoverContent>
     </Popover>
   );
+}
+
+/**
+ * Unwraps a chat-notifications promise the layout started without awaiting.
+ * Must render inside a `Suspense` boundary — `use()` throws the promise until
+ * it settles, so the caller supplies the empty-state fallback.
+ */
+export function NotificationsMenuAsync({
+  notifications,
+}: {
+  notifications: Promise<ShellNotification[]>;
+}) {
+  const items = use(notifications);
+  return <NotificationsMenu notifications={items} />;
 }

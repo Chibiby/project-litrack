@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarDays, Menu } from "lucide-react";
@@ -10,6 +10,7 @@ import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
 import { HeaderSearch } from "@/components/shell/header-search";
 import {
   NotificationsMenu,
+  NotificationsMenuAsync,
   type ShellNotification,
 } from "@/components/shell/notifications-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -18,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { getNavGroups, type NavGrade } from "@/lib/nav/nav-config";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import type { UserRole } from "@prisma/client";
+import { cn } from "@/lib/utils";
 
 const SEARCH_HREF: Record<UserRole, string> = {
   SUPER_ADMIN: "/admin/schools",
@@ -47,7 +49,7 @@ export function AppHeader({
   schoolName,
   roleLabel,
   grades,
-  notifications = [],
+  notifications,
   isAralVolunteer,
   isFloating,
   advisoryPlacements,
@@ -61,7 +63,13 @@ export function AppHeader({
   schoolName?: string;
   roleLabel?: string;
   grades?: NavGrade[];
-  notifications?: ShellNotification[];
+  /**
+   * `undefined` or a resolved list renders `NotificationsMenu` immediately
+   * (teacher/school-head today). A promise (admin, started without awaiting
+   * in the layout) is unwrapped behind its own `Suspense` boundary so the
+   * rest of the chrome does not wait on the chat query.
+   */
+  notifications?: ShellNotification[] | Promise<ShellNotification[]>;
   /**
    * Renders the advisory-only `Learners` nav item inert and drops the search box,
    * whose target is that roster; see `NavOptions.isAralVolunteer`.
@@ -128,9 +136,12 @@ export function AppHeader({
         <Link
           href={roleHomePath(role)}
           aria-label="LITRACK home"
-          className="flex min-w-0 flex-1 items-center justify-center gap-2 lg:hidden"
+          className={cn(
+            "flex min-w-0 flex-1 items-center justify-center gap-2 lg:hidden",
+            !isAralVolunteer && !isFloating && "md:max-lg:justify-start"
+          )}
         >
-          <Image src="/logo.png" alt="" width={30} height={40} className="h-9 w-auto shrink-0" />
+          <Image src="/logo.webp" alt="" width={30} height={40} className="h-9 w-auto shrink-0" />
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="text-base font-extrabold tracking-tight text-foreground">LITRACK</span>
             {schoolName ? (
@@ -167,13 +178,19 @@ export function AppHeader({
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
             pages={searchPages}
-            className="hidden w-full max-w-xl lg:block"
+            className="hidden w-full max-w-xl md:max-lg:block md:max-lg:max-w-xs lg:block"
           />
         )}
 
         <div className="hidden flex-1 lg:block" />
         <div className="hidden lg:contents">
-          <NotificationsMenu notifications={notifications} />
+          {Array.isArray(notifications) || notifications === undefined ? (
+            <NotificationsMenu notifications={notifications ?? []} />
+          ) : (
+            <Suspense fallback={<NotificationsMenu notifications={[]} />}>
+              <NotificationsMenuAsync notifications={notifications} />
+            </Suspense>
+          )}
           <ThemeToggle />
           <Separator orientation="vertical" className="h-6" />
           <p

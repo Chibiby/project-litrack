@@ -49,7 +49,13 @@ interface RoleShellProps {
    * depends on it (v2: one URL for every advisory).
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
-  notifications?: ShellNotification[];
+  /**
+   * Either the resolved list (teacher/school-head, which pass nothing today —
+   * `undefined` renders the menu's empty state immediately) or a promise the
+   * layout started without awaiting (admin), unwrapped in `AppHeader` behind a
+   * `Suspense` boundary so the chrome paints before the chat query resolves.
+   */
+  notifications?: ShellNotification[] | Promise<ShellNotification[]>;
   /**
    * Whether a model backend is configured, read from server env by the layout.
    *

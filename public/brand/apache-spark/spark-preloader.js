@@ -1,5 +1,5 @@
 /* Apache Spark — drop-in site preloader. Vendored from the brand kit at
-   public/Apache Spark Brand Animation/brand/web/. Only change from the
+   design/apache-spark-brand-animation/brand/web/. Only change from the
    original: SANS/MONO resolve the app's next/font variables first, so the
    lockup renders in real Archivo and IBM Plex Mono instead of the fallbacks.
    Second local change: the timeline advances on clamped frame deltas rather

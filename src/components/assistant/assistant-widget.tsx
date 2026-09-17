@@ -1,12 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, ChevronLeft, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Bot, ChevronLeft, Loader2, Sparkles } from "lucide-react";
 import type { UserRole } from "@prisma/client";
-import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { Button } from "@/components/ui/button";
 import { useAssistantHidden } from "@/hooks/use-assistant-hidden";
 import { cn } from "@/lib/utils";
+
+/**
+ * Loads the ~670-line panel — ChatThread, the ticket form, the assistant
+ * server actions — only once someone opens it, instead of on every role
+ * shell. `loadPanel` is also called eagerly on hover/focus of the FAB below,
+ * so the common "hover then click" path already has the chunk in flight
+ * before `openPanel` runs.
+ */
+const loadPanel = () => import("@/components/assistant/assistant-panel");
+const AssistantPanel = dynamic(() => loadPanel().then((m) => m.AssistantPanel), {
+  ssr: false,
+  loading: () => (
+    <div
+      aria-hidden
+      className="flex h-[560px] max-h-[calc(100dvh-6rem)] w-[360px] max-w-[calc(100vw-2rem)] items-center justify-center rounded-2xl border bg-card shadow-2xl"
+    >
+      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    </div>
+  ),
+});
 
 /**
  * The floating assistant button, and the panel it opens.
@@ -111,6 +131,8 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
           size="icon"
           type="button"
           onClick={() => (open ? minimize() : openPanel())}
+          onMouseEnter={loadPanel}
+          onFocus={loadPanel}
           aria-expanded={open}
           aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
           className="relative size-14 rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-violet focus-visible:ring-offset-background active:scale-95"

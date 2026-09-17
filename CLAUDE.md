@@ -6,17 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LITRACK — multi-tenant school management app for DepEd schools tracking learners in the ARAL reading program. Three roles: `SUPER_ADMIN`, `SCHOOL_HEAD`, `TEACHER`. `School` is the tenant root; nearly every table carries `schoolId`.
 
-**Stack (authoritative source is `package.json`):** Next.js 15.5 App Router · React 19 · TypeScript strict · Prisma 5 → Supabase Postgres · Supabase Auth (`@supabase/ssr`) · Zod · Tailwind + shadcn/ui · Recharts · papaparse + exceljs · Resend · Vitest + Playwright.
+**Stack (authoritative source is `package.json`):** Next.js 16.3 App Router · React 19 · TypeScript strict · Prisma 5 → Supabase Postgres · Supabase Auth (`@supabase/ssr`) · Zod · Tailwind + shadcn/ui · Recharts · papaparse + exceljs · Resend · Vitest + Playwright.
 
-> `README.md`, `DOCUMENTATION.md`, and `docs/backlog.md` still claim Next 14.2.28 / React 18.3.1. That is stale — the repo is on Next 15 / React 19. Trust `package.json`.
+> `README.md`, `DOCUMENTATION.md`, and `docs/backlog.md` still claim Next 14.2.28 / React 18.3.1. That is stale — the repo is on Next 16 / React 19. Trust `package.json`.
 
 ## Commands
 
 ```powershell
 npm run dev          # next dev --turbopack → http://localhost:3000
-npm run build        # scripts/build-platform.mjs — OpenNext when WORKERS_CI=1, else prisma generate && next build
+npm run build        # scripts/build-platform.mjs — OpenNext when WORKERS_CI=1, else prisma generate && next build --turbopack
 npm run typecheck    # tsc --noEmit
-npm run lint         # next lint
+npm run lint         # eslint src (eslint.config.mjs; next lint was removed in Next 16)
 npm run test         # vitest run
 npm run test:e2e     # playwright (opt-in; see below)
 npm run db:seed      # tsx prisma/seed.ts — prints seeded Super Admin login
@@ -62,7 +62,7 @@ Concurrent sessions: if `releases.ts` or `package.json` conflicts on merge, renu
 
 ### Request path
 
-`src/middleware.ts` → `updateSession` (Supabase cookie refresh) → `enforceRolePrefix` from `src/lib/auth/roles.ts` (defense-in-depth check of `/admin`, `/school-head`, `/teacher` prefixes against the JWT `app_metadata.role`). Middleware is **not** authoritative — it deliberately passes through legacy accounts with no JWT role. `requireUser` in the server component / action is the real gate.
+`src/middleware.ts` (deliberately not renamed to Next 16's `proxy.ts`: proxy forces the Node runtime) → `updateSession` (Supabase cookie refresh) → `enforceRolePrefix` from `src/lib/auth/roles.ts` (defense-in-depth check of `/admin`, `/school-head`, `/teacher` prefixes against the JWT `app_metadata.role`). Middleware is **not** authoritative — it deliberately passes through legacy accounts with no JWT role. `requireUser` in the server component / action is the real gate.
 
 `src/lib/auth/roles.ts` is the Edge-safe half (pure, no Prisma, no `server-only`); `src/lib/auth/session.ts` is the Node half and re-exports the path helpers. Don't import session.ts from middleware.
 
@@ -118,7 +118,7 @@ On Cloudflare both layers are backed by `open-next.config.ts`: cache entries in 
 
 ### Prisma client
 
-Production runs on Cloudflare Workers via OpenNext, so `src/lib/prisma.ts` has two shapes, chosen by the `LITRACK_DEPLOY_TARGET` constant `next.config.mjs` inlines. On Cloudflare: one client per request through React `cache()`, behind a lazy proxy, with the pg adapter set to `maxUses: 1` — workerd rejects an I/O object carried over from a previous request. Everywhere else: a global singleton **cached in production too** (a warm Node lambda reuses the process; re-instantiating would open a new pooler pool per request). The connection URL is resolved **at call time**, never at module scope: `getCloudflareContext()` throws outside a request, and reading the `HYPERDRIVE` binding once during isolate startup silently pins that isolate to the unpooled `DATABASE_URL` forever. `resolvePooledDatabaseUrl` (`src/lib/db-url.ts`) rewrites a port-6543 `DATABASE_URL` to add `pgbouncer=true` and floor `connection_limit` at 3 — PgBouncer transaction mode breaks Prisma's named prepared statements (`42P05`) and `connection_limit=1` causes `P2024` under overlapping RSC navigation. Migrations use `DIRECT_URL` (port 5432) instead. Set `PRISMA_LOG_QUERIES=1` to see SQL in dev.
+Production runs on Cloudflare Workers via OpenNext, so `src/lib/prisma.ts` has two shapes, chosen by the `LITRACK_DEPLOY_TARGET` constant `next.config.mjs` inlines. On Cloudflare: one client per request through React `cache()`, behind a lazy proxy, with the pg adapter set to `maxUses: 1` — workerd rejects an I/O object carried over from a previous request. Everywhere else: a global singleton **cached in production too** (a warm Node lambda reuses the process; re-instantiating would open a new pooler pool per request). The connection URL is resolved **at call time**, never at module scope: `getCloudflareContext()` throws outside a request, and reading the `HYPERDRIVE` binding once during isolate startup silently pins that isolate to the unpooled `DATABASE_URL` forever. `resolvePooledDatabaseUrl` (`src/lib/db-url.ts`) rewrites a port-6543 `DATABASE_URL` to add `pgbouncer=true` and floor `connection_limit` at 3 — PgBouncer transaction mode breaks Prisma's named prepared statements (`42P05`) and `connection_limit=1` causes `P2024` under overlapping RSC navigation. Migrations use `DIRECT_URL` (port 5432) instead. Set `PRISMA_LOG_QUERIES=1` to see SQL in dev. On Windows, the Cloudflare build runs `scripts/relink-standalone-externals.mjs` after `next build`; without it Turbopack's absolute external links make the Worker load Prisma's Node client and every query fails.
 
 ### Validation
 

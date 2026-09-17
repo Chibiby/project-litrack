@@ -380,7 +380,7 @@ function WelcomeBanner({
       {/* The v2 learner art, right- and bottom-anchored; faded under the text
           wherever the two would meet. */}
       <Image
-        src="/brand/banner-learner.png"
+        src="/brand/banner-learner.webp"
         alt=""
         aria-hidden="true"
         width={2172}
@@ -400,7 +400,7 @@ function WelcomeBanner({
       <div className="absolute right-16 top-5 hidden sm:block">{languageSwitch}</div>
 
       <div className="flex items-center gap-3 pr-12 sm:pr-0">
-        <Image src="/logo.png" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
+        <Image src="/logo.webp" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xl font-extrabold tracking-tight text-violet sm:text-2xl">LITRACK</span>

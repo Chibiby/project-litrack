@@ -1,6 +1,5 @@
 import { builtinModules } from "node:module";
 
-/** @type {import('next').NextConfig} */
 const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
 const cloudflareNodeExternals = Object.fromEntries(
   builtinModules
@@ -8,6 +7,7 @@ const cloudflareNodeExternals = Object.fromEntries(
     .map((name) => [name, `commonjs node:${name}`]),
 );
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   // Keep standalone tracing anchored to this checkout. This matters in local
   // git worktrees (where a parent checkout has another lockfile) and is a
@@ -46,8 +46,23 @@ const nextConfig = {
    * paths, but it must not prevent /login from starting.
    */
   serverExternalPackages: isCloudflareWorkersBuild
-    ? ["@prisma/client", ".prisma/client", "@prisma/adapter-pg", "pg"]
+    ? // `pg-cloudflare` is pg's workerd socket shim. Once Prisma resolves to its
+      // Workers client (see scripts/relink-standalone-externals.mjs), OpenNext's
+      // esbuild pass reaches `require("pg-cloudflare")` and cannot bundle it;
+      // leaving it external lets wrangler resolve it with the workerd condition.
+      ["@prisma/client", ".prisma/client", "@prisma/adapter-pg", "pg", "pg-cloudflare"]
     : ["pdfkit"],
+  /**
+   * ROLLBACK PATH ONLY since Next 16. Both builds run Turbopack
+   * (`next build --turbopack` in scripts/build-platform.mjs), which ignores
+   * this hook. Turbopack needs neither half: it compiled the edge bundle without
+   * following `pg` into its fs/path loaders, and it leaves Node built-ins
+   * external on the server by itself (verified: standard build, OpenNext build,
+   * and the Worker serving /login under `wrangler dev`). `turbopack.resolveAlias`
+   * could not have ported the edge alias anyway — it supports only the `browser`
+   * condition. Keep this hook until Turbopack has run in production; switching
+   * that flag to `--webpack` restores the Next 15 build exactly.
+   */
   webpack(config, { isServer, nextRuntime }) {
     /**
      * `src/instrumentation.ts` is compiled for the EDGE runtime as well as node,

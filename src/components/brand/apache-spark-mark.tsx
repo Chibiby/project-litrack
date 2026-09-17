@@ -1,7 +1,7 @@
 /**
  * Apache Spark mark — pure geometry, inlined.
  *
- * The shipped asset (`public/Apache Spark Brand Animation/brand/svg/
+ * The shipped asset (`design/apache-spark-brand-animation/brand/svg/
  * apache-spark-mark.svg`) is the same four lines and four vertex squares, but
  * it carries a ~8 KB C2PA manifest and would cost a request wherever it
  * appears at 12px. The mark-only SVGs need no font, so inlining is lossless.

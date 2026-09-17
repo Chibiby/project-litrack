@@ -46,7 +46,7 @@ export async function AdminMetricsSection() {
 
   return (
     <>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           title="Schools"
           value={metrics?.schoolsTotal ?? 0}

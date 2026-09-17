@@ -2,10 +2,10 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  // tsconfig.json sets jsx: "preserve" (Next.js/SWC handles the actual
-  // transform outside tsc). esbuild doesn't understand "preserve", so
-  // without this it falls back to the classic transform and JSX-using
-  // test/component files fail with "React is not defined".
+  // Next 16 rewrites tsconfig.json to jsx: "react-jsx" (it was "preserve" on
+  // Next 15, which esbuild does not understand and so fell back to the classic
+  // transform — "React is not defined"). Kept explicit so tests do not depend
+  // on whatever tsconfig value the next Next upgrade writes.
   esbuild: {
     jsx: "automatic",
   },
