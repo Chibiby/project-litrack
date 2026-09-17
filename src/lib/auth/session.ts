@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { primeReadMode } from "@/lib/db/read-mode";
 import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
 import { noteScopeUser } from "@/lib/errors/context";
@@ -152,6 +153,9 @@ async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<U
  * see far fewer spans and should not read that as missing instrumentation.
  */
 const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User | null> => {
+  // Before the first query: a user who just wrote must not read their own
+  // row, or anything after it, from Hyperdrive's query cache.
+  await primeReadMode();
   const supabase = await createSupabaseServerClient();
 
   // Session verification against Supabase Auth. Spans the whole verification step, not

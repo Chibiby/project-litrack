@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { schoolDashboard } from "@/lib/cache/tags";
+import { allCachedData, schoolDashboard } from "@/lib/cache/tags";
 
 /**
  * `getGradeSections`' cache key, which is the whole reason the function exists.
@@ -125,9 +125,10 @@ describe("getGradeSections — cache key composition", () => {
     expect(cacheCalls[0].keyParts).toContain(SCHOOL_ID);
     expect(cacheCalls[1].keyParts).toContain(OTHER_SCHOOL_ID);
     expect(cacheCalls[0].keyParts).not.toEqual(cacheCalls[1].keyParts);
-    expect(cacheCalls[0].options.tags).toEqual([schoolDashboard(SCHOOL_ID)]);
+    expect(cacheCalls[0].options.tags).toEqual([schoolDashboard(SCHOOL_ID), allCachedData]);
     expect(cacheCalls[1].options.tags).toEqual([
       schoolDashboard(OTHER_SCHOOL_ID),
+      allCachedData,
     ]);
   });
 

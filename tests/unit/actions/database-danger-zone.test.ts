@@ -89,7 +89,7 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (...a: unknown[]) => checkRateLimit(...a),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
 // Imported after the mock factories above are registered.
 const { removeAllTeachers, resetAllSchoolAccounts, resetOperationalData } = await import(

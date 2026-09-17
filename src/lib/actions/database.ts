@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateAllCachedData } from "@/lib/cache/revalidate";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
@@ -237,6 +238,7 @@ export async function restoreFromBackup(formData: FormData): Promise<ActionResul
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     return { ok: true, data: { counts } };
   } catch (err) {
     console.error("[database] restore failed:", err);
@@ -289,6 +291,7 @@ export async function restoreFromUpload(formData: FormData): Promise<ActionResul
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     return { ok: true, data: { counts } };
   } catch (err) {
     console.error("[database] upload restore failed:", err);
@@ -330,6 +333,7 @@ export async function undoLastOperation(): Promise<ActionResult<{ counts: Snapsh
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     return { ok: true, data: { counts } };
   } catch (err) {
     console.error("[database] undo failed:", err);
@@ -372,6 +376,7 @@ export async function resetOperationalData(formData: FormData): Promise<ActionRe
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     return { ok: true, data: { removed } };
   } catch (err) {
     console.error("[database] operational reset failed:", err);
@@ -414,6 +419,7 @@ export async function resetAllSchoolAccounts(formData: FormData): Promise<Action
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     revalidatePath("/admin/accounts");
     return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
   } catch (err) {
@@ -457,6 +463,7 @@ export async function removeAllTeachers(formData: FormData): Promise<ActionResul
     });
 
     revalidatePath("/admin/database");
+    revalidateAllCachedData();
     return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
   } catch (err) {
     console.error("[database] teacher removal failed:", err);

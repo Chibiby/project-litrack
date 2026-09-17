@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useOptimistic,
   useRef,
   useState,
   useTransition,
@@ -149,6 +150,9 @@ function gradeAndSection(l: LearnerListRow): string {
 const ARAL_CHIP =
   "inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200";
 
+/** Stable passthrough: a new Set per render would re-run the optimistic reducer. */
+const NO_LEAVING_IDS: ReadonlySet<string> = new Set();
+
 export function LearnerListClient({
   basePath = "/teacher/learners",
   grade = "all",
@@ -162,7 +166,7 @@ export function LearnerListClient({
   grades = [],
   schoolId,
   isSuperAdmin,
-  learners,
+  learners: serverLearners,
   page,
   pageSize = LEARNER_LIST_DEFAULT_PAGE_SIZE,
   totalCount,
@@ -186,6 +190,26 @@ export function LearnerListClient({
   useEffect(() => {
     setInputValue(q);
   }, [q]);
+
+  /**
+   * Rows that leave this view on archive (or restore, in the archived view)
+   * disappear on click rather than after the refresh lands. Reverts on its own
+   * if the action fails, because the transition ends without new props.
+   */
+  const [leavingIds, markLeaving] = useOptimistic(
+    NO_LEAVING_IDS,
+    (prev: ReadonlySet<string>, ids: string[]): ReadonlySet<string> =>
+      new Set([...prev, ...ids])
+  );
+  // React replays the reducer on every render while the transition is pending,
+  // so `leavingIds` is a new Set each time. Memoize on its contents, or every
+  // render hands children a new `learners` array and effects keyed on it loop.
+  const leavingKey = [...leavingIds].sort().join(",");
+  const learners = useMemo(() => {
+    if (!leavingKey) return serverLearners;
+    const leaving = new Set(leavingKey.split(","));
+    return serverLearners.filter((l) => !leaving.has(l.id));
+  }, [serverLearners, leavingKey]);
 
   const visibleIds = useMemo(() => learners.map((l) => l.id), [learners]);
 
@@ -291,13 +315,18 @@ export function LearnerListClient({
   const archive = (ids: string[]) => {
     startTransition(async () => {
       if (ids.length === 0) return;
+      markLeaving(ids);
       const fd = new FormData();
       for (const id of ids) fd.append("learnerIds", id);
       const res = await archiveLearners(fd);
-      await settleActionResult(
-        res,
-        `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
-      );
+      try {
+        await settleActionResult(
+          res,
+          `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
+        );
+      } catch {
+        return; // Already toasted; the rows come back as the transition ends.
+      }
       setSelected(new Set());
       invalidateNavWarm();
       router.refresh();
@@ -306,10 +335,15 @@ export function LearnerListClient({
 
   const handleRestoreOne = (id: string) => {
     startTransition(async () => {
+      markLeaving([id]);
       const fd = new FormData();
       fd.set("id", id);
       const res = await restoreLearner(fd);
-      await settleActionResult(res, "Learner restored");
+      try {
+        await settleActionResult(res, "Learner restored");
+      } catch {
+        return; // Already toasted; the row comes back as the transition ends.
+      }
       invalidateNavWarm();
       router.refresh();
     });

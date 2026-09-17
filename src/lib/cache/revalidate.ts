@@ -72,6 +72,16 @@ export function revalidateTermSubjectDefaults() {
   revalidatePath("/admin/term-subjects");
 }
 
+/**
+ * Every Data Cache entry, in every school. For a database restore, undo, or
+ * reset, which rewrite rows no per-tenant tag describes; without this the
+ * dashboards and lists would show pre-restore numbers until their TTLs lapse
+ * (up to 15 minutes for a school name).
+ */
+export function revalidateAllCachedData() {
+  revalidateTag(tags.allCachedData);
+}
+
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {
   revalidateTag(tags.adminDashboard);

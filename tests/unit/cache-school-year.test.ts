@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { schoolDashboard } from "@/lib/cache/tags";
+import { allCachedData, schoolDashboard } from "@/lib/cache/tags";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 
 /**
@@ -150,9 +150,10 @@ describe("getActiveSchoolYear", () => {
     expect(cacheCalls[0].keyParts).not.toEqual(cacheCalls[1].keyParts);
 
     // And each entry must be bustable without touching the other.
-    expect(cacheCalls[0].options.tags).toEqual([schoolDashboard(SCHOOL_ID)]);
+    expect(cacheCalls[0].options.tags).toEqual([schoolDashboard(SCHOOL_ID), allCachedData]);
     expect(cacheCalls[1].options.tags).toEqual([
       schoolDashboard(OTHER_SCHOOL_ID),
+      allCachedData,
     ]);
   });
 

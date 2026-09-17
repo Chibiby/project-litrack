@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { resolveRevalidate, type CacheProfile } from "@/lib/cache/profiles";
+import { allCachedData } from "@/lib/cache/tags";
 
 export type CachedOptions = {
   /**
@@ -28,7 +29,7 @@ export function cachedQuery<T>(
 ): Promise<T> {
   const { keyParts, tags, profile, revalidate } = options;
   return unstable_cache(fn, keyParts, {
-    tags,
+    tags: [...tags, allCachedData],
     revalidate: resolveRevalidate({ profile, revalidate }),
   })();
 }

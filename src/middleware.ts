@@ -3,6 +3,11 @@ import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { authedLoginRedirect, enforceRolePrefix } from "@/lib/auth/roles";
 import { hasSupabaseSessionCookie, loginPath } from "@/lib/auth/session-end";
+import {
+  FRESH_READ_COOKIE,
+  FRESH_READ_WINDOW_SECONDS,
+  isServerActionRequest,
+} from "@/lib/db/read-consistency";
 
 function isPublicPath(pathname: string) {
   return (
@@ -76,6 +81,18 @@ export async function middleware(request: NextRequest) {
   const gate = enforceRolePrefix(pathname, user.role);
   if (!gate.ok) {
     return NextResponse.redirect(new URL(gate.redirectTo, request.url));
+  }
+
+  // A Server Action is a write. Open this browser's read-your-writes window so
+  // the refresh that follows skips Hyperdrive's query cache.
+  if (isServerActionRequest(request.method, (name) => request.headers.get(name))) {
+    supabaseResponse.cookies.set(FRESH_READ_COOKIE, "1", {
+      maxAge: FRESH_READ_WINDOW_SECONDS,
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+    });
   }
 
   return supabaseResponse;

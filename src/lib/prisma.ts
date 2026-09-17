@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
+import { currentReadMode } from "@/lib/db/read-mode";
 import {
   pickHyperdriveUrl,
   resolvePgDriverUrl,
@@ -145,15 +146,27 @@ function getPrismaClient(): PrismaClient {
   return client;
 }
 
+/**
+ * On Cloudflare, reads go through the cached Hyperdrive binding unless this
+ * request is a Server Action or its browser wrote within the last
+ * `FRESH_READ_WINDOW_SECONDS` — then through the uncached one, so a user sees
+ * their own save or delete at once. See `@/lib/db/read-consistency`.
+ */
 export const prisma =
   process.env.LITRACK_DEPLOY_TARGET === "cloudflare"
-    ? createPrismaProxy(getCloudflarePrismaClient)
+    ? createPrismaProxy(() =>
+        currentReadMode().fresh
+          ? getCloudflareFreshPrismaClient()
+          : getCloudflarePrismaClient(),
+      )
     : getPrismaClient();
 
 /**
- * A client whose reads never come from Hyperdrive's query cache. Use it only
- * where a page must show what was just written — today the School Head
- * teachers workspace and the actions it calls. See `pickHyperdriveUrl`.
+ * A client whose reads never come from Hyperdrive's query cache, whoever is
+ * asking. `prisma` already reads fresh for a user who just wrote; this is for
+ * a page that must also show *other* people's writes at once — today the
+ * School Head teachers workspace and the actions it calls. See
+ * `pickHyperdriveUrl`.
  *
  * Off Cloudflare there is no query cache, so this is the same client as
  * `prisma`.

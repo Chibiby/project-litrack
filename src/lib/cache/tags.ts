@@ -4,6 +4,13 @@
  * cross-request TTL wiring uses `cachedQuery` in `@/lib/cache/unstable`.
  */
 
+/**
+ * Carried by every `cachedQuery` entry. Only for operations that replace data
+ * wholesale across tenants — a database restore, undo, or reset — where no
+ * narrower tag names everything that changed.
+ */
+export const allCachedData = "litrack-data";
+
 export const adminDashboard = "admin-dashboard";
 
 export const schoolsList = "schools-list";

@@ -183,6 +183,34 @@ describe("LearnerListClient — Actions column", () => {
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
   });
 
+  it("hides an archived row at once, before the server answers", async () => {
+    let settle!: (value: { ok: true; data: { archived: number } }) => void;
+    archiveLearners.mockImplementationOnce(
+      () => new Promise((resolve) => (settle = resolve))
+    );
+    renderRoster();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("checkbox", { name: "Select Ana Santos" })).toBeNull()
+    );
+    expect(screen.getByRole("checkbox", { name: "Select Ben Cruz" })).toBeTruthy();
+    settle({ ok: true, data: { archived: 1 } });
+  });
+
+  it("brings the row back when archiving fails", async () => {
+    archiveLearners.mockResolvedValueOnce({ ok: false, error: "Nope" } as never);
+    renderRoster();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: "Select Ana Santos" })).toBeTruthy()
+    );
+  });
+
   it("restores a learner from the archived view", async () => {
     renderRoster(false, true);
     fireEvent.click(screen.getAllByRole("button", { name: /Restore/ })[0]);
