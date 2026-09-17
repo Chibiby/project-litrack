@@ -366,7 +366,18 @@ export async function setTeacherAdvisorySection(
 export type AdvisorySettingResult =
   | { ok: true }
   | { ok: false; error: string }
-  | { ok: false; error: "confirm_release"; releases: { id: string; label: string }[] };
+  | {
+      ok: false;
+      error: "confirm_release";
+      releases: { id: string; label: string }[];
+      /**
+       * Present when the new setting still allows some advisories (multi-advisory
+       * → one advisory section): every section held, and how many may stay. The
+       * School Head picks which to keep and sends them back as `keepSectionIds`,
+       * so the kept section is a decision rather than whichever sorted first.
+       */
+      choose?: { keepLimit: number; held: { id: string; label: string }[] };
+    };
 
 const DESIGNATION_KINDS = ["Teacher", "Master Teacher", ARAL_VOLUNTEER_DESIGNATION, "__OTHER__"] as const;
 
@@ -381,6 +392,7 @@ const advisorySettingSchema = z
       errorMap: () => ({ message: "Invalid advisory mode" }),
     }),
     confirmRelease: z.union([z.literal("true"), z.undefined(), z.null()]).optional(),
+    keepSectionIds: z.array(z.string().uuid("Invalid section")).max(3).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.designationKind === "__OTHER__" && !(data.designationOther && data.designationOther.length > 0)) {
@@ -413,17 +425,26 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
     designationOther: formData.get("designationOther") ?? undefined,
     advisoryMode: formData.get("advisoryMode"),
     confirmRelease: formData.get("confirmRelease") ?? undefined,
+    keepSectionIds: formData.has("keepSectionIds")
+      ? formData.getAll("keepSectionIds")
+      : undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
-  const { teacherId, designationKind, designationOther, advisoryMode, confirmRelease } = parsed.data;
+  const { teacherId, designationKind, designationOther, advisoryMode, confirmRelease, keepSectionIds } =
+    parsed.data;
   const designation = designationKind === "__OTHER__" ? (designationOther as string) : designationKind;
 
   type TxOutcome =
     | { kind: "not-found" }
     | { kind: "no-profile" }
-    | { kind: "needs-confirm"; releases: { id: string; label: string }[] }
+    | {
+        kind: "needs-confirm";
+        releases: { id: string; label: string }[];
+        choose?: { keepLimit: number; held: { id: string; label: string }[] };
+      }
+    | { kind: "bad-keep" }
     | { kind: "no-op" }
     | {
         kind: "done";
@@ -461,15 +482,32 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
 
       const held = teacher.advisorySections;
       const cap = advisoryCapFor(designation, advisoryMode);
-      const excess = held.slice(cap);
+      const labelOf = (s: (typeof held)[number]) =>
+        `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`;
+      // Over cap with room left (multi-advisory → one advisory section): which
+      // sections stay is the School Head's call, not the sort order's.
+      const mustChoose = held.length > cap && cap > 0;
 
-      if (excess.length > 0 && confirmRelease !== "true") {
+      let excess = held.slice(cap);
+      if (mustChoose && keepSectionIds) {
+        const heldIds = new Set(held.map((s) => s.id));
+        const keep = new Set(keepSectionIds);
+        // Exactly `cap` distinct sections this teacher actually holds — anything
+        // else is a stale dialog or a forged id, and releasing on it would free
+        // the wrong roster.
+        if (keep.size !== cap || [...keep].some((id) => !heldIds.has(id))) {
+          return { kind: "bad-keep" } as const;
+        }
+        excess = held.filter((s) => !keep.has(s.id));
+      }
+
+      if (excess.length > 0 && (confirmRelease !== "true" || (mustChoose && !keepSectionIds))) {
         return {
           kind: "needs-confirm",
-          releases: excess.map((s) => ({
-            id: s.id,
-            label: `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} · ${s.name}`,
-          })),
+          releases: excess.map((s) => ({ id: s.id, label: labelOf(s) })),
+          ...(mustChoose
+            ? { choose: { keepLimit: cap, held: held.map((s) => ({ id: s.id, label: labelOf(s) })) } }
+            : {}),
         } as const;
       }
 
@@ -508,8 +546,16 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
   if (outcome.kind === "no-profile") {
     return { ok: false, error: "This teacher hasn't finished profiling yet." };
   }
+  if (outcome.kind === "bad-keep") {
+    return { ok: false, error: "Their sections changed. Close this and try again." };
+  }
   if (outcome.kind === "needs-confirm") {
-    return { ok: false, error: "confirm_release", releases: outcome.releases };
+    return {
+      ok: false,
+      error: "confirm_release",
+      releases: outcome.releases,
+      ...(outcome.choose ? { choose: outcome.choose } : {}),
+    };
   }
   if (outcome.kind === "no-op") return { ok: true };
 

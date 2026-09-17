@@ -75,21 +75,45 @@ export function TeacherRoleDialog({
   const [designationOther, setDesignationOther] = useState(initial.other);
   const [advisoryMode, setAdvisoryMode] = useState<AdvisoryMode>(row.advisoryMode ?? "DEFAULT");
   const [releases, setReleases] = useState<{ id: string; label: string }[] | null>(null);
+  // Set when the new setting still allows some advisories: the School Head picks
+  // which of the held sections stay, and `releases` is derived from that pick.
+  const [choose, setChoose] = useState<{
+    keepLimit: number;
+    held: { id: string; label: string }[];
+  } | null>(null);
+  const [keepIds, setKeepIds] = useState<string[]>([]);
+
+  const clearConfirm = () => {
+    setReleases(null);
+    setChoose(null);
+    setKeepIds([]);
+  };
 
   const resetFromRow = () => {
     const resolved = resolveDesignationKind(row.designation);
     setDesignationKind(resolved.kind);
     setDesignationOther(resolved.other);
     setAdvisoryMode(row.advisoryMode ?? "DEFAULT");
-    setReleases(null);
+    clearConfirm();
   };
 
   const handleOpenChange = (next: boolean) => {
     if (pending) return;
     if (next) resetFromRow();
-    else setReleases(null);
+    else clearConfirm();
     setOpen(next);
   };
+
+  const toggleKeep = (id: string, limit: number) => {
+    setKeepIds((prev) => {
+      if (limit === 1) return [id];
+      if (prev.includes(id)) return prev.filter((k) => k !== id);
+      return prev.length < limit ? [...prev, id] : prev;
+    });
+  };
+
+  const chosenReleases = choose ? choose.held.filter((s) => !keepIds.includes(s.id)) : releases;
+  const choiceComplete = !choose || keepIds.length === choose.keepLimit;
 
   async function submit(confirmRelease: boolean) {
     setPending(true);
@@ -106,12 +130,17 @@ export function TeacherRoleDialog({
         "advisoryMode",
         designationKind === ARAL_VOLUNTEER_DESIGNATION ? "DEFAULT" : advisoryMode
       );
-      if (confirmRelease) fd.set("confirmRelease", "true");
+      if (confirmRelease) {
+        fd.set("confirmRelease", "true");
+        if (choose) for (const id of keepIds) fd.append("keepSectionIds", id);
+      }
 
       const res = await setTeacherAdvisorySetting(fd);
       if (!res.ok) {
         if ("releases" in res) {
           setReleases(res.releases);
+          setChoose(res.choose ?? null);
+          setKeepIds([]);
           return;
         }
         toast.error(res.error);
@@ -119,7 +148,7 @@ export function TeacherRoleDialog({
       }
       toast.success(`Saved ${row.fullName}'s role`);
       setOpen(false);
-      setReleases(null);
+      clearConfirm();
       // No `router.refresh()`: the action revalidates, so its response already
       // carries the re-rendered roster.
       onSaved();
@@ -140,14 +169,57 @@ export function TeacherRoleDialog({
       <DialogContent>
         {releases ? (
           <>
-            <DialogHeader>
-              <DialogTitle>This unassigns:</DialogTitle>
-            </DialogHeader>
-            <ul className="list-disc space-y-1 pl-5 text-sm">
-              {releases.map((r) => (
-                <li key={r.id}>{r.label}</li>
-              ))}
-            </ul>
+            {choose ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
+                    {choose.keepLimit === 1
+                      ? "Which advisory section do they keep?"
+                      : `Which ${choose.keepLimit} advisory sections do they keep?`}
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  {row.fullName} advises {choose.held.length} sections.{" "}
+                  {choose.keepLimit === 1
+                    ? "One advisory section allows only one."
+                    : `This setting allows ${choose.keepLimit}.`}
+                </p>
+                <fieldset className="space-y-2" aria-label="Sections to keep">
+                  {choose.held.map((s) => (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm has-[:checked]:border-primary"
+                    >
+                      <input
+                        type={choose.keepLimit === 1 ? "radio" : "checkbox"}
+                        name={`keep-${row.id}`}
+                        value={s.id}
+                        checked={keepIds.includes(s.id)}
+                        disabled={pending}
+                        onChange={() => toggleKeep(s.id, choose.keepLimit)}
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </fieldset>
+                {choiceComplete && chosenReleases && chosenReleases.length > 0 ? (
+                  <p className="text-sm">
+                    This unassigns: {chosenReleases.map((r) => r.label).join(", ")}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>This unassigns:</DialogTitle>
+                </DialogHeader>
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  {releases.map((r) => (
+                    <li key={r.id}>{r.label}</li>
+                  ))}
+                </ul>
+              </>
+            )}
             <p className="text-sm text-muted-foreground">
               Their learners stay in the section and will need a new adviser.
             </p>
@@ -156,7 +228,7 @@ export function TeacherRoleDialog({
                 type="button"
                 variant="outline"
                 disabled={pending}
-                onClick={() => setReleases(null)}
+                onClick={clearConfirm}
               >
                 Cancel
               </Button>
@@ -165,6 +237,7 @@ export function TeacherRoleDialog({
                 variant="destructive"
                 loading={pending}
                 loadingText="Saving…"
+                disabled={!choiceComplete}
                 onClick={() => submit(true)}
               >
                 Unassign and save

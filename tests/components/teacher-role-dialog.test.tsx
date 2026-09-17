@@ -105,6 +105,45 @@ describe("TeacherRoleDialog — confirm-release round trip", () => {
   });
 });
 
+describe("TeacherRoleDialog — choosing the advisory to keep", () => {
+  it("makes the School Head pick the kept section and sends it back", async () => {
+    const held = [
+      { id: "sec-1", label: "Grade 4 · Sampaguita" },
+      { id: "sec-2", label: "Grade 5 · Rosal" },
+      { id: "sec-3", label: "Grade 6 · Ilang" },
+    ];
+    setTeacherAdvisorySetting.mockResolvedValueOnce({
+      ok: false,
+      error: "confirm_release",
+      releases: held.slice(1),
+      choose: { keepLimit: 1, held },
+    });
+    setTeacherAdvisorySetting.mockResolvedValueOnce({ ok: true });
+
+    const onSaved = vi.fn();
+    render(<TeacherRoleDialog row={{ ...ROW, advisoryMode: "MULTI_GRADE" }} onSaved={onSaved} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await screen.findByText("Which advisory section do they keep?");
+    const confirm = screen.getByRole("button", { name: "Unassign and save" }) as HTMLButtonElement;
+    // Nothing kept yet — cannot save.
+    expect(confirm.disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Grade 5 · Rosal" }));
+    expect(confirm.disabled).toBe(false);
+    expect(screen.getByText("This unassigns: Grade 4 · Sampaguita, Grade 6 · Ilang")).toBeTruthy();
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(setTeacherAdvisorySetting).toHaveBeenCalledTimes(2));
+    const second = setTeacherAdvisorySetting.mock.calls[1][0];
+    expect(second.get("confirmRelease")).toBe("true");
+    expect(second.getAll("keepSectionIds")).toEqual(["sec-2"]);
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+});
+
 describe("TeacherRoleDialog — designation and advisory setting", () => {
   it("hides the advisory radios when Volunteer is chosen", async () => {
     render(<TeacherRoleDialog row={ROW} onSaved={vi.fn()} />);

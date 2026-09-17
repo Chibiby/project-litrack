@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.1.0",
+    date: "2026-09-17",
+    title: "Choose which advisory a teacher keeps",
+    announce: true,
+    fixes: [
+      { text: "Your Grades on the dashboard now counts only the grades you advise. Before, one ARAL learner from another grade made it show an extra grade.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "When you switch a multi-advisory teacher to One advisory section, you now pick which section they keep. Before, the first section in the list was kept without asking.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.0.2",
     date: "2026-09-17",
     title: "Student Profile tabs show on phones",

@@ -97,7 +97,7 @@ export async function getTeacherOverview(
 
   return cachedQuery(
     async () => {
-      const [grades, schoolGrades, activeYear] = await Promise.all([
+      const [grades, schoolGrades, activeYear, advisedSections] = await Promise.all([
         prisma.gradeLevel.findMany({
           where: teacherGradeFilter(opts),
           select: { id: true, type: true },
@@ -115,16 +115,31 @@ export async function getTeacherOverview(
           where: { schoolId, isActive: true },
           select: { label: true },
         }),
+        isSuperAdmin
+          ? Promise.resolve([])
+          : prisma.section.findMany({
+              where: { adviserId: teacherId, schoolId, deletedAt: null },
+              select: { gradeLevelId: true },
+            }),
       ]);
 
       const gradeIds = grades.map((g) => g.id);
+      // "Your Grades" means the grades a teacher advises. `grades` is a
+      // visibility union that also includes any grade holding one learner they
+      // tutor for ARAL, so a single-advisory teacher with one stray learner in
+      // another grade read "2". Fall back to the union only when they advise
+      // nothing (floating / ARAL-only), where it is the only grade they have.
+      const advisedGradeCount = new Set(
+        advisedSections.map((s) => s.gradeLevelId)
+      ).size;
+      const gradeCount = advisedGradeCount > 0 ? advisedGradeCount : grades.length;
       const careFilter = teacherLearnerFilter(opts);
 
       const empty: TeacherOverview = {
         todayKey: formatLocalDateKey(now),
         weekStartKey: formatLocalDateKey(weekStart),
         monthStartKey: formatLocalDateKey(monthStart),
-        gradeCount: grades.length,
+        gradeCount,
         totalLearners: 0,
         aralLearners: 0,
         pendingAralProfiles: 0,
@@ -279,7 +294,7 @@ export async function getTeacherOverview(
         todayKey: formatLocalDateKey(now),
         weekStartKey: formatLocalDateKey(weekStart),
         monthStartKey: formatLocalDateKey(monthStart),
-        gradeCount: grades.length,
+        gradeCount,
         totalLearners,
         aralLearners,
         pendingAralProfiles,

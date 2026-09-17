@@ -228,6 +228,14 @@ describe("setTeacherAdvisorySetting", () => {
         { id: "77777777-7777-4777-8777-777777777777", label: "Grade 3 · Section 1" },
         { id: "88888888-8888-4888-8888-888888888888", label: "Grade 3 · Section 2" },
       ],
+      choose: {
+        keepLimit: 1,
+        held: [
+          { id: "66666666-6666-4666-8666-666666666666", label: "Grade 3 · Section 0" },
+          { id: "77777777-7777-4777-8777-777777777777", label: "Grade 3 · Section 1" },
+          { id: "88888888-8888-4888-8888-888888888888", label: "Grade 3 · Section 2" },
+        ],
+      },
     });
     // The cap re-check now runs inside the transaction (to close the race
     // Finding 1 flagged), so the transaction IS entered — it just returns
@@ -237,7 +245,7 @@ describe("setTeacherAdvisorySetting", () => {
     expect(calls.sectionUpdateMany).toHaveLength(0);
   });
 
-  it("releases the excess and writes the update once confirmed", async () => {
+  it("still asks which section to keep when confirmed without a choice", async () => {
     holding(3);
     teacherLookup!.teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
 
@@ -249,6 +257,71 @@ describe("setTeacherAdvisorySetting", () => {
         confirmRelease: "true",
       })
     );
+
+    expect(result).toMatchObject({ ok: false, error: "confirm_release", choose: { keepLimit: 1 } });
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
+    expect(calls.sectionUpdateMany).toHaveLength(0);
+  });
+
+  it("keeps the chosen section and releases the others", async () => {
+    holding(3);
+    teacherLookup!.teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
+
+    const fd = buildFormData({
+      teacherId: TEACHER_ID,
+      designationKind: "Teacher",
+      advisoryMode: "DEFAULT",
+      confirmRelease: "true",
+    });
+    fd.append("keepSectionIds", "88888888-8888-4888-8888-888888888888");
+    const result = await setTeacherAdvisorySetting(fd);
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      calls.sectionUpdateMany.map((c) => (c as { where: { id: string } }).where.id)
+    ).toEqual(["66666666-6666-4666-8666-666666666666", "77777777-7777-4777-8777-777777777777"]);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          releasedSectionIds: [
+            "66666666-6666-4666-8666-666666666666",
+            "77777777-7777-4777-8777-777777777777",
+          ],
+        }),
+      })
+    );
+  });
+
+  it("rejects a kept section the teacher does not hold", async () => {
+    holding(2);
+    teacherLookup!.teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
+
+    const fd = buildFormData({
+      teacherId: TEACHER_ID,
+      designationKind: "Teacher",
+      advisoryMode: "DEFAULT",
+      confirmRelease: "true",
+    });
+    fd.append("keepSectionIds", "99999999-9999-4999-8999-999999999999");
+    const result = await setTeacherAdvisorySetting(fd);
+
+    expect(result).toEqual({ ok: false, error: "Their sections changed. Close this and try again." });
+    expect(calls.teacherProfileUpdate).toHaveLength(0);
+    expect(calls.sectionUpdateMany).toHaveLength(0);
+  });
+
+  it("releases the excess and writes the update once confirmed", async () => {
+    holding(3);
+    teacherLookup!.teacherProfile = { designation: "Teacher", advisoryMode: "MULTI_GRADE" };
+
+    const fd = buildFormData({
+      teacherId: TEACHER_ID,
+      designationKind: "Teacher",
+      advisoryMode: "DEFAULT",
+      confirmRelease: "true",
+    });
+    fd.append("keepSectionIds", "66666666-6666-4666-8666-666666666666");
+    const result = await setTeacherAdvisorySetting(fd);
 
     expect(result).toEqual({ ok: true });
     expect(calls.teacherProfileUpdate[0]).toEqual({
