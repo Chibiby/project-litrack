@@ -301,6 +301,11 @@ export const AUDIT_ACTIONS = {
   DEMO_MODE_SET: "DEMO_MODE_SET",
   DEMO_PROVISION: "DEMO_PROVISION",
   DEMO_RESET: "DEMO_RESET",
+  /**
+   * Page Test Lab built or refreshed its fixtures inside the demo school.
+   * Metadata is ids and counts only — never the generated account passwords.
+   */
+  TEST_LAB_PREPARE: "TEST_LAB_PREPARE",
 
   /**
    * Whether submission deadlines are being enforced at all

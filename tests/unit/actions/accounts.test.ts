@@ -60,6 +60,9 @@ const prismaMock = {
     findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     update: vi.fn(async (_args: unknown) => ({})),
   },
+  school: {
+    findFirst: vi.fn(async (_args: unknown): Promise<unknown> => null),
+  },
   auditLog: {
     groupBy: vi.fn(async (_args: unknown) => []),
     findMany: vi.fn(async (_args: unknown) => []),
@@ -171,7 +174,7 @@ vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolsList: vi.fn() }));
 
 // ── the module under test ────────────────────────────────────────────────
 const { impersonateUser, endImpersonation, resetTeacherPassword, getAccountProfile,
-  revealSchoolHeadPassword, resetSchoolHeadPasswordToDefault } = await import(
+  revealSchoolHeadPassword, resetSchoolHeadPasswordToDefault, startTestLabSession } = await import(
   "@/lib/actions/accounts"
 );
 const { logoutAction } = await import("@/lib/actions/auth");
@@ -231,6 +234,7 @@ beforeEach(() => {
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   targetRow = teacher();
   prismaMock.user.findFirst.mockImplementation(async () => targetRow);
+  prismaMock.school.findFirst.mockResolvedValue(null);
   generateLink.mockResolvedValue({ data: { properties: { hashed_token: "hashed-token" } }, error: null });
   detachedVerifyOtp.mockResolvedValue({
     data: { session: { access_token: "minted-access-token", refresh_token: "minted-refresh-token" } },
@@ -324,6 +328,118 @@ describe("impersonateUser", () => {
     expect(JSON.stringify(entry)).not.toContain("t@school.local");
     expect(JSON.stringify(entry)).not.toContain("Some Teacher");
   });
+
+  it("regression: still signs in as a real (non-demo) account, with no demo check applied", async () => {
+    // A real school: Test Lab's guard would refuse it, so it must not be on this path.
+    prismaMock.school.findFirst.mockResolvedValue({ isDemo: false });
+    const res = await run(impersonateUser(form()));
+    expect(res).toEqual({ redirectedTo: "/teacher" });
+    expect(prismaMock.school.findFirst).not.toHaveBeenCalled();
+    expect(setImpersonationCookie).toHaveBeenCalledWith(
+      expect.objectContaining({ adminUserId: ADMIN_ID, targetUserId: TARGET_ID, sessionId: SESSION_ID })
+    );
+    expect(serverSetSession).toHaveBeenCalledTimes(1);
+    const entry = writeAudit.mock.calls[0][0] as { metadata: Record<string, unknown> };
+    expect(entry.metadata).not.toHaveProperty("source");
+  });
+});
+
+describe("startTestLabSession", () => {
+  function labForm(fields: Record<string, string> = {}): FormData {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries({ persona: "teacher", ...fields })) fd.set(k, v);
+    return fd;
+  }
+
+  it("refuses a non-Super-Admin caller before any read or write", async () => {
+    requireUser.mockRejectedValueOnce(new Error("NEXT_REDIRECT:/login"));
+    await expect(startTestLabSession(labForm())).rejects.toThrow("NEXT_REDIRECT:/login");
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.school.findFirst).not.toHaveBeenCalled();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown persona", async () => {
+    const res = await startTestLabSession(labForm({ persona: "SUPER_ADMIN" }));
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("looks the persona up by its synthetic email inside a live demo school only", async () => {
+    prismaMock.school.findFirst.mockResolvedValue({ isDemo: true });
+    await run(startTestLabSession(labForm()));
+    const args = prismaMock.user.findFirst.mock.calls[0][0] as { where: Record<string, unknown> };
+    expect(args.where).toMatchObject({
+      email: "testlab.teacher.demo-1-123456@school.local",
+      role: "TEACHER",
+      deletedAt: null,
+      school: { isDemo: true, deletedAt: null },
+    });
+  });
+
+  it("refuses a persona account whose school is not demo: no ticket minted, no Supabase session", async () => {
+    // Belt and braces: even if the lookup returned a row, the school re-check refuses.
+    prismaMock.school.findFirst.mockResolvedValue({ isDemo: false });
+    const res = await startTestLabSession(labForm());
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(generateLink).not.toHaveBeenCalled();
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+    expect(serverSetSession).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("tells the admin to prepare test data when no demo persona exists, minting nothing", async () => {
+    targetRow = null;
+    const res = await startTestLabSession(labForm());
+    expect(res).toMatchObject({ ok: false, code: "TEST_LAB_NOT_PREPARED" });
+    expect(generateLink).not.toHaveBeenCalled();
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+    expect(serverSetSession).not.toHaveBeenCalled();
+  });
+
+  it("shares impersonateUser's rate-limit bucket", async () => {
+    checkRateLimit.mockResolvedValueOnce({ ok: false, retryAfterMs: 60_000 });
+    const res = await startTestLabSession(labForm());
+    expect(res).toMatchObject({ ok: false, code: "RATE_LIMITED" });
+    expect(checkRateLimit).toHaveBeenCalledWith(`impersonate:${ADMIN_ID}`, expect.anything());
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it.each(["//evil.example", "https://evil.example/teacher", "/school-head/learners", "/teacher\\..\\admin"])(
+    "falls back to the role home for unsafe next %j",
+    async (next) => {
+      prismaMock.school.findFirst.mockResolvedValue({ isDemo: true });
+      const res = await run(startTestLabSession(labForm({ next })));
+      expect(res).toEqual({ redirectedTo: "/teacher" });
+    }
+  );
+
+  it("honours a safe next inside the persona's role tree", async () => {
+    prismaMock.school.findFirst.mockResolvedValue({ isDemo: true });
+    const res = await run(startTestLabSession(labForm({ next: "/teacher/aral/profiling" })));
+    expect(res).toEqual({ redirectedTo: "/teacher/aral/profiling" });
+  });
+
+  it("writes a bound ticket and audits IMPERSONATION_START with source test-lab, ids only", async () => {
+    prismaMock.school.findFirst.mockResolvedValue({ isDemo: true });
+    await run(startTestLabSession(labForm()));
+    expect(setImpersonationCookie).toHaveBeenCalledWith(
+      expect.objectContaining({ adminUserId: ADMIN_ID, targetUserId: TARGET_ID, sessionId: SESSION_ID })
+    );
+    expect(writeAudit).toHaveBeenCalledTimes(1);
+    const entry = writeAudit.mock.calls[0][0] as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      userId: ADMIN_ID,
+      action: AUDIT_ACTIONS.IMPERSONATION_START,
+      resource: "User",
+      resourceId: TARGET_ID,
+      metadata: { schoolId: SCHOOL_ID, targetRole: "TEACHER", source: "test-lab" },
+    });
+    expect(JSON.stringify(entry)).not.toContain("t@school.local");
+    expect(JSON.stringify(entry)).not.toContain("Some Teacher");
+  });
 });
 
 describe("endImpersonation", () => {
@@ -395,6 +511,25 @@ describe("endImpersonation", () => {
     expect(res).toEqual({ redirectedTo: "/admin/accounts" });
     expect(adminSignOut).toHaveBeenCalledWith("the-bound-access-token", "local");
     expect(clearImpersonationCookie).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [true, "/admin/test-lab"],
+    [false, "/admin/accounts"],
+    [null, "/admin/accounts"],
+  ])("returns a session whose target school isDemo=%s to %s", async (isDemo, path) => {
+    readImpersonationTicket.mockResolvedValue(ticket());
+    checkCurrentSession.mockResolvedValue({ status: "live", sessionId: SESSION_ID, accessToken: "tok" });
+    prismaMock.user.findFirst
+      .mockResolvedValueOnce({ id: ADMIN_ID, email: "admin@litrack.local" })
+      .mockResolvedValueOnce(isDemo === null ? { school: null } : { school: { isDemo } });
+    serverVerifyOtp.mockResolvedValueOnce({ error: null });
+
+    const res = await run(endImpersonation());
+
+    expect(res).toEqual({ redirectedTo: path });
+    const targetLookup = prismaMock.user.findFirst.mock.calls[1][0] as { where: Record<string, unknown> };
+    expect(targetLookup.where).toEqual({ id: TARGET_ID });
   });
 
   it("still refuses a demoted, inactive, or deleted admin row (re-checked live at return time)", async () => {

@@ -30,24 +30,16 @@ describe("demo tenant constants", () => {
     expect(DEMO_DISTRICT_NAME).toBe("[demo district]");
   });
 
-  it("provides three schools, named exactly as the training script does", () => {
-    expect(DEMO_SCHOOLS.map((s) => s.name)).toEqual([
-      "[demo school 1]",
-      "[demo school 2]",
-      "[demo school 3]",
-    ]);
+  it("provides exactly one school, named exactly as the training script does", () => {
+    // One demo school since Page Test Lab (docs/test-lab-spec.md, decision 2).
+    expect(DEMO_SCHOOLS).toHaveLength(1);
+    expect(DEMO_SCHOOLS.map((s) => s.name)).toEqual(["[demo school 1]"]);
+    expect(DEMO_SCHOOLS[0].key).toBe("1");
+    expect(DEMO_SCHOOLS[0].emailCode).toBe("demo-1-123456");
   });
 
   it("uses 123456 as the School ID", () => {
     expect(DEMO_SCHOOL_ID_CODE).toBe("123456");
-  });
-
-  it("gives every demo school the same School ID, so there is one password on camera", () => {
-    // Possible only because the unique index on School.schoolIdCode is partial
-    // (WHERE "isDemo" = false). If that ever reverts to a global unique, the
-    // second school fails to insert.
-    expect(DEMO_SCHOOLS).toHaveLength(3);
-    expect(new Set(DEMO_SCHOOLS.map(() => DEMO_SCHOOL_ID_CODE)).size).toBe(1);
   });
 
   it("keeps names and School IDs the real create-school form would also accept", () => {
@@ -64,10 +56,9 @@ describe("demo tenant constants", () => {
   });
 
   it("gives each demo School Head an address that collides with nothing", () => {
-    // Two ways a bare-School-ID address would collide: a real school already
-    // owns 123456 and its head is already sh@123456.<domain>, and all three demo
-    // schools share the ID so they would clash with each other. User.email is
-    // unique and Supabase Auth rejects duplicates outright.
+    // A bare-School-ID address would collide: a real school already owns 123456
+    // and its head is already sh@123456.<domain>. User.email is unique and
+    // Supabase Auth rejects duplicates outright.
     const emails = DEMO_SCHOOLS.map((s) => schoolHeadSyntheticEmail(s.emailCode));
     expect(new Set(emails).size).toBe(DEMO_SCHOOLS.length);
     expect(emails).not.toContain(schoolHeadSyntheticEmail(DEMO_SCHOOL_ID_CODE));
@@ -137,9 +128,7 @@ describe("demo district on the login page", () => {
     teachersOpen: true,
   });
 
-  it("groups all three demo schools under the one demo district", () => {
-    // This is what the recording shows: pick the district, and the School
-    // dropdown narrows to a real list to scroll rather than a single entry.
+  it("groups the demo school under the demo district", () => {
     const schools = [
       opt("Real ES", "District I"),
       ...DEMO_SCHOOLS.map((s) => opt(s.name, DEMO_DISTRICT_NAME)),

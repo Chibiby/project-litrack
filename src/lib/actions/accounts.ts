@@ -29,6 +29,13 @@ import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-er
 import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { parseInput } from "@/lib/errors/validation";
 import { accountUserIdSchema } from "@/lib/validators/accounts.schema";
+import { startTestLabSessionSchema } from "@/lib/validators/test-lab.schema";
+import {
+  resolveTestLabNext,
+  testLabPersonaEmail,
+  testLabPersonaRole,
+} from "@/lib/test-lab/personas";
+import { assertTestableSchool, impersonationReturnPath } from "@/lib/auth/test-lab";
 import type { AccountSignIn } from "@/lib/admin/accounts";
 import {
   checkCurrentSession,
@@ -390,6 +397,27 @@ export const resetTeacherPassword = action(
 
 // ── Impersonation ──────────────────────────────────────────────────────────
 
+const IMPERSONATION_TARGET_SELECT = {
+  id: true,
+  role: true,
+  isActive: true,
+  approvalStatus: true,
+  email: true,
+  schoolId: true,
+  fullName: true,
+  school: { select: { name: true } },
+} as const;
+
+type ImpersonationTarget = {
+  id: string;
+  role: UserRole;
+  isActive: boolean;
+  approvalStatus: TeacherApprovalStatus | null;
+  email: string;
+  schoolId: string | null;
+  school: { name: string } | null;
+};
+
 /**
  * Sign the Super Admin into another account's session without changing its
  * password.
@@ -432,137 +460,201 @@ export const impersonateUser = action(
         deletedAt: null,
         OR: [{ schoolId: null }, { school: { deletedAt: null } }],
       },
-      select: {
-        id: true,
-        role: true,
-        isActive: true,
-        approvalStatus: true,
-        email: true,
-        schoolId: true,
-        fullName: true,
-        school: { select: { name: true } },
-      },
+      select: IMPERSONATION_TARGET_SELECT,
     });
     if (!target) throw accountNotFound(`impersonateUser: no live account ${userId}`);
 
-    // REFUSAL — PRIVILEGE ESCALATION GUARD. One Super Admin may never take over
-    // another's session, not even with a valid admin session of their own. The
-    // audit trail's ability to say which admin did something depends entirely on
-    // admin sessions being unforgeable from inside the app, and impersonating a
-    // peer would let any admin act as any other with no row naming them. The
-    // message stays generic — `what: "this account"` — so it says nothing the
-    // list did not already show.
-    if (target.role === "SUPER_ADMIN") {
-      throw new AppError("AUTH_FORBIDDEN", {
-        params: { what: "this account" },
-        detail: `impersonateUser refused: target ${target.id} is SUPER_ADMIN`,
-      });
-    }
-
-    if (target.role === "SCHOOL_HEAD") {
-      const signInHead = target.schoolId ? await findSignInSchoolHead(target.schoolId) : null;
-      if (signInHead?.id !== target.id) {
-        throw accountNotFound(`impersonateUser: ${target.id} is not the sign-in head`);
-      }
-    }
-
-    // REFUSAL — STRANDING GUARD, and it must come BEFORE the swap.
-    // `getCurrentUser` signs out, on their very next request, every account it
-    // will not serve. If the swap happened first, the admin's own session would
-    // already be gone by the time that fired: they would be bounced to the login
-    // page holding an impersonation ticket they can no longer redeem, with no
-    // way back short of an operator clearing a cookie they cannot see.
-    //
-    // So this mirrors `getCurrentUserCached` exactly rather than approximating
-    // it. A PENDING teacher is `isActive: false` from registration until
-    // approval, but that function redirects them to `/pending-approval` and
-    // returns BEFORE its inactive sign-out — they are never signed out, and that
-    // page mounts the banner, so they are a legitimate target (spec §5.1). The
-    // exemption is TEACHER + PENDING and nothing wider, because that is exactly
-    // what its pending gate matches: an inactive School Head carrying a stray
-    // PENDING status would still be signed out, so it is still refused.
-    //
-    // REJECTED is refused by name. `rejectTeacher` also writes `isActive: false`,
-    // so the inactive check would catch it today — but that invariant is held by
-    // one unrelated function, and a path that set the status without the flag
-    // would reopen this hole. `getCurrentUser` signs REJECTED out on its own
-    // terms, so it is refused here on its own terms.
-    const pendingTeacher = target.role === "TEACHER" && target.approvalStatus === "PENDING";
-    if (target.approvalStatus === "REJECTED" || (!target.isActive && !pendingTeacher)) {
-      throw new AppError("ADMIN_IMPERSONATE_INACTIVE", {
-        detail: `impersonateUser refused: target ${target.id} would be signed out (isActive=${target.isActive}, approvalStatus=${target.approvalStatus ?? "none"})`,
-      });
-    }
-
-    // ORDERING — mint, bind, then install. The ticket still lands before the
-    // swap, and here is why that order holds even though the ticket now needs a
-    // session id that does not exist until the session does.
-    //
-    // Stranding is the failure this sequence prevents: the browser holding the
-    // target's session with no ticket, so no banner and no way back. Today's
-    // answer was "write the ticket first", and it still is — the session is
-    // minted OFF the response (a detached client, no cookies touched), its
-    // `session_id` is read, the ticket is written bound to it, and only then is
-    // the session installed into this response's cookies. Every exit leaves one
-    // of two coherent states:
-    //  - the admin's own session, and no ticket that can restore anything: a
-    //    failure while minting writes nothing; a failed install clears the
-    //    ticket; and even a throw between the two leaves a ticket bound to a
-    //    session this browser never received, which `endImpersonation` refuses;
-    //  - the target's session plus a ticket bound to exactly that session.
-    // There is no point at which the target's session is in the cookies without
-    // its ticket, and no ticket ever exists without a binding.
-    //
-    // The rejected alternative — write an unbound placeholder, swap, overwrite
-    // with the bound ticket — leaves an unredeemable placeholder in precisely the
-    // window the placeholder was there to cover.
-    const minted = await mintSessionFor(target.email);
-    if (!minted) {
-      throw new AppError("AUTH_PROVIDER_ERROR", {
-        detail: `impersonateUser: could not mint a session for user ${target.id}`,
-      });
-    }
-
-    await setImpersonationCookie({
-      adminAuthId: admin.authId,
-      adminUserId: admin.id,
-      targetUserId: target.id,
-      sessionId: minted.sessionId,
-    });
-
-    const supabase = await createSupabaseServerClient();
-    const { error: installError } = await supabase.auth.setSession({
-      access_token: minted.session.access_token,
-      refresh_token: minted.session.refresh_token,
-    });
-    if (installError) {
-      await clearImpersonationCookie();
-      throw new AppError("AUTH_PROVIDER_ERROR", {
-        cause: installError,
-        detail: `impersonateUser: session install failed for user ${target.id}`,
-      });
-    }
-
-    await writeAudit({
-      userId: admin.id,
-      schoolId: target.schoolId,
-      action: AUDIT_ACTIONS.IMPERSONATION_START,
-      resource: "User",
-      resourceId: target.id,
+    return startImpersonation(admin, target, {
+      redirectTo: target.role === "TEACHER" ? "/teacher" : "/school-head",
       // Ids, a school name the admin already sees on the row, and the role.
       // `targetRole` is what lets the log answer "head or teacher" without a
       // join. Never the account's email or the person's name.
-      metadata: {
+      auditMetadata: {
         schoolId: target.schoolId,
         schoolName: target.school?.name ?? null,
         targetRole: target.role,
       },
     });
-
-    redirect(target.role === "TEACHER" ? "/teacher" : "/school-head");
   },
   { verb: "sign in as that account" }
 );
+
+/**
+ * Page Test Lab: sign the Super Admin in as one of the demo school's test
+ * personas (docs/test-lab-spec.md).
+ *
+ * The persona is looked up by its fixed synthetic email AND
+ * `school: { isDemo: true, deletedAt: null }`, then `assertTestableSchool`
+ * re-checks the school — so nothing a browser can send reaches a real account
+ * through this action. Past the lookup it is `impersonateUser` exactly: same
+ * rate-limit bucket, same refusals, same bound ticket, same audit action.
+ */
+export const startTestLabSession = action(
+  "startTestLabSession",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const admin = await requireUser("SUPER_ADMIN");
+
+    // Same bucket as `impersonateUser`: both mint sessions for other accounts.
+    const rate = await checkRateLimit(`impersonate:${admin.id}`, IMPERSONATE_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
+
+    const { persona, next } = parseInput(startTestLabSessionSchema, {
+      persona: formData.get("persona"),
+      next: formData.get("next") ?? undefined,
+    });
+
+    const target = await prisma.user.findFirst({
+      where: {
+        email: testLabPersonaEmail(persona),
+        role: testLabPersonaRole(persona),
+        deletedAt: null,
+        school: { isDemo: true, deletedAt: null },
+      },
+      select: IMPERSONATION_TARGET_SELECT,
+    });
+    if (!target) {
+      throw new AppError("TEST_LAB_NOT_PREPARED", {
+        detail: `startTestLabSession: no demo account for persona ${persona}`,
+      });
+    }
+    await assertTestableSchool(target.schoolId);
+
+    return startImpersonation(admin, target, {
+      redirectTo: resolveTestLabNext(persona, next),
+      // Ids and the role only.
+      auditMetadata: {
+        schoolId: target.schoolId,
+        targetRole: target.role,
+        source: "test-lab",
+        persona,
+      },
+    });
+  },
+  { verb: "start the test session" }
+);
+
+/**
+ * The shared body of `impersonateUser` and `startTestLabSession`: target
+ * refusals, mint, bind, install, audit, redirect.
+ *
+ * Performs no authorization of its own — both callers have already passed
+ * `requireUser("SUPER_ADMIN")`, the rate limit, and their own target lookup.
+ * Must never be exported: this is a "use server" module.
+ */
+async function startImpersonation(
+  admin: { id: string; authId: string },
+  target: ImpersonationTarget,
+  options: { redirectTo: string; auditMetadata: Record<string, unknown> }
+): Promise<never> {
+  // REFUSAL — PRIVILEGE ESCALATION GUARD. One Super Admin may never take over
+  // another's session, not even with a valid admin session of their own. The
+  // audit trail's ability to say which admin did something depends entirely on
+  // admin sessions being unforgeable from inside the app, and impersonating a
+  // peer would let any admin act as any other with no row naming them. The
+  // message stays generic — `what: "this account"` — so it says nothing the
+  // list did not already show.
+  if (target.role === "SUPER_ADMIN") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "this account" },
+      detail: `impersonateUser refused: target ${target.id} is SUPER_ADMIN`,
+    });
+  }
+
+  if (target.role === "SCHOOL_HEAD") {
+    const signInHead = target.schoolId ? await findSignInSchoolHead(target.schoolId) : null;
+    if (signInHead?.id !== target.id) {
+      throw accountNotFound(`impersonateUser: ${target.id} is not the sign-in head`);
+    }
+  }
+
+  // REFUSAL — STRANDING GUARD, and it must come BEFORE the swap.
+  // `getCurrentUser` signs out, on their very next request, every account it
+  // will not serve. If the swap happened first, the admin's own session would
+  // already be gone by the time that fired: they would be bounced to the login
+  // page holding an impersonation ticket they can no longer redeem, with no
+  // way back short of an operator clearing a cookie they cannot see.
+  //
+  // So this mirrors `getCurrentUserCached` exactly rather than approximating
+  // it. A PENDING teacher is `isActive: false` from registration until
+  // approval, but that function redirects them to `/pending-approval` and
+  // returns BEFORE its inactive sign-out — they are never signed out, and that
+  // page mounts the banner, so they are a legitimate target (spec §5.1). The
+  // exemption is TEACHER + PENDING and nothing wider, because that is exactly
+  // what its pending gate matches: an inactive School Head carrying a stray
+  // PENDING status would still be signed out, so it is still refused.
+  //
+  // REJECTED is refused by name. `rejectTeacher` also writes `isActive: false`,
+  // so the inactive check would catch it today — but that invariant is held by
+  // one unrelated function, and a path that set the status without the flag
+  // would reopen this hole. `getCurrentUser` signs REJECTED out on its own
+  // terms, so it is refused here on its own terms.
+  const pendingTeacher = target.role === "TEACHER" && target.approvalStatus === "PENDING";
+  if (target.approvalStatus === "REJECTED" || (!target.isActive && !pendingTeacher)) {
+    throw new AppError("ADMIN_IMPERSONATE_INACTIVE", {
+      detail: `impersonateUser refused: target ${target.id} would be signed out (isActive=${target.isActive}, approvalStatus=${target.approvalStatus ?? "none"})`,
+    });
+  }
+
+  // ORDERING — mint, bind, then install. The ticket still lands before the
+  // swap, and here is why that order holds even though the ticket now needs a
+  // session id that does not exist until the session does.
+  //
+  // Stranding is the failure this sequence prevents: the browser holding the
+  // target's session with no ticket, so no banner and no way back. Today's
+  // answer was "write the ticket first", and it still is — the session is
+  // minted OFF the response (a detached client, no cookies touched), its
+  // `session_id` is read, the ticket is written bound to it, and only then is
+  // the session installed into this response's cookies. Every exit leaves one
+  // of two coherent states:
+  //  - the admin's own session, and no ticket that can restore anything: a
+  //    failure while minting writes nothing; a failed install clears the
+  //    ticket; and even a throw between the two leaves a ticket bound to a
+  //    session this browser never received, which `endImpersonation` refuses;
+  //  - the target's session plus a ticket bound to exactly that session.
+  // There is no point at which the target's session is in the cookies without
+  // its ticket, and no ticket ever exists without a binding.
+  //
+  // The rejected alternative — write an unbound placeholder, swap, overwrite
+  // with the bound ticket — leaves an unredeemable placeholder in precisely the
+  // window the placeholder was there to cover.
+  const minted = await mintSessionFor(target.email);
+  if (!minted) {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      detail: `impersonateUser: could not mint a session for user ${target.id}`,
+    });
+  }
+
+  await setImpersonationCookie({
+    adminAuthId: admin.authId,
+    adminUserId: admin.id,
+    targetUserId: target.id,
+    sessionId: minted.sessionId,
+  });
+
+  const supabase = await createSupabaseServerClient();
+  const { error: installError } = await supabase.auth.setSession({
+    access_token: minted.session.access_token,
+    refresh_token: minted.session.refresh_token,
+  });
+  if (installError) {
+    await clearImpersonationCookie();
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      cause: installError,
+      detail: `impersonateUser: session install failed for user ${target.id}`,
+    });
+  }
+
+  await writeAudit({
+    userId: admin.id,
+    schoolId: target.schoolId,
+    action: AUDIT_ACTIONS.IMPERSONATION_START,
+    resource: "User",
+    resourceId: target.id,
+    metadata: options.auditMetadata,
+  });
+
+  redirect(options.redirectTo);
+}
 
 /**
  * Restore the Super Admin's own session and drop the ticket.
@@ -649,7 +741,18 @@ export async function endImpersonation(): Promise<ActionResult> {
     resourceId: ticket.targetUserId,
   });
 
-  redirect("/admin/accounts");
+  // Where to land, and nothing else: the admin is already restored, so a failed
+  // read falls back to the accounts console rather than reporting a failure.
+  // No `deletedAt` filter — a demo school reset mid-session is still a demo
+  // session; a hard-deleted row simply returns to the console.
+  const target = await prisma.user
+    .findFirst({
+      where: { id: ticket.targetUserId },
+      select: { school: { select: { isDemo: true } } },
+    })
+    .catch(() => null);
+
+  redirect(impersonationReturnPath({ targetSchoolIsDemo: target?.school?.isDemo === true }));
 }
 
 type AuthClient = SupabaseClient["auth"];

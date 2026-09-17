@@ -3,7 +3,7 @@
  *
  * These strings are deliberately literal — the training script and the recorded
  * screen must read the same, so the district is exactly "[demo district]", the
- * schools are "[demo school 1]" … "[demo school 3]", square brackets included,
+ * school is "[demo school 1]", square brackets included,
  * and the School ID is exactly "123456". Changing any of them desynchronises the
  * video from the app, so treat them as fixed copy rather than configuration.
  *
@@ -15,15 +15,14 @@
 export const DEMO_DISTRICT_NAME = "[demo district]";
 
 /**
- * School ID, shared by all three demo schools. Doubles as each School Head's
- * first-login password — that is the system-wide rule for a freshly created
- * school (see `createSchool`), and the video teaches it, so the demo must not be
- * a special case.
+ * School ID of the demo school. Doubles as its School Head's first-login
+ * password — that is the system-wide rule for a freshly created school (see
+ * `createSchool`), and the video teaches it, so the demo must not be a special
+ * case.
  *
- * All three carrying the same ID is possible only because the unique index on
- * `School.schoolIdCode` is partial (`WHERE "isDemo" = false`). It keeps one
- * password to remember on camera, and keeps the video's "one-two-three-four-
- * five-six" line true whichever demo school the presenter picks.
+ * A real school may already own this ID; the demo school can still carry it
+ * only because the unique index on `School.schoolIdCode` is partial
+ * (`WHERE "isDemo" = false`).
  */
 export const DEMO_SCHOOL_ID_CODE = "123456";
 
@@ -38,10 +37,9 @@ export type DemoSchoolSpec = {
    *
    * Two reasons it cannot be the bare School ID. A real school may already own
    * 123456 — one does — and its School Head is then already
-   * `sh@123456.<domain>`. And all three demo schools share the ID, so they would
-   * collide with each other as well. `User.email` is unique and Supabase Auth
-   * rejects duplicates outright, so each school needs its own address:
-   * `sh@demo-1-123456.<domain>`, `sh@demo-2-123456.<domain>`, and so on.
+   * `sh@123456.<domain>`. `User.email` is unique and Supabase Auth rejects
+   * duplicates outright, so the demo school needs its own address:
+   * `sh@demo-1-123456.<domain>`.
    *
    * Still a synthetic address, so these accounts stay correctly barred from
    * email password recovery. Invisible during the recording either way: the
@@ -51,17 +49,21 @@ export type DemoSchoolSpec = {
 };
 
 /**
- * The three demo schools, all in `DEMO_DISTRICT_NAME`.
+ * The one demo school, in `DEMO_DISTRICT_NAME`.
  *
- * Three rather than one so the recording can show the School dropdown actually
- * containing a list to scroll, which is what the video narrates, instead of a
- * single entry that makes the district filter look pointless.
+ * One, not three (project owner, 2026-09-17, docs/test-lab-spec.md): Page Test
+ * Lab works inside a single demo school. Schools 2 and 3 from earlier releases
+ * are removed only when an admin clicks "Reset test data" — `resetDemoTenant`
+ * deletes every `isDemo` school and rebuilds this list. No code path deletes
+ * them automatically.
  */
-export const DEMO_SCHOOLS: readonly DemoSchoolSpec[] = ["1", "2", "3"].map((key) => ({
-  key,
-  name: `[demo school ${key}]`,
-  emailCode: `demo-${key}-${DEMO_SCHOOL_ID_CODE}`,
-}));
+export const DEMO_SCHOOLS: readonly [DemoSchoolSpec] = [
+  {
+    key: "1",
+    name: "[demo school 1]",
+    emailCode: `demo-1-${DEMO_SCHOOL_ID_CODE}`,
+  },
+];
 
 export const DEMO_REGION = "[demo region]";
 export const DEMO_DIVISION = "[demo division]";

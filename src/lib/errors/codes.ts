@@ -192,6 +192,15 @@ export const ERRORS = {
     message:
       "This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it.",
   },
+  /**
+   * Page Test Lab could not find the demo account it signs in as — the demo
+   * school or its test accounts have not been prepared (or were reset since).
+   */
+  TEST_LAB_NOT_PREPARED: {
+    status: 409,
+    severity: "user",
+    message: "The test account isn't ready yet. Prepare test data on the Test Lab page, then try again.",
+  },
 
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
