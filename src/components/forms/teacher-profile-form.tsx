@@ -53,6 +53,7 @@ import {
   GRADE_LEVEL_LABELS,
   ETHNICITY_LABELS,
   GENDER_LABELS,
+  ADVISORY_MODE_LABELS,
   formatEthnicities,
   toOptions,
 } from "@/lib/constants/enum-labels";
@@ -68,8 +69,14 @@ import {
 } from "@/lib/validators/profile.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
 import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
-import { saveTeacherProfile } from "@/lib/actions/teacher";
+import { saveTeacherProfile, type TeacherProfileDryRunPreview } from "@/lib/actions/teacher";
 import { toFormData } from "@/lib/forms/to-form-data";
+import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
+import {
+  DryRunPreviewDialog,
+  isDryRunPreview,
+  type DryRunPreviewRow,
+} from "@/components/test-lab/dry-run-preview-dialog";
 
 /** RHF shape for the wizard UI (maps to teacherProfileSchema on submit). */
 const teacherWizardFormSchema = z.object({
@@ -298,6 +305,43 @@ export function buildPayload(values: TeacherFormValues): Record<string, unknown>
   return payload;
 }
 
+function sectionNameOf(
+  gradeLevels: { sections: { id: string; name: string }[] }[],
+  sectionId: string | null
+): string | null {
+  if (!sectionId) return null;
+  for (const g of gradeLevels) {
+    const match = g.sections.find((s) => s.id === sectionId);
+    if (match) return match.name;
+  }
+  return null;
+}
+
+function buildTeacherPreviewRows(
+  preview: TeacherProfileDryRunPreview,
+  gradeLevels: { sections: { id: string; name: string }[] }[]
+): DryRunPreviewRow[] {
+  const rows: DryRunPreviewRow[] = [
+    ["Name", preview.fullName],
+    ["Designation", preview.designation || "—"],
+    [
+      "Advisory mode",
+      ADVISORY_MODE_LABELS[preview.advisoryMode as keyof typeof ADVISORY_MODE_LABELS] ??
+        preview.advisoryMode,
+    ],
+    ["Section", sectionNameOf(gradeLevels, preview.sectionId) ?? "N/A"],
+  ];
+  if (preview.additionalSectionIds.length > 0) {
+    rows.push([
+      "Additional sections",
+      preview.additionalSectionIds
+        .map((id) => sectionNameOf(gradeLevels, id) ?? id)
+        .join(", "),
+    ]);
+  }
+  return rows;
+}
+
 const STEP_FIELDS: (keyof TeacherFormValues)[][] = [
   [
     "firstName",
@@ -404,12 +448,15 @@ export function TeacherProfileForm({
   gradeLevels,
   registeredAsAralVolunteer = false,
   summary,
+  dryRun = false,
 }: {
   defaultValues: Defaults;
   /** Edit only: rendered between the Cancel / Save Changes row and the form. */
   summary?: React.ReactNode;
   /** `wizard` = onboarding steps; `edit` = flat settings profile (no Review). */
   presentation?: "wizard" | "edit";
+  /** Test Lab dry-run session (`readTestLabSession`) — UI only, the server decides writes. */
+  dryRun?: boolean;
   /**
    * They ticked "I am a Non-DepEd ARAL Volunteer" when they registered
    * (`User.registeredAsAralVolunteer`).
@@ -436,6 +483,8 @@ export function TeacherProfileForm({
    * disappears after four seconds cannot say that usefully.
    */
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [previewRows, setPreviewRows] = useState<DryRunPreviewRow[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const isEdit = presentation === "edit";
   /**
    * The wizard no longer locks a volunteer into a separate step flow — every
@@ -910,6 +959,11 @@ export function TeacherProfileForm({
     startTransition(async () => {
       const res = await saveTeacherProfile(toFormData(parsed.data as TeacherProfileInput));
       if (res.ok) {
+        if (isDryRunPreview<TeacherProfileDryRunPreview>(res.data)) {
+          setPreviewRows(buildTeacherPreviewRows(res.data.preview, gradeLevels));
+          setPreviewOpen(true);
+          return;
+        }
         markFormClean(form);
         toast.success("Profile saved");
         onSuccess();
@@ -973,6 +1027,7 @@ export function TeacherProfileForm({
 
   const feedback = (
     <>
+      {dryRun ? <DryRunNotice /> : null}
       {saveError ? (
         <div
           id={SAVE_ERROR_ID}
@@ -1417,6 +1472,12 @@ export function TeacherProfileForm({
             </div>
           </div>
         </AppForm>
+        <DryRunPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          description="Nothing was saved. This is only a check."
+          rows={previewRows}
+        />
       </>
     );
   }
@@ -1852,25 +1913,33 @@ export function TeacherProfileForm({
   );
 
   return (
-    <AppForm
-      form={form}
-      enableUnsavedGuard
-      unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
-      onSubmit={() => {
-        void handleContinue();
-      }}
-      className="space-y-6"
-    >
-      <ProfileWizardChrome
-        steps={wizardSteps}
-        currentStep={visiblePositionOf(step, false)}
-        pending={pending}
-        onBack={() => setStep((s) => previousTeacherStep(s, false))}
-        onContinue={() => void handleContinue()}
+    <>
+      <AppForm
+        form={form}
+        enableUnsavedGuard
+        unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
+        onSubmit={() => {
+          void handleContinue();
+        }}
+        className="space-y-6"
       >
-        {sections}
-      </ProfileWizardChrome>
-    </AppForm>
+        <ProfileWizardChrome
+          steps={wizardSteps}
+          currentStep={visiblePositionOf(step, false)}
+          pending={pending}
+          onBack={() => setStep((s) => previousTeacherStep(s, false))}
+          onContinue={() => void handleContinue()}
+        >
+          {sections}
+        </ProfileWizardChrome>
+      </AppForm>
+      <DryRunPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        description="Nothing was saved. This is only a check."
+        rows={previewRows}
+      />
+    </>
   );
 }
 

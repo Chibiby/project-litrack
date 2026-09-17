@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { OnboardingShell } from "@/components/onboarding-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,9 @@ export default async function TeacherOnboardingLayout({
 }) {
   const user = await requireUser("TEACHER");
 
-  if (user.profileCompleted) {
+  // A Test Lab session may reopen the wizard on an already-profiled demo
+  // account to exercise it; every real session keeps the redirect.
+  if (user.profileCompleted && !(await readTestLabSession(user))) {
     redirect("/teacher");
   }
 

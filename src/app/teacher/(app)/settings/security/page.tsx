@@ -6,15 +6,19 @@ import { AppShell } from "@/components/app-shell";
 import { PasswordForm } from "@/components/forms/password-form";
 import { ChangeEmailForm } from "@/components/forms/change-email-form";
 import { TeacherSettingsShell } from "@/components/settings/teacher-settings-shell";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
 export default async function TeacherSettingsSecurityPage() {
   const user = await requireUser("TEACHER");
-  const profile = await prisma.teacherProfile.findUnique({
-    where: { userId: user.id },
-    select: { gender: true },
-  });
+  const [profile, dryRun] = await Promise.all([
+    prisma.teacherProfile.findUnique({
+      where: { userId: user.id },
+      select: { gender: true },
+    }),
+    readTestLabSession(user),
+  ]);
 
   return (
     <AppShell
@@ -25,11 +29,12 @@ export default async function TeacherSettingsSecurityPage() {
     >
       <TeacherSettingsShell active="security" bannerSrc={teacherBannerSrc(profile?.gender)}>
         <div className="grid items-start gap-4 lg:gap-6 xl:grid-cols-2">
-          <PasswordForm mode="change" className="rounded-2xl" />
+          <PasswordForm mode="change" className="rounded-2xl" dryRun={dryRun} />
           <ChangeEmailForm
             currentEmail={user.email}
             isSynthetic={isSyntheticEmail(user.email)}
             className="rounded-2xl"
+            dryRun={dryRun}
           />
         </div>
       </TeacherSettingsShell>

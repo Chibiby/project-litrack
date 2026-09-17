@@ -145,10 +145,9 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                 Show the training district and schools on the login page
               </p>
               <p className="text-sm text-muted-foreground">
-                While this is off, {data.districtName} and its {data.schools.length} schools are
-                hidden from the District and School dropdowns and left out of every dashboard
-                count. Nothing is deleted — switch it back on and the demo returns exactly as it
-                was.
+                While this is off, {data.districtName} and its demo school are hidden from the
+                District and School dropdowns and left out of every dashboard count. Nothing is
+                deleted — switch it back on and the demo returns exactly as it was.
               </p>
             </div>
             <Switch
@@ -204,17 +203,15 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                 <Field label="School ID / first-login password" value={data.schoolIdCode} />
               </div>
               <p className="text-sm text-muted-foreground">
-                All {data.schools.length} share the same School ID, so there is one password to
-                remember on camera. Each School Head signs in by picking the district and their
-                school on the login page, then using the School ID as the password — the same
-                first-login rule every real school follows, which is what the training video
-                demonstrates.
+                The School Head signs in by picking the district and school on the login page,
+                then using the School ID above as the password — the same first-login rule every
+                real school follows, which is what the training video demonstrates.
               </p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No demo data yet. Creating it adds one district and {data.schools.length} schools —{" "}
-              {data.schools.map((s) => s.name).join(", ")} — each with School ID{" "}
+              No demo data yet. Creating it adds one district and one school —{" "}
+              {data.schools.map((s) => s.name).join(", ")} — with School ID{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">{data.schoolIdCode}</code> and
               its own School Head account. Grades, sections, teachers and learners are then added
               live during the recording, which is the point of the walkthrough.
@@ -248,9 +245,11 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
               <p className="flex items-start gap-2 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>
-                  This permanently deletes all {data.schools.length} demo schools and everything
-                  recorded under them — grades, sections, teacher accounts and learners — then
-                  rebuilds the set empty. It cannot be undone, and it touches no real school.
+                  This permanently deletes every demo school — including any earlier demo schools
+                  left over from before — and everything recorded under them: grades, sections,
+                  teacher accounts and learners. It then rebuilds {data.districtName} and{" "}
+                  {data.schools[0]?.name ?? "the demo school"} empty. It cannot be undone, and it
+                  touches no real school.
                 </span>
               </p>
               <div className="space-y-1.5">

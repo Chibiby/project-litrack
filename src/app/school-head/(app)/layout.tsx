@@ -49,6 +49,8 @@ export default async function SchoolHeadAppLayout({
         userId={user.id}
         accountName={`${userName} · ${schoolName ?? "school"}`}
         impersonation={impersonation}
+        schoolId={user.schoolId}
+        role="SCHOOL_HEAD"
       />
       {!impersonating && <PostLoginSplash role="school-head" />}
       <RoleShell

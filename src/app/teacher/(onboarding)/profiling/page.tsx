@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
 export default async function TeacherProfilingPage() {
   const user = await requireSchoolUser("TEACHER");
-  const [profile, grades] = await Promise.all([
+  const [profile, grades, dryRun] = await Promise.all([
     prisma.teacherProfile.findUnique({ where: { userId: user.id } }),
     prisma.gradeLevel.findMany({
       where: { schoolId: user.schoolId, deletedAt: null },
@@ -23,6 +24,7 @@ export default async function TeacherProfilingPage() {
         },
       },
     }),
+    readTestLabSession(user),
   ]);
 
   const gradeLevels = grades.map((g) => ({
@@ -47,6 +49,7 @@ export default async function TeacherProfilingPage() {
       </div>
       <TeacherProfileForm
         gradeLevels={gradeLevels}
+        dryRun={dryRun}
         /*
           What they said at sign-up. The wizard uses it to seed and lock
           Designation; the saved profile still outranks it, so re-opening

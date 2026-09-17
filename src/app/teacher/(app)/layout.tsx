@@ -107,6 +107,8 @@ export default async function TeacherAppLayout({
         userId={user.id}
         accountName={`${userName} · ${schoolName ?? "school"}`}
         impersonation={impersonation}
+        schoolId={user.schoolId}
+        role="TEACHER"
       />
       {/* Sibling of RoleShell (also portaled to body) so chrome cannot contain it. */}
       {!impersonating && <PostLoginSplash role="teacher" />}

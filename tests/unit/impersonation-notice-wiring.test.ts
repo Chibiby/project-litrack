@@ -42,4 +42,28 @@ describe("impersonation notice wiring", () => {
 
     expect(layout).toContain("trackTeacherPresence={!impersonating}");
   });
+
+  it.each([
+    ["src/app/school-head/(app)/layout.tsx", 'role="SCHOOL_HEAD"'],
+    ["src/app/teacher/(app)/layout.tsx", 'role="TEACHER"'],
+  ])("passes schoolId and role to the notice in %s, for Test Lab banner (T8)", (file, roleProp) => {
+    const layout = read(file);
+
+    expect(layout).toContain("schoolId={user.schoolId}");
+    expect(layout).toContain(roleProp);
+  });
+
+  it("computes the Test Lab checklist only from a verified server-side test-lab session", () => {
+    const notice = read("src/components/admin/impersonation-notice.tsx");
+
+    expect(notice).toContain("readTestLabSession({ id: userId, schoolId: schoolId ?? null })");
+    expect(notice).toContain("testLab={testLab}");
+  });
+
+  it("keeps a non-Test-Lab impersonation banner unchanged", () => {
+    const banner = read("src/components/admin/impersonation-banner.tsx");
+
+    expect(banner).toContain("Signed in as <strong className=\"font-semibold\">{accountName}</strong> — anything you");
+    expect(banner).toContain('{testLab ? "Back to Test Lab" : "Return to admin"}');
+  });
 });

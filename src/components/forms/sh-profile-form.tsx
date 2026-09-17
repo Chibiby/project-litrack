@@ -36,9 +36,18 @@ import {
 import { PROFILING_GRADE_LEVEL_TYPES } from "@/lib/validators/grade-level.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
 import { isValidEmail } from "@/lib/validators/common";
-import { saveSchoolHeadProfile } from "@/lib/actions/school-head";
+import {
+  saveSchoolHeadProfile,
+  type SchoolHeadProfileDryRunPreview,
+} from "@/lib/actions/school-head";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
+import {
+  DryRunPreviewDialog,
+  isDryRunPreview,
+  type DryRunPreviewRow,
+} from "@/components/test-lab/dry-run-preview-dialog";
 
 /**
  * Position preselected when a profile has none stored yet.
@@ -186,6 +195,22 @@ function buildPayload(values: SHFormValues): Record<string, unknown> {
   };
 }
 
+function buildSHPreviewRows(preview: SchoolHeadProfileDryRunPreview): DryRunPreviewRow[] {
+  const rows: DryRunPreviewRow[] = [
+    ["Name", preview.fullName],
+    ["Email address", preview.contactEmail ?? "—"],
+    ["Position", labelOf(SCHOOL_HEAD_POSITION_LABELS, preview.position)],
+  ];
+  if (!preview.skipSchoolStructure && preview.gradeTypes) {
+    rows.push([
+      "Grade levels",
+      preview.gradeTypes.map((t) => GRADE_LEVEL_LABELS[t] ?? t).join(", ") || "—",
+    ]);
+    rows.push(["Sections per grade", String(preview.sectionsPerGrade ?? "—")]);
+  }
+  return rows;
+}
+
 function parseSectionsPerGrade(raw: string): number | null {
   const n = Number(String(raw).trim());
   if (!Number.isInteger(n)) return null;
@@ -209,14 +234,19 @@ function projectedSectionTotal(
 export function SchoolHeadProfileForm({
   defaultValues,
   presentation = "wizard",
+  dryRun = false,
 }: {
   defaultValues: Defaults;
   /** `wizard` = onboarding steps; `edit` = flat settings profile (no Review / School Structure UI). */
   presentation?: "wizard" | "edit";
+  /** Test Lab dry-run session (`readTestLabSession`) — UI only, the server decides writes. */
+  dryRun?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(0);
+  const [previewRows, setPreviewRows] = useState<DryRunPreviewRow[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const isEdit = presentation === "edit";
 
   // A stored position that is not a known enum value falls back, rather than
@@ -423,6 +453,11 @@ export function SchoolHeadProfileForm({
       );
       if (!res.ok) {
         toast.error(res.error);
+        return;
+      }
+      if (isDryRunPreview<SchoolHeadProfileDryRunPreview>(res.data)) {
+        setPreviewRows(buildSHPreviewRows(res.data.preview));
+        setPreviewOpen(true);
         return;
       }
       markFormClean(form);
@@ -811,15 +846,17 @@ export function SchoolHeadProfileForm({
   );
 
   return (
-    <AppForm
-      form={form}
-      enableUnsavedGuard
-      unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
-      onSubmit={() => {
-        void (isEdit ? handleSave() : handleContinue());
-      }}
-      className="space-y-6"
-    >
+    <>
+      <AppForm
+        form={form}
+        enableUnsavedGuard
+        unsavedMessage="You have unsaved profiling changes. Leave this page? Your progress will be lost."
+        onSubmit={() => {
+          void (isEdit ? handleSave() : handleContinue());
+        }}
+        className="space-y-6"
+      >
+      {dryRun ? <DryRunNotice /> : null}
       {isEdit ? (
         <div className="space-y-6">
           {sections}
@@ -843,7 +880,14 @@ export function SchoolHeadProfileForm({
           {sections}
         </ProfileWizardChrome>
       )}
-    </AppForm>
+      </AppForm>
+      <DryRunPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        description="Nothing was saved. This is only a check."
+        rows={previewRows}
+      />
+    </>
   );
 }
 

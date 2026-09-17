@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,13 @@ import {
 } from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { cn } from "@/lib/utils";
+import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
+import { DryRunPreviewDialog } from "@/components/test-lab/dry-run-preview-dialog";
 
 type Mode = "set" | "change" | "reset";
+
+/** Password previews never echo the typed value — validated only. */
+const PASSWORD_DRY_RUN_DESCRIPTION = "The password meets the rules. Nothing was changed.";
 
 const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
 
@@ -40,11 +45,14 @@ export function PasswordForm({
   mode,
   allowSkip = true,
   className,
+  dryRun = false,
 }: {
   mode: Mode;
   allowSkip?: boolean;
   /** Extra card classes (`change` only), e.g. the teacher Settings v2 radius. */
   className?: string;
+  /** Test Lab dry-run session (`readTestLabSession`) — UI only, the server decides writes. */
+  dryRun?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -62,6 +70,7 @@ export function PasswordForm({
         pending={pending}
         startTransition={startTransition}
         className={className}
+        dryRun={dryRun}
       />
     );
   }
@@ -73,6 +82,7 @@ export function PasswordForm({
       title={title}
       pending={pending}
       startTransition={startTransition}
+      dryRun={dryRun}
     />
   );
 }
@@ -82,12 +92,15 @@ function PasswordFormChange({
   pending,
   startTransition,
   className,
+  dryRun,
 }: {
   title: string;
   pending: boolean;
   startTransition: React.TransitionStartFunction;
   className?: string;
+  dryRun: boolean;
 }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const form = useAppForm<ChangeValues>({
     schema: changePasswordSchema,
     defaultValues: {
@@ -111,15 +124,20 @@ function PasswordFormChange({
                 toast.error(res.error);
                 return;
               }
-              toast.success("Password updated");
               markFormClean(form, {
                 currentPassword: "",
                 password: "",
                 confirmPassword: "",
               });
+              if (res?.data?.dryRun) {
+                setPreviewOpen(true);
+                return;
+              }
+              toast.success("Password updated");
             });
           }}
         >
+          {dryRun ? <DryRunNotice /> : null}
           <FormField
             control={form.control}
             name="currentPassword"
@@ -183,6 +201,11 @@ function PasswordFormChange({
           </Button>
         </AppForm>
       </CardContent>
+      <DryRunPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        description={PASSWORD_DRY_RUN_DESCRIPTION}
+      />
     </Card>
   );
 }
@@ -193,13 +216,16 @@ function PasswordFormSetOrReset({
   title,
   pending,
   startTransition,
+  dryRun,
 }: {
   mode: "set" | "reset";
   allowSkip: boolean;
   title: string;
   pending: boolean;
   startTransition: React.TransitionStartFunction;
+  dryRun: boolean;
 }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const form = useAppForm<SetValues>({
     schema: setPasswordSchema,
     defaultValues: {
@@ -224,11 +250,16 @@ function PasswordFormSetOrReset({
                 toast.error(res.error);
                 return;
               }
-              toast.success(mode === "set" ? "Password saved" : "Password updated");
               markFormClean(form, { password: "", confirmPassword: "" });
+              if (res?.data?.dryRun) {
+                setPreviewOpen(true);
+                return;
+              }
+              toast.success(mode === "set" ? "Password saved" : "Password updated");
             });
           }}
         >
+          {mode === "set" && dryRun ? <DryRunNotice /> : null}
           <FormField
             control={form.control}
             name="password"
@@ -273,9 +304,16 @@ function PasswordFormSetOrReset({
           >
             Save password
           </Button>
-          {mode === "set" && allowSkip ? <SkipForNowButton disabled={pending} /> : null}
+          {mode === "set" && allowSkip ? (
+            <SkipForNowButton disabled={pending} onDryRun={() => setPreviewOpen(true)} />
+          ) : null}
         </AppForm>
       </CardContent>
+      <DryRunPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        description={PASSWORD_DRY_RUN_DESCRIPTION}
+      />
     </Card>
   );
 }
@@ -290,7 +328,14 @@ function PasswordFormSetOrReset({
  * `AppForm`'s submit path entirely (`type="button"`), so the empty password
  * fields never get validated on the way out.
  */
-function SkipForNowButton({ disabled }: { disabled: boolean }) {
+function SkipForNowButton({
+  disabled,
+  onDryRun,
+}: {
+  disabled: boolean;
+  /** Called instead of the redirect when a Test Lab dry run reports success. */
+  onDryRun: () => void;
+}) {
   const [skipping, startSkip] = useTransition();
 
   return (
@@ -305,8 +350,14 @@ function SkipForNowButton({ disabled }: { disabled: boolean }) {
         onClick={() => {
           startSkip(async () => {
             const res = await skipPasswordChange();
-            // Success redirects, so only a failure ever returns here.
-            if (res && !res.ok) toast.error(res.error);
+            // Outside Test Lab, success redirects and only a failure ever
+            // returns here. In a dry-run session it returns normally instead.
+            if (!res) return;
+            if (!res.ok) {
+              toast.error(res.error);
+              return;
+            }
+            if (res.data?.dryRun) onDryRun();
           });
         }}
       >

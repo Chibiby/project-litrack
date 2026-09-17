@@ -9,12 +9,13 @@ import { AppShell } from "@/components/app-shell";
 import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
 import { TeacherProfileSummary } from "@/components/settings/teacher-profile-summary";
 import { TeacherSettingsShell } from "@/components/settings/teacher-settings-shell";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
 export default async function TeacherSettingsProfilePage() {
   const user = await requireSchoolUser("TEACHER");
-  const [profile, grades, schoolName] = await Promise.all([
+  const [profile, grades, schoolName, dryRun] = await Promise.all([
     prisma.teacherProfile.findUnique({ where: { userId: user.id } }),
     prisma.gradeLevel.findMany({
       where: { schoolId: user.schoolId, deletedAt: null },
@@ -31,6 +32,7 @@ export default async function TeacherSettingsProfilePage() {
     }),
     // School-scoped by the session's own schoolId (`where: { id }`), cached.
     getSchoolName(user.schoolId),
+    readTestLabSession(user),
   ]);
 
   const gradeLevels = grades.map((g) => ({
@@ -67,6 +69,7 @@ export default async function TeacherSettingsProfilePage() {
           presentation="edit"
           gradeLevels={gradeLevels}
           defaultValues={defaultValues}
+          dryRun={dryRun}
           summary={
             <TeacherProfileSummary
               roleLabel={profile?.designation || "Teacher"}

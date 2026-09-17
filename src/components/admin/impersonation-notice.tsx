@@ -3,6 +3,9 @@ import {
   type ImpersonationContext,
 } from "@/lib/auth/impersonation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readTestLabSession } from "@/lib/auth/test-lab";
+import { findTestLabFixtures } from "@/lib/demo/test-fixtures";
+import { buildTestLabChecklist } from "@/lib/test-lab/checklist";
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 
 /**
@@ -22,6 +25,8 @@ export async function ImpersonationNotice({
   userId,
   accountName,
   impersonation,
+  schoolId,
+  role,
 }: {
   userId: string;
   accountName: string;
@@ -30,6 +35,14 @@ export async function ImpersonationNotice({
    * every layout decision and this notice tied to the same live session check.
    */
   impersonation?: ImpersonationContext | null;
+  /**
+   * The impersonated user's own school id and role. Only passed by the
+   * School Head and Teacher app layouts — the pages a Test Lab session
+   * actually lands on. Omitting them just skips the Test Lab enhancements;
+   * the ordinary banner still renders.
+   */
+  schoolId?: string | null;
+  role?: "SCHOOL_HEAD" | "TEACHER";
 }) {
   const context =
     impersonation === undefined
@@ -37,5 +50,35 @@ export async function ImpersonationNotice({
       : impersonation;
   if (context?.ticket.targetUserId !== userId) return null;
 
-  return <ImpersonationBanner accountName={accountName} expired={context.expired} />;
+  const testLab =
+    role && (await readTestLabSession({ id: userId, schoolId: schoolId ?? null }))
+      ? await testLabBannerPages(role)
+      : null;
+
+  return (
+    <ImpersonationBanner accountName={accountName} expired={context.expired} testLab={testLab} />
+  );
+}
+
+/**
+ * The current role's checklist pages for the Test Lab banner's "Pages"
+ * popover — `null` when fixtures are not (yet) prepared, in which case the
+ * banner still shows Test Lab mode with an empty page list.
+ */
+async function testLabBannerPages(
+  role: "SCHOOL_HEAD" | "TEACHER"
+): Promise<{ pages: { label: string; href: string }[] }> {
+  const fixtures = await findTestLabFixtures();
+  const aralLearnerId = fixtures.aralLearnerIds[0];
+  const learnerId = fixtures.learnerIds.find((id) => !fixtures.aralLearnerIds.includes(id));
+  if (!fixtures.prepared || !fixtures.g1GradeId || !fixtures.kinderGradeId || !aralLearnerId || !learnerId) {
+    return { pages: [] };
+  }
+  const checklist = buildTestLabChecklist({
+    gradeId: fixtures.g1GradeId,
+    secondGradeId: fixtures.kinderGradeId,
+    learnerId,
+    aralLearnerId,
+  });
+  return { pages: checklist.filter((item) => item.role === role).map((item) => ({ label: item.label, href: item.href })) };
 }

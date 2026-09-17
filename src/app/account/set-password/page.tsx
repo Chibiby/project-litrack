@@ -2,12 +2,14 @@ import Image from "next/image";
 import { requireUser } from "@/lib/auth/session";
 import { PasswordForm } from "@/components/forms/password-form";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetPasswordPage() {
   const user = await requireUser(undefined, true, { allowMustChangePassword: true });
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
+  const dryRun = await readTestLabSession(user);
 
   return (
     <main id="main-content" className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -33,7 +35,7 @@ export default async function SetPasswordPage() {
             skip this and do it later from Settings → Security.
           </p>
         </div>
-        <PasswordForm mode="set" allowSkip={user.role === "SCHOOL_HEAD"} />
+        <PasswordForm mode="set" allowSkip={user.role === "SCHOOL_HEAD"} dryRun={dryRun} />
       </div>
     </main>
   );

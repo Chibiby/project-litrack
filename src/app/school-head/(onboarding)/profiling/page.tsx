@@ -2,12 +2,16 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { SchoolHeadProfileForm } from "@/components/forms/sh-profile-form";
 import { getSchoolStructureDefaults } from "@/lib/school-structure-defaults";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 
 export const dynamic = "force-dynamic";
 
 export default async function SHProfilingPage() {
   const user = await requireUser("SCHOOL_HEAD");
-  const profile = await prisma.schoolHeadProfile.findUnique({ where: { userId: user.id } });
+  const [profile, dryRun] = await Promise.all([
+    prisma.schoolHeadProfile.findUnique({ where: { userId: user.id } }),
+    readTestLabSession(user),
+  ]);
   const structure = user.schoolId
     ? await getSchoolStructureDefaults(user.schoolId)
     : { gradeTypes: [], sectionsPerGrade: 1, existingGradeStats: [] };
@@ -23,6 +27,7 @@ export default async function SHProfilingPage() {
         </p>
       </div>
       <SchoolHeadProfileForm
+        dryRun={dryRun}
         defaultValues={{
           // Bootstrap placeholders from createSchool — blank so SH enters real name.
           firstName:

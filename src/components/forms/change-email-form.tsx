@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,17 +24,23 @@ import { changeEmailAction } from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { cn } from "@/lib/utils";
+import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
+import { DryRunPreviewDialog } from "@/components/test-lab/dry-run-preview-dialog";
 
 type Props = {
   currentEmail: string;
   isSynthetic?: boolean;
   /** Extra card classes, e.g. the teacher Settings v2 radius. */
   className?: string;
+  /** Test Lab dry-run session (`readTestLabSession`) — UI only, the server decides writes. */
+  dryRun?: boolean;
 };
 
-export function ChangeEmailForm({ currentEmail, isSynthetic, className }: Props) {
+export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun = false }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewEmail, setPreviewEmail] = useState("");
   const synthetic = isSynthetic ?? isSyntheticEmail(currentEmail);
 
   const form = useAppForm<ChangeEmailInput>({
@@ -71,16 +77,22 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className }: Props)
                 toast.error(res.error);
                 return;
               }
-              toast.success("Email updated");
               markFormClean(form, {
                 newEmail: "",
                 confirmEmail: "",
                 currentPassword: "",
               });
+              if (res?.data?.dryRun) {
+                setPreviewEmail(res.data.preview.newEmail);
+                setPreviewOpen(true);
+                return;
+              }
+              toast.success("Email updated");
               router.refresh();
             });
           }}
         >
+          {dryRun ? <DryRunNotice /> : null}
           <FormField
             control={form.control}
             name="newEmail"
@@ -147,6 +159,12 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className }: Props)
           </Button>
         </AppForm>
       </CardContent>
+      <DryRunPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        description="Nothing was saved. This is only a check."
+        rows={[["New email", previewEmail]]}
+      />
     </Card>
   );
 }
