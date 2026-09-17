@@ -224,12 +224,14 @@ const createUserMock = vi.fn(async (_args?: unknown) => {
   return { data: { user: { id: `auth-${authUserCounter}` } }, error: null };
 });
 const updateUserByIdMock = vi.fn(async (..._args: unknown[]) => ({ data: {}, error: null }));
+const deleteUserMock = vi.fn(async (_id: string) => ({ data: {}, error: null }));
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => ({
     auth: {
       admin: {
         createUser: (args: unknown) => createUserMock(args),
         updateUserById: (...args: unknown[]) => updateUserByIdMock(...args),
+        deleteUser: (id: string) => deleteUserMock(id),
       },
     },
   }),
@@ -391,6 +393,36 @@ describe("prepareTestLabFixtures — idempotency", () => {
     expect(enrollments).toHaveLength(counts.enrollments);
     expect(createUserMock).toHaveBeenCalledTimes(2); // no new auth users
     expect(second).toEqual(first);
+  });
+});
+
+describe("prepareTestLabFixtures — partial failure", () => {
+  it("removes the persona auth user when its User row cannot be written, so Prepare can be retried", async () => {
+    seedLiveDemoSchool();
+    users.push({
+      id: "head-1",
+      authId: "auth-head",
+      email: HEAD_EMAIL,
+      role: "SCHOOL_HEAD",
+      schoolId: SCHOOL_ID,
+      firstName: "",
+      lastName: "",
+      fullName: "[demo school 1]",
+      isActive: true,
+      mustChangePassword: true,
+      profileCompleted: false,
+      approvalStatus: null,
+      approvedAt: null,
+      approvedById: null,
+      deletedAt: null,
+    });
+    const poolTimeout = new Error("P2024 pool timeout");
+    prismaMock.user.create.mockRejectedValueOnce(poolTimeout);
+
+    await expect(prepareTestLabFixtures(ADMIN_ID)).rejects.toBe(poolTimeout);
+
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    expect(deleteUserMock).toHaveBeenCalledWith("auth-1");
   });
 });
 

@@ -216,20 +216,31 @@ async function createTeacherAuthUser(params: {
     throw error ?? new Error("prepareTestLabFixtures: teacher auth bootstrap failed");
   }
   const fullName = `${params.firstName} ${params.lastName}`;
-  const user = await prisma.user.create({
-    data: {
-      authId: data.user.id,
-      email: params.email,
-      role: "TEACHER",
-      schoolId: params.schoolId,
-      firstName: params.firstName,
-      lastName: params.lastName,
-      fullName,
-      isActive: true,
-      mustChangePassword: false,
-    },
-  });
-  return { id: user.id, authId: data.user.id };
+  try {
+    const user = await prisma.user.create({
+      data: {
+        authId: data.user.id,
+        email: params.email,
+        role: "TEACHER",
+        schoolId: params.schoolId,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        fullName,
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+    return { id: user.id, authId: data.user.id };
+  } catch (err) {
+    // The persona's email is fixed, and Supabase refuses a duplicate. Leaving
+    // this auth user behind would make every later Prepare fail on "already
+    // registered", so undo it before surfacing the original failure.
+    const { error: deleteError } = await admin.auth.admin.deleteUser(data.user.id);
+    if (deleteError) {
+      console.error("[test-lab] rolling back persona auth user failed:", deleteError.message);
+    }
+    throw err;
+  }
 }
 
 /**

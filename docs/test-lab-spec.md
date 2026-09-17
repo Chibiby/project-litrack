@@ -67,8 +67,9 @@ Personas: `head | teacher | pending-teacher`, found by fixed synthetic emails.
 - `startTestLabSession(persona, next?)` in `src/lib/actions/accounts.ts`: Zod enum
   persona; lookup with `school: { isDemo: true }`; `assertTestableSchool`; shares
   `impersonateUser`'s body via a local non-exported function; same rate limit;
-  audit `IMPERSONATION_START` with `metadata.source = "test-lab"`. `next` must exactly
-  equal a checklist href for the persona's role, else role home.
+  audit `IMPERSONATION_START` with `metadata.source = "test-lab"`. `next` must resolve
+  (after dot-segment normalization) inside the persona's role tree, with no scheme,
+  `//`, backslash, or encoded slash; otherwise it falls back to the role home.
 - `endImpersonation` returns to `/admin/test-lab` when the target school is demo
   (pure helper `impersonationReturnPath`).
 - `impersonateUser` behaviour for real accounts is unchanged (regression test).

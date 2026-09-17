@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.3.0",
+    date: "2026-09-17",
+    title: "Tidier menus, and a Page Test Lab for Super Admins",
+    announce: true,
+    fixes: [
+      { text: "The side menu is now grouped under clear headings, and several items have clearer names — for example End-of-Term Subjects, Learner Transfers and Audit Log. Every page is still where it was.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "New Page Test Lab under QA & Data. Open any School Head or Teacher page as a demo account, in the demo school only, without making a login of your own. Profile, password and email forms there only preview what would be saved.", roles: ["SUPER_ADMIN"] },
+      { text: "There is now one demo school instead of three. Press Reset test data in Page Test Lab once to remove the other two.", roles: ["SUPER_ADMIN"] },
+      { text: "Support tickets, chats and errors that come from the demo school now carry a Demo tag.", roles: ["SUPER_ADMIN"] },
+      "A few buttons — on the Assistant, the Student Profile tabs, and the update welcome screen — now match the rest of LITRACK, including the outline you see when moving through them with the keyboard.",
+    ],
+  },
+  {
     version: "2.2.1",
     date: "2026-09-17",
     title: "Clearer Grade 1 marks, and old advisories let go of their learners",
