@@ -48,7 +48,9 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { writeSetting } from "@/lib/settings/system-settings";
 import { DEMO_ENABLED_KEY } from "@/lib/demo/constants";
 import { provisionDemoTenant, resetDemoTenant } from "@/lib/demo/provision";
+import { prepareTestLabFixtures, type TestLabFixtures } from "@/lib/demo/test-fixtures";
 import { setDemoModeSchema, resetDemoSchema } from "@/lib/validators/demo.schema";
+import { action } from "@/lib/errors/action";
 import {
   revalidateAdminDashboard,
   revalidateSchoolsList,
@@ -152,4 +154,25 @@ export async function createDemoData(): Promise<
   };
 }
 
+export type PrepareTestLabResult = { ok: true; fixtures: TestLabFixtures };
+
+/**
+ * Super Admin: build (or complete) Page Test Lab's fixtures inside the one
+ * live demo school (docs/test-lab-spec.md, T2/T3).
+ *
+ * `prepareTestLabFixtures` re-checks the school itself via
+ * `assertTestableSchool` before any write, so this can never reach a real
+ * school even if `findDemoSchools()` were ever wrong. Idempotent — calling it
+ * again completes whatever is missing and creates nothing that already exists.
+ */
+export const prepareTestLab = action(
+  "prepareTestLab",
+  async (): Promise<PrepareTestLabResult> => {
+    const admin = await requireUser("SUPER_ADMIN");
+    const fixtures = await prepareTestLabFixtures(admin.id);
+    revalidatePath("/admin/test-lab");
+    return { ok: true, fixtures };
+  },
+  { verb: "prepare the test data" }
+);
 
