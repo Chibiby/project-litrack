@@ -28,6 +28,21 @@ vi.mock("@/lib/post-login-flag", () => ({
 }));
 
 let announce = true;
+let withWelcome = false;
+const WELCOME: import("@/lib/releases").ReleaseWelcome = {
+  headline: "Welcome to the test app!",
+  intro: "An intro line.",
+  highlightsTitle: "What is new",
+  highlightsSubtitle: "A subtitle.",
+  highlights: [
+    { icon: "reports", tone: "emerald", title: "For everyone", body: "Card body." },
+    { icon: "schools", tone: "violet", title: "Admins only card", body: "Card body.", roles: ["SUPER_ADMIN"] },
+  ],
+  guide: [
+    { icon: "dashboard", tone: "violet", title: "Teacher step one", body: "Step body.", roles: ["TEACHER"] },
+    { icon: "help", tone: "amber", title: "Everyone step two", body: "Step body." },
+  ],
+};
 vi.mock("@/lib/releases", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/releases")>();
   const history = (): import("@/lib/releases").Release[] => [
@@ -36,6 +51,7 @@ vi.mock("@/lib/releases", async (importOriginal) => {
       date: "2026-09-12",
       title: "A test release",
       announce,
+      ...(withWelcome ? { welcome: WELCOME } : {}),
       fixes: [
         "The first fix",
         "The second fix",
@@ -63,6 +79,10 @@ vi.mock("@/lib/releases", async (importOriginal) => {
     unseenReleases: (lastSeen: string | null) =>
       real.unseenReleases(lastSeen, history()),
     visibleFixes: real.visibleFixes,
+    welcomeRelease: (lastSeen: string | null) =>
+      real.welcomeRelease(lastSeen, history()),
+    visibleHighlights: real.visibleHighlights,
+    visibleGuide: real.visibleGuide,
   };
 });
 
@@ -72,6 +92,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   covered = false;
   announce = true;
+  withWelcome = false;
+  window.sessionStorage.clear();
   mockAcknowledge.mockResolvedValue({ ok: true });
 });
 afterEach(() => {
@@ -226,5 +248,84 @@ describe("ReleaseNotesModal — acknowledging", () => {
     // explanation. Staying open lets them retry, and says what happened.
     expect(await screen.findByText(/could not save/i)).toBeTruthy();
     expect(screen.getByText(HEADING)).toBeTruthy();
+  });
+});
+
+describe("ReleaseNotesModal — the landmark welcome", () => {
+  const WELCOME_HEADING = "Welcome to the test app!";
+
+  beforeEach(() => {
+    withWelcome = true;
+  });
+
+  it("replaces the plain update list with the welcome, filtered by role", async () => {
+    render(<ReleaseNotesModal lastSeenVersion="1.2.0" role="TEACHER" />);
+
+    expect(await screen.findByText(WELCOME_HEADING)).toBeTruthy();
+    expect(screen.queryByText(HEADING)).toBeNull();
+    expect(screen.getByText("For everyone")).toBeTruthy();
+    expect(screen.queryByText("Admins only card")).toBeNull();
+  });
+
+  it("welcomes a brand-new account", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="SCHOOL_HEAD" />);
+    expect(await screen.findByText(WELCOME_HEADING)).toBeTruthy();
+  });
+
+  it("does not welcome an account that acknowledged this version", () => {
+    render(<ReleaseNotesModal lastSeenVersion="1.3.0" role="TEACHER" />);
+    expect(screen.queryByText(WELCOME_HEADING)).toBeNull();
+  });
+
+  it("acknowledges Explore Later while Don't show this again is ticked", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getByRole("button", { name: "Explore Later" }));
+
+    await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText(WELCOME_HEADING)).toBeNull());
+  });
+
+  it("only snoozes Explore Later when the box is unticked, for this session", async () => {
+    const { unmount } = render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /don't show this again/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Explore Later" }));
+
+    await waitFor(() => expect(screen.queryByText(WELCOME_HEADING)).toBeNull());
+    expect(mockAcknowledge).not.toHaveBeenCalled();
+
+    // The next page in the same session does not reopen it.
+    unmount();
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await act(async () => {});
+    expect(screen.queryByText(WELCOME_HEADING)).toBeNull();
+  });
+
+  it("walks the tour for this role and acknowledges on Finish", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getByRole("button", { name: /let's get started/i }));
+    expect(screen.getByText("Step 1 of 2")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Teacher step one" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByRole("heading", { name: "Everyone step two" })).toBeTruthy();
+    expect(mockAcknowledge).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+    await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledTimes(1));
+  });
+
+  it("leaves another role's steps out of the tour", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="SCHOOL_HEAD" />);
+    await screen.findByText(WELCOME_HEADING);
+
+    fireEvent.click(screen.getByRole("button", { name: /let's get started/i }));
+    expect(screen.getByText("Step 1 of 1")).toBeTruthy();
+    expect(screen.queryByText("Teacher step one")).toBeNull();
   });
 });

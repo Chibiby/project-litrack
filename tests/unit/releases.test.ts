@@ -8,6 +8,9 @@ import {
   latestRelease,
   unseenReleases,
   visibleFixes,
+  visibleGuide,
+  visibleHighlights,
+  welcomeRelease,
   type Release,
 } from "@/lib/releases";
 
@@ -229,5 +232,58 @@ describe("APP_VERSION", () => {
       readFileSync(resolve(process.cwd(), "package.json"), "utf8")
     ) as { version: string };
     expect(pkg.version).toBe(APP_VERSION);
+  });
+});
+
+describe("welcomeRelease", () => {
+  const landmark: Release = {
+    ...rel("2.0.0"),
+    welcome: {
+      headline: "h",
+      intro: "i",
+      highlightsTitle: "ht",
+      highlightsSubtitle: "hs",
+      highlights: [],
+      guide: [],
+    },
+  };
+  const history = [rel("2.0.2"), rel("2.0.1"), landmark, rel("1.9.0")];
+
+  it("welcomes a brand-new account even after later patches ship", () => {
+    expect(welcomeRelease(null, history)).toBe(landmark);
+  });
+
+  it("welcomes someone last on a version before the landmark", () => {
+    expect(welcomeRelease("1.9.0", history)).toBe(landmark);
+  });
+
+  it("retires once the landmark or anything later is acknowledged", () => {
+    expect(welcomeRelease("2.0.0", history)).toBeNull();
+    expect(welcomeRelease("2.0.1", history)).toBeNull();
+  });
+
+  it("is null when no release carries a welcome", () => {
+    expect(welcomeRelease(null, [rel("1.0.0")])).toBeNull();
+  });
+});
+
+describe("the committed v2 welcome", () => {
+  const v2 = RELEASES.find((r) => r.welcome);
+
+  it("exists on 2.0.0", () => {
+    expect(v2?.version).toBe("2.0.0");
+  });
+
+  it("gives every role at least one card and one tour step", () => {
+    for (const role of ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] as const) {
+      expect(visibleHighlights(v2!.welcome!, role).length, role).toBeGreaterThan(0);
+      expect(visibleGuide(v2!.welcome!, role).length, role).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps each role's tour short", () => {
+    for (const role of ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] as const) {
+      expect(visibleGuide(v2!.welcome!, role).length, role).toBeLessThanOrEqual(5);
+    }
   });
 });

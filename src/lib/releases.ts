@@ -66,6 +66,60 @@ export type Release = {
    * it was not written for.
    */
   fixes: readonly ReleaseNote[];
+  /**
+   * A one-time welcome for a landmark release. When present, the update modal
+   * becomes the welcome screen for every account that has not yet
+   * acknowledged this version or a later one — see `welcomeRelease`.
+   */
+  welcome?: ReleaseWelcome;
+};
+
+/** Icon keys the welcome modal knows how to draw. Strings, so this module stays client-safe and icon-free. */
+export type ReleaseHighlightIcon =
+  | "profiling"
+  | "reports"
+  | "analytics"
+  | "mobile"
+  | "speed"
+  | "workflow"
+  | "dashboard"
+  | "learners"
+  | "aral"
+  | "teachers"
+  | "checklist"
+  | "schools"
+  | "help";
+
+/** Tints the welcome cards use; the same families as the dashboard stat cards. */
+export type ReleaseHighlightTone = "violet" | "emerald" | "blue" | "amber" | "rose" | "purple";
+
+export type ReleaseHighlight = {
+  icon: ReleaseHighlightIcon;
+  tone: ReleaseHighlightTone;
+  title: string;
+  body: string;
+  /** Same rule as a restricted `ReleaseNote`: omit for everybody. */
+  roles?: readonly ReleaseAudience[];
+};
+
+/** One screen of the short tour behind "Let's Get Started". */
+export type ReleaseGuideStep = {
+  icon: ReleaseHighlightIcon;
+  tone: ReleaseHighlightTone;
+  title: string;
+  body: string;
+  roles?: readonly ReleaseAudience[];
+};
+
+export type ReleaseWelcome = {
+  /** Large line at the top of the modal. */
+  headline: string;
+  /** One or two sentences under the headline. */
+  intro: string;
+  highlightsTitle: string;
+  highlightsSubtitle: string;
+  highlights: readonly ReleaseHighlight[];
+  guide: readonly ReleaseGuideStep[];
 };
 
 /**
@@ -73,6 +127,144 @@ export type Release = {
  * test enforces strict descending order so it cannot quietly stop being true.
  */
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.0.0",
+    date: "2026-09-17",
+    title: "Welcome to LitRack v2",
+    announce: true,
+    welcome: {
+      headline: "Welcome to Litrack v2!",
+      intro:
+        "A more modern, faster, and more complete learner profiling system — built to make teaching and learning management easier for you.",
+      highlightsTitle: "What's New in Litrack v2",
+      highlightsSubtitle: "New features and improvements to give you a better experience.",
+      highlights: [
+        {
+          icon: "profiling",
+          tone: "violet",
+          title: "Improved Learner Profiling",
+          body: "Easier and faster encoding with a cleaner, modern interface.",
+        },
+        {
+          icon: "reports",
+          tone: "emerald",
+          title: "Enhanced Reports",
+          body: "Generate End of Term Reports with updated formats and more options.",
+        },
+        {
+          icon: "analytics",
+          tone: "blue",
+          title: "Better Analytics",
+          body: "Visual insights to help you monitor learner progress.",
+        },
+        {
+          icon: "mobile",
+          tone: "amber",
+          title: "Mobile Friendly",
+          body: "Access key features anytime, anywhere.",
+        },
+        {
+          icon: "speed",
+          tone: "rose",
+          title: "Instant Updates",
+          body: "What you save, archive or delete shows up right away.",
+        },
+        {
+          icon: "workflow",
+          tone: "purple",
+          title: "Streamlined Workflow",
+          body: "A smoother and more organized experience for teachers and school heads.",
+        },
+      ],
+      guide: [
+        {
+          icon: "dashboard",
+          tone: "violet",
+          title: "Start at your Dashboard",
+          body: "See your grades, learners, ARAL learners and pending profiles at a glance. Each card opens the page behind it.",
+          roles: ["TEACHER"],
+        },
+        {
+          icon: "learners",
+          tone: "blue",
+          title: "Find any learner",
+          body: "On Learners, switch advisories from the banner, filter by grade, section, gender or ARAL status, and open a learner's menu to view, enroll in ARAL or archive.",
+          roles: ["TEACHER"],
+        },
+        {
+          icon: "aral",
+          tone: "emerald",
+          title: "Run the ARAL Program",
+          body: "Under ARAL Program in the side menu: record Weekly Attendance, enter the Monthly Reading Level, and complete ARAL Profiling for each learner you tutor.",
+          roles: ["TEACHER"],
+        },
+        {
+          icon: "reports",
+          tone: "amber",
+          title: "Finish the term",
+          body: "End of Terms Reports opens on your advisory. Kindergarten advisers rate the competency checklist instead, and both can be exported or printed.",
+          roles: ["TEACHER"],
+        },
+        {
+          icon: "dashboard",
+          tone: "violet",
+          title: "Start at your Dashboard",
+          body: "Your school's learners, teachers and ARAL progress at a glance.",
+          roles: ["SCHOOL_HEAD"],
+        },
+        {
+          icon: "teachers",
+          tone: "blue",
+          title: "Manage your teachers",
+          body: "Approve new teachers, set their advisories and roles, and see changes the moment you save them.",
+          roles: ["SCHOOL_HEAD"],
+        },
+        {
+          icon: "checklist",
+          tone: "emerald",
+          title: "Review Kindergarten checklists",
+          body: "Open Kindergarten Checklist to view each learner's competency ratings, then export or print them.",
+          roles: ["SCHOOL_HEAD"],
+        },
+        {
+          icon: "schools",
+          tone: "violet",
+          title: "Oversee every school",
+          body: "Schools, accounts, submissions and audit logs are where they were. Open a school to see it as its School Head does.",
+          roles: ["SUPER_ADMIN"],
+        },
+        {
+          icon: "reports",
+          tone: "emerald",
+          title: "Keep term subjects in step",
+          body: "Default Term Subjects can now reset every school's End of Terms subjects in one step.",
+          roles: ["SUPER_ADMIN"],
+        },
+        {
+          icon: "help",
+          tone: "amber",
+          title: "Help is always nearby",
+          body: "Ask the assistant in the corner when you are stuck. These notes stay under Updates in the bell, and every release is listed on the changelog.",
+        },
+      ],
+    },
+    fixes: [
+      { text: "New teacher dashboard: a greeting banner, cards for your grades, learners, ARAL learners and pending profiles, attendance and reading summaries, a calendar, and a daily quote.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "New side menu and header. The highlight slides to the page you open, and the account menu works on phones.",
+      { text: "Learners page: a banner, colored summary cards, an advisory switcher, every filter in one bar, a menu on each row, and a list made for phones.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "Archiving or restoring a learner removes them from the list the moment you click. If it fails, they come back and you are told why.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "Weekly Attendance shows the week's totals up front, and the grade and section pickers sit together under the banner.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "Monthly Reading Level shows five summary cards and a Reading Level Guide that uses the same colors as the grid.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "ARAL Profiling has a new banner, four summary cards, and a list made for phones.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "End-of-Term Reports use one advisory picker, placed in the banner.",
+      "Kindergarten's End-of-Term report is now the DepEd competency checklist: 62 competencies rated BG, DV or CO for each term. Teachers fill it in, School Heads can view it, and both can export it to Excel or print it.",
+      { text: "The side menu now highlights the right page when you open a learner's ARAL profile, attendance or reading level.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "Profile Settings have a new layout with a summary of how complete your profile is. You can add your gender, which picks your dashboard picture.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "A new sign-in screen.",
+      "When you save, archive or delete something, the page shows the change right away instead of up to a minute later.",
+      { text: "A Super Admin can reset every school's End-of-Term subjects to the defaults in one step.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
   {
     version: "1.19.1",
     date: "2026-09-15",
@@ -580,4 +772,46 @@ export function unseenReleases(
   return releases.filter(
     (r) => r.announce && compareVersions(r.version, seen) > 0
   );
+}
+
+/**
+ * The landmark release to welcome this user to, or null.
+ *
+ * Unlike `unseenReleases`, a brand-new account (`null`) is welcomed even after
+ * later patches ship: the welcome is once per account, not once per head. Only
+ * an acknowledgement of this version or a later one retires it.
+ */
+export function welcomeRelease(
+  lastSeen: string | null,
+  releases: readonly Release[] = RELEASES
+): Release | null {
+  const landmark = releases.find((r) => r.welcome);
+  if (!landmark) return null;
+  if (lastSeen !== null && compareVersions(lastSeen, landmark.version) >= 0) {
+    return null;
+  }
+  return landmark;
+}
+
+/** The welcome cards this reader may see, in order. */
+export function visibleHighlights(
+  welcome: ReleaseWelcome,
+  role: ReleaseAudience | null
+): ReleaseHighlight[] {
+  return welcome.highlights.filter((h) => forReader(h.roles, role));
+}
+
+/** The tour steps this reader may see, in order. */
+export function visibleGuide(
+  welcome: ReleaseWelcome,
+  role: ReleaseAudience | null
+): ReleaseGuideStep[] {
+  return welcome.guide.filter((step) => forReader(step.roles, role));
+}
+
+function forReader(
+  roles: readonly ReleaseAudience[] | undefined,
+  role: ReleaseAudience | null
+): boolean {
+  return !roles || (role !== null && roles.includes(role));
 }

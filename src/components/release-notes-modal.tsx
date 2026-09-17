@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ReleaseWelcome } from "@/components/release-welcome";
 import { acknowledgeRelease } from "@/lib/actions/release";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
 import {
@@ -17,6 +18,9 @@ import {
   latestRelease,
   unseenReleases,
   visibleFixes,
+  visibleGuide,
+  visibleHighlights,
+  welcomeRelease,
   type ReleaseAudience,
 } from "@/lib/releases";
 
@@ -27,6 +31,30 @@ const COVER_POLL_MS = 250;
  * never lifts, a late modal still beats none. Same numbers as the ARAL alerts.
  */
 const COVER_WAIT_CAP_MS = 10_000;
+
+/**
+ * "Explore Later" with "Don't show this again" unticked hides the welcome for
+ * this browser tab's session only. Without it the layout, which re-renders on
+ * every navigation with the same unacknowledged stamp, would reopen it on the
+ * next click. Browser storage can be unavailable; then it simply shows again.
+ */
+const snoozeKey = (version: string) => `litrack:welcome-later:${version}`;
+
+function isSnoozed(version: string): boolean {
+  try {
+    return window.sessionStorage.getItem(snoozeKey(version)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function snooze(version: string): void {
+  try {
+    window.sessionStorage.setItem(snoozeKey(version), "1");
+  } catch {
+    // Private mode or blocked storage: the welcome returns on the next page.
+  }
+}
 
 /**
  * "LITRACK System updated to vX.Y.Z", shown once per release per user, listing
@@ -65,20 +93,28 @@ export function ReleaseNotesModal({
   role: ReleaseAudience | null;
 }) {
   const release = latestRelease();
+  // A landmark release (LitRack v2) replaces the plain list with its welcome,
+  // once per account — including accounts created after later patches.
+  const landmark = welcomeRelease(lastSeenVersion);
   const releases = unseenReleases(lastSeenVersion)
     .map((r) => ({ release: r, fixes: visibleFixes(r, role) }))
     .filter((r) => r.fixes.length > 0);
-  const unseen = releases.length > 0;
+  const unseen = landmark !== null || releases.length > 0;
+  // A string, so a re-render that rebuilds the release object does not reopen it.
+  const landmarkVersion = landmark?.version ?? null;
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dontShowAgain, setDontShowAgain] = useState(true);
 
   useEffect(() => {
     if (!unseen) return;
     let cancelled = false;
     let pollId: ReturnType<typeof setTimeout> | undefined;
     const deadline = Date.now() + COVER_WAIT_CAP_MS;
+
+    if (landmarkVersion && isSnoozed(landmarkVersion)) return;
 
     const whenUncovered = () => {
       if (cancelled) return;
@@ -94,7 +130,7 @@ export function ReleaseNotesModal({
       cancelled = true;
       if (pollId) clearTimeout(pollId);
     };
-  }, [unseen]);
+  }, [unseen, landmarkVersion]);
 
   if (!unseen) return null;
 
@@ -112,6 +148,46 @@ export function ReleaseNotesModal({
     }
     setOpen(false);
   };
+
+  if (landmark?.welcome) {
+    const welcome = landmark.welcome;
+    // ✕, Escape, the overlay, "Explore Later" and "View Changelog" all land
+    // here. Ticked: the account has seen it. Unticked: later, this session.
+    const dismiss = () => {
+      if (dontShowAgain) {
+        void acknowledge();
+        return;
+      }
+      snooze(landmark.version);
+      setOpen(false);
+    };
+    return (
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) dismiss();
+        }}
+      >
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-5xl [&>button:last-child]:z-10 [&>button:last-child]:rounded-full [&>button:last-child]:bg-card [&>button:last-child]:opacity-100 [&>button:last-child]:shadow-md">
+          <ReleaseWelcome
+            version={landmark.version}
+            headline={welcome.headline}
+            intro={welcome.intro}
+            highlightsTitle={welcome.highlightsTitle}
+            highlightsSubtitle={welcome.highlightsSubtitle}
+            highlights={visibleHighlights(welcome, role)}
+            guide={visibleGuide(welcome, role)}
+            dontShowAgain={dontShowAgain}
+            onDontShowAgainChange={setDontShowAgain}
+            error={error}
+            saving={saving}
+            onDismiss={dismiss}
+            onComplete={() => void acknowledge()}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
