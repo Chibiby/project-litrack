@@ -167,6 +167,11 @@ vi.mock("@/lib/auth/session", () => ({
   requireSchoolUser: (...args: unknown[]) => requireSchoolUser(...(args as [])),
 }));
 
+const readTestLabSession = vi.fn(async () => false);
+vi.mock("@/lib/auth/test-lab", () => ({
+  readTestLabSession: (...args: unknown[]) => readTestLabSession(...(args as [])),
+}));
+
 const writeAudit = vi.fn(async () => {});
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => writeAudit(...(args as [])),
@@ -272,6 +277,7 @@ beforeEach(() => {
     sectionCreateMany: [],
   };
   requireSchoolUser.mockResolvedValue({ id: TEACHER_ID, schoolId: SCHOOL_ID });
+  readTestLabSession.mockResolvedValue(false);
   // The action logs failures with console.error; keep test output pristine.
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -766,5 +772,36 @@ describe("saveTeacherProfile — first save vs later saves", () => {
     const upsert = calls.profileUpsert[0] as { update: Record<string, unknown> };
     expect(upsert.update.designation).toBe("Guidance Counselor");
     expect(upsert.update.advisoryMode).toBe("DEFAULT");
+  });
+});
+
+describe("saveTeacherProfile — Test Lab dry run", () => {
+  it("returns a preview and writes nothing when the session is a Test Lab session", async () => {
+    readTestLabSession.mockResolvedValue(true);
+
+    const result = await saveTeacherProfile(buildFormData());
+    expect(result.ok).toBe(true);
+    expect((result as { ok: true; data?: { dryRun: true } }).data?.dryRun).toBe(true);
+
+    expect(transaction).not.toHaveBeenCalled();
+    expect(calls.profileUpsert).toHaveLength(0);
+    expect(calls.userUpdate).toHaveLength(0);
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("still returns a validation error in a Test Lab session for invalid input", async () => {
+    readTestLabSession.mockResolvedValue(true);
+
+    const result = await saveTeacherProfile(buildFormData({ sectionId: "" }));
+    expect(result).toEqual({ ok: false, error: "Select a section" });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("performs the real write outside a Test Lab session", async () => {
+    readTestLabSession.mockResolvedValue(false);
+
+    const result = await saveTeacherProfile(buildFormData());
+    expect(result).toEqual({ ok: true });
+    expect(transaction).toHaveBeenCalled();
   });
 });

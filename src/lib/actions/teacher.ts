@@ -17,6 +17,7 @@ import {
 import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 import {
   revalidateTeacherCaches,
   revalidateSchoolDashboard,
@@ -33,7 +34,19 @@ import {
 } from "@/lib/teachers/section-assignment";
 import { advisoryCapFor } from "@/lib/teachers/advisory-limits";
 
-type ActionResult = { ok: true } | { ok: false; error: string };
+type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+
+/** Preview shown in a Test Lab dry run instead of the real write. */
+export type TeacherProfileDryRunPreview = {
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  fullName: string;
+  designation: string;
+  advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE";
+  sectionId: string | null;
+  additionalSectionIds: string[];
+};
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -50,6 +63,72 @@ function formToObj(formData: FormData): Record<string, unknown> {
     }
   }
   return obj;
+}
+
+/**
+ * Pure input→saved mapping for a teacher's profile, shared by the real write
+ * and the Test Lab dry-run preview so the two cannot drift.
+ */
+function buildTeacherProfileWrite(
+  parsed: z.infer<typeof teacherProfileSchema> | z.infer<typeof teacherProfileUpdateSchema>,
+  isFirstSave: boolean,
+  existing: { designation: string | null; advisoryMode: string } | null
+) {
+  const {
+    firstName: firstRaw,
+    lastName: lastRaw,
+    middleName: middleRaw,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Intentionally destructuring contactEmail to exclude it from profileFields
+    contactEmail: _contactEmail,
+    sectionId,
+    advisoryMode,
+    additionalSectionIds,
+    ...profileFields
+  } = parsed;
+  const firstName = formatPersonName(firstRaw);
+  const lastName = formatPersonName(lastRaw);
+  const middleName = formatOptionalPersonName(middleRaw) ?? null;
+  const fullName = buildFullName(firstName, middleName, lastName);
+
+  // Prisma skips `undefined` on update — normalize optionals to null so clears persist
+  // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).
+  // On a later save, if the stored designation is null, keep the submitted one (don't write null).
+  const profileData = {
+    ...profileFields,
+    designation: isFirstSave || existing?.designation == null ? parsed.designation : existing.designation,
+    advisoryMode: isFirstSave ? advisoryMode : (existing?.advisoryMode as "DEFAULT" | "FLOATING" | "MULTI_GRADE"),
+    contactNumber: parsed.contactNumber ?? null,
+    // Cleared in Settings has to be written as null; Prisma skips undefined.
+    gender: parsed.gender ?? null,
+    specializationOther: parsed.specializationOther ?? null,
+    currentGradeAssignment: parsed.currentGradeAssignment ?? null,
+    position: parsed.position ?? null,
+    yearsInService: parsed.yearsInService ?? null,
+    // Same reason: an ethnicity removed in Settings has to be written as null,
+    // and each free-text line has to be cleared when its slot is not Others.
+    ...ethnicityColumns(parsed),
+  };
+
+  // Only on first save: assign the sections the teacher declared. On later
+  // saves, the School Head owns advisory assignment via setTeacherAdvisorySection.
+  const volunteer = parsed.designation === ARAL_VOLUNTEER_DESIGNATION;
+  const wantedSectionIds = isFirstSave
+    ? volunteer || advisoryMode === "FLOATING" || !sectionId
+      ? []
+      : [sectionId, ...(advisoryMode === "MULTI_GRADE" ? additionalSectionIds : [])]
+    : [];
+
+  return {
+    firstName,
+    middleName,
+    lastName,
+    fullName,
+    sectionId,
+    advisoryMode,
+    additionalSectionIds,
+    profileData,
+    wantedSectionIds,
+  };
 }
 
 /**
@@ -84,39 +163,30 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   }
 
   const {
-    firstName: firstRaw,
-    lastName: lastRaw,
-    middleName: middleRaw,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Intentionally destructuring contactEmail to exclude it from profileFields
-    contactEmail: _contactEmail,
+    firstName,
+    middleName,
+    lastName,
+    fullName,
     sectionId,
     advisoryMode,
     additionalSectionIds,
-    ...profileFields
-  } = parsed.data;
-  const firstName = formatPersonName(firstRaw);
-  const lastName = formatPersonName(lastRaw);
-  const middleName = formatOptionalPersonName(middleRaw) ?? null;
-  const fullName = buildFullName(firstName, middleName, lastName);
+    profileData,
+    wantedSectionIds: wanted,
+  } = buildTeacherProfileWrite(parsed.data, isFirstSave, existing);
 
-  // Prisma skips `undefined` on update — normalize optionals to null so clears persist
-  // (e.g. position when designation is Others). Leave contactEmail untouched (no longer collected).
-  // On a later save, if the stored designation is null, keep the submitted one (don't write null).
-  const profileData = {
-    ...profileFields,
-    designation: isFirstSave || existing.designation == null ? parsed.data.designation : existing.designation,
-    advisoryMode: isFirstSave ? advisoryMode : existing.advisoryMode,
-    contactNumber: parsed.data.contactNumber ?? null,
-    // Cleared in Settings has to be written as null; Prisma skips undefined.
-    gender: parsed.data.gender ?? null,
-    specializationOther: parsed.data.specializationOther ?? null,
-    currentGradeAssignment: parsed.data.currentGradeAssignment ?? null,
-    position: parsed.data.position ?? null,
-    yearsInService: parsed.data.yearsInService ?? null,
-    // Same reason: an ethnicity removed in Settings has to be written as null,
-    // and each free-text line has to be cleared when its slot is not Others.
-    ...ethnicityColumns(parsed.data),
-  };
+  if (await readTestLabSession(user)) {
+    const preview: TeacherProfileDryRunPreview = {
+      firstName,
+      middleName,
+      lastName,
+      fullName,
+      designation: profileData.designation as string,
+      advisoryMode: profileData.advisoryMode as "DEFAULT" | "FLOATING" | "MULTI_GRADE",
+      sectionId: sectionId ?? null,
+      additionalSectionIds: isFirstSave ? additionalSectionIds : [],
+    };
+    return { ok: true, data: { dryRun: true, preview } };
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -132,11 +202,6 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
       // Only on first save: assign the sections the teacher declared. On later
       // saves, the School Head owns advisory assignment via setTeacherAdvisorySection.
       if (isFirstSave) {
-        const volunteer = parsed.data.designation === ARAL_VOLUNTEER_DESIGNATION;
-        const wanted =
-          volunteer || advisoryMode === "FLOATING" || !sectionId
-            ? []
-            : [sectionId, ...(advisoryMode === "MULTI_GRADE" ? additionalSectionIds : [])];
         if (wanted.length === 0) {
           await setTeacherAdvisory(tx, { teacherId: user.id, schoolId: user.schoolId, change: { op: "clear" } });
         }

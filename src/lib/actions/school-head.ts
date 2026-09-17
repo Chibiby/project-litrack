@@ -22,6 +22,7 @@ import { lettersNeededToReachCount } from "@/lib/section-letters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 import {
   releaseTeacherAdvisory,
   type ReleasedAdvisory,
@@ -36,6 +37,19 @@ import {
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+
+/** Preview shown in a Test Lab dry run instead of the real write. */
+export type SchoolHeadProfileDryRunPreview = {
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  fullName: string;
+  contactEmail: string | null;
+  position: string;
+  skipSchoolStructure: boolean;
+  gradeTypes: GradeLevelType[] | null;
+  sectionsPerGrade: number | null;
+};
 
 const teacherUserIdSchema = z.object({
   userId: z.string().uuid("Invalid teacher"),
@@ -190,6 +204,33 @@ async function bootstrapSchoolStructure(params: {
   return { createdGradeIds, createdSectionIds };
 }
 
+/**
+ * Pure input→saved mapping for the School Head profile, shared by the real
+ * write and the Test Lab dry-run preview so the two cannot drift.
+ */
+function buildSchoolHeadProfileWrite(parsed: z.infer<typeof schoolHeadProfileSchema>) {
+  const {
+    firstName: firstRaw,
+    lastName: lastRaw,
+    middleName: middleRaw,
+    contactEmail: contactEmailRaw,
+    ...profileData
+  } = parsed;
+  const firstName = formatPersonName(firstRaw);
+  const lastName = formatPersonName(lastRaw);
+  const middleName = formatOptionalPersonName(middleRaw) ?? null;
+  const fullName = buildFullName(firstName, middleName, lastName);
+
+  // The field is optional, and the schema turns a blank one into `undefined` —
+  // which Prisma reads as "leave this column alone". A head who deletes their
+  // contact email and saves means to remove it, so an absent value is written as
+  // an explicit null. This is the survey address (P-I4) only; the Supabase login
+  // identity on `User.email` is never touched here.
+  const contactEmail = contactEmailRaw ?? null;
+
+  return { firstName, middleName, lastName, fullName, contactEmail, profileData };
+}
+
 export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionResult> {
   const user = await requireUser("SCHOOL_HEAD");
   if (!user.schoolId) return { ok: false, error: "User has no school" };
@@ -236,25 +277,24 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
     sectionsPerGrade = structureParsed.data.sectionsPerGrade;
   }
 
-  const {
-    firstName: firstRaw,
-    lastName: lastRaw,
-    middleName: middleRaw,
-    contactEmail: contactEmailRaw,
-    ...profileData
-  } = parsed.data;
-  const firstName = formatPersonName(firstRaw);
-  const lastName = formatPersonName(lastRaw);
-  const middleName = formatOptionalPersonName(middleRaw) ?? null;
-  const fullName = buildFullName(firstName, middleName, lastName);
   const schoolId = user.schoolId;
+  const { firstName, middleName, lastName, fullName, contactEmail, profileData } =
+    buildSchoolHeadProfileWrite(parsed.data);
 
-  // The field is optional, and the schema turns a blank one into `undefined` —
-  // which Prisma reads as "leave this column alone". A head who deletes their
-  // contact email and saves means to remove it, so an absent value is written as
-  // an explicit null. This is the survey address (P-I4) only; the Supabase login
-  // identity on `User.email` is never touched here.
-  const contactEmail = contactEmailRaw ?? null;
+  if (await readTestLabSession(user)) {
+    const preview: SchoolHeadProfileDryRunPreview = {
+      firstName,
+      middleName,
+      lastName,
+      fullName,
+      contactEmail,
+      position: parsed.data.position,
+      skipSchoolStructure,
+      gradeTypes: gradeTypes ?? null,
+      sectionsPerGrade: sectionsPerGrade ?? null,
+    };
+    return { ok: true, data: { dryRun: true, preview } };
+  }
 
   // Save profile first (short pooled queries), then bootstrap grades/sections
   // outside any interactive transaction. PgBouncer transaction-mode pooler

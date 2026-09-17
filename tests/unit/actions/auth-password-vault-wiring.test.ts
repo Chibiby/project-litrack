@@ -116,6 +116,8 @@ vi.mock("@/lib/auth/teacher-registration-helpers", () => ({
 
 vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: () => false }));
 
+vi.mock("@/lib/auth/test-lab", () => ({ readTestLabSession: vi.fn(async () => false) }));
+
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
     redirect(path);

@@ -80,6 +80,11 @@ vi.mock("@/lib/cache/revalidate", () => ({
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/delete-auth-user", () => ({ deleteAuthUser: vi.fn() }));
 
+const readTestLabSession = vi.fn(async () => false);
+vi.mock("@/lib/auth/test-lab", () => ({
+  readTestLabSession: (...args: unknown[]) => readTestLabSession(...(args as [])),
+}));
+
 const { saveSchoolHeadProfile } = await import("@/lib/actions/school-head");
 
 /**
@@ -122,7 +127,41 @@ beforeEach(() => {
   vi.clearAllMocks();
   profileUpsert = [];
   userUpdate = [];
+  readTestLabSession.mockResolvedValue(false);
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("saveSchoolHeadProfile — Test Lab dry run", () => {
+  it("returns a preview and writes nothing when the session is a Test Lab session", async () => {
+    readTestLabSession.mockResolvedValue(true);
+
+    const result = await saveSchoolHeadProfile(buildFormData());
+    expect(result.ok).toBe(true);
+    expect((result as { ok: true; data?: { dryRun: true } }).data?.dryRun).toBe(true);
+
+    expect(profileUpsert).toHaveLength(0);
+    expect(userUpdate).toHaveLength(0);
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(writeAuditMany).not.toHaveBeenCalled();
+  });
+
+  it("still returns a validation error in a Test Lab session for invalid input", async () => {
+    readTestLabSession.mockResolvedValue(true);
+
+    const result = await saveSchoolHeadProfile(buildFormData({ contactEmail: "not-an-email" }));
+    expect(result.ok).toBe(false);
+    expect(profileUpsert).toHaveLength(0);
+    expect(userUpdate).toHaveLength(0);
+  });
+
+  it("performs the real write outside a Test Lab session", async () => {
+    readTestLabSession.mockResolvedValue(false);
+
+    const result = await saveSchoolHeadProfile(buildFormData());
+    expect(result).toEqual({ ok: true });
+    expect(profileUpsert).toHaveLength(1);
+    expect(userUpdate).toHaveLength(1);
+  });
 });
 
 describe("saveSchoolHeadProfile — contact email", () => {

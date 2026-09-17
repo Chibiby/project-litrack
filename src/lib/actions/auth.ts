@@ -31,6 +31,7 @@ import type { ActionFailure } from "@/lib/errors/result";
 import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
 import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
+import { readTestLabSession } from "@/lib/auth/test-lab";
 import {
   clearImpersonationCookie,
   checkCurrentSession,
@@ -48,6 +49,17 @@ import {
   isPendingTeacherAtSchool,
   registerConflictCode,
 } from "@/lib/auth/teacher-registration-helpers";
+
+/**
+ * Test Lab dry-run result shape for the four self-bound account saves. Never
+ * carries a password: the preview says the input passed validation and
+ * nothing was changed. `changeEmailAction` is the one exception allowed to
+ * show the (already-validated) new address.
+ */
+type DryRunResult<TPreview> = { ok: true; data: { dryRun: true; preview: TPreview } };
+
+export type PasswordDryRunPreview = { validated: true; changed: false };
+export type EmailDryRunPreview = { validated: true; changed: false; newEmail: string };
 
 const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
@@ -643,7 +655,7 @@ export async function logoutAction(): Promise<void> {
  */
 export const setPasswordAction = action(
   "setPasswordAction",
-  async (formData: FormData): Promise<never> => {
+  async (formData: FormData): Promise<DryRunResult<PasswordDryRunPreview>> => {
     assertSupabaseConfigured();
 
     const user = await requireUser(undefined, true, { allowMustChangePassword: true });
@@ -655,6 +667,10 @@ export const setPasswordAction = action(
       password: formData.get("password"),
       confirmPassword: formData.get("confirmPassword"),
     });
+
+    if (await readTestLabSession(user)) {
+      return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
+    }
 
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.updateUser({ password: input.password });
@@ -694,13 +710,19 @@ export const setPasswordAction = action(
  * public. `/account/password` remains available from Settings → Security, and
  * a Super Admin can always reset the account back to the School ID.
  */
-export const skipPasswordChange = action("skipPasswordChange", async (): Promise<never> => {
+export const skipPasswordChange = action(
+  "skipPasswordChange",
+  async (): Promise<DryRunResult<PasswordDryRunPreview>> => {
   const user = await requireUser(undefined, true, { allowMustChangePassword: true });
 
   if (user.role === "TEACHER") {
     throw new AppError("AUTH_FORBIDDEN", {
       detail: "Teachers must choose a new password after an administrator reset it",
     });
+  }
+
+  if (await readTestLabSession(user)) {
+    return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
   }
 
   await prisma.user.update({
@@ -720,14 +742,17 @@ export const skipPasswordChange = action("skipPasswordChange", async (): Promise
   });
 
   redirect(roleHomePath(user.role));
-});
+  }
+);
 
 /**
  * Voluntary password change — requires verifying the current password first.
  */
 export const changePasswordAction = action(
   "changePasswordAction",
-  async (formData: FormData): Promise<{ ok: true }> => {
+  async (
+    formData: FormData
+  ): Promise<{ ok: true; data?: { dryRun: true; preview: PasswordDryRunPreview } }> => {
     assertSupabaseConfigured();
 
     const user = await requireUser();
@@ -740,6 +765,10 @@ export const changePasswordAction = action(
       password: formData.get("password"),
       confirmPassword: formData.get("confirmPassword"),
     });
+
+    if (await readTestLabSession(user)) {
+      return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
+    }
 
     const supabase = await createSupabaseServerClient();
     const { error: verifyErr } = await supabase.auth.signInWithPassword({
@@ -782,7 +811,9 @@ export const changePasswordAction = action(
  */
 export const changeEmailAction = action(
   "changeEmailAction",
-  async (formData: FormData): Promise<{ ok: true }> => {
+  async (
+    formData: FormData
+  ): Promise<{ ok: true; data?: { dryRun: true; preview: EmailDryRunPreview } }> => {
     assertSupabaseConfigured();
 
     const user = await requireUser();
@@ -798,6 +829,13 @@ export const changeEmailAction = action(
 
     const newEmail = input.newEmail.trim().toLowerCase();
     if (newEmail === user.email.trim().toLowerCase()) throw new AppError("AUTH_EMAIL_UNCHANGED");
+
+    if (await readTestLabSession(user)) {
+      return {
+        ok: true,
+        data: { dryRun: true, preview: { validated: true, changed: false, newEmail } },
+      };
+    }
 
     const supabase = await createSupabaseServerClient();
     const { error: verifyErr } = await supabase.auth.signInWithPassword({
