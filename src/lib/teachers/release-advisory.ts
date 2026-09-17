@@ -21,14 +21,27 @@ export type ReleasedAdvisory = {
  * section never reads as Unassigned, and the refusal in `setTeacherAdvisory`
  * (which only claims an adviser-free section) makes it unassignable forever.
  *
- * Three pointers are cleared, and they have to move together:
+ * Four pointers are cleared, and they have to move together:
  *   - `Section.adviserId`, through `setTeacherAdvisory`'s `clear`, so the legacy
  *     `advisorySectionId` / `TeacherSection` / `taughtGrades` mirrors follow.
  *   - `Learner.teacherId` — their advisory learners are left adviser-less, the
  *     same state a floating learner is already in, until the section gets a new
  *     adviser (who picks them up; see `setTeacherAdvisory`'s `add`).
+ *   - `Learner.aralTeacherId`, for the same learners — `setTeacherAdvisory`'s
+ *     `clear` drops it section-by-section for every section this teacher gave
+ *     up, so a departing adviser stops being listed as anyone's ARAL tutor for
+ *     a roster they no longer hold. A School Head re-designates a tutor after.
  *   - `Enrollment.teacherId` on the ACTIVE row only, so it keeps agreeing with
  *     the learner row. Closed enrolments are history and keep who advised them.
+ *
+ * The learner/enrolment sweep below runs BEFORE `setTeacherAdvisory`'s `clear`,
+ * deliberately: `clear` now performs this same release itself, section by
+ * section, so if it ran first there would be nothing left here to count —
+ * `learnerCount` would silently read 0. Doing it here first, while `teacherId`
+ * still names them, makes this sweep the one source of truth for the count;
+ * `clear`'s own release then finds those rows already null and is a no-op for
+ * them, plus a real (idempotent) catch for any learner whose `aralTeacherId`
+ * points here without being tied to a section this teacher currently advises.
  *
  * Every write is scoped to `schoolId` — the tenant boundary, never optional.
  */
@@ -44,8 +57,6 @@ export async function releaseTeacherAdvisory(
     select: { id: true },
   });
 
-  await setTeacherAdvisory(tx, { teacherId, schoolId, change: { op: "clear" } });
-
   const learners = await tx.learner.updateMany({
     where: { teacherId, schoolId },
     data: { teacherId: null },
@@ -54,6 +65,8 @@ export async function releaseTeacherAdvisory(
     where: { teacherId, schoolId, status: "ACTIVE" },
     data: { teacherId: null },
   });
+
+  await setTeacherAdvisory(tx, { teacherId, schoolId, change: { op: "clear" } });
 
   return { sectionIds: held.map((s) => s.id), learnerCount: learners.count };
 }

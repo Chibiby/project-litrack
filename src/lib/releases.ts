@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.2.1",
+    date: "2026-09-17",
+    title: "Clearer Grade 1 marks, and old advisories let go of their learners",
+    announce: true,
+    fixes: [
+      "A learner you no longer advise now leaves your Learners list. Before, a section you were moved off kept its learners attached to you. If one of them still needs you as their ARAL tutor, ask your School Head to set that again.",
+      "On the Grade 1 sheet, the empty choice now reads \"Unassigned\" instead of \"Clear\", each mark has its own colour, and a guide under the sheet spells out what A, B, C, D and E mean.",
+      "The button that hides the Assistant on a phone now says \"Hide\", so it is clear what it does.",
+    ],
+  },
+  {
     version: "2.2.0",
     date: "2026-09-17",
     title: "Letter marks for Grade 1, and a way to tuck the Assistant away",

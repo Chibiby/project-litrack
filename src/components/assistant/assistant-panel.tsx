@@ -291,11 +291,14 @@ export function AssistantPanel({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-8 md:hidden"
+            size="sm"
+            className="h-8 gap-1 px-2 md:hidden"
             onClick={onHide}
           >
             <PanelRightClose className="size-4" aria-hidden />
+            <span className="text-xs font-medium" aria-hidden>
+              Hide
+            </span>
             <span className="sr-only">Hide the LITRACK Assistant</span>
           </Button>
         )}

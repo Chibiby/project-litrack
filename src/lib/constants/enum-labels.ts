@@ -75,6 +75,42 @@ export const TERM_MARK_OPTIONS = (
   label: TERM_MARK_LABELS[value],
 }));
 
+/**
+ * Grade 1 letter-mark colour ramp, strongest (A) to weakest (E). The single
+ * place a mark is assigned a colour — the term grades grid reads `cell` to
+ * tint a filled cell's trigger, `text`/`dot` to colour a dropdown option and
+ * the below-grid legend. Violet is reserved for the ARAL accent, so this
+ * ramp never touches it; the letter itself always stays visible alongside
+ * the colour (colour is never the only signal).
+ */
+export const TERM_MARK_TONE = {
+  ADVANCING: {
+    cell: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    text: "text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500 dark:bg-emerald-400",
+  },
+  BENCHMARKING: {
+    cell: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
+    text: "text-blue-700 dark:text-blue-300",
+    dot: "bg-blue-500 dark:bg-blue-400",
+  },
+  CONNECTING: {
+    cell: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    text: "text-amber-700 dark:text-amber-300",
+    dot: "bg-amber-500 dark:bg-amber-400",
+  },
+  DEVELOPING: {
+    cell: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300",
+    text: "text-orange-700 dark:text-orange-300",
+    dot: "bg-orange-500 dark:bg-orange-400",
+  },
+  EMERGING: {
+    cell: "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
+    text: "text-rose-700 dark:text-rose-300",
+    dot: "bg-rose-500 dark:bg-rose-400",
+  },
+} as const;
+
 export const ATTENDANCE_STATUS_LABELS = {
   PRESENT: "Present",
   ABSENT: "Absent",

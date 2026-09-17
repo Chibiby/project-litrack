@@ -35,6 +35,44 @@ async function loadValidSections(
   return sections;
 }
 
+/**
+ * Null both adviser pointers for the learners of a section this teacher is
+ * giving up — `Learner.teacherId` AND `Learner.aralTeacherId` — plus the
+ * matching ACTIVE `Enrollment.teacherId`. Both learner pointers go, not just
+ * the advisory one: a School Head moving a teacher off a section expects the
+ * roster (`/teacher/learners`) AND the ARAL tutor list to actually let go,
+ * not keep listing an ex-adviser who no longer sees the section anywhere. A
+ * School Head re-designates an ARAL tutor afterwards; this does not hand the
+ * ARAL seat to whichever teacher happens to take the section next (that only
+ * happens for `teacherId`, in the `add` branch above).
+ *
+ * Scoped by `sectionId` (and `schoolId`), never by `teacherId` alone: `remove`
+ * gives up exactly ONE section, so a teacher's other advisories must not be
+ * swept along with it, and a learner this teacher tutors ARAL for in a
+ * section they don't advise is out of scope for this call entirely. The
+ * `teacherId` / `aralTeacherId` equality inside each `where` is a second
+ * guard on top of that: a learner already reassigned to someone else (e.g. by
+ * a concurrent request) is never pulled back.
+ */
+async function releaseSectionLearners(
+  tx: Tx,
+  params: { sectionId: string | { in: string[] }; schoolId: string; teacherId: string }
+): Promise<void> {
+  const { sectionId, schoolId, teacherId } = params;
+  await tx.learner.updateMany({
+    where: { sectionId, schoolId, teacherId },
+    data: { teacherId: null },
+  });
+  await tx.learner.updateMany({
+    where: { sectionId, schoolId, aralTeacherId: teacherId },
+    data: { aralTeacherId: null },
+  });
+  await tx.enrollment.updateMany({
+    where: { sectionId, schoolId, teacherId, status: "ACTIVE" },
+    data: { teacherId: null },
+  });
+}
+
 /** Prisma unique-constraint violation (here: two advisers for one section). */
 export function isUniqueViolation(err: unknown): boolean {
   return (
@@ -182,17 +220,31 @@ export async function setTeacherAdvisory(
       });
     }
   } else if (change.op === "remove") {
-    await tx.section.updateMany({
-      // Scoped to this teacher, so a stale form cannot free somebody else's
-      // section by naming it.
+    // Scoped to this teacher, so a stale form cannot free somebody else's
+    // section by naming it.
+    const { count } = await tx.section.updateMany({
       where: { id: change.sectionId, schoolId, adviserId: teacherId },
       data: { adviserId: null },
     });
+    // Only release learners when the section was actually this teacher's —
+    // `count === 0` means the guard above refused the write (stale form /
+    // already someone else's section), and there is nothing of theirs to give up.
+    if (count > 0) {
+      await releaseSectionLearners(tx, { sectionId: change.sectionId, schoolId, teacherId });
+    }
   } else {
+    const heldSectionIds = current.map((s) => s.id);
     await tx.section.updateMany({
       where: { adviserId: teacherId, schoolId },
       data: { adviserId: null },
     });
+    if (heldSectionIds.length > 0) {
+      await releaseSectionLearners(tx, {
+        sectionId: { in: heldSectionIds },
+        schoolId,
+        teacherId,
+      });
+    }
   }
 
   const remaining = await tx.section.findMany({

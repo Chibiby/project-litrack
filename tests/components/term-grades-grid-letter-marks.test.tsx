@@ -145,13 +145,29 @@ describe("AralTermGradesGridForm — Grade 1 letter marks", () => {
     });
 
     fireEvent.click(trigger);
-    fireEvent.click(await screen.findByRole("option", { name: "Clear" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Unassigned" }));
 
     const { entries, invalid } = ref.current!.collect();
     expect(invalid).toEqual([]);
     expect(entries).toEqual([
       { learnerId: "l1", termSubjectId: "g1-read", score: null, mark: null },
     ]);
+  });
+});
+
+describe("AralTermGradesGridForm — letter-mark legend", () => {
+  it("G1: lists all five marks under the sheet", () => {
+    renderGrid();
+    for (const mark of ["ADVANCING", "BENCHMARKING", "CONNECTING", "DEVELOPING", "EMERGING"] as const) {
+      // Outside the table: the legend sits below it, so a match here is the
+      // legend rather than a cell's selected value.
+      expect(screen.getAllByText(termMarkText(mark)).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("G3: shows no letter legend", () => {
+    renderGrid({ gradeType: "G3", subjects: [{ id: "g3-eng", name: "English" }] });
+    expect(screen.queryByText(termMarkText("ADVANCING"))).toBeNull();
   });
 });
 

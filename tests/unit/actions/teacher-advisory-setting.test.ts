@@ -40,6 +40,8 @@ let teacherLookup:
 let calls: {
   teacherProfileUpdate: unknown[];
   sectionUpdateMany: unknown[];
+  learnerUpdateMany: unknown[];
+  enrollmentUpdateMany: unknown[];
 };
 
 function advisorySectionsOf(teacherId: string) {
@@ -94,6 +96,23 @@ function makeTx() {
           return { count };
         }
       ),
+    },
+    // `setTeacherAdvisory`'s `remove` (this action only ever removes excess
+    // advisories) now also releases the given-up section's learners — both
+    // adviser pointers, plus the active enrolment. These stubs exist so that
+    // release runs without crashing; `section-assignment.test.ts` pins the
+    // release behaviour itself, so this file only needs to not blow up.
+    learner: {
+      updateMany: vi.fn(async (args: unknown) => {
+        calls.learnerUpdateMany.push(args);
+        return { count: 0 };
+      }),
+    },
+    enrollment: {
+      updateMany: vi.fn(async (args: unknown) => {
+        calls.enrollmentUpdateMany.push(args);
+        return { count: 0 };
+      }),
     },
     teacherSection: {
       deleteMany: vi.fn(async () => ({ count: 0 })),
@@ -206,7 +225,12 @@ beforeEach(() => {
     fullName: "Marivic Cruz",
     teacherProfile: { designation: "Teacher", advisoryMode: "DEFAULT" },
   };
-  calls = { teacherProfileUpdate: [], sectionUpdateMany: [] };
+  calls = {
+    teacherProfileUpdate: [],
+    sectionUpdateMany: [],
+    learnerUpdateMany: [],
+    enrollmentUpdateMany: [],
+  };
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });

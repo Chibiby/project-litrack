@@ -22,7 +22,11 @@ import {
 import { generalAverage } from "@/lib/terms/average";
 import { termGradingScale, termMarkText, type TermGradingScale } from "@/lib/terms/grading-scale";
 import { subjectAbbreviation, subjectWindow } from "@/lib/terms/sheet-view";
-import { TERM_MARK_OPTIONS, TERM_MARK_SHORT_LABELS } from "@/lib/constants/enum-labels";
+import {
+  TERM_MARK_OPTIONS,
+  TERM_MARK_SHORT_LABELS,
+  TERM_MARK_TONE,
+} from "@/lib/constants/enum-labels";
 import type { TermMark } from "@prisma/client";
 import type { TermGradesSaveInput } from "@/lib/validators/term-grade.schema";
 import { cn } from "@/lib/utils";
@@ -325,7 +329,11 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
           <SelectTrigger
             aria-label={`${learner.fullName} — ${subject.name} grade`}
             title={legacyTitle}
-            className={cn("px-1 justify-center [&>svg]:hidden sm:[&>svg]:inline", className)}
+            className={cn(
+              "px-1 justify-center [&>svg]:hidden sm:[&>svg]:inline",
+              state.kind === "mark" && TERM_MARK_TONE[state.mark].cell,
+              className
+            )}
           >
             <SelectValue>
               {state.kind === "mark" ? (
@@ -338,10 +346,18 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={LETTER_CLEAR}>Clear</SelectItem>
+            <SelectItem value={LETTER_CLEAR}>Unassigned</SelectItem>
             {TERM_MARK_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {termMarkText(option.value)}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={cn("size-2 shrink-0 rounded-full", TERM_MARK_TONE[option.value].dot)}
+                    aria-hidden
+                  />
+                  <span className={TERM_MARK_TONE[option.value].text}>
+                    {termMarkText(option.value)}
+                  </span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -551,10 +567,29 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
             ))}
           </ul>
         </div>
+
+        {scale === "LETTER" && <TermMarkLegend />}
       </div>
     );
   }
 );
+
+/** The five letter marks and their colour, once per LETTER-scale grid. */
+function TermMarkLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+      {TERM_MARK_OPTIONS.map((option) => (
+        <span key={option.value} className="inline-flex items-center gap-1.5">
+          <span
+            className={cn("size-2.5 shrink-0 rounded-full", TERM_MARK_TONE[option.value].dot)}
+            aria-hidden
+          />
+          <span className={TERM_MARK_TONE[option.value].text}>{termMarkText(option.value)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /**
  * The phone row: number, name, the five-subject block, the chevron. The block
