@@ -8,6 +8,7 @@ import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
 import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
+import { getProfilePhotoBellNotifications } from "@/lib/notifications";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
@@ -116,6 +117,7 @@ export default async function TeacherAppLayout({
         role={user.role}
         userId={user.id}
         userName={userName}
+        avatarPath={user.avatarPath}
         schoolName={schoolName}
         grades={grades}
         roleLabel={roleLabel}
@@ -128,6 +130,19 @@ export default async function TeacherAppLayout({
         // own account then, and acknowledging would stamp their row — the real
         // teacher would never be shown the release they have not read.
         lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}
+        // Not awaited: streamed through RoleShell/AppHeader as a promise so the
+        // sidebar and header paint before the notification query resolves. Only
+        // a real teacher with a school can hold one — an impersonating Super
+        // Admin gets the menu's empty state instead of a query with no school.
+        notifications={
+          user.role === "TEACHER" && user.schoolId
+            ? getProfilePhotoBellNotifications({
+                id: user.id,
+                schoolId: user.schoolId,
+                role: user.role,
+              })
+            : []
+        }
       >
         {children}
       </RoleShell>

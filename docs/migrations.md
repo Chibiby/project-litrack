@@ -210,6 +210,26 @@ scores are recorded. A non-zero count is an escalation to the project owner,
 not a rollback to run — see the full walkthrough and guarded pre-M2 backfill
 in `docs/migrate-checklist.md` section (o).
 
+## `20260918000001_user_avatar_path`
+
+Adds nullable `User.avatarPath` (object key in the `avatars` Supabase
+Storage bucket, not a URL) and a fourth SQL-only CHECK, next to
+`TermGrade_score_range`, `TermSubject_grade_active_name_unique`, and
+`TermGrade_score_xor_mark` above: `User_avatarPath_shape` pins the column to
+either NULL or `<id>/<uuid>.(webp|jpg|png)` for the row's own `id`, mirroring
+`isValidAvatarPath` (`src/lib/avatars/paths.ts`) at the database layer.
+Prisma's schema language cannot express a CHECK constraint, so, like the
+others, this lives only in the migration SQL — preserve it when editing
+`User` migrations. Also adds `NotificationType` value
+`PROFILE_PHOTO_REMOVED`, combined into the same file as the column change
+following the `20260910000003_chat_channels` / `20260911000002_release_channel`
+precedent (an added enum value just can't be used in the same transaction
+it's added in, and nothing here does). Additive, no backfill: every existing
+`User` row already satisfies the CHECK because NULL passes it. The paired
+`prisma/storage-avatars.sql` (bucket + restrictive storage policy) is a
+separate, non-Prisma, human-applied file — see its own header and
+`docs/migrate-checklist.md` section **(q)**.
+
 ## Preview features
 
 `generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.

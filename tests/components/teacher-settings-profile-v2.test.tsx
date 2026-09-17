@@ -140,16 +140,12 @@ describe("teacher settings v2 — Cancel and the unsaved guard", () => {
 });
 
 describe("teacher settings v2 — not built yet", () => {
-  it("shows the photo controls disabled with the reason", () => {
+  it("no longer renders the disabled photo placeholder — the real photo card owns this now", () => {
     renderEdit();
-    for (const name of ["Change Photo", "Remove"]) {
-      const button = screen.getByRole("button", { name }) as HTMLButtonElement;
-      expect(button.disabled).toBe(true);
-      const describedBy = button.getAttribute("aria-describedby");
-      expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(
-        "Photo upload is coming soon."
-      );
-    }
+    expect(screen.queryByRole("button", { name: "Change Photo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    expect(screen.queryByText("Photo upload is coming soon.")).toBeNull();
+    expect(screen.queryByText("Profile Photo & Identity")).toBeNull();
   });
 
   it("renders Account Preferences and Notifications inert, with Profile and Security as links", () => {

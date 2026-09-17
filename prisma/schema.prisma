@@ -434,6 +434,13 @@ enum NotificationType {
   /// is composed at read time from the grant row `unlockGrantId` /
   /// `schoolUnlockGrantId` points at, like the chat and release types above.
   UNLOCK_GRANTED
+  /// A School Head or Super Admin removed the recipient's own profile photo
+  /// (self-removal sends nothing). `actorId` is the remover; `learnerIds` is
+  /// empty — this is an account-level event, not a learner one. Never sent
+  /// when the target has no `schoolId` (a Super Admin target), because
+  /// `Notification.schoolId` is required. Sentence composed at read time in
+  /// `src/lib/notifications.ts`, like the chat/release/unlock types above.
+  PROFILE_PHOTO_REMOVED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -777,6 +784,15 @@ model User {
   /// Null means presence has never been recorded. Super Admin impersonation is
   /// explicitly excluded by the write action.
   lastOnlineAt              DateTime?
+  /// Object key in the public Supabase Storage bucket `avatars`, NOT a URL —
+  /// `src/lib/avatars/paths.ts` builds the public URL from this at read time.
+  /// Key shape: `<userId>/<uuid>.<webp|jpg|png>`. The 128px thumbnail sibling
+  /// `<userId>/<uuid>_128.<ext>` is derived from this same uuid and is never
+  /// stored separately. NULL means the user has no photo. A SQL-only CHECK
+  /// (`User_avatarPath_shape`, prisma/migrations/20260918000001_user_avatar_path)
+  /// pins the shape at the database layer; Prisma's schema language cannot
+  /// express a CHECK constraint.
+  avatarPath                String?
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?

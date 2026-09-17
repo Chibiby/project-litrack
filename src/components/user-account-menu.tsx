@@ -23,11 +23,13 @@ import {
   roleSettingsProfilePath,
   type AppRole,
 } from "@/lib/auth/roles";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
 interface UserAccountMenuProps {
   role: AppRole;
   userName: string;
+  avatarPath: string | null;
   roleLabel: string;
   className?: string;
   side?: "top" | "bottom";
@@ -38,13 +40,6 @@ interface UserAccountMenuProps {
   variant?: "default" | "avatar";
 }
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
-  return (first + last).toUpperCase() || "?";
-}
-
 /**
  * Identity trigger with Profile and Settings. The sidebar variant has no Sign
  * out — the sidebar renders its own button right under it. The `avatar`
@@ -53,6 +48,7 @@ function initialsOf(name: string): string {
 export function UserAccountMenu({
   role,
   userName,
+  avatarPath,
   roleLabel,
   className,
   side = "bottom",
@@ -69,12 +65,7 @@ export function UserAccountMenu({
       className={cn("h-auto shrink-0 gap-1 rounded-full p-0.5 hover:bg-muted", className)}
       aria-label={`Account menu, ${userName}`}
     >
-      <span
-        aria-hidden
-        className="flex size-10 items-center justify-center rounded-full bg-violet-200 text-sm font-semibold text-violet-800 dark:bg-violet-900/60 dark:text-violet-100"
-      >
-        {initialsOf(userName)}
-      </span>
+      <UserAvatar name={userName} avatarPath={avatarPath} size={40} variant="thumb" />
       <Chevron className="h-4 w-4 text-muted-foreground" aria-hidden />
     </Button>
   ) : (
@@ -87,9 +78,7 @@ export function UserAccountMenu({
       )}
       aria-label={collapsed ? `Account menu, ${userName}` : "Account menu"}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-        <UserCircle className="h-4 w-4" />
-      </div>
+      <UserAvatar name={userName} avatarPath={avatarPath} size={32} variant="thumb" fallback="icon" />
       {!collapsed && (
         <>
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -125,9 +114,7 @@ export function UserAccountMenu({
       <DropdownMenuContent side={side} align={align} className="w-56">
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-              <UserCircle className="h-4 w-4" />
-            </div>
+            <UserAvatar name={userName} avatarPath={avatarPath} size={32} variant="thumb" fallback="icon" />
             <div className="flex min-w-0 flex-col overflow-hidden">
               <span className="truncate text-sm font-medium text-foreground">
                 {userName}

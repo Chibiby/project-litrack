@@ -13,6 +13,8 @@ import { purgeLearnerRecord, purgeTeacherRecord } from "@/lib/archive/purge";
 import { reactivateEnrollment } from "@/lib/learners/reactivate-enrollment";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { removeAvatarObjects } from "@/lib/supabase/avatar-storage";
+import { thumbPathFor } from "@/lib/avatars/paths";
 import {
   revalidateLearnerScoped,
   revalidateSchoolDashboard,
@@ -275,7 +277,8 @@ export type PurgeRemovedTeacherResult = { ok: true; authDeleted: boolean };
  * 2. `purgeTeacherRecord` releases advisory + learners, nulls
  *    `advisorySectionId`, then deletes the `User` row — all inside one
  *    transaction.
- * 3. Only AFTER that transaction commits: a best-effort Supabase
+ * 3. Only AFTER that transaction commits: a best-effort removal of the
+ *    account's two profile-photo objects, then a best-effort Supabase
  *    `auth.admin.deleteUser(authId)`, tolerating "not found" exactly as
  *    `removeTeacherRows` does.
  *
@@ -293,9 +296,12 @@ export const purgeRemovedTeacher = action(
 
     const { id } = parseInput(archiveRowSchema, { id: formData.get("id") });
 
+    // `avatarPath` is read HERE, before the delete, because the row is about to
+    // stop existing and with it the only pointer to the two storage objects.
+    // They are removed after the transaction commits — see below.
     const teacher = await prisma.user.findFirst({
       where: { id, role: "TEACHER", deletedAt: { not: null } },
-      select: { id: true, schoolId: true, authId: true },
+      select: { id: true, schoolId: true, authId: true, avatarPath: true },
     });
     if (!teacher) throw resourceNotFound("Teacher");
 
@@ -327,6 +333,15 @@ export const purgeRemovedTeacher = action(
       throw new AppError("ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION", {
         detail: `purgeTeacherRecord P2003 for teacher ${teacher.id}`,
       });
+    }
+
+    // AFTER the commit, never before, and best-effort: the same ordering rule
+    // the Supabase auth delete below follows. A failed transaction must not
+    // leave a live `User` row pointing at objects that are already gone, and a
+    // failed removal leaves only an orphan in the bucket. A SOFT delete keeps
+    // the photo — this is the hard purge, and it is the only path that deletes.
+    if (teacher.avatarPath) {
+      await removeAvatarObjects([teacher.avatarPath, thumbPathFor(teacher.avatarPath)]);
     }
 
     let authDeleted = false;

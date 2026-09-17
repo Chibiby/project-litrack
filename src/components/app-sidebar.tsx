@@ -47,6 +47,8 @@ import {
 interface AppSidebarProps {
   role: UserRole;
   userName: string;
+  /** Omitted by the non-`RoleShell` fallback path, which has no user row to read it from. */
+  avatarPath?: string | null;
   schoolName?: string;
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
@@ -240,6 +242,7 @@ function NavLink({
 export function AppSidebar({
   role,
   userName,
+  avatarPath = null,
   schoolName,
   grades,
   isSuperAdminView,
@@ -447,6 +450,7 @@ export function AppSidebar({
               <UserAccountMenu
                 role={accountRole}
                 userName={userName}
+                avatarPath={avatarPath ?? null}
                 roleLabel={roleLabel}
                 side="top"
                 align="start"

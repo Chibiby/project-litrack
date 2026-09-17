@@ -25,6 +25,7 @@ interface RoleShellProps {
   /** Keys the "hide the assistant on this phone" preference to this account. */
   userId: string;
   userName: string;
+  avatarPath: string | null;
   schoolName?: string;
   grades?: { id: string; label: string; hasAral?: boolean }[];
   isSuperAdminView?: boolean;
@@ -84,6 +85,7 @@ export function RoleShell({
   role,
   userId,
   userName,
+  avatarPath,
   schoolName,
   grades,
   isSuperAdminView,
@@ -111,6 +113,7 @@ export function RoleShell({
           <AppSidebar
             role={role}
             userName={userName}
+            avatarPath={avatarPath}
             schoolName={schoolName}
             grades={grades}
             isSuperAdminView={isSuperAdminView}
@@ -137,6 +140,7 @@ export function RoleShell({
             <AppHeader
               role={role}
               userName={userName}
+              avatarPath={avatarPath}
               schoolName={schoolName}
               roleLabel={roleLabel}
               grades={grades}

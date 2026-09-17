@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { thumbPathFor } from "@/lib/avatars/paths";
 
 /**
  * `/admin/archive`'s four server actions — restore or permanently delete one
@@ -113,6 +114,16 @@ const createSupabaseAdminClient = vi.fn(() => {
 });
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => createSupabaseAdminClient(),
+}));
+
+// ── avatar storage — invariant 14: a hard purge removes the user's photo
+// objects only AFTER the transaction commits ───────────────────────────────
+
+const removeAvatarObjects = vi.fn(async (paths: string[]) => {
+  order.push(`removeAvatarObjects:${paths.length}`);
+});
+vi.mock("@/lib/supabase/avatar-storage", () => ({
+  removeAvatarObjects: (...args: unknown[]) => removeAvatarObjects(...(args as [string[]])),
 }));
 
 // ── cache ────────────────────────────────────────────────────────────────
@@ -575,6 +586,44 @@ describe("purgeRemovedTeacher", () => {
     const supabaseIndex = order.indexOf("createSupabaseAdminClient");
     expect(commitIndex).toBeGreaterThanOrEqual(0);
     expect(supabaseIndex).toBeGreaterThan(commitIndex);
+  });
+
+  it("removes the purged teacher's avatar objects only AFTER the transaction commits (invariant 14)", async () => {
+    const avatarPath = `${TEACHER_ID}/aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa.webp`;
+    userFindFirst.mockResolvedValue(removedTeacher({ avatarPath }));
+
+    await purgeRemovedTeacher(fd(TEACHER_ID));
+
+    expect(removeAvatarObjects).toHaveBeenCalledWith([avatarPath, thumbPathFor(avatarPath)]);
+    const commitIndex = order.indexOf("transaction:commit");
+    const removeIndex = order.indexOf("removeAvatarObjects:2");
+    expect(commitIndex).toBeGreaterThanOrEqual(0);
+    expect(removeIndex).toBeGreaterThan(commitIndex);
+  });
+
+  it("never touches the avatar objects when a purge with a photo has no photo to purge", async () => {
+    userFindFirst.mockResolvedValue(removedTeacher({ avatarPath: null }));
+
+    await purgeRemovedTeacher(fd(TEACHER_ID));
+
+    expect(removeAvatarObjects).not.toHaveBeenCalled();
+  });
+
+  it("does not remove the avatar objects when the purge transaction throws", async () => {
+    const avatarPath = `${TEACHER_ID}/bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb.webp`;
+    userFindFirst.mockResolvedValue(removedTeacher({ avatarPath }));
+    transaction.mockImplementation(async () => {
+      order.push("transaction:start");
+      throw new Error("purgeTeacherRecord failed");
+    });
+
+    const res = await purgeRemovedTeacher(fd(TEACHER_ID));
+
+    expect(res).toMatchObject({ ok: false });
+    expect(order).not.toContain("transaction:commit");
+    expect(removeAvatarObjects).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
   });
 
   it("a Supabase deleteUser failure does not turn a successful purge into a reported failure", async () => {

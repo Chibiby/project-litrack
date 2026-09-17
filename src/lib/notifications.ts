@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import type { TermPeriod, UnlockScope, UserRole } from "@prisma/client";
 import { TERM_PERIOD_LABELS, UNLOCK_SCOPE_LABELS } from "@/lib/constants/enum-labels";
+import { roleSettingsProfilePath } from "@/lib/auth/roles";
 import { formatWeekRange } from "@/lib/week-range";
 import { formatMonthLabel } from "@/lib/month-range";
 import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
+import type { ShellNotification } from "@/components/shell/notifications-menu";
 
 /**
  * `expiresAt` (a real UTC instant, e.g. `UnlockGrant.expiresAt`) rendered as
@@ -206,6 +208,170 @@ export async function getUnreadAralAssignments(user: {
       href,
     };
   });
+}
+
+/**
+ * Record that somebody other than the owner removed `recipientId`'s profile
+ * photo.
+ *
+ * Never throws, same posture as `notifyAralAssigned`: the removal has already
+ * committed and the object is already gone, so failing the moderator's action
+ * over the courtesy message would misreport what happened.
+ *
+ * Self-removal writes nothing — a person who removes their own photo does not
+ * need to be told. `schoolId` is the TARGET's: `Notification.schoolId` is
+ * required and the row belongs to the recipient's school, not the actor's. The
+ * caller skips this entirely for a target with no school (a Super Admin), which
+ * is why there is no placeholder here to invent one.
+ */
+export async function notifyProfilePhotoRemoved(input: {
+  schoolId: string;
+  recipientId: string;
+  actorId: string;
+}): Promise<void> {
+  if (input.recipientId === input.actorId) return;
+
+  try {
+    await prisma.notification.create({
+      data: {
+        schoolId: input.schoolId,
+        recipientId: input.recipientId,
+        actorId: input.actorId,
+        type: "PROFILE_PHOTO_REMOVED",
+        learnerIds: [],
+      },
+    });
+  } catch (err) {
+    console.error("[notifications] PROFILE_PHOTO_REMOVED write failed:", err);
+  }
+}
+
+export type ProfilePhotoAlert = {
+  id: string;
+  /** "Your School Head removed your profile photo." */
+  title: string;
+  description: string;
+  href: string;
+};
+
+/**
+ * The recipient's unread photo-removal notices, newest first.
+ *
+ * Tenant-scoped on `schoolId` as well as `recipientId`, for the same reason
+ * `getUnreadAralAssignments` is. No learner is involved, so `learnerIds` is
+ * empty on these rows and nothing extra is looked up.
+ *
+ * The sentence names the actor the way the recipient knows them, through the
+ * same `honorificFor` the ARAL alerts use. With no actor row left (the account
+ * was deleted and the FK set null) it falls back to "Your School Head", which
+ * is who removes a teacher's photo in every ordinary case.
+ */
+export async function getUnreadProfilePhotoRemovals(user: {
+  id: string;
+  schoolId: string;
+  role: UserRole;
+}): Promise<ProfilePhotoAlert[]> {
+  const rows = await prisma.notification.findMany({
+    where: {
+      recipientId: user.id,
+      schoolId: user.schoolId,
+      type: "PROFILE_PHOTO_REMOVED",
+      readAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+    take: FEED_LIMIT,
+    select: {
+      id: true,
+      actor: {
+        select: {
+          fullName: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          teacherProfile: { select: { designation: true } },
+        },
+      },
+    },
+  });
+
+  const href = roleSettingsProfilePath(user.role);
+  return rows.map((row) => {
+    const name =
+      row.actor?.fullName?.trim() ||
+      [row.actor?.firstName, row.actor?.lastName].filter(Boolean).join(" ").trim();
+    const actorName = row.actor
+      ? name
+        ? `${honorificFor(row.actor)} ${name}`
+        : honorificFor(row.actor)
+      : "Your School Head";
+
+    return {
+      id: row.id,
+      title: `${actorName} removed your profile photo.`,
+      description: "You can upload a new one from Settings → Profile.",
+      href,
+    };
+  });
+}
+
+/**
+ * Clear this recipient's waiting photo-removal notices.
+ *
+ * No id list: unlike `markUnlockAlertsRead` and `dismissAralAssignmentAlerts`,
+ * nothing here comes from a client to trust or distrust. This is called from
+ * the one page the notice points at — `Settings → Profile`
+ * (`roleSettingsProfilePath`) — as a side effect of that page rendering, the
+ * same "arriving is what clears it" contract `markChatNotificationsRead`
+ * (`src/lib/chat/notifications.ts`) gives a chat mention when its channel is
+ * opened, scoped the same way: by recipient and `type`, not by which rows a
+ * caller claims to have seen. A write from inside a server component's
+ * render is an established shape in this codebase — `resolveSchoolContext`
+ * (`src/lib/school-context.ts`) writes an `ADMIN_SCHOOL_VIEW` audit row the
+ * same way, called directly from `/school-head/**` page components — so this
+ * needs no server action of its own.
+ */
+export async function markProfilePhotoRemovalsRead(input: {
+  recipientId: string;
+  schoolId: string;
+}): Promise<void> {
+  await prisma.notification.updateMany({
+    where: {
+      recipientId: input.recipientId,
+      schoolId: input.schoolId,
+      type: "PROFILE_PHOTO_REMOVED",
+      readAt: null,
+    },
+    data: { readAt: new Date() },
+  });
+}
+
+/**
+ * Photo-removal notices for the header bell, in the shape the bell wants.
+ *
+ * A pure read — composed from `getUnreadProfilePhotoRemovals` and left
+ * unread. The row must keep showing on every page until the recipient
+ * actually lands on `Settings → Profile`, where `markProfilePhotoRemovalsRead`
+ * clears it; marking it read here, at display time, would mean it is gone
+ * again by the very next navigation and a recipient who never happens to
+ * open the bell never sees it at all.
+ */
+export async function getProfilePhotoBellNotifications(user: {
+  id: string;
+  schoolId: string;
+  role: UserRole;
+}): Promise<ShellNotification[]> {
+  const rows = await getUnreadProfilePhotoRemovals(user);
+  if (rows.length === 0) return [];
+
+  // Amber, the same tone `getChatNotifications` gives a direct message — an
+  // account-level notice rather than a thread someone was pulled into (violet).
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    href: row.href,
+    tone: "amber" as const,
+  }));
 }
 
 export type UnlockAlert = {

@@ -101,6 +101,7 @@ export const managedTeacherSelect = {
   id: true,
   fullName: true,
   email: true,
+  avatarPath: true,
   profileCompleted: true,
   approvedAt: true,
   // A LIST since Wave A of multi-advisory: a teacher may advise up to three.
@@ -141,6 +142,7 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
     id: t.id,
     fullName: t.fullName,
     email: t.email,
+    avatarPath: t.avatarPath,
     profileCompleted: t.profileCompleted,
     approvedAt: t.approvedAt?.toISOString() ?? null,
     learnerCount: t._count.managedLearners,

@@ -260,6 +260,27 @@ export const AUDIT_ACTIONS = {
   SUPER_ADMIN_RETIRE: "SUPER_ADMIN_RETIRE",
 
   /**
+   * Profile photos, `resource: "User"`.
+   *
+   * `USER_AVATAR_UPLOAD` and `USER_AVATAR_REMOVE` are the account holder acting
+   * on their own photo; `USER_AVATAR_MODERATE_REMOVE` is somebody else removing
+   * it — a School Head on a teacher in their own school, or a Super Admin on
+   * anyone. They are three strings rather than one with a flag because the
+   * question an auditor asks of the third is different: it names a person whose
+   * photo was taken down by someone with authority over them, and that must be
+   * answerable without reading the metadata.
+   *
+   * Metadata is object paths, the sniffed mime, byte sizes, and — on the
+   * moderation row — the `basis` `decideAvatarModeration` decided on plus a
+   * `crossTenant` flag. NEVER a public URL (an audit row is read back in two
+   * UIs, and a URL in one is a live link to a face), never a name, never an
+   * email.
+   */
+  USER_AVATAR_UPLOAD: "USER_AVATAR_UPLOAD",
+  USER_AVATAR_REMOVE: "USER_AVATAR_REMOVE",
+  USER_AVATAR_MODERATE_REMOVE: "USER_AVATAR_MODERATE_REMOVE",
+
+  /**
    * Global Archive (`/admin/archive`) restore and permanent delete.
    *
    * Deliberately NOT reusing `LEARNER_RESTORE` (means "cleared `archivedAt`")

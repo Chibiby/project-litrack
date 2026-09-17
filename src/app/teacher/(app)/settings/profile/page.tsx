@@ -5,7 +5,9 @@ import { getSchoolName } from "@/lib/cache/school";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { TEACHER_POSITION_LABELS } from "@/lib/constants/enum-labels";
 import { computeProfileCompletion } from "@/lib/teachers/profile-completion";
+import { markProfilePhotoRemovalsRead } from "@/lib/notifications";
 import { AppShell } from "@/components/app-shell";
+import { ProfilePhotoCard } from "@/components/profile-photo/profile-photo-card";
 import { TeacherProfileForm } from "@/components/forms/teacher-profile-form";
 import { TeacherProfileSummary } from "@/components/settings/teacher-profile-summary";
 import { TeacherSettingsShell } from "@/components/settings/teacher-settings-shell";
@@ -33,6 +35,14 @@ export default async function TeacherSettingsProfilePage() {
     // School-scoped by the session's own schoolId (`where: { id }`), cached.
     getSchoolName(user.schoolId),
     readTestLabSession(user),
+    // This IS the page a profile-photo-removal notice points at — landing here
+    // is what clears it from the bell. Never throws: a failed clear only means
+    // the row repeats on the next screen, not that this page fails to render.
+    markProfilePhotoRemovalsRead({ recipientId: user.id, schoolId: user.schoolId }).catch(
+      (err) => {
+        console.error("[teacher/settings/profile] photo notice mark-read failed:", err);
+      }
+    ),
   ]);
 
   const gradeLevels = grades.map((g) => ({
@@ -65,6 +75,10 @@ export default async function TeacherSettingsProfilePage() {
       hideTitle
     >
       <TeacherSettingsShell active="profile" bannerSrc={teacherBannerSrc(profile?.gender)}>
+        <ProfilePhotoCard
+          name={user.fullName || `${user.firstName} ${user.lastName}`}
+          avatarPath={user.avatarPath}
+        />
         <TeacherProfileForm
           presentation="edit"
           gradeLevels={gradeLevels}

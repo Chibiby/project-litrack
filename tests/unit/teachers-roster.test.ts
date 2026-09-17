@@ -31,6 +31,7 @@ const BASE = {
   id: "teacher-marivic",
   fullName: "Marivic Cruz",
   email: "marivic@example.test",
+  avatarPath: null,
   profileCompleted: true,
   approvedAt: new Date(2026, 5, 1),
   advisorySections: [],

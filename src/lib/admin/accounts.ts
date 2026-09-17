@@ -49,6 +49,7 @@ export type AccountRow = {
   id: string;
   role: UserRole;
   fullName: string;
+  avatarPath: string | null;
   schoolId: string | null;
   school: { id: string; name: string; schoolIdCode: string } | null;
   signIn: AccountSignIn;
@@ -179,6 +180,7 @@ type AccountsPageUser = {
   lastName: string;
   email: string;
   username: string | null;
+  avatarPath: string | null;
   schoolId: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
@@ -248,6 +250,7 @@ export async function getAccountsPage(
         lastName: true,
         email: true,
         username: true,
+        avatarPath: true,
         schoolId: true,
         isActive: true,
         mustChangePassword: true,
@@ -274,6 +277,7 @@ export async function getAccountsPage(
       id: user.id,
       role: user.role,
       fullName: user.fullName || `${user.firstName} ${user.lastName}`.trim(),
+      avatarPath: user.avatarPath,
       schoolId: user.schoolId,
       school: user.school,
       signIn: accountSignIn(user),

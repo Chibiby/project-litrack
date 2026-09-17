@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -10,8 +12,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ConfirmAction } from "@/components/confirm-action";
+import { UserAvatar } from "@/components/user-avatar";
 import { getAccountProfile, type AccountProfile } from "@/lib/actions/accounts";
+import { removeUserAvatar } from "@/lib/actions/avatar";
 import {
   ADVISORY_MODE_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -57,9 +63,34 @@ export function AccountProfileDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const router = useRouter();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removingPhoto, setRemovingPhoto] = useState(false);
+
+  const removePhoto = async () => {
+    setRemovingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.set("userId", row.id);
+      const res = await removeUserAvatar(fd);
+      if (!res.ok) {
+        toast.error(res.error);
+        throw new Error(res.error);
+      }
+      if (res.dryRun) {
+        // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
+        // as a toast since this is a click action, not a persistent form.
+        toast("Test Lab — no photo was actually removed.");
+        return;
+      }
+      toast.success(`Removed ${row.fullName}'s photo`);
+      router.refresh();
+    } finally {
+      setRemovingPhoto(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -92,8 +123,41 @@ export function AccountProfileDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{row.fullName}</DialogTitle>
-          <DialogDescription>{USER_ROLE_LABELS[row.role]}</DialogDescription>
+          <div className="flex items-center gap-4">
+            <UserAvatar
+              name={row.fullName}
+              avatarPath={row.avatarPath}
+              size={96}
+              variant="full"
+              eager
+            />
+            <div className="min-w-0 space-y-1.5">
+              <DialogTitle>{row.fullName}</DialogTitle>
+              <DialogDescription>{USER_ROLE_LABELS[row.role]}</DialogDescription>
+              {row.avatarPath ? (
+                <ConfirmAction
+                  title="Remove profile photo?"
+                  description={`${row.fullName}'s current photo will be deleted. They can upload a new one from their Settings → Profile page.`}
+                  confirmLabel="Remove photo"
+                  variant="destructive"
+                  disabled={removingPhoto}
+                  trigger={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      loading={removingPhoto}
+                      loadingText="Removing…"
+                      disabled={removingPhoto}
+                    >
+                      Remove photo
+                    </Button>
+                  }
+                  onConfirm={removePhoto}
+                />
+              ) : null}
+            </div>
+          </div>
         </DialogHeader>
 
         {loading && !profile ? (

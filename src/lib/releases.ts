@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.5.0",
+    date: "2026-09-18",
+    title: "Profile photos",
+    announce: true,
+    fixes: [
+      "You can now add a profile photo. Open Settings → Profile, choose a picture, then drag and zoom to frame your face before saving. Your photo appears in the top bar and the side menu.",
+      "Pick any photo from your phone or computer — LITRACK shrinks it for you, so a large picture will not use up your data. Location details that phones store inside a photo are removed before it is saved.",
+      "You can change or remove your photo at any time from the same page.",
+      { text: "You can remove a teacher's photo from the Teachers page if it is not appropriate. The teacher is told their photo was removed.", roles: ["SCHOOL_HEAD"] },
+      { text: "You can remove any account's photo from Accounts, or from the account's profile window.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.4.1",
     date: "2026-09-18",
     title: "Behind-the-scenes clean-up",

@@ -18,12 +18,14 @@ import {
 } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/confirm-action";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   clearRejectedTeacher,
   removeTeacher,
   setTeacherActive,
 } from "@/lib/actions/school-head";
 import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
+import { removeUserAvatar } from "@/lib/actions/avatar";
 import { advisoryCapFor, advisoryCapReason } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL, UNASSIGNED_CHIP_LABEL } from "@/lib/teachers/floating-copy";
 import { removalAdvisoryNote } from "@/lib/teachers/removal-copy";
@@ -53,6 +55,7 @@ export type ActiveTeacherRow = {
   id: string;
   fullName: string;
   email: string;
+  avatarPath: string | null;
   profileCompleted: boolean;
   approvedAt: string | null;
   /** Advisory learners — removal leaves them with no adviser; it does not block. */
@@ -272,13 +275,15 @@ function TeacherManageActions({
   busy,
   onSetActive,
   onRemove,
+  onRemovePhoto,
 }: {
   row: ActiveTeacherRow;
   mode: "active" | "inactive";
   /** Which of this row's actions is in flight, or `null` when the row is idle. */
-  busy: "setActive" | "remove" | null;
+  busy: "setActive" | "remove" | "removePhoto" | null;
   onSetActive: (row: ActiveTeacherRow, isActive: boolean) => Promise<void>;
   onRemove: (row: ActiveTeacherRow) => Promise<void>;
+  onRemovePhoto: (row: ActiveTeacherRow) => Promise<void>;
 }) {
   // The server blocks removal only while the teacher is someone's designated
   // ARAL teacher. Mirror it here so the button explains itself instead of
@@ -342,6 +347,27 @@ function TeacherManageActions({
           onConfirm={() => onSetActive(row, true)}
         />
       )}
+      {row.avatarPath ? (
+        <ConfirmAction
+          title="Remove profile photo?"
+          description={`${row.fullName}'s current photo will be deleted. They can upload a new one from Settings → Profile.`}
+          confirmLabel="Remove photo"
+          variant="destructive"
+          disabled={rowBusy}
+          trigger={
+            <Button
+              size="sm"
+              variant="outline"
+              loading={busy === "removePhoto"}
+              loadingText="Removing…"
+              disabled={rowBusy}
+            >
+              Remove photo
+            </Button>
+          }
+          onConfirm={() => onRemovePhoto(row)}
+        />
+      ) : null}
       <ConfirmAction
         title="Remove teacher?"
         description={blockedReason ?? removeDescription}
@@ -615,6 +641,27 @@ function TeachersManagedTable({
     }).finally(() => setActingKey(null));
   };
 
+  const onRemovePhoto = (row: ActiveTeacherRow) => {
+    setActingKey(`${row.id}:removePhoto`);
+    return runOptimistic(startRowTransition, async () => {
+      const fd = new FormData();
+      fd.set("userId", row.id);
+      const res = await removeUserAvatar(fd);
+      if (!res.ok) {
+        toast.error(res.error);
+        throw new Error(res.error);
+      }
+      if (res.dryRun) {
+        // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
+        // as a toast since this is a click action, not a persistent form.
+        toast("Test Lab — no photo was actually removed.");
+        return;
+      }
+      toast.success(`Removed ${row.fullName}'s photo`);
+      router.refresh();
+    }).finally(() => setActingKey(null));
+  };
+
   // Name, Email, Role, Grade & section, ARAL, Profile, Approved (+ Actions when editable).
   const colSpan = readOnly ? 7 : 8;
 
@@ -731,10 +778,22 @@ function TeachersManagedTable({
                     ? ("setActive" as const)
                     : actingKey === `${row.id}:remove`
                       ? ("remove" as const)
-                      : null;
+                      : actingKey === `${row.id}:removePhoto`
+                        ? ("removePhoto" as const)
+                        : null;
                 return (
                 <TableRow key={row.id}>
-                  <TableCell className="font-medium">{row.fullName}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <UserAvatar
+                        name={row.fullName}
+                        avatarPath={row.avatarPath}
+                        size={32}
+                        variant="thumb"
+                      />
+                      <span>{row.fullName}</span>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
                   <TableCell className="text-sm">
                     {row.designation === null ? (
@@ -815,6 +874,7 @@ function TeachersManagedTable({
                       busy={rowBusy}
                       onSetActive={onSetActive}
                       onRemove={onRemove}
+                      onRemovePhoto={onRemovePhoto}
                     />
                   ) : null}
                 </TableRow>

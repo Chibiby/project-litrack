@@ -4,6 +4,7 @@ import { getSchoolName } from "@/lib/cache/school";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
+import { getProfilePhotoBellNotifications } from "@/lib/notifications";
 import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -57,12 +58,27 @@ export default async function SchoolHeadAppLayout({
         role={user.role}
         userId={user.id}
         userName={userName}
+        avatarPath={user.avatarPath}
         schoolName={schoolName}
         aiEnabled={geminiConfigured()}
         // Not while an admin impersonates this head: `user` IS the head's own
         // account then, and acknowledging would stamp their row — the real head
         // would never be shown the release they have not read.
         lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}
+        // Not awaited: streamed through RoleShell/AppHeader as a promise so the
+        // sidebar and header paint before the notification query resolves. Only
+        // a real School Head with a school can hold one — an impersonating
+        // Super Admin gets the menu's empty state instead of a query with no
+        // school.
+        notifications={
+          user.role === "SCHOOL_HEAD" && user.schoolId
+            ? getProfilePhotoBellNotifications({
+                id: user.id,
+                schoolId: user.schoolId,
+                role: user.role,
+              })
+            : []
+        }
       >
         {children}
       </RoleShell>

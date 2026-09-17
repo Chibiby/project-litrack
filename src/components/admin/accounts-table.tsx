@@ -19,6 +19,7 @@ import {
   PasswordCell,
 } from "@/components/admin/account-row-actions";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -402,9 +403,17 @@ export function AccountsTable({
                     {rows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell className="py-2.5 pl-4">
-                          <span className="text-sm font-medium">
-                            {row.fullName}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <UserAvatar
+                              name={row.fullName}
+                              avatarPath={row.avatarPath}
+                              size={32}
+                              variant="thumb"
+                            />
+                            <span className="text-sm font-medium">
+                              {row.fullName}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="py-2.5">
                           <Badge
@@ -450,11 +459,19 @@ export function AccountsTable({
                     className="rounded-xl border bg-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate font-medium">{row.fullName}</h3>
-                        <Badge variant="outline" className="mt-1">
-                          {USER_ROLE_LABELS[row.role]}
-                        </Badge>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <UserAvatar
+                          name={row.fullName}
+                          avatarPath={row.avatarPath}
+                          size={32}
+                          variant="thumb"
+                        />
+                        <div className="min-w-0">
+                          <h3 className="truncate font-medium">{row.fullName}</h3>
+                          <Badge variant="outline" className="mt-1">
+                            {USER_ROLE_LABELS[row.role]}
+                          </Badge>
+                        </div>
                       </div>
                       <StatusCell row={row} />
                     </div>

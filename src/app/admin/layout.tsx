@@ -27,6 +27,7 @@ export default async function AdminLayout({
         role={user.role}
         userId={user.id}
         userName={user.fullName || user.email}
+        avatarPath={user.avatarPath}
         aiEnabled={geminiConfigured()}
         // Not awaited: streamed through RoleShell/AppHeader as a promise so the
         // sidebar and header paint before the notifications query resolves.

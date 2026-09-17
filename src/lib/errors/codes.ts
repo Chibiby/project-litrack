@@ -227,6 +227,49 @@ export const ERRORS = {
       "This account can't be permanently deleted yet — a pending database update hasn't been applied. The account stays safely removed in the meantime; ask your division admin or developer to apply the update, then try again.",
   },
 
+  // ── Profile photos ───────────────────────────────────────────────────────
+  /**
+   * The raw file a person picked, refused before it is even decoded. Client
+   * side only — the server never receives the source, just the two re-encoded
+   * objects made from it.
+   */
+  AVATAR_SOURCE_TOO_LARGE: {
+    status: 413,
+    severity: "user",
+    message: "That picture file is too large. Pick one smaller than 5 MB.",
+  },
+  /**
+   * The uploaded bytes are not a plain square photo of an accepted type. One
+   * message for every reason on purpose: the person's next step is the same
+   * whether the file was the wrong type, not square, animated, or carried
+   * camera metadata we refuse to store.
+   */
+  AVATAR_FILE_INVALID: {
+    status: 422,
+    severity: "user",
+    message: "That photo couldn't be used. Pick a JPG, PNG or WebP picture and try again.",
+  },
+  AVATAR_FILE_TOO_LARGE: {
+    status: 413,
+    severity: "user",
+    message: "That photo is too large to save. Crop it again or pick a smaller picture.",
+  },
+  /**
+   * The compare-and-swap lost: the photo on the account changed between this
+   * request reading it and writing it. Nothing was deleted, and trying again
+   * from a fresh page works.
+   */
+  AVATAR_CHANGED: {
+    status: 409,
+    severity: "user",
+    message: "Your profile photo changed somewhere else while this was uploading. Refresh the page and try again.",
+  },
+  AVATAR_STORAGE_FAILED: {
+    status: 502,
+    severity: "system",
+    message: "Couldn't save the profile photo. Try again in a few minutes.",
+  },
+
   // ── Our side ─────────────────────────────────────────────────────────────
   DB_CONFLICT: {
     status: 409,

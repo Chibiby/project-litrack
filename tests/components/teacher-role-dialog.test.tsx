@@ -45,6 +45,7 @@ const ROW: ActiveTeacherRow = {
   id: "teacher-1",
   fullName: "Marivic Cruz",
   email: "marivic@example.test",
+  avatarPath: null,
   profileCompleted: true,
   approvedAt: "2026-06-01T00:00:00.000Z",
   learnerCount: 20,

@@ -1227,6 +1227,107 @@ promise `number` — fix forward, per the migration's header comment.
 
 ---
 
+## (q) User profile photos  —  Sep 2026
+
+`20260918000001_user_avatar_path` (additive `User.avatarPath` column, SQL-only
+`User_avatarPath_shape` CHECK, `NotificationType` value
+`PROFILE_PHOTO_REMOVED`) plus `prisma/storage-avatars.sql` (bucket `avatars`
++ one restrictive storage policy — not a Prisma migration; see that file's
+header for why). Design:
+`docs/superpowers/specs/2026-09-18-user-profile-photos-design.md`.
+
+### Apply order
+
+1. **Migrate first, from the branch containing the migration**, against the
+   production `DIRECT_URL` resolved the same way section **(b)** requires —
+   confirm the Hyperdrive origin (`npx wrangler hyperdrive list`) before
+   using any connection string, `.env.local` is not authoritative:
+
+   ```powershell
+   npx prisma migrate deploy
+   ```
+
+   Confirm `npx prisma migrate status` reports up to date afterward.
+
+2. **Then** apply the storage bucket + policy, also against the resolved
+   production `DIRECT_URL`:
+
+   ```powershell
+   npx prisma db execute --file prisma/storage-avatars.sql --url $env:DIRECT_URL
+   ```
+
+   `db execute --file` is the one `db execute` use this doc sanctions for a
+   human running a *file* of hand-written SQL against production — it is not
+   `migrate dev`/`deploy`/`db push`, and it writes no `_prisma_migrations`
+   bookkeeping row because `storage-avatars.sql` is deliberately not a
+   migration (the shadow DB has no `storage` schema — see that file's
+   header). Re-running it is safe; every statement in it is idempotent.
+
+3. **Verify**, using the commented queries at the bottom of
+   `prisma/storage-avatars.sql`:
+
+   ```sql
+   select id, name, public, file_size_limit, allowed_mime_types
+   from storage.buckets
+   where id = 'avatars';
+
+   select policyname, permissive, roles, cmd
+   from pg_policies
+   where schemaname = 'storage' and tablename = 'objects';
+   ```
+
+   Expect one `avatars` bucket row (`public = true`, `file_size_limit =
+   1048576`, `allowed_mime_types = {image/webp,image/jpeg,image/png}`) and
+   one `avatars_no_client_access` policy (`permissive = RESTRICTIVE`, `roles
+   = {anon,authenticated}`, `cmd = ALL`).
+
+4. **Only then push main.** Steps 1–3 are a hard prerequisite, not a
+   parallel option — see the failure mode below.
+
+### P2022 failure mode if the code ships first
+
+`getCurrentUser` (`src/lib/auth/session.ts`) loads the full `User` row with
+no narrow `select`, so a Prisma client regenerated against a schema that
+names `avatarPath` asks Postgres for that column on every signed-in
+request. If the application code reaches production before step 1 above,
+every authenticated page fails immediately with `P2022` ("column does not
+exist"), not only the avatar-display surfaces — the same failure mode
+`docs/migrations.md`'s `20260912000002_add_teacher_presence` note and this
+file's section **(i)** describe for `lastSeenReleaseVersion`. There is no
+mixed-version window that is safe here: migrate first, deploy second, in
+that order, every time.
+
+Skipping step 2 (the storage bucket) is a softer failure: uploads and
+removals fail server-side with `AVATAR_STORAGE_FAILED` (bucket/policy not
+found) rather than corrupting any row, because the write order in
+`src/lib/actions/avatar.ts` uploads to storage before it touches
+`User.avatarPath`. Still apply it before push — nobody should see that error
+in the field.
+
+### Rollback
+
+`avatarPath` is additive and starts every row at NULL, so the same
+"deploy the CHECK before it is possible to violate" reasoning as section
+**(p)** applies, but simpler: no existing row can violate
+`User_avatarPath_shape` (NULL always satisfies it), so there is no pre-check
+to run before applying, unlike **(p)**'s `TermGrade` xor CHECK. If a rollback
+of the *column* is ever needed, it is safe as long as `avatarPath` is
+NULL on every row — check first:
+
+```sql
+SELECT count(*) FROM "User" WHERE "avatarPath" IS NOT NULL;
+```
+
+At 0: drop the CHECK and the column. At any other count, dropping the
+column deletes the pointer to real, currently-displayed photos while the
+objects themselves remain in the bucket as orphans — escalate to the
+project owner rather than run it. Postgres cannot drop one value from an
+enum, so `PROFILE_PHOTO_REMOVED` cannot be rolled back at the database
+layer at all; leaving an unused enum value in place is the accepted cost,
+the same as every other enum addition in this project.
+
+---
+
 ## Related docs
 
 - `docs/deployment.md` — Vercel + env names

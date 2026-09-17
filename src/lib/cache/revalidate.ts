@@ -1,6 +1,8 @@
 import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
+import type { UserRole } from "@prisma/client";
 import * as tags from "@/lib/cache/tags";
+import { roleSettingsProfilePath } from "@/lib/auth/roles";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
@@ -206,6 +208,43 @@ export function revalidateSupportTicket(requesterId: string) {
  * grant row. There is no tag to emit for them, and adding one would suggest a
  * Data Cache entry exists where none does.
  */
+/**
+ * One user's profile photo was set or removed.
+ *
+ * Deliberately a short list, because `avatarPath` is never read inside
+ * `cachedQuery` — there is no Data Cache entry holding a photo and therefore no
+ * tag to expire. What these calls clear is the Router Cache on the surfaces
+ * that render the photo from a server read:
+ *
+ * 1. **The owner's own Settings → Profile page**, which is where the change was
+ *    made and the one page that must never show the old picture back.
+ * 2. **`/admin/accounts`**, the Super Admin accounts table and its account
+ *    profile dialog. Busted for every role, because that one table lists all
+ *    three and the admin who just moderated a photo is standing on it.
+ * 3. **The School Head teachers workspace**, but only for a TEACHER who still
+ *    has a school — that is the only list outside `/admin` that shows someone
+ *    else's photo. `revalidateSchoolHeadTeachers` is tenant-scoped, so it takes
+ *    the TARGET's `schoolId`, never the actor's: a Super Admin moderating a
+ *    teacher must clear that teacher's school, not the admin's (which is null).
+ *
+ * The shell avatar (header, sidebar, account menu) needs nothing here: every
+ * role layout is `force-dynamic` and reads `avatarPath` off `getCurrentUser`,
+ * so the next request already has it. The client also calls `router.refresh()`.
+ */
+export function revalidateUserAvatar({
+  role,
+  schoolId,
+}: {
+  role: UserRole;
+  schoolId: string | null;
+}) {
+  revalidatePath(roleSettingsProfilePath(role));
+  revalidatePath("/admin/accounts");
+  if (role === "TEACHER" && schoolId) {
+    revalidateSchoolHeadTeachers(schoolId);
+  }
+}
+
 export function revalidateUnlockGrants({ recipientIds }: { recipientIds: string[] }) {
   for (const recipientId of recipientIds) {
     revalidateSupportTicket(recipientId);

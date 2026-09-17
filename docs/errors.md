@@ -216,6 +216,11 @@ if this table and the code ever disagree, trust the code.
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |
 | `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` | 409 | user | This account can't be permanently deleted yet — a pending database update hasn't been applied. The account stays safely removed in the meantime; ask your division admin or developer to apply the update, then try again. |
+| `AVATAR_SOURCE_TOO_LARGE` | 413 | user | That picture file is too large. Pick one smaller than 5 MB. |
+| `AVATAR_FILE_INVALID` | 422 | user | That photo couldn't be used. Pick a JPG, PNG or WebP picture and try again. |
+| `AVATAR_FILE_TOO_LARGE` | 413 | user | That photo is too large to save. Crop it again or pick a smaller picture. |
+| `AVATAR_CHANGED` | 409 | user | Your profile photo changed somewhere else while this was uploading. Refresh the page and try again. |
+| `AVATAR_STORAGE_FAILED` | 502 | system | Couldn't save the profile photo. Try again in a few minutes. |
 | `DB_CONFLICT` | 409 | system | This conflicts with a record that already exists. Refresh the page and check before trying again. |
 | `DB_SCHEMA_OUT_OF_DATE` | 503 | system | Couldn't {verb}: the database is missing an update this version of LITRACK needs. Trying again won't help — ask your administrator to finish the pending update. |
 | `DB_UNAVAILABLE` | 503 | system | Couldn't {verb}: the database didn't respond in time. Wait a few seconds and try again. |
@@ -232,7 +237,24 @@ supply a value: `{verb}` = "finish that", `{resource}` = "Record", `{wait}` =
 
 An earlier draft of this catalog listed a 39th code, `NETWORK_UNREACHABLE`;
 that code was unused and was removed, before `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION`
-(below) brought the count back to 39.
+(below) brought the count back to 39. The five `AVATAR_*` codes take it to 44.
+
+### The `AVATAR_*` codes
+
+`AVATAR_SOURCE_TOO_LARGE` is the only one of the five the server never throws:
+it belongs to the crop dialog, which refuses an oversized source file before it
+decodes it. The server receives the two re-encoded objects, not the source.
+
+`AVATAR_FILE_INVALID` covers every way the uploaded bytes can fail
+`validateAvatarUpload` (`src/lib/avatars/validate-upload.ts`) other than size —
+wrong type, not square, out of the dimension range, animated, carrying EXIF or
+XMP, or the two objects not agreeing on a type. One message for all of them,
+because the person's next step is the same in every case, and because naming
+which check failed would describe our validator to whoever is probing it.
+
+`AVATAR_CHANGED` is the lost compare-and-swap in `src/lib/actions/avatar.ts`.
+It always means "nothing was deleted": an object is removed only after a CAS
+this request won.
 
 ### `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` (transitional)
 

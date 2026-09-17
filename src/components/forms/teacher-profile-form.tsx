@@ -8,11 +8,9 @@ import {
   AlertCircle,
   BookOpenCheck,
   Briefcase,
-  Camera,
   GraduationCap,
   Lock,
   Save,
-  Trash2,
   UserRound,
   X,
   type LucideIcon,
@@ -380,7 +378,6 @@ const SAVE_ERROR_ID = "teacher-profile-save-error";
 
 /** The Settings header's Save Changes sits outside the form and targets it by id. */
 const EDIT_FORM_ID = "teacher-profile-edit-form";
-const PHOTO_SOON_ID = "teacher-profile-photo-soon";
 
 /**
  * Field → the label the teacher actually sees above it. A summary that lists
@@ -1300,12 +1297,6 @@ export function TeacherProfileForm({
   );
 
   if (isEdit) {
-    const initials =
-      [values.firstName, values.lastName]
-        .map((part) => part.trim().charAt(0))
-        .join("")
-        .toUpperCase() || "?";
-
     return (
       <>
         <div className="grid grid-cols-2 gap-2 max-lg:order-first sm:flex sm:justify-end">
@@ -1420,48 +1411,6 @@ export function TeacherProfileForm({
             </div>
 
             <div className="flex flex-col gap-6">
-              <SettingsFormCard title="Profile Photo & Identity" icon={Camera}>
-                <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
-                  <span
-                    aria-hidden
-                    className="flex size-24 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold tracking-tight text-primary ring-4 ring-primary/5"
-                  >
-                    {initials}
-                  </span>
-                  <div className="min-w-0 space-y-2">
-                    <p className="text-sm font-medium text-foreground">
-                      A friendly face helps build a stronger learning community
-                    </p>
-                    <p className="text-xs text-muted-foreground">JPG, PNG or WEBP. Max 5MB.</p>
-                    <div className="flex flex-wrap justify-center gap-2 pt-1 sm:justify-start">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled
-                        aria-describedby={PHOTO_SOON_ID}
-                      >
-                        <Camera aria-hidden />
-                        Change Photo
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled
-                        aria-describedby={PHOTO_SOON_ID}
-                      >
-                        <Trash2 aria-hidden />
-                        Remove
-                      </Button>
-                    </div>
-                    <p id={PHOTO_SOON_ID} className="text-xs text-muted-foreground">
-                      Photo upload is coming soon.
-                    </p>
-                  </div>
-                </div>
-              </SettingsFormCard>
-
               <SettingsFormCard title="Professional Background" icon={GraduationCap}>
                 <div className="space-y-6">{professionalFields}</div>
               </SettingsFormCard>

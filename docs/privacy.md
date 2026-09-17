@@ -119,6 +119,40 @@ statement, so it follows `docs/migrate-checklist.md`, not an ad-hoc console.
 Admins. Say so in the privacy notice the schools are given; the alternative is
 a surprise during an audit.
 
+## Profile photos
+
+A profile photo is personal information about a member of staff. Learners have
+no photo anywhere in LITRACK; this is teachers, School Heads and Super Admins
+only, and it is always optional — an account with no photo shows initials and
+loses nothing.
+
+**What is stored.** The browser crops and re-encodes the picture before it
+leaves the device, which discards everything a camera writes alongside the
+image — most importantly the GPS coordinates a phone records. The server
+rejects any upload that still carries that metadata, so stripping it is not
+merely a promise made by the page. What lands in storage is two square images,
+512px and 128px, and what lands in the database is the object's key, not a URL.
+
+**Who can see it.** The photo is served from a public Supabase Storage bucket
+under a key nobody can guess (`<userId>/<random uuid>`). There is no listing:
+holding the public API key does not let anyone enumerate the bucket or discover
+a single photo. The practical consequence to be honest about is that anyone who
+obtains a photo's exact URL — by being shown it in the app, or by copying the
+link out of a browser — can keep opening it afterwards, without signing in.
+Photos are shown to people who can already see the person's name and role: the
+account owner, their School Head, and Super Admins.
+
+**Removal.** A person can remove their own photo at any time from
+Settings → Profile. A School Head can remove the photo of a teacher in their
+own school, and a Super Admin can remove any account's. A removal deletes the
+stored files outright — nothing is kept for review, and the audit log records
+only who removed whose photo and when. The owner is told through the
+notification bell when someone else removed it.
+
+Two limits worth stating plainly in a school's own privacy notice: a removed
+photo may still be served from a browser or CDN cache for up to 24 hours, and a
+URL that was already copied elsewhere before the removal cannot be recalled.
+
 ## Security measures in product
 
 - Private passwords (School ID is not the password), with the School Head

@@ -46,6 +46,7 @@ const SEARCH_PLACEHOLDER: Record<UserRole, string> = {
 export function AppHeader({
   role,
   userName,
+  avatarPath,
   schoolName,
   roleLabel,
   grades,
@@ -59,6 +60,8 @@ export function AppHeader({
   role: UserRole;
   /** Phone top bar only: avatar initials and account menu (v2). */
   userName?: string;
+  /** Phone top bar only: the account menu's avatar photo, when there is one. */
+  avatarPath?: string | null;
   /** Phone top bar only: shown under the wordmark (v2). */
   schoolName?: string;
   roleLabel?: string;
@@ -207,6 +210,7 @@ export function AppHeader({
           <UserAccountMenu
             role={role as AppRole}
             userName={userName}
+            avatarPath={avatarPath ?? null}
             roleLabel={roleLabel ?? role.toLowerCase().replaceAll("_", " ")}
             variant="avatar"
             className="lg:hidden"
