@@ -20,6 +20,7 @@ describe("computeSheetStats", () => {
         { id: "c", gradeLevelId: "g4" },
       ],
       subjectIdsByGrade,
+      gradeTypeByGrade: new Map(),
       scores: [
         { learnerId: "a", termSubjectId: "eng", score: 80 },
         { learnerId: "a", termSubjectId: "fil", score: 90 },
@@ -39,6 +40,7 @@ describe("computeSheetStats", () => {
         { id: "c", gradeLevelId: "g4" },
       ],
       subjectIdsByGrade,
+      gradeTypeByGrade: new Map(),
       scores: [
         { learnerId: "a", termSubjectId: "eng", score: 80 },
         { learnerId: "a", termSubjectId: "fil", score: 90 },
@@ -56,6 +58,7 @@ describe("computeSheetStats", () => {
     const stats = computeSheetStats({
       learners: [{ id: "a", gradeLevelId: "g3" }],
       subjectIdsByGrade,
+      gradeTypeByGrade: new Map(),
       scores: [
         { learnerId: "a", termSubjectId: "eng", score: 80 },
         { learnerId: "a", termSubjectId: "archived", score: 60 },
@@ -69,6 +72,7 @@ describe("computeSheetStats", () => {
     const stats = computeSheetStats({
       learners: [{ id: "k", gradeLevelId: "gk" }],
       subjectIdsByGrade,
+      gradeTypeByGrade: new Map(),
       scores: [],
     });
     expect(stats).toEqual({ total: 1, complete: 0, completionPct: 0, classAverage: null });
@@ -76,8 +80,69 @@ describe("computeSheetStats", () => {
 
   it("reports zeros and no average for an empty scope", () => {
     expect(
-      computeSheetStats({ learners: [], subjectIdsByGrade, scores: [] })
+      computeSheetStats({
+        learners: [],
+        subjectIdsByGrade,
+        gradeTypeByGrade: new Map(),
+        scores: [],
+      })
     ).toEqual({ total: 0, complete: 0, completionPct: 0, classAverage: null });
+  });
+
+  describe("Grade 1 (letter marks) via gradeTypeByGrade", () => {
+    const g1SubjectIdsByGrade = new Map([
+      ["g1", ["eng1"]],
+      ["g3", ["eng3", "fil3"]],
+    ]);
+    const gradeTypeByGrade = new Map([
+      ["g1", "G1"],
+      ["g3", "G3"],
+    ]);
+
+    it("counts a G1 learner whose cells are marks as complete", () => {
+      const stats = computeSheetStats({
+        learners: [{ id: "a", gradeLevelId: "g1" }],
+        subjectIdsByGrade: g1SubjectIdsByGrade,
+        gradeTypeByGrade,
+        scores: [{ learnerId: "a", termSubjectId: "eng1", score: null, mark: "ADVANCING" }],
+      });
+      expect(stats.complete).toBe(1);
+      expect(stats.completionPct).toBe(100);
+    });
+
+    it("excludes G1 learners from the class average even though they count as complete", () => {
+      const stats = computeSheetStats({
+        learners: [
+          { id: "a", gradeLevelId: "g1" },
+          { id: "b", gradeLevelId: "g3" },
+        ],
+        subjectIdsByGrade: g1SubjectIdsByGrade,
+        gradeTypeByGrade,
+        scores: [
+          { learnerId: "a", termSubjectId: "eng1", score: null, mark: "ADVANCING" },
+          { learnerId: "b", termSubjectId: "eng3", score: 80, mark: null },
+          { learnerId: "b", termSubjectId: "fil3", score: 90, mark: null },
+        ],
+      });
+      expect(stats.complete).toBe(2);
+      // Only b's (80+90)/2 = 85 counts; a's LETTER-scale row is excluded entirely.
+      expect(stats.classAverage).toBe(85);
+    });
+
+    it("treats a grade missing from gradeTypeByGrade as numeric", () => {
+      const stats = computeSheetStats({
+        learners: [{ id: "a", gradeLevelId: "g3" }],
+        subjectIdsByGrade: g1SubjectIdsByGrade,
+        // An empty scale map: every grade falls back to "", which
+        // termGradingScale treats as NUMERIC.
+        gradeTypeByGrade: new Map(),
+        scores: [
+          { learnerId: "a", termSubjectId: "eng3", score: 80, mark: null },
+          { learnerId: "a", termSubjectId: "fil3", score: 90, mark: null },
+        ],
+      });
+      expect(stats.classAverage).toBe(85);
+    });
   });
 });
 

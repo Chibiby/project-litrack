@@ -112,6 +112,7 @@ export default async function TeacherAppLayout({
       {!impersonating && <PostLoginSplash role="teacher" />}
       <RoleShell
         role={user.role}
+        userId={user.id}
         userName={userName}
         schoolName={schoolName}
         grades={grades}

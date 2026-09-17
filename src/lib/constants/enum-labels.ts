@@ -45,6 +45,36 @@ export const KINDER_COMPETENCY_RATING_SHORT_LABELS = {
   CONSISTENT: "CO",
 } as const;
 
+/**
+ * `TermMark` (the Grade 1 End of Terms letter-mark scale). Full-word labels,
+ * keyed by the stored enum value, which is itself the full word.
+ */
+export const TERM_MARK_LABELS = {
+  ADVANCING: "Advancing",
+  BENCHMARKING: "Benchmarking",
+  CONNECTING: "Connecting",
+  DEVELOPING: "Developing",
+  EMERGING: "Emerging",
+} as const;
+
+/** The letters the Grade 1 sheet shows (A–E). */
+export const TERM_MARK_SHORT_LABELS = {
+  ADVANCING: "A",
+  BENCHMARKING: "B",
+  CONNECTING: "C",
+  DEVELOPING: "D",
+  EMERGING: "E",
+} as const;
+
+/** Picker options, ordered A..E. */
+export const TERM_MARK_OPTIONS = (
+  ["ADVANCING", "BENCHMARKING", "CONNECTING", "DEVELOPING", "EMERGING"] as const
+).map((value) => ({
+  value,
+  short: TERM_MARK_SHORT_LABELS[value],
+  label: TERM_MARK_LABELS[value],
+}));
+
 export const ATTENDANCE_STATUS_LABELS = {
   PRESENT: "Present",
   ABSENT: "Absent",

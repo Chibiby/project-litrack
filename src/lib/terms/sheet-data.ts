@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, TermMark } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { classifyError } from "@/lib/errors/classify";
 import { reportError } from "@/lib/errors/report";
@@ -31,6 +31,12 @@ import { readUnlockState } from "@/lib/unlock/grants";
 export type SheetScope = {
   key: string;
   gradeLevelId: string;
+  /**
+   * Raw `GradeLevelType` of `gradeLevelId` ("G1", "G3"): picks the grading
+   * scale. Must come from the authorized placement or the tenant-scoped grade
+   * read the page already did, never from the URL.
+   */
+  gradeType: string;
   /** Null for a Super Admin's whole-grade scope. */
   sectionId: string | null;
   /** "Grade 3 - Atis" */
@@ -43,11 +49,22 @@ export type SheetScope = {
 export type SheetGroup = {
   key: string;
   gradeLevelId: string;
+  /** Raw `GradeLevelType`; `termGradingScale(gradeType)` says letters or numbers. */
+  gradeType: string;
   sectionId: string | null;
   label: string;
   subjects: { id: string; name: string }[];
   learners: { id: string; fullName: string; sectionLabel: string }[];
-  initialGrades: { learnerId: string; termSubjectId: string; score: number }[];
+  /**
+   * Saved cells. Exactly one of `score` / `mark` is non-null. A Grade 1 cell
+   * saved before letter marks can still hold a `score`.
+   */
+  initialGrades: {
+    learnerId: string;
+    termSubjectId: string;
+    score: number | null;
+    mark: TermMark | null;
+  }[];
   /** Row number (0-based) of the group's first learner on the combined list. */
   indexOffset: number;
 };
@@ -131,7 +148,7 @@ export async function loadTermSheet(args: {
         // Tenancy rides on the roster clause, so cells and rows cannot drift.
         learner: scopeWhere,
       },
-      select: { learnerId: true, termSubjectId: true, score: true },
+      select: { learnerId: true, termSubjectId: true, score: true, mark: true },
     }),
   ]);
 
@@ -140,6 +157,7 @@ export async function loadTermSheet(args: {
     subjectIdsByGrade: new Map(
       [...subjectsByGrade].map(([id, list]) => [id, list.map((s) => s.id)])
     ),
+    gradeTypeByGrade: new Map(scopes.map((s) => [s.gradeLevelId, s.gradeType])),
     scores,
   });
 
@@ -180,6 +198,7 @@ export async function loadTermSheet(args: {
     return {
       key: scope.key,
       gradeLevelId: scope.gradeLevelId,
+      gradeType: scope.gradeType,
       sectionId: scope.sectionId,
       label: scope.label,
       subjects,
@@ -191,7 +210,12 @@ export async function loadTermSheet(args: {
             learnerIds.has(g.learnerId) &&
             subjectIds.has(g.termSubjectId)
         )
-        .map((g) => ({ learnerId: g.learnerId, termSubjectId: g.termSubjectId, score: g.score })),
+        .map((g) => ({
+          learnerId: g.learnerId,
+          termSubjectId: g.termSubjectId,
+          score: g.score,
+          mark: g.mark,
+        })),
       indexOffset: slice.offset,
     };
   });

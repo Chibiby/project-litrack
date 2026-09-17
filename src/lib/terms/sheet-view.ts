@@ -1,4 +1,6 @@
+import type { TermMark } from "@prisma/client";
 import { generalAverage } from "@/lib/terms/average";
+import { rowGeneralAverage, type TermCell } from "@/lib/terms/grading-scale";
 import { LEARNER_LIST_DEFAULT_PAGE_SIZE } from "@/lib/learners/pagination";
 import type { TermPeriodValue } from "@/lib/terms/windows";
 
@@ -40,11 +42,14 @@ export function sheetHref(basePath: string, s: SheetUrlState, page?: number): st
 export type SheetStats = {
   /** Learners in scope. */
   total: number;
-  /** Learners with a score in every active subject of their grade. */
+  /** Learners with a score or mark in every active subject of their grade. */
   complete: number;
   /** `round(complete / total × 100)`, 0 when there is nobody in scope. */
   completionPct: number;
-  /** Mean of the complete learners' general averages, 2 decimals; null when none. */
+  /**
+   * Mean of the complete learners' general averages, 2 decimals; null when
+   * none. Grade 1 (letter marks) has no general average and is excluded.
+   */
   classAverage: number | null;
 };
 
@@ -60,13 +65,32 @@ export type SheetStats = {
 export function computeSheetStats(input: {
   learners: readonly { id: string; gradeLevelId: string }[];
   subjectIdsByGrade: ReadonlyMap<string, readonly string[]>;
-  scores: readonly { learnerId: string; termSubjectId: string | null; score: number }[];
+  /**
+   * Raw `GradeLevelType` per grade id. A LETTER-scale grade (Grade 1) still
+   * counts toward "complete" but never toward the class average. A grade
+   * missing from the map is treated as numeric.
+   *
+   * Required, like `subjectIdsByGrade`: an optional scale map is one a caller
+   * forgets, and forgetting it silently averages Grade 1's legacy numbers into
+   * a class average that is then shown as authoritative. Pass an empty map to
+   * mean "every grade here is numeric".
+   */
+  gradeTypeByGrade: ReadonlyMap<string, string>;
+  scores: readonly {
+    learnerId: string;
+    termSubjectId: string | null;
+    score: number | null;
+    mark?: TermMark | null;
+  }[];
 }): SheetStats {
-  const byLearner = new Map<string, Map<string, number>>();
+  const byLearner = new Map<string, Map<string, TermCell>>();
   for (const s of input.scores) {
     if (!s.termSubjectId) continue;
-    const cells = byLearner.get(s.learnerId) ?? new Map<string, number>();
-    cells.set(s.termSubjectId, s.score);
+    // A stored row always holds one value; the guard keeps a malformed row from
+    // counting as encoded.
+    if (s.score === null && !s.mark) continue;
+    const cells = byLearner.get(s.learnerId) ?? new Map<string, TermCell>();
+    cells.set(s.termSubjectId, { score: s.score, mark: s.mark ?? null });
     byLearner.set(s.learnerId, cells);
   }
 
@@ -76,10 +100,15 @@ export function computeSheetStats(input: {
     const subjectIds = input.subjectIdsByGrade.get(learner.gradeLevelId) ?? [];
     if (subjectIds.length === 0) continue;
     const cells = byLearner.get(learner.id);
-    const scores = subjectIds.map((id) => cells?.get(id));
-    if (scores.some((s) => s === undefined)) continue;
+    const rowCells = subjectIds.map((id) => cells?.get(id));
+    if (rowCells.some((c) => c === undefined)) continue;
     complete += 1;
-    const average = generalAverage(scores);
+    // Null for a LETTER-scale learner or a row holding a mark, so those learners
+    // are complete but stay out of the class average.
+    const average = rowGeneralAverage(
+      input.gradeTypeByGrade.get(learner.gradeLevelId) ?? "",
+      rowCells
+    );
     if (average !== null) averages.push(average);
   }
 

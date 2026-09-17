@@ -196,6 +196,59 @@ describe("termGradesSaveSchema", () => {
   });
 });
 
+describe("termGradesSaveSchema — Grade 1 letter marks", () => {
+  // A cell carries EITHER a score OR a mark, never both — enforced by the
+  // `.refine` — and "neither" is the legacy clear. Which grade may post which
+  // kind is a server-side decision (`termGradingScale`), not asserted here;
+  // the schema only asserts shape.
+  function withEntry(entry: Record<string, unknown>) {
+    const { score: _s, ...rest } = validEntry;
+    return { ...validSave, entries: [{ ...rest, ...entry }] };
+  }
+
+  it("accepts a mark-only cell", () => {
+    const result = termGradesSaveSchema.safeParse(withEntry({ mark: "BENCHMARKING" }));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.entries[0].mark).toBe("BENCHMARKING");
+    expect(result.data.entries[0].score).toBeUndefined();
+  });
+
+  it("accepts every TermMark value", () => {
+    for (const mark of ["ADVANCING", "BENCHMARKING", "CONNECTING", "DEVELOPING", "EMERGING"]) {
+      expect(termGradesSaveSchema.safeParse(withEntry({ mark })).success, mark).toBe(true);
+    }
+  });
+
+  it("accepts { score: null } as the legacy clear payload", () => {
+    const result = termGradesSaveSchema.safeParse(withEntry({ score: null }));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.entries[0].score).toBeNull();
+  });
+
+  it("accepts a cell with neither score nor mark set", () => {
+    const result = termGradesSaveSchema.safeParse(withEntry({}));
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a cell carrying both a score and a mark", () => {
+    const result = termGradesSaveSchema.safeParse(
+      withEntry({ score: 90, mark: "ADVANCING" })
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unrecognised mark value", () => {
+    const result = termGradesSaveSchema.safeParse(withEntry({ mark: "X" }));
+    expect(result.success).toBe(false);
+  });
+
+  it("still enforces the score floor at 60 when a score is posted instead of a mark", () => {
+    expect(termGradesSaveSchema.safeParse(withEntry({ score: 59 })).success).toBe(false);
+  });
+});
+
 describe("termGradesExportSchema", () => {
   it("accepts input with section and q omitted", () => {
     // Export from an unfiltered, unsearched sheet — the common case.

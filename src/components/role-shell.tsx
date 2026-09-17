@@ -22,6 +22,8 @@ export function useRoleShell() {
 
 interface RoleShellProps {
   role: UserRole;
+  /** Keys the "hide the assistant on this phone" preference to this account. */
+  userId: string;
   userName: string;
   schoolName?: string;
   grades?: { id: string; label: string; hasAral?: boolean }[];
@@ -74,6 +76,7 @@ interface RoleShellProps {
  */
 export function RoleShell({
   role,
+  userId,
   userName,
   schoolName,
   grades,
@@ -146,7 +149,7 @@ export function RoleShell({
 
           {/* Outside the offset wrapper: the widget is fixed to the viewport, so
               it must not sit inside a node whose margin animates with the rail. */}
-          <AssistantWidget role={role} userName={userName} aiEnabled={aiEnabled} />
+          <AssistantWidget role={role} userId={userId} userName={userName} aiEnabled={aiEnabled} />
 
           {trackTeacherPresence ? <TeacherPresenceHeartbeat /> : null}
 

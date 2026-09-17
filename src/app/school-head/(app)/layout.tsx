@@ -53,6 +53,7 @@ export default async function SchoolHeadAppLayout({
       {!impersonating && <PostLoginSplash role="school-head" />}
       <RoleShell
         role={user.role}
+        userId={user.id}
         userName={userName}
         schoolName={schoolName}
         aiEnabled={geminiConfigured()}

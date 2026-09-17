@@ -151,6 +151,7 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
   const scopes: SheetScope[] = inScope.map((p) => ({
     key: p.sectionId,
     gradeLevelId: p.gradeLevelId,
+    gradeType: p.gradeType,
     sectionId: p.sectionId,
     label: labelOf(p),
     gradeShort: shortGradeLabel(p.gradeLabel),

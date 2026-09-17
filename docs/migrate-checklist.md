@@ -85,6 +85,10 @@ Committed migrations (apply in order via `migrate deploy`):
   (nullable) with backfill, `TermGrade.subject` loosened to nullable. **Two of its
   indexes take the concurrent-build carve-out** — see section **(o)** below and
   `prisma/concurrent-indexes.sql` BATCH 3.
+- `20260917000001_term_grade_letter_mark` — Grade 1 End of Terms letter marks: new
+  `TermMark` enum, `TermGrade.score` loosened to nullable, additive
+  `TermGrade.mark` column, SQL-only `TermGrade_score_xor_mark` CHECK. No backfill.
+  **Apply before the code that writes `mark` ships** — see section **(p)** below.
 
 `migrate deploy` applies whatever is pending in this order; the list is here so you
 can eyeball what a given database is missing. Always confirm with the read-only
@@ -1108,6 +1112,94 @@ A non-zero count is not this checklist's rollback to perform on its own:
 escalate to the project owner. Keeping the custom subjects, migrating their
 scores back onto a `legacyArea`, and accepting the loss are product
 decisions, not a SQL rollback.
+
+---
+
+## (p) Grade 1 End of Terms letter mark  —  Sep 2026
+
+`20260917000001_term_grade_letter_mark`. **Apply before the code that writes
+`mark` ships.** Additive and inert on its own: old code keeps reading and
+writing `TermGrade.score` exactly as before, and an old Prisma client never
+selects a column it does not know about.
+
+### What it does
+
+| # | Statement(s) | What it does | Can it fail? |
+|---|---|---|---|
+| 1 | `CREATE TYPE "TermMark"` | DepEd's Grade 1 rating scale: Advancing, Benchmarking, Connecting, Developing, Emerging. | No. |
+| 2 | `ALTER TABLE "TermGrade" ADD COLUMN "mark"` + `ALTER COLUMN "score" DROP NOT NULL` | Additive nullable column plus loosening the existing `score` column. Every existing row already has a `score`, so nothing changes for it. | No. Widening only. |
+| 3 | `ALTER TABLE "TermGrade" ADD CONSTRAINT "TermGrade_score_xor_mark" CHECK (("score" IS NULL) <> ("mark" IS NULL))` | SQL-only, like `TermGrade_score_range` next to it — Prisma's schema language cannot express a CHECK. **Preserve both when editing TermGrade migrations.** Exactly one of `score`/`mark` per row. | Only if some existing row has neither `score` nor `mark` — see the pre-check below. |
+
+`TermGrade_score_range` (`CHECK ("score" BETWEEN 60 AND 100)`) already passes
+on NULL — Postgres treats a `BETWEEN` against NULL as satisfying a CHECK — so
+it alone would let a row through with neither column set. The new xor CHECK
+is what actually closes that gap.
+
+This migration does not restrict letter marks to Grade 1 — `TermGrade` has no
+direct grade-level column; that lives across `TermSubject` → `GradeLevel`, a
+cross-table hop a single-table CHECK cannot reach. The Grade-1-only rule is
+enforced in the save action (validated against `GradeLevel.type`), not here.
+
+### Pre-check (read-only, run before applying)
+
+Every existing row is expected to have a `score` and no `mark`, so the new
+CHECK should pass immediately with zero rows needing anything:
+
+```sql
+SELECT count(*) FROM "TermGrade" WHERE "score" IS NULL AND "mark" IS NULL;
+```
+
+Expect **0**. A non-zero count means step 3 above will fail with a CHECK
+violation — investigate those rows (they would predate this migration, so
+their existence would itself be a bug) before applying.
+
+Also useful context while you are here — a read-only count of existing
+Grade 1 rows, i.e. how many rows this feature will eventually touch:
+
+```sql
+SELECT count(*) FROM "TermGrade" tg
+JOIN "TermSubject" ts ON ts.id = tg."termSubjectId"
+JOIN "GradeLevel" g ON g.id = ts."gradeLevelId"
+WHERE g.type = 'G1';
+```
+
+This is informational only — the migration does not touch these rows, and
+the count is expected to be nonzero. `termSubjectId` can be NULL on a
+pre-M1 legacy row, so this join undercounts if any Grade 1 row was never
+healed onto `TermSubject`; see section **(o)**'s "Backfill misses" if that
+matters for your check.
+
+### Steps
+
+1. Run the pre-check above; confirm 0.
+2. Apply and confirm `npx prisma migrate status` reports up to date.
+3. **Post-apply check** — same predicate as the pre-check, now enforced by
+   the CHECK itself, so this is a belt-and-suspenders confirmation rather
+   than a live risk:
+   ```sql
+   SELECT count(*) FROM "TermGrade" WHERE ("score" IS NULL) = ("mark" IS NULL);
+   ```
+   Expect **0**. (Reads as "score-nullness equals mark-nullness", i.e. both
+   set or both NULL — the CHECK forbids exactly this on any new write, but a
+   pre-existing row could only violate it if the pre-check above was skipped.)
+4. Deploy the code that writes `mark` for Grade 1 subjects.
+
+### Rollback
+
+Safe only while no row has `mark` set — check first:
+
+```sql
+SELECT count(*) FROM "TermGrade" WHERE "mark" IS NOT NULL;
+```
+
+At 0: `ALTER TABLE "TermGrade" DROP CONSTRAINT "TermGrade_score_xor_mark";
+ALTER TABLE "TermGrade" DROP COLUMN "mark"; ALTER TABLE "TermGrade" ALTER
+COLUMN "score" SET NOT NULL;` (re-tightening `score` also needs the same
+zero-nulls check `TermGrade_score_range` migrations already assume). At any
+other count, reverting the code first is mandatory and reverting the DB is
+not: once a mark exists, a Prisma client generated against `score Int`
+(non-nullable) reads that row's `score` as `null` where its own types
+promise `number` — fix forward, per the migration's header comment.
 
 ---
 

@@ -5,6 +5,13 @@ import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -13,7 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { generalAverage } from "@/lib/terms/average";
+import { termGradingScale, termMarkText, type TermGradingScale } from "@/lib/terms/grading-scale";
 import { subjectAbbreviation, subjectWindow } from "@/lib/terms/sheet-view";
+import { TERM_MARK_OPTIONS, TERM_MARK_SHORT_LABELS } from "@/lib/constants/enum-labels";
+import type { TermMark } from "@prisma/client";
 import type { TermGradesSaveInput } from "@/lib/validators/term-grade.schema";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +55,9 @@ export type TermGradesGridLearner = {
 export type TermGradesGridExisting = {
   learnerId: string;
   termSubjectId: string;
-  score: number;
+  score: number | null;
+  /** Grade 1 letter mark. Not rendered by this grid yet. */
+  mark?: TermMark | null;
 };
 
 /**
@@ -58,17 +70,68 @@ export type AralTermGradesGridFormHandle = {
   commit: () => void;
 };
 
-/** A cell holds the raw input string so an emptied cell stays distinct from a 0. */
+/**
+ * A cell holds the raw input string so an emptied cell stays distinct from a 0.
+ *
+ * For a LETTER-scale grid (Grade 1) the string is instead one of:
+ * - `""` — empty (never saved, or cleared)
+ * - `score:87` — a legacy numeric score saved before letter marks existed
+ * - `mark:ADVANCING` — a letter mark
+ */
 type RowState = Record<string, string>;
+
+const LETTER_CLEAR = "CLEAR";
+/**
+ * The Select's value for a cell still holding a number saved before letter
+ * marks existed. It must differ from `LETTER_CLEAR`: Radix only fires
+ * `onValueChange` when the chosen value differs from the current one, so if a
+ * legacy cell sat on `LETTER_CLEAR`, choosing Clear would be a silent no-op and
+ * the old number could never be removed. No `SelectItem` carries this value —
+ * the trigger renders the number through `SelectValue`'s children.
+ */
+const LETTER_LEGACY = "LEGACY";
+
+type LetterCellState =
+  | { kind: "empty" }
+  | { kind: "legacyScore"; score: number }
+  | { kind: "mark"; mark: TermMark };
+
+function encodeMark(mark: TermMark): string {
+  return `mark:${mark}`;
+}
+
+function encodeLegacyScore(score: number): string {
+  return `score:${score}`;
+}
+
+function parseLetterCell(raw: string): LetterCellState {
+  if (raw.startsWith("mark:")) return { kind: "mark", mark: raw.slice(5) as TermMark };
+  if (raw.startsWith("score:")) return { kind: "legacyScore", score: Number(raw.slice(6)) };
+  return { kind: "empty" };
+}
 
 function toRows(
   learners: TermGradesGridLearner[],
   existing: TermGradesGridExisting[],
-  subjectIds: ReadonlySet<string>
+  subjectIds: ReadonlySet<string>,
+  scale: TermGradingScale
 ): Record<string, RowState> {
   const byLearner = new Map<string, RowState>();
   for (const record of existing) {
     if (!subjectIds.has(record.termSubjectId)) continue;
+    if (scale === "LETTER") {
+      const value = record.mark
+        ? encodeMark(record.mark)
+        : record.score !== null
+          ? encodeLegacyScore(record.score)
+          : null;
+      if (value === null) continue;
+      const row = byLearner.get(record.learnerId) ?? {};
+      row[record.termSubjectId] = value;
+      byLearner.set(record.learnerId, row);
+      continue;
+    }
+    if (record.score === null) continue;
     const row = byLearner.get(record.learnerId) ?? {};
     row[record.termSubjectId] = String(record.score);
     byLearner.set(record.learnerId, row);
@@ -109,6 +172,8 @@ type Props = {
   subjects: TermGradesGridSubject[];
   learners: TermGradesGridLearner[];
   initialGrades: TermGradesGridExisting[];
+  /** Raw `GradeLevelType`; decides the scale via `termGradingScale` (Grade 1 = letter marks). */
+  gradeType: string;
   /** Row-number offset so numbering continues across pages and groups. */
   indexOffset?: number;
   /** Inputs off: a locked term, an admin view, or a save in flight. */
@@ -133,6 +198,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       subjects,
       learners,
       initialGrades,
+      gradeType,
       indexOffset = 0,
       disabled,
       groupLabel,
@@ -143,13 +209,15 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
     },
     ref
   ) {
+    const scale = termGradingScale(gradeType);
+    const showGeneralAverage = scale === "NUMERIC";
     const subjectIds = new Set(subjects.map((s) => s.id));
     /**
      * What the sheet looked like when it loaded. Saves send the difference, so an
      * untouched cell is never rewritten and "No changes to save" is honest.
      */
     const [initial, setInitial] = useState(() =>
-      toRows(learners, initialGrades, subjectIds)
+      toRows(learners, initialGrades, subjectIds, scale)
     );
     const [rows, setRows] = useState(initial);
 
@@ -171,6 +239,28 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
               const before = cellValue(initial[learner.id], subject.id).trim();
               const after = cellValue(rows[learner.id], subject.id).trim();
               if (before === after) continue;
+              if (scale === "LETTER") {
+                if (after === "") {
+                  entries.push({
+                    learnerId: learner.id,
+                    termSubjectId: subject.id,
+                    score: null,
+                    mark: null,
+                  });
+                  continue;
+                }
+                const state = parseLetterCell(after);
+                // A "legacyScore" `after` value can't come from user input — the
+                // select only ever writes "" (Clear) or a mark — so it is never sent.
+                if (state.kind === "mark") {
+                  entries.push({
+                    learnerId: learner.id,
+                    termSubjectId: subject.id,
+                    mark: state.mark,
+                  });
+                }
+                continue;
+              }
               if (after === "") {
                 entries.push({ learnerId: learner.id, termSubjectId: subject.id, score: null });
                 continue;
@@ -194,7 +284,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
           setInitial(rows);
         },
       }),
-      [learners, subjects, initial, rows]
+      [learners, subjects, initial, rows, scale]
     );
 
     const shown = visibleSubjectIds
@@ -203,12 +293,69 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
     const phoneWindow = subjectWindow(shown.length, subjectStep);
     const phoneSubjects = shown.slice(phoneWindow.start, phoneWindow.end);
 
+    function letterMarkSelect(
+      learner: TermGradesGridLearner,
+      subject: TermGradesGridSubject,
+      className: string
+    ) {
+      const raw = cellValue(rows[learner.id], subject.id);
+      const state = parseLetterCell(raw);
+      const selectValue =
+        state.kind === "mark"
+          ? state.mark
+          : state.kind === "legacyScore"
+            ? LETTER_LEGACY
+            : LETTER_CLEAR;
+      const legacyTitle =
+        state.kind === "legacyScore"
+          ? "Saved as a number before letter marks. Pick a letter to replace it."
+          : undefined;
+      return (
+        <Select
+          value={selectValue}
+          onValueChange={(value) =>
+            setScore(
+              learner.id,
+              subject.id,
+              value === LETTER_CLEAR ? "" : encodeMark(value as TermMark)
+            )
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger
+            aria-label={`${learner.fullName} — ${subject.name} grade`}
+            title={legacyTitle}
+            className={cn("px-1 justify-center [&>svg]:hidden sm:[&>svg]:inline", className)}
+          >
+            <SelectValue>
+              {state.kind === "mark" ? (
+                TERM_MARK_SHORT_LABELS[state.mark]
+              ) : state.kind === "legacyScore" ? (
+                <span className="text-muted-foreground">{state.score}</span>
+              ) : (
+                "—"
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={LETTER_CLEAR}>Clear</SelectItem>
+            {TERM_MARK_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {termMarkText(option.value)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
     function scoreInput(
       learner: TermGradesGridLearner,
       subject: TermGradesGridSubject,
       className: string,
       placeholder?: string
     ) {
+      if (scale === "LETTER") return letterMarkSelect(learner, subject, className);
       const raw = cellValue(rows[learner.id], subject.id);
       const trimmed = raw.trim();
       const valid = trimmed !== "" && isValidScore(trimmed);
@@ -282,14 +429,16 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                     {termCaption}
                   </span>
                 </TableHead>
-                <TableHead
-                  rowSpan={2}
-                  scope="col"
-                  className="w-28 border-l border-border/60 bg-violet-50/70 text-center text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
-                >
-                  <span className="block">General</span>
-                  <span className="block">Average</span>
-                </TableHead>
+                {showGeneralAverage && (
+                  <TableHead
+                    rowSpan={2}
+                    scope="col"
+                    className="w-28 border-l border-border/60 bg-violet-50/70 text-center text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                  >
+                    <span className="block">General</span>
+                    <span className="block">Average</span>
+                  </TableHead>
+                )}
               </TableRow>
               <TableRow className="hover:bg-transparent">
                 {shown.map((subject, index) => (
@@ -307,7 +456,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
             </TableHeader>
             <TableBody>
               {learners.map((learner, index) => {
-                const average = rowAverage(rows[learner.id], subjects);
+                const average = showGeneralAverage ? rowAverage(rows[learner.id], subjects) : null;
                 return (
                   <TableRow key={learner.id}>
                     <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
@@ -323,9 +472,11 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                         {scoreInput(learner, subject, "h-9 w-full min-w-[4.5rem]")}
                       </TableCell>
                     ))}
-                    <TableCell className="border-l border-border/60 bg-violet-50/70 text-center text-base font-bold tabular-nums text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
-                      {average === null ? "—" : average.toFixed(2)}
-                    </TableCell>
+                    {showGeneralAverage && (
+                      <TableCell className="border-l border-border/60 bg-violet-50/70 text-center text-base font-bold tabular-nums text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                        {average === null ? "—" : average.toFixed(2)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -362,17 +513,38 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                   className={cn(PHONE_SUBJECTS, "grid gap-1")}
                   style={{ gridTemplateColumns: `repeat(${Math.max(1, phoneSubjects.length)}, minmax(0, 1fr))` }}
                 >
-                  {phoneSubjects.map((subject) => (
-                    <label key={subject.id} className="flex min-w-0 flex-col items-center gap-1">
+                  {phoneSubjects.map((subject) => {
+                    const abbreviation = (
                       <span
                         className="text-[10px] font-medium uppercase text-muted-foreground"
                         aria-hidden
                       >
                         {subjectAbbreviation(subject.name)}
                       </span>
-                      {scoreInput(learner, subject, "h-9 w-full min-w-0 px-0 text-[13px] sm:text-sm", "—")}
-                    </label>
-                  ))}
+                    );
+                    const control = scoreInput(
+                      learner,
+                      subject,
+                      "h-9 w-full min-w-0 px-0 text-[13px] sm:text-sm",
+                      "—"
+                    );
+                    // A `label` only forwards a tap to a *labelable* element. The
+                    // letter-mark control is a button, which is not one, so on a
+                    // Grade 1 sheet the abbreviation would look tappable and do
+                    // nothing. Plain `div` there; the trigger carries its own
+                    // aria-label either way.
+                    return scale === "LETTER" ? (
+                      <div key={subject.id} className="flex min-w-0 flex-col items-center gap-1">
+                        {abbreviation}
+                        {control}
+                      </div>
+                    ) : (
+                      <label key={subject.id} className="flex min-w-0 flex-col items-center gap-1">
+                        {abbreviation}
+                        {control}
+                      </label>
+                    );
+                  })}
                 </span>
                 <NextSubjectsButton onClick={onNextSubjects} windows={phoneWindow.windows} />
               </li>

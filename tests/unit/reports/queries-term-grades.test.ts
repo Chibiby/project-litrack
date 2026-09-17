@@ -39,7 +39,8 @@ function row(overrides: {
   gradeType: string;
   section: string | null;
   term: string;
-  score: number;
+  score?: number | null;
+  mark?: string | null;
   subjectName: string;
   subjectPosition: number;
   subjectGradeLevelId?: string;
@@ -48,7 +49,8 @@ function row(overrides: {
 }) {
   return {
     term: overrides.term,
-    score: overrides.score,
+    score: overrides.score ?? null,
+    mark: overrides.mark ?? null,
     updatedAt: overrides.updatedAt ?? new Date(2026, 8, 1),
     termSubject: {
       name: overrides.subjectName,
@@ -295,5 +297,79 @@ describe("buildTermGradesTable — column grouping by subject NAME, not id", () 
     // Learner, Grade, Section, Term, English, Mathematics, General Average.
     const [rowValues] = table.rows;
     expect(rowValues[rowValues.length - 1]).toBe(85);
+  });
+});
+
+describe("buildTermGradesTable — Grade 1 letter marks", () => {
+  it("shows a mark cell as its full label, not the raw enum value", async () => {
+    termGradeFindMany.mockResolvedValueOnce([
+      row({
+        learnerId: "l1",
+        fullName: "Dizon, Divina",
+        gradeType: "G1",
+        section: "Mabini",
+        term: "FIRST",
+        mark: "ADVANCING",
+        subjectName: "English",
+        subjectPosition: 0,
+      }),
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+
+    const idx = table.columns.findIndex((c) => c.header === "English");
+    expect(table.rows[0][idx]).toBe("A – Advancing");
+  });
+
+  it("leaves the General Average blank/null for a Grade 1 row", async () => {
+    termGradeFindMany.mockResolvedValueOnce([
+      row({
+        learnerId: "l1",
+        fullName: "Dizon, Divina",
+        gradeType: "G1",
+        section: "Mabini",
+        term: "FIRST",
+        mark: "ADVANCING",
+        subjectName: "English",
+        subjectPosition: 0,
+      }),
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+
+    const [rowValues] = table.rows;
+    expect(rowValues[rowValues.length - 1]).toBeNull();
+  });
+
+  it("leaves the General Average blank for any row holding a mark, even outside Grade 1", async () => {
+    // Defensive: `rowGeneralAverage` also nulls a non-G1 row that somehow
+    // carries a mark cell, and the report must not silently average around it.
+    termGradeFindMany.mockResolvedValueOnce([
+      row({
+        learnerId: "l1",
+        fullName: "Abad, Ana",
+        gradeType: "G3",
+        section: "A",
+        term: "FIRST",
+        mark: "CONNECTING",
+        subjectName: "English",
+        subjectPosition: 0,
+      }),
+      row({
+        learnerId: "l1",
+        fullName: "Abad, Ana",
+        gradeType: "G3",
+        section: "A",
+        term: "FIRST",
+        score: 90,
+        subjectName: "Mathematics",
+        subjectPosition: 1,
+      }),
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+
+    const [rowValues] = table.rows;
+    expect(rowValues[rowValues.length - 1]).toBeNull();
   });
 });

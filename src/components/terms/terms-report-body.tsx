@@ -2,6 +2,7 @@ import { BarChart3, FileCheck2, Lock, Trophy, Users } from "lucide-react";
 import { StatCard, StatCardRow } from "@/components/dashboard/teacher/stat-cards";
 import { TermsReportPanel } from "@/components/terms/terms-report-panel";
 import { loadTermSheet, type SheetScope } from "@/lib/terms/sheet-data";
+import { termGradingScale } from "@/lib/terms/grading-scale";
 import type { SheetStats, SheetUrlState } from "@/lib/terms/sheet-view";
 import type { TermGradesExportInput } from "@/lib/validators/term-grade.schema";
 
@@ -49,10 +50,12 @@ export async function TermsReportBody({
     route: basePath,
   });
   const { stats } = data;
+  const allLetterScale =
+    scopes.length > 0 && scopes.every((s) => termGradingScale(s.gradeType) === "LETTER");
 
   return (
     <>
-      <TermsReportSummary stats={stats} />
+      <TermsReportSummary stats={stats} allLetterScale={allLetterScale} />
 
       <div className="mt-3 sm:mt-4">
         <TermsReportPanel
@@ -75,7 +78,14 @@ export async function TermsReportBody({
 }
 
 /** The four figures and the auto-lock notice. */
-export function TermsReportSummary({ stats }: { stats: SheetStats }) {
+export function TermsReportSummary({
+  stats,
+  /** Every scope in view is Grade 1 (letter marks) — the class average has nothing to compute. */
+  allLetterScale = false,
+}: {
+  stats: SheetStats;
+  allLetterScale?: boolean;
+}) {
   return (
     <>
       <div className="mt-3 sm:mt-4">
@@ -114,7 +124,7 @@ export function TermsReportSummary({ stats }: { stats: SheetStats }) {
           <StatCard
             title="Class Average"
             value={stats.classAverage === null ? "—" : stats.classAverage.toFixed(2)}
-            hint="Based on saved grades"
+            hint={allLetterScale ? "Not computed for letter marks" : "Based on saved grades"}
             icon={Trophy}
             tone="amber"
             decor="wave"

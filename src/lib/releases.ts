@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.2.0",
+    date: "2026-09-17",
+    title: "Letter marks for Grade 1, and a way to tuck the Assistant away",
+    announce: true,
+    fixes: [
+      "Grade 1 End of Terms grades are now picked from a list — A – Advancing, B – Benchmarking, C – Connecting, D – Developing, E – Emerging — instead of typed as numbers. Grade 1 sheets no longer show a General Average.",
+      "A Grade 1 grade saved as a number before this update still shows on the sheet and in exports. Pick a letter for that learner to replace it.",
+      "On a phone, the Assistant now has a Hide button. Hiding it leaves a small arrow tab at the edge of the screen; tap that to bring it back. Each account keeps its own choice on that phone, even after you log out and back in.",
+    ],
+  },
+  {
     version: "2.1.1",
     date: "2026-09-17",
     title: "Password reset links open LITRACK again",

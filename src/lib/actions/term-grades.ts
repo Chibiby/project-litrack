@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, type TermMark } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -19,7 +19,12 @@ import {
   type AdvisoryPlacement,
 } from "@/lib/teachers/advisory";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
-import { generalAverage } from "@/lib/terms/average";
+import {
+  rowGeneralAverage,
+  termCellText,
+  termGradingScale,
+  type TermCell,
+} from "@/lib/terms/grading-scale";
 import { canWriteWindow } from "@/lib/unlock/grants";
 import {
   getTermWindows,
@@ -53,6 +58,8 @@ const NOT_IN_ADVISORY_MESSAGE =
   "One or more learners are not in your advisory section";
 const STALE_SUBJECTS_MESSAGE =
   "One or more subjects are no longer on this sheet. Reload the page.";
+const LETTER_SCALE_MESSAGE = "Grade 1 grades are now letter marks. Reload the page.";
+const NUMERIC_SCALE_MESSAGE = "This grade uses number grades. Reload the page.";
 
 /**
  * The gate every teacher entry point re-derives: they must be a DepEd teacher
@@ -105,9 +112,11 @@ async function requireAdvisoryForTermSheet(
  * cells, which is a nested array. It sends only what the teacher touched, so an
  * untouched sheet writes nothing and the audit counts mean something.
  *
- * A cleared cell arrives as `score: null` and is DELETED rather than nulled —
- * `TermGrade.score` is a non-nullable `Int`, so absence of a row is the only
- * representation of "not encoded".
+ * A cell carries a numeric `score` or, for a LETTER-scale grade (Grade 1), a
+ * `mark`. A cleared cell arrives with neither set and is DELETED rather than
+ * nulled — a stored row holds exactly one of the two (SQL CHECK
+ * "TermGrade_score_xor_mark"), so absence of a row is the only representation
+ * of "not encoded".
  */
 export async function saveTermGrades(
   input: unknown
@@ -134,6 +143,21 @@ export async function saveTermGrades(
   // grade it was showing. Refuse rather than quietly writing into another grade.
   if (parsed.data.gradeLevelId !== advisory.gradeLevelId) {
     return { ok: false, error: WRONG_GRADE_MESSAGE };
+  }
+
+  // The scale comes from the placement the gate resolved, never the payload. A
+  // tab loaded before Grade 1 switched to letters (or a hand-built post) can
+  // send the wrong kind of cell; refuse the whole batch before any write so
+  // the sheet is never half letters, half numbers.
+  const scale = termGradingScale(advisory.gradeType);
+  const wrongKind = parsed.data.entries.some((e) =>
+    scale === "LETTER" ? e.score != null : e.mark != null
+  );
+  if (wrongKind) {
+    return {
+      ok: false,
+      error: scale === "LETTER" ? LETTER_SCALE_MESSAGE : NUMERIC_SCALE_MESSAGE,
+    };
   }
 
   // A term enum carries no year, so the row needs one. No active year is a real
@@ -223,12 +247,20 @@ export async function saveTermGrades(
   // Split, then dedupe WITHIN each side on the conflict tuple. Deduping across
   // the combined `entries` array would let a clear win over an encoded score and
   // invert the deliberate ordering decision below.
-  const saveByTuple = new Map<string, TermGradeEntry & { score: number }>();
+  // A cell is a clear when NEITHER value is set; the schema already refused
+  // both. Normalized to explicit nulls so the raw write below binds a typed
+  // NULL for the value the cell does not carry.
+  const saveByTuple = new Map<
+    string,
+    TermGradeEntry & { score: number | null; mark: TermMark | null }
+  >();
   const clearByTuple = new Map<string, TermGradeEntry>();
   for (const entry of parsed.data.entries) {
     const tuple = `${entry.learnerId}:${schoolYear.id}:${parsed.data.term}:${entry.termSubjectId}`;
-    if (entry.score === null) clearByTuple.set(tuple, entry);
-    else saveByTuple.set(tuple, { ...entry, score: entry.score });
+    const score = entry.score ?? null;
+    const mark = entry.mark ?? null;
+    if (score === null && mark === null) clearByTuple.set(tuple, entry);
+    else saveByTuple.set(tuple, { ...entry, score, mark });
   }
   const toSave = [...saveByTuple.values()];
   const toClear = [...clearByTuple.values()];
@@ -279,6 +311,7 @@ export async function saveTermGrades(
               ${parsed.data.term}::text::"TermPeriod",
               ${e.termSubjectId}::text,
               ${e.score}::integer,
+              ${e.mark}::text::"TermMark",
               ${user.id}::text,
               ${now}::timestamp(3)
             )`
@@ -304,7 +337,7 @@ export async function saveTermGrades(
         const written = await tx.$queryRaw<{ id: string }[]>`
           INSERT INTO "TermGrade" (
             "id", "learnerId", "schoolYearId", "term", "termSubjectId", "subject",
-            "score", "recordedById", "updatedAt"
+            "score", "mark", "recordedById", "updatedAt"
           )
           SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."termSubjectId",
                  CASE WHEN EXISTS (
@@ -315,10 +348,10 @@ export async function saveTermGrades(
                      AND o."subject" = ts."legacyArea"
                      AND o."termSubjectId" IS DISTINCT FROM v."termSubjectId"
                  ) THEN NULL ELSE ts."legacyArea" END,
-                 v."score", v."recordedById", v."updatedAt"
+                 v."score", v."mark", v."recordedById", v."updatedAt"
           FROM (VALUES ${values}) AS v (
             "id", "learnerId", "schoolYearId", "term", "termSubjectId", "score",
-            "recordedById", "updatedAt"
+            "mark", "recordedById", "updatedAt"
           )
           JOIN "Learner" l
             ON l."id" = v."learnerId"
@@ -334,6 +367,10 @@ export async function saveTermGrades(
            AND ts."deletedAt" IS NULL
           ON CONFLICT ("learnerId", "schoolYearId", "term", "termSubjectId") DO UPDATE SET
             "score" = EXCLUDED."score",
+            -- Both columns always move together: saving a letter over a Grade 1
+            -- cell that still holds a legacy number sets the mark and NULLs the
+            -- score in this one statement, so the xor CHECK holds.
+            "mark" = EXCLUDED."mark",
             -- Non-null EXCLUDED means no other row holds this area (checked
             -- above), so taking it is safe; NULL keeps what the row had.
             "subject" = COALESCE(EXCLUDED."subject", "TermGrade"."subject"),
@@ -435,6 +472,8 @@ export async function exportTermGrades(
    */
   const targets: {
     gradeLevelId: string;
+    /** Raw `GradeLevelType`: picks the grading scale for the worksheet. */
+    gradeType: string;
     sectionId: string | null;
     label: string;
     rosterWhere: Prisma.LearnerWhereInput;
@@ -447,7 +486,7 @@ export async function exportTermGrades(
     // keeps a client-supplied `schoolId` out of the payload entirely.
     const grade = await prisma.gradeLevel.findFirst({
       where: { id: parsed.data.gradeLevelId, deletedAt: null },
-      select: { id: true, schoolId: true },
+      select: { id: true, schoolId: true, type: true },
     });
     if (!grade) return { ok: false, error: "Not found" };
 
@@ -458,6 +497,7 @@ export async function exportTermGrades(
     // matching how `export-learners.ts` logs its own section filter.
     targets.push({
       gradeLevelId: grade.id,
+      gradeType: grade.type,
       sectionId: section === "all" ? null : section,
       label: "",
       rosterWhere: {
@@ -494,6 +534,7 @@ export async function exportTermGrades(
       // consulted — it cannot widen or redirect the export.
       targets.push({
         gradeLevelId: advisory.gradeLevelId,
+        gradeType: advisory.gradeType,
         sectionId: advisory.sectionId,
         label: advisory.label,
         rosterWhere: {
@@ -598,20 +639,23 @@ export async function exportTermGrades(
           // two can never disagree about which rows belong to this export.
           learner: target.rosterWhere,
         },
-        select: { learnerId: true, termSubjectId: true, score: true },
+        select: { learnerId: true, termSubjectId: true, score: true, mark: true },
       }),
     ]);
     learnerCount += learners.length;
     cellCount += rows.length;
 
-    const byLearner = new Map<string, Map<string, number>>();
+    const byLearner = new Map<string, Map<string, TermCell>>();
     for (const row of rows) {
       if (!row.termSubjectId) continue;
-      const cells = byLearner.get(row.learnerId) ?? new Map<string, number>();
-      cells.set(row.termSubjectId, row.score);
+      const cells = byLearner.get(row.learnerId) ?? new Map<string, TermCell>();
+      cells.set(row.termSubjectId, { score: row.score, mark: row.mark ?? null });
       byLearner.set(row.learnerId, cells);
     }
 
+    // A LETTER-scale grade (Grade 1) has no General Average, so its worksheet
+    // drops the column rather than leaving it blank.
+    const isLetterScale = termGradingScale(target.gradeType) === "LETTER";
     const sheet = wb.addWorksheet(sheetName(target.label, index));
     sheet.columns = [
       { header: "#", key: "index", width: 6 },
@@ -621,21 +665,29 @@ export async function exportTermGrades(
         key: columnKey(subject.id),
         width: 16,
       })),
-      { header: "General Average", key: "average", width: 18 },
+      ...(isLetterScale ? [] : [{ header: "General Average", key: "average", width: 18 }]),
     ];
     sheet.getRow(1).font = { bold: true };
 
     learners.forEach((learner, index) => {
       const cells = byLearner.get(learner.id);
-      const scores = subjects.map((subject) => cells?.get(subject.id) ?? null);
+      const rowCells = subjects.map((subject) => cells?.get(subject.id) ?? null);
       const row: Record<string, string | number> = {
         index: index + 1,
         fullName: learner.fullName,
       };
       subjects.forEach((subject, i) => {
-        row[columnKey(subject.id)] = scores[i] ?? "";
+        const cell = rowCells[i];
+        // A score stays a number cell, exactly as before; a mark is its label.
+        row[columnKey(subject.id)] = !cell
+          ? ""
+          : cell.mark
+            ? termCellText(cell)
+            : (cell.score ?? "");
       });
-      row.average = generalAverage(scores) ?? "";
+      if (!isLetterScale) {
+        row.average = rowGeneralAverage(target.gradeType, rowCells) ?? "";
+      }
       sheet.addRow(row);
     });
   }

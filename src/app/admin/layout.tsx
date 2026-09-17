@@ -25,6 +25,7 @@ export default async function AdminLayout({
       <PostLoginSplash role="admin" />
       <RoleShell
         role={user.role}
+        userId={user.id}
         userName={user.fullName || user.email}
         aiEnabled={geminiConfigured()}
         notifications={await getChatNotifications(user)}

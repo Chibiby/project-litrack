@@ -472,6 +472,20 @@ enum KinderCompetencyRating {
   CONSISTENT
 }
 
+/// DepEd's Grade 1 End of Terms rating scale, used in place of a numeric
+/// `TermGrade.score` for a Grade 1 subject: A - Advancing, B - Benchmarking,
+/// C - Connecting, D - Developing, E - Emerging. Full words, matching this
+/// file's other rating enums (`KinderCompetencyRating`,
+/// `WeeklyWordRecognitionLevel`), not the letter shorthand the paper form and
+/// UI display. See `TermGrade.mark`.
+enum TermMark {
+  ADVANCING
+  BENCHMARKING
+  CONNECTING
+  DEVELOPING
+  EMERGING
+}
+
 // =====================================================
 // MODELS
 // =====================================================
@@ -1436,7 +1450,18 @@ model TermGrade {
   /// still reference it, so no delete on `TermSubject` should ever need to
   /// touch this table.
   termSubjectId String?
-  score         Int // 60-100, enforced by a CHECK constraint in SQL
+  /// 60-100 when set, enforced by the `TermGrade_score_range` CHECK in SQL.
+  /// Nullable as of `20260917000001_term_grade_letter_mark`: a Grade 1
+  /// subject carries `mark` instead. Exactly one of `score` / `mark` is set
+  /// per row, enforced by the SQL-only `TermGrade_score_xor_mark` CHECK —
+  /// Prisma's schema language cannot express either CHECK, so both are
+  /// invisible here; preserve them when editing TermGrade migrations.
+  score         Int?
+  /// The Grade 1 End of Terms letter mark, in place of a numeric `score` for
+  /// that grade. Whether a subject uses `score` or `mark` is a Grade-1-only
+  /// rule enforced in the save action (it depends on `GradeLevel.type`,
+  /// which this table cannot see directly) — not by a CHECK here.
+  mark          TermMark?
   /// Nullable, `SetNull` — see `Attendance.recordedById` for the full rule.
   recordedById  String?
   createdAt     DateTime      @default(now())

@@ -152,7 +152,8 @@ type CellRow = {
   schoolYearId: string;
   term: string;
   termSubjectId: string;
-  score: number;
+  score: number | null;
+  mark: string | null;
 };
 
 let learners: LearnerRow[];
@@ -193,11 +194,13 @@ function learner(overrides: Partial<LearnerRow> & { id: string; fullName: string
 }
 
 function cell(
-  overrides: Partial<CellRow> & { learnerId: string; termSubjectId: string; score: number }
+  overrides: Partial<CellRow> & { learnerId: string; termSubjectId: string }
 ): CellRow {
   return {
     schoolYearId: SCHOOL_YEAR_ID,
     term: OPEN_TERM,
+    score: null,
+    mark: null,
     ...overrides,
   };
 }
@@ -320,7 +323,12 @@ const cellFindMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
       }
       return true;
     })
-    .map((c) => ({ learnerId: c.learnerId, termSubjectId: c.termSubjectId, score: c.score }));
+    .map((c) => ({
+      learnerId: c.learnerId,
+      termSubjectId: c.termSubjectId,
+      score: c.score,
+      mark: c.mark,
+    }));
 });
 
 /**
@@ -1642,5 +1650,90 @@ describe("exportTermGrades — one worksheet per advisory (sectionIds)", () => {
     const res = await exportTermGrades({ term: OPEN_TERM });
     expect(errorOf(res)).toBe("Invalid input");
     expectRefusedBeforeReading();
+  });
+});
+
+/**
+ * Grade 1's worksheet has no General Average column and shows a mark cell as
+ * its full label ("A – Advancing"); a legacy G1 row that still holds a
+ * numeric score stays a plain number. Every other grade is unaffected — see
+ * the `HEADER_ROW`-based assertions throughout the rest of this file, which
+ * keep passing on a G7 sheet.
+ */
+describe("exportTermGrades — Grade 1 letter marks", () => {
+  const G1_GRADE_ID = "grade-g1";
+  const G1_SECTION_ID = "section-g1-mabini";
+  const G1_SUBJECT_ID = "subject-g1-english";
+
+  function addG1Advisory() {
+    sections.push({
+      id: G1_SECTION_ID,
+      name: "Mabini",
+      schoolId: SCHOOL_ID,
+      gradeLevelId: G1_GRADE_ID,
+      gradeType: "G1",
+      deletedAt: null,
+      adviserId: TEACHER_ID,
+    });
+    grades.push({ id: G1_GRADE_ID, schoolId: SCHOOL_ID, deletedAt: null });
+    termSubjects.push({
+      id: G1_SUBJECT_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: G1_GRADE_ID,
+      name: "English",
+      position: 0,
+      deletedAt: null,
+    });
+    learners.push(
+      learner({
+        id: "learner-g1",
+        fullName: "Dizon, Divina",
+        gradeLevelId: G1_GRADE_ID,
+        sectionId: G1_SECTION_ID,
+      })
+    );
+  }
+
+  async function g1Sheet(base64: string) {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(base64, "base64") as unknown as ExcelLoadable);
+    return grid(wb.worksheets[0], 3);
+  }
+
+  it("has no General Average column, and a mark cell shows its full label", async () => {
+    addG1Advisory();
+    cells.push(
+      cell({ learnerId: "learner-g1", termSubjectId: G1_SUBJECT_ID, mark: "ADVANCING" })
+    );
+
+    const file = fileOf(
+      await exportTermGrades({ term: OPEN_TERM, sectionIds: [G1_SECTION_ID] })
+    );
+    const rows = await g1Sheet(file.base64);
+
+    expect(rows[0]).toEqual(["#", "Complete Name", "English"]);
+    expect(rows[0]).not.toContain("General Average");
+    expect(rows[1]).toEqual([1, "Dizon, Divina", "A – Advancing"]);
+  });
+
+  it("keeps a legacy Grade 1 numeric score as a plain number", async () => {
+    // A Grade 1 row saved before letter marks still holds a `score`, and the
+    // worksheet must show it as the number, not blank it out.
+    addG1Advisory();
+    cells.push(cell({ learnerId: "learner-g1", termSubjectId: G1_SUBJECT_ID, score: 88 }));
+
+    const file = fileOf(
+      await exportTermGrades({ term: OPEN_TERM, sectionIds: [G1_SECTION_ID] })
+    );
+    const rows = await g1Sheet(file.base64);
+
+    expect(rows[1]).toEqual([1, "Dizon, Divina", 88]);
+  });
+
+  it("still shows General Average on a non-G1 sheet", async () => {
+    const file = fileOf(await post());
+    const { rows } = await readExport(file.base64);
+    expect(rows[0]).toContain("General Average");
   });
 });

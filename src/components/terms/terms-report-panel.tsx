@@ -341,6 +341,7 @@ export function TermsReportPanel({
               subjects={group.subjects}
               learners={group.learners}
               initialGrades={group.initialGrades}
+              gradeType={group.gradeType}
               indexOffset={group.indexOffset}
               disabled={readOnly || savePending}
               groupLabel={groups.length > 1 ? group.label : undefined}

@@ -14,6 +14,11 @@ import {
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import { subjectNameKey } from "@/lib/terms/subjects";
+import {
+  rowGeneralAverage,
+  termCellText,
+  type TermCell,
+} from "@/lib/terms/grading-scale";
 import type { ReportFilters } from "@/lib/reports/kinds";
 import type { ReportTable } from "@/lib/reports/render";
 
@@ -240,6 +245,7 @@ export async function buildTermGradesTable(
     select: {
       term: true,
       score: true,
+      mark: true,
       updatedAt: true,
       termSubject: { select: { name: true, position: true, gradeLevelId: true } },
       learner: {
@@ -284,8 +290,10 @@ export async function buildTermGradesTable(
     grade: string;
     section: string;
     term: string;
-    scores: Map<string, number>;
-    picks: Map<string, { score: number; current: boolean; updatedAt: number }>;
+    /** Raw `GradeLevelType` of the learner's current grade: picks the scale. */
+    gradeType: string;
+    scores: Map<string, TermCell>;
+    picks: Map<string, { cell: TermCell; current: boolean; updatedAt: number }>;
   };
   const groups = new Map<string, Group>();
 
@@ -299,6 +307,7 @@ export async function buildTermGradesTable(
           GRADE_LEVEL_LABELS[r.learner.gradeLevel.type] ?? r.learner.gradeLevel.type,
         section: r.learner.section?.name ?? "—",
         term: TERM_PERIOD_LABELS[r.term] ?? r.term,
+        gradeType: r.learner.gradeLevel.type,
         scores: new Map(),
         picks: new Map(),
       };
@@ -311,7 +320,7 @@ export async function buildTermGradesTable(
     // first seen.
     const nameKey = subjectNameKey(r.termSubject.name);
     const candidate = {
-      score: r.score,
+      cell: { score: r.score, mark: r.mark ?? null },
       current: r.termSubject.gradeLevelId === r.learner.gradeLevelId,
       updatedAt: r.updatedAt.getTime(),
     };
@@ -322,7 +331,7 @@ export async function buildTermGradesTable(
       (candidate.current === held.current && candidate.updatedAt > held.updatedAt)
     ) {
       g.picks.set(nameKey, candidate);
-      g.scores.set(nameKey, r.score);
+      g.scores.set(nameKey, candidate.cell);
     }
   }
 
@@ -341,13 +350,17 @@ export async function buildTermGradesTable(
       { header: "General Average", width: 14 },
     ],
     rows: [...groups.values()].map((g) => {
-      const scores = subjects.map((s) => g.scores.get(s) ?? null);
-      const present = scores.filter((s): s is number => s !== null);
-      const average =
-        present.length > 0
-          ? Math.round(present.reduce((a, b) => a + b, 0) / present.length)
-          : null;
-      return [g.name, g.grade, g.section, g.term, ...scores, average];
+      const cells = subjects.map((s) => g.scores.get(s) ?? null);
+      // A score stays a number cell, exactly as before; a mark is its full
+      // label ("A – Advancing").
+      const values = cells.map((c) =>
+        !c ? null : c.mark ? termCellText(c) : c.score
+      );
+      // Null for Grade 1 (letter marks) and for any row holding a mark. Whole
+      // number, as this report has always shown it.
+      const mean = rowGeneralAverage(g.gradeType, cells);
+      const average = mean === null ? null : Math.round(mean);
+      return [g.name, g.grade, g.section, g.term, ...values, average];
     }),
   };
 }

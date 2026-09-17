@@ -9,6 +9,7 @@ import {
   ChevronRight,
   LifeBuoy,
   Minus,
+  PanelRightClose,
   Send,
   Sparkles,
   X,
@@ -93,6 +94,8 @@ type Props = {
   active: boolean;
   onMinimize: () => void;
   onClose: () => void;
+  /** Phone-only "Hide" control in the header; see `AssistantWidget`. */
+  onHide?: () => void;
 };
 
 let entrySeq = 0;
@@ -141,6 +144,7 @@ export function AssistantPanel({
   active,
   onMinimize,
   onClose,
+  onHide,
 }: Props) {
   const pathname = usePathname();
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -283,6 +287,18 @@ export function AssistantPanel({
             Online
           </p>
         </div>
+        {onHide && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 md:hidden"
+            onClick={onHide}
+          >
+            <PanelRightClose className="size-4" aria-hidden />
+            <span className="sr-only">Hide the LITRACK Assistant</span>
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"

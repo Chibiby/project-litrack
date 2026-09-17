@@ -139,6 +139,7 @@ export default async function AralGradeTermsReportsPage({ params, searchParams }
             {
               key: grade.id,
               gradeLevelId: grade.id,
+              gradeType: grade.type,
               sectionId: null,
               label: gradeLabel,
               gradeShort: shortGradeLabel(gradeLabel),

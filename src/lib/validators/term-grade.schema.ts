@@ -1,13 +1,43 @@
 import { z } from "zod";
+import type { TermMark } from "@prisma/client";
+
+/**
+ * Mirrors the Prisma `TermMark` enum. A `z.enum` rather than `z.nativeEnum` so
+ * this schema stays free of a runtime `@prisma/client` import on the client;
+ * the assertion below fails typecheck if the two ever drift.
+ */
+const TERM_MARK_VALUES = [
+  "ADVANCING",
+  "BENCHMARKING",
+  "CONNECTING",
+  "DEVELOPING",
+  "EMERGING",
+] as const;
+type _TermMarkInSync = [TermMark] extends [(typeof TERM_MARK_VALUES)[number]]
+  ? [(typeof TERM_MARK_VALUES)[number]] extends [TermMark]
+    ? true
+    : never
+  : never;
+const _termMarkInSync: _TermMarkInSync = true;
+void _termMarkInSync;
 
 /**
  * End of Terms grade sheet payloads.
  *
- * `score` is nullable and the floor is 60, not 75. 75 is DepEd's *passing* mark,
- * not its floor — a 75 floor would make a failing learner unrecordable and push
- * teachers into entering a false 75. `null` means "cleared": the column is a
- * non-nullable `Int`, so the save action deletes the row rather than writing a
- * null.
+ * A cell carries EITHER a numeric `score` OR a letter `mark`, never both.
+ * Grade 1 uses letter marks (A – Advancing … E – Emerging); every other grade
+ * uses a score. Which one a grade takes is decided server-side from the
+ * teacher's placement (`termGradingScale`), not here — this schema only
+ * asserts shape.
+ *
+ * `score`'s floor is 60, not 75. 75 is DepEd's *passing* mark, not its floor —
+ * a 75 floor would make a failing learner unrecordable and push teachers into
+ * entering a false 75.
+ *
+ * Both absent/null means "cleared": the save action deletes the row, because
+ * a stored row always holds exactly one of the two (SQL CHECK
+ * "TermGrade_score_xor_mark"). The old `{ score: null }` payload still parses
+ * as a clear.
  *
  * Subjects are the grade's School Head-managed `TermSubject` rows, posted by id.
  * The server re-checks every id against the grade's active list, so this schema
@@ -24,11 +54,16 @@ export const termGradesSaveSchema = z.object({
   term: z.enum(["FIRST", "SECOND", "THIRD"]),
   entries: z
     .array(
-      z.object({
-        learnerId: z.string().min(1),
-        termSubjectId: z.string().min(1),
-        score: z.number().int().min(60).max(100).nullable(),
-      })
+      z
+        .object({
+          learnerId: z.string().min(1),
+          termSubjectId: z.string().min(1),
+          score: z.number().int().min(60).max(100).nullable().optional(),
+          mark: z.enum(TERM_MARK_VALUES).nullable().optional(),
+        })
+        .refine((e) => e.score == null || e.mark == null, {
+          message: "A grade cannot have both a number and a letter mark",
+        })
     )
     .min(1)
     // Worst legitimate payload is one full page re-typed: 100 learners x 15

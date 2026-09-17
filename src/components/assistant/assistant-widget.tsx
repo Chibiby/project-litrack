@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, ChevronLeft, Sparkles } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
+import { Button } from "@/components/ui/button";
+import { useAssistantHidden } from "@/hooks/use-assistant-hidden";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,13 +31,16 @@ type Props = {
   userName: string;
   /** Whether the panel should disclose that answers are sent to Google. */
   aiEnabled?: boolean;
+  /** Keys the "hide the assistant on this phone" preference to this account. */
+  userId: string;
 };
 
-export function AssistantWidget({ role, userName, aiEnabled }: Props) {
+export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
   const fabRef = useRef<HTMLButtonElement>(null);
+  const { hidden, setHidden } = useAssistantHidden(userId);
 
   const openPanel = useCallback(() => {
     setMounted(true);
@@ -56,6 +61,17 @@ export function AssistantWidget({ role, userName, aiEnabled }: Props) {
     fabRef.current?.focus();
   }, []);
 
+  // Hiding is a minimize, not a close: the transcript survives. Only the panel
+  // and the round button leave the screen, until the edge tab brings them back.
+  const hide = useCallback(() => {
+    setOpen(false);
+    setHidden(true);
+  }, [setHidden]);
+
+  const show = useCallback(() => {
+    setHidden(false);
+  }, [setHidden]);
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -66,32 +82,53 @@ export function AssistantWidget({ role, userName, aiEnabled }: Props) {
   }, [open, minimize]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 print:hidden">
-      {mounted && (
-        <div className={cn(open ? "block" : "hidden")}>
-          <AssistantPanel
-            key={sessionKey}
-            role={role}
-            userName={userName}
-            aiEnabled={aiEnabled}
-            active={open}
-            onMinimize={minimize}
-            onClose={close}
-          />
-        </div>
-      )}
-
-      <button
-        ref={fabRef}
-        type="button"
-        onClick={() => (open ? minimize() : openPanel())}
-        aria-expanded={open}
-        aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
-        className="relative flex size-14 items-center justify-center rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95"
+    <>
+      <div
+        className={cn(
+          "fixed bottom-4 right-4 z-40 flex-col items-end gap-3 print:hidden",
+          // Hiding applies on phones only — at `md` and up the FAB always
+          // shows, regardless of the stored preference.
+          hidden ? "hidden md:flex" : "flex"
+        )}
       >
-        <Bot className="size-6" aria-hidden />
-        <Sparkles className="absolute right-3 top-3 size-3" aria-hidden />
-      </button>
-    </div>
+        {mounted && (
+          <div className={cn(open ? "block" : "hidden")}>
+            <AssistantPanel
+              key={sessionKey}
+              role={role}
+              userName={userName}
+              aiEnabled={aiEnabled}
+              active={open}
+              onMinimize={minimize}
+              onClose={close}
+              onHide={hide}
+            />
+          </div>
+        )}
+
+        <button
+          ref={fabRef}
+          type="button"
+          onClick={() => (open ? minimize() : openPanel())}
+          aria-expanded={open}
+          aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
+          className="relative flex size-14 items-center justify-center rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95"
+        >
+          <Bot className="size-6" aria-hidden />
+          <Sparkles className="absolute right-3 top-3 size-3" aria-hidden />
+        </button>
+      </div>
+
+      {hidden && (
+        <Button
+          type="button"
+          onClick={show}
+          aria-label="Show the LITRACK Assistant"
+          className="fixed bottom-4 right-0 z-40 h-12 w-8 rounded-l-full bg-violet p-0 text-violet-foreground shadow-lg hover:bg-violet/90 md:hidden print:hidden"
+        >
+          <ChevronLeft className="size-5" aria-hidden />
+        </Button>
+      )}
+    </>
   );
 }

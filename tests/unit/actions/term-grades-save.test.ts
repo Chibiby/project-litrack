@@ -1566,3 +1566,121 @@ describe("saveTermGrades — a named advisory section (sectionId)", () => {
     expect(learnerFindMany).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Grade 1's grading scale is LETTER, not NUMERIC: cells carry a `mark`
+ * (TermMark), not a `score`. The scale is derived from the advisory's own
+ * `gradeType` (never trusted from the payload), so a wrong-kind cell must be
+ * refused for the WHOLE batch before any write — a tab left open from before
+ * the switch, or a hand-built payload, must not half-save.
+ */
+describe("saveTermGrades — Grade 1 letter marks", () => {
+  const G1_GRADE_ID = "grade-g1";
+  const G1_SECTION_ID = "section-g1-mabini";
+  const G1_SUBJECT_ID = "subject-g1-english";
+
+  /** Gives the fixture teacher a second advisory, in Grade 1. */
+  function addG1Advisory() {
+    sections.push({
+      id: G1_SECTION_ID,
+      name: "Mabini",
+      schoolId: SCHOOL_ID,
+      gradeLevelId: G1_GRADE_ID,
+      gradeType: "G1",
+      deletedAt: null,
+      adviserId: TEACHER_ID,
+    });
+    termSubjects.push({
+      id: G1_SUBJECT_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: G1_GRADE_ID,
+      name: "English",
+      position: 0,
+      deletedAt: null,
+    });
+    learners.push(
+      learner({ id: "learner-g1", gradeLevelId: G1_GRADE_ID, sectionId: G1_SECTION_ID })
+    );
+  }
+
+  function postG1(
+    entries: { learnerId: string; termSubjectId: string; score?: number | null; mark?: string | null }[]
+  ) {
+    return saveTermGrades({
+      gradeLevelId: G1_GRADE_ID,
+      sectionId: G1_SECTION_ID,
+      term: OPEN_TERM,
+      entries,
+    });
+  }
+
+  it("refuses a score posted against a Grade 1 cell, and writes nothing", async () => {
+    addG1Advisory();
+
+    const res = await postG1([
+      { learnerId: "learner-g1", termSubjectId: G1_SUBJECT_ID, score: 87 },
+    ]);
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Grade 1 grades are now letter marks. Reload the page.",
+    });
+    expectNoWrites();
+  });
+
+  it("accepts a Grade 1 mark, and the raw write carries it", async () => {
+    addG1Advisory();
+
+    const res = await postG1([
+      { learnerId: "learner-g1", termSubjectId: G1_SUBJECT_ID, mark: "ADVANCING" },
+    ]);
+
+    expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
+    expect(rawWrites).toHaveLength(1);
+    const { sql, params } = rawWrites[0];
+    expect(sql).toContain('"mark"');
+    expect(params).toContain("ADVANCING");
+    // A LETTER-scale save never binds a numeric score for this cell.
+    expect(params).not.toContain(87);
+  });
+
+  it("clears a Grade 1 cell (neither score nor mark) through the delete path, not the raw write", async () => {
+    addG1Advisory();
+
+    const res = await postG1([{ learnerId: "learner-g1", termSubjectId: G1_SUBJECT_ID }]);
+
+    expect(res).toEqual({ ok: true, data: { saved: 0, cleared: 1 } });
+    expect(termGradeDeleteMany).toHaveBeenCalledTimes(1);
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("refuses a mark posted against a G3 (number-scale) placement, and writes nothing", async () => {
+    // The fixture's default advisory grade is renamed G3 for this one case, so
+    // the refusal is pinned against a concrete non-letter grade rather than
+    // only the default fixture's G7.
+    sections[0] = { ...sections[0], gradeType: "G3" };
+
+    const res = await saveTermGrades({
+      gradeLevelId: GRADE_ID,
+      term: OPEN_TERM,
+      entries: [
+        { learnerId: "learner-a", termSubjectId: SUBJECT_IDS.ENGLISH, mark: "ADVANCING" },
+      ],
+    });
+
+    expect(res).toEqual({
+      ok: false,
+      error: "This grade uses number grades. Reload the page.",
+    });
+    expectNoWrites();
+  });
+
+  it("still saves a G3 (number-scale) score exactly as before", async () => {
+    sections[0] = { ...sections[0], gradeType: "G3" };
+
+    const res = await post();
+
+    expect(res).toEqual({ ok: true, data: { saved: 1, cleared: 0 } });
+    expect(rawWrites[0].params).toContain(87);
+  });
+});
