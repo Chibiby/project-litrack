@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
@@ -53,8 +54,21 @@ const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+/**
+ * Site origin for links that must work wherever this deploy is reached from,
+ * not a hardcoded production URL.
+ *
+ * Next validates a Server Action POST's `Origin` header against `Host` before
+ * the action body ever runs, so — unlike a value read from the client — the
+ * `origin` header here is trustworthy: it is the origin the browser is
+ * actually on. `NEXT_PUBLIC_APP_URL` only covers the case where that header
+ * is absent (non-browser callers), and localhost is the last resort so local
+ * dev without the env var still produces a link that works locally.
+ */
+async function resolveRequestOrigin(): Promise<string> {
+  const origin = (await headers()).get("origin");
+  const base = origin || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return base.replace(/\/+$/, "");
 }
 
 /**
@@ -878,7 +892,7 @@ export const requestPasswordReset = action(
       });
       if (existing && existing.isActive && !existing.deletedAt) {
         try {
-          await sendPasswordRecoveryEmail(email, `${appUrl()}/auth/reset`);
+          await sendPasswordRecoveryEmail(email, await resolveRequestOrigin());
         } catch (error) {
           // The person must still see "sent" — telling them it failed would
           // tell a stranger the account exists. But a mail sender that has

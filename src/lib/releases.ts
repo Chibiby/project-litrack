@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.1.1",
+    date: "2026-09-17",
+    title: "Password reset links open LITRACK again",
+    announce: true,
+    fixes: [
+      "The link in a Forgot Password email now opens the LITRACK reset page. Before, it opened a page that could not be reached. If you already got a reset email, request a new one.",
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-09-17",
     title: "Choose which advisory a teacher keeps",
