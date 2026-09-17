@@ -64,9 +64,24 @@ export function isAllowedTestLabNext(persona: TestLabPersona, next: string): boo
     return false;
   }
   if (next.includes("//") || next.includes("\\")) return false;
+  if (/%(2f|5c|00)/i.test(next)) return false;
   if (/^[a-z][a-z0-9+.-]*:/i.test(next)) return false;
   // eslint-disable-next-line no-control-regex
   if (/[\s\u0000-\u001f\u007f]/.test(next)) return false;
+
+  // The checks above compare the raw string, but a browser resolves the path
+  // before it navigates: `/teacher/../admin` starts with `/teacher/` yet lands
+  // on `/admin`. So re-run the role-tree check on the resolved path, and refuse
+  // anything whose resolution moved it — dot segments and encoded slashes
+  // (`%2f`, `%5c`) both show up here as a mismatch.
+  let resolvedPath: string;
+  try {
+    resolvedPath = new URL(next, "https://litrack.invalid").pathname;
+  } catch {
+    return false;
+  }
+  if (resolvedPath !== home && !resolvedPath.startsWith(`${home}/`)) return false;
+  if (resolvedPath !== next.split("?")[0]) return false;
   return true;
 }
 
