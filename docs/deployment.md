@@ -80,14 +80,22 @@ Verify after a deploy: `npx wrangler tail --format pretty` and wait for a schedu
 one against the deployed Worker with `curl -H "Authorization: Bearer $CRON_SECRET"
 "$NEXT_PUBLIC_APP_URL/api/cron/backup?kind=daily"`.
 
+### Data Cache and placement
+
+`open-next.config.ts` backs Next's Data Cache with Workers KV (`NEXT_INC_CACHE_KV`, namespace
+`litrack-next-cache`) and a D1 tag cache (`NEXT_TAG_CACHE_D1`, database `litrack-tag-cache`, table
+`revalidations`). So `cachedQuery` (`src/lib/cache/unstable.ts`) caches across requests and the
+`src/lib/cache/revalidate.ts` helpers invalidate. KV is eventually consistent, but every read checks
+its tags against D1, so a revalidated entry is a miss at once. KV is used instead of R2 because R2
+is not enabled on the account.
+
+`wrangler.jsonc` pins the Worker with targeted placement to `aws:ap-southeast-1`, next to the
+Supabase project. This replaces the Vercel `sin1` pin described in the appendix.
+
 ### Known gaps
 
 Carried over from the Vercel cutover and not yet closed:
 
-- **No incremental cache.** `open-next.config.ts` is a bare `defineCloudflareConfig()` with no
-  `incrementalCache` or `tagCache`, and there is no KV/R2 binding. `cachedQuery`
-  (`src/lib/cache/unstable.ts`) therefore no longer caches across requests and the
-  `src/lib/cache/revalidate.ts` helpers are no-ops. Dashboard aggregates hit Postgres every load.
 - **Rate limiting is per-isolate.** Without `UPSTASH_REDIS_REST_URL` / `_TOKEN`,
   `src/lib/rate-limit.ts` uses an in-memory window. Workers spread requests across many isolates, so
   the login throttle bounds far less than it appears to. See `docs/runbook.md`.

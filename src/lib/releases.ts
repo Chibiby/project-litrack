@@ -74,6 +74,45 @@ export type Release = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.19.1",
+    date: "2026-09-15",
+    title: "Pages load faster",
+    announce: false,
+    fixes: [
+      "Pages open faster, especially dashboards. LITRACK now runs closer to its database and remembers dashboard totals for a short time instead of counting them again on every visit.",
+    ],
+  },
+  {
+    version: "1.19.0",
+    date: "2026-09-15",
+    title: "ARAL Profiling is back as its own page",
+    announce: true,
+    fixes: [
+      { text: "ARAL Profiling is back in the side menu under ARAL Program. It lists your ARAL learners, shows whose profile is still pending, and has a Complete profile or Update profile button for each one.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      { text: "On your dashboard, the Pending Profiles card now opens ARAL Profiling on the learners who still need a profile.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "The ARAL profile no longer asks how often a learner is absent or why. Weekly Attendance already records absences, so they are not counted twice. Answers saved before are kept.",
+    ],
+  },
+  {
+    version: "1.18.3",
+    date: "2026-09-15",
+    title: "Kindergarten gets the Grade 1 subject list",
+    announce: false,
+    fixes: [
+      "The default End of Terms subjects for Kindergarten are now the same as Grade 1: Reading and Literacy, Language, Makabansa, GMRC and Math. A school gets them when a School Head presses Reset to default.",
+    ],
+  },
+  {
+    version: "1.18.2",
+    date: "2026-09-15",
+    title: "Default End of Terms subjects can be edited again",
+    announce: true,
+    fixes: [
+      { text: "On Default Term Subjects, Add subject, Restore and the move up/down arrows work again. Before, they failed with an error.", roles: ["SUPER_ADMIN"] },
+      "The default End of Terms subjects for Grades 1 to 10 now follow the new lists. Grade 1: Reading and Literacy, Language, Makabansa, GMRC and Math. Grade 2: English, Filipino, Math, GMRC and Makabansa. Grade 3 adds Science. Grades 4 to 10: Math, Science, English, Filipino, MAPEH, Araling Panlipunan, TLE and GMRC. A school gets them when a School Head presses Reset to default.",
+    ],
+  },
+  {
     version: "1.18.1",
     date: "2026-09-15",
     title: "Teacher changes show up right away",

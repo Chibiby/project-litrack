@@ -936,6 +936,9 @@ model TeacherInvite {
   @@index([schoolId, email])
   @@index([userId])
   @@index([expiresAt])
+  /// Lookup side of each placement pointer's `SetNull`.
+  @@index([gradeLevelId])
+  @@index([sectionId])
 }
 
 model GradeLevel {
@@ -1407,6 +1410,9 @@ model TermSubject {
   @@unique([gradeLevelId, legacyArea])
   /// The sheet read: one grade's rows, active first, in display order.
   @@index([gradeLevelId, deletedAt, position])
+  /// Lookup side of the `School` cascade — deleting a school must find its
+  /// subject rows without a sequential scan.
+  @@index([schoolId])
 }
 
 /// One learner's grade in one subject for one term of one school year.
@@ -1581,6 +1587,8 @@ model Notification {
   @@index([actorId])
   /// Same rule for the ticket pointer's `SetNull`.
   @@index([ticketId])
+  /// Same rule for the chat channel pointer's `SetNull`.
+  @@index([channelId])
   /// Same rule for each unlock pointer's `SetNull`.
   @@index([unlockGrantId])
   @@index([schoolUnlockGrantId])
