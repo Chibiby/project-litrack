@@ -515,10 +515,14 @@ describe("AppSidebar — teacher", () => {
 });
 
 describe("AppSidebar — school head", () => {
-  it("renders no section heading for single-group roles", () => {
+  it("renders every group heading, including the first", () => {
     pathname.value = "/school-head";
     render(<AppSidebar role="SCHOOL_HEAD" userName="Head" expanded />);
-    expect(screen.queryByText("Menu")).toBeNull();
+    expect(screen.getAllByText("Overview").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("School Setup").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("People").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Programs").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Communication & Records").length).toBeGreaterThan(0);
     expect(
       screen.getAllByRole("link", { name: "Teachers" })[0].getAttribute("href")
     ).toBe("/school-head/teachers");

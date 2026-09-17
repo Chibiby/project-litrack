@@ -72,7 +72,7 @@ export default async function DatabasePage() {
 
   return (
     <AppShell
-      title="Database"
+      title="Database Console"
       subtitle="Backups, restore, and system-wide resets"
       role={user.role}
       userName={user.fullName || user.email}

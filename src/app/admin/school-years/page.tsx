@@ -30,7 +30,7 @@ export default async function AdminSchoolYearsPage() {
 
   return (
     <AppShell
-      title="School years"
+      title="School Years"
       subtitle="Read-only oversight of school years across the platform"
       role={user.role}
       userName={user.fullName || user.email}

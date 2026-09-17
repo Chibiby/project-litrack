@@ -480,40 +480,75 @@ describe("getNavGroups — floating teacher", () => {
 });
 
 describe("getNavGroups — admin", () => {
-  it("keeps admin on a single unlabeled group", () => {
-    // The redesign regrouped the School Head sidebar only; admin was left
-    // alone on purpose, so its flat shape is part of the contract now rather
-    // than an accident of the two roles once sharing a branch.
+  it("splits admin into Overview, Schools & People, School Year Setup, Monitoring and QA & Data", () => {
     const groups = getNavGroups("SUPER_ADMIN");
-    expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBeUndefined();
+    expect(groups.map((g) => g.label)).toEqual([
+      "Overview",
+      "Schools & People",
+      "School Year Setup",
+      "Monitoring",
+      "QA & Data",
+    ]);
+    expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
     expect(groups[0].items[0].href).toBe("/admin");
+    expect(groups[1].items.map((i) => i.label)).toEqual([
+      "Schools",
+      "User Accounts",
+      "Learner Transfers",
+    ]);
+    expect(groups[2].items.map((i) => i.label)).toEqual([
+      "School Years",
+      "End-of-Term Subjects",
+    ]);
+    expect(groups[3].items.map((i) => i.label)).toEqual([
+      "Report Submissions",
+      "Support Inbox",
+      "Audit Log",
+      "Error Log",
+    ]);
+    expect(groups[4].items.map((i) => i.label)).toEqual([
+      "Page Test Lab",
+      "Archived Records",
+      "Database Console",
+    ]);
+    // Ids, hrefs, icons and flags are unchanged by the regroup — only labels
+    // and structure moved.
+    expect(groups[1].items[1]).toMatchObject({ id: "admin-accounts", href: "/admin/accounts", heavy: true });
+    expect(groups[4].items[1]).toMatchObject({ id: "admin-archive", href: "/admin/archive", heavy: true });
+    expect(groups[4].items[0]).toMatchObject({ id: "admin-test-lab", href: "/admin/test-lab" });
   });
 });
 
 describe("getNavGroups — school head", () => {
-  it("splits nav into a lone Dashboard, Manage and Records", () => {
+  it("splits nav into Overview, School Setup, People, Programs and Communication & Records", () => {
     const groups = getNavGroups("SCHOOL_HEAD");
-    expect(groups.map((g) => g.label)).toEqual([undefined, "Manage", "Records"]);
+    expect(groups.map((g) => g.label)).toEqual([
+      "Overview",
+      "School Setup",
+      "People",
+      "Programs",
+      "Communication & Records",
+    ]);
     // Dashboard sits above the labelled groups on its own so it reads as the
     // landing page, not as the first of the things you manage.
     expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
     expect(groups[0].items[0].href).toBe("/school-head");
-    // Manage is what a School Head changes, Records what they publish or read
-    // back. "School" is one entry because school years, grade levels and school
-    // info are tabs of one workspace now, not three separate destinations.
     expect(groups[1].items.map((i) => i.label)).toEqual([
-      "School",
-      "Teachers",
-      "ARAL Program",
-      "Transfer",
-      "Term Subjects",
+      "School Setup",
+      "End-of-Term Subjects",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
+      "Teachers",
+      "Learner Transfers",
+    ]);
+    expect(groups[3].items.map((i) => i.label)).toEqual([
+      "ARAL Program",
+      "Kindergarten Checklist",
+    ]);
+    expect(groups[4].items.map((i) => i.label)).toEqual([
       "Announcements",
       "Reports",
-      "Kindergarten Checklist",
-      "Audit",
+      "Audit Log",
     ]);
   });
 

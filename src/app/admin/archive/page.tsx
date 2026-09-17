@@ -59,7 +59,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
 
   return (
     <AppShell
-      title="Archive"
+      title="Archived Records"
       subtitle="Soft-deleted teachers and learners across all schools"
       role={user.role}
       userName={user.fullName || user.email}

@@ -145,7 +145,7 @@ export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps)
 
   return (
     <AppShell
-      title="Errors"
+      title="Error Log"
       subtitle="Server-side failures and refused requests across all schools"
       role={user.role}
       userName={user.fullName || user.email}

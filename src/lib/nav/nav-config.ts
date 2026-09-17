@@ -9,6 +9,7 @@ import {
   FileBarChart,
   FileCheck2,
   FileText,
+  FlaskConical,
   KeyRound,
   LayoutDashboard,
   LifeBuoy,
@@ -147,50 +148,83 @@ export function getNavGroups(
     case "SUPER_ADMIN":
       return [
         {
+          label: "Overview",
           items: [
             { id: "admin-dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+          ],
+        },
+        {
+          label: "Schools & People",
+          items: [
             { id: "admin-schools", label: "Schools", href: "/admin/schools", icon: School },
-            { id: "admin-accounts", label: "Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
-            { id: "admin-transfers", label: "Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
-            { id: "admin-school-years", label: "School years", href: "/admin/school-years", icon: CalendarRange },
-            { id: "admin-term-subjects", label: "Term Subjects", href: "/admin/term-subjects", icon: ListOrdered },
-            { id: "admin-submissions", label: "Submissions", href: "/admin/submissions", icon: FileCheck2 },
-            { id: "admin-support", label: "Support", href: "/admin/support", icon: LifeBuoy },
-            { id: "admin-audit", label: "Audit", href: "/admin/audit", icon: ScrollText },
-            { id: "admin-errors", label: "Errors", href: "/admin/errors", icon: TriangleAlert },
-            { id: "admin-archive", label: "Archive", href: "/admin/archive", icon: Archive, heavy: true },
-            { id: "admin-database", label: "Database", href: "/admin/database", icon: Database },
+            { id: "admin-accounts", label: "User Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
+            { id: "admin-transfers", label: "Learner Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
+          ],
+        },
+        {
+          label: "School Year Setup",
+          items: [
+            { id: "admin-school-years", label: "School Years", href: "/admin/school-years", icon: CalendarRange },
+            { id: "admin-term-subjects", label: "End-of-Term Subjects", href: "/admin/term-subjects", icon: ListOrdered },
+          ],
+        },
+        {
+          label: "Monitoring",
+          items: [
+            { id: "admin-submissions", label: "Report Submissions", href: "/admin/submissions", icon: FileCheck2 },
+            { id: "admin-support", label: "Support Inbox", href: "/admin/support", icon: LifeBuoy },
+            { id: "admin-audit", label: "Audit Log", href: "/admin/audit", icon: ScrollText },
+            { id: "admin-errors", label: "Error Log", href: "/admin/errors", icon: TriangleAlert },
+          ],
+        },
+        {
+          label: "QA & Data",
+          items: [
+            { id: "admin-test-lab", label: "Page Test Lab", href: "/admin/test-lab", icon: FlaskConical },
+            { id: "admin-archive", label: "Archived Records", href: "/admin/archive", icon: Archive, heavy: true },
+            { id: "admin-database", label: "Database Console", href: "/admin/database", icon: Database },
           ],
         },
       ];
     case "SCHOOL_HEAD":
       return [
         {
+          label: "Overview",
           items: [
             { id: "school-head-dashboard", label: "Dashboard", href: SCHOOL_HEAD_ROUTES.dashboard, icon: LayoutDashboard },
           ],
         },
         {
-          // Things a School Head changes. "School" replaces the three separate
-          // entries (school years, grade levels, school info) that were really
-          // one job; they are tabs inside the workspace now.
-          label: "Manage",
+          // "School Setup" replaces the three separate entries (school years,
+          // grade levels, school info) that were really one job; they are tabs
+          // inside the workspace now.
+          label: "School Setup",
           items: [
-            { id: "school-head-school", label: "School", href: SCHOOL_HEAD_ROUTES.school, icon: School },
+            { id: "school-head-school", label: "School Setup", href: SCHOOL_HEAD_ROUTES.school, icon: School },
+            { id: "school-head-term-subjects", label: "End-of-Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
+          ],
+        },
+        {
+          label: "People",
+          items: [
             { id: "school-head-teachers", label: "Teachers", href: SCHOOL_HEAD_ROUTES.teachers, icon: Users },
+            { id: "school-head-transfer", label: "Learner Transfers", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
+          ],
+        },
+        {
+          label: "Programs",
+          items: [
             { id: "school-head-aral", label: "ARAL Program", href: SCHOOL_HEAD_ROUTES.aral, icon: Sparkles },
-            { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
-            { id: "school-head-term-subjects", label: "Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
+            { id: "school-head-kinder-checklist", label: "Kindergarten Checklist", href: SCHOOL_HEAD_ROUTES.kinderChecklist, icon: ClipboardList },
           ],
         },
         {
           // Things a School Head publishes or reads back.
-          label: "Records",
+          label: "Communication & Records",
           items: [
             { id: "school-head-announcements", label: "Announcements", href: SCHOOL_HEAD_ROUTES.announcements, icon: Megaphone },
             { id: "school-head-reports", label: "Reports", href: SCHOOL_HEAD_ROUTES.reports, icon: FileBarChart },
-            { id: "school-head-kinder-checklist", label: "Kindergarten Checklist", href: SCHOOL_HEAD_ROUTES.kinderChecklist, icon: ClipboardList },
-            { id: "school-head-audit", label: "Audit", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText },
+            { id: "school-head-audit", label: "Audit Log", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText },
           ],
         },
       ];

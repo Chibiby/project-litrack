@@ -105,7 +105,7 @@ export default async function TermSubjectsPage({ searchParams }: PageProps) {
 
   return (
     <SchoolHeadPage
-      title="Term Subjects"
+      title="End-of-Term Subjects"
       description="Set which subjects appear on each grade's End of Terms sheet. Kindergarten uses the competency checklist instead."
       view={view}
       superAdminCaption="editable — every change is audited"
