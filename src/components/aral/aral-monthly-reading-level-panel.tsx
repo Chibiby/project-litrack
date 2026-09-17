@@ -231,6 +231,34 @@ export function AralMonthlyReadingLevelPanel({
   const desiredMonthRef = useRef(initialMonthKey);
   const requestIdRef = useRef(0);
 
+  // Adopt a fresh server render whenever it describes the month already in the
+  // grid — that is what moves the progress bar after a save (the grid calls
+  // `router.refresh()`) and what keeps the record set current across pagination.
+  // Guarded on the month so a render that is still catching up to a client-side
+  // month step cannot write another month's numbers into this one's banner.
+  // Adjusted during render (not an effect) per the React docs "adjusting state
+  // when a prop changes" pattern, comparing against the previous committed props.
+  const [prevSync, setPrevSync] = useState({
+    monthKey: initialMonthKey,
+    existing: initialExisting,
+    progress: initialProgress,
+  });
+  if (
+    prevSync.monthKey !== initialMonthKey ||
+    prevSync.existing !== initialExisting ||
+    prevSync.progress !== initialProgress
+  ) {
+    setPrevSync({
+      monthKey: initialMonthKey,
+      existing: initialExisting,
+      progress: initialProgress,
+    });
+    if (initialMonthKey === loadedMonth) {
+      setExisting(initialExisting);
+      setProgress(initialProgress);
+    }
+  }
+
   const lockState = { lockingEnabled, programUnlockAll, unlockedMonths };
   // The banner follows the month the teacher asked for; the grid follows the
   // month whose rows have arrived — same split as the weekly attendance panel's
@@ -315,17 +343,6 @@ export function AralMonthlyReadingLevelPanel({
     loadMonth(urlMonth, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- URL/month identity only
   }, [urlMonthParam, initialMonthKey]);
-
-  // Adopt a fresh server render whenever it describes the month already in the
-  // grid — that is what moves the progress bar after a save (the grid calls
-  // `router.refresh()`) and what keeps the record set current across pagination.
-  // Guarded on the month so a render that is still catching up to a client-side
-  // month step cannot write another month's numbers into this one's banner.
-  useEffect(() => {
-    if (initialMonthKey !== loadedMonth) return;
-    setExisting(initialExisting);
-    setProgress(initialProgress);
-  }, [initialMonthKey, loadedMonth, initialExisting, initialProgress]);
 
   function pushFilters(next: { section?: string; gender?: string }) {
     const nextSection = next.section ?? section;

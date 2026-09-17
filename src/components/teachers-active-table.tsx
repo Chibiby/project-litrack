@@ -444,12 +444,18 @@ function TeachersManagedTable({
    */
   const editableAdvisory = readOnly ? undefined : advisoryOptions;
 
-  useEffect(() => {
+  const [prevListQ, setPrevListQ] = useState(list?.q ?? "");
+  if ((list?.q ?? "") !== prevListQ) {
+    setPrevListQ(list?.q ?? "");
     setSearchValue(list?.q ?? "");
-  }, [list?.q]);
-  useEffect(() => {
+  }
+  const [prevListFilter, setPrevListFilter] = useState<TeacherListFilter>(
+    list?.filter ?? "all"
+  );
+  if ((list?.filter ?? "all") !== prevListFilter) {
+    setPrevListFilter(list?.filter ?? "all");
     setFilterValue(list?.filter ?? "all");
-  }, [list?.filter]);
+  }
 
   /**
    * Server data wins once it arrives for a row — but only for *that* row.

@@ -95,7 +95,13 @@ export function TermsReportPanel({
     [groups]
   );
 
-  useEffect(() => setSearchValue(state.q), [state.q]);
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevQ, setPrevQ] = useState(state.q);
+  if (state.q !== prevQ) {
+    setPrevQ(state.q);
+    setSearchValue(state.q);
+  }
   useEffect(
     () => () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

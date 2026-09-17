@@ -1,9 +1,19 @@
 "use client";
 
-import { useLayoutEffect, useState, type ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
 
 const CREAM = "#FDFBF5";
+
+/** The flag/latch this reads never notifies of changes; nothing to subscribe to. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+/** Server and first client paint must agree, so both default to covered. */
+function getServerShowCover(): boolean {
+  return true;
+}
 
 /**
  * Wraps role-home `loading.tsx` skeletons.
@@ -13,17 +23,20 @@ const CREAM = "#FDFBF5";
  * z-9999. The cream matches the splash's own background, so the handover from
  * cover to splash is invisible.
  *
- * In-app soft navigations: `useLayoutEffect` clears the boot cover before
- * paint when the flag/latch is absent, so skeletons still show as usual.
+ * In-app soft navigations: `useSyncExternalStore` resolves the real
+ * flag/latch state right after mount (before paint, same timing a layout
+ * effect would give), clearing the boot cover so skeletons still show as
+ * usual. The default above matches what the server rendered, so there is
+ * nothing for server and client to disagree on at hydration time.
  */
 export function PostLoginLoadingBridge({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<"boot" | "cover" | "skeleton">("boot");
+  const showCover = useSyncExternalStore(
+    subscribeNever,
+    isPostLoginLoadingCover,
+    getServerShowCover
+  );
 
-  useLayoutEffect(() => {
-    setMode(isPostLoginLoadingCover() ? "cover" : "skeleton");
-  }, []);
-
-  if (mode === "skeleton") {
+  if (!showCover) {
     return <>{children}</>;
   }
 

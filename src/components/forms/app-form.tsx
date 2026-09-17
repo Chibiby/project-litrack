@@ -81,11 +81,17 @@ function useReliableFormDirty<TFieldValues extends FieldValues>(
 ): boolean {
   const [dirty, setDirty] = React.useState(false);
 
+  // Reset the local flag when the guard is turned off — adjusted during render
+  // (React docs "adjusting state when a prop changes" pattern) so the effect
+  // below only ever runs its subscription side, not a synchronous setState.
+  const [prevEnabled, setPrevEnabled] = React.useState(enabled);
+  if (enabled !== prevEnabled) {
+    setPrevEnabled(enabled);
+    if (!enabled) setDirty(false);
+  }
+
   React.useEffect(() => {
-    if (!enabled) {
-      setDirty(false);
-      return;
-    }
+    if (!enabled) return;
 
     // Access isDirty so RHF enables dirty tracking; still OR with valuesDiff
     // because useFormState subscriptions alone can miss wizard field edits.

@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.4.1",
+    date: "2026-09-18",
+    title: "Behind-the-scenes clean-up",
+    announce: false,
+    fixes: [
+      "Lists, search boxes, dialogs and the side menu now update in the same moment you act, instead of a split second later. Nothing looks different.",
+    ],
+  },
+  {
     version: "2.4.0",
     date: "2026-09-18",
     title: "Faster pages, and a better fit on tablets",

@@ -21,12 +21,12 @@ const ANY = "any";
  * in an alert email lands on exactly this view.
  */
 export function ErrorLogFilters({
-  ref: initialRef,
+  refFilter: initialRef,
   code,
   severity,
   window: initialWindow,
 }: {
-  ref: string | null;
+  refFilter: string | null;
   code: string | null;
   severity: string | null;
   window: string;

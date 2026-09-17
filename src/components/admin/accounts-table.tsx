@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -257,8 +257,11 @@ export function AccountsTable({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState(list.q);
-
-  useEffect(() => setQuery(list.q), [list.q]);
+  const [prevListQ, setPrevListQ] = useState(list.q);
+  if (list.q !== prevListQ) {
+    setPrevListQ(list.q);
+    setQuery(list.q);
+  }
 
   const apply = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams.toString());

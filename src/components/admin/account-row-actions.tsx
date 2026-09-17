@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CheckCircle2, Copy, Eye, EyeOff, KeyRound, UserCog } from "lucide-react";
@@ -39,11 +39,15 @@ export function PasswordCell({ row }: { row: AccountRow }) {
   // A row's password state is a fresh object every time the server re-sends
   // it (e.g. after `router.refresh()` following a reset), so keying on its
   // shape — not the row's identity, which is unchanged — clears a stale
-  // reveal the instant the underlying credential does.
+  // reveal the instant the underlying credential does. Adjusted during
+  // render (React docs "Adjusting state when a prop changes") rather than in
+  // an effect, so the stale value never paints.
   const passwordKey = `${password.kind}:${"value" in password ? password.value : ""}`;
-  useEffect(() => {
+  const [prevPasswordKey, setPrevPasswordKey] = useState(passwordKey);
+  if (passwordKey !== prevPasswordKey) {
+    setPrevPasswordKey(passwordKey);
     setRevealed(null);
-  }, [passwordKey]);
+  }
 
   if (password.kind === "never_stored") {
     return <span className="text-sm text-muted-foreground">—</span>;

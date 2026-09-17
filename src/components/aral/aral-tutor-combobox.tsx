@@ -99,16 +99,25 @@ export function AralTutorCombobox({
       [filteredTutors]
     );
 
-  React.useEffect(() => {
+  // A filter change resets the highlighted row. Adjusted during render (React
+  // docs "adjusting state when a prop changes" pattern) rather than an effect,
+  // comparing against the previously committed query.
+  const [prevQuery, setPrevQuery] = React.useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
     setActiveIndex(0);
-  }, [query]);
+  }
 
-  React.useEffect(() => {
+  // Closing clears the search and the highlight, so reopening always starts
+  // fresh rather than wherever the last visit left the cursor.
+  const [prevOpen, setPrevOpen] = React.useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setQuery("");
       setActiveIndex(0);
     }
-  }, [open]);
+  }
 
   React.useEffect(() => {
     if (!open) return;

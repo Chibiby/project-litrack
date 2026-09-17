@@ -112,6 +112,7 @@ export function ReleaseNotesModal({
     if (!unseen) return;
     let cancelled = false;
     let pollId: ReturnType<typeof setTimeout> | undefined;
+    // eslint-disable-next-line react-hooks/purity -- polls an external DOM/global loading flag with a real wall-clock timeout; the deadline must be "now" at the moment this effect starts polling, not a value frozen at an earlier render
     const deadline = Date.now() + COVER_WAIT_CAP_MS;
 
     if (landmarkVersion && isSnoozed(landmarkVersion)) return;

@@ -160,9 +160,16 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
   }, [filledCount]);
 
   // Read-and-clear the post-login flag; absent → never show.
+  //
+  // consumePostLoginFlag() is an impure, one-shot claim on a module-level
+  // latch/sessionStorage flag (it must run exactly once, not be replayed if a
+  // render is thrown away); `active` can only be known after that claim runs,
+  // so it cannot be derived during render or moved to an event handler — this
+  // is genuine external-system synchronization, not derived state.
   useEffect(() => {
     if (!consumePostLoginFlag()) return;
     startedAtRef.current = Date.now();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above the effect
     setActive(true);
   }, []);
 

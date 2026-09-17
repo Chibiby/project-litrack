@@ -41,12 +41,16 @@ export function LearnerSearchSelect({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevSchoolId, setPrevSchoolId] = useState(schoolId);
+  if (schoolId !== prevSchoolId) {
+    setPrevSchoolId(schoolId);
     setQuery("");
     setHits([]);
     setOpen(false);
     setError(null);
-  }, [schoolId]);
+  }
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {

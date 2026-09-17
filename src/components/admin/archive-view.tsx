@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Archive as ArchiveIcon, ChevronLeft, ChevronRight, GraduationCap, Users } from "lucide-react";
@@ -125,21 +125,33 @@ export function ArchiveView({
   // the search can make the currently selected school disappear from the
   // option list — which would blank the Select even though it still has a
   // value. Accumulate every school id/name this session has seen (across
-  // filter changes) in a ref so a selection never falls out of its own
-  // dropdown; mutated during render rather than an effect since it is
-  // idempotent and must be visible in the same pass that reads it.
-  const seenSchoolsRef = useRef<Map<string, string>>(new Map());
-  for (const school of schools) seenSchoolsRef.current.set(school.id, school.name);
-  if (filters.school && !seenSchoolsRef.current.has(filters.school)) {
-    seenSchoolsRef.current.set(filters.school, filters.school);
-  }
+  // filter changes) in state so a selection never falls out of its own
+  // dropdown; adjusted during render (React docs "Adjusting state when a
+  // prop changes") rather than a ref or an effect, so it is visible in the
+  // same pass that reads it.
+  const [seenSchools, setSeenSchools] = useState<Map<string, string>>(() => new Map());
+  const mergedSchools = useMemo(() => {
+    const next = new Map(seenSchools);
+    let changed = false;
+    for (const school of schools) {
+      if (next.get(school.id) !== school.name) {
+        next.set(school.id, school.name);
+        changed = true;
+      }
+    }
+    if (filters.school && !next.has(filters.school)) {
+      next.set(filters.school, filters.school);
+      changed = true;
+    }
+    return changed ? next : seenSchools;
+  }, [schools, filters.school, seenSchools]);
+  if (mergedSchools !== seenSchools) setSeenSchools(mergedSchools);
   const schoolOptions = useMemo(
     () =>
-      Array.from(seenSchoolsRef.current, ([id, name]) => ({ id, name })).sort((a, b) =>
+      Array.from(mergedSchools, ([id, name]) => ({ id, name })).sort((a, b) =>
         a.name.localeCompare(b.name)
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ref content, keyed off the inputs that mutate it
-    [schools, filters.school]
+    [mergedSchools]
   );
 
   const apply = (changes: Record<string, string | null>) => {

@@ -148,12 +148,30 @@ export function LearnerProfileModal({
 
   // Reset to the first tab for each learner so the dialog never opens on the
   // tab left behind by the previous row — nor, since Edit is now in-place, on
-  // the previous row's edit form.
+  // the previous row's edit form. The resets are adjusted during render (React
+  // docs "adjusting state when a prop changes" pattern); the fetch itself
+  // stays in an effect since it's a genuine external-system sync.
+  const [prevLoadKey, setPrevLoadKey] = useState({ learnerId, initialMode });
+  if (prevLoadKey.learnerId !== learnerId || prevLoadKey.initialMode !== initialMode) {
+    setPrevLoadKey({ learnerId, initialMode });
+    if (learnerId) {
+      setTab("profile");
+      setMode(initialMode);
+      setLearner(null);
+      // Cleared here, not only in `load`, so a previous learner's failed fetch
+      // never paints under the next learner before the effect runs.
+      setError(null);
+      setLoading(true);
+    }
+  }
+
   useEffect(() => {
     if (!learnerId) return;
-    setTab("profile");
-    setMode(initialMode);
-    setLearner(null);
+    // `load` fetches from the server (a genuine external system) and also sets
+    // its own loading/error flags synchronously before awaiting; it is reused
+    // by `handleSaved`/`onDone` re-fetches below, so hoisting those setState
+    // calls out of `load` to dodge this lint would change behavior there.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
     void load(learnerId);
   }, [learnerId, initialMode, load]);
 

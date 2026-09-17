@@ -384,9 +384,14 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
   const [hadRecord, setHadRecord] = useState(
     () => new Set(existing.filter(existingHasVisibleRow).map((r) => r.learnerId))
   );
-  useEffect(() => {
+  // Re-seeded whenever a new `existing` prop arrives (e.g. after
+  // `router.refresh()`). Adjusted during render (React docs "adjusting state
+  // when a prop changes" pattern) rather than an effect.
+  const [prevExisting, setPrevExisting] = useState(existing);
+  if (existing !== prevExisting) {
+    setPrevExisting(existing);
     setHadRecord(new Set(existing.filter(existingHasVisibleRow).map((r) => r.learnerId)));
-  }, [existing]);
+  }
 
   useEffect(() => {
     onSavePendingChange?.(pending);
@@ -683,10 +688,13 @@ function BandSelect({
   const [active, setActive] = useState(selectedIndex);
 
   // Reopening lands on the current value rather than wherever the last visit
-  // left the cursor.
-  useEffect(() => {
+  // left the cursor. Adjusted during render (React docs "adjusting state when
+  // a prop changes" pattern) rather than an effect.
+  const [prevActiveKey, setPrevActiveKey] = useState({ open, selectedIndex });
+  if (prevActiveKey.open !== open || prevActiveKey.selectedIndex !== selectedIndex) {
+    setPrevActiveKey({ open, selectedIndex });
     if (open) setActive(selectedIndex);
-  }, [open, selectedIndex]);
+  }
 
   function commit(next: string) {
     onChange(next);

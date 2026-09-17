@@ -48,9 +48,13 @@ export function ProfilingToolbar({
   const [inputValue, setInputValue] = useState(q);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
+  // React docs "adjusting state when a prop changes" pattern.
+  const [prevQ, setPrevQ] = useState(q);
+  if (q !== prevQ) {
+    setPrevQ(q);
     setInputValue(q);
-  }, [q]);
+  }
 
   const clearDebounce = () => {
     if (debounceRef.current !== null) {

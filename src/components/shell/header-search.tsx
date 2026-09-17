@@ -74,6 +74,20 @@ export type HeaderSearchPage = { label: string; href: string };
  */
 const NO_PAGES: HeaderSearchPage[] = [];
 
+/** Pure match against the static, role-filtered page list — no network. */
+function matchPages(pages: HeaderSearchPage[], trimmed: string): Row[] {
+  if (trimmed.length < GLOBAL_SEARCH_MIN_CHARS) return [];
+  return pages
+    .filter((p) => p.label.toLowerCase().includes(trimmed.toLowerCase()))
+    .map((p) => ({
+      id: p.href,
+      kind: "page" as const,
+      title: p.label,
+      subtitle: null,
+      href: p.href,
+    }));
+}
+
 export function HeaderSearch({
   searchHref,
   placeholder = "Search learners, teachers, pages…",
@@ -96,26 +110,26 @@ export function HeaderSearch({
   const [, startTransition] = useTransition();
 
   const trimmed = query.trim();
+  const [prevTrimmed, setPrevTrimmed] = useState(trimmed);
+
+  // Below the minimum, or on a fresh query, the previous list is stale the
+  // instant `trimmed` changes — adjusted during render (the "previous prop"
+  // pattern) rather than in the effect below, so it never has a chance to
+  // paint before the query it belonged to is replaced.
+  if (trimmed !== prevTrimmed) {
+    setPrevTrimmed(trimmed);
+    setRows(matchPages(pages, trimmed));
+  }
 
   useEffect(() => {
     if (trimmed.length < GLOBAL_SEARCH_MIN_CHARS) {
-      setRows([]);
       return;
     }
 
-    const pageHits: Row[] = pages
-      .filter((p) => p.label.toLowerCase().includes(trimmed.toLowerCase()))
-      .map((p) => ({
-        id: p.href,
-        kind: "page" as const,
-        title: p.label,
-        subtitle: null,
-        href: p.href,
-      }));
-
-    // Pages resolve instantly; records arrive when the server answers. Showing
-    // the pages first means a keystroke is never met with an empty box.
-    setRows(pageHits);
+    // Pages resolve instantly; records arrive when the server answers. The
+    // render-phase adjustment above already showed the page matches, so this
+    // recomputes the same list only to merge it with the server's answer.
+    const pageHits = matchPages(pages, trimmed);
 
     // `cancelled` rather than an AbortController: a server action cannot be
     // aborted, so the guard is against applying a STALE result, which is the
@@ -136,9 +150,11 @@ export function HeaderSearch({
     };
   }, [trimmed, pages]);
 
-  useEffect(() => {
+  const [prevRowsLength, setPrevRowsLength] = useState(rows.length);
+  if (rows.length !== prevRowsLength) {
+    setPrevRowsLength(rows.length);
     setActive(0);
-  }, [rows.length]);
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

@@ -93,20 +93,28 @@ export function SearchableSelect({
   const selected = options.find((o) => o.value === value);
 
   // A filter change can leave the active index past the end of the new list.
-  React.useEffect(() => {
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevQuery, setPrevQuery] = React.useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
     setActiveIndex(0);
-  }, [query]);
+  }
 
-  React.useEffect(() => {
+  // Closing clears the search and the highlight, so reopening always starts
+  // fresh rather than wherever the last visit left the cursor.
+  const [prevOpen, setPrevOpen] = React.useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setQuery("");
       // Reset the highlight here as well. When the query is already empty — the
       // user opened, hovered a row, and clicked it — `setQuery("")` is a no-op,
-      // so the `[query]` effect above never fires and a mouse-set `activeIndex`
+      // so the render-time check above never fires and a mouse-set `activeIndex`
       // would survive into the next open.
       setActiveIndex(0);
     }
-  }, [open]);
+  }
 
   // Keep the active option in view without moving DOM focus off the search input.
   React.useEffect(() => {

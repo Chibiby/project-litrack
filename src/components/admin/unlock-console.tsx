@@ -144,6 +144,9 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
   const [issuePending, setIssuePending] = useState(false);
   const [reason, setReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // `Date.now()` can't be called during render (purity); refreshed instead at
+  // the moments that actually change what the preview needs to reflect.
+  const [now, setNow] = useState(() => Date.now());
   const allowedScopes = scopes.length ? scopes : (UNLOCK_SCOPES as unknown as UnlockScope[]);
 
   const selectedSchool = schools.find((s) => s.id === schoolId);
@@ -151,7 +154,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
 
   const daysNum = Number(daysInput);
   const daysValid = Number.isInteger(daysNum) && daysNum >= 1 && daysNum <= MAX_UNLOCK_DAYS;
-  const expiresAt = daysValid ? new Date(Date.now() + daysNum * 86_400_000) : null;
+  const expiresAt = daysValid ? new Date(now + daysNum * 86_400_000) : null;
 
   const canIssue =
     daysValid &&
@@ -356,7 +359,10 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
               min={1}
               max={MAX_UNLOCK_DAYS}
               value={daysInput}
-              onChange={(event) => setDaysInput(event.target.value)}
+              onChange={(event) => {
+                setDaysInput(event.target.value);
+                setNow(Date.now());
+              }}
               aria-invalid={!daysValid}
               className="max-w-[7rem]"
             />
@@ -384,7 +390,13 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
           <p className="text-xs text-muted-foreground">Required for the audit trail.</p>
         </div>
 
-        <Button disabled={!canIssue || issuePending} onClick={() => setConfirmOpen(true)}>
+        <Button
+          disabled={!canIssue || issuePending}
+          onClick={() => {
+            setNow(Date.now());
+            setConfirmOpen(true);
+          }}
+        >
           <ShieldCheck className="h-4 w-4" aria-hidden />
           Allow revision
         </Button>

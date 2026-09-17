@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -39,19 +39,23 @@ const NavPathContext = createContext<NavPathValue | null>(null);
 export function NavPathProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [pending, setPending] = useState<PendingNav | null>(null);
+  const [prevPathname, setPrevPathname] = useState(pathname);
 
-  useEffect(() => {
-    // The functional updater is what keeps `pending` out of the dependency list.
-    // Depending on it would run this the instant a click set it and clear the
-    // highlight before the navigation had finished, which is the entire
-    // behaviour this state exists to provide.
-    //
-    // `retirePendingNav` returns the identical object when there is nothing to
-    // drop, and React bails out of a state update that changes nothing — so this
-    // re-renders once per navigation, on the render that hands the highlight
-    // back to the real pathname.
+  // Adjusted during render rather than in an effect, on the "previous prop"
+  // pattern — the pathname is the prop this whole module reacts to. Doing it
+  // here rather than via a `[pathname]`-keyed effect is what keeps `pending`
+  // out of the dependency list: depending on it would run this the instant a
+  // click set it and clear the highlight before the navigation had finished,
+  // which is the entire behaviour this state exists to provide.
+  //
+  // `retirePendingNav` returns the identical object when there is nothing to
+  // drop, and React bails out of a state update that changes nothing — so this
+  // still only re-renders once per navigation, on the render that hands the
+  // highlight back to the real pathname.
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setPending((current) => retirePendingNav(pathname, current));
-  }, [pathname]);
+  }
 
   const markPending = useCallback(
     (href: string) => {

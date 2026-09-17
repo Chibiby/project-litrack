@@ -64,6 +64,7 @@ export function AccountProfileDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets stale profile/error state before every re-fetch triggered by reopening the dialog; the fetch result (not a derivable value) is what actually populates state
     setError(null);
     setProfile(null);
     setLoading(true);

@@ -85,6 +85,11 @@ export function TestLabChecklist({ items }: { items: TestLabChecklistItem[] }) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    // localStorage is unavailable during SSR, so the server-rendered pass
+    // always shows an empty checklist; `hydrated` keeps that first client
+    // render matching it, then this effect syncs in the real, persisted
+    // checked set without a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads localStorage (external system) after mount; a lazy initializer would run during hydration and mismatch the server-rendered empty state
     setChecked(readChecked());
     setHydrated(true);
   }, []);

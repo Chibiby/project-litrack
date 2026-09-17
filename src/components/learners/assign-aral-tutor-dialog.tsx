@@ -120,9 +120,13 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
   }, [open, load]);
 
   // Each opening starts from its own learner's tutor, never the previous row's.
-  useEffect(() => {
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevTarget, setPrevTarget] = useState(target);
+  if (target !== prevTarget) {
+    setPrevTarget(target);
     setTutorId(target?.currentTutorId ?? null);
-  }, [target]);
+  }
 
   /** Falls back to the caller once the list lands — "Myself" is the default. */
   const chosenId = tutorId ?? selfId;

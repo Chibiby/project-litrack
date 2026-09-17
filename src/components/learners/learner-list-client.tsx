@@ -187,9 +187,13 @@ export function LearnerListClient({
     null
   );
 
-  useEffect(() => {
+  // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
+  // React docs "adjusting state when a prop changes" pattern.
+  const [prevQ, setPrevQ] = useState(q);
+  if (q !== prevQ) {
+    setPrevQ(q);
     setInputValue(q);
-  }, [q]);
+  }
 
   /**
    * Rows that leave this view on archive (or restore, in the archived view)
@@ -215,14 +219,18 @@ export function LearnerListClient({
 
   // A new page (or a new filter) is a different set of rows — carrying a
   // selection across it would let a teacher delete learners they can't see.
-  useEffect(() => {
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevVisibleIds, setPrevVisibleIds] = useState(visibleIds);
+  if (visibleIds !== prevVisibleIds) {
+    setPrevVisibleIds(visibleIds);
     setSelected((prev) => {
       if (prev.size === 0) return prev;
       const visible = new Set(visibleIds);
       const next = new Set([...prev].filter((id) => visible.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [visibleIds]);
+  }
 
   const clearDebounce = () => {
     if (debounceRef.current !== null) {

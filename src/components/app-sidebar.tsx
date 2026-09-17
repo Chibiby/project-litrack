@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
@@ -253,6 +253,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(pathname);
   const navGroups = useMemo(
     () =>
       getNavGroups(role, grades ?? [], {
@@ -277,9 +278,14 @@ export function AppSidebar({
   const roleLabel = roleLabelOverride ?? role.toLowerCase().replaceAll("_", " ");
   const collapsed = !expanded;
 
-  useEffect(() => {
+  // Closes the phone drawer on any route change, including ones that did not
+  // go through a NavLink's own onNavigate (back/forward, a hard redirect).
+  // Adjusted during render rather than in an effect so the closed drawer never
+  // has a chance to paint over the new route first.
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   const homeHref = roleHomePath(role);
   const accountRole = role as AppRole;

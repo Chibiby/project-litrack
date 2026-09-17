@@ -84,7 +84,7 @@ export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps)
         </CardHeader>
         <CardContent className="space-y-4">
           <ErrorLogFilters
-            ref={params.ref}
+            refFilter={params.ref}
             code={params.code}
             severity={params.severity}
             window={params.window}

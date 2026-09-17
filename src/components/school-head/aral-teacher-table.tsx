@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -107,14 +107,20 @@ export function AralTeacherTable({
    */
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Adjusted during render (React docs "adjusting state when a prop changes"
+  // pattern) rather than an effect.
+  const [prevListQ, setPrevListQ] = useState(list.q);
+  if (list.q !== prevListQ) {
+    setPrevListQ(list.q);
     setSearchValue(list.q);
-  }, [list.q]);
+  }
 
   // Server data is the source of truth once it arrives; drop stale overrides.
-  useEffect(() => {
+  const [prevRows, setPrevRows] = useState(rows);
+  if (rows !== prevRows) {
+    setPrevRows(rows);
     setOverrides({});
-  }, [rows]);
+  }
 
   const teacherById = useMemo(
     () => new Map(teachers.map((t) => [t.id, t])),

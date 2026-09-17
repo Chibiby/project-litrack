@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -163,15 +163,17 @@ export function SchoolsTable({
    */
   const [actingId, setActingId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState(list.q);
+  const [prevListQ, setPrevListQ] = useState(list.q);
   const [optimisticSchools, dispatchOptimistic] = useOptimistic(
     schools,
     (state: SchoolRow[], op: ListOptimisticOp<SchoolRow>) =>
       listOptimisticReducer(state, op)
   );
 
-  useEffect(() => {
+  if (list.q !== prevListQ) {
+    setPrevListQ(list.q);
     setSearchValue(list.q);
-  }, [list.q]);
+  }
 
   const pushList = (next: { page?: number; q?: string; region?: string; status?: SchoolsTableList["status"] }) => {
     const params = new URLSearchParams();

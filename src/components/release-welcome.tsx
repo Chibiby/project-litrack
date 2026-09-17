@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -139,18 +139,39 @@ const UI: Record<WelcomeLocale, UiCopy> = {
 
 const LOCALE_KEY = "litrack:welcome-locale";
 
-/** Remembered per browser as a convenience; any storage failure means English. */
+/** The stored locale never changes from outside this hook; nothing to subscribe to. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+/** Server and first client paint must agree, so both default to English. */
+function getServerLocale(): WelcomeLocale {
+  return "en";
+}
+
+function getStoredLocale(): WelcomeLocale {
+  try {
+    return window.localStorage.getItem(LOCALE_KEY) === "fil" ? "fil" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+/**
+ * Remembered per browser as a convenience; any storage failure means English.
+ *
+ * SSR / first paint always render English; `useSyncExternalStore` swaps in the
+ * stored choice right after mount, same pattern as `useSidebarExpanded`, so
+ * there is nothing for the server and the client to disagree on at hydration
+ * time. A choice made in this session overrides the stored value immediately.
+ */
 function useWelcomeLocale(): [WelcomeLocale, (next: WelcomeLocale) => void] {
-  const [locale, setLocale] = useState<WelcomeLocale>("en");
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(LOCALE_KEY) === "fil") setLocale("fil");
-    } catch {
-      // Storage blocked: stay on English.
-    }
-  }, []);
+  const storedLocale = useSyncExternalStore(subscribeNever, getStoredLocale, getServerLocale);
+  const [override, setOverride] = useState<WelcomeLocale | null>(null);
+  const locale = override ?? storedLocale;
+
   const choose = (next: WelcomeLocale) => {
-    setLocale(next);
+    setOverride(next);
     try {
       window.localStorage.setItem(LOCALE_KEY, next);
     } catch {

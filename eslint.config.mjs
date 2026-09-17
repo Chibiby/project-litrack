@@ -20,15 +20,6 @@ export default defineConfig([
     rules: {
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "warn",
-      // eslint-config-next 16 ships eslint-plugin-react-hooks 7, whose
-      // `recommended` set adds the React Compiler rules. Every one of them stays
-      // at its default EXCEPT these three, which had existing violations at the
-      // time of the Next 16 upgrade (34 / 13 / 2 sites). They are warnings, not
-      // off, so the sites stay visible; fix them and delete these lines — they
-      // are also the React Compiler readiness list.
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/refs": "warn",
-      "react-hooks/purity": "warn",
     },
   },
   // Default ignores of eslint-config-next, restated so they survive overrides.
