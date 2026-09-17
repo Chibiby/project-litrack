@@ -124,12 +124,18 @@ export function termsReportsHref(): string {
 
 /**
  * ARAL weekly/monthly entry is grade-scoped (`/teacher/aral/[gradeId]/…`).
- * With exactly one ARAL grade we can skip the picker; otherwise link to it.
+ *
+ * Links to that page for the first grade with ARAL learners. With several ARAL
+ * grades the row used to fall back to the /teacher/aral picker, so Weekly
+ * Attendance and Monthly Reading Level both opened the ARAL Program page
+ * instead of their own. Both pages switch grades in place, and `alsoOwns`
+ * keeps the row lit on every grade's copy. Only a teacher with no ARAL grade
+ * still lands on the picker, which explains how to enroll.
  */
 function aralHref(grades: NavGrade[], suffix: string): string {
-  const aralGrades = grades.filter((g) => g.hasAral);
-  if (aralGrades.length !== 1) return "/teacher/aral";
-  return `/teacher/aral/${aralGrades[0].id}/${suffix}`;
+  const first = grades.find((g) => g.hasAral);
+  if (!first) return "/teacher/aral";
+  return `/teacher/aral/${first.id}/${suffix}`;
 }
 
 export function getNavGroups(
@@ -236,14 +242,14 @@ export function getNavGroups(
           items: [
             {
               id: "teacher-aral-attendance",
-              alsoOwns: /^\/teacher\/aral\/[^\/]+\/learners\/[^\/]+\/attendance(\/|$)/,
+              alsoOwns: /^\/teacher\/aral\/[^\/]+\/(learners\/[^\/]+\/)?attendance(\/|$)/,
               label: "Weekly Attendance",
               href: aralHref(grades, "attendance"),
               icon: CalendarDays,
             },
             {
               id: "teacher-aral-reading-level",
-              alsoOwns: /^\/teacher\/aral\/[^\/]+\/learners\/[^\/]+\/reading-level(\/|$)/,
+              alsoOwns: /^\/teacher\/aral\/[^\/]+\/(learners\/[^\/]+\/)?reading-level(\/|$)/,
               label: "Monthly Reading Level",
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,

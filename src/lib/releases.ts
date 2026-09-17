@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.0.1",
+    date: "2026-09-17",
+    title: "ARAL menu links open the right page on phones",
+    announce: false,
+    fixes: [
+      { text: "Weekly Attendance and Monthly Reading Level in the side menu now open their own pages, even when you have ARAL learners in more than one grade. Before, both opened the ARAL Program page.", roles: ["TEACHER", "SUPER_ADMIN"] },
+      "The side menu on phones opens and closes faster, without the sliding highlight.",
+    ],
+  },
+  {
     version: "2.0.0",
     date: "2026-09-17",
     title: "Welcome to LitRack v2",

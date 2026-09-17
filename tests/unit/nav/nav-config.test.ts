@@ -80,8 +80,22 @@ describe("getNavGroups — teacher", () => {
     expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
   });
 
-  it("falls back to the grade picker when there is not exactly one ARAL grade", () => {
-    for (const grades of [twoAral, [], undefined]) {
+  it("deep-links ARAL items to the first ARAL grade when there are several", () => {
+    // Each row must open its own page, not the ARAL Program picker; both pages
+    // switch grades in place.
+    const [, aral] = getNavGroups("TEACHER", twoAral);
+    expect(aral.items[0].href).toBe("/teacher/aral/g1/attendance");
+    expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
+  });
+
+  it("keeps each ARAL row lit on every grade's copy of its page", () => {
+    const items = flattenNavGroups(getNavGroups("TEACHER", twoAral));
+    expect(resolveActiveItemId("/teacher/aral/g2/attendance", items)).toBe("teacher-aral-attendance");
+    expect(resolveActiveItemId("/teacher/aral/g2/reading-level", items)).toBe("teacher-aral-reading-level");
+  });
+
+  it("falls back to the grade picker only when there is no ARAL grade", () => {
+    for (const grades of [[], undefined]) {
       const [, aral] = getNavGroups("TEACHER", grades);
       expect(aral.items[0].href).toBe("/teacher/aral");
       expect(aral.items[1].href).toBe("/teacher/aral");
@@ -317,7 +331,7 @@ describe("getNavGroups — the term report's href", () => {
     // /teacher/aral for both, so if the term report were built the same way it
     // would land on a live route it does not own. Assert the ARAL rows really do
     // fall back here, otherwise this case could pass for the wrong reason.
-    for (const grades of [[], twoAral, undefined] as (NavGrade[] | undefined)[]) {
+    for (const grades of [[], undefined] as (NavGrade[] | undefined)[]) {
       const groups = getNavGroups("TEACHER", grades);
       expect(groups[1].items.map((i) => i.href)).toEqual([
         "/teacher/aral",
@@ -340,12 +354,15 @@ describe("getNavGroups — the term report's href", () => {
     // Spelled out per payload, so a regression cannot be masked by "some other
     // row won". With Learner Profiling gone the picker route falls to the first
     // ARAL row whenever those collapse onto it.
-    for (const grades of [[], twoAral, undefined] as (NavGrade[] | undefined)[]) {
+    for (const grades of [[], undefined] as (NavGrade[] | undefined)[]) {
       const items = flattenNavGroups(getNavGroups("TEACHER", grades));
       expect(resolveActiveItemId("/teacher/aral", items)).toBe(
         "teacher-aral-attendance"
       );
     }
+    expect(
+      resolveActiveItemId("/teacher/aral", flattenNavGroups(getNavGroups("TEACHER", twoAral)))
+    ).toBe("teacher-dashboard");
     // With exactly one ARAL grade both ARAL rows deep-link, so no row names the
     // picker at all and the role root takes it. Nothing links there in that case.
     expect(
@@ -363,7 +380,7 @@ describe("getNavGroups — the term report's href", () => {
         "End of Terms Reports"
       );
     }
-    expect(resolvePageTitle("/teacher/aral", getNavGroups("TEACHER", twoAral))).toBe(
+    expect(resolvePageTitle("/teacher/aral", getNavGroups("TEACHER", []))).toBe(
       "Weekly Attendance"
     );
   });

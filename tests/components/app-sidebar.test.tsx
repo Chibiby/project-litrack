@@ -364,9 +364,9 @@ describe("AppSidebar — teacher", () => {
 
   it("does not steal the shared ARAL workspace route's highlight", () => {
     // The mirror: the deep href must not steal a sibling's highlight. Two ARAL
-    // grades, so both ARAL rows collapse onto /teacher/aral — a PREFIX of the
-    // term sheet's href — which is the arrangement where the two can compete.
-    pathname.value = "/teacher/aral";
+    // grades: the ARAL rows deep-link to the first grade, and the second grade's
+    // attendance page shares the /teacher/aral/<grade>/ parent with term sheets.
+    pathname.value = "/teacher/aral/g2/attendance";
     render(
       <AppSidebar
         role="TEACHER"
@@ -379,9 +379,7 @@ describe("AppSidebar — teacher", () => {
         expanded
       />
     );
-    // Both ARAL rows collapse onto /teacher/aral with two ARAL grades, and with
-    // Learner Profiling gone they are the only rows that name it. What matters is
-    // that the term sheet's deep href does not steal the picker's highlight.
+    // Weekly Attendance claims every grade's attendance page through alsoOwns.
     const current = screen.getAllByRole("link", { current: "page" });
     expect(current.length).toBeGreaterThan(0);
     expect(

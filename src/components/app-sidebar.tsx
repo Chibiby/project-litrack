@@ -384,7 +384,11 @@ export function AppSidebar({
                 ))}
               </div>
             ))}
-            <NavHighlight activeKey={activeItemId} collapsed={isCollapsed} />
+            {/* Phones get no sliding pill: the drawer closes on the same tap, so
+                the slide was motion nobody could follow. Each row lights itself. */}
+            {opts?.phone ? null : (
+              <NavHighlight activeKey={activeItemId} collapsed={isCollapsed} />
+            )}
           </nav>
           {!isCollapsed && (
             <div className="mt-5">
@@ -487,7 +491,10 @@ export function AppSidebar({
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 border-r p-0">
+        <SheetContent
+          side="left"
+          className="w-64 border-r p-0 data-[state=closed]:duration-150 data-[state=open]:duration-200"
+        >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           {renderSidebarContent(() => setMobileOpen(false), { collapsed: false, phone: true })}
         </SheetContent>
