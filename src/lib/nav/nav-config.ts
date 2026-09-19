@@ -106,6 +106,12 @@ export interface NavOptions {
    * sheet lives at one URL for every advisory — see `termsReportsHref`.
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
+  /**
+   * Teachers waiting on the School Head's approve/reject decision. Shows as a
+   * count badge on the Teachers row; omitted (not zero) hides the badge, so an
+   * empty queue renders no badge at all rather than a "0".
+   */
+  pendingTeacherCount?: number;
 }
 
 /** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
@@ -177,7 +183,13 @@ export function getNavGroups(
           label: "Manage",
           items: [
             { id: "school-head-school", label: "School", href: SCHOOL_HEAD_ROUTES.school, icon: School },
-            { id: "school-head-teachers", label: "Teachers", href: SCHOOL_HEAD_ROUTES.teachers, icon: Users },
+            {
+              id: "school-head-teachers",
+              label: "Teachers",
+              href: SCHOOL_HEAD_ROUTES.teachers,
+              icon: Users,
+              ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
+            },
             { id: "school-head-aral", label: "ARAL Program", href: SCHOOL_HEAD_ROUTES.aral, icon: Sparkles },
             { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
             { id: "school-head-term-subjects", label: "Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },

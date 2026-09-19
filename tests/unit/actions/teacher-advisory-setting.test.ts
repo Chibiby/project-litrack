@@ -378,11 +378,15 @@ describe("setTeacherAdvisorySetting", () => {
         }),
       })
     );
+    // `revalidateSchoolHeadTeachers` now busts the school dashboard itself (see
+    // `tests/unit/cache/revalidate.test.ts` for that fold, pinned against the
+    // real module) so this action no longer calls `revalidateSchoolDashboard`
+    // alongside it — asserting that mock here would just assert a call this
+    // action never makes.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     expect(revalidatePath).toHaveBeenCalledWith("/teacher/settings/profile");
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
-    expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
   it("refuses without confirmation when DEFAULT holding 1 switches to FLOATING", async () => {

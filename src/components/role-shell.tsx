@@ -49,6 +49,11 @@ interface RoleShellProps {
    * depends on it (v2: one URL for every advisory).
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
+  /**
+   * School Head only — teachers waiting on an approve/reject decision; see
+   * `NavOptions.pendingTeacherCount`.
+   */
+  pendingTeacherCount?: number;
   notifications?: ShellNotification[];
   /**
    * Whether a model backend is configured, read from server env by the layout.
@@ -86,6 +91,7 @@ export function RoleShell({
   isAralVolunteer,
   isFloating,
   advisoryPlacements,
+  pendingTeacherCount,
   notifications,
   aiEnabled,
   lastSeenReleaseVersion,
@@ -113,6 +119,7 @@ export function RoleShell({
             isAralVolunteer={isAralVolunteer}
             isFloating={isFloating}
             advisoryPlacements={advisoryPlacements}
+            pendingTeacherCount={pendingTeacherCount}
             expanded={expanded}
             transitionsEnabled={hydrated}
           />

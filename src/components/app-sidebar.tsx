@@ -73,6 +73,11 @@ interface AppSidebarProps {
    * depends on it (v2: one URL for every advisory).
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
+  /**
+   * School Head only — teachers waiting on an approve/reject decision; see
+   * `NavOptions.pendingTeacherCount`.
+   */
+  pendingTeacherCount?: number;
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -248,6 +253,7 @@ export function AppSidebar({
   isAralVolunteer,
   isFloating,
   advisoryPlacements,
+  pendingTeacherCount,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
@@ -259,8 +265,9 @@ export function AppSidebar({
         isAralVolunteer,
         isFloating,
         advisoryPlacements,
+        pendingTeacherCount,
       }),
-    [role, grades, isAralVolunteer, isFloating, advisoryPlacements]
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, pendingTeacherCount]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   // `navPath`, not `pathname`: during a click the router has not committed yet

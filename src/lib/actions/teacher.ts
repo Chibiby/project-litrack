@@ -19,7 +19,6 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
   revalidateTeacherCaches,
-  revalidateSchoolDashboard,
   revalidateSchoolHeadTeachers,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -186,10 +185,9 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   // Grade/section self-assignment changes the teacher's sidebar grade links,
-  // not just their dashboard metrics — and the school-head dashboard counts
-  // sectioned/advised teachers.
+  // not just their dashboard metrics — the school-head dashboard bust (which
+  // counts sectioned/advised teachers) rides along with revalidateSchoolHeadTeachers above.
   revalidateTeacherCaches(user.id);
-  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 
@@ -359,7 +357,6 @@ export async function setTeacherAdvisorySection(
   // grade links, so a change made here has to reach their surfaces too.
   revalidatePath("/teacher/settings/profile");
   revalidateTeacherCaches(teacher.id);
-  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 
@@ -580,6 +577,5 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidatePath("/teacher/settings/profile");
   revalidateTeacherCaches(outcome.teacherId);
-  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }

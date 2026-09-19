@@ -339,6 +339,11 @@ describe("saveTeacherProfile", () => {
     // Asserted with the id, not bare: the helper also busts the tenant-scoped
     // `schoolTeachers(schoolId)` tag, so a site passing another school's id
     // would clear the wrong tenant's ARAL tutor list and leave this one stale.
+    // `revalidateSchoolHeadTeachers` now busts the school dashboard itself (see
+    // `tests/unit/cache/revalidate.test.ts` for that fold, pinned against the
+    // real module) so this action no longer calls `revalidateSchoolDashboard`
+    // alongside it — asserting that mock here would just assert a call this
+    // action never makes.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(
       SCHOOL_HEAD_ROUTES.schoolGradeLevels
@@ -346,7 +351,6 @@ describe("saveTeacherProfile", () => {
     // Grade/section self-assignment changes the sidebar shell too, so the
     // combined helper (dashboard + shell) must be the one called.
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
-    expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
   it("clears the advisory section for an ARAL Volunteer who submits none", async () => {

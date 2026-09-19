@@ -147,6 +147,7 @@ export const RELEASES: readonly Release[] = [
       "Your profile now asks for your gender, which chooses the artwork on your dashboard and settings pages.",
       "The Teachers list no longer shows an empty page when you have no inactive teachers, and the Indigenous Peoples learners page now shows a loading screen instead of a blank one.",
       "Approving a teacher now updates the count on your dashboard straight away, instead of leaving the old number for up to a minute.",
+      "The Teachers item in the sidebar now shows how many teachers are waiting for your approval, so you can see the queue without opening the page.",
     ],
   },
   {
