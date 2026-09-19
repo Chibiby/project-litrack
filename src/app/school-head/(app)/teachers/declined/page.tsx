@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { UserX } from "lucide-react";
+import { UserX, Users } from "lucide-react";
 import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
@@ -9,6 +9,7 @@ import {
   teacherTabCounts,
 } from "@/lib/teachers/roster";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import {
   TEACHER_TABS,
   teacherWorkspaceTabs,
@@ -85,10 +86,17 @@ export default async function DeclinedTeachersPage({
   return (
     <SchoolHeadPage
       title="Teachers"
-      description="Requests you turned down. Clearing one lets that person register again."
       view={view}
       tabs={teacherWorkspaceTabs(counts)}
       activeTab={TEACHER_TABS.declined}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Staff"
+          eyebrowIcon={Users}
+          title="Teachers"
+          subtitle="Requests you turned down. Clearing one lets that person register again."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={3} columns={4} />}>
         <DeclinedTeachersBody view={view} />

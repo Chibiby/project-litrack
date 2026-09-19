@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { School, GraduationCap, Layers, CalendarRange } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import {
   SCHOOL_TABS,
   SCHOOL_WORKSPACE_TABS,
@@ -36,26 +39,81 @@ export default async function SchoolInfoPage({ searchParams }: PageProps) {
     SCHOOL_HEAD_ROUTES.schoolInfo
   );
 
-  const school = await prisma.school.findUnique({
-    where: { id: view.schoolId },
-    select: {
-      name: true,
-      schoolIdCode: true,
-      address: true,
-      region: true,
-      division: true,
-      district: true,
-    },
-  });
+  const [school, activeGradeCount, activeSectionCount, activeYear] = await Promise.all([
+    prisma.school.findUnique({
+      where: { id: view.schoolId },
+      select: {
+        name: true,
+        schoolIdCode: true,
+        address: true,
+        region: true,
+        division: true,
+        district: true,
+      },
+    }),
+    prisma.gradeLevel.count({ where: { schoolId: view.schoolId, deletedAt: null } }),
+    prisma.section.count({
+      where: {
+        schoolId: view.schoolId,
+        deletedAt: null,
+        gradeLevel: { deletedAt: null },
+      },
+    }),
+    prisma.schoolYear.findFirst({
+      where: { schoolId: view.schoolId, isActive: true },
+      select: { label: true },
+    }),
+  ]);
   if (!school) redirect(SCHOOL_HEAD_ROUTES.dashboard);
 
   return (
     <SchoolHeadPage
       title="School information"
-      description="Details shown on reports and exports. The DepEd School ID cannot be changed."
       view={view}
       tabs={SCHOOL_WORKSPACE_TABS}
       activeTab={SCHOOL_TABS.info}
+      hero={
+        <SchoolHeadHero
+          eyebrow="School"
+          eyebrowIcon={School}
+          title="School information"
+          subtitle="Details shown on reports and exports. The DepEd School ID cannot be changed."
+          stats={
+            <>
+              <StatCard
+                title="Active grades"
+                value={activeGradeCount}
+                hint="Grades this school offers"
+                icon={GraduationCap}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Sections"
+                value={activeSectionCount}
+                hint="Across all active grades"
+                icon={Layers}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Active school year"
+                value={activeYear?.label ?? "Not set"}
+                hint="Learners enroll against this year"
+                icon={CalendarRange}
+                tone="primary"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+            </>
+          }
+        />
+      }
     >
       <Surface as="section" className="max-w-2xl">
         <SurfaceHeader>

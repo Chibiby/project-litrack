@@ -214,6 +214,7 @@ function buildSchoolHeadProfileWrite(parsed: z.infer<typeof schoolHeadProfileSch
     lastName: lastRaw,
     middleName: middleRaw,
     contactEmail: contactEmailRaw,
+    gender: genderRaw,
     ...profileData
   } = parsed;
   const firstName = formatPersonName(firstRaw);
@@ -227,8 +228,11 @@ function buildSchoolHeadProfileWrite(parsed: z.infer<typeof schoolHeadProfileSch
   // an explicit null. This is the survey address (P-I4) only; the Supabase login
   // identity on `User.email` is never touched here.
   const contactEmail = contactEmailRaw ?? null;
+  // Same reason: a cleared Gender has to be written as null, not skipped.
+  // Mirrors `src/lib/actions/teacher.ts`'s `TeacherProfile.gender` normalization.
+  const gender = genderRaw ?? null;
 
-  return { firstName, middleName, lastName, fullName, contactEmail, profileData };
+  return { firstName, middleName, lastName, fullName, contactEmail, gender, profileData };
 }
 
 export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionResult> {
@@ -278,7 +282,7 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   }
 
   const schoolId = user.schoolId;
-  const { firstName, middleName, lastName, fullName, contactEmail, profileData } =
+  const { firstName, middleName, lastName, fullName, contactEmail, gender, profileData } =
     buildSchoolHeadProfileWrite(parsed.data);
 
   if (await readTestLabSession(user)) {
@@ -300,21 +304,30 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   // outside any interactive transaction. PgBouncer transaction-mode pooler
   // drops long interactive txns mid-flight ("Transaction not found").
   try {
+    // Profile row first, account flag second. `profileCompleted: true` is what
+    // the `(app)` layout's first-run gate checks, so writing it before the
+    // upsert means a failed upsert strands the head inside the app with no
+    // profile row and no way back to the wizard to retry.
+    await prisma.schoolHeadProfile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, ...profileData, contactEmail, gender },
+      update: { ...profileData, contactEmail, gender },
+    });
     await prisma.user.update({
       where: { id: user.id },
       data: { firstName, middleName, lastName, fullName, profileCompleted: true },
     });
-    await prisma.schoolHeadProfile.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, ...profileData, contactEmail },
-      update: { ...profileData, contactEmail },
-    });
   } catch (err) {
     console.error("[saveSchoolHeadProfile] profile save failed:", err);
+    // Deliberately generic: this is the only thing the user sees, and `err`
+    // here is a raw Prisma/Postgres message (CLAUDE.md — client-facing errors
+    // must be safe). It also matters during a deploy-before-migrate window,
+    // where a column this code writes may not exist yet and the driver's text
+    // would otherwise name the table and column back to the browser. The full
+    // error still goes to the server log above.
     return {
       ok: false,
-      error:
-        err instanceof Error ? err.message : "Failed to save profile",
+      error: "Failed to save profile. Please try again, or contact your administrator if this keeps happening.",
     };
   }
 

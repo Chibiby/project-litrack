@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import type { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
@@ -18,12 +18,17 @@ import {
   mergeKinderChecklist,
 } from "@/lib/terms/kinder-checklist-view";
 import { loadKinderChecklist } from "@/lib/terms/kinder-sheet-data";
-import { TermsReportBodySkeleton } from "@/components/terms/terms-report-skeleton";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: Promise<{ schoolId?: string; section?: string; learner?: string }>;
+}
+
+interface KinderChecklistView {
+  /** `null` on the branches with too little data to place a hero — see each early return below. */
+  hero: ReactNode | null;
+  content: ReactNode;
 }
 
 /**
@@ -35,8 +40,13 @@ interface PageProps {
  * teacher page uses, `readOnly`, with Save omitted — export/print reuse the
  * teacher page's own pieces (`KinderChecklistExportControls`,
  * `PrintableKinderChecklist`) via `SchoolHeadKinderChecklistExport`.
+ *
+ * Returns `{ hero, content }` rather than one JSX tree so the hero can be
+ * threaded through `SchoolHeadPage`'s `hero` prop (spec
+ * `docs/school-head-ui-rework.md` section 1.3) while `content` stays this
+ * page's children — one query pass, no data fetched twice.
  */
-async function SchoolHeadKinderChecklistBody({
+async function loadKinderChecklistView({
   view,
   sectionParam,
   learnerParam,
@@ -44,7 +54,7 @@ async function SchoolHeadKinderChecklistBody({
   view: SchoolHeadView;
   sectionParam?: string;
   learnerParam?: string;
-}) {
+}): Promise<KinderChecklistView> {
   const { schoolId } = view;
 
   const grades = await prisma.gradeLevel.findMany({
@@ -54,12 +64,15 @@ async function SchoolHeadKinderChecklistBody({
   const kinderGradeIds = grades.filter((g) => isKinderGradeType(g.type)).map((g) => g.id);
 
   if (kinderGradeIds.length === 0) {
-    return (
-      <EmptyState
-        title="No Kindergarten grade"
-        description="This school has no Kindergarten grade level yet."
-      />
-    );
+    return {
+      hero: null,
+      content: (
+        <EmptyState
+          title="No Kindergarten grade"
+          description="This school has no Kindergarten grade level yet."
+        />
+      ),
+    };
   }
 
   const sections = await prisma.section.findMany({
@@ -69,12 +82,15 @@ async function SchoolHeadKinderChecklistBody({
   });
 
   if (sections.length === 0) {
-    return (
-      <EmptyState
-        title="No Kindergarten sections"
-        description="Add a Kindergarten section before a checklist can be viewed."
-      />
-    );
+    return {
+      hero: null,
+      content: (
+        <EmptyState
+          title="No Kindergarten sections"
+          description="Add a Kindergarten section before a checklist can be viewed."
+        />
+      ),
+    };
   }
 
   const selectedSection = sections.find((s) => s.id === sectionParam) ?? null;
@@ -115,21 +131,24 @@ async function SchoolHeadKinderChecklistBody({
   );
 
   if (!schoolYear) {
-    return (
-      <>
-        {picker}
-        <Callout title="No active school year">
-          Activate a school year before a Kindergarten checklist can be viewed.
-        </Callout>
-      </>
-    );
+    return {
+      hero: null,
+      content: (
+        <>
+          {picker}
+          <Callout title="No active school year">
+            Activate a school year before a Kindergarten checklist can be viewed.
+          </Callout>
+        </>
+      ),
+    };
   }
 
   if (!selectedSection) {
     const merged = mergeKinderChecklist(new Map());
     const progress = countTouchedCompetencies(merged);
-    return (
-      <>
+    return {
+      hero: (
         <KinderChecklistHero
           title="End-of-Term Reports"
           subtitle="Kindergarten"
@@ -140,20 +159,24 @@ async function SchoolHeadKinderChecklistBody({
           total={progress.total}
           pct={progress.pct}
         />
-        {picker}
-        <EmptyState
-          title="Select a Kindergarten section"
-          description="Choose a section, then a learner, to view their checklist."
-        />
-      </>
-    );
+      ),
+      content: (
+        <>
+          {picker}
+          <EmptyState
+            title="Select a Kindergarten section"
+            description="Choose a section, then a learner, to view their checklist."
+          />
+        </>
+      ),
+    };
   }
 
   if (learners.length === 0) {
     const merged = mergeKinderChecklist(new Map());
     const progress = countTouchedCompetencies(merged);
-    return (
-      <>
+    return {
+      hero: (
         <KinderChecklistHero
           title="End-of-Term Reports"
           subtitle="Kindergarten"
@@ -164,20 +187,24 @@ async function SchoolHeadKinderChecklistBody({
           total={progress.total}
           pct={progress.pct}
         />
-        {picker}
-        <EmptyState
-          title="No learners in this section"
-          description="This section has no active learners yet."
-        />
-      </>
-    );
+      ),
+      content: (
+        <>
+          {picker}
+          <EmptyState
+            title="No learners in this section"
+            description="This section has no active learners yet."
+          />
+        </>
+      ),
+    };
   }
 
   if (!selectedLearner) {
     const merged = mergeKinderChecklist(new Map());
     const progress = countTouchedCompetencies(merged);
-    return (
-      <>
+    return {
+      hero: (
         <KinderChecklistHero
           title="End-of-Term Reports"
           subtitle="Kindergarten"
@@ -188,13 +215,17 @@ async function SchoolHeadKinderChecklistBody({
           total={progress.total}
           pct={progress.pct}
         />
-        {picker}
-        <EmptyState
-          title="Select a learner"
-          description="Choose a learner to view their checklist."
-        />
-      </>
-    );
+      ),
+      content: (
+        <>
+          {picker}
+          <EmptyState
+            title="Select a learner"
+            description="Choose a learner to view their checklist."
+          />
+        </>
+      ),
+    };
   }
 
   // Tenancy boundary: the caller-supplied `learnerWhere` scopes to this
@@ -216,8 +247,8 @@ async function SchoolHeadKinderChecklistBody({
   const merged = mergeKinderChecklist(records);
   const progress = countTouchedCompetencies(merged);
 
-  return (
-    <>
+  return {
+    hero: (
       <KinderChecklistHero
         title="End-of-Term Reports"
         subtitle="Kindergarten"
@@ -228,24 +259,28 @@ async function SchoolHeadKinderChecklistBody({
         total={progress.total}
         pct={progress.pct}
       />
-      {picker}
-      <SchoolHeadKinderChecklistExport
-        learnerId={selectedLearner.id}
-        learnerName={learner.fullName}
-        schoolName={school?.name ?? "School"}
-        advisoryLabel={selectedSection.name}
-        schoolYearLabel={schoolYear.label}
-        entries={[...merged.entries()]}
-      />
-      <div className="print:hidden">
-        <KinderChecklistPanel
-          states={merged}
-          locked={{ t1: true, t2: true, t3: true }}
-          readOnly
+    ),
+    content: (
+      <>
+        {picker}
+        <SchoolHeadKinderChecklistExport
+          learnerId={selectedLearner.id}
+          learnerName={learner.fullName}
+          schoolName={school?.name ?? "School"}
+          advisoryLabel={selectedSection.name}
+          schoolYearLabel={schoolYear.label}
+          entries={[...merged.entries()]}
         />
-      </div>
-    </>
-  );
+        <div className="print:hidden">
+          <KinderChecklistPanel
+            states={merged}
+            locked={{ t1: true, t2: true, t3: true }}
+            readOnly
+          />
+        </div>
+      </>
+    ),
+  };
 }
 
 export default async function SchoolHeadKinderChecklistPage({ searchParams }: PageProps) {
@@ -255,20 +290,20 @@ export default async function SchoolHeadKinderChecklistPage({ searchParams }: Pa
     SCHOOL_HEAD_ROUTES.kinderChecklist
   );
 
+  const { hero, content } = await loadKinderChecklistView({
+    view,
+    sectionParam: params.section,
+    learnerParam: params.learner,
+  });
+
   return (
     <SchoolHeadPage
       title="Kindergarten Checklist"
       description="View a Kindergarten learner's End-of-Term competency checklist. Read-only — ratings are entered by the learner's teacher."
       view={view}
-      hideTitle
+      hero={hero ?? undefined}
     >
-      <Suspense fallback={<TermsReportBodySkeleton />}>
-        <SchoolHeadKinderChecklistBody
-          view={view}
-          sectionParam={params.section}
-          learnerParam={params.learner}
-        />
-      </Suspense>
+      {content}
     </SchoolHeadPage>
   );
 }

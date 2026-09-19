@@ -1,6 +1,8 @@
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { getSchoolHeadIpMetrics } from "@/lib/dashboard/aggregates";
 import {
   Table,
@@ -12,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Users, GraduationCap } from "lucide-react";
+import { Users, GraduationCap, Percent } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +43,49 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
   return (
     <SchoolHeadPage
       title="IP learners"
-      description="Every grade/section with an enrolled learner, and every IP group in your school."
       view={view}
+      hero={
+        <SchoolHeadHero
+          eyebrow="IP Learners"
+          eyebrowIcon={Users}
+          title="IP learners"
+          subtitle="Every grade/section with an enrolled learner, and every IP group in your school."
+          stats={
+            <>
+              <StatCard
+                title="IP learners"
+                value={ip?.ipLearners ?? 0}
+                hint="Enrolled this school year"
+                icon={Users}
+                tone="amber"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Share of enrolled"
+                value={ip?.ipPercent ?? "—"}
+                hint="Of all enrolled learners"
+                icon={Percent}
+                tone="primary"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Learners per teacher"
+                value={ip?.learnersPerTeacher ?? "—"}
+                hint="Across active teachers"
+                icon={GraduationCap}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+            </>
+          }
+        />
+      }
     >
       <div className="space-y-6">
         <Surface as="section">

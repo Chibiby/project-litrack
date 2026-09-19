@@ -1,11 +1,10 @@
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import {
-  getSchoolHeadMetricCounts,
   getSchoolHeadCharts,
   getSchoolHeadRecentActivity,
   getSchoolHeadIpMetrics,
 } from "@/lib/dashboard/aggregates";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import {
   Table,
   TableBody,
@@ -14,9 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Callout } from "@/components/ui/callout";
 import { Button } from "@/components/ui/button";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
@@ -24,129 +22,26 @@ import {
   DashboardLineChart,
   DashboardPieChart,
 } from "@/components/dashboard/lazy-charts";
-import {
-  Users,
-  GraduationCap,
-  UserPlus,
-  ListChecks,
-  CalendarRange,
-  Megaphone,
-  Sparkles,
-  Layers,
-  ClipboardList,
-} from "lucide-react";
+import { Users, GraduationCap, Megaphone, ClipboardList } from "lucide-react";
 import { toDateKey } from "@/lib/utils";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { collapseKindsToOthers } from "@/lib/dashboard/ip-metrics";
+import { schoolHeadHref, type SchoolHeadView } from "@/components/school-head/school-head-page";
 
-function schoolPath(path: string, schoolId: string, isSuperAdminView: boolean) {
-  return isSuperAdminView ? `${path}?schoolId=${schoolId}` : path;
-}
-
-export async function SchoolHeadMetricsSection({
-  schoolId,
-  isSuperAdminView,
-}: {
-  schoolId: string;
-  isSuperAdminView: boolean;
-}) {
-  let metrics: Awaited<ReturnType<typeof getSchoolHeadMetricCounts>> | null =
-    null;
-  try {
-    metrics = await getSchoolHeadMetricCounts(schoolId);
-  } catch (err) {
-    console.error("[SchoolHeadMetricsSection] failed to load:", err);
-  }
-
-  const sh = (path: string) => schoolPath(path, schoolId, isSuperAdminView);
-
-  return (
-    <>
-      {!metrics?.activeYear ? (
-        <Callout title="No active school year">
-          New learners will not get an Enrollment until you set one.{" "}
-          <PrefetchLink
-            href={sh(SCHOOL_HEAD_ROUTES.schoolYears)}
-            prefetch={true}
-            className="font-medium underline"
-          >
-            Manage school years
-          </PrefetchLink>
-        </Callout>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
-        <MetricCard
-          title="Learners"
-          value={metrics?.learnerCount ?? 0}
-          tone="amber"
-          icon={ListChecks}
-        />
-        <MetricCard
-          title="Teachers"
-          value={metrics?.teacherCount ?? 0}
-          icon={UserPlus}
-          href={sh(SCHOOL_HEAD_ROUTES.teachers)}
-        />
-        <MetricCard
-          title="Grades"
-          value={metrics?.gradeCount ?? 0}
-          icon={GraduationCap}
-          tone="primary"
-          href={sh(SCHOOL_HEAD_ROUTES.schoolGradeLevels)}
-        />
-        <MetricCard
-          title="Sections"
-          value={metrics?.sectionCount ?? 0}
-          icon={Layers}
-          href={sh(SCHOOL_HEAD_ROUTES.schoolGradeLevels)}
-        />
-        <MetricCard
-          title="ARAL"
-          value={metrics?.aralCount ?? 0}
-          icon={Sparkles}
-          tone="violet"
-        />
-        <MetricCard
-          title="School year"
-          value={metrics?.activeYear?.label ?? "None"}
-          hint={metrics?.activeYear ? "Active" : "Set an active year"}
-          icon={CalendarRange}
-          href={sh(SCHOOL_HEAD_ROUTES.schoolYears)}
-        />
-      </div>
-
-      {(metrics?.setupTasks.length ?? 0) > 0 ? (
-        <Callout title="Finish setting up your school">
-          <div className="mt-2 flex flex-wrap gap-2">
-            {metrics!.setupTasks.map((t) => (
-              <Button
-                key={t.id}
-                asChild
-                size="sm"
-                variant="outline"
-                // The amber callout already carries the tint; the buttons sit on
-                // card white so they read as actions rather than more banner.
-                className="bg-card text-foreground"
-              >
-                <PrefetchLink
-                  href={
-                    isSuperAdminView
-                      ? `${t.href}?schoolId=${schoolId}`
-                      : t.href
-                  }
-                  prefetch={true}
-                >
-                  {t.label}
-                </PrefetchLink>
-              </Button>
-            ))}
-          </div>
-        </Callout>
-      ) : null}
-    </>
-  );
-}
+/**
+ * The three sections of the School Head dashboard that still fetch and render
+ * on their own: charts, IP metrics, and recent activity. Steps 1–5 of
+ * `docs/school-head-ui-rework.md` section 3.2 (hero, stat row, coverage
+ * panels, attention rail, quick actions) live in
+ * `src/components/dashboard/school-head/dashboard-body.tsx` instead, built off
+ * `getSchoolHeadOverview` — this file's old `SchoolHeadMetricsSection` is
+ * retired for exactly that reason, not merely restyled.
+ *
+ * T2.7: metric cards become stat cards, cards become surfaces, and the local
+ * `schoolPath()` helper is gone in favour of `schoolHeadHref`. Every `where`
+ * clause, cache tag and Suspense boundary below is byte-identical to before
+ * this restyle — only the JSX changed.
+ */
 
 export async function SchoolHeadChartsSection({
   schoolId,
@@ -253,15 +148,16 @@ export async function SchoolHeadIpSection({
     console.error("[SchoolHeadIpSection] failed to load:", err);
   }
 
+  const view: SchoolHeadView = { schoolId, schoolName: null, isSuperAdminView };
   const allRows = ip?.rows ?? [];
   const rows = [...allRows].sort((a, b) => b.ipLearners - a.ipLearners || a.key.localeCompare(b.key)).slice(0, 5);
   const kinds = collapseKindsToOthers(ip?.ipKinds ?? [], 5);
-  const viewAllHref = schoolPath(SCHOOL_HEAD_ROUTES.ipLearners, schoolId, isSuperAdminView);
+  const viewAllHref = schoolHeadHref(view, SCHOOL_HEAD_ROUTES.ipLearners);
 
   return (
     <>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
+        <StatCard
           title="Learners per teacher"
           value={ip?.learnersPerTeacher ?? "—"}
           hint={`across ${ip?.activeTeachers ?? 0} active teachers`}
@@ -353,15 +249,16 @@ export async function SchoolHeadRecentActivitySection({
     console.error("[SchoolHeadRecentActivitySection] failed to load:", err);
   }
 
-  const sh = (path: string) => schoolPath(path, schoolId, isSuperAdminView);
+  const view: SchoolHeadView = { schoolId, schoolName: null, isSuperAdminView };
+  const sh = (path: string) => schoolHeadHref(view, path);
 
   return (
     <div className="mb-6 grid gap-4 md:max-lg:grid-cols-2 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent notices</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Surface as="section" className="rounded-2xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold text-foreground">Recent notices</h2>
+        </SurfaceHeader>
+        <SurfaceBody>
           {(activity?.announcements.length ?? 0) === 0 ? (
             <EmptyState
               title="No notices yet"
@@ -386,13 +283,13 @@ export async function SchoolHeadRecentActivitySection({
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent activity</CardTitle>
-        </CardHeader>
-        <CardContent>
+        </SurfaceBody>
+      </Surface>
+      <Surface as="section" className="rounded-2xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold text-foreground">Recent activity</h2>
+        </SurfaceHeader>
+        <SurfaceBody>
           {(activity?.recentAudit.length ?? 0) === 0 ? (
             <EmptyState
               title="Nothing audited yet"
@@ -419,8 +316,8 @@ export async function SchoolHeadRecentActivitySection({
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+        </SurfaceBody>
+      </Surface>
     </div>
   );
 }

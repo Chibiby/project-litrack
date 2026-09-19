@@ -339,6 +339,8 @@ export const schoolHeadProfileSchema = baseProfile
     /** Read-only UI always sends School Head. */
     designation: z.literal("School Head"),
     position: z.enum(SH_POSITION),
+    /** Optional; only chooses the School Head dashboard banner art. */
+    gender: z.enum(["MALE", "FEMALE"]).optional(),
   })
   .superRefine(refineProfileConditionals);
 

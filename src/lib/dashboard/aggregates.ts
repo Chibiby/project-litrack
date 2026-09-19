@@ -10,9 +10,10 @@ import {
 import { IP_ETHNICITIES } from "@/lib/ip/ethnicity";
 import { shapeAdminIpMetrics, shapeSchoolIpMetrics } from "@/lib/dashboard/ip-metrics";
 import { cachedQuery } from "@/lib/cache/unstable";
-import { formatLocalDateKey } from "@/lib/date-keys";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
+import { teacherRosterScope, TEACHER_ROSTER_STATE } from "@/lib/teachers/roster";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
 import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
@@ -329,6 +330,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         activeYear,
         profiledHead,
         gradesNeedingSections,
+        pendingTeacherCount,
       ] = await Promise.all([
         prisma.learner.count({
           where: { schoolId, deletedAt: null, archivedAt: null },
@@ -362,6 +364,15 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
             learners: { some: { deletedAt: null } },
             sections: { none: { deletedAt: null } },
           },
+        }),
+        // Teachers waiting on the head's approve/reject decision. Safe to fold
+        // into this cached aggregate (rather than reading it uncached, as
+        // originally proposed) now that `revalidateSchoolHeadTeachers` busts
+        // `schoolDashboard(schoolId)` on every approve/reject/remove/toggle —
+        // see the doc comment on that function in `src/lib/cache/revalidate.ts`.
+        // One indexed count against `[schoolId, approvalStatus]` on `User`.
+        prisma.user.count({
+          where: { ...teacherRosterScope(schoolId), ...TEACHER_ROSTER_STATE.pending },
         }),
       ]);
 
@@ -406,10 +417,14 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         aralCount,
         activeYear,
         setupTasks,
+        pendingTeacherCount,
       };
     },
     {
-      keyParts: ["school-head-metric-counts", schoolId],
+      // `-v2`: gained `pendingTeacherCount`. Bumped so a stale entry from
+      // before this change (missing the field) cannot be read as the new
+      // shape — same reason `school-head-recent-activity` carries a version.
+      keyParts: ["school-head-metric-counts-v2", schoolId],
       tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }
@@ -520,6 +535,73 @@ export async function getSchoolHeadCharts(schoolId: string) {
         // can never name a different day than the window it caches.
         formatLocalDateKey(daysAgo(0)),
       ],
+      tags: [schoolDashboard(schoolId)],
+      profile: "aggregate",
+    }
+  );
+}
+
+/**
+ * School-wide weekly attendance mix for the dashboard donut: present / absent /
+ * late / excused / not-yet-marked counts across the current Monday-start school
+ * week, over every ARAL learner in the school.
+ *
+ * `Attendance` rows only ever exist for ARAL learners — `markAttendance`
+ * (`src/lib/actions/attendance.ts`) refuses to write one for a non-ARAL
+ * learner — so this mirrors `getTeacherAttendanceOverview`'s shape exactly
+ * (same status buckets, same `noClass`/expected-marks derivation), just
+ * school-scoped instead of teacher-scoped, and it is a different fact from
+ * `attendanceTrend` above: that is a rolling 7-day present+late count for a
+ * line chart, this is a status *mix* for the current calendar week, including
+ * absences and not-yet-marked days a trend line never shows. Reusing
+ * `attendanceTrend` would report one fact twice under two different windows,
+ * not save a query.
+ *
+ * `weekBounds` takes `schoolToday()`, not `new Date()`, as its anchor — the
+ * plain `new Date()` `getTeacherAttendanceOverview` uses resolves to the
+ * previous civil day on a UTC-TZ server between 00:00 and 08:00 Manila time
+ * (see `schoolToday`'s doc comment in `src/lib/date-keys.ts`); anchoring on
+ * the school's own civil day keeps this aggregate correct in that window.
+ *
+ * Returns raw counts and the denominator only, never a rounded rate, so a
+ * school with no ARAL learners this week renders an honest empty ring instead
+ * of a false 0%.
+ */
+export async function getSchoolHeadAttendanceMix(schoolId: string) {
+  const { start, end, schoolDaysElapsed } = weekBounds(schoolToday());
+
+  return cachedQuery(
+    async () => {
+      const [groups, aralLearners] = await Promise.all([
+        prisma.attendance.groupBy({
+          by: ["status"],
+          where: {
+            date: { gte: start, lt: end },
+            learner: { schoolId, deletedAt: null },
+          },
+          _count: { _all: true },
+        }),
+        prisma.learner.count({
+          where: { schoolId, deletedAt: null, archivedAt: null, isAralLearner: true },
+        }),
+      ]);
+
+      const byStatus = new Map(groups.map((g) => [g.status, g._count._all]));
+      const present = byStatus.get("PRESENT") ?? 0;
+      const absent = byStatus.get("ABSENT") ?? 0;
+      const late = byStatus.get("LATE") ?? 0;
+      const excused = byStatus.get("EXCUSED") ?? 0;
+      const totalMarks = present + absent + late + excused;
+
+      // Sessions with no record at all — expected marks minus what was entered.
+      const expected = aralLearners * schoolDaysElapsed;
+      const noClass = Math.max(expected - totalMarks, 0);
+      const denominator = totalMarks + noClass;
+
+      return { present, absent, late, excused, noClass, totalMarks, denominator };
+    },
+    {
+      keyParts: ["school-head-attendance-mix-v1", schoolId, formatLocalDateKey(start)],
       tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }

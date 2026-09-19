@@ -3,6 +3,7 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { PURGED_USER_LABEL } from "@/lib/constants/purged-user";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
@@ -33,8 +34,15 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
   return (
     <SchoolHeadPage
       title="Announcements"
-      description="School notices for teachers and staff."
       view={view}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Announcements"
+          eyebrowIcon={Megaphone}
+          title="Announcements"
+          subtitle="School notices for teachers and staff."
+        />
+      }
       // The compose form and the published list are peers, so they share one grid
       // rather than stacking. `contentClassName` replaces the frame's default
       // `space-y-6`, which is what we want here — the grid owns the gaps.

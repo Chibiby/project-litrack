@@ -1,30 +1,21 @@
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-} from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
-import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
+import { SchoolHeadDashboardSkeleton } from "@/components/dashboard/school-head/dashboard-skeleton";
 
 /**
- * Fuller content-slot skeleton for school-head soft navigations.
- * Sidebar + header stay mounted in `school-head/layout.tsx` → RoleShell;
- * this replaces only the page slot (do not wrap in another shell).
- * Post-login hard navigations get a cream cover via PostLoginLoadingBridge.
+ * The dashboard's own boundary. Draws the same skeleton the page's own
+ * Suspense fallback draws (`docs/school-head-ui-rework.md` section 3.7), so
+ * the handover is invisible rather than a second, differently-shaped
+ * skeleton. Deliberately does not wrap in `SchoolHeadPageSkeleton` — that
+ * would draw a title block above the hero block the dashboard no longer has.
  */
 export default function SchoolHeadLoading() {
   return (
-    // Overlay INSIDE the bridge — same reasoning as `src/app/admin/loading.tsx`.
-    // The bridge only renders children in `skeleton` mode, so nested this way the
-    // overlay's timer cannot fire a book over the post-login cream cover.
     <PostLoginLoadingBridge>
       <RouteLoadingOverlay>
-        <SchoolHeadPageSkeleton>
-          <div className="space-y-6">
-            <MetricsGridSkeleton variant="school-head" />
-            <ChartSectionSkeleton columns={2} />
-          </div>
-        </SchoolHeadPageSkeleton>
+        <div className="w-full p-4 lg:p-6">
+          <SchoolHeadDashboardSkeleton />
+        </div>
       </RouteLoadingOverlay>
     </PostLoginLoadingBridge>
   );

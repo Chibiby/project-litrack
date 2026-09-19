@@ -135,6 +135,21 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.6.0",
+    date: "2026-09-19",
+    title: "A new School Head dashboard, and every School Head page redesigned",
+    announce: true,
+    fixes: [
+      "Your dashboard has been rebuilt. It opens with a greeting and your school's figures as cards you can click straight through to, followed by how many learners are in ARAL, how many are Indigenous Peoples learners, and how this week's ARAL attendance is going. Charts and recent activity are still there, further down.",
+      "A new panel gathers what needs you: teachers waiting for approval, sections with no adviser, and a school year that has not been set. The most urgent sits at the top, and each one is a link to the page where you fix it.",
+      "Every School Head page now carries the same banner and layout as the teacher pages, so moving between them no longer feels like two different apps.",
+      "The Audit page can now be searched by who did something or what they did, and narrowed to a date range. It also pages properly instead of stopping at the most recent hundred entries.",
+      "Your profile now asks for your gender, which chooses the artwork on your dashboard and settings pages.",
+      "The Teachers list no longer shows an empty page when you have no inactive teachers, and the Indigenous Peoples learners page now shows a loading screen instead of a blank one.",
+      "Approving a teacher now updates the count on your dashboard straight away, instead of leaving the old number for up to a minute.",
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-09-18",
     title: "Profile photos",

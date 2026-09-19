@@ -49,6 +49,17 @@ function expireTag(tag: string) {
  *
  * Takes a `schoolId` because that tag is tenant-scoped. Pass the same
  * `schoolId` the calling action scoped its own ownership check to.
+ *
+ * Also busts `schoolDashboard(schoolId)` (via `revalidateSchoolDashboard`):
+ * approving, rejecting, removing, or (de)activating a teacher changes the
+ * dashboard's pending-approval and teacher counts, both read out of
+ * `getSchoolHeadMetricCounts`, which is cached under that same tag. Without
+ * this a head who just approved every pending teacher would see "N waiting"
+ * for up to the cache's TTL — the one figure whose entire job is to prompt an
+ * action. Nearly every call site already paired an explicit
+ * `revalidateSchoolDashboard(schoolId)` next to this call for exactly that
+ * reason; this fold makes the pairing the default instead of something every
+ * new call site has to remember.
  */
 export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachers);
@@ -57,6 +68,7 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersDeclined);
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersRemoved);
   revalidateSchoolTeachers(schoolId);
+  revalidateSchoolDashboard(schoolId);
 }
 
 /** One school's cached teacher list (ARAL tutor pickers). */

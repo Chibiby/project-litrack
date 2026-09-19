@@ -14,7 +14,7 @@ import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay"
 export default function SchoolWorkspaceLoading() {
   return (
     <RouteLoadingOverlay>
-      <SchoolHeadPageSkeleton tabs={SCHOOL_WORKSPACE_TABS.length}>
+      <SchoolHeadPageSkeleton tabs={SCHOOL_WORKSPACE_TABS.length} hero>
         <ListCardSkeleton grid items={6} />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>

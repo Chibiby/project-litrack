@@ -44,3 +44,5 @@ skills-lock.json
 screenshots/
 skill-observations/
 skill-updates/
+
+.env.migrate

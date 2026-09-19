@@ -7,6 +7,7 @@ import {
   SchoolHeadPage,
   schoolHeadHref,
 } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Callout } from "@/components/ui/callout";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -81,7 +82,7 @@ async function TransferBody({ view }: { view: SchoolHeadView }) {
         </Callout>
       ) : null}
 
-      <Surface as="section" className="max-w-xl">
+      <Surface as="section" className="max-w-2xl">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">Choose a learner</h2>
         </SurfaceHeader>
@@ -140,6 +141,14 @@ export default async function TransferPage({ searchParams }: PageProps) {
       title="Transfer a learner"
       description="Move a learner to another grade, section, and adviser — or to Floating."
       view={view}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Learners"
+          eyebrowIcon={ArrowRightLeft}
+          title="Transfer a learner"
+          subtitle="Move a learner to another grade, section, and adviser — or to Floating."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
         <TransferBody view={view} />

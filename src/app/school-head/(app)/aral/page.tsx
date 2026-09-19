@@ -1,5 +1,6 @@
-import { Suspense } from "react";
+import type { ReactNode } from "react";
 import type { Prisma } from "@prisma/client";
+import { Sparkles, UserCheck, UserX } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
@@ -7,6 +8,8 @@ import {
   type SchoolHeadView,
 } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { Callout } from "@/components/ui/callout";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { listAralTutors } from "@/lib/teachers/aral-tutor";
@@ -20,7 +23,6 @@ import {
   type AralLearnerRow,
   type AralTeacherOption,
 } from "@/components/school-head/aral-teacher-table";
-import { TableSectionSkeleton } from "@/components/loading";
 
 export const dynamic = "force-dynamic";
 
@@ -40,24 +42,40 @@ function parseParams(searchParams: { page?: string; q?: string }) {
   };
 }
 
-async function AralBody({
+/**
+ * Awaited directly by the page rather than rendered as a Suspense child: the
+ * hero's stats and the table below it come from the same read, and the hero
+ * must resolve before `SchoolHeadPage` renders so it can be handed through
+ * the `hero` prop (the Super Admin badge row renders between hero and
+ * `children`, so the hero cannot be folded into `children` instead).
+ */
+async function loadAralPage({
   view,
   params,
 }: {
   view: SchoolHeadView;
   params: ReturnType<typeof parseParams>;
-}) {
+}): Promise<{ hero: ReactNode; body: ReactNode }> {
   const { schoolId, isSuperAdminView } = view;
 
-  const learnerWhere: Prisma.LearnerWhereInput = {
+  // The programme's own scope, with no search applied: the hero's three figures
+  // describe ARAL at this school, so a head typing a name into the table's search
+  // box must not silently rewrite "240 ARAL learners" into "3".
+  const programWhere: Prisma.LearnerWhereInput = {
     schoolId,
     deletedAt: null,
     archivedAt: null,
     isAralLearner: true,
+  };
+
+  // What the table below shows: the same tenancy scope, narrowed by the search.
+  const learnerWhere: Prisma.LearnerWhereInput = {
+    ...programWhere,
     ...nameSearchWhere(params.q),
   };
 
-  const [learners, learnerCount, teachers] = await Promise.all([
+  const [learners, learnerCount, teachers, programCount, programUntutored] =
+    await Promise.all([
     prisma.learner.findMany({
       relationLoadStrategy: "join",
       where: learnerWhere,
@@ -78,6 +96,10 @@ async function AralBody({
     // valid designee, so this must not be narrowed to advisers. Shared with the
     // teacher's own picker so the two can never disagree about who qualifies.
     listAralTutors(schoolId),
+    // The hero's figures: same tenancy scope as everything above, without the
+    // search — never a narrower or wider tenancy scope than its neighbours.
+    prisma.learner.count({ where: programWhere }),
+    prisma.learner.count({ where: { ...programWhere, aralTeacherId: null } }),
   ]);
 
   const rows: AralLearnerRow[] = learners.map((l) => ({
@@ -96,7 +118,49 @@ async function AralBody({
     employmentType: t.employmentType,
   }));
 
-  return (
+  const programTutored = programCount - programUntutored;
+
+  const hero = (
+    <SchoolHeadHero
+      eyebrow="ARAL Program"
+      eyebrowIcon={Sparkles}
+      title="ARAL learners"
+      subtitle="Designate the teacher who tracks each ARAL learner's reading and writing every week."
+      stats={
+        <>
+          <StatCard
+            title="ARAL learners"
+            value={programCount}
+            hint="In the ARAL program"
+            icon={Sparkles}
+            tone="violet"
+            inlineOnPhone
+            denseOnPhone
+          />
+          <StatCard
+            title="With a tutor"
+            value={programTutored}
+            hint="Already designated"
+            icon={UserCheck}
+            tone="emerald"
+            inlineOnPhone
+            denseOnPhone
+          />
+          <StatCard
+            title="Awaiting a tutor"
+            value={programUntutored}
+            hint="Needs a designated teacher"
+            icon={UserX}
+            tone={programUntutored > 0 ? "amber" : "neutral"}
+            inlineOnPhone
+            denseOnPhone
+          />
+        </>
+      }
+    />
+  );
+
+  const body = (
     <>
       {/* Violet is the reserved ARAL accent, so the one place it earns a whole
           banner is here. */}
@@ -130,6 +194,8 @@ async function AralBody({
       />
     </>
   );
+
+  return { hero, body };
 }
 
 export default async function SchoolHeadAralPage({ searchParams }: PageProps) {
@@ -140,16 +206,16 @@ export default async function SchoolHeadAralPage({ searchParams }: PageProps) {
   );
 
   const params = parseParams(raw);
+  const { hero, body } = await loadAralPage({ view, params });
 
   return (
     <SchoolHeadPage
       title="ARAL learners"
       description="Designate the teacher who tracks each ARAL learner's reading and writing every week."
       view={view}
+      hero={hero}
     >
-      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
-        <AralBody view={view} params={params} />
-      </Suspense>
+      {body}
     </SchoolHeadPage>
   );
 }

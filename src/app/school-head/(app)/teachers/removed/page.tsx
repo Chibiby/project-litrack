@@ -1,11 +1,12 @@
 import { Suspense } from "react";
-import { UserMinus } from "lucide-react";
+import { UserMinus, Users } from "lucide-react";
 import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import { removedTeacherScope, teacherTabCounts } from "@/lib/teachers/roster";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import {
   TEACHER_TABS,
   teacherWorkspaceTabs,
@@ -70,10 +71,17 @@ export default async function RemovedTeachersPage({
   return (
     <SchoolHeadPage
       title="Teachers"
-      description="Teachers removed from this school. Their logins are deleted; to come back, they register again."
       view={view}
       tabs={teacherWorkspaceTabs(counts)}
       activeTab={TEACHER_TABS.removed}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Staff"
+          eyebrowIcon={Users}
+          title="Teachers"
+          subtitle="Teachers removed from this school. Their logins are deleted; to come back, they register again."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={4} columns={3} />}>
         <RemovedTeachersBody view={view} />

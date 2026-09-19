@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { Users } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -21,6 +22,7 @@ import {
   SchoolHeadPage,
   schoolHeadHref,
 } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import {
   TEACHER_TABS,
   teacherWorkspaceTabs,
@@ -235,10 +237,17 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
   return (
     <SchoolHeadPage
       title="Teachers"
-      description="Everyone who can sign in to this school. Change an advisory section here at any time."
       view={view}
       tabs={teacherWorkspaceTabs(counts)}
       activeTab={TEACHER_TABS.active}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Staff"
+          eyebrowIcon={Users}
+          title="Teachers"
+          subtitle="Everyone who can sign in to this school. Change an advisory section here at any time."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={8} columns={7} />}>
         <ActiveTeachersBody

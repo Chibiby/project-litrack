@@ -9,7 +9,7 @@ import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay"
 export default function Loading() {
   return (
     <RouteLoadingOverlay>
-      <SchoolHeadPageSkeleton>
+      <SchoolHeadPageSkeleton hero>
         <DualListCardSkeleton />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
