@@ -15,7 +15,8 @@ import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { teacherRosterScope, TEACHER_ROSTER_STATE } from "@/lib/teachers/roster";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
-import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
+import { demoSchoolFilter } from "@/lib/settings/system-settings";
+import { isDemoVisible } from "@/lib/demo/session";
 import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
 import {
   adminDashboard,
@@ -50,18 +51,18 @@ function labelProfile(key: string): string {
 /**
  * System-wide counts for the Super Admin dashboard.
  *
- * The demo tenant is excluded while demo mode is off, so the figures an admin
+ * The demo tenant is excluded unless this request carries a demo session, so the figures an admin
  * reports upward count real schools, real teachers and real learners. Every
  * count is filtered, not only the school ones — a demo School Head inflating
  * `schoolHeadCount` is the same untruth in a smaller font.
  */
 export async function getAdminMetricCounts() {
-  const demoEnabled = await isDemoEnabled();
-  const schoolScope = demoSchoolFilter(demoEnabled);
+  const demoVisible = await isDemoVisible();
+  const schoolScope = demoSchoolFilter(demoVisible);
   // Users and learners reach the flag through their school. No count below
   // includes SUPER_ADMIN, the one role with a null `schoolId`, so filtering
   // through the relation cannot drop a row that should have been counted.
-  const viaSchool = demoEnabled ? {} : ({ school: { isDemo: false } } as const);
+  const viaSchool = demoVisible ? {} : ({ school: { isDemo: false } } as const);
   return cachedQuery(
     async () => {
       const [
@@ -105,7 +106,7 @@ export async function getAdminMetricCounts() {
       };
     },
     {
-      keyParts: ["admin-metric-counts", `demo:${demoEnabled}`],
+      keyParts: ["admin-metric-counts", `demo:${demoVisible}`],
       tags: [adminDashboard],
       profile: "aggregate",
     }
@@ -113,8 +114,8 @@ export async function getAdminMetricCounts() {
 }
 
 export async function getAdminActivitySeries() {
-  const demoEnabled = await isDemoEnabled();
-  const schoolScope = demoSchoolFilter(demoEnabled);
+  const demoVisible = await isDemoVisible();
+  const schoolScope = demoSchoolFilter(demoVisible);
   return cachedQuery(
     async () => {
       const since7 = daysAgo(6);
@@ -162,7 +163,7 @@ export async function getAdminActivitySeries() {
     {
       keyParts: [
         "admin-activity-series-v2",
-        `demo:${demoEnabled}`,
+        `demo:${demoVisible}`,
         // The 7-day window above is `daysAgo(6)`; this is derived from the same
         // helper, so the key can never name a different day than the window it
         // caches. Admin-scoped read — no tenant discriminator exists to carry.
@@ -175,8 +176,8 @@ export async function getAdminActivitySeries() {
 }
 
 export async function getAdminRecentSchools() {
-  const demoEnabled = await isDemoEnabled();
-  const schoolScope = demoSchoolFilter(demoEnabled);
+  const demoVisible = await isDemoVisible();
+  const schoolScope = demoSchoolFilter(demoVisible);
   return cachedQuery(
     async () =>
       prisma.school.findMany({
@@ -186,7 +187,7 @@ export async function getAdminRecentSchools() {
         select: { id: true, name: true, schoolIdCode: true, isActive: true },
       }),
     {
-      keyParts: ["admin-recent-schools", `demo:${demoEnabled}`],
+      keyParts: ["admin-recent-schools", `demo:${demoVisible}`],
       tags: [adminDashboard, schoolsList],
       profile: "aggregate",
     }
@@ -229,12 +230,12 @@ const ACTIVE_TEACHER: Prisma.UserWhereInput = {
 /**
  * Super Admin: learners per active teacher and IP learners, per school and
  * nationally. Cross-tenant by design (admin-only caller); demo tenant excluded
- * while demo mode is off, like every other admin figure.
+ * outside a demo session, like every other admin figure.
  */
 export async function getAdminIpAndAdvisoryMetrics() {
-  const demoEnabled = await isDemoEnabled();
-  const schoolScope = demoSchoolFilter(demoEnabled);
-  const viaSchool = demoEnabled ? {} : ({ school: { isDemo: false } } as const);
+  const demoVisible = await isDemoVisible();
+  const schoolScope = demoSchoolFilter(demoVisible);
+  const viaSchool = demoVisible ? {} : ({ school: { isDemo: false } } as const);
   return cachedQuery(
     async () => {
       const [schools, learnerTotals, ipRows, teacherTotals] = await Promise.all([
@@ -262,7 +263,7 @@ export async function getAdminIpAndAdvisoryMetrics() {
       return shapeAdminIpMetrics({ schools, learnerTotals, ipRows, teacherTotals });
     },
     {
-      keyParts: ["admin-ip-advisory-metrics-v2", `demo:${demoEnabled}`],
+      keyParts: ["admin-ip-advisory-metrics-v2", `demo:${demoVisible}`],
       tags: [adminDashboard, schoolsList],
       profile: "aggregate",
     }

@@ -151,6 +151,12 @@ vi.mock("@/lib/auth/impersonation", () => ({
   readImpersonationContext: (...a: unknown[]) => readImpersonationContext(...(a as [])),
   readBoundImpersonationSession: (...a: unknown[]) => readBoundImpersonationSession(...(a as [])),
 }));
+// Signing out also ends any demo session in the browser. Stubbed because the
+// real one reaches for `cookies()`, which does not exist outside a request.
+const clearDemoSessionCookie = vi.fn(async () => {});
+vi.mock("@/lib/demo/session", () => ({
+  clearDemoSessionCookie: (...a: unknown[]) => clearDemoSessionCookie(...(a as [])),
+}));
 const readBoundImpersonationSession = vi.fn(async (..._args: unknown[]) => null as null | {
   ticket: { adminUserId: string; targetUserId: string }; expired: boolean;
 });

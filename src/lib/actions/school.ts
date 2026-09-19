@@ -11,7 +11,8 @@ import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedQuery } from "@/lib/cache/unstable";
-import { demoSchoolFilter, isDemoEnabled } from "@/lib/settings/system-settings";
+import { demoSchoolFilter } from "@/lib/settings/system-settings";
+import { isDemoVisible } from "@/lib/demo/session";
 import { schoolsList } from "@/lib/cache/tags";
 import {
   revalidateSchoolDashboard,
@@ -219,17 +220,28 @@ export async function regenerateSchoolHeadCredential(
   return { ok: true, data: { password } };
 }
 
-/** Active schools (id + name). Cached ~60s under `schools-list`. */
+/**
+ * Active schools (id + name). Cached ~60s under `schools-list`.
+ *
+ * Unauthenticated, so the demo tenant is filtered out unless the request
+ * carries a demo session. This endpoint names schools to anybody who asks, and
+ * a demo school listed here would reach real users through the back door after
+ * the login dropdown had already been taught to hide it.
+ */
 export async function listSchoolsPublic() {
+  const demoVisible = await isDemoVisible();
   return cachedQuery(
     () =>
       prisma.school.findMany({
-        where: { isActive: true, deletedAt: null },
+        where: { isActive: true, deletedAt: null, ...demoSchoolFilter(demoVisible) },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
     {
-      keyParts: ["schools-public"],
+      // `demo` belongs in the key, not only the closure: two different lists
+      // exist, and an entry keyed without it would serve the demo one to the
+      // next anonymous caller for the rest of the TTL.
+      keyParts: ["schools-public", `demo:${demoVisible}`],
       tags: [schoolsList],
       revalidate: 60,
     }
@@ -241,19 +253,19 @@ export async function listSchoolsPublic() {
  * the school has at least one grade level (teachers self-register).
  * Cached ~60s under `schools-list`; bust via `revalidateSchoolsList()`.
  *
- * The demo tenant is filtered out unless demo mode is on. This is the query
- * behind the login page's District and School dropdowns, so it is the surface
- * the switch most visibly controls — and the one where a stray "[demo school]"
- * in front of real teachers would do the most damage. `setDemoMode` busts the
- * `schools-list` tag, so the switch takes effect on the next load rather than
- * after the 60-second TTL.
+ * The demo tenant is filtered out unless this request carries a demo session
+ * (`@/lib/demo/session`). This is the query behind the login page's District
+ * and School dropdowns — the surface where a stray "[demo school]" in front of
+ * real teachers does the most damage — so it is the one place the per-browser
+ * rule matters most: the admin who opened the demo sees those three schools,
+ * every other visitor never does.
  */
 export async function listSchoolsWithTeacherStatus() {
-  const demoEnabled = await isDemoEnabled();
+  const demoVisible = await isDemoVisible();
   return cachedQuery(
     async () => {
       const schools = await prisma.school.findMany({
-        where: { isActive: true, deletedAt: null, ...demoSchoolFilter(demoEnabled) },
+        where: { isActive: true, deletedAt: null, ...demoSchoolFilter(demoVisible) },
         select: {
           id: true,
           name: true,
@@ -287,7 +299,7 @@ export async function listSchoolsWithTeacherStatus() {
       // `demo` is part of the key, not just of the closure: two different
       // school lists exist and an `unstable_cache` entry keyed without it would
       // serve the wrong one for up to the TTL after the switch is flipped.
-      keyParts: ["schools-with-teacher-status", `demo:${demoEnabled}`],
+      keyParts: ["schools-with-teacher-status", `demo:${demoVisible}`],
       tags: [schoolsList],
       revalidate: 60,
     }

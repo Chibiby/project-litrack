@@ -45,11 +45,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
-import { writeSetting } from "@/lib/settings/system-settings";
-import { DEMO_ENABLED_KEY } from "@/lib/demo/constants";
+import { clearDemoSessionCookie, setDemoSessionCookie } from "@/lib/demo/session";
 import { provisionDemoTenant, resetDemoTenant } from "@/lib/demo/provision";
 import { prepareTestLabFixtures, type TestLabFixtures } from "@/lib/demo/test-fixtures";
-import { setDemoModeSchema, resetDemoSchema } from "@/lib/validators/demo.schema";
+import { resetDemoSchema } from "@/lib/validators/demo.schema";
 import { action } from "@/lib/errors/action";
 import {
   revalidateAdminDashboard,
@@ -64,11 +63,11 @@ const DEMO_SETTINGS_PATH = "/admin/settings/demo";
  * Bust every cache entry whose contents depend on whether the demo tenant is
  * visible.
  *
- * `schoolsList` is the important one: the login page's school dropdown is a
- * 60-second `cachedQuery` under that tag, so without this the switch would look
- * broken for up to a minute on the one page it most obviously affects. The
- * admin dashboard aggregates are tagged separately and exclude demo counts, so
- * they are busted too.
+ * Cache keys already carry the demo flag (see `listSchoolsWithTeacherStatus`),
+ * so a stale entry can never be served to the wrong audience. This exists so
+ * the surfaces that just changed for THIS browser — the login dropdowns, the
+ * admin dashboard counts, the settings page itself — repaint immediately
+ * instead of after the 60-second TTL.
  */
 function revalidateDemoSurfaces() {
   revalidateSchoolsList();
@@ -79,36 +78,56 @@ function revalidateDemoSurfaces() {
 }
 
 /**
- * Super Admin: show or hide the demo district, school and accounts.
+ * Super Admin: open a demo session in this browser.
  *
- * Purely a visibility switch — no row is created, deleted or modified beyond the
- * one settings row, so turning it back on restores the demo exactly as it was,
- * mid-recording state included.
+ * The demo tenant is visible to a request, never to a deployment. Opening a
+ * session writes the signed cookie from `@/lib/demo/session`, and from then on
+ * this browser — and only this browser — sees the demo district and its schools
+ * in the login dropdowns and may sign in to them. Everyone else keeps seeing
+ * the system as if the training data did not exist, which is the whole point:
+ * the old global switch put "[demo school 1]" in front of every real teacher
+ * for as long as it stayed on.
+ *
+ * The session ends when the admin ends it, when anyone signs out in this
+ * browser (`logoutAction` clears the cookie), when the browser closes, or at
+ * the signed expiry — whichever comes first.
  */
-export async function setDemoMode(formData: FormData): Promise<ActionResult> {
+export async function startDemoSession(): Promise<ActionResult<{ expiresAt: number }>> {
   const admin = await requireUser("SUPER_ADMIN");
 
-  const parsed = setDemoModeSchema.safeParse({ enabled: formData.get("enabled") });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
+  let session;
   try {
-    await writeSetting(DEMO_ENABLED_KEY, parsed.data.enabled ? "true" : "false");
+    session = await setDemoSessionCookie(admin.id);
   } catch (err) {
-    console.error("[demo] setDemoMode write failed:", err);
-    return { ok: false, error: "Could not save the setting. Please try again." };
+    // The only failure here is a missing SUPABASE_SERVICE_ROLE_KEY, which is a
+    // deployment problem the admin cannot fix from this page.
+    console.error("[demo] could not open a demo session:", err);
+    return { ok: false, error: "Could not open a demo session. Check the server configuration." };
   }
 
   await writeAudit({
     userId: admin.id,
     schoolId: null,
-    action: AUDIT_ACTIONS.DEMO_MODE_SET,
-    resource: "SystemSetting",
-    resourceId: DEMO_ENABLED_KEY,
-    metadata: { enabled: parsed.data.enabled },
+    action: AUDIT_ACTIONS.DEMO_SESSION_START,
+    resource: "DemoSession",
+    resourceId: null,
+    metadata: { expiresAt: new Date(session.expiresAt).toISOString() },
   });
 
+  revalidateDemoSurfaces();
+  return { ok: true, data: { expiresAt: session.expiresAt } };
+}
+
+/**
+ * End the demo session in this browser.
+ *
+ * Deliberately not gated on SUPER_ADMIN. Ending only ever hides demo data, and
+ * the person clicking it may by then be signed in as the demo School Head —
+ * which is exactly the state this button exists to get out of. Requiring the
+ * admin role would strand them in the demo until the cookie expired.
+ */
+export async function endDemoSession(): Promise<ActionResult> {
+  await clearDemoSessionCookie();
   revalidateDemoSurfaces();
   return { ok: true };
 }

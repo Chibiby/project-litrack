@@ -8,11 +8,7 @@ import {
   DEMO_SCHOOL_ID_CODE,
 } from "@/lib/demo/constants";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
-import {
-  RESET_DEMO_CONFIRMATION,
-  resetDemoSchema,
-  setDemoModeSchema,
-} from "@/lib/validators/demo.schema";
+import { RESET_DEMO_CONFIRMATION, resetDemoSchema } from "@/lib/validators/demo.schema";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
 import {
   ALL_DISTRICTS,
@@ -73,37 +69,15 @@ describe("demo tenant constants", () => {
 });
 
 describe("demoSchoolFilter", () => {
-  it("adds no clause at all when demo mode is on", () => {
+  it("adds no clause at all inside a demo session", () => {
     // An empty object matters, not just an equivalent one: it must leave the
     // query exactly as it was before this feature existed.
     expect(demoSchoolFilter(true)).toEqual({});
     expect(Object.keys(demoSchoolFilter(true))).toHaveLength(0);
   });
 
-  it("excludes demo rows when demo mode is off", () => {
+  it("excludes demo rows for every request without a demo session", () => {
     expect(demoSchoolFilter(false)).toEqual({ isDemo: false });
-  });
-});
-
-describe("setDemoModeSchema", () => {
-  it.each([
-    ["true", true],
-    ["on", true],
-    ["false", false],
-    ["off", false],
-  ])("reads %s as %s", (input, expected) => {
-    const parsed = setDemoModeSchema.safeParse({ enabled: input });
-    expect(parsed.success && parsed.data.enabled).toBe(expected);
-  });
-
-  it("accepts real booleans", () => {
-    expect(setDemoModeSchema.parse({ enabled: true }).enabled).toBe(true);
-    expect(setDemoModeSchema.parse({ enabled: false }).enabled).toBe(false);
-  });
-
-  it("rejects anything else rather than guessing", () => {
-    expect(setDemoModeSchema.safeParse({ enabled: "yes" }).success).toBe(false);
-    expect(setDemoModeSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -198,7 +172,11 @@ describe("schoolIdCode uniqueness is partial, not global", () => {
 });
 
 describe("demo.enabled key", () => {
-  it("is namespaced so future switches can share the table", () => {
+  // Legacy: nothing reads this row any more — visibility is the per-browser
+  // session cookie in tests/unit/demo-session.test.ts. Pinned so a deployment
+  // still holding the row keeps a name for it, and so re-adding a global
+  // switch is a deliberate act rather than an accident.
+  it("keeps the namespaced name of the retired global switch", () => {
     expect(DEMO_ENABLED_KEY).toBe("demo.enabled");
   });
 });

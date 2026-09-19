@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,24 +23,28 @@ export type AuditFiltersState = {
  * count would otherwise render an empty table that looks broken rather than
  * filtered.
  */
-export function AuditFilters({
-  basePath,
-  state,
-  otherParams,
-}: {
+export function AuditFilters(props: AuditFiltersProps) {
+  // Remounted whenever the URL changes, which is what re-seeds the three
+  // inputs from the new query string. A prop→state effect would do the same
+  // job and is what this used to be, but it costs a second render pass on
+  // every navigation and the compiler lint rejects it; a key is the pattern
+  // the rest of this codebase already resets child state with.
+  const { state } = props;
+  return <AuditFiltersForm key={`${state.q}|${state.from ?? ""}|${state.to ?? ""}`} {...props} />;
+}
+
+type AuditFiltersProps = {
   basePath: string;
   state: AuditFiltersState;
   /** Params outside this component's control that must survive a push, e.g. `schoolId`. */
   otherParams: Record<string, string | undefined>;
-}) {
+};
+
+function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
   const router = useRouter();
   const [q, setQ] = useState(state.q);
   const [from, setFrom] = useState(state.from ?? "");
   const [to, setTo] = useState(state.to ?? "");
-
-  useEffect(() => setQ(state.q), [state.q]);
-  useEffect(() => setFrom(state.from ?? ""), [state.from]);
-  useEffect(() => setTo(state.to ?? ""), [state.to]);
 
   const push = (next: Partial<AuditFiltersState>) => {
     const merged: AuditFiltersState = {

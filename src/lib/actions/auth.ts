@@ -37,6 +37,7 @@ import {
   checkCurrentSession,
   readImpersonationContext,
 } from "@/lib/auth/impersonation";
+import { clearDemoSessionCookie } from "@/lib/demo/session";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
 import { sendPasswordRecoveryEmail } from "@/lib/auth/recovery-email";
 import {
@@ -630,6 +631,13 @@ export async function logoutAction(): Promise<void> {
     });
   }
   await clearImpersonationCookie();
+
+  // Signing out ends the demo too. "Open demo session" promises the training
+  // tenant disappears when the sitting ends, and the sitting usually ends here:
+  // the admin signed in as the demo School Head to record, and this is the
+  // click that leaves it. A cookie left behind would keep showing demo schools
+  // on the very next visit to /login in this browser.
+  await clearDemoSessionCookie();
 
   if (impersonation) {
     await writeAudit({

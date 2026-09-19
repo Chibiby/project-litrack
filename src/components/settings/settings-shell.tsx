@@ -18,7 +18,7 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
     // end.
     ...(roleBase === "/admin"
       ? ([
-          { label: "Demo mode", href: "/admin/settings/demo", icon: MonitorPlay },
+          { label: "Demo session", href: "/admin/settings/demo", icon: MonitorPlay },
           { label: "Submissions", href: "/admin/settings/submissions", icon: Lock },
         ] as const)
       : []),
@@ -90,7 +90,7 @@ export function SettingsShell({
       ? "demo"
       : "profile";
   const title =
-    segment === "security" ? "Security" : segment === "demo" ? "Demo mode" : "Profile";
+    segment === "security" ? "Security" : segment === "demo" ? "Demo session" : "Profile";
   const subtitle =
     segment === "security"
       ? securitySubtitle

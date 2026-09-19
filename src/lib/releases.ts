@@ -135,6 +135,24 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.7.0",
+    date: "2026-09-19",
+    title: "The training schools are gone from the login page",
+    announce: true,
+    fixes: [
+      "The practice district and its three practice schools no longer appear in the District and School lists when you sign in. They were only ever there for training videos, and they are now invisible to everyone except an administrator who deliberately opens them.",
+      "Those practice schools can no longer be signed in to, or registered against, by anyone else — not even with a link or a saved page.",
+      {
+        text: "Demo data is now opened per browser, from Page Test Lab or Settings › Demo session, instead of a switch that showed it to every school at once. Opening a session reveals the practice district in your browser alone for up to four hours, and it ends when you sign out, end it, or close the browser.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Dashboard figures count the practice schools only while your demo session is open, so the numbers you report upward stay real.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.6.0",
     date: "2026-09-19",
     title: "A new School Head dashboard, and every School Head page redesigned",

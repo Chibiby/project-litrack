@@ -46,7 +46,7 @@ export type SchoolRow = {
   users: number;
   learners: number;
   /**
-   * The training tenant. Kept in this admin table even while demo mode hides it
+   * The training tenant. Kept in this admin table even while it is hidden
    * from the login page and the dashboard counts — an admin has to be able to
    * see and manage the school whose visibility they are switching.
    */
@@ -379,7 +379,7 @@ export function SchoolsTable({
                       {school.isDemo ? (
                         <span
                           className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
-                          title="Training data. Hidden from the login page while demo mode is off."
+                          title="Training data. Hidden from the login page except inside a demo session."
                         >
                           Demo
                         </span>

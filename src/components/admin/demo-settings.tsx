@@ -1,18 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, Copy, Loader2, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { createDemoData, resetDemoData, setDemoMode } from "@/lib/actions/demo";
+import {
+  createDemoData,
+  endDemoSession,
+  resetDemoData,
+  startDemoSession,
+} from "@/lib/actions/demo";
 import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 
 export type DemoSettingsData = {
-  enabled: boolean;
+  /** Epoch ms this browser's demo session ends, or null when there is none. */
+  sessionExpiresAt: number | null;
   /** Every demo school exists. */
   complete: boolean;
   /** At least one does — a partly built set still needs the create button. */
@@ -50,39 +63,82 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Mount detection only, so nothing ever has to be re-subscribed. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+/** The server and the first client paint must agree: no local clock yet. */
+function getServerMounted(): boolean {
+  return false;
+}
+
+function getClientMounted(): boolean {
+  return true;
+}
+
 /**
  * The Super Admin's control over the training tenant.
  *
- * Two deliberately different weights of control: the visibility switch is
- * instant and reversible, so it acts on click; the reset destroys the demo
- * school, so it is behind a typed confirmation. Nothing on this page can reach a
- * real school.
+ * Three deliberately different weights of control. Opening a demo session is
+ * instant and affects only this browser, so it acts on click and opens the
+ * login page in a new tab, where the demo schools are now selectable. Ending it
+ * is one click too, because hiding demo data is never the risky direction. The
+ * reset destroys the demo schools, so it stays behind a typed confirmation.
+ * Nothing on this page can reach a real school.
  */
 export function DemoSettings({ data }: { data: DemoSettingsData }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [enabled, setEnabled] = useState(data.enabled);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirm, setConfirm] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
 
-  function toggle() {
-    const next = !enabled;
+  // Formatted after mount, never during SSR: the server formats in UTC and the
+  // browser in Asia/Manila, which is a hydration mismatch on every load. Same
+  // `useSyncExternalStore` shape as `useWelcomeLocale` — the server snapshot is
+  // null, the client one is the local time, and no effect writes state.
+  const mounted = useSyncExternalStore(subscribeNever, getClientMounted, getServerMounted);
+  const endsAt =
+    mounted && data.sessionExpiresAt !== null
+      ? new Date(data.sessionExpiresAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null;
+
+  const active = data.sessionExpiresAt !== null;
+
+  function openSession() {
     setError(null);
     setNotice(null);
-    // Optimistic: the switch is the whole affordance, so it has to move on click
-    // or the page reads as broken. Rolled back below if the write fails.
-    setEnabled(next);
     startTransition(async () => {
-      const fd = new FormData();
-      fd.set("enabled", next ? "true" : "false");
-      const res = await setDemoMode(fd);
+      const res = await startDemoSession();
       if (!res.ok) {
-        setEnabled(!next);
         setError(res.error);
         return;
       }
+      // A new tab, not this one: the admin keeps this page — and their admin
+      // session — while the demo runs beside it.
+      window.open("/login", "_blank", "noopener");
+      setNotice(
+        "Demo session open in this browser. The demo district and schools are now on the login page, for you only."
+      );
+      router.refresh();
+    });
+  }
+
+  function closeSession() {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      const res = await endDemoSession();
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setNotice("Demo session ended. The demo district and schools are hidden again.");
       router.refresh();
     });
   }
@@ -136,34 +192,59 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Demo mode</CardTitle>
+          <CardTitle>Demo session</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-start justify-between gap-6">
-            <div className="space-y-1">
-              <p className="text-sm text-foreground">
-                Show the training district and schools on the login page
-              </p>
-              <p className="text-sm text-muted-foreground">
-                While this is off, {data.districtName} and its demo school are hidden from the
-                District and School dropdowns and left out of every dashboard count. Nothing is
-                deleted — switch it back on and the demo returns exactly as it was.
-              </p>
-            </div>
-            <Switch
-              checked={enabled}
-              onCheckedChange={toggle}
-              aria-label="Demo mode"
-              disabled={pending}
-              className="mt-1"
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            {data.districtName} and its demo school are hidden from everyone by default — not in
+            the District and School dropdowns, not signable-in to, and left out of every dashboard
+            count. Opening a demo session reveals them in <strong>this browser only</strong>, for
+            up to four hours. No teacher, School Head or visitor is affected at any point.
+          </p>
 
-          {enabled && !data.complete ? (
+          {active ? (
+            <div className="space-y-3 rounded-lg border border-violet-300/70 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-950/40">
+              <p className="text-sm font-medium text-violet-900 dark:text-violet-100">
+                Demo session active{endsAt ? ` — ends at ${endsAt}` : ""}
+              </p>
+              <p className="text-sm text-violet-900/80 dark:text-violet-200/80">
+                Signing out of any account in this browser ends it, and so does closing the
+                browser. Until then the demo schools appear on the login page for you.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.open("/login", "_blank", "noopener")}
+                  disabled={pending}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden />
+                  Open the demo login page
+                </Button>
+                <Button type="button" variant="secondary" onClick={closeSession} disabled={pending}>
+                  {pending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Square className="mr-2 h-4 w-4" aria-hidden />
+                  )}
+                  End demo session
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button type="button" onClick={openSession} disabled={pending || !data.any}>
+              {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+              Open demo session
+            </Button>
+          )}
+
+          {!data.any ? (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              {data.any
-                ? "Demo mode is on, but some demo schools are missing. Create the rest below."
-                : "Demo mode is on, but the demo data has not been created yet. Nothing extra appears on the login page until you create it below."}
+              There is no demo data to open a session on yet. Create it below first.
+            </p>
+          ) : !data.complete ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              Some demo schools are missing. Create the rest below.
             </p>
           ) : null}
         </CardContent>

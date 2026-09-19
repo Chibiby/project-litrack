@@ -70,8 +70,15 @@ export const DEMO_DIVISION = "[demo division]";
 export const DEMO_ADDRESS = "[demo address]";
 
 /**
- * The SystemSetting key holding the on/off switch. Absent row means "off" —
- * a database that has never seen the demo settings page must not expose demo
- * schools on the public login page.
+ * Legacy SystemSetting key for the old deployment-wide demo switch.
+ *
+ * Nothing reads it any more. Demo visibility is per browser now — a signed
+ * cookie written by "Open demo session" (`@/lib/demo/session`) — because a
+ * global row meant that switching the demo on for a recording put the training
+ * district in front of every real teacher until somebody switched it back off.
+ *
+ * The constant stays so a deployment whose `demo.enabled` row is still "true"
+ * has a name for the inert row, and so the test that pins the key keeps the
+ * history honest. Do not add a reader.
  */
 export const DEMO_ENABLED_KEY = "demo.enabled";

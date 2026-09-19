@@ -21,7 +21,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { prepareTestLab, resetDemoData } from "@/lib/actions/demo";
+import {
+  endDemoSession,
+  prepareTestLab,
+  resetDemoData,
+  startDemoSession,
+} from "@/lib/actions/demo";
 import { startTestLabSession } from "@/lib/actions/accounts";
 import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
@@ -32,7 +37,8 @@ export type TestLabPageData = {
   status: {
     demoSchoolExists: boolean;
     prepared: boolean;
-    demoModeEnabled: boolean;
+    /** Epoch ms this browser's demo session ends, or null when there is none. */
+    demoSessionExpiresAt: number | null;
   };
   checklist: TestLabChecklistItem[];
 };
@@ -88,6 +94,42 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
     });
   }
 
+  const demoSessionActive = data.status.demoSessionExpiresAt !== null;
+
+  /**
+   * Open the demo school on the ordinary login page, in a new tab.
+   *
+   * Different from the persona buttons below, and deliberately kept beside
+   * them: those sign the admin straight in as a demo account, while this one
+   * reveals the demo district and school in the login dropdowns so the sign-in
+   * itself can be walked through — the part a training recording has to show.
+   * Nobody else's login page changes.
+   */
+  function openDemoSession() {
+    startTransition(async () => {
+      const res = await startDemoSession();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      window.open("/login", "_blank", "noopener");
+      toast.success("Demo session open. The demo school is on the login page, for you only.");
+      router.refresh();
+    });
+  }
+
+  function closeDemoSession() {
+    startTransition(async () => {
+      const res = await endDemoSession();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Demo session ended. The demo school is hidden again.");
+      router.refresh();
+    });
+  }
+
   function start(persona: TestLabPersona) {
     startStartTransition(async () => {
       const fd = new FormData();
@@ -130,15 +172,26 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
           <div className="flex flex-wrap gap-2">
             <StatusBadge ok={data.status.demoSchoolExists} label="Demo school" />
             <StatusBadge ok={data.status.prepared} label="Test data prepared" />
-            <StatusBadge ok={data.status.demoModeEnabled} label="Demo mode on" />
+            <StatusBadge ok={demoSessionActive} label="Demo session on" />
           </div>
-          {!data.status.demoModeEnabled ? (
-            <p className="text-sm text-muted-foreground">
-              Demo mode is informational here — Test Lab works whether it is on or off.
-            </p>
-          ) : null}
+          <p className="text-sm text-muted-foreground">
+            {demoSessionActive
+              ? "A demo session is open in this browser: the demo district and school appear on the login page for you, and for nobody else. Signing out anywhere in this browser ends it."
+              : "The demo school is hidden from the login page for everyone. Open a demo session to make it selectable in this browser only — the persona buttons below work either way."}
+          </p>
 
           <div className="flex flex-wrap gap-2">
+            {data.status.demoSchoolExists ? (
+              demoSessionActive ? (
+                <Button type="button" variant="secondary" onClick={closeDemoSession}>
+                  End demo session
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={openDemoSession}>
+                  Open demo session
+                </Button>
+              )
+            ) : null}
             {!data.status.demoSchoolExists ? (
               <Button asChild>
                 <Link href="/admin/settings/demo">Create demo data</Link>

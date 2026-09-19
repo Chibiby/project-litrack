@@ -314,12 +314,15 @@ export const AUDIT_ACTIONS = {
   DB_REMOVE_TEACHER_ACCOUNTS: "DB_REMOVE_TEACHER_ACCOUNTS",
 
   /**
-   * The training/demo tenant. `DEMO_MODE_SET` records the visibility switch,
-   * which is reversible and touches no rows. `DEMO_RESET` is the destructive
-   * one — it hard-deletes the demo school — so it logs the per-model row counts
-   * it removed, the same rule the database console follows.
+   * The training/demo tenant. `DEMO_SESSION_START` records one admin opening
+   * the demo in their own browser — visibility is per session now, so this is
+   * who could see the training data and when, not a deployment-wide switch.
+   * Ending a session is not audited: it only ever hides demo data, it needs no
+   * admin role, and a row per click would bury the openings that matter.
+   * `DEMO_RESET` is the destructive one — it hard-deletes the demo schools — so
+   * it logs the ids it removed, the same rule the database console follows.
    */
-  DEMO_MODE_SET: "DEMO_MODE_SET",
+  DEMO_SESSION_START: "DEMO_SESSION_START",
   DEMO_PROVISION: "DEMO_PROVISION",
   DEMO_RESET: "DEMO_RESET",
   /**

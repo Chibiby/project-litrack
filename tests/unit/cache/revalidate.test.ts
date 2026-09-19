@@ -47,12 +47,12 @@ describe("revalidateSchoolHeadTeachers", () => {
     revalidateSchoolHeadTeachers(SCHOOL_ID);
 
     // The teacher-list side, tenant-scoped.
-    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolTeachers(SCHOOL_ID));
+    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolTeachers(SCHOOL_ID), { expire: 0 });
 
     // The fold under test: everything `revalidateSchoolDashboard` itself emits
     // must show up here too, with no call site having to ask for it.
-    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(SCHOOL_ID));
-    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID));
+    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(SCHOOL_ID), { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID), { expire: 0 });
   });
 
   it("folds in exactly what a direct revalidateSchoolDashboard call would emit", async () => {
@@ -83,9 +83,9 @@ describe("revalidateSchoolHeadTeachers", () => {
 
     revalidateSchoolHeadTeachers(otherSchoolId);
 
-    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolDashboard(SCHOOL_ID));
-    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID));
-    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolTeachers(SCHOOL_ID));
-    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(otherSchoolId));
+    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolDashboard(SCHOOL_ID), { expire: 0 });
+    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID), { expire: 0 });
+    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolTeachers(SCHOOL_ID), { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(otherSchoolId), { expire: 0 });
   });
 });

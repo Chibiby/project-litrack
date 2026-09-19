@@ -1,7 +1,6 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
-import { DEMO_ENABLED_KEY } from "@/lib/demo/constants";
 import {
   READING_LEVEL_UNLOCK_ALL_KEY,
   SUBMISSION_LOCKING_KEY,
@@ -38,28 +37,11 @@ export async function writeSetting(key: string, value: string): Promise<void> {
   });
 }
 
-/**
- * Is the training/demo tenant currently visible?
- *
- * Defaults to **off**. A database with no `demo.enabled` row has never had demo
- * mode switched on, and the safe reading of "unknown" on a public login page is
- * "do not show a fake school to real teachers".
- *
- * Wrapped in React `cache()` so a single render that filters several queries on
- * it pays one query, not several. Deliberately *not* an `unstable_cache` entry:
- * the readers that matter (`listSchoolsWithTeacherStatus`, the admin dashboard
- * aggregates) are themselves cached under their own tags, and the toggle action
- * busts those tags — adding a second TTL layer here would only widen the window
- * where the switch looks stuck.
- */
-export const isDemoEnabled = cache(async (): Promise<boolean> => {
-  return (await readSetting(DEMO_ENABLED_KEY)) === "true";
-});
 
 /**
  * Are the deadlines on ARAL weekly attendance and term grades being enforced?
  *
- * Defaults to **off**, which is the opposite direction from `isDemoEnabled` and
+ * Defaults to **off**, which is the opposite direction from the reading-level
  * deliberately so. The programme asked for everything writable while the rollout
  * settles, so a database with no `submissions.locking` row ships with every
  * window open and no `UnlockGrant` lookup on any save path.
@@ -76,7 +58,7 @@ export const isDemoEnabled = cache(async (): Promise<boolean> => {
  * programme's rollout. A per-school variant can be added later without moving
  * what this establishes.
  *
- * `cache()` for the same reason as `isDemoEnabled` — a page that checks several
+ * `cache()` so a page that checks several
  * windows pays one query — and deliberately not an `unstable_cache` entry, so
  * the switch is never stuck behind a second TTL.
  */
@@ -112,12 +94,17 @@ export const isMonthlyReadingLevelUnlockedForAll = cache(
 );
 
 /**
- * A Prisma `where` fragment that hides the demo tenant while demo mode is off.
+ * A Prisma `where` fragment that hides the demo tenant from a request that has
+ * no demo session.
  *
  * Spread into a School `where` rather than writing `isDemo: false` inline, so
- * that when demo mode is on the clause disappears entirely and the query plan is
- * exactly what it was before this feature existed.
+ * that inside a demo session the clause disappears entirely and the query plan
+ * is exactly what it was before this feature existed.
+ *
+ * The argument comes from `isDemoVisible()` (`@/lib/demo/session`), never from
+ * a settings row: demo visibility is a property of the browser asking, not of
+ * the deployment.
  */
-export function demoSchoolFilter(demoEnabled: boolean): { isDemo?: false } {
-  return demoEnabled ? {} : { isDemo: false };
+export function demoSchoolFilter(demoVisible: boolean): { isDemo?: false } {
+  return demoVisible ? {} : { isDemo: false };
 }

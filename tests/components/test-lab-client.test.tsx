@@ -18,7 +18,11 @@ vi.mock("next/navigation", () => ({
 
 const prepareTestLab = vi.fn(async () => ({ ok: true, fixtures: {} }));
 const resetDemoData = vi.fn(async () => ({ ok: true, data: { count: 1, initialPassword: "123456" } }));
+const startDemoSession = vi.fn(async () => ({ ok: true, data: { expiresAt: Date.now() + 1000 } }));
+const endDemoSession = vi.fn(async () => ({ ok: true }));
 vi.mock("@/lib/actions/demo", () => ({
+  startDemoSession: (...args: unknown[]) => startDemoSession(...(args as [])),
+  endDemoSession: (...args: unknown[]) => endDemoSession(...(args as [])),
   prepareTestLab: (...args: unknown[]) => prepareTestLab(...(args as [])),
   resetDemoData: (...args: unknown[]) => resetDemoData(...(args as [])),
 }));
@@ -48,7 +52,7 @@ function baseData(overrides: Partial<TestLabPageData["status"]> = {}): TestLabPa
     status: {
       demoSchoolExists: true,
       prepared: false,
-      demoModeEnabled: true,
+      demoSessionExpiresAt: null,
       ...overrides,
     },
     checklist: [],
@@ -73,7 +77,7 @@ describe("TestLabClient", () => {
 
   it("renders the checklist, grouped by role, once prepared", () => {
     const data: TestLabPageData = {
-      status: { demoSchoolExists: true, prepared: true, demoModeEnabled: true },
+      status: { demoSchoolExists: true, prepared: true, demoSessionExpiresAt: null },
       checklist: CHECKLIST,
     };
     render(<TestLabClient data={data} />);
@@ -101,7 +105,7 @@ describe("TestLabClient", () => {
     };
 
     const data: TestLabPageData = {
-      status: { demoSchoolExists: true, prepared: true, demoModeEnabled: true },
+      status: { demoSchoolExists: true, prepared: true, demoSessionExpiresAt: null },
       checklist: CHECKLIST,
     };
     expect(() => render(<TestLabClient data={data} />)).not.toThrow();
