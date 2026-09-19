@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -103,24 +104,27 @@ export function ProfileTabs({
       {PROFILE_TABS.map((tab) => {
         const selected = tab.key === active;
         return (
-          <button
+          <Button
             key={tab.key}
             id={tabId(tab.key)}
             type="button"
+            variant={null}
+            size={null}
             role="tab"
             aria-selected={selected}
             aria-controls={panelId(tab.key)}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.key)}
             className={cn(
-              "-mb-px whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              // inline-block, rounded-none, ring-offset-white undo the Button base so the tab renders as the plain button it replaced.
+              "-mb-px inline-block whitespace-nowrap rounded-none border-b-2 px-3 py-3 text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               selected
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
             )}
           >
             {tab.label}
-          </button>
+          </Button>
         );
       })}
     </div>

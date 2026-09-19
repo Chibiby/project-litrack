@@ -319,7 +319,7 @@ export function AppSidebar({
             aria-label="LITRACK home"
           >
             <Image
-              src="/logo.png"
+              src="/logo.webp"
               alt="ARAL Program logo"
               width={36}
               height={48}

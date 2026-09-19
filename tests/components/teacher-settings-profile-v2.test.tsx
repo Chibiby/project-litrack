@@ -154,7 +154,7 @@ describe("teacher settings v2 — not built yet", () => {
 
   it("renders Account Preferences and Notifications inert, with Profile and Security as links", () => {
     render(
-      <TeacherSettingsShell active="profile" bannerSrc="/brand/banner-teacher-female.png">
+      <TeacherSettingsShell active="profile" bannerSrc="/brand/banner-teacher-female.webp">
         <p>content</p>
       </TeacherSettingsShell>
     );

@@ -334,19 +334,22 @@ function LanguageSwitch({
       className="inline-flex rounded-full border border-border bg-card/90 p-0.5 text-xs font-semibold shadow-sm backdrop-blur"
     >
       {options.map((o) => (
-        <button
+        <Button
           key={o.value}
           type="button"
+          variant={null}
+          size={null}
           role="radio"
           aria-checked={locale === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "min-h-8 rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            // inline-block through focus-visible:ring-offset-0 undo the Button base so the pill keeps the plain button's inherited type and ring.
+            "min-h-8 inline-block whitespace-normal rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
             locale === o.value ? "bg-violet text-violet-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
           {o.text}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -377,7 +380,7 @@ function WelcomeBanner({
       {/* The v2 learner art, right- and bottom-anchored; faded under the text
           wherever the two would meet. */}
       <Image
-        src="/brand/banner-learner.png"
+        src="/brand/banner-learner.webp"
         alt=""
         aria-hidden="true"
         width={2172}
@@ -397,7 +400,7 @@ function WelcomeBanner({
       <div className="absolute right-16 top-5 hidden sm:block">{languageSwitch}</div>
 
       <div className="flex items-center gap-3 pr-12 sm:pr-0">
-        <Image src="/logo.png" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
+        <Image src="/logo.webp" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xl font-extrabold tracking-tight text-violet sm:text-2xl">LITRACK</span>

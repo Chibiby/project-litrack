@@ -5,10 +5,10 @@ import { buildMonthGrid } from "@/lib/dashboard/month-grid";
 
 describe("teacherBannerSrc", () => {
   it("uses the male banner for MALE", () => {
-    expect(teacherBannerSrc("MALE")).toBe("/brand/banner-teacher-male.png");
+    expect(teacherBannerSrc("MALE")).toBe("/brand/banner-teacher-male.webp");
   });
   it.each(["FEMALE", null, undefined] as const)("uses the female banner for %s", (g) => {
-    expect(teacherBannerSrc(g)).toBe("/brand/banner-teacher-female.png");
+    expect(teacherBannerSrc(g)).toBe("/brand/banner-teacher-female.webp");
   });
 });
 

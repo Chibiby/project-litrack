@@ -23,6 +23,7 @@ import {
   READING_TRAINING_LABELS,
   ENGLISH_TRAINING_LABELS,
   GRADE_LEVEL_LABELS,
+  GENDER_LABELS,
   toOptions,
 } from "@/lib/constants/enum-labels";
 import {
@@ -96,6 +97,7 @@ const shWizardFormSchema = z.object({
   lastName: z.string(),
   contactEmail: z.string(),
   contactNumber: z.string(),
+  gender: z.string().optional(),
   designation: z.literal("School Head"),
   position: z.string(),
   educationalAttainment: z.string(),
@@ -131,6 +133,8 @@ type Defaults = {
    */
   contactEmail?: string | null;
   contactNumber?: string | null;
+  /** Optional; only chooses the School Head dashboard banner art. */
+  gender?: string | null;
   designation?: string | null;
   position?: string;
   educationalAttainment?: string;
@@ -164,6 +168,7 @@ function buildPayload(values: SHFormValues): Record<string, unknown> {
     lastName: values.lastName.trim(),
     contactEmail: values.contactEmail.trim() || undefined,
     contactNumber: values.contactNumber.trim() || undefined,
+    gender: values.gender || undefined,
     designation: "School Head",
     position: values.position || SH_DEFAULT_POSITION,
     educationalAttainment: values.educationalAttainment || undefined,
@@ -239,6 +244,7 @@ export function SchoolHeadProfileForm({
       lastName: defaultValues.lastName ?? "",
       contactEmail: defaultValues.contactEmail ?? "",
       contactNumber: defaultValues.contactNumber ?? "",
+      gender: defaultValues.gender ?? undefined,
       designation: "School Head",
       position: initialPosition,
       educationalAttainment: defaultValues.educationalAttainment ?? "",
@@ -541,6 +547,15 @@ export function SchoolHeadProfileForm({
                 inputMode="tel"
                 description="Optional. PH number, e.g. 09171234567 or +639171234567."
               />
+              <FormSelectField
+                control={form.control}
+                name="gender"
+                label="Gender"
+                description="Optional. Sets the artwork on your dashboard."
+                options={toOptions(GENDER_LABELS)}
+                allowEmpty
+                emptyLabel="Not specified"
+              />
               <ReadOnlyField
                 label="Designation"
                 value="School Head"
@@ -723,6 +738,7 @@ export function SchoolHeadProfileForm({
                 ],
                 ["Email address", values.contactEmail || "—"],
                 ["Contact number", values.contactNumber || "—"],
+                ["Gender", labelOf(GENDER_LABELS, values.gender)],
                 ["Designation", "School Head"],
                 ["Position", labelOf(SCHOOL_HEAD_POSITION_LABELS, values.position)],
               ]}

@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { getNavGroups, type NavGrade } from "@/lib/nav/nav-config";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import type { UserRole } from "@prisma/client";
+import { cn } from "@/lib/utils";
 
 const SEARCH_HREF: Record<UserRole, string> = {
   SUPER_ADMIN: "/admin/schools",
@@ -128,9 +129,12 @@ export function AppHeader({
         <Link
           href={roleHomePath(role)}
           aria-label="LITRACK home"
-          className="flex min-w-0 flex-1 items-center justify-center gap-2 lg:hidden"
+          className={cn(
+            "flex min-w-0 flex-1 items-center justify-center gap-2 lg:hidden",
+            !isAralVolunteer && !isFloating && "md:max-lg:justify-start"
+          )}
         >
-          <Image src="/logo.png" alt="" width={30} height={40} className="h-9 w-auto shrink-0" />
+          <Image src="/logo.webp" alt="" width={30} height={40} className="h-9 w-auto shrink-0" />
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="text-base font-extrabold tracking-tight text-foreground">LITRACK</span>
             {schoolName ? (
@@ -167,7 +171,7 @@ export function AppHeader({
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
             pages={searchPages}
-            className="hidden w-full max-w-xl lg:block"
+            className="hidden w-full max-w-xl md:max-lg:block md:max-lg:max-w-xs lg:block"
           />
         )}
 

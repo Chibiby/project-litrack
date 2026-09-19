@@ -838,6 +838,10 @@ model SchoolHeadProfile {
   contactEmail  String?
   designation   String?
   position      SchoolHeadPosition
+  /// Chooses the School Head dashboard banner art (MALE gives the male banner,
+  /// anything else the female one). Nullable: every profile saved before this
+  /// existed has none, and it stays optional. Mirrors `TeacherProfile.gender`.
+  gender        Gender?
 
   // II. Professional Background
   educationalAttainment EducationalAttainment

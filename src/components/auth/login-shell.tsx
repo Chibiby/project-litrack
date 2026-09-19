@@ -35,7 +35,7 @@ export function LoginShell({ children }: { children: React.ReactNode }) {
         <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/15 to-transparent lg:bg-gradient-to-r lg:from-white/55 lg:via-white/10 lg:to-transparent" />
       </div>
 
-      <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-10 xl:px-16 2xl:px-24">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-10 xl:px-16 2xl:px-24">
         <LoginBrand />
         <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
           {children}
@@ -53,7 +53,7 @@ function LoginBrand() {
     >
       <div className="flex items-center gap-3 sm:gap-5">
         <Image
-          src="/logo.png"
+          src="/logo.webp"
           alt="ARAL Program logo"
           width={384}
           height={512}
@@ -63,7 +63,7 @@ function LoginBrand() {
         />
         <span aria-hidden className="h-16 w-px bg-muted-foreground/40 sm:h-20 lg:h-24" />
         <Image
-          src="/partner-logos.png"
+          src="/partner-logos.webp"
           alt="Partner organizations: DepEd, Bagong Pilipinas, and Division of Sarangani"
           width={1024}
           height={312}

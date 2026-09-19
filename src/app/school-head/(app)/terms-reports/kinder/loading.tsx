@@ -5,14 +5,15 @@ import { TermsReportBodySkeleton } from "@/components/terms/terms-report-skeleto
 /**
  * Content-slot skeleton for the School Head's read-only Kindergarten
  * checklist. `SchoolHeadPageSkeleton` reproduces `SchoolHeadPage`'s header
- * chrome (no tabs on this route); `TermsReportBodySkeleton` is the same
+ * chrome (no tabs on this route) with a banded hero block, matching the page's
+ * first paint once a section is picked; `TermsReportBodySkeleton` is the same
  * cards-then-table shape the teacher's End of Terms route already uses for
  * its own busy state, reused rather than one-off skeleton markup.
  */
 export default function SchoolHeadKinderChecklistLoading() {
   return (
     <RouteLoadingOverlay>
-      <SchoolHeadPageSkeleton>
+      <SchoolHeadPageSkeleton hero>
         <TermsReportBodySkeleton />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>

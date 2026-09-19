@@ -227,7 +227,7 @@ export function HeaderSearch({
             setActive((i) => (i - 1 + rows.length) % rows.length);
           }
         }}
-        className="h-9 rounded-lg border-transparent bg-muted pl-9 pr-3 text-sm focus-visible:border-input focus-visible:bg-background"
+        className="h-9 rounded-lg border-transparent bg-muted pl-9 pr-3 text-sm focus-visible:border-input focus-visible:bg-background md:max-lg:h-11"
       />
 
       {showList && (

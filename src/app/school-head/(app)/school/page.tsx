@@ -1,8 +1,11 @@
 import { Suspense } from "react";
+import { School, GraduationCap, Layers, CalendarRange } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import {
   SCHOOL_TABS,
   SCHOOL_WORKSPACE_TABS,
@@ -102,13 +105,72 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
     SCHOOL_HEAD_ROUTES.schoolGradeLevels
   );
 
+  // Light counts for the hero's stat row — cheap, indexed queries kept apart
+  // from `GradeLevelsGrid`'s own (heavier, deactivated-grades-included) read so
+  // the hero can paint without waiting on the grid's Suspense boundary.
+  const [activeGradeCount, activeSectionCount, activeYear] = await Promise.all([
+    prisma.gradeLevel.count({ where: { schoolId: view.schoolId, deletedAt: null } }),
+    prisma.section.count({
+      where: {
+        schoolId: view.schoolId,
+        deletedAt: null,
+        gradeLevel: { deletedAt: null },
+      },
+    }),
+    prisma.schoolYear.findFirst({
+      where: { schoolId: view.schoolId, isActive: true },
+      select: { label: true },
+    }),
+  ]);
+
   return (
     <SchoolHeadPage
       title="Grade levels"
-      description="Activate the grades your school offers, then add each grade's sections."
       view={view}
       tabs={SCHOOL_WORKSPACE_TABS}
       activeTab={SCHOOL_TABS.gradeLevels}
+      hero={
+        <SchoolHeadHero
+          eyebrow="School"
+          eyebrowIcon={School}
+          title="Grade levels"
+          subtitle="Activate the grades your school offers, then add each grade's sections."
+          stats={
+            <>
+              <StatCard
+                title="Active grades"
+                value={activeGradeCount}
+                hint="Grades this school offers"
+                icon={GraduationCap}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Sections"
+                value={activeSectionCount}
+                hint="Across all active grades"
+                icon={Layers}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Active school year"
+                value={activeYear?.label ?? "Not set"}
+                hint="Learners enroll against this year"
+                icon={CalendarRange}
+                tone="primary"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+            </>
+          }
+        />
+      }
     >
       <Suspense fallback={<ListCardSkeleton grid items={10} />}>
         <GradeLevelsGrid

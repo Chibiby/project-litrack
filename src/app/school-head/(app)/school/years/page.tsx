@@ -1,8 +1,10 @@
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, GraduationCap, Layers, School } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import {
   SCHOOL_TABS,
   SCHOOL_WORKSPACE_TABS,
@@ -29,22 +31,32 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
     SCHOOL_HEAD_ROUTES.schoolYears
   );
 
-  const years = await prisma.schoolYear.findMany({
-    where: { schoolId: view.schoolId },
-    orderBy: { startDate: "desc" },
-    // Counts decide two things per row: whether the edit dialog warns that
-    // changing dates will not move existing records, and whether removal is
-    // offered at all. Cheap here (one grouped count per year) versus a second
-    // round trip from the client once the dialog is already open.
-    select: {
-      id: true,
-      label: true,
-      startDate: true,
-      endDate: true,
-      isActive: true,
-      _count: { select: { enrollments: true, termGrades: true } },
-    },
-  });
+  const [years, activeGradeCount, activeSectionCount] = await Promise.all([
+    prisma.schoolYear.findMany({
+      where: { schoolId: view.schoolId },
+      orderBy: { startDate: "desc" },
+      // Counts decide two things per row: whether the edit dialog warns that
+      // changing dates will not move existing records, and whether removal is
+      // offered at all. Cheap here (one grouped count per year) versus a second
+      // round trip from the client once the dialog is already open.
+      select: {
+        id: true,
+        label: true,
+        startDate: true,
+        endDate: true,
+        isActive: true,
+        _count: { select: { enrollments: true, termGrades: true } },
+      },
+    }),
+    prisma.gradeLevel.count({ where: { schoolId: view.schoolId, deletedAt: null } }),
+    prisma.section.count({
+      where: {
+        schoolId: view.schoolId,
+        deletedAt: null,
+        gradeLevel: { deletedAt: null },
+      },
+    }),
+  ]);
 
   const items: SchoolYearListItem[] = years.map((y) => ({
     id: y.id,
@@ -61,14 +73,55 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
   return (
     <SchoolHeadPage
       title="School years"
-      description="One year is active at a time. Learners are enrolled against the active year."
       view={view}
       tabs={SCHOOL_WORKSPACE_TABS}
       activeTab={SCHOOL_TABS.years}
-      actions={
-        view.isSuperAdminView ? null : (
-          <CreateSchoolYearDialog existingYears={items} />
-        )
+      hero={
+        <SchoolHeadHero
+          eyebrow="School"
+          eyebrowIcon={School}
+          title="School years"
+          subtitle="One year is active at a time. Learners are enrolled against the active year."
+          topRight={
+            view.isSuperAdminView ? null : (
+              <CreateSchoolYearDialog existingYears={items} />
+            )
+          }
+          stats={
+            <>
+              <StatCard
+                title="Active grades"
+                value={activeGradeCount}
+                hint="Grades this school offers"
+                icon={GraduationCap}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Sections"
+                value={activeSectionCount}
+                hint="Across all active grades"
+                icon={Layers}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+              <StatCard
+                title="Active school year"
+                value={active?.label ?? "Not set"}
+                hint="Learners enroll against this year"
+                icon={CalendarRange}
+                tone="primary"
+                inlineOnPhone
+                denseOnPhone
+                valueClassName="text-xl sm:text-2xl"
+              />
+            </>
+          }
+        />
       }
       callout={
         active ? null : (
@@ -97,11 +150,17 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
       </Surface>
 
       {view.isSuperAdminView ? null : (
-        <Surface as="section">
-          <SurfaceHeader>
-            <h2 className="text-base font-semibold">Correcting a school year</h2>
-          </SurfaceHeader>
-          <SurfaceBody className="space-y-3 text-sm text-muted-foreground">
+        <details className="group rounded-xl border border-border/80 bg-card text-card-foreground shadow-card [&_summary::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-base font-semibold">
+            Correcting a school year
+            <span
+              aria-hidden
+              className="text-sm font-normal text-muted-foreground transition-transform group-open:rotate-180"
+            >
+              ▾
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-border/60 px-5 py-4 text-sm text-muted-foreground">
             <p>
               Mistakes here are fixable. <strong className="text-foreground">Edit</strong>{" "}
               on any row opens the label and the date range for correction — use it
@@ -134,8 +193,8 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
               Every correction is written to the audit log with its before and after
               values, so a range that changed mid-year can always be traced.
             </p>
-          </SurfaceBody>
-        </Surface>
+          </div>
+        </details>
       )}
     </SchoolHeadPage>
   );

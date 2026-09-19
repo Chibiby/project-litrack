@@ -1,23 +1,9 @@
-import { Suspense } from "react";
-import Link from "next/link";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
-import { Button } from "@/components/ui/button";
-import {
-  SchoolHeadMetricsSection,
-  SchoolHeadChartsSection,
-  SchoolHeadIpSection,
-  SchoolHeadRecentActivitySection,
-} from "@/components/dashboard/school-head-dashboard-sections";
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-  DualListCardSkeleton,
-} from "@/components/loading";
-import { ArrowRightLeft, Megaphone } from "lucide-react";
-import { getAdviserlessSections } from "@/lib/teachers/adviserless";
-import { AdviserlessSectionsNotice } from "@/components/school-head/adviserless-sections-notice";
+import { loadSchoolHeadDashboard } from "@/components/dashboard/school-head/dashboard-body";
+import { teacherBannerSrc } from "@/lib/dashboard/banner";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -33,67 +19,42 @@ export default async function SchoolHeadDashboard({
     params.schoolId,
     SCHOOL_HEAD_ROUTES.dashboard
   );
-  const adviserlessSections = await getAdviserlessSections(view.schoolId);
+
+  // Hero art follows the head's own profile; Super Admin gets the documented
+  // fallback (section 3.8). Artwork must never take the dashboard down: a
+  // database the gender migration has not reached yet (CLAUDE.md's
+  // deploy-before-migrate window, spec risk R7) falls back to the default
+  // banner instead of a 500 — the same defensive shape
+  // `src/app/teacher/(app)/(dashboard)/page.tsx` uses for `TeacherProfile.gender`.
+  const gender = view.isSuperAdminView
+    ? null
+    : await prisma.schoolHeadProfile
+        .findUnique({ where: { userId: user.id }, select: { gender: true } })
+        .then((p) => p?.gender ?? null)
+        .catch(() => null);
+
+  const displayName = view.isSuperAdminView
+    ? view.schoolName ?? "Unknown school"
+    : user.firstName;
+
+  const { hero, body } = await loadSchoolHeadDashboard({
+    view,
+    displayName,
+    bannerSrc: teacherBannerSrc(gender),
+  });
 
   return (
     <SchoolHeadPage
-      // The frame names the viewed school in its own badge, so a Super Admin
-      // drilling in does not need it repeated in the heading.
-      title={view.isSuperAdminView ? "Dashboard" : `Welcome, ${user.firstName}`}
-      description="Enrollment, ARAL progress, and recent activity at a glance."
+      // The dashboard opens with its own greeting hero, so the frame's
+      // generic title block would only repeat it. `hero` goes through the
+      // `hero` prop so `SchoolHeadPage` can render the Super Admin badge row
+      // between it and `body` — folding both into one slot pushed that badge
+      // to the bottom of the page, below every chart.
+      hero={hero ?? undefined}
+      title={view.isSuperAdminView ? `Dashboard - ${displayName}` : `Welcome, ${user.firstName}`}
       view={view}
-      actions={
-        view.isSuperAdminView ? undefined : (
-          <>
-            <Button asChild size="sm" variant="outline">
-              <Link href={SCHOOL_HEAD_ROUTES.announcements}>
-                <Megaphone className="mr-1 h-4 w-4" aria-hidden /> Post an
-                announcement
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href={SCHOOL_HEAD_ROUTES.transfer}>
-                <ArrowRightLeft className="mr-1 h-4 w-4" aria-hidden /> Transfer
-                a learner
-              </Link>
-            </Button>
-          </>
-        )
-      }
     >
-      <AdviserlessSectionsNotice sections={adviserlessSections} />
-
-      <Suspense fallback={<MetricsGridSkeleton variant="school-head" />}>
-        <SchoolHeadMetricsSection
-          schoolId={view.schoolId}
-          isSuperAdminView={view.isSuperAdminView}
-        />
-      </Suspense>
-
-      <Suspense
-        fallback={
-          <>
-            <ChartSectionSkeleton columns={2} />
-            <ChartSectionSkeleton columns={2} />
-          </>
-        }
-      >
-        <SchoolHeadChartsSection schoolId={view.schoolId} />
-      </Suspense>
-
-      <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
-        <SchoolHeadIpSection
-          schoolId={view.schoolId}
-          isSuperAdminView={view.isSuperAdminView}
-        />
-      </Suspense>
-
-      <Suspense fallback={<DualListCardSkeleton />}>
-        <SchoolHeadRecentActivitySection
-          schoolId={view.schoolId}
-          isSuperAdminView={view.isSuperAdminView}
-        />
-      </Suspense>
+      {body}
     </SchoolHeadPage>
   );
 }

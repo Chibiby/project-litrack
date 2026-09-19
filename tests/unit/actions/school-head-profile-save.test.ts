@@ -215,3 +215,49 @@ describe("saveSchoolHeadProfile — position", () => {
     expect(profileUpsert).toHaveLength(0);
   });
 });
+
+describe("saveSchoolHeadProfile — gender", () => {
+  // Round trip: a submitted value must reach both branches of the upsert
+  // unchanged. Fails if `gender` were dropped from the destructure, or from
+  // the object passed to `create/update`.
+  it.each(["MALE", "FEMALE"])("persists a submitted %s on both create and update", async (gender) => {
+    await expect(saveSchoolHeadProfile(buildFormData({ gender }))).resolves.toEqual({ ok: true });
+
+    const args = upsertArgs();
+    expect(args.create.gender).toBe(gender);
+    expect(args.update.gender).toBe(gender);
+  });
+
+  // The bug this guards, verbatim from `docs/school-head-ui-rework.md` §4.4:
+  // the action used to spread `...profileData`, so a Gender the head cleared
+  // arrived as `undefined` on the parsed data and Prisma's `update` silently
+  // skips an `undefined` column — the old value would have stayed in the
+  // database while Settings showed the field blank. `?? null` is what turns
+  // "not submitted" into an explicit column write.
+  //
+  // Why this test fails if that normalisation is reverted: `buildFormData`'s
+  // loop only calls `fd.set` for a non-empty override, so omitting `gender`
+  // here reproduces a browser that never sent the key — the exact shape the
+  // bug needs. If `saveSchoolHeadProfile` goes back to spreading
+  // `...profileData` instead of destructuring `gender` out and writing
+  // `gender ?? null` explicitly, `parsed.data` simply has no `gender` key
+  // (Zod drops an absent optional field rather than keying it to
+  // `undefined`), so `args.update.gender` would read back as `undefined` —
+  // and `toBeNull()` fails on `undefined`, while `toBeUndefined()` below
+  // would then fail to fail. Both assertions together are what makes a
+  // reversion visible.
+  it("writes an explicit null when gender is not submitted, so clearing it actually clears it", async () => {
+    await expect(saveSchoolHeadProfile(buildFormData())).resolves.toEqual({ ok: true });
+
+    const args = upsertArgs();
+    expect(args.update.gender).toBeNull();
+    expect(args.create.gender).toBeNull();
+    expect(args.update.gender).not.toBeUndefined();
+  });
+
+  it("rejects a value outside MALE/FEMALE before touching the database", async () => {
+    const result = await saveSchoolHeadProfile(buildFormData({ gender: "OTHER" }));
+    expect(result.ok).toBe(false);
+    expect(profileUpsert).toHaveLength(0);
+  });
+});

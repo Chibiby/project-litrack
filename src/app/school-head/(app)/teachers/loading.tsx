@@ -14,7 +14,7 @@ import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay"
 export default function SchoolHeadTeachersLoading() {
   return (
     <RouteLoadingOverlay>
-      <SchoolHeadPageSkeleton tabs={Object.keys(TEACHER_TABS).length}>
+      <SchoolHeadPageSkeleton tabs={Object.keys(TEACHER_TABS).length} hero>
         <TableSectionSkeleton rows={6} columns={7} />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>

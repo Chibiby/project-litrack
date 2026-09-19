@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Users } from "lucide-react";
 import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
@@ -8,10 +9,12 @@ import {
   teacherTabCounts,
 } from "@/lib/teachers/roster";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import {
   TEACHER_TABS,
   teacherWorkspaceTabs,
 } from "@/components/school-head/workspace-tabs";
+import { Callout } from "@/components/ui/callout";
 import {
   TeachersPendingTable,
   type PendingTeacherRow,
@@ -50,12 +53,12 @@ async function PendingTeachersBody({ view }: { view: SchoolHeadView }) {
     <>
       {/* The one place the registration flow needs explaining is the tab where
           you act on it. */}
-      <p className="text-sm text-muted-foreground">
+      <Callout variant="info">
         Teachers self-register from the login page and verify their email once.
         Approving one lets them sign in with their email and password and pick
         their own grade and section during profiling — you can change that from
         the Active tab at any time.
-      </p>
+      </Callout>
 
       <TeachersPendingTable rows={pendingRows} readOnly={view.isSuperAdminView} />
     </>
@@ -76,10 +79,17 @@ export default async function PendingTeachersPage({
   return (
     <SchoolHeadPage
       title="Teachers"
-      description="Registration requests waiting on your decision."
       view={view}
       tabs={teacherWorkspaceTabs(counts)}
       activeTab={TEACHER_TABS.pending}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Staff"
+          eyebrowIcon={Users}
+          title="Teachers"
+          subtitle="Registration requests waiting on your decision."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={4} columns={4} />}>
         <PendingTeachersBody view={view} />

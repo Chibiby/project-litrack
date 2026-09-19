@@ -39,6 +39,14 @@ export interface SchoolHeadPageProps {
   view: SchoolHeadView;
   /** Right-aligned header controls. */
   actions?: React.ReactNode;
+  /**
+   * Replaces the default title block outright, e.g. `SchoolHeadHero` or
+   * `KinderChecklistHero`. `title` is still required — it is the page's
+   * accessible name in code review, and the fallback for any caller that
+   * omits `hero` — but `description` and `actions` are ignored when `hero`
+   * is set, because the hero carries them.
+   */
+  hero?: React.ReactNode;
   /** Notice rendered between the header and the tabs. */
   callout?: React.ReactNode;
   tabs?: SchoolHeadTab[];
@@ -57,13 +65,6 @@ export interface SchoolHeadPageProps {
    * would put stray top margins on every wrapped grid row.
    */
   contentClassName?: string;
-  /**
-   * Suppresses the whole title block — title, description, the Super Admin
-   * drill-down badge, and `actions` — for a page whose own hero (e.g.
-   * `KinderChecklistHero`) already carries that content. Mirrors `AppShell`'s
-   * `hideTitle`, which drops the same slot for the same reason.
-   */
-  hideTitle?: boolean;
   children: React.ReactNode;
 }
 
@@ -81,22 +82,49 @@ export function schoolHeadHref(view: SchoolHeadView, path: string): string {
   return hash ? `${withParam}#${hash}` : withParam;
 }
 
+/**
+ * The Super Admin drill-down indicator: "Super Admin view", the school's name
+ * and a caption saying whether the view may write. Exported so it has exactly
+ * one definition, but only `SchoolHeadPage` calls it — this is the single
+ * enforcement point for "a Super Admin always knows whose school they are
+ * looking at, and whether they may write." Rendered in its own row so it can
+ * never be dropped by a page that supplies its own `hero`.
+ */
+export function SuperAdminViewBadge({
+  view,
+  caption,
+}: {
+  view: SchoolHeadView;
+  caption?: string;
+}): React.JSX.Element {
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2">
+      <Badge variant="secondary">Super Admin view</Badge>
+      <span className="text-xs text-muted-foreground">
+        {view.schoolName ?? "Unknown school"} · {caption ?? "read-only"}
+      </span>
+    </div>
+  );
+}
+
 export function SchoolHeadPage({
   title,
   description,
   view,
   actions,
+  hero,
   callout,
   tabs,
   activeTab,
   superAdminCaption,
   contentClassName,
-  hideTitle,
   children,
 }: SchoolHeadPageProps) {
   return (
     <main id="main-content" className="w-full p-4 lg:p-6">
-      {!hideTitle ? (
+      {hero ? (
+        <div className="mb-6">{hero}</div>
+      ) : (
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
@@ -105,21 +133,15 @@ export function SchoolHeadPage({
             {description ? (
               <p className="mt-1 text-sm text-muted-foreground">{description}</p>
             ) : null}
-            {view.isSuperAdminView ? (
-              // The school name belongs here rather than concatenated into the
-              // title, which is what every page used to do.
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">Super Admin view</Badge>
-                <span className="text-xs text-muted-foreground">
-                  {view.schoolName ?? "Unknown school"} · {superAdminCaption ?? "read-only"}
-                </span>
-              </div>
-            ) : null}
           </div>
           {actions ? (
             <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
           ) : null}
         </div>
+      )}
+
+      {view.isSuperAdminView ? (
+        <SuperAdminViewBadge view={view} caption={superAdminCaption} />
       ) : null}
 
       {callout ? <div className="mb-6">{callout}</div> : null}

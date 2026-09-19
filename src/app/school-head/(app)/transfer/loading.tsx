@@ -5,7 +5,7 @@ import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay"
 export default function Loading() {
   return (
     <RouteLoadingOverlay>
-      <SchoolHeadPageSkeleton>
+      <SchoolHeadPageSkeleton hero>
         <TableSectionSkeleton rows={6} columns={3} />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>

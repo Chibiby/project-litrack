@@ -10,12 +10,20 @@ import { Skeleton } from "@/components/ui/skeleton";
  * jump — the tabs are identical across the panels, so redrawing them is a lie.
  *
  * `tabs` is a count, not labels: at skeleton time the widths are all that show.
+ *
+ * `hero` draws the banded hero block a converted page's first paint shows
+ * instead of the title-and-description pair — the same block
+ * `TeacherDashboardSkeleton` uses for its hero, so a route's `loading.tsx`
+ * keeps matching that route's first paint (`docs/school-head-ui-rework.md`
+ * section 1.7).
  */
 export function SchoolHeadPageSkeleton({
   tabs = 0,
+  hero = false,
   children,
 }: {
   tabs?: number;
+  hero?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -26,10 +34,14 @@ export function SchoolHeadPageSkeleton({
     >
       <span className="sr-only">Loading page</span>
 
-      <div className="mb-6" aria-hidden>
-        <Skeleton className="h-7 w-52" />
-        <Skeleton className="mt-2 h-4 w-80 max-w-full" />
-      </div>
+      {hero ? (
+        <Skeleton className="mb-6 mt-2 h-60 w-full rounded-2xl lg:h-[19rem]" aria-hidden />
+      ) : (
+        <div className="mb-6" aria-hidden>
+          <Skeleton className="h-7 w-52" />
+          <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+        </div>
+      )}
 
       {tabs > 0 ? (
         <div

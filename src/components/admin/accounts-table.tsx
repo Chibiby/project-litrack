@@ -221,7 +221,7 @@ function AccountOverview({ summary }: { summary?: AccountSummary }) {
   return (
     <section
       aria-label="Account overview"
-      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
+      className="grid gap-3 sm:grid-cols-2 md:max-lg:grid-cols-3 xl:grid-cols-5"
     >
       {cards.map(({ label, value, icon: Icon, tone }) => (
         <Card key={label} className="shadow-none">

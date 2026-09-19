@@ -47,7 +47,7 @@ export function TermsReportHero({
 }) {
   return (
     <PageHero
-      bannerSrc="/brand/banner-learner.png"
+      bannerSrc="/brand/banner-learner.webp"
       className="h-auto"
       topRight={
         <TermsAdvisoryHeroControl

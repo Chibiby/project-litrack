@@ -29,6 +29,21 @@ import TeacherAralAttendanceLoading from "@/app/teacher/(app)/aral/[gradeId]/att
 import TeacherAralReadingLevelLoading from "@/app/teacher/(app)/aral/[gradeId]/reading-level/loading";
 import TeacherAralTermsReportsLoading from "@/app/teacher/(app)/aral/[gradeId]/terms-reports/loading";
 import TeacherTermsReportsLoading from "@/app/teacher/(app)/terms-reports/loading";
+import SchoolHeadDashboardLoading from "@/app/school-head/(app)/loading";
+import SchoolHeadTransferLoading from "@/app/school-head/(app)/transfer/loading";
+import SchoolHeadAralLoading from "@/app/school-head/(app)/aral/loading";
+import SchoolHeadAnnouncementsLoading from "@/app/school-head/(app)/announcements/loading";
+import SchoolWorkspaceLoading from "@/app/school-head/(app)/school/loading";
+import SchoolHeadTeachersLoading from "@/app/school-head/(app)/teachers/loading";
+import SchoolHeadKinderChecklistLoading from "@/app/school-head/(app)/terms-reports/kinder/loading";
+import SchoolHeadIpLearnersLoading from "@/app/school-head/(app)/ip-learners/loading";
+import SchoolHeadAuditLoading from "@/app/school-head/(app)/audit/loading";
+import SchoolHeadTermSubjectsLoading from "@/app/school-head/(app)/term-subjects/loading";
+import SchoolHeadReportsLoading from "@/app/school-head/(app)/reports/loading";
+import {
+  SCHOOL_WORKSPACE_TABS,
+  TEACHER_TABS,
+} from "@/components/school-head/workspace-tabs";
 import { AralAttendanceSkeleton, AralReadingLevelSkeleton } from "@/components/loading";
 import { clearPendingPostLoginSplash } from "@/lib/post-login-flag";
 
@@ -390,4 +405,145 @@ describe("End of Terms route loading boundaries", () => {
       expect(source, page).toContain("fallback={<TermsReportBodySkeleton />}");
     }
   });
+});
+
+/**
+ * School Head route boundaries: the same "two skeletons" contract as the
+ * teacher tree above, guarding the regression directly named in the task that
+ * created this block — `/school-head/transfer` grew a banded hero, but its
+ * `loading.tsx` kept drawing the old compact title-and-description block, so
+ * the boundary and the loaded page disagreed about the header shape and the
+ * layout jumped on every hard navigation to that route. It has since been
+ * fixed; these cases are what would have caught it.
+ */
+describe("School Head dashboard loading boundary", () => {
+  it("draws six stat skeletons and no table", () => {
+    const { container } = render(<SchoolHeadDashboardLoading />);
+
+    // `dashboard-skeleton.tsx` marks each card `data-slot="stat-card-skeleton"`
+    // for exactly this assertion. Six, not the teacher tree's four — and never
+    // a table, because the dashboard's own Suspense fallback draws the same
+    // six cards and nothing tabular.
+    expect(
+      container.querySelectorAll('[data-slot="stat-card-skeleton"]')
+    ).toHaveLength(6);
+    expect(
+      container.querySelectorAll('[data-slot="table-skeleton"]')
+    ).toHaveLength(0);
+  });
+});
+
+interface SchoolHeadHeroRoute {
+  label: string;
+  Boundary: ComponentType;
+  /** Tabs this route's own tab bar should draw; 0 for the untabbed routes. */
+  tabs: number;
+}
+
+/**
+ * Every School Head route whose page was converted to the banded hero, paired
+ * with the `loading.tsx` that is supposed to mirror it. `audit`,
+ * `term-subjects` and `reports` are deliberately absent here — they kept the
+ * compact title block on purpose, and are asserted separately below.
+ */
+const SCHOOL_HEAD_HERO_ROUTES: SchoolHeadHeroRoute[] = [
+  { label: "transfer", Boundary: SchoolHeadTransferLoading, tabs: 0 },
+  { label: "aral", Boundary: SchoolHeadAralLoading, tabs: 0 },
+  { label: "announcements", Boundary: SchoolHeadAnnouncementsLoading, tabs: 0 },
+  {
+    label: "school workspace",
+    Boundary: SchoolWorkspaceLoading,
+    tabs: SCHOOL_WORKSPACE_TABS.length,
+  },
+  {
+    label: "teachers",
+    Boundary: SchoolHeadTeachersLoading,
+    tabs: Object.keys(TEACHER_TABS).length,
+  },
+  {
+    label: "terms-reports/kinder",
+    Boundary: SchoolHeadKinderChecklistLoading,
+    tabs: 0,
+  },
+  { label: "ip-learners", Boundary: SchoolHeadIpLearnersLoading, tabs: 0 },
+];
+
+/**
+ * The three routes that deliberately kept the compact title-and-description
+ * block instead of the hero. Asserted as their own group, not merely left out
+ * of the table above, so a hero wrongly added to one of these fails a test
+ * too — guarding the operator's decision in both directions.
+ */
+const SCHOOL_HEAD_COMPACT_ROUTES: { label: string; Boundary: ComponentType }[] = [
+  { label: "audit", Boundary: SchoolHeadAuditLoading },
+  { label: "term-subjects", Boundary: SchoolHeadTermSubjectsLoading },
+  { label: "reports", Boundary: SchoolHeadReportsLoading },
+];
+
+/**
+ * `SchoolHeadPageSkeleton` draws exactly one of two things right after its
+ * sr-only label: the hero variant is a single unpadded `Skeleton` leaf (zero
+ * element children of its own); the compact variant is a wrapper `div` around
+ * a title-text-and-description-text pair of `Skeleton`s (two element
+ * children). Neither carries a `data-slot` — that marker is spent on
+ * `stat-card-skeleton` and `table-skeleton` elsewhere — so the two are told
+ * apart the only way the DOM itself tells them apart: child-element count.
+ */
+function heroOrTitleNodeOf(container: HTMLElement): HTMLElement {
+  const root = boundaryRootOf(container);
+  const srOnly = root.querySelector(".sr-only");
+  expect(srOnly).not.toBeNull();
+  const node = srOnly!.nextElementSibling;
+  expect(node).toBeInstanceOf(HTMLElement);
+  return node as HTMLElement;
+}
+
+/**
+ * `SchoolHeadPageSkeleton`'s tab bar is the only block in this skeleton
+ * styled with `border-border/70` — every content skeleton's own row and
+ * header dividers use `/60` or `/40` (`table-section-skeleton.tsx`,
+ * `list-card-skeleton.tsx`) — so that value alone, not document position,
+ * is what picks the tab bar out from whatever content follows it.
+ */
+function tabSkeletonCountOf(container: HTMLElement): number {
+  const root = boundaryRootOf(container);
+  const tabBar = root.querySelector<HTMLElement>('[class*="border-border/70"]');
+  return tabBar ? tabBar.children.length : 0;
+}
+
+describe("School Head hero route loading boundaries", () => {
+  for (const route of SCHOOL_HEAD_HERO_ROUTES) {
+    it(`the ${route.label} boundary draws the banded hero, not the compact title block`, () => {
+      const { container } = render(<route.Boundary />);
+      expect(heroOrTitleNodeOf(container).children).toHaveLength(0);
+    });
+  }
+
+  it("the teachers boundary draws its own five tabs", () => {
+    const { container } = render(<SchoolHeadTeachersLoading />);
+    expect(tabSkeletonCountOf(container)).toBe(5);
+  });
+
+  it("the school workspace boundary draws its own three tabs", () => {
+    const { container } = render(<SchoolWorkspaceLoading />);
+    expect(tabSkeletonCountOf(container)).toBe(3);
+  });
+
+  it("the untabbed hero routes draw no tab bar", () => {
+    for (const route of SCHOOL_HEAD_HERO_ROUTES.filter((r) => r.tabs === 0)) {
+      const { container } = render(<route.Boundary />);
+      expect(tabSkeletonCountOf(container)).toBe(0);
+    }
+  });
+});
+
+describe("School Head compact route loading boundaries", () => {
+  for (const route of SCHOOL_HEAD_COMPACT_ROUTES) {
+    it(`the ${route.label} boundary keeps the compact title block, not a hero`, () => {
+      const { container } = render(<route.Boundary />);
+      // Two children: the title-text `Skeleton` and the description-text
+      // `Skeleton` this route's page still renders instead of a hero.
+      expect(heroOrTitleNodeOf(container).children).toHaveLength(2);
+    });
+  }
 });
