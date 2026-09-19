@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { School, GraduationCap, Layers, CalendarRange } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { getSchoolHeadMetricCounts } from "@/lib/dashboard/aggregates";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
@@ -105,23 +106,14 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
     SCHOOL_HEAD_ROUTES.schoolGradeLevels
   );
 
-  // Light counts for the hero's stat row — cheap, indexed queries kept apart
-  // from `GradeLevelsGrid`'s own (heavier, deactivated-grades-included) read so
-  // the hero can paint without waiting on the grid's Suspense boundary.
-  const [activeGradeCount, activeSectionCount, activeYear] = await Promise.all([
-    prisma.gradeLevel.count({ where: { schoolId: view.schoolId, deletedAt: null } }),
-    prisma.section.count({
-      where: {
-        schoolId: view.schoolId,
-        deletedAt: null,
-        gradeLevel: { deletedAt: null },
-      },
-    }),
-    prisma.schoolYear.findFirst({
-      where: { schoolId: view.schoolId, isActive: true },
-      select: { label: true },
-    }),
-  ]);
+  // Hero's stat row reuses the cached dashboard aggregate — same figures, no
+  // ad-hoc counts blocking first paint apart from `GradeLevelsGrid`'s own
+  // (heavier, deactivated-grades-included) read behind its Suspense boundary.
+  const {
+    gradeCount: activeGradeCount,
+    sectionCount: activeSectionCount,
+    activeYear,
+  } = await getSchoolHeadMetricCounts(view.schoolId);
 
   return (
     <SchoolHeadPage

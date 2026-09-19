@@ -182,8 +182,12 @@ describe("removeTeacher", () => {
   it("refreshes the teacher tabs and the grade-levels page the freed sections show on", async () => {
     await removeTeacher(form());
 
+    // `revalidateSchoolHeadTeachers` now busts the school dashboard itself (see
+    // `tests/unit/cache/revalidate.test.ts` for that fold, pinned against the
+    // real module) so this action no longer calls `revalidateSchoolDashboard`
+    // alongside it — asserting that mock here would just assert a call this
+    // action never makes.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
-    expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
     expect(revalidatePath).toHaveBeenCalledWith(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   });

@@ -577,7 +577,6 @@ export async function archiveGradeLevel(formData: FormData): Promise<ActionResul
 
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
     revalidateSchoolHeadTeachers(user.schoolId);
-    revalidateSchoolDashboard(user.schoolId);
     // Login "teachers open" depends on at least one grade level, same as create.
     revalidateSchoolsList();
     for (const teacherId of affectedTeacherIds) {
@@ -726,7 +725,6 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
-  revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -773,7 +771,6 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
-  revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -830,7 +827,6 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
-  revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
 }
 
@@ -896,7 +892,6 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
-  revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
@@ -1005,7 +1000,6 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
 
   revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
-  revalidateSchoolDashboard(user.schoolId);
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };

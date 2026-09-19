@@ -51,6 +51,11 @@ interface RoleShellProps {
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
   /**
+   * School Head only — teachers waiting on an approve/reject decision; see
+   * `NavOptions.pendingTeacherCount`.
+   */
+  pendingTeacherCount?: number;
+  /**
    * Either the resolved list (teacher/school-head, which pass nothing today —
    * `undefined` renders the menu's empty state immediately) or a promise the
    * layout started without awaiting (admin), unwrapped in `AppHeader` behind a
@@ -94,6 +99,7 @@ export function RoleShell({
   isAralVolunteer,
   isFloating,
   advisoryPlacements,
+  pendingTeacherCount,
   notifications,
   aiEnabled,
   lastSeenReleaseVersion,
@@ -122,6 +128,7 @@ export function RoleShell({
             isAralVolunteer={isAralVolunteer}
             isFloating={isFloating}
             advisoryPlacements={advisoryPlacements}
+            pendingTeacherCount={pendingTeacherCount}
             expanded={expanded}
             transitionsEnabled={hydrated}
           />

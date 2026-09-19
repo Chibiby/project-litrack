@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
+import { getSchoolHeadMetricCounts } from "@/lib/dashboard/aggregates";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
@@ -44,6 +45,20 @@ export default async function SchoolHeadAppLayout({
     }
   }
 
+  let pendingTeacherCount: number | undefined;
+  // Real School Heads only: a layout has no searchParams, so it cannot learn
+  // which school a Super Admin has drilled into via `?schoolId=`, and this
+  // account's own `schoolId` (if any) is not that school. Showing no badge
+  // beats guessing one, or showing one school's count on another's page.
+  if (user.role === "SCHOOL_HEAD" && user.schoolId) {
+    try {
+      const counts = await getSchoolHeadMetricCounts(user.schoolId);
+      pendingTeacherCount = counts.pendingTeacherCount;
+    } catch (err) {
+      console.error("[school-head/layout] pending teacher count failed:", err);
+    }
+  }
+
   return (
     <>
       <ImpersonationNotice
@@ -60,6 +75,7 @@ export default async function SchoolHeadAppLayout({
         userName={userName}
         avatarPath={user.avatarPath}
         schoolName={schoolName}
+        pendingTeacherCount={pendingTeacherCount}
         aiEnabled={geminiConfigured()}
         // Not while an admin impersonates this head: `user` IS the head's own
         // account then, and acknowledging would stamp their row — the real head

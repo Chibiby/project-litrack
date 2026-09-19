@@ -332,6 +332,11 @@ describe("setTeacherAdvisorySection", () => {
     // Asserted with the id, not bare: the helper also busts the tenant-scoped
     // `schoolTeachers(schoolId)` tag, so a site passing another school's id
     // would clear the wrong tenant's ARAL tutor list and leave this one stale.
+    // `revalidateSchoolHeadTeachers` now busts the school dashboard itself (see
+    // `tests/unit/cache/revalidate.test.ts` for that fold, pinned against the
+    // real module) so this action no longer calls `revalidateSchoolDashboard`
+    // alongside it — asserting that mock here would just assert a call this
+    // action never makes.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(
       SCHOOL_HEAD_ROUTES.schoolGradeLevels
@@ -339,7 +344,6 @@ describe("setTeacherAdvisorySection", () => {
     // The teacher's own surfaces show this advisory too.
     expect(revalidatePath).toHaveBeenCalledWith("/teacher/settings/profile");
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ID);
-    expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
   });
 
   it("clears an advisory when the School Head picks Unassigned", async () => {

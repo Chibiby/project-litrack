@@ -1,5 +1,6 @@
 import { CalendarRange, GraduationCap, Layers, School } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { getSchoolHeadMetricCounts } from "@/lib/dashboard/aggregates";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
@@ -31,32 +32,28 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
     SCHOOL_HEAD_ROUTES.schoolYears
   );
 
-  const [years, activeGradeCount, activeSectionCount] = await Promise.all([
-    prisma.schoolYear.findMany({
-      where: { schoolId: view.schoolId },
-      orderBy: { startDate: "desc" },
-      // Counts decide two things per row: whether the edit dialog warns that
-      // changing dates will not move existing records, and whether removal is
-      // offered at all. Cheap here (one grouped count per year) versus a second
-      // round trip from the client once the dialog is already open.
-      select: {
-        id: true,
-        label: true,
-        startDate: true,
-        endDate: true,
-        isActive: true,
-        _count: { select: { enrollments: true, termGrades: true } },
-      },
-    }),
-    prisma.gradeLevel.count({ where: { schoolId: view.schoolId, deletedAt: null } }),
-    prisma.section.count({
-      where: {
-        schoolId: view.schoolId,
-        deletedAt: null,
-        gradeLevel: { deletedAt: null },
-      },
-    }),
-  ]);
+  const [years, { gradeCount: activeGradeCount, sectionCount: activeSectionCount }] =
+    await Promise.all([
+      prisma.schoolYear.findMany({
+        where: { schoolId: view.schoolId },
+        orderBy: { startDate: "desc" },
+        // Counts decide two things per row: whether the edit dialog warns that
+        // changing dates will not move existing records, and whether removal is
+        // offered at all. Cheap here (one grouped count per year) versus a second
+        // round trip from the client once the dialog is already open.
+        select: {
+          id: true,
+          label: true,
+          startDate: true,
+          endDate: true,
+          isActive: true,
+          _count: { select: { enrollments: true, termGrades: true } },
+        },
+      }),
+      // Hero's grade/section stats reuse the cached dashboard aggregate — the
+      // active-year figure below comes from `years` itself, not this call.
+      getSchoolHeadMetricCounts(view.schoolId),
+    ]);
 
   const items: SchoolYearListItem[] = years.map((y) => ({
     id: y.id,
