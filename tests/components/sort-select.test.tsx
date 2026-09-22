@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SortSelect } from "@/components/ui/sort-select";
 import { ListNavigationProvider, useListPending } from "@/components/nav/list-navigation";
@@ -17,18 +17,39 @@ beforeAll(() => {
   window.HTMLElement.prototype.releasePointerCapture = vi.fn();
 });
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-  searchParamsString = "page=1";
-});
-
-const push = vi.fn();
+/**
+ * `push` resolves to a `Promise` this file settles itself, rather than a
+ * synchronous no-op: `useListNavigate()` runs `router.push` inside
+ * `startTransition`, and React 19 keeps `isPending` true for as long as the
+ * callback's returned promise is unsettled — a faithful stand-in for the
+ * real RSC round trip, and what makes the "raises the shared pending state"
+ * test below able to observe it at all.
+ */
+let resolvePush: (() => void) | null = null;
+const push = vi.fn(
+  (_href: string) =>
+    new Promise<void>((resolve) => {
+      resolvePush = resolve;
+    })
+);
 let searchParamsString = "page=1";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => ({ toString: () => searchParamsString }),
 }));
+
+afterEach(async () => {
+  // Settle any still-pending navigation before the next test, so a left-open
+  // transition can never bleed pending state (or an act() warning) across
+  // tests.
+  await act(async () => {
+    resolvePush?.();
+    resolvePush = null;
+  });
+  cleanup();
+  vi.clearAllMocks();
+  searchParamsString = "page=1";
+});
 
 type Sort = "name" | "age";
 const options: readonly SortOption<Sort>[] = [

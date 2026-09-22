@@ -19,6 +19,13 @@ import type { LearnerListRow } from "@/components/learners/learner-list-client";
  *    `useListNavigate()` → the aria-busy test fails, because a raw
  *    `router.push` never touches the shared pending flag `ListBusyRegion`
  *    reads.
+ *
+ * `push` resolves to a `Promise` this file settles itself (rather than a
+ * synchronous no-op): `useListNavigate()` runs `router.push` inside
+ * `startTransition`, and React 19 keeps `isPending` true for as long as the
+ * callback's returned promise is unsettled — a faithful stand-in for the
+ * real RSC round trip, and what makes the shared pending flag's aria-busy
+ * reaction observable here at all.
  */
 
 beforeAll(() => {
@@ -27,7 +34,14 @@ beforeAll(() => {
   window.HTMLElement.prototype.releasePointerCapture = vi.fn();
 });
 
-const push = vi.fn();
+/** Resolver for whichever `push` call is currently in flight, if any. */
+let resolvePush: (() => void) | null = null;
+const push = vi.fn(
+  (_href: string) =>
+    new Promise<void>((resolve) => {
+      resolvePush = resolve;
+    })
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/teacher/learners",
@@ -109,13 +123,20 @@ beforeEach(() => {
   push.mockClear();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Settle any still-pending navigation before the next test, so a left-open
+  // transition can never bleed pending state (or an act() warning) across
+  // tests.
+  await act(async () => {
+    resolvePush?.();
+    resolvePush = null;
+  });
   cleanup();
   vi.useRealTimers();
 });
 
 describe("LearnerListClient — instant feedback", () => {
-  it("marks the rows region aria-busy once a real list navigation is pending", () => {
+  it("marks the rows region aria-busy once a real list navigation is pending", async () => {
     renderRoster();
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region?.getAttribute("aria-busy")).toBeNull();
@@ -128,6 +149,14 @@ describe("LearnerListClient — instant feedback", () => {
     expect(document.querySelector('[data-slot="list-busy-region"]')?.getAttribute("aria-busy")).toBe(
       "true"
     );
+
+    // Once the "navigation" settles, the flag clears — the regression guard
+    // for the latched-flag defect this contract replaced (see
+    // `list-navigation.tsx`).
+    await act(async () => {
+      resolvePush?.();
+    });
+    expect(document.querySelector('[data-slot="list-busy-region"]')?.getAttribute("aria-busy")).toBeNull();
   });
 
   it("raises the busy skeleton on keystroke, before the 500ms debounce fires", () => {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -9,6 +9,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
  * throws, it just never raises `aria-busy`). This asserts the rendered
  * `aria-busy` attribute and the skeleton swap directly, not a `push` call
  * count, which would still pass even with the provider misplaced.
+ *
+ * `push` resolves to a `Promise` this file settles itself, rather than a
+ * synchronous no-op: `useListNavigate()` runs `router.push` inside
+ * `startTransition`, and React 19 keeps `isPending` true for as long as the
+ * callback's returned promise is unsettled — a faithful stand-in for the
+ * real RSC round trip, and what makes the shared pending flag's aria-busy
+ * reaction observable here at all.
  */
 
 beforeAll(() => {
@@ -22,13 +29,20 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 });
 
-const push = vi.fn();
+/** Resolver for whichever `push` call is currently in flight, if any. */
+let resolvePush: (() => void) | null = null;
+const push = vi.fn(
+  () =>
+    new Promise<void>((resolve) => {
+      resolvePush = resolve;
+    })
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/school-head/teachers",
   // A stable, never-changing search string: the shared pending flag only
-  // clears when useSearchParams().toString() changes, so this keeps the
-  // navigation "in flight" for the assertions below.
+  // clears when the transition settles, so this keeps the navigation "in
+  // flight" for the assertions below alongside the deferred `push` mock.
   useSearchParams: () => new URLSearchParams(""),
 }));
 
@@ -82,10 +96,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  // Settle any still-pending navigation before the next test, so a left-open
+  // transition can never bleed pending state (or an act() warning) across
+  // tests.
+  await act(async () => {
+    resolvePush?.();
+    resolvePush = null;
+  });
+  cleanup();
+});
 
 describe("TeachersActiveTable — instant feedback while a list navigation is pending", () => {
-  it("sets aria-busy on the rows region and swaps to the skeleton once search is applied", () => {
+  it("sets aria-busy on the rows region and swaps to the skeleton once search is applied", async () => {
     render(<TeachersActiveTable rows={[ROW]} list={LIST} />);
 
     const region = document.querySelector('[data-slot="list-busy-region"]');
@@ -97,6 +120,14 @@ describe("TeachersActiveTable — instant feedback while a list navigation is pe
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeTruthy();
     expect(push).toHaveBeenCalledTimes(1);
+
+    // Once the "navigation" settles, the flag clears — the regression guard
+    // for the latched-flag defect this contract replaced (see
+    // `list-navigation.tsx`).
+    await act(async () => {
+      resolvePush?.();
+    });
+    expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
   it("also goes busy when the advisory filter changes", () => {

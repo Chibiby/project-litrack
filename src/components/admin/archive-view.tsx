@@ -418,10 +418,19 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
                   </TableBody>
                 </Table>
               </div>
-              <Paginator page={data.page} pages={data.pages} hrefFor={teacherHref} />
             </>
           )}
         </ListBusyRegion>
+        {/*
+          The pager stays OUTSIDE the busy region, matching every other list in
+          the app. Inside it, the skeleton unmounts the pager while pending —
+          which unmounts the `LinkStatusPulse` that is reporting the pending
+          state, so its cleanup withdraws the report, pending drops, the pager
+          remounts, reports again, and React aborts with "Maximum update depth
+          exceeded". Keeping it outside also means the reader can still see
+          which page they are on while the rows load.
+        */}
+        <Paginator page={data.page} pages={data.pages} hrefFor={teacherHref} />
       </CardContent>
     </Card>
   );
@@ -538,10 +547,11 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
                   </TableBody>
                 </Table>
               </div>
-              <Paginator page={data.page} pages={data.pages} hrefFor={learnerHref} />
             </>
           )}
         </ListBusyRegion>
+        {/* Outside the busy region — see the teachers bucket above for why. */}
+        <Paginator page={data.page} pages={data.pages} hrefFor={learnerHref} />
       </CardContent>
     </Card>
   );

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SchoolDetail } from "@/lib/admin/school-detail";
 
@@ -11,10 +11,24 @@ import type { SchoolDetail } from "@/lib/admin/school-detail";
  *  - the teachers table never calls `router.push`, no matter how it is
  *    re-sorted, and re-sorts purely by re-rendering the same rows in a new
  *    client-side order.
+ *
+ * `push` resolves to a `Promise` this file settles itself, rather than a
+ * synchronous no-op: the learners panel's own `useListNavigate()` runs
+ * `router.push` inside `startTransition`, and React 19 keeps `isPending`
+ * true for as long as the callback's returned promise is unsettled — a
+ * faithful stand-in for the real RSC round trip, and what makes the shared
+ * pending flag's aria-busy reaction observable here at all.
  */
 
 let searchParamsString = "";
-const push = vi.fn();
+/** Resolver for whichever `push` call is currently in flight, if any. */
+let resolvePush: (() => void) | null = null;
+const push = vi.fn(
+  (_href: string) =>
+    new Promise<void>((resolve) => {
+      resolvePush = resolve;
+    })
+);
 const refresh = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -30,7 +44,14 @@ beforeAll(() => {
   window.HTMLElement.prototype.releasePointerCapture = vi.fn();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Settle any still-pending navigation before the next test, so a left-open
+  // transition can never bleed pending state (or an act() warning) across
+  // tests.
+  await act(async () => {
+    resolvePush?.();
+    resolvePush = null;
+  });
   cleanup();
   push.mockClear();
   refresh.mockClear();
@@ -141,5 +162,13 @@ describe("SchoolDetailView — learners panel reports its own busy state", () =>
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][0]).toContain("learnersSort=grade-level");
+
+    // Once the "navigation" settles, the flag clears — the regression guard
+    // for the latched-flag defect this contract replaced (see
+    // `list-navigation.tsx`).
+    await act(async () => {
+      resolvePush?.();
+    });
+    expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 });

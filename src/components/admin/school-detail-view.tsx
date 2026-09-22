@@ -757,52 +757,58 @@ function SchoolLearnersPanelBody({
                   </TableBody>
                 </Table>
               </div>
-
-              {learnerPages > 1 ? (
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  <span className="text-sm text-muted-foreground">
-                    Page {learnerPage} of {learnerPages}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button asChild={learnerPage > 1} variant="outline" size="sm" disabled={learnerPage <= 1}>
-                      {learnerPage > 1 ? (
-                        <Link href={learnerHref(learnerPage - 1)}>
-                          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-                          Previous
-                          <LinkStatusPulse />
-                        </Link>
-                      ) : (
-                        <span>
-                          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-                          Previous
-                        </span>
-                      )}
-                    </Button>
-                    <Button
-                      asChild={learnerPage < learnerPages}
-                      variant="outline"
-                      size="sm"
-                      disabled={learnerPage >= learnerPages}
-                    >
-                      {learnerPage < learnerPages ? (
-                        <Link href={learnerHref(learnerPage + 1)}>
-                          Next
-                          <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
-                          <LinkStatusPulse />
-                        </Link>
-                      ) : (
-                        <span>
-                          Next
-                          <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
-                        </span>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
         </ListBusyRegion>
+        {/*
+          Outside the busy region on purpose. Inside it, the skeleton unmounts
+          the pager while pending, which unmounts the LinkStatusPulse that is
+          reporting that pending state; its cleanup withdraws the report,
+          pending drops, the pager remounts and reports again, and React aborts
+          with "Maximum update depth exceeded".
+        */}
+        {learnerPages > 1 ? (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="text-sm text-muted-foreground">
+              Page {learnerPage} of {learnerPages}
+            </span>
+            <div className="flex gap-2">
+              <Button asChild={learnerPage > 1} variant="outline" size="sm" disabled={learnerPage <= 1}>
+                {learnerPage > 1 ? (
+                  <Link href={learnerHref(learnerPage - 1)}>
+                    <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
+                    Previous
+                    <LinkStatusPulse />
+                  </Link>
+                ) : (
+                  <span>
+                    <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
+                    Previous
+                  </span>
+                )}
+              </Button>
+              <Button
+                asChild={learnerPage < learnerPages}
+                variant="outline"
+                size="sm"
+                disabled={learnerPage >= learnerPages}
+              >
+                {learnerPage < learnerPages ? (
+                  <Link href={learnerHref(learnerPage + 1)}>
+                    Next
+                    <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+                    <LinkStatusPulse />
+                  </Link>
+                ) : (
+                  <span>
+                    Next
+                    <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+                  </span>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

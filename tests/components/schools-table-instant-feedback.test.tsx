@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -7,9 +7,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
  * (search/filter/sort/page) gets an immediate `aria-busy` + skeleton swap
  * instead of a frozen table, and its Prev/Next pager gives `aria-disabled`
  * (never `disabled`, which would drop a keyboard user's focus) while a
- * navigation is in flight. `push` never resolving `useSearchParams()` to a
- * new string here is what keeps the navigation "in flight" for the
- * assertions below — mirrors the technique `list-navigation.test.tsx` uses.
+ * navigation is in flight.
+ *
+ * `push` resolves to a `Promise` this file settles itself, rather than a
+ * synchronous no-op: `useListNavigate()` runs `router.push` inside
+ * `startTransition`, and React 19 keeps `isPending` true for as long as the
+ * callback's returned promise is unsettled — a faithful stand-in for the
+ * real RSC round trip, and what makes the shared pending flag's aria-busy
+ * reaction observable here at all.
  */
 
 beforeAll(() => {
@@ -23,7 +28,14 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 });
 
-const push = vi.fn();
+/** Resolver for whichever `push` call is currently in flight, if any. */
+let resolvePush: (() => void) | null = null;
+const push = vi.fn(
+  () =>
+    new Promise<void>((resolve) => {
+      resolvePush = resolve;
+    })
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/admin/schools",
@@ -72,10 +84,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  // Settle any still-pending navigation before the next test, so a left-open
+  // transition can never bleed pending state (or an act() warning) across
+  // tests.
+  await act(async () => {
+    resolvePush?.();
+    resolvePush = null;
+  });
+  cleanup();
+});
 
 describe("SchoolsTable — instant feedback while a list navigation is pending", () => {
-  it("sets aria-busy on the rows region and swaps to the skeleton once search is applied", () => {
+  it("sets aria-busy on the rows region and swaps to the skeleton once search is applied", async () => {
     render(<SchoolsTable schools={[SCHOOL]} list={LIST} />);
 
     const region = document.querySelector('[data-slot="list-busy-region"]');
@@ -86,6 +107,14 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
 
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeTruthy();
+
+    // Once the "navigation" settles, the flag clears — the regression guard
+    // for the latched-flag defect this contract replaced (see
+    // `list-navigation.tsx`).
+    await act(async () => {
+      resolvePush?.();
+    });
+    expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
   it("gives the Next pager control aria-disabled (not disabled) on a non-boundary page while pending", () => {

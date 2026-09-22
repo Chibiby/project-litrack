@@ -1,14 +1,15 @@
 "use client";
 
 import { useLinkStatus } from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   createContext,
-  startTransition,
+  useCallback,
   useContext,
   useEffect,
-  useRef,
+  useMemo,
   useState,
+  useTransition,
   type ReactNode,
 } from "react";
 
@@ -24,14 +25,18 @@ import {
  * signal available at t=0, before any network activity, so every control
  * that changes the list ORs its pending state into one shared flag here.
  *
- * The flag clears itself when `useSearchParams().toString()` changes: that
- * string changing is direct proof the new server payload has committed to
- * the URL (and therefore the DOM), so there is nothing to time out, retry,
- * or manually reset. No timers, no cleanup races.
+ * The flag is DERIVED from signals that clear themselves — a `useTransition`
+ * for programmatic pushes, OR'd with a count of links currently reporting in
+ * flight — rather than latched and cleared on a URL change. See the comment
+ * inside the provider for why that distinction matters. No timers, no manual
+ * reset, and no way for it to stick on.
  */
 type ListNavigationContextValue = {
   pending: boolean;
-  setPending: (value: boolean) => void;
+  /** Runs `run` inside the navigation transition whose pending state we expose. */
+  startNavigation: (run: () => void) => void;
+  /** A `<Link>` reports that it is, or is no longer, navigating. */
+  reportLinkPending: (active: boolean) => void;
 };
 
 const ListNavigationContext = createContext<ListNavigationContextValue | null>(null);
@@ -41,19 +46,47 @@ export type ListNavigationProviderProps = {
 };
 
 export function ListNavigationProvider({ children }: ListNavigationProviderProps) {
-  const searchParams = useSearchParams();
-  const paramsKey = searchParams.toString();
-  const [pending, setPending] = useState(false);
-  const lastParamsKey = useRef(paramsKey);
+  // Pending is DERIVED from live signals, never latched.
+  //
+  // An earlier version set a boolean `true` on click and cleared it only when
+  // `useSearchParams().toString()` changed. That sticks on for any navigation
+  // that does not change the URL — submitting the search box with unchanged
+  // text, re-applying a filter that is already set — and for any navigation
+  // that fails or is aborted. Because `ListBusyRegion` swaps the rows out for
+  // a skeleton immediately, a stuck flag means the table's rows disappear and
+  // never come back until the user reloads the page. That is a worse outcome
+  // than the unresponsive pager this whole feature exists to fix.
+  //
+  // Both signals below clear themselves: React settles a transition whether
+  // the navigation commits, resolves to the same URL, or throws; and a link's
+  // report is undone by its own effect cleanup, including on unmount.
+  const [isPending, startNavTransition] = useTransition();
+  const [linkPendingCount, setLinkPendingCount] = useState(0);
 
-  useEffect(() => {
-    if (lastParamsKey.current === paramsKey) return;
-    lastParamsKey.current = paramsKey;
-    setPending(false);
-  }, [paramsKey]);
+  const startNavigation = useCallback(
+    (run: () => void) => startNavTransition(run),
+    []
+  );
+
+  const reportLinkPending = useCallback((active: boolean) => {
+    // Counted, not a boolean: a list can hold several links (Prev, Next and
+    // the numbered pages), and a plain flag would let the first one to settle
+    // clear a sibling that is still in flight. Floored at zero so an
+    // unbalanced report can never drive it negative and wedge it "on".
+    setLinkPendingCount((n) => Math.max(0, n + (active ? 1 : -1)));
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      pending: isPending || linkPendingCount > 0,
+      startNavigation,
+      reportLinkPending,
+    }),
+    [isPending, linkPendingCount, startNavigation, reportLinkPending]
+  );
 
   return (
-    <ListNavigationContext.Provider value={{ pending, setPending }}>
+    <ListNavigationContext.Provider value={value}>
       {children}
     </ListNavigationContext.Provider>
   );
@@ -74,11 +107,13 @@ export function ListNavigationProvider({ children }: ListNavigationProviderProps
  * the behaviour it had before.
  *
  * Frozen at module scope, not rebuilt per call, so consumers depending on
- * `setPending` identity do not re-run on every render.
+ * these callbacks' identity do not re-run on every render.
  */
 const NO_PROVIDER: ListNavigationContextValue = Object.freeze({
   pending: false,
-  setPending: () => {},
+  // Still runs the navigation — just without a shared pending flag to feed.
+  startNavigation: (run: () => void) => run(),
+  reportLinkPending: () => {},
 });
 
 function useListNavigationContext(): ListNavigationContextValue {
@@ -93,14 +128,14 @@ function useListNavigationContext(): ListNavigationContextValue {
  */
 export function useListNavigate(): (href: string) => void {
   const router = useRouter();
-  const { setPending } = useListNavigationContext();
+  const { startNavigation } = useListNavigationContext();
 
-  return (href: string) => {
-    startTransition(() => {
-      setPending(true);
-      router.push(href);
-    });
-  };
+  return useCallback(
+    (href: string) => {
+      startNavigation(() => router.push(href));
+    },
+    [router, startNavigation]
+  );
 }
 
 /** Whether any list navigation (pager, sort, filter, search) is in flight. */
@@ -123,11 +158,18 @@ const LINK_STATUS_RAMP_MS = 100;
  */
 export function LinkStatusPulse() {
   const { pending } = useLinkStatus();
-  const { setPending } = useListNavigationContext();
+  const { reportLinkPending } = useListNavigationContext();
 
+  // Reports while pending and withdraws the report in cleanup — when the link
+  // settles, and also if this control unmounts mid-navigation (which the
+  // keyed Suspense boundary does on every commit). An earlier version only
+  // ever reported "true", which latched the shared flag on for good if the
+  // navigation failed or did not change the URL.
   useEffect(() => {
-    if (pending) setPending(true);
-  }, [pending, setPending]);
+    if (!pending) return;
+    reportLinkPending(true);
+    return () => reportLinkPending(false);
+  }, [pending, reportLinkPending]);
 
   return (
     <span

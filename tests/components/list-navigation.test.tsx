@@ -43,8 +43,20 @@ function NavigateButton({ href }: { href: string }) {
   );
 }
 
+/**
+ * Pending is DERIVED (a `useTransition` for programmatic pushes, OR'd with a
+ * count of links currently reporting in flight), never latched.
+ *
+ * These tests previously asserted the opposite — a boolean set on click and
+ * cleared only when `useSearchParams().toString()` changed. That contract had
+ * a defect these tests could not see: any navigation that does not change the
+ * URL (submitting the search box with unchanged text, re-applying a filter
+ * already set) or that fails leaves the flag stuck on. Since `ListBusyRegion`
+ * swaps rows for a skeleton immediately, a stuck flag means the rows vanish
+ * until the user reloads. The tests below pin the derived contract instead.
+ */
 describe("ListNavigationProvider / useListNavigate / useListPending", () => {
-  it("becomes pending as soon as navigate is called, before any params change", () => {
+  it("performs the navigation it is given", () => {
     render(
       <ListNavigationProvider>
         <PendingProbe />
@@ -52,79 +64,92 @@ describe("ListNavigationProvider / useListNavigate / useListPending", () => {
       </ListNavigationProvider>
     );
 
-    expect(screen.getByTestId("pending").textContent).toBe("false");
     act(() => {
       screen.getByText("go").click();
     });
-    expect(screen.getByTestId("pending").textContent).toBe("true");
+
     expect(push).toHaveBeenCalledWith("/teacher/learners?page=2");
   });
 
-  it("clears pending when the search-params string changes", () => {
-    function Real() {
-      const navigate = useListNavigate();
-      const pending = useListPending();
-      return (
-        <div>
-          <span data-testid="pending">{String(pending)}</span>
-          <button type="button" onClick={() => navigate("/x?page=2")}>
-            go
-          </button>
-        </div>
-      );
-    }
-
-    const { rerender } = render(
+  it("does not leave pending stuck on when the navigation never changes the URL", () => {
+    // The regression guard for the latched-flag defect. Here `push` is a mock
+    // that resolves immediately and `searchParamsString` never changes — the
+    // shape of submitting a search with unchanged text. Under the old latched
+    // contract this settled on `true` forever; pending must end up false.
+    render(
       <ListNavigationProvider>
-        <Real />
+        <PendingProbe />
+        <NavigateButton href="/x?page=1" />
       </ListNavigationProvider>
     );
 
     act(() => {
       screen.getByText("go").click();
     });
-    expect(screen.getByTestId("pending").textContent).toBe("true");
 
-    // The URL commits: useSearchParams().toString() now returns a new value.
-    searchParamsString = "page=2";
-    rerender(
-      <ListNavigationProvider>
-        <Real />
-      </ListNavigationProvider>
-    );
-
+    expect(searchParamsString).toBe("page=1");
     expect(screen.getByTestId("pending").textContent).toBe("false");
   });
 
-  it("does not clear pending on a rerender where the params string is unchanged", () => {
-    function Real() {
-      const navigate = useListNavigate();
-      const pending = useListPending();
-      return (
-        <div>
-          <span data-testid="pending">{String(pending)}</span>
-          <button type="button" onClick={() => navigate("/x?page=2")}>
-            go
-          </button>
-        </div>
-      );
-    }
-
+  it("is pending while a link reports in flight, and clears when it settles", () => {
+    useLinkStatusMock.mockReturnValue({ pending: true });
     const { rerender } = render(
       <ListNavigationProvider>
-        <Real />
+        <PendingProbe />
+        <LinkStatusPulse />
       </ListNavigationProvider>
     );
-
-    act(() => {
-      screen.getByText("go").click();
-    });
     expect(screen.getByTestId("pending").textContent).toBe("true");
 
-    // Rerender with the params string unchanged — pending must survive.
+    useLinkStatusMock.mockReturnValue({ pending: false });
     rerender(
       <ListNavigationProvider>
-        <Real />
+        <PendingProbe />
+        <LinkStatusPulse />
+      </ListNavigationProvider>
+    );
+    expect(screen.getByTestId("pending").textContent).toBe("false");
+  });
+
+  it("clears pending when an in-flight link unmounts", () => {
+    // The keyed Suspense boundary unmounts the pager on every commit. If a
+    // link's report were not withdrawn on unmount, the count would never
+    // return to zero and the skeleton would stay up for good.
+    useLinkStatusMock.mockReturnValue({ pending: true });
+    const { rerender } = render(
+      <ListNavigationProvider>
+        <PendingProbe />
+        <LinkStatusPulse />
+      </ListNavigationProvider>
+    );
+    expect(screen.getByTestId("pending").textContent).toBe("true");
+
+    rerender(
+      <ListNavigationProvider>
+        <PendingProbe />
+      </ListNavigationProvider>
+    );
+    expect(screen.getByTestId("pending").textContent).toBe("false");
+  });
+
+  it("stays pending while a second link is still in flight", () => {
+    // Counted rather than a boolean: with two links reporting, the first to
+    // settle must not clear a sibling that is still navigating.
+    useLinkStatusMock.mockReturnValue({ pending: true });
+    const { rerender } = render(
+      <ListNavigationProvider>
+        <PendingProbe />
+        <LinkStatusPulse />
+        <LinkStatusPulse />
+      </ListNavigationProvider>
+    );
+    expect(screen.getByTestId("pending").textContent).toBe("true");
+
+    // One settles (unmounts); the other is still reporting.
+    rerender(
+      <ListNavigationProvider>
+        <PendingProbe />
+        <LinkStatusPulse />
       </ListNavigationProvider>
     );
     expect(screen.getByTestId("pending").textContent).toBe("true");
