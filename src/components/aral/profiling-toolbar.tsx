@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
+import { useListNavigate } from "@/components/nav/list-navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,7 +44,7 @@ export function ProfilingToolbar({
   sections: ProfilingSectionOption[];
   status: ProfilingStatusFilter;
 }) {
-  const router = useRouter();
+  const listNavigate = useListNavigate();
   const searchParams = useSearchParams();
   const [inputValue, setInputValue] = useState(q);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +73,7 @@ export function ProfilingToolbar({
     }
     params.delete("page");
     const qs = params.toString();
-    router.push(qs ? `${ARAL_PROFILING_HREF}?${qs}` : ARAL_PROFILING_HREF);
+    listNavigate(qs ? `${ARAL_PROFILING_HREF}?${qs}` : ARAL_PROFILING_HREF);
   }
 
   const pushSearch = (raw: string) => {

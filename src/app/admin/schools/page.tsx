@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import {
+  SCHOOLS_LIST_SORTS,
   getSchoolsListPage,
   parseSchoolsListParams,
   schoolsTotalPages,
@@ -13,17 +14,33 @@ import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
 import { TableSectionSkeleton } from "@/components/loading";
 import { Plus } from "lucide-react";
 import { PageTip } from "@/components/admin/page-tip";
+import { listKey } from "@/lib/nav/list-params";
+
+/** Params that change which rows the schools list shows — see `listKey`. */
+export const SCHOOLS_LIST_KEYS = ["page", "sort", "q", "region", "status"] as const;
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; q?: string; region?: string; status?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    region?: string;
+    status?: string;
+    sort?: string;
+  }>;
 }
 
 async function SchoolsTableBody({
   searchParams,
 }: {
-  searchParams: { page?: string; q?: string; region?: string; status?: string };
+  searchParams: {
+    page?: string;
+    q?: string;
+    region?: string;
+    status?: string;
+    sort?: string;
+  };
 }) {
   const list = parseSchoolsListParams(searchParams);
   let tableData: SchoolRow[] = [];
@@ -61,6 +78,8 @@ async function SchoolsTableBody({
               q: list.q,
               region: list.region,
               status: list.status,
+              sort: list.sort,
+              sortOptions: SCHOOLS_LIST_SORTS.options,
             }}
           />
         </CardContent>
@@ -94,7 +113,10 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
         afterwards. See <code className="rounded bg-amber-100 px-1 text-xs">docs/runbook.md</code>.
       </PageTip>
 
-      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
+      <Suspense
+        key={listKey(params, SCHOOLS_LIST_KEYS)}
+        fallback={<TableSectionSkeleton rows={8} columns={5} />}
+      >
         <SchoolsTableBody searchParams={params} />
       </Suspense>
     </AppShell>

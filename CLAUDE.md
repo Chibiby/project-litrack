@@ -37,9 +37,32 @@ E2E does **not** auto-start a server (`playwright.config.ts` has no `webServer`)
 
 ## The hard rule: migrations
 
-**Never apply migrations or destructive SQL to any remote/shared database.** Forbidden without explicit, task-specific approval from the project owner: `prisma migrate deploy`, `prisma migrate dev`, `prisma migrate reset`, `prisma db push`, and any `DROP`/`TRUNCATE`/unbounded `DELETE`/`UPDATE` via psql or the Supabase SQL Editor.
+Claude may apply **additive, non-destructive** migrations to the project's
+database with `prisma migrate deploy`. This was previously human-only; the
+project owner lifted that restriction on 2026-09-22, because pushing to main is
+a production deploy and application code that writes a newly added enum value
+fails against a database that has not received the migration, so holding the
+apply step back stalled every deploy behind a manual task.
 
-Your job is to *author* migrations; a human applies them. Safe offline commands: `prisma validate`, `prisma format`, `prisma generate`, and `prisma migrate diff --script` with file inputs (never `--from-url`/`--to-url`).
+Additive means: adding a table, a nullable column, an index, or an enum value;
+a backfill that only fills nulls. Before applying, always run `prisma migrate
+status` and read the pending list — `prisma migrate deploy` applies **every**
+pending migration, not just the one you authored, and the database may be
+behind by more than you think. Confirm which database `DATABASE_URL` and
+`DIRECT_URL` actually point at first; this repository has more than one
+Supabase project in its env files.
+
+**Still forbidden without explicit, task-specific approval from the project
+owner:** `prisma migrate reset`, `prisma db push`, and any `DROP`, `TRUNCATE`,
+or unbounded `DELETE`/`UPDATE` via psql or the Supabase SQL Editor. Dropping a
+column or a table, narrowing a type, and adding a `NOT NULL` to a populated
+column are destructive too — they can fail mid-deploy or lose data, so ask.
+Say plainly which category a migration falls into rather than assuming the
+permission stretches.
+
+Always-safe offline commands: `prisma validate`, `prisma format`,
+`prisma generate`, and `prisma migrate diff --script` with file inputs (never
+`--from-url`/`--to-url`).
 
 Conventions: committed SQL under `prisma/migrations/`, named `YYYYMMDDNNNNNN_short_description`, baseline `0_init`. Additive first — nullable column → backfill migration → tighten (see `20260808190002_backfill_null_section_a`). `Enrollment`'s partial unique index (one `ACTIVE` row per learner) exists only in SQL because Prisma's schema language can't express it — preserve it when editing Enrollment migrations. Details in `docs/migrations.md`, apply checklist in `docs/migrate-checklist.md`.
 
@@ -144,3 +167,13 @@ Zod schemas in `src/lib/validators/*.schema.ts`, shared primitives in `common.ts
 ## Docs map
 
 `docs/migrations.md` (policy) · `docs/migrate-checklist.md` (human apply steps) · `docs/runbook.md` (credential regen, invites) · `docs/deployment.md` (Cloudflare Workers + Supabase) · `docs/privacy.md` (PH Data Privacy Act) · `docs/backlog.md` (architecture decisions + wave status) · `docs/requirements-traceability.md` (source DOCX → implementation matrix) · `docs/errors.md` (error codes, severities, admin log) · `docs/aral-profile.md` (what is dormant, what must keep working without it).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

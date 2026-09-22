@@ -50,7 +50,9 @@ const attendanceFindMany = vi.fn(async (_args: { where: Record<string, unknown> 
     status: "ABSENT",
     notes: "Sick / Illness",
     learner: {
-      fullName: "Asriel Gabby B. Andrews",
+      firstName: "Asriel Gabby",
+      middleName: "B.",
+      lastName: "Andrews",
       gradeLevel: { type: "G3" },
       section: { name: "A" },
     },

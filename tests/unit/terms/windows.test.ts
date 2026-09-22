@@ -17,10 +17,26 @@ import {
  * move a boundary by a day.
  */
 
-/** August 2026 start — the mock's school year. Local midnight, no UTC instant. */
-const AUGUST_START = new Date(2026, 7, 1);
+/**
+ * These fixtures are DATABASE-SHAPED on purpose: `new Date("2026-08-01")`,
+ * not `new Date(2026, 7, 1)`.
+ *
+ * `createSchoolYear` stores the value of an `<input type="date">` via
+ * `new Date("YYYY-MM-DD")`, and ECMA-262 parses a date-only ISO string as UTC
+ * midnight, so a school year starting August 1 is `2026-08-01T00:00:00.000Z`.
+ * The school-year pages round-trip it with `.toISOString().slice(0, 10)`.
+ *
+ * Building a fixture from local year/month/day fields instead produces a
+ * different instant on any machine that is not at UTC (on UTC+8 it is
+ * `2026-07-31T16:00:00.000Z`), which is a value this app never writes. Such a
+ * fixture masked a real defect: `getTermWindows` read the anchor month with
+ * local getters, which agreed with the UTC ones at UTC and at positive
+ * offsets but landed a day — and therefore a month — early at negative ones.
+ */
+/** August 2026 start — the mock's school year. */
+const AUGUST_START = new Date("2026-08-01");
 /** June 2026 start — a school on the older DepEd calendar. */
-const JUNE_START = new Date(2026, 5, 15);
+const JUNE_START = new Date("2026-06-15");
 
 describe("getTermWindows", () => {
   it("derives the mock's three windows from an August-start school year", () => {
@@ -107,26 +123,56 @@ describe("getTermWindows", () => {
 
   it("ends on the true last day of a leap February", () => {
     // December 2027 start: Term 1 is Dec-Feb, and February 2028 has 29 days.
-    const [first] = getTermWindows(new Date(2027, 11, 1));
+    const [first] = getTermWindows(new Date("2027-12-01"));
     expect(first.rangeLabel).toBe("December - February");
     expect(first.endKey).toBe("2028-02-29");
   });
 
-  it("reads the start month from the local calendar, not a UTC instant", () => {
-    // The UTC+8 trap. `SchoolYear.startDate` is a bare timestamp, and on a
-    // UTC+8 runtime the very start of August 1 local is 2026-07-31T16:00Z — so
-    // anything that reads the month off UTC fields (`toISOString().slice(0, 7)`,
-    // `getUTCMonth()`) yields July and shifts every window a month early.
-    const firstInstantOfAugust = new Date(2026, 7, 1, 0, 0, 0, 0);
-    expect(getTermWindows(firstInstantOfAugust)[0].startKey).toBe("2026-08-01");
-    expect(getTermWindows(firstInstantOfAugust)[0].rangeLabel).toBe("August - October");
+  it("reads the start month off the stored UTC instant, in any process timezone", () => {
+    // This test previously asserted the opposite — that the month is read
+    // from LOCAL fields — on the premise that `SchoolYear.startDate` holds
+    // local midnight. It does not. `createSchoolYear` writes
+    // `new Date("2026-08-01")`, which is `2026-08-01T00:00:00.000Z`, and the
+    // school-year pages read it back with `.toISOString().slice(0, 10)`. Were
+    // the premise true, that round-trip would display "2026-07-31" on a UTC+8
+    // machine for a year the user entered as August 1.
+    //
+    // Reading local fields happened to agree at UTC (production) and at
+    // positive offsets, and shifted every window — and every `deadlineKey`
+    // that `isTermLocked` consults — a month early at negative ones.
+    const stored = new Date("2026-08-01T00:00:00.000Z");
+    expect(getTermWindows(stored)[0].startKey).toBe("2026-08-01");
+    expect(getTermWindows(stored)[0].rangeLabel).toBe("August - October");
 
-    // Stated timezone-independently: every instant inside local August must
-    // derive the same windows as the month's first instant.
-    const midMonth = new Date(2026, 7, 15, 23, 30, 0, 0);
-    const lastInstant = new Date(2026, 7, 31, 23, 59, 59, 999);
-    expect(getTermWindows(firstInstantOfAugust)).toEqual(getTermWindows(midMonth));
-    expect(getTermWindows(firstInstantOfAugust)).toEqual(getTermWindows(lastInstant));
+    // Stated timezone-independently: every instant inside UTC August derives
+    // the same windows as the month's first instant.
+    const midMonth = new Date("2026-08-15T23:30:00.000Z");
+    const lastInstant = new Date("2026-08-31T23:59:59.999Z");
+    expect(getTermWindows(stored)).toEqual(getTermWindows(midMonth));
+    expect(getTermWindows(stored)).toEqual(getTermWindows(lastInstant));
+  });
+
+  it("derives the same windows on a negative-offset runtime", () => {
+    // The discriminating case. At UTC and at positive offsets, reading the
+    // anchor month from local fields and from UTC fields give the same
+    // answer, so neither a UTC nor a Manila test can catch this regression —
+    // only a negative offset can. A developer in the Americas previously saw
+    // every window, and every `deadlineKey` that `isTermLocked` consults,
+    // land a month early: "July - September" for an August-start year.
+    const originalTz = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const windows = getTermWindows(new Date("2026-08-01T00:00:00.000Z"));
+      expect(windows.map((w) => w.rangeLabel)).toEqual([
+        "August - October",
+        "November - January",
+        "February - April",
+      ]);
+      expect(windows[0].startKey).toBe("2026-08-01");
+      expect(windows[2].deadlineKey).toBe("2027-04-30");
+    } finally {
+      process.env.TZ = originalTz;
+    }
   });
 
   it("returns one window per term period, in chronological order", () => {
@@ -137,7 +183,7 @@ describe("getTermWindows", () => {
   });
 
   it("labels ranges without years, so a term reads the same in any school year", () => {
-    expect(getTermWindows(new Date(2030, 7, 1)).map((w) => w.rangeLabel)).toEqual(
+    expect(getTermWindows(new Date("2030-08-01")).map((w) => w.rangeLabel)).toEqual(
       getTermWindows(AUGUST_START).map((w) => w.rangeLabel)
     );
   });

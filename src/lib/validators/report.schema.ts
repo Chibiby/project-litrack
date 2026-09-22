@@ -24,6 +24,7 @@ export const reportGenerateSchema = z
       "TERM_GRADES",
       "TEACHER_SUMMARY",
       "CLASS_ROSTER",
+      "MOSY",
       "CUSTOM",
     ]),
     format: z.enum(["EXCEL", "PDF"]),

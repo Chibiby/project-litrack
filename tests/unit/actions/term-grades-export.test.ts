@@ -84,8 +84,16 @@ const SCHOOL_YEAR_LABEL = "2026-2027";
  * exported filename and the set of locked terms change between the two.
  */
 const TODAY = new Date(2026, 11, 15, 12, 0, 0);
-/** August 1 2026 — the approved sheet's calendar. Local midnight, no UTC instant. */
-const SCHOOL_YEAR_START = new Date(2026, 7, 1);
+/**
+ * August 1 2026 — the approved sheet's calendar, database-shaped.
+ *
+ * `createSchoolYear` stores the value of an `<input type="date">` via
+ * `new Date("YYYY-MM-DD")`, which ECMA-262 parses as UTC midnight, and
+ * `getTermWindows` reads the anchor month with UTC getters to match. A
+ * fixture built from local year/month/day fields is a value this app never
+ * writes, and on a non-UTC machine it anchors the terms to the wrong month.
+ */
+const SCHOOL_YEAR_START = new Date("2026-08-01");
 /** The civil day `TODAY` must resolve to in every timezone this suite runs in. */
 const TODAY_KEY = "2026-12-15";
 /** Open on `TODAY`. */

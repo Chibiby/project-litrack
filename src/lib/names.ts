@@ -105,3 +105,49 @@ export function buildFullName(
 ): string {
   return [firstName, middleName, lastName].filter(Boolean).join(" ");
 }
+
+/**
+ * DepEd paperwork (report cards, class lists, honor rolls) reads names
+ * surname-first: "Dela Cruz, Juan Miguel". This is a display-only transform —
+ * the stored `fullName` column keeps its "Firstname Middlename Lastname"
+ * shape, because search, CSV import and dedupe depend on that value staying
+ * put. Build the listing form from the separate `firstName`/`middleName`/
+ * `lastName` columns, never by parsing `fullName` apart: a surname like
+ * "Dela Cruz" would be split on the wrong word.
+ *
+ * A blank/whitespace-only middle name collapses to "Lastname, Firstname"
+ * with no trailing space and no stray comma. A blank `lastName` is a known
+ * legacy-data gap (rows created before lastName was required); rather than
+ * emit a leading comma for nothing, this falls back to the given name alone
+ * with no comma at all.
+ */
+export function formatListingName(
+  firstName: string,
+  middleName: string | null | undefined,
+  lastName: string
+): string {
+  const last = collapseWhitespace(lastName);
+  const given = [collapseWhitespace(firstName), middleName ? collapseWhitespace(middleName) : ""]
+    .filter(Boolean)
+    .join(" ");
+
+  if (!last) return given;
+  return given ? `${last}, ${given}` : last;
+}
+
+/**
+ * Convenience sibling for the common call site: spreading a Prisma row
+ * (`Learner`, `Teacher`, ...) that already has `firstName`/`middleName`/
+ * `lastName` as named fields. `formatListingName` stays the positional,
+ * order-sensitive primitive; this is the obvious entry point for table
+ * cells and export rows built straight from a row object, since it can't be
+ * miscalled with two arguments swapped the way three same-typed positional
+ * strings can.
+ */
+export function formatListingNameFromRecord(record: {
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+}): string {
+  return formatListingName(record.firstName, record.middleName, record.lastName);
+}

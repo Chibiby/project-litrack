@@ -59,12 +59,19 @@ function row(overrides: {
     },
     learner: {
       id: overrides.learnerId,
-      fullName: overrides.fullName,
+      // Fixture strings are already "Lastname, Firstname" (the display shape),
+      // split back into the columns the query now selects instead of `fullName`.
+      ...splitDisplayName(overrides.fullName),
       gradeLevelId: overrides.learnerGradeLevelId ?? "grade-current",
       gradeLevel: { type: overrides.gradeType },
       section: overrides.section ? { name: overrides.section } : null,
     },
   };
+}
+
+function splitDisplayName(display: string): { firstName: string; middleName: null; lastName: string } {
+  const [lastName, given] = display.split(",").map((s) => s.trim());
+  return { firstName: given ?? display, middleName: null, lastName: lastName ?? "" };
 }
 
 describe("buildTermGradesTable — column grouping by subject NAME, not id", () => {
@@ -371,5 +378,80 @@ describe("buildTermGradesTable — Grade 1 letter marks", () => {
 
     const [rowValues] = table.rows;
     expect(rowValues[rowValues.length - 1]).toBeNull();
+  });
+});
+
+describe("buildTermGradesTable — surname-first display", () => {
+  it("renders the Learner cell as 'Lastname, Firstname Middlename'", async () => {
+    termGradeFindMany.mockResolvedValueOnce([
+      {
+        term: "FIRST",
+        score: 91,
+        mark: null,
+        updatedAt: new Date(2026, 8, 1),
+        termSubject: { name: "English", position: 0, gradeLevelId: "grade-current" },
+        learner: {
+          id: "l1",
+          firstName: "Juan Miguel",
+          middleName: "Reyes",
+          lastName: "Dela Cruz",
+          gradeLevelId: "grade-current",
+          gradeLevel: { type: "G7" },
+          section: { name: "A" },
+        },
+      },
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+    expect(table.rows[0][0]).toBe("Dela Cruz, Juan Miguel Reyes");
+  });
+
+  it("collapses to 'Lastname, Firstname' with no trailing space when there is no middle name", async () => {
+    termGradeFindMany.mockResolvedValueOnce([
+      {
+        term: "FIRST",
+        score: 91,
+        mark: null,
+        updatedAt: new Date(2026, 8, 1),
+        termSubject: { name: "English", position: 0, gradeLevelId: "grade-current" },
+        learner: {
+          id: "l1",
+          firstName: "Ana",
+          middleName: null,
+          lastName: "Santos",
+          gradeLevelId: "grade-current",
+          gradeLevel: { type: "G7" },
+          section: { name: "A" },
+        },
+      },
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+    expect(table.rows[0][0]).toBe("Santos, Ana");
+    expect(table.rows[0][0]).not.toMatch(/\s$/);
+  });
+
+  it("orders by lastName then firstName, not by the retired fullName column", async () => {
+    termGradeFindMany.mockResolvedValueOnce([]);
+
+    await buildTermGradesTable(SCOPE, {});
+
+    const args = termGradeFindMany.mock.calls[0][0] as { orderBy: unknown[] };
+    expect(args.orderBy).toEqual([
+      { learner: { lastName: "asc" } },
+      { learner: { firstName: "asc" } },
+      { id: "asc" },
+    ]);
+  });
+
+  it("carries schoolId on the learner predicate", async () => {
+    termGradeFindMany.mockResolvedValueOnce([]);
+
+    await buildTermGradesTable(SCOPE, {});
+
+    const args = termGradeFindMany.mock.calls[0][0] as {
+      where: { learner: { schoolId?: string } };
+    };
+    expect(args.where.learner.schoolId).toBe("school-1");
   });
 });

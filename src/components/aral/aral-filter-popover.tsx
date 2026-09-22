@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useListNavigate } from "@/components/nav/list-navigation";
 import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -78,7 +78,7 @@ export function AralFilterPopover({
   pathForGrade,
   preserveParams = {},
 }: Props) {
-  const router = useRouter();
+  const listNavigate = useListNavigate();
   const showGrade = grades.length > 1 || (allowAllGrades && grades.length > 0);
   // The dot may only advertise controls this popover actually renders. The
   // monthly reading level bar owns its own Section select and passes
@@ -100,7 +100,7 @@ export function AralFilterPopover({
     if (!path) return;
     const gradeChanged = nextGradeId !== gradeId;
 
-    router.push(
+    listNavigate(
       buildHref(path, {
         schoolId,
         ...preserveParams,

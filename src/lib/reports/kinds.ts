@@ -78,6 +78,16 @@ export const REPORT_CARDS: {
     bullets: ["Class performance summary", "Attendance overview", "Reading level insights"],
   },
   {
+    kind: "MOSY",
+    title: "MOSY Report",
+    blurb: "Mid-year reading level profile per grade and ARAL profiling results.",
+    bullets: [
+      "Reading level profile per grade",
+      "ARAL profiling summary",
+      "Middle of school year window",
+    ],
+  },
+  {
     kind: "CUSTOM",
     title: "Custom Report",
     blurb: "Create a custom report based on your selected data.",
@@ -99,4 +109,8 @@ export const QUICK_ACTIONS: {
   { id: "week-reading", label: "This Week Reading Level", kind: "READING_LEVEL", range: "this-week" },
   { id: "term-grades", label: "This Term Grades", kind: "TERM_GRADES", range: "none" },
   { id: "class-roster", label: "Class Roster", kind: "CLASS_ROSTER", range: "none" },
+  // MOSY's window comes from the school year's start date plus any term-window
+  // overrides, both server-side only — the browser has neither, so this stays
+  // "none" rather than a client-computed date range. Do not change this.
+  { id: "mosy", label: "MOSY Report", kind: "MOSY", range: "none" },
 ];

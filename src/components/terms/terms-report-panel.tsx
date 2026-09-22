@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectItem } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
-import { FacetSelect } from "@/components/learners/learner-list-toolbar";
+import { FacetSelect } from "@/components/ui/facet-select";
 import { LearnerListFooter } from "@/components/learners/learner-list-footer";
 import {
   AralTermGradesGridForm,

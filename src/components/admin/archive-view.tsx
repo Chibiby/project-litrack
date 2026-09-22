@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Suspense, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Archive as ArchiveIcon, ChevronLeft, ChevronRight, GraduationCap, Users } from "lucide-react";
@@ -26,7 +26,31 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LearnerRowActions, TeacherRowActions } from "@/components/admin/archive-row-actions";
-import type { Archive } from "@/lib/admin/archive";
+import { SortSelect } from "@/components/ui/sort-select";
+import {
+  ListNavigationProvider,
+  LinkStatusPulse,
+  useListNavigate,
+  useListPending,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion } from "@/components/loading/list-busy-region";
+import { TableSectionSkeleton } from "@/components/loading/table-section-skeleton";
+import { listKey, type ListSearchParams } from "@/lib/nav/list-params";
+// The registries come from the Prisma-free `archive-sorts` module: this is a
+// client component, and `@/lib/admin/archive` is `server-only`, so importing
+// their runtime values from there pulls Prisma and `pg` into the browser
+// bundle. Only the `Archive`-family types may come from the server module —
+// type-only imports are erased before the `server-only` guard can run.
+import {
+  ARCHIVE_LEARNER_SORTS,
+  ARCHIVE_TEACHER_SORTS,
+} from "@/lib/admin/archive-sorts";
+import type {
+  Archive,
+  ArchivedLearnerRow,
+  ArchivedTeacherRow,
+  ArchivePage,
+} from "@/lib/admin/archive";
 import { cn } from "@/lib/utils";
 
 export interface ArchiveSchoolOption {
@@ -35,6 +59,19 @@ export interface ArchiveSchoolOption {
 }
 
 const ANY_SCHOOL = "any";
+
+/**
+ * Params that change which rows the archived-TEACHERS bucket shows, for the
+ * `<Suspense key>` on that panel. Deliberately disjoint from
+ * `ARCHIVE_LEARNERS_KEYS` on the pager/sort param names, so paging or
+ * re-sorting one bucket never re-keys — and therefore never re-suspends — the
+ * other. The shared `school`/`q` filters intentionally appear in BOTH lists:
+ * narrowing either legitimately changes what both buckets show, so both
+ * panels are meant to re-suspend together on those two params.
+ */
+export const ARCHIVE_TEACHERS_KEYS = ["school", "q", "teachers", "teachersSort"] as const;
+/** Same reasoning as `ARCHIVE_TEACHERS_KEYS`, for the learners panel. */
+export const ARCHIVE_LEARNERS_KEYS = ["school", "q", "learners", "learnersSort"] as const;
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-PH", {
@@ -52,6 +89,15 @@ function SchoolCell({ name, deleted }: { name: string | null; deleted: boolean }
   );
 }
 
+/**
+ * Prev/Next for one bucket's paginator. Used once inside `ArchiveTeachersPanel`
+ * and once inside `ArchiveLearnersPanel` — each call site already sits inside
+ * its OWN `ListNavigationProvider` (see those components), so the
+ * `LinkStatusPulse` rendered inside each `Link` reports into whichever
+ * provider is nearest, never a shared one. Navigation itself stays plain
+ * `<Link>` (not `useListNavigate`/`router.push`): the href is the source of
+ * truth and `LinkStatusPulse` is what feeds the pending flag at t=0.
+ */
 function Paginator({
   page,
   pages,
@@ -73,6 +119,7 @@ function Paginator({
             <Link href={hrefFor(page - 1)}>
               <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
               Previous
+              <LinkStatusPulse />
             </Link>
           ) : (
             <span>
@@ -86,6 +133,7 @@ function Paginator({
             <Link href={hrefFor(page + 1)}>
               Next
               <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+              <LinkStatusPulse />
             </Link>
           ) : (
             <span>
@@ -100,21 +148,35 @@ function Paginator({
 }
 
 /**
- * The Super Admin's view across every school: every soft-deleted Teacher and
- * Learner, restore or permanently delete one row at a time.
+ * The shared filters card (School / Search name), plus whatever the caller
+ * renders below it — the two independently-keyed Suspense panels, passed in
+ * plus two independently-keyed `<Suspense>` panels below it — one per bucket,
+ * each wrapping its own `ListNavigationProvider`/`ListBusyRegion` pair (see
+ * `ArchiveTeachersPanel`/`ArchiveLearnersPanel` below), so paging or
+ * re-sorting one bucket never shows a skeleton over the other.
  *
- * Filters (`school`, `q`) and both paginators (`teachers`, `learners`) live in
- * the URL, so a link into this page — or a browser back — reproduces exactly
- * what was on screen.
+ * `params` is the page's raw (already-`await`ed) `searchParams` object,
+ * threaded through only to compute each panel's `listKey` — everything else
+ * this component needs comes from `data`/`schools`/`filters`.
+ *
+ * Filter navigation stays outside `ListNavigationProvider`: a school/search
+ * change legitimately re-suspends BOTH panels below (their Suspense keys both
+ * include `school`/`q`), and this card has no single provider to report a
+ * shared pending flag into — see the file-level note in
+ * `list-navigation.tsx` on why `useListNavigate` degrades to a no-op instead
+ * of throwing when a provider isn't present. The Search button's own
+ * `loading` state already gives immediate feedback for this control.
  */
 export function ArchiveView({
   data,
   schools,
   filters,
+  params,
 }: {
   data: Archive;
   schools: ArchiveSchoolOption[];
   filters: { school: string; q: string };
+  params: ListSearchParams;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -166,17 +228,6 @@ export function ArchiveView({
       next.delete("learners");
     }
     startTransition(() => router.push(`/admin/archive?${next.toString()}`));
-  };
-
-  const teacherHref = (page: number) => {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("teachers", String(page));
-    return `/admin/archive?${next.toString()}`;
-  };
-  const learnerHref = (page: number) => {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("learners", String(page));
-    return `/admin/archive?${next.toString()}`;
   };
 
   return (
@@ -243,15 +294,91 @@ export function ArchiveView({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="space-y-3 pt-6">
+      <Suspense
+        key={listKey(params, ARCHIVE_TEACHERS_KEYS)}
+        fallback={<TableSectionSkeleton rows={8} columns={5} showToolbar={false} />}
+      >
+        <ArchiveTeachersPanel data={data.teachers} />
+      </Suspense>
+      <Suspense
+        key={listKey(params, ARCHIVE_LEARNERS_KEYS)}
+        fallback={<TableSectionSkeleton rows={8} columns={7} showToolbar={false} />}
+      >
+        <ArchiveLearnersPanel data={data.learners} />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * Removed-teachers panel: its own `ListNavigationProvider` (so its pager and
+ * "Sort by" report pending independently of the learners panel below) wrapped
+ * around its own `ListBusyRegion` (so a teachers-only page/sort change swaps
+ * straight to a skeleton without touching the learners table at all).
+ *
+ * Deliberately a thin wrapper: the hooks that read the provider
+ * (`useListNavigate`/`useListPending`) are called one level down, in
+ * `ArchiveTeachersPanelBody` — a component calling those hooks in the SAME
+ * function that renders the provider would read the OUTER (parent) context
+ * instead, since React context is only visible to descendants. That failure
+ * mode degrades silently (`useListNavigate`/`useListPending` never throw when
+ * unwrapped — see `list-navigation.tsx`), so the split here isn't optional.
+ */
+export function ArchiveTeachersPanel({ data }: { data: ArchivePage<ArchivedTeacherRow> }) {
+  return (
+    <ListNavigationProvider>
+      <ArchiveTeachersPanelBody data={data} />
+    </ListNavigationProvider>
+  );
+}
+
+function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherRow> }) {
+  const searchParams = useSearchParams();
+  const navigate = useListNavigate();
+  const pending = useListPending();
+  const sort = ARCHIVE_TEACHER_SORTS.parse(searchParams.get("teachersSort") ?? undefined);
+
+  const teacherHref = (page: number) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("teachers", String(page));
+    return `/admin/archive?${next.toString()}`;
+  };
+
+  // Re-sorting drops the teachers page — page 3 of "recently deleted" is
+  // meaningless once the bucket is reordered alphabetically — and never
+  // touches `learners`/`learnersSort`, so the learners panel's own Suspense
+  // key (and therefore its rows) is untouched by this navigation.
+  const applyTeachersSort = (value: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("teachersSort", value);
+    next.delete("teachers");
+    navigate(`/admin/archive?${next.toString()}`);
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="h-5 w-5" aria-hidden />
             Removed teachers
-            <Badge variant="secondary">{data.teachers.total}</Badge>
+            <Badge variant="secondary">{data.total}</Badge>
           </h2>
+          <SortSelect
+            id="archive-teachers-sort"
+            mode="client"
+            value={sort}
+            options={ARCHIVE_TEACHER_SORTS.options}
+            onSortChange={applyTeachersSort}
+            pending={pending}
+          />
+        </div>
 
-          {data.teachers.rows.length === 0 ? (
+        <ListBusyRegion
+          label="removed teachers"
+          skeleton={<TableSectionSkeleton rows={8} columns={5} showToolbar={false} />}
+        >
+          {data.rows.length === 0 ? (
             <EmptyState
               title="No removed teachers"
               description="Teacher accounts that have been removed will appear here."
@@ -271,9 +398,9 @@ export function ArchiveView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.teachers.rows.map((teacher) => (
+                    {data.rows.map((teacher) => (
                       <TableRow key={teacher.id}>
-                        <TableCell className="font-medium">{teacher.fullName}</TableCell>
+                        <TableCell className="font-medium">{teacher.listingName}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />
                         </TableCell>
@@ -291,21 +418,73 @@ export function ArchiveView({
                   </TableBody>
                 </Table>
               </div>
-              <Paginator page={data.teachers.page} pages={data.teachers.pages} hrefFor={teacherHref} />
+              <Paginator page={data.page} pages={data.pages} hrefFor={teacherHref} />
             </>
           )}
-        </CardContent>
-      </Card>
+        </ListBusyRegion>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <Card>
-        <CardContent className="space-y-3 pt-6">
+/**
+ * Removed-learners panel — the mirror of `ArchiveTeachersPanel`, with its own
+ * `ListNavigationProvider`/`ListBusyRegion` pair so paging or re-sorting this
+ * bucket never shows a skeleton over the teachers table above it. Same thin
+ * wrapper/body split as `ArchiveTeachersPanel`, for the same reason — see its
+ * comment.
+ */
+export function ArchiveLearnersPanel({ data }: { data: ArchivePage<ArchivedLearnerRow> }) {
+  return (
+    <ListNavigationProvider>
+      <ArchiveLearnersPanelBody data={data} />
+    </ListNavigationProvider>
+  );
+}
+
+function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerRow> }) {
+  const searchParams = useSearchParams();
+  const navigate = useListNavigate();
+  const pending = useListPending();
+  const sort = ARCHIVE_LEARNER_SORTS.parse(searchParams.get("learnersSort") ?? undefined);
+
+  const learnerHref = (page: number) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("learners", String(page));
+    return `/admin/archive?${next.toString()}`;
+  };
+
+  const applyLearnersSort = (value: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("learnersSort", value);
+    next.delete("learners");
+    navigate(`/admin/archive?${next.toString()}`);
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <GraduationCap className="h-5 w-5" aria-hidden />
             Removed learners
-            <Badge variant="secondary">{data.learners.total}</Badge>
+            <Badge variant="secondary">{data.total}</Badge>
           </h2>
+          <SortSelect
+            id="archive-learners-sort"
+            mode="client"
+            value={sort}
+            options={ARCHIVE_LEARNER_SORTS.options}
+            onSortChange={applyLearnersSort}
+            pending={pending}
+          />
+        </div>
 
-          {data.learners.rows.length === 0 ? (
+        <ListBusyRegion
+          label="removed learners"
+          skeleton={<TableSectionSkeleton rows={8} columns={7} showToolbar={false} />}
+        >
+          {data.rows.length === 0 ? (
             <EmptyState
               title="No removed learners"
               description="Learners that have been removed will appear here."
@@ -327,9 +506,9 @@ export function ArchiveView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.learners.rows.map((learner) => (
+                    {data.rows.map((learner) => (
                       <TableRow key={learner.id}>
-                        <TableCell className="font-medium">{learner.fullName}</TableCell>
+                        <TableCell className="font-medium">{learner.listingName}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />
                         </TableCell>
@@ -359,11 +538,11 @@ export function ArchiveView({
                   </TableBody>
                 </Table>
               </div>
-              <Paginator page={data.learners.page} pages={data.learners.pages} hrefFor={learnerHref} />
+              <Paginator page={data.page} pages={data.pages} hrefFor={learnerHref} />
             </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </ListBusyRegion>
+      </CardContent>
+    </Card>
   );
 }

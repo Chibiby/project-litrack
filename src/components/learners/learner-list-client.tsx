@@ -9,6 +9,11 @@ import {
   useTransition,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ListNavigationProvider,
+  useListNavigate,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion } from "@/components/loading";
 import { Surface } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +46,7 @@ import {
   type SectionOption,
 } from "@/components/learners/learner-list-toolbar";
 import { EmptyState } from "@/components/dashboard";
+import { LearnerTableSkeleton } from "@/components/learners/learner-roster-skeleton";
 import {
   LEARNER_LIST_DEFAULT_PAGE_SIZE,
   totalPages as calcTotalPages,
@@ -90,6 +96,10 @@ export const SEARCH_DEBOUNCE_MS = 500;
 export type LearnerListRow = {
   id: string;
   fullName: string;
+  /** Surname-first display form ("Lastname, Firstname Middlename"), built
+   * server-side by `formatListingNameFromRecord`. `fullName` stays the
+   * stored Firstname-first value search and import depend on. */
+  listingName: string;
   age: number;
   gender: keyof typeof GENDER_LABELS;
   isAralLearner: boolean;
@@ -153,7 +163,23 @@ const ARAL_CHIP =
 /** Stable passthrough: a new Set per render would re-run the optimistic reducer. */
 const NO_LEAVING_IDS: ReadonlySet<string> = new Set();
 
-export function LearnerListClient({
+/**
+ * Public entry point. `ListNavigationProvider` has to be an ANCESTOR of every
+ * hook consumer that needs the real shared pending flag — including this
+ * component's own `useListNavigate()` call — so it is rendered here, one
+ * level above the panel, rather than returned from inside it. (Wrapping it
+ * around your own return value does not work: hooks read context from a
+ * component's position in the tree, not from JSX it renders below itself.)
+ */
+export function LearnerListClient(props: LearnerListClientProps) {
+  return (
+    <ListNavigationProvider>
+      <LearnerListPanel {...props} />
+    </ListNavigationProvider>
+  );
+}
+
+function LearnerListPanel({
   basePath = "/teacher/learners",
   grade = "all",
   section = "all",
@@ -176,7 +202,18 @@ export function LearnerListClient({
 }: LearnerListClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const navigate = useListNavigate();
   const [inputValue, setInputValue] = useState(q);
+  /**
+   * Instant, pre-network feedback for the search box: the debounce (below)
+   * intentionally waits 500ms before it even starts a navigation, so without
+   * this flag a typing user sees nothing for half a second before the round
+   * trip that itself takes time on top. Set the instant a key lands, cleared
+   * once the roster's own `q` prop reflects the settled search (see the `q`
+   * sync below) — the same moment the shared list-navigation pending flag
+   * (driven by the eventual `navigate()` call) would also clear.
+   */
+  const [searchBusy, setSearchBusy] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -193,6 +230,7 @@ export function LearnerListClient({
   if (q !== prevQ) {
     setPrevQ(q);
     setInputValue(q);
+    setSearchBusy(false);
   }
 
   /**
@@ -249,11 +287,14 @@ export function LearnerListClient({
     else params.delete("q");
     params.delete("page");
     const qs = params.toString();
-    router.push(qs ? `${basePath}?${qs}` : basePath);
+    navigate(qs ? `${basePath}?${qs}` : basePath);
   };
 
   const handleSearchChange = (value: string) => {
     setInputValue(value);
+    // Instant feedback on keystroke — well before the debounce below even
+    // starts the navigation that would otherwise raise it.
+    setSearchBusy(true);
     clearDebounce();
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
@@ -472,7 +513,7 @@ export function LearnerListClient({
           searchValue={inputValue}
           onSearchChange={handleSearchChange}
           onSearchSubmit={handleSearchSubmit}
-          onNavigate={(href) => router.push(href)}
+          onNavigate={navigate}
           bulkActions={
             selectable ? (
               <LearnerBulkActions
@@ -485,7 +526,10 @@ export function LearnerListClient({
           }
         />
 
-        {totalCount === 0 ? (
+        <ListBusyRegion label="learners" skeleton={<LearnerTableSkeleton />}>
+        {searchBusy ? (
+          <LearnerTableSkeleton />
+        ) : totalCount === 0 ? (
           <div className="p-4">
             <EmptyState
               title={
@@ -567,7 +611,7 @@ export function LearnerListClient({
                             <LearnerAvatar id={l.id} fullName={l.fullName} />
                             <span className="flex flex-wrap items-center gap-1.5">
                               <span className="whitespace-nowrap font-medium text-foreground">
-                                {l.fullName}
+                                {l.listingName}
                               </span>
                               {l.archivedAt && (
                                 <Badge variant="outline">Archived</Badge>
@@ -668,7 +712,7 @@ export function LearnerListClient({
                       onClick={() => (archivedView ? undefined : setProfileLearnerId(l.id))}
                     >
                       <span className="line-clamp-1 text-sm font-medium text-foreground sm:text-base">
-                        {l.fullName}
+                        {l.listingName}
                       </span>
                       <span className="line-clamp-1 text-xs font-normal text-muted-foreground sm:text-sm">
                         Age {l.age} · {gradeAndSection(l)}
@@ -689,6 +733,7 @@ export function LearnerListClient({
             </ul>
           </>
         )}
+        </ListBusyRegion>
 
         <LearnerListFooter
           basePath={basePath}

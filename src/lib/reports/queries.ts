@@ -13,12 +13,22 @@ import {
   WEEKLY_WRITING_LEVEL_LABELS,
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { formatListingNameFromRecord } from "@/lib/names";
 import { subjectNameKey } from "@/lib/terms/subjects";
 import {
   rowGeneralAverage,
   termCellText,
   type TermCell,
 } from "@/lib/terms/grading-scale";
+import { isReadingRecordComplete } from "@/lib/reading/policy";
+import {
+  buildMosyBlocks,
+  describeMosyWindowNote,
+  type MosyLearner,
+  type MosyWindowInfo,
+} from "@/lib/reports/mosy";
+import { resolveMosyWindow } from "@/lib/reports/mosy-window";
+import type { TermPeriodValue } from "@/lib/terms/windows";
 import type { ReportFilters } from "@/lib/reports/kinds";
 import type { ReportTable } from "@/lib/reports/render";
 
@@ -45,6 +55,21 @@ export type ReportScope = {
 export function reportScope(args: ReportScope): ReportScope {
   return args;
 }
+
+/**
+ * A `ReportTable` plus the ids/counts the audit row should carry for this
+ * kind, when the builder knows something the action cannot re-derive.
+ *
+ * MOSY resolves its own date window from the school year and its term
+ * overrides, so `generateReport` has no way to name the window it exported
+ * unless the builder hands it over. Carried here rather than widening
+ * `ReportTable` (`render.ts`) because it is audit data, not render data, and
+ * the renderers must stay unaware of it. Counts, keys and ids only — never a
+ * learner field (`src/lib/audit.ts`).
+ */
+export type ReportAuditMeta = Record<string, string | number | null>;
+
+export type ReportTableWithAudit = ReportTable & { auditMeta?: ReportAuditMeta };
 
 /** Learner rows this actor may see at all, before the hub's own filters. */
 function learnerWhere(
@@ -120,13 +145,20 @@ export async function buildAttendanceTable(
       notes: true,
       learner: {
         select: {
-          fullName: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
           gradeLevel: { select: { type: true } },
           section: { select: { name: true } },
         },
       },
     },
-    orderBy: [{ date: "asc" }, { learner: { fullName: "asc" } }],
+    orderBy: [
+      { date: "asc" },
+      { learner: { lastName: "asc" } },
+      { learner: { firstName: "asc" } },
+      { id: "asc" },
+    ],
     // Bounded like every other bulk read here: a year of a large school is far
     // more rows than a report is useful at, and an unbounded findMany is how a
     // lambda runs out of memory.
@@ -146,7 +178,7 @@ export async function buildAttendanceTable(
     ],
     rows: rows.map((r) => [
       formatLocalDateKey(r.date),
-      r.learner.fullName,
+      formatListingNameFromRecord(r.learner),
       GRADE_LEVEL_LABELS[r.learner.gradeLevel.type] ?? r.learner.gradeLevel.type,
       r.learner.section?.name ?? "—",
       ATTENDANCE_STATUS_LABELS[r.status] ?? r.status,
@@ -175,13 +207,20 @@ export async function buildReadingLevelTable(
       notes: true,
       learner: {
         select: {
-          fullName: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
           gradeLevel: { select: { type: true } },
           section: { select: { name: true } },
         },
       },
     },
-    orderBy: [{ weekStart: "asc" }, { learner: { fullName: "asc" } }],
+    orderBy: [
+      { weekStart: "asc" },
+      { learner: { lastName: "asc" } },
+      { learner: { firstName: "asc" } },
+      { id: "asc" },
+    ],
     take: 5000,
   });
 
@@ -202,7 +241,7 @@ export async function buildReadingLevelTable(
     ],
     rows: rows.map((r) => [
       formatLocalDateKey(r.weekStart),
-      r.learner.fullName,
+      formatListingNameFromRecord(r.learner),
       GRADE_LEVEL_LABELS[r.learner.gradeLevel.type] ?? r.learner.gradeLevel.type,
       r.learner.section?.name ?? "—",
       r.englishProfile
@@ -251,14 +290,20 @@ export async function buildTermGradesTable(
       learner: {
         select: {
           id: true,
-          fullName: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
           gradeLevelId: true,
           gradeLevel: { select: { type: true } },
           section: { select: { name: true } },
         },
       },
     },
-    orderBy: [{ learner: { fullName: "asc" } }],
+    orderBy: [
+      { learner: { lastName: "asc" } },
+      { learner: { firstName: "asc" } },
+      { id: "asc" },
+    ],
     take: 10000,
   });
 
@@ -302,7 +347,7 @@ export async function buildTermGradesTable(
     let g = groups.get(key);
     if (!g) {
       g = {
-        name: r.learner.fullName,
+        name: formatListingNameFromRecord(r.learner),
         grade:
           GRADE_LEVEL_LABELS[r.learner.gradeLevel.type] ?? r.learner.gradeLevel.type,
         section: r.learner.section?.name ?? "—",
@@ -372,13 +417,16 @@ export async function buildClassRosterTable(
   const learners = await prisma.learner.findMany({
     where: learnerWhere(scope, filters),
     select: {
-      fullName: true,
+      id: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
       gender: true,
       isAralLearner: true,
       gradeLevel: { select: { type: true } },
       section: { select: { name: true } },
     },
-    orderBy: { fullName: "asc" },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
     take: 5000,
   });
 
@@ -395,7 +443,7 @@ export async function buildClassRosterTable(
     ],
     rows: learners.map((l, i) => [
       i + 1,
-      l.fullName,
+      formatListingNameFromRecord(l),
       GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       l.section?.name ?? "—",
       l.gender ?? "",
@@ -428,7 +476,7 @@ export async function buildTeacherSummaryTable(
       id: true,
       name: true,
       gradeLevel: { select: { type: true } },
-      adviser: { select: { fullName: true } },
+      adviser: { select: { firstName: true, middleName: true, lastName: true } },
     },
     orderBy: { name: "asc" },
     take: 200,
@@ -472,7 +520,7 @@ export async function buildTeacherSummaryTable(
 
     rows.push([
       `${GRADE_LEVEL_LABELS[section.gradeLevel.type] ?? section.gradeLevel.type} - ${section.name}`,
-      section.adviser?.fullName ?? "—",
+      section.adviser ? formatListingNameFromRecord(section.adviser) : "—",
       learnerCount,
       aralCount,
       present,
@@ -498,5 +546,242 @@ export async function buildTeacherSummaryTable(
       { header: "Grade-level Readers", width: 16 },
     ],
     rows,
+  };
+}
+
+/**
+ * MOSY ("Middle of School Year") — the school year's SECOND TERM window.
+ *
+ * Three reads, no per-grade fan-out: the school year (plus its term-window
+ * overrides), the grades in scope, and the learners in scope with their
+ * in-window reading records attached. `buildMosyBlocks` (`./mosy.ts`) turns
+ * the result into the four blocks; every decision about bands, percentages
+ * and ARAL counts lives there, so this function only fetches and shapes.
+ *
+ * TENANCY. The school-year and override reads are the only `where`s in this
+ * file that are not already `learnerWhere`/`gradeWhere`, so both pin
+ * `schoolId` explicitly. The override table denormalises `schoolId` for
+ * exactly this reason (`prisma/schema.prisma` § TermWindowOverride).
+ *
+ * The report ALWAYS generates. No school year, no override, no ARAL profile
+ * and no reading record are all ordinary states — an unresolved window simply
+ * means every learner reads as not assessed (see `docs/aral-profile.md` for
+ * the standing rule that nothing may gate on `AralProfile`).
+ */
+export async function buildMosyTable(
+  scope: ReportScope,
+  filters: ReportFilters
+): Promise<ReportTableWithAudit> {
+  const schoolYear = await prisma.schoolYear.findFirst({
+    where: {
+      schoolId: scope.schoolId,
+      ...(filters.schoolYearId ? { id: filters.schoolYearId } : { isActive: true }),
+    },
+    select: { id: true, startDate: true, endDate: true, label: true },
+  });
+
+  const overrides = schoolYear
+    ? await prisma.termWindowOverride.findMany({
+        where: { schoolId: scope.schoolId, schoolYearId: schoolYear.id },
+        select: { term: true, startKey: true, endKey: true, deadlineKey: true },
+      })
+    : [];
+
+  const window = resolveMosyWindowInfo(schoolYear, overrides, filters);
+
+  // A supplied edge replaces the MOSY edge; the unsupplied one keeps its MOSY
+  // value. Routed back through `dateRange` rather than re-derived, so the
+  // half-open `lt: to + 1 day` rule has one answer for every report here.
+  const range =
+    window.startKey || window.endKey
+      ? dateRange({ ...filters, from: window.startKey, to: window.endKey })
+      : undefined;
+  // Unresolved window: match no record at all. Omitting the filter instead
+  // would silently widen the report to a learner's whole history and still
+  // label it MOSY, which is worse than showing everyone as not assessed.
+  const recordWhere: Prisma.ReadingLevelRecordWhereInput = range
+    ? { weekStart: range }
+    : { id: { in: [] } };
+
+  const [grades, learners] = await Promise.all([
+    prisma.gradeLevel.findMany({
+      where: {
+        ...gradeWhere(scope),
+        ...(filters.gradeLevelId ? { id: filters.gradeLevelId } : {}),
+      },
+      select: { id: true, type: true },
+      orderBy: { type: "asc" },
+    }),
+    prisma.learner.findMany({
+      where: learnerWhere(scope, filters),
+      select: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        gradeLevelId: true,
+        isAralLearner: true,
+        gradeLevel: { select: { type: true } },
+        section: { select: { name: true } },
+        aralTeacher: { select: { firstName: true, middleName: true, lastName: true } },
+        // A `select`, never a `where`: gating the learner read on a profile
+        // would empty this report for every school that has filled none in.
+        aralProfile: { select: { updatedAt: true, suggestedInterventions: true } },
+        readingLevels: {
+          where: recordWhere,
+          select: {
+            weekStart: true,
+            englishProfile: true,
+            filipinoProfile: true,
+            wordRecognitionLevel: true,
+            readingComprehensionLevel: true,
+          },
+          orderBy: { weekStart: "desc" },
+        },
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
+      // Bounded like every other bulk read in this file.
+      take: 5000,
+    }),
+  ]);
+
+  const mosyLearners: MosyLearner[] = learners.map((learner) => {
+    const gradeType = learner.gradeLevel.type;
+    return {
+      id: learner.id,
+      gradeLevelId: learner.gradeLevelId,
+      gradeType,
+      gradeLabel: GRADE_LEVEL_LABELS[gradeType] ?? gradeType,
+      sectionName: learner.section?.name ?? null,
+      firstName: learner.firstName,
+      middleName: learner.middleName,
+      lastName: learner.lastName,
+      isAralLearner: learner.isAralLearner,
+      // Scope is advised UNION ARAL-tutored (`teacherLearnerScope`), as in
+      // every other builder, so the tutor's name is what makes visible which
+      // learners are here on the ARAL axis rather than the advisory one.
+      aralTutorName: learner.aralTeacher
+        ? formatListingNameFromRecord(learner.aralTeacher)
+        : null,
+      record: pickMosyRecord(learner.readingLevels, gradeType),
+      profile: learner.aralProfile
+        ? {
+            updatedAtKey: formatLocalDateKey(learner.aralProfile.updatedAt),
+            interventions: learner.aralProfile.suggestedInterventions,
+          }
+        : null,
+    };
+  });
+
+  const blocks = buildMosyBlocks({
+    window,
+    grades: grades.map((g) => ({
+      id: g.id,
+      type: g.type,
+      label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+    })),
+    learners: mosyLearners,
+  });
+
+  const windowNote = describeMosyWindowNote(window);
+  const assessed = mosyLearners.filter((l) => l.record !== null).length;
+  const detail = blocks[blocks.length - 1];
+
+  return {
+    title: "MOSY Report",
+    subtitle: subtitleFor(scope, filters, [
+      schoolYear
+        ? `School Year: ${schoolYear.label} (${formatLocalDateKey(schoolYear.startDate)} to ${formatLocalDateKey(schoolYear.endDate)})`
+        : "School Year: none resolved",
+      `MOSY window: ${window.label}`,
+      `${mosyLearners.length} learner(s), ${assessed} assessed in window`,
+      ...(windowNote ? [windowNote] : []),
+    ]),
+    // `blocks` is what both renderers read (`reportBlocks`). The learner
+    // detail block is mirrored into the flat pair so anything still reading
+    // `columns`/`rows` sees the row-per-learner listing rather than nothing.
+    columns: detail.columns,
+    rows: detail.rows,
+    blocks,
+    auditMeta: {
+      windowStartKey: window.startKey,
+      windowEndKey: window.endKey,
+      windowSource: window.source,
+      grades: grades.length,
+      learners: mosyLearners.length,
+      assessedLearners: assessed,
+    },
+  };
+}
+
+/**
+ * The MOSY window: the school year's Second Term, with each supplied filter
+ * edge REPLACING the corresponding MOSY edge while the unsupplied edge keeps
+ * its MOSY value. No school year and no supplied edge is `"unresolved"` — a
+ * state the report renders, never an error.
+ */
+function resolveMosyWindowInfo(
+  schoolYear: { startDate: Date } | null,
+  overrides: { term: string; startKey: string; endKey: string; deadlineKey: string }[],
+  filters: ReportFilters
+): MosyWindowInfo {
+  const mosy = schoolYear
+    ? resolveMosyWindow(
+        schoolYear.startDate,
+        overrides.map((o) => ({
+          term: o.term as TermPeriodValue,
+          startKey: o.startKey,
+          endKey: o.endKey,
+          deadlineKey: o.deadlineKey,
+        }))
+      )
+    : null;
+
+  const startKey = filters.from ?? mosy?.startKey ?? null;
+  const endKey = filters.to ?? mosy?.endKey ?? null;
+
+  if (!startKey && !endKey) {
+    return { startKey: null, endKey: null, label: "Unresolved", source: "unresolved" };
+  }
+  if (filters.from || filters.to) {
+    return {
+      startKey,
+      endKey,
+      label: `${startKey ?? "start"} to ${endKey ?? "today"}`,
+      source: "custom",
+    };
+  }
+  return { startKey, endKey, label: mosy?.label ?? "Unresolved", source: "term" };
+}
+
+/**
+ * The record a learner is judged on: among their in-window records, the one
+ * with the greatest `weekStart` that is COMPLETE for their grade; if none is
+ * complete, the greatest `weekStart`, marked not-complete.
+ *
+ * Deterministic without a tiebreaker because `@@unique([learnerId,
+ * weekStart])` makes two records on one day impossible, and the caller reads
+ * them already ordered `weekStart` desc.
+ */
+function pickMosyRecord(
+  records: {
+    weekStart: Date;
+    englishProfile: string | null;
+    filipinoProfile: string | null;
+    wordRecognitionLevel: string | null;
+    readingComprehensionLevel: string | null;
+  }[],
+  gradeType: string
+): MosyLearner["record"] {
+  const complete = records.find((r) => isReadingRecordComplete(r, gradeType));
+  const chosen = complete ?? records[0];
+  if (!chosen) return null;
+  return {
+    weekStartKey: formatLocalDateKey(chosen.weekStart),
+    englishProfile: chosen.englishProfile,
+    filipinoProfile: chosen.filipinoProfile,
+    wordRecognitionLevel: chosen.wordRecognitionLevel,
+    readingComprehensionLevel: chosen.readingComprehensionLevel,
+    complete: complete !== undefined,
   };
 }

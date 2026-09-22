@@ -1,6 +1,24 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfilingList, type ProfilingListRow } from "@/components/aral/profiling-list";
+
+// LearnerPagination (rendered by ProfilingList when totalPages > 1) uses
+// PrefetchLink, which calls useRouter()/usePathname() eagerly — real
+// next/navigation throws outside an app router, so it needs a mock here the
+// same as every other list-navigation consumer test.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/teacher/aral/profiling",
+  useSearchParams: () => new URLSearchParams(""),
+}));
+vi.mock("next/link", () => ({
+  useLinkStatus: () => ({ pending: false }),
+  default: ({ children, href, prefetch: _p, ...rest }: any) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 afterEach(cleanup);
 

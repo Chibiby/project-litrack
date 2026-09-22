@@ -20,6 +20,11 @@ import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
 import { setLearnerAralTeacher } from "@/lib/actions/learner";
+import {
+  ListNavigationProvider,
+  useListNavigate,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 
 export type AralTeacherOption = {
   id: string;
@@ -84,7 +89,26 @@ export type AralListPagination = {
  * a School Head can hand ARAL learners over before removing a teacher, so the
  * teacher dropdown is deliberately the whole active roster, not just advisers.
  */
-export function AralTeacherTable({
+export function AralTeacherTable(props: {
+  rows: AralLearnerRow[];
+  teachers: AralTeacherOption[];
+  list: AralListPagination;
+  readOnly?: boolean;
+}) {
+  return (
+    <ListNavigationProvider>
+      <AralTeacherTablePanel {...props} />
+    </ListNavigationProvider>
+  );
+}
+
+/**
+ * Rendered strictly INSIDE `ListNavigationProvider` (see `AralTeacherTable`
+ * above) — `useListNavigate` here and `useListPending` inside `ListBusyRegion`
+ * further down are both read from a component that must be a DESCENDANT of
+ * the provider, never a sibling rendered from the same return.
+ */
+function AralTeacherTablePanel({
   rows,
   teachers,
   list,
@@ -96,6 +120,7 @@ export function AralTeacherTable({
   readOnly?: boolean;
 }) {
   const router = useRouter();
+  const navigate = useListNavigate();
   const [, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(list.q);
   /** Row-local overrides so a select reflects the change before the refresh lands. */
@@ -137,7 +162,7 @@ export function AralTeacherTable({
     if (q) params.set("q", q);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
-    router.push(qs ? `${list.basePath}?${qs}` : list.basePath);
+    navigate(qs ? `${list.basePath}?${qs}` : list.basePath);
   };
 
   const onChangeTeacher = (row: AralLearnerRow, nextId: string | null) => {
@@ -226,6 +251,16 @@ export function AralTeacherTable({
           ) : null}
         </div>
 
+        <ListBusyRegion
+          label="ARAL learners"
+          skeleton={
+            <TableSectionSkeleton
+              rows={Math.min(rows.length || 8, 8)}
+              columns={5}
+              showToolbar={false}
+            />
+          }
+        >
         <Table>
           <TableHeader>
             <TableRow>
@@ -316,6 +351,7 @@ export function AralTeacherTable({
             )}
           </TableBody>
         </Table>
+        </ListBusyRegion>
 
         <LearnerPagination
           basePath={list.basePath}

@@ -79,6 +79,7 @@ const ROWS: LearnerListRow[] = [
   {
     id: "learner-1",
     fullName: "Ana Santos",
+    listingName: "Santos, Ana",
     age: 10,
     gender: "FEMALE",
     isAralLearner: false,
@@ -92,6 +93,7 @@ const ROWS: LearnerListRow[] = [
   {
     id: "learner-2",
     fullName: "Ben Cruz",
+    listingName: "Cruz, Ben",
     age: 9,
     gender: "MALE",
     isAralLearner: true,

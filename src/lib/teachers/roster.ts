@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prismaFresh } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { formatListingNameFromRecord } from "@/lib/names";
 import type { TeacherListFilter } from "@/lib/teachers/pagination";
 import type { ActiveTeacherRow } from "@/components/teachers-active-table";
 import type { TeacherTabCounts } from "@/components/school-head/workspace-tabs";
@@ -100,6 +101,11 @@ export function removedTeacherScope(schoolId: string): Prisma.UserWhereInput {
 export const managedTeacherSelect = {
   id: true,
   fullName: true,
+  // Surname-first display (`listingName`, built below) needs the separate
+  // name parts — `fullName` cannot be split back apart, see `src/lib/names.ts`.
+  firstName: true,
+  middleName: true,
+  lastName: true,
   email: true,
   avatarPath: true,
   profileCompleted: true,
@@ -141,6 +147,8 @@ export function toManagedRow(t: ManagedTeacher): ActiveTeacherRow {
   return {
     id: t.id,
     fullName: t.fullName,
+    // Display-only, surname-first — never derived by re-parsing `fullName`.
+    listingName: formatListingNameFromRecord(t),
     email: t.email,
     avatarPath: t.avatarPath,
     profileCompleted: t.profileCompleted,

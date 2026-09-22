@@ -1,8 +1,17 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import type { LearnerPurgeCounts } from "@/lib/archive/purge";
+import { assertOrderByCoversOptions } from "@/lib/sort/registry";
+import {
+  ARCHIVE_LEARNER_SORTS,
+  ARCHIVE_TEACHER_SORTS,
+  type ArchiveLearnerSort,
+  type ArchiveTeacherSort,
+} from "./archive-sorts";
+import { formatListingNameFromRecord } from "@/lib/names";
 
 /**
  * The read model behind `/admin/archive` — every soft-deleted Teacher and
@@ -23,9 +32,72 @@ import type { LearnerPurgeCounts } from "@/lib/archive/purge";
 
 export const ARCHIVE_PAGE_SIZE = 50;
 
+/**
+ * Both buckets' option lists live in `./archive-sorts`, a Prisma-free module,
+ * because the archive view is a client component and needs them at runtime to
+ * render its dropdowns. Re-exported here so server-side callers still have a
+ * single import site.
+ */
+export {
+  ARCHIVE_TEACHER_SORTS,
+  ARCHIVE_LEARNER_SORTS,
+  type ArchiveTeacherSort,
+  type ArchiveLearnerSort,
+} from "./archive-sorts";
+
+/**
+ * The primary `orderBy` clause per sort option, without the tiebreaker. Kept
+ * alongside `ARCHIVE_TEACHER_SORTS` so an option added to one and not the
+ * other is a build-time (`satisfies`) and test-time
+ * (`assertOrderByCoversOptions`) failure rather than a silently unsorted table.
+ */
+const ARCHIVE_TEACHER_SORT_ORDER_BY = {
+  recent: [{ deletedAt: "desc" }],
+  alphabetical: [{ lastName: "asc" }, { firstName: "asc" }],
+  school: [{ school: { name: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
+} satisfies Record<ArchiveTeacherSort, Prisma.UserOrderByWithRelationInput[]>;
+
+assertOrderByCoversOptions(ARCHIVE_TEACHER_SORTS, ARCHIVE_TEACHER_SORT_ORDER_BY);
+
+const ARCHIVE_LEARNER_SORT_ORDER_BY = {
+  recent: [{ deletedAt: "desc" }],
+  alphabetical: [{ lastName: "asc" }, { firstName: "asc" }],
+  school: [{ school: { name: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
+} satisfies Record<ArchiveLearnerSort, Prisma.LearnerOrderByWithRelationInput[]>;
+
+assertOrderByCoversOptions(ARCHIVE_LEARNER_SORTS, ARCHIVE_LEARNER_SORT_ORDER_BY);
+
+/**
+ * Prisma `orderBy` array for a parsed removed-teachers sort, always ending in
+ * the `id` tiebreaker. This bucket is server-paginated with skip/take —
+ * `school` is not a unique key, and even `recent` (`deletedAt`) can collide
+ * when rows are removed in the same batch, so without the tiebreaker Postgres
+ * can repeat or skip a row across pages.
+ */
+export function archiveTeacherOrderBy(
+  sort: ArchiveTeacherSort
+): Prisma.UserOrderByWithRelationInput[] {
+  return [...ARCHIVE_TEACHER_SORT_ORDER_BY[sort], { id: "asc" }];
+}
+
+/** Same tiebreaker reasoning as `archiveTeacherOrderBy`, for the learners bucket. */
+export function archiveLearnerOrderBy(
+  sort: ArchiveLearnerSort
+): Prisma.LearnerOrderByWithRelationInput[] {
+  return [...ARCHIVE_LEARNER_SORT_ORDER_BY[sort], { id: "asc" }];
+}
+
 export type ArchivedTeacherRow = {
   id: string;
   fullName: string;
+  /**
+   * Surname-first display form ("Lastname, Firstname Middlename"), built from
+   * `firstName`/`middleName`/`lastName` via `formatListingNameFromRecord` —
+   * never by parsing `fullName` apart. `fullName` keeps its existing shape:
+   * search and dedupe depend on that stored value, so this is an added
+   * display field, not a replacement.
+   */
+  listingName: string;
   schoolId: string | null;
   schoolName: string | null;
   /** True when the teacher's own school has been soft-deleted. */
@@ -38,6 +110,8 @@ export type ArchivedTeacherRow = {
 export type ArchivedLearnerRow = {
   id: string;
   fullName: string;
+  /** Surname-first display form — see `ArchivedTeacherRow.listingName`. */
+  listingName: string;
   schoolId: string;
   schoolName: string;
   /** True when the learner's own school has been soft-deleted. */
@@ -63,6 +137,14 @@ export type ArchiveParams = {
   q?: string;
   teacherPage?: number;
   learnerPage?: number;
+  /**
+   * Raw `?teachersSort=` value, parsed with `ARCHIVE_TEACHER_SORTS.parse`
+   * (garbage/undefined falls back to `"recent"`). A distinct param name from
+   * `learnersSort` — the two buckets sort independently.
+   */
+  teachersSort?: string;
+  /** Raw `?learnersSort=` value, parsed with `ARCHIVE_LEARNER_SORTS.parse`. */
+  learnersSort?: string;
 };
 
 export type Archive = {
@@ -78,6 +160,8 @@ function normalizePage(page: number | undefined): number {
 export async function getArchive(params: ArchiveParams): Promise<Archive> {
   const teacherPage = normalizePage(params.teacherPage);
   const learnerPage = normalizePage(params.learnerPage);
+  const teachersSort = ARCHIVE_TEACHER_SORTS.parse(params.teachersSort);
+  const learnersSort = ARCHIVE_LEARNER_SORTS.parse(params.learnersSort);
 
   const schoolWhere = params.school ? { schoolId: params.school } : {};
   const nameWhere = params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {};
@@ -91,11 +175,14 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
       select: {
         id: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
         email: true,
         deletedAt: true,
         school: { select: { id: true, name: true, deletedAt: true } },
       },
-      orderBy: { deletedAt: "desc" },
+      orderBy: archiveTeacherOrderBy(teachersSort),
       skip: (teacherPage - 1) * ARCHIVE_PAGE_SIZE,
       take: ARCHIVE_PAGE_SIZE,
     }),
@@ -107,13 +194,16 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
       select: {
         id: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
         isAralLearner: true,
         deletedAt: true,
         gradeLevel: { select: { type: true } },
         section: { select: { name: true } },
         school: { select: { id: true, name: true, deletedAt: true } },
       },
-      orderBy: { deletedAt: "desc" },
+      orderBy: archiveLearnerOrderBy(learnersSort),
       skip: (learnerPage - 1) * ARCHIVE_PAGE_SIZE,
       take: ARCHIVE_PAGE_SIZE,
     }),
@@ -122,6 +212,7 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
   const teachers = teacherRows.map((t) => ({
     id: t.id,
     fullName: t.fullName,
+    listingName: formatListingNameFromRecord(t),
     schoolId: t.school?.id ?? null,
     schoolName: t.school?.name ?? null,
     schoolDeleted: t.school?.deletedAt != null,
@@ -175,6 +266,7 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
   const learners = learnerRows.map((l) => ({
     id: l.id,
     fullName: l.fullName,
+    listingName: formatListingNameFromRecord(l),
     schoolId: l.school.id,
     schoolName: l.school.name,
     schoolDeleted: l.school.deletedAt != null,

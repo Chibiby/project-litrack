@@ -84,21 +84,42 @@ const MONTH_NAMES = [
 /**
  * The three windows for a school year, derived from its start date.
  *
- * The anchor month is read off the LOCAL date key — never `getUTCMonth()` or
- * `toISOString()`. `SchoolYear.startDate` is a bare `DateTime` (a timestamp, not
- * `@db.Date`), so a school year that starts on August 1 in Manila is stored as
- * `2026-07-31T16:00:00Z`; reading the UTC month would put Term 1 in July and
- * shift all three windows a month early.
+ * The anchor month is read with UTC getters, matching how `SchoolYear.startDate`
+ * is written and read back everywhere else. See the comment on the read itself
+ * for the full reasoning.
+ *
+ * This docblock previously claimed the opposite — that the month must come from
+ * the LOCAL date key, on the premise that an August 1 Manila start is stored as
+ * `2026-07-31T16:00:00Z`. That premise was wrong: `createSchoolYear` stores the
+ * value of an `<input type="date">` via `new Date("2026-08-01")`, which
+ * ECMA-262 parses as UTC midnight, and the school-year pages round-trip it with
+ * `.toISOString().slice(0, 10)`. Reading local fields agreed with UTC at UTC and
+ * at positive offsets, and shifted every window a month early at negative ones.
  */
 export function getTermWindows(
   schoolYearStart: Date,
   overrides: TermWindowOverrideInput[] = []
 ): TermWindow[] {
-  const [year, month] = formatLocalDateKey(schoolYearStart)
-    .slice(0, 7)
-    .split("-")
-    .map(Number);
-  const anchor = new Date(year, month - 1, 1);
+  // The anchor month is read with UTC getters, not local ones, because that
+  // is how `SchoolYear.startDate` is written and how every other reader reads
+  // it back. `createSchoolYear` does `new Date("2026-08-01")` on the value of
+  // an `<input type="date">`, and ECMA-262 parses a date-only ISO string as
+  // UTC midnight, so the stored instant is `2026-08-01T00:00:00.000Z`. The
+  // school-year pages round-trip it with `.toISOString().slice(0, 10)`.
+  //
+  // Reading LOCAL fields off that instant agrees with the UTC ones at UTC and
+  // at every positive offset (so Cloudflare Workers, which runs UTC, and a
+  // machine in Manila both got the right month), but lands on the PREVIOUS
+  // day at any negative offset — a developer in the Americas saw every term,
+  // and every `deadlineKey` that `isTermLocked` consults, shift a month early.
+  const year = schoolYearStart.getUTCFullYear();
+  const month = schoolYearStart.getUTCMonth();
+
+  // Local midnight from here on is deliberate and safe: `anchor` is rebuilt
+  // from plain integers, so the rest of this module is pure calendar
+  // arithmetic over local fields and `formatLocalDateKey` round-trips it
+  // exactly, in any timezone.
+  const anchor = new Date(year, month, 1);
 
   return TERM_PERIODS.map((term, index) => {
     const override = overrides.find((o) => o.term === term);

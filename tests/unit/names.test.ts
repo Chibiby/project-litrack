@@ -5,6 +5,8 @@ import {
   formatOptionalLabel,
   collapseWhitespace,
   buildFullName,
+  formatListingName,
+  formatListingNameFromRecord,
 } from "@/lib/names";
 
 describe("formatPersonName", () => {
@@ -97,5 +99,65 @@ describe("buildFullName", () => {
     expect(buildFullName("Juan", null, "Cruz")).toBe("Juan Cruz");
     expect(buildFullName("Juan", "Dela", "Cruz")).toBe("Juan Dela Cruz");
     expect(buildFullName("Juan", undefined, "Cruz")).toBe("Juan Cruz");
+  });
+
+  // Regression guard: the DepEd surname-first display formatter must never
+  // change what gets written to the stored `fullName` column.
+  it("keeps producing today's Firstname Middlename Lastname shape, unaffected by the listing formatter", () => {
+    expect(buildFullName("Juan", "Dela", "Cruz")).toBe("Juan Dela Cruz");
+    expect(buildFullName("Maria", null, "Santos")).toBe("Maria Santos");
+    expect(buildFullName("Maria", undefined, "Santos")).toBe("Maria Santos");
+    expect(buildFullName("Maria", "", "Santos")).toBe("Maria Santos");
+    expect(buildFullName("Jose", "Protacio", "Rizal")).toBe("Jose Protacio Rizal");
+  });
+});
+
+describe("formatListingName", () => {
+  it('renders "Lastname, Firstname Middlename" for a full triple', () => {
+    expect(formatListingName("Juan", "Miguel", "Dela Cruz")).toBe(
+      "Dela Cruz, Juan Miguel"
+    );
+  });
+
+  it("collapses a whitespace-only middle name with no trailing space", () => {
+    expect(formatListingName("Juan", "   ", "Dela Cruz")).toBe("Dela Cruz, Juan");
+  });
+
+  it("collapses a null middle name with no stray comma", () => {
+    expect(formatListingName("Juan", null, "Dela Cruz")).toBe("Dela Cruz, Juan");
+  });
+
+  it("collapses an undefined middle name", () => {
+    expect(formatListingName("Juan", undefined, "Dela Cruz")).toBe(
+      "Dela Cruz, Juan"
+    );
+  });
+
+  it("falls back to the given name with no leading comma when lastName is blank", () => {
+    expect(formatListingName("Juan", "Miguel", "")).toBe("Juan Miguel");
+    expect(formatListingName("Juan", null, "   ")).toBe("Juan");
+  });
+
+  it("is a pure display transform: it never mutates buildFullName's stored shape", () => {
+    const stored = buildFullName("Juan", "Miguel", "Dela Cruz");
+    expect(stored).toBe("Juan Miguel Dela Cruz");
+    expect(formatListingName("Juan", "Miguel", "Dela Cruz")).toBe(
+      "Dela Cruz, Juan Miguel"
+    );
+  });
+});
+
+describe("formatListingNameFromRecord", () => {
+  it("matches formatListingName for the same parts, spread from a row object", () => {
+    const record = { firstName: "Juan", middleName: "Miguel", lastName: "Dela Cruz" };
+    expect(formatListingNameFromRecord(record)).toBe(
+      formatListingName(record.firstName, record.middleName, record.lastName)
+    );
+  });
+
+  it("handles an omitted middleName field", () => {
+    expect(
+      formatListingNameFromRecord({ firstName: "Juan", lastName: "Cruz" })
+    ).toBe("Cruz, Juan");
   });
 });

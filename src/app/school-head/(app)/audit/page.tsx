@@ -24,10 +24,20 @@ import {
 import { totalPages } from "@/lib/learners/pagination";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { AuditFilters } from "@/components/school-head/audit-filters";
+import { ListNavigationProvider } from "@/components/nav/list-navigation";
+import { ListBusyRegion } from "@/components/loading";
+import { listKey } from "@/lib/nav/list-params";
 
 export const dynamic = "force-dynamic";
 
 const AUDIT_PAGE_SIZE = 50;
+
+/**
+ * Every param `parseAuditListParams` reads — the complete set that changes
+ * which audit rows are shown. `schoolId` (Super Admin's view context) is
+ * deliberately excluded, same reasoning as the Teachers and ARAL boundaries.
+ */
+export const AUDIT_LIST_KEYS = ["page", "q", "from", "to"] as const;
 
 interface PageProps {
   searchParams: Promise<{
@@ -118,71 +128,86 @@ async function SchoolAuditTable({
   };
 
   return (
-    <Surface as="section">
-      <SurfaceHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="whitespace-nowrap text-base font-semibold">
-          {totalCount} event{totalCount === 1 ? "" : "s"}
-        </h2>
-        <AuditFilters
-          basePath={SCHOOL_HEAD_ROUTES.audit}
-          state={{ q: list.q, from: list.from, to: list.to }}
-          otherParams={{ schoolId: schoolIdParam }}
-        />
-      </SurfaceHeader>
-      {logs.length === 0 ? (
-        <SurfaceBody>
-          <EmptyState
-            title={hasFilters ? "No events match your filters" : "Nothing audited yet"}
-            description={
-              hasFilters
-                ? "Try a different search term or widen the date range."
-                : "Changes made in this school will be recorded here."
-            }
-            icon={ScrollText}
-          />
-        </SurfaceBody>
-      ) : (
-        <>
-          {/* The table is wider than a phone. It scrolls in its own container so the
-              page body never scrolls sideways. */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When (UTC)</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>ID</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {log.timestamp
-                        .toISOString()
-                        .replace("T", " ")
-                        .slice(0, 19)}
-                    </TableCell>
-                    <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell>{log.resource}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {log.resourceId ?? "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <LearnerPagination
+    <ListNavigationProvider>
+      <Surface as="section">
+        <SurfaceHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="whitespace-nowrap text-base font-semibold">
+            {totalCount} event{totalCount === 1 ? "" : "s"}
+          </h2>
+          <AuditFilters
             basePath={SCHOOL_HEAD_ROUTES.audit}
-            page={page}
-            totalPages={pages}
-            searchParams={filterParams}
+            state={{ q: list.q, from: list.from, to: list.to }}
+            otherParams={{ schoolId: schoolIdParam }}
           />
-        </>
-      )}
-    </Surface>
+        </SurfaceHeader>
+        {logs.length === 0 ? (
+          <SurfaceBody>
+            <EmptyState
+              title={hasFilters ? "No events match your filters" : "Nothing audited yet"}
+              description={
+                hasFilters
+                  ? "Try a different search term or widen the date range."
+                  : "Changes made in this school will be recorded here."
+              }
+              icon={ScrollText}
+            />
+          </SurfaceBody>
+        ) : (
+          <>
+            {/* The table is wider than a phone. It scrolls in its own container so the
+                page body never scrolls sideways. */}
+            <ListBusyRegion
+              label="audit entries"
+              skeleton={
+                <div className="p-2">
+                  <TableSectionSkeleton
+                    rows={Math.min(logs.length || 10, 10)}
+                    columns={4}
+                    showToolbar={false}
+                  />
+                </div>
+              }
+            >
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When (UTC)</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Resource</TableHead>
+                      <TableHead>ID</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {log.timestamp
+                            .toISOString()
+                            .replace("T", " ")
+                            .slice(0, 19)}
+                        </TableCell>
+                        <TableCell className="font-medium">{log.action}</TableCell>
+                        <TableCell>{log.resource}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {log.resourceId ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </ListBusyRegion>
+            <LearnerPagination
+              basePath={SCHOOL_HEAD_ROUTES.audit}
+              page={page}
+              totalPages={pages}
+              searchParams={filterParams}
+            />
+          </>
+        )}
+      </Surface>
+    </ListNavigationProvider>
   );
 }
 
@@ -200,7 +225,10 @@ export default async function SchoolAuditPage({ searchParams }: PageProps) {
       description="The most recent audited actions in your school."
       view={view}
     >
-      <Suspense fallback={<TableSectionSkeleton rows={10} columns={4} />}>
+      <Suspense
+        key={listKey(params, AUDIT_LIST_KEYS)}
+        fallback={<TableSectionSkeleton rows={10} columns={4} />}
+      >
         <SchoolAuditTable
           schoolId={view.schoolId}
           schoolIdParam={params.schoolId}

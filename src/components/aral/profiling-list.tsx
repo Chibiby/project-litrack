@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 import type { ProfilingStatusFilter } from "@/lib/aral/profiling-stats";
@@ -66,6 +67,16 @@ export function ProfilingList({
 
   return (
     <Surface as="section" className="overflow-hidden rounded-2xl">
+      <ListBusyRegion
+        label="profiles"
+        skeleton={
+          <TableSectionSkeleton
+            rows={8}
+            columns={canEdit ? 7 : 6}
+            showToolbar={false}
+          />
+        }
+      >
       {totalCount === 0 ? (
         <div className="p-4">
           <EmptyState
@@ -170,6 +181,7 @@ export function ProfilingList({
           </ul>
         </>
       )}
+      </ListBusyRegion>
 
       <LearnerPagination
         basePath={ARAL_PROFILING_HREF}

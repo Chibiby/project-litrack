@@ -143,9 +143,15 @@ async function ensureActiveSchoolYear(schoolId: string): Promise<string> {
     return updated.id;
   }
 
+  // UTC midnight, matching `createSchoolYear` — which stores the value of an
+  // `<input type="date">` via `new Date("YYYY-MM-DD")`, and ECMA-262 parses a
+  // date-only ISO string as UTC midnight. Building these from LOCAL fields
+  // instead would store a different instant on any machine that is not at
+  // UTC, and `getTermWindows` reads the anchor month with UTC getters, so the
+  // demo tenant's term windows would drift against every real school's.
   const now = new Date();
-  const startDate = new Date(now.getFullYear(), 5, 1); // June 1
-  const endDate = new Date(now.getFullYear() + 1, 2, 31); // March 31 next year
+  const startDate = new Date(Date.UTC(now.getUTCFullYear(), 5, 1)); // June 1
+  const endDate = new Date(Date.UTC(now.getUTCFullYear() + 1, 2, 31)); // March 31 next year
   const created = await prisma.schoolYear.create({
     data: { schoolId, label: TEST_LAB_YEAR_LABEL, startDate, endDate, isActive: true },
   });

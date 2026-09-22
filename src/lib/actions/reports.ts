@@ -12,14 +12,16 @@ import {
   REPORT_KIND_LABELS,
   type ReportFilters,
 } from "@/lib/reports/kinds";
-import { renderReport, type ReportTable } from "@/lib/reports/render";
+import { renderReport, reportBlocks } from "@/lib/reports/render";
 import {
   buildAttendanceTable,
   buildClassRosterTable,
+  buildMosyTable,
   buildReadingLevelTable,
   buildTeacherSummaryTable,
   buildTermGradesTable,
   type ReportScope,
+  type ReportTableWithAudit,
 } from "@/lib/reports/queries";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -36,13 +38,14 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
 /** Every builder keyed by kind, so `generateReport` has no switch to fall off. */
 const BUILDERS: Record<
   Exclude<ReportKind, "CUSTOM">,
-  (scope: ReportScope, filters: ReportFilters) => Promise<ReportTable>
+  (scope: ReportScope, filters: ReportFilters) => Promise<ReportTableWithAudit>
 > = {
   ATTENDANCE: buildAttendanceTable,
   READING_LEVEL: buildReadingLevelTable,
   TERM_GRADES: buildTermGradesTable,
   TEACHER_SUMMARY: buildTeacherSummaryTable,
   CLASS_ROSTER: buildClassRosterTable,
+  MOSY: buildMosyTable,
 };
 
 /**
@@ -150,7 +153,7 @@ export async function generateReport(
   }
 
   let buffer: Buffer;
-  let table: ReportTable;
+  let table: ReportTableWithAudit;
   try {
     table = await BUILDERS[kind](resolved.scope, filters);
     buffer = await renderReport(table, format);
@@ -189,9 +192,18 @@ export async function generateReport(
     // Counts and ids only — a report is built over learner PII and none of it
     // enters an audit row.
     metadata: {
+      // Builder-supplied keys, counts and ids only — for MOSY this is the
+      // window it actually resolved, which the request filters do not name.
+      // Spread FIRST: a future builder's `auditMeta` must never be able to
+      // overwrite the fixed keys below by happening to reuse one of their
+      // names.
+      ...(table.auditMeta ?? {}),
       kind,
       format,
       rows: table.rows.length,
+      // A multi-block report (MOSY) exports more than one table, so the single
+      // `rows` count above does not describe what was generated on its own.
+      blockRows: reportBlocks(table).map((b) => b.rows.length),
       gradeLevelId: filters.gradeLevelId ?? null,
       sectionId: filters.sectionId ?? null,
       from: filters.from ?? null,

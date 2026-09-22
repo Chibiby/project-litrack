@@ -16,7 +16,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
-import { TableSectionSkeleton } from "@/components/loading";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
+import { ListNavigationProvider } from "@/components/nav/list-navigation";
+import { listKey } from "@/lib/nav/list-params";
 import { AralFilterPopover } from "@/components/aral/aral-filter-popover";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EnrollToAralDialog } from "@/components/aral/enroll-to-aral-dialog";
@@ -39,6 +41,14 @@ import {
 import { BookOpen, CalendarDays, Sparkles } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Params that change which rows the ARAL learners table shows — see
+ * `listKey`. `schoolId` is deliberately excluded: it is the Super Admin's
+ * view-context switch, not a facet of this list, and the Suspense boundary
+ * must not re-suspend for it.
+ */
+export const ARAL_LEARNERS_LIST_KEYS = ["page", "grade", "section"] as const;
 
 interface AralDashboardProps {
   searchParams: Promise<{
@@ -113,65 +123,70 @@ async function AralLearnersTable({
   return (
     <Card>
       <CardContent className="p-0">
-        {totalCount === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              title={
-                section !== "all" || activeGrade !== "all"
-                  ? "No ARAL learners match these filters"
-                  : "No ARAL learners"
-              }
-              description={
-                section !== "all" || activeGrade !== "all"
-                  ? "Try another grade or section filter."
-                  : "Use Enroll to ARAL to add learners from your grades."
-              }
-            />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Learner</TableHead>
-                <TableHead>Age</TableHead>
-                {showGradeColumn && <TableHead>Grade</TableHead>}
-                {showSection && <TableHead>Section</TableHead>}
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {learners.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
-                    </span>
-                  </TableCell>
-                  <TableCell>{l.age}</TableCell>
-                  {showGradeColumn && (
-                    <TableCell className="text-sm text-muted-foreground">
-                      {gradeLabels[l.gradeLevelId] ?? "—"}
-                    </TableCell>
-                  )}
-                  {showSection && (
-                    <TableCell className="text-sm text-muted-foreground">
-                      {l.section?.name ?? "—"}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`}
-                      >
-                        View learner
-                      </Link>
-                    </Button>
-                  </TableCell>
+        <ListBusyRegion
+          label="ARAL learners"
+          skeleton={<TableSectionSkeleton rows={8} columns={5} showToolbar={false} />}
+        >
+          {totalCount === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                title={
+                  section !== "all" || activeGrade !== "all"
+                    ? "No ARAL learners match these filters"
+                    : "No ARAL learners"
+                }
+                description={
+                  section !== "all" || activeGrade !== "all"
+                    ? "Try another grade or section filter."
+                    : "Use Enroll to ARAL to add learners from your grades."
+                }
+              />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Age</TableHead>
+                  {showGradeColumn && <TableHead>Grade</TableHead>}
+                  {showSection && <TableHead>Section</TableHead>}
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {learners.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
+                      </span>
+                    </TableCell>
+                    <TableCell>{l.age}</TableCell>
+                    {showGradeColumn && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {gradeLabels[l.gradeLevelId] ?? "—"}
+                      </TableCell>
+                    )}
+                    {showSection && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {l.section?.name ?? "—"}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right">
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`}
+                        >
+                          View learner
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </ListBusyRegion>
         <LearnerPagination
           basePath="/teacher/aral"
           page={page}
@@ -346,6 +361,16 @@ export default async function AralDashboard({
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
       isSuperAdminView={isSuperAdmin && !!sp.schoolId}
     >
+      {/*
+        The provider wraps the filter control as well as the rows, not just the
+        Suspense boundary. `useListNavigate` reads ancestor context only, so a
+        control rendered as a SIBLING of the provider silently falls back to the
+        no-op `NO_PROVIDER` value: it would still navigate, but never raise the
+        pending flag, so the grade/section filter would change the list with no
+        skeleton and no error. Same reasoning as the profiling page, which wraps
+        its tabs and toolbar together with its boundary.
+      */}
+      <ListNavigationProvider>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <AralFilterPopover
           gradeId={activeGrade}
@@ -382,22 +407,26 @@ export default async function AralDashboard({
         </div>
       </div>
 
-      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
-        <AralLearnersTable
-          where={aralWhere}
-          totalCount={aralCount}
-          page={page}
-          pages={pages}
-          skip={skip}
-          take={list.take}
-          activeGrade={activeGrade}
-          schoolIdParam={sp.schoolId}
-          section={section}
-          gradeLabels={gradeLabels}
-          showGradeColumn={showGradeColumn}
-          showSection={showSection}
-        />
-      </Suspense>
+        <Suspense
+          key={listKey(sp, ARAL_LEARNERS_LIST_KEYS)}
+          fallback={<TableSectionSkeleton rows={8} columns={5} />}
+        >
+          <AralLearnersTable
+            where={aralWhere}
+            totalCount={aralCount}
+            page={page}
+            pages={pages}
+            skip={skip}
+            take={list.take}
+            activeGrade={activeGrade}
+            schoolIdParam={sp.schoolId}
+            section={section}
+            gradeLabels={gradeLabels}
+            showGradeColumn={showGradeColumn}
+            showSection={showSection}
+          />
+        </Suspense>
+      </ListNavigationProvider>
     </AppShell>
   );
 }

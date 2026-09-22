@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useListNavigate } from "@/components/nav/list-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,7 @@ type AuditFiltersProps = {
 };
 
 function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
-  const router = useRouter();
+  const listNavigate = useListNavigate();
   const [q, setQ] = useState(state.q);
   const [from, setFrom] = useState(state.from ?? "");
   const [to, setTo] = useState(state.to ?? "");
@@ -60,7 +60,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
     if (merged.from) params.set("from", merged.from);
     if (merged.to) params.set("to", merged.to);
     const qs = params.toString();
-    router.push(qs ? `${basePath}?${qs}` : basePath);
+    listNavigate(qs ? `${basePath}?${qs}` : basePath);
   };
 
   const hasFilters = Boolean(state.q || state.from || state.to);

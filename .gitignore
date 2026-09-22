@@ -23,6 +23,9 @@ prisma/migrations/dev.db*
 .next-verify/
 .open-next/
 .wrangler-dry-run/
+# Wrangler's own build/state directory. Untracked but previously not ignored,
+# so a `git add .` would have committed local build state.
+.wrangler/
 
 # Impeccable design review captures (local evidence, not source)
 .impeccable/review/

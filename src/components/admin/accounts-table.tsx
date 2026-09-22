@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +26,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  ListNavigationProvider,
+  LinkStatusPulse,
+  useListNavigate,
+  useListPending,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,7 +47,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AccountRow, AccountSummary } from "@/lib/admin/accounts";
+import { SortSelect } from "@/components/ui/sort-select";
+import type { SortOption } from "@/lib/sort/registry";
+import type {
+  AccountListSort,
+  AccountRow,
+  AccountSummary,
+} from "@/lib/admin/accounts";
 import { USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
 import type { UserRole } from "@prisma/client";
 
@@ -59,6 +72,17 @@ export type AccountsTableList = {
   role: string;
   schoolId: string;
   q: string;
+  /**
+   * "Sort by" for this table. Optional so `list` stays a safe superset for
+   * any caller that does not wire it. `AccountListSort` and the option list
+   * live in `@/lib/admin/accounts`, a `server-only` module; both are
+   * imported here as types only (erased at compile time by
+   * `isolatedModules`), so the actual option data must be threaded in as a
+   * prop by the server page rather than imported at runtime from a Client
+   * Component.
+   */
+  sort?: AccountListSort;
+  sortOptions?: readonly SortOption<AccountListSort>[];
 };
 
 function Paginator({
@@ -74,6 +98,7 @@ function Paginator({
   totalCount: number;
   hrefFor: (page: number) => string;
 }) {
+  const pending = useListPending();
   const firstItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = Math.min(page * pageSize, totalCount);
   const canGoBack = page > 1;
@@ -90,11 +115,13 @@ function Paginator({
           variant="ghost"
           size="icon"
           disabled={!canGoBack}
+          aria-disabled={canGoBack && pending ? true : undefined}
           aria-label="Previous page"
         >
           {canGoBack ? (
             <Link href={hrefFor(page - 1)}>
               <ChevronLeft aria-hidden />
+              <LinkStatusPulse />
             </Link>
           ) : (
             <span>
@@ -110,11 +137,13 @@ function Paginator({
           variant="ghost"
           size="icon"
           disabled={!canGoForward}
+          aria-disabled={canGoForward && pending ? true : undefined}
           aria-label="Next page"
         >
           {canGoForward ? (
             <Link href={hrefFor(page + 1)}>
               <ChevronRight aria-hidden />
+              <LinkStatusPulse />
             </Link>
           ) : (
             <span>
@@ -245,7 +274,26 @@ function AccountOverview({ summary }: { summary?: AccountSummary }) {
   );
 }
 
-export function AccountsTable({
+/**
+ * Thin wrapper so `useListNavigate`/`useListPending` inside
+ * `AccountsTableInner` (and its `Paginator`) resolve to THIS table's own
+ * `ListNavigationProvider` rather than the no-provider fallback — a hook
+ * call sees only ANCESTOR context, so it must live inside the provider's
+ * subtree, not in the same component that renders the provider.
+ */
+export function AccountsTable(props: {
+  rows: AccountRow[];
+  summary?: AccountSummary;
+  list: AccountsTableList;
+}) {
+  return (
+    <ListNavigationProvider>
+      <AccountsTableInner {...props} />
+    </ListNavigationProvider>
+  );
+}
+
+function AccountsTableInner({
   rows,
   summary,
   list,
@@ -254,9 +302,9 @@ export function AccountsTable({
   summary?: AccountSummary;
   list: AccountsTableList;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const navigate = useListNavigate();
+  const pending = useListPending();
   const [query, setQuery] = useState(list.q);
   const [prevListQ, setPrevListQ] = useState(list.q);
   if (list.q !== prevListQ) {
@@ -271,7 +319,7 @@ export function AccountsTable({
       else next.set(key, value);
     }
     next.delete("page");
-    startTransition(() => router.push(`/admin/accounts?${next.toString()}`));
+    navigate(`/admin/accounts?${next.toString()}`);
   };
 
   const hrefFor = (page: number) => {
@@ -282,12 +330,12 @@ export function AccountsTable({
   };
 
   return (
-    <div className="space-y-3">
+      <div className="space-y-3">
       <AccountOverview summary={summary} />
       <Card className="shadow-none">
         <CardContent className="p-3 sm:p-4">
           <form
-            className="grid gap-3 lg:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_auto] lg:items-end"
+            className="grid gap-3 lg:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto] lg:items-end"
             onSubmit={(event) => {
               event.preventDefault();
               apply({ q: query.trim() || null });
@@ -334,6 +382,22 @@ export function AccountsTable({
                 </SelectContent>
               </Select>
             </div>
+            {list.sort && list.sortOptions ? (
+              <div className="space-y-1.5">
+                <SortSelect
+                  mode="link"
+                  id="accounts-sort"
+                  basePath="/admin/accounts"
+                  value={list.sort}
+                  options={list.sortOptions}
+                  searchParams={{
+                    q: list.q || undefined,
+                    role: list.role || undefined,
+                    schoolId: list.schoolId || undefined,
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <Button
                 type="submit"
@@ -351,7 +415,7 @@ export function AccountsTable({
                   disabled={pending}
                   onClick={() => {
                     setQuery("");
-                    router.push("/admin/accounts");
+                    navigate("/admin/accounts");
                   }}
                 >
                   Clear filters
@@ -374,6 +438,12 @@ export function AccountsTable({
               Page {list.page} of {list.totalPages}
             </span>
           </div>
+          <ListBusyRegion
+            label="accounts"
+            skeleton={
+              <TableSectionSkeleton rows={10} columns={7} showToolbar={false} />
+            }
+          >
           {rows.length === 0 ? (
             <div className="px-4 pb-4">
               <EmptyState
@@ -411,7 +481,7 @@ export function AccountsTable({
                               variant="thumb"
                             />
                             <span className="text-sm font-medium">
-                              {row.fullName}
+                              {row.listingName}
                             </span>
                           </div>
                         </TableCell>
@@ -467,7 +537,7 @@ export function AccountsTable({
                           variant="thumb"
                         />
                         <div className="min-w-0">
-                          <h3 className="truncate font-medium">{row.fullName}</h3>
+                          <h3 className="truncate font-medium">{row.listingName}</h3>
                           <Badge variant="outline" className="mt-1">
                             {USER_ROLE_LABELS[row.role]}
                           </Badge>
@@ -509,17 +579,20 @@ export function AccountsTable({
                   </article>
                 ))}
               </div>
-              <Paginator
-                page={list.page}
-                pageSize={list.pageSize}
-                pages={list.totalPages}
-                totalCount={list.totalCount}
-                hrefFor={hrefFor}
-              />
             </>
           )}
+          </ListBusyRegion>
+          {rows.length > 0 ? (
+            <Paginator
+              page={list.page}
+              pageSize={list.pageSize}
+              pages={list.totalPages}
+              totalCount={list.totalCount}
+              hrefFor={hrefFor}
+            />
+          ) : null}
         </CardContent>
       </Card>
-    </div>
+      </div>
   );
 }

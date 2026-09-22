@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { flattenNavGroups, getNavGroups } from "@/lib/nav/nav-config";
 import { aralProfileSchema } from "@/lib/validators/aral.schema";
 import { WRITE_ORDER } from "@/lib/db/schema-order";
+import { buildMosyBlocks, type MosyInput } from "@/lib/reports/mosy";
 
 /**
  * The ARAL Profile (Sections C–D–E) was dormant and is back, with one entry
@@ -168,5 +169,53 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
     const source = read("src/lib/actions/learner.ts");
     const enroll = source.slice(source.indexOf("enrollLearnersToAral"));
     expect(enroll).not.toMatch(/aralProfile/i);
+  });
+
+  it("the MOSY report still yields four non-empty blocks when every learner's profile is null", () => {
+    const input: MosyInput = {
+      window: {
+        startKey: "2026-11-01",
+        endKey: "2027-01-31",
+        label: "November - January",
+        source: "term",
+      },
+      grades: [{ id: "grade-3", type: "G3", label: "Grade 3" }],
+      learners: [
+        {
+          id: "l1",
+          gradeLevelId: "grade-3",
+          gradeType: "G3",
+          gradeLabel: "Grade 3",
+          sectionName: "Sampaguita",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          isAralLearner: true,
+          aralTutorName: "T. Santos",
+          record: null,
+          profile: null,
+        },
+        {
+          id: "l2",
+          gradeLevelId: "grade-3",
+          gradeType: "G3",
+          gradeLabel: "Grade 3",
+          sectionName: "Sampaguita",
+          firstName: "Ana",
+          middleName: null,
+          lastName: "Reyes",
+          isAralLearner: true,
+          aralTutorName: "T. Santos",
+          record: null,
+          profile: null,
+        },
+      ],
+    };
+
+    const blocks = buildMosyBlocks(input);
+    expect(blocks).toHaveLength(4);
+    for (const block of blocks) {
+      expect(block.rows.length).toBeGreaterThan(0);
+    }
   });
 });

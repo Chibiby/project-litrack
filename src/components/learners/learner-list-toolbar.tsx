@@ -9,13 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectItem } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -25,7 +19,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { FacetSelect } from "@/components/ui/facet-select";
+import { SortSelect } from "@/components/ui/sort-select";
 import {
+  LEARNER_LIST_SORTS,
   LEARNER_PAGE_SIZE_OPTIONS,
   type LearnerAralStatusFilter,
   type LearnerGenderFilter,
@@ -131,51 +128,6 @@ export function withGrade(
 /** Apply a Section choice: an advisory filter would contradict it. */
 export function withSection(s: RosterUrlState, section: string): RosterUrlState {
   return { ...s, section, advisory: section === "all" ? s.advisory : null };
-}
-
-/**
- * Facet control: a small caption stacked over the current value, matching the
- * mockup. `line-clamp-none` undoes SelectTrigger's single-line clamp.
- */
-export function FacetSelect({
-  id,
-  label,
-  value,
-  onValueChange,
-  className,
-  children,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger
-        id={id}
-        aria-label={label}
-        className={cn(
-          "h-auto w-full gap-2 rounded-xl py-1.5 [&>span]:line-clamp-none",
-          className
-        )}
-      >
-        {/* Block children, not flex: the clamp reset above sets display:block
-            on this span, so its two lines must stack on their own. */}
-        <span className="min-w-0 text-left">
-          <span className="block text-[11px] font-normal leading-tight text-muted-foreground">
-            {label}
-          </span>
-          <span className="block truncate text-sm font-medium leading-tight text-foreground">
-            <SelectValue />
-          </span>
-        </span>
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
-  );
 }
 
 const TAB_BASE =
@@ -352,15 +304,13 @@ function SortAndSize({
   const go = (next: RosterUrlState) => onNavigate(rosterHref(basePath, next));
   return (
     <div className="grid gap-3">
-      <FacetSelect
+      <SortSelect
         id={`${idPrefix}-sort`}
-        label="Sort by"
+        mode="client"
+        options={LEARNER_LIST_SORTS.options}
         value={state.sort}
-        onValueChange={(v) => go({ ...state, sort: v as LearnerListSort })}
-      >
-        <SelectItem value="name">Name (A–Z)</SelectItem>
-        <SelectItem value="age">Age (youngest first)</SelectItem>
-      </FacetSelect>
+        onSortChange={(v) => go({ ...state, sort: v as LearnerListSort })}
+      />
       <FacetSelect
         id={`${idPrefix}-per-page`}
         label="Rows per page"

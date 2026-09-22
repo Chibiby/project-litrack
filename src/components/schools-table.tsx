@@ -2,7 +2,6 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,12 +28,22 @@ import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
 import { ConfirmAction } from "@/components/confirm-action";
 import { setSchoolActive } from "@/lib/actions/school-management";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { SortSelect } from "@/components/ui/sort-select";
+import type { SortOption } from "@/lib/sort/registry";
+import type { SchoolsListSort } from "@/lib/cache/schools-list";
 import {
   listOptimisticReducer,
   runOptimistic,
   settleActionResult,
   type ListOptimisticOp,
 } from "@/lib/ui/optimistic";
+import {
+  ListNavigationProvider,
+  LinkStatusPulse,
+  useListNavigate,
+  useListPending,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 
 export type SchoolRow = {
   id: string;
@@ -61,6 +70,18 @@ export type SchoolsTableList = {
   q: string;
   region: string;
   status: "" | "active" | "inactive";
+  /**
+   * "Sort by" for this table. Optional so `list` stays a safe superset for
+   * any caller that does not wire it — mirrors `TeachersActiveTable`'s
+   * `list.sort`/`list.sortOptions` pattern. `SchoolsListSort` and the option
+   * list live in `@/lib/cache/schools-list`, a `server-only` module; both are
+   * imported here as types only (erased at compile time by
+   * `isolatedModules`), so the actual option data must be threaded in as a
+   * prop by the server page rather than imported at runtime from a Client
+   * Component.
+   */
+  sort?: SchoolsListSort;
+  sortOptions?: readonly SortOption<SchoolsListSort>[];
 };
 
 const REGIONS = [
@@ -140,19 +161,89 @@ function hrefFor(list: SchoolsTableList, page: number): string {
   if (list.q) params.set("q", list.q);
   if (list.region) params.set("region", list.region);
   if (list.status) params.set("status", list.status);
+  if (list.sort) params.set("sort", list.sort);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
   return qs ? `/admin/schools?${qs}` : "/admin/schools";
 }
 
-export function SchoolsTable({
+function SchoolsPager({
+  list,
+  hrefFor: buildHref,
+}: {
+  list: SchoolsTableList;
+  hrefFor: (list: SchoolsTableList, page: number) => string;
+}) {
+  const pending = useListPending();
+  const canGoBack = list.page > 1;
+  const canGoForward = list.page < list.totalPages;
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className="rounded-lg"
+        disabled={!canGoBack}
+      >
+        <Link
+          href={buildHref(list, list.page - 1)}
+          className={!canGoBack ? "pointer-events-none opacity-50" : ""}
+          aria-disabled={!canGoBack || pending}
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Previous
+          <LinkStatusPulse />
+        </Link>
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {list.page} of {list.totalPages}
+      </span>
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className="rounded-lg"
+        disabled={!canGoForward}
+      >
+        <Link
+          href={buildHref(list, list.page + 1)}
+          className={!canGoForward ? "pointer-events-none opacity-50" : ""}
+          aria-disabled={!canGoForward || pending}
+        >
+          Next
+          <ChevronRight className="ml-1 h-4 w-4" />
+          <LinkStatusPulse />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Thin wrapper so `useListNavigate`/`useListPending` inside
+ * `SchoolsTableInner` (and its `SchoolsPager`) resolve to THIS table's own
+ * `ListNavigationProvider` rather than the no-provider fallback — a hook
+ * call sees only ANCESTOR context, so it must live inside the provider's
+ * subtree, not in the same component that renders the provider.
+ */
+export function SchoolsTable(props: { schools: SchoolRow[]; list: SchoolsTableList }) {
+  return (
+    <ListNavigationProvider>
+      <SchoolsTableInner {...props} />
+    </ListNavigationProvider>
+  );
+}
+
+function SchoolsTableInner({
   schools,
   list,
 }: {
   schools: SchoolRow[];
   list: SchoolsTableList;
 }) {
-  const router = useRouter();
+  const navigate = useListNavigate();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [, startTransition] = useTransition();
@@ -184,9 +275,10 @@ export function SchoolsTable({
     if (q) params.set("q", q);
     if (region) params.set("region", region);
     if (status) params.set("status", status);
+    if (list.sort) params.set("sort", list.sort);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
-    router.push(qs ? `/admin/schools?${qs}` : "/admin/schools");
+    navigate(qs ? `/admin/schools?${qs}` : "/admin/schools");
   };
 
   const toggleActive = (school: SchoolRow, nextActive: boolean) => {
@@ -310,6 +402,20 @@ export function SchoolsTable({
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
+          {list.sort && list.sortOptions ? (
+            <SortSelect
+              mode="link"
+              id="schools-sort"
+              basePath="/admin/schools"
+              value={list.sort}
+              options={list.sortOptions}
+              searchParams={{
+                q: list.q || undefined,
+                region: list.region || undefined,
+                status: list.status || undefined,
+              }}
+            />
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -340,6 +446,10 @@ export function SchoolsTable({
         Showing {from} to {to} of {list.totalCount} results
       </div>
 
+      <ListBusyRegion
+        label="schools"
+        skeleton={<TableSectionSkeleton rows={8} columns={8} showToolbar={false} />}
+      >
       <div className="hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card md:block">
         <Table>
           <TableHeader>
@@ -600,49 +710,10 @@ export function SchoolsTable({
           ))
         )}
       </div>
+      </ListBusyRegion>
 
       {list.totalPages > 1 ? (
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            disabled={list.page <= 1}
-          >
-            <Link
-              href={hrefFor(list, list.page - 1)}
-              className={list.page <= 1 ? "pointer-events-none opacity-50" : ""}
-              aria-disabled={list.page <= 1}
-            >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              Previous
-            </Link>
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {list.page} of {list.totalPages}
-          </span>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            disabled={list.page >= list.totalPages}
-          >
-            <Link
-              href={hrefFor(list, list.page + 1)}
-              className={
-                list.page >= list.totalPages
-                  ? "pointer-events-none opacity-50"
-                  : ""
-              }
-              aria-disabled={list.page >= list.totalPages}
-            >
-              Next
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
+        <SchoolsPager list={list} hrefFor={hrefFor} />
       ) : null}
     </div>
   );

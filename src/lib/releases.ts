@@ -135,6 +135,30 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.8.0",
+    date: "2026-09-23",
+    title: "Sort any list, names read surname-first, and a new MOSY report",
+    announce: true,
+    fixes: [
+      "Every list now has a Sort by dropdown. Alphabetical is always there, alongside options that suit each list — grade level, section, date added, reading level, status, and so on. Your choice stays in the address, so a sorted list can be bookmarked or shared and it comes back the same way.",
+      "Names now read surname-first everywhere — \"Dela Cruz, Juan Miguel\" — in every table and in every Excel and PDF you download, matching the DepEd forms you copy them onto. Alphabetical now means by surname, as you would expect on a class list.",
+      "Searching still finds a learner whether you type the given name or the surname first.",
+      "Next and Previous now respond the moment you click them, and the list shows a loading placeholder while it fetches, instead of sitting still for a few seconds with no sign anything happened. The same applies to sorting, filtering and searching.",
+      {
+        text: "A new MOSY report on the Reports page. One click gives you the mid-year reading level profile for every grade, in English and in Filipino, together with your ARAL profiling results and a learner-by-learner appendix. It still generates for learners who have no ARAL profile yet.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "The learner spreadsheet's \"Full name\" column is now called \"Name\" and reads surname-first. The separate First, Middle and Last name columns are unchanged, so re-importing a sheet still works.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "The Schools list now opens in alphabetical order rather than newest-first.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.7.0",
     date: "2026-09-19",
     title: "The training schools are gone from the login page",

@@ -44,6 +44,7 @@ const { TeacherRoleDialog } = await import(
 const ROW: ActiveTeacherRow = {
   id: "teacher-1",
   fullName: "Marivic Cruz",
+  listingName: "Cruz, Marivic",
   email: "marivic@example.test",
   avatarPath: null,
   profileCompleted: true,

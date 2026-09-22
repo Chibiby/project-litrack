@@ -36,10 +36,17 @@ import {
   type RowSignatures,
 } from "@/lib/teachers/row-resync";
 import { TeacherRoleDialog } from "@/components/school-head/teacher-role-dialog";
-import type { TeacherListFilter } from "@/lib/teachers/pagination";
+import type { TeacherListFilter, TeacherListSort } from "@/lib/teachers/pagination";
+import { SortSelect } from "@/components/ui/sort-select";
+import type { SortOption } from "@/lib/sort/registry";
 import { RefreshCw, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
+import {
+  ListNavigationProvider,
+  useListNavigate,
+} from "@/components/nav/list-navigation";
+import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 
 export type TeachersListPagination = {
   page: number;
@@ -49,6 +56,13 @@ export type TeachersListPagination = {
   filter: TeacherListFilter;
   basePath: string;
   searchParams: Record<string, string | undefined>;
+  /**
+   * "Sort by" for this table. Optional so `list` stays a safe superset —
+   * `inactive/page.tsx` renders `TeachersInactiveTable` with no `list` at all
+   * and must keep compiling untouched.
+   */
+  sort?: TeacherListSort;
+  sortOptions?: readonly SortOption<TeacherListSort>[];
 };
 
 export type ActiveTeacherRow = {
@@ -58,6 +72,13 @@ export type ActiveTeacherRow = {
   avatarPath: string | null;
   profileCompleted: boolean;
   approvedAt: string | null;
+  /**
+   * Surname-first display name ("Lastname, Firstname Middlename"), built from
+   * the separate name columns by `formatListingNameFromRecord` — never by
+   * parsing `fullName` apart. `fullName` stays on the row for search, avatar
+   * initials and every other caller that already depends on its shape.
+   */
+  listingName: string;
   /** Advisory learners — removal leaves them with no adviser; it does not block. */
   learnerCount: number;
   /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
@@ -417,6 +438,7 @@ function TeachersManagedTable({
   advisoryOptions?: AdvisoryGradeOption[];
 }) {
   const router = useRouter();
+  const navigate = useListNavigate();
   const [, startRowTransition] = useTransition();
   const [refreshing, startRefreshTransition] = useTransition();
   /**
@@ -596,7 +618,7 @@ function TeachersManagedTable({
     if (filter !== "all") params.set("filter", filter);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
-    router.push(qs ? `${list.basePath}?${qs}` : list.basePath);
+    navigate(qs ? `${list.basePath}?${qs}` : list.basePath);
   };
 
   const onSetActive = (row: ActiveTeacherRow, isActive: boolean) => {
@@ -710,6 +732,20 @@ function TeachersManagedTable({
                 <option value="with-advisory">With advisory</option>
               </select>
             </div>
+            {list.sort && list.sortOptions ? (
+              <SortSelect
+                mode="link"
+                id="teachers-sort"
+                basePath={list.basePath}
+                value={list.sort}
+                options={list.sortOptions}
+                searchParams={{
+                  ...list.searchParams,
+                  q: list.q || undefined,
+                  filter: list.filter === "all" ? undefined : list.filter,
+                }}
+              />
+            ) : null}
             <div className="min-w-[12rem] flex-1 space-y-1">
               <Label htmlFor="teachers-search" className="text-xs text-muted-foreground">
                 Search active teachers
@@ -751,6 +787,16 @@ function TeachersManagedTable({
             ) : null}
           </div>
         ) : null}
+        <ListBusyRegion
+          label="teachers"
+          skeleton={
+            <TableSectionSkeleton
+              rows={Math.min(optimisticRows.length || 8, 8)}
+              columns={colSpan}
+              showToolbar={false}
+            />
+          }
+        >
         <Table>
           <TableHeader>
             <TableRow>
@@ -791,7 +837,7 @@ function TeachersManagedTable({
                         size={32}
                         variant="thumb"
                       />
-                      <span>{row.fullName}</span>
+                      <span>{row.listingName}</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{row.email}</TableCell>
@@ -883,6 +929,7 @@ function TeachersManagedTable({
             )}
           </TableBody>
         </Table>
+        </ListBusyRegion>
         {list ? (
           <LearnerPagination
             basePath={list.basePath}
@@ -896,7 +943,13 @@ function TeachersManagedTable({
   );
 }
 
-export function TeachersActiveTable({
+/**
+ * Rendered strictly INSIDE `ListNavigationProvider` (see `TeachersActiveTable`
+ * below) — `useListNavigate`/`useListPending` are read by `TeachersManagedTable`
+ * and `ListBusyRegion` further down the tree, so the provider has to be an
+ * ancestor of this component, never a sibling rendered from the same return.
+ */
+function TeachersActiveTablePanel({
   rows,
   readOnly = false,
   list,
@@ -921,6 +974,19 @@ export function TeachersActiveTable({
       list={list}
       advisoryOptions={advisoryOptions}
     />
+  );
+}
+
+export function TeachersActiveTable(props: {
+  rows: ActiveTeacherRow[];
+  readOnly?: boolean;
+  list?: TeachersListPagination;
+  advisoryOptions?: AdvisoryGradeOption[];
+}) {
+  return (
+    <ListNavigationProvider>
+      <TeachersActiveTablePanel {...props} />
+    </ListNavigationProvider>
   );
 }
 

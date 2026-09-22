@@ -3,7 +3,9 @@ import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { TableSectionSkeleton } from "@/components/loading";
 import { AccountsTable } from "@/components/admin/accounts-table";
+import { listKey } from "@/lib/nav/list-params";
 import {
+  ACCOUNT_LIST_SORTS,
   getAccountSummary,
   getAccountsPage,
   parseAccountsParams,
@@ -12,16 +14,31 @@ import {
   type AccountRow,
 } from "@/lib/admin/accounts";
 
+/** Params that change which rows the accounts list shows — see `listKey`. */
+export const ACCOUNTS_LIST_KEYS = ["page", "sort", "q", "role", "schoolId"] as const;
+
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ page?: string; q?: string; role?: string; schoolId?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    role?: string;
+    schoolId?: string;
+    sort?: string;
+  }>;
 }
 
 async function AccountsTableBody({
   searchParams,
 }: {
-  searchParams: { page?: string; q?: string; role?: string; schoolId?: string };
+  searchParams: {
+    page?: string;
+    q?: string;
+    role?: string;
+    schoolId?: string;
+    sort?: string;
+  };
 }) {
   const params = parseAccountsParams(searchParams);
   let rows: AccountRow[] = [];
@@ -69,6 +86,8 @@ async function AccountsTableBody({
           role: params.role ?? "",
           schoolId: params.schoolId ?? "",
           q: params.q,
+          sort: params.sort,
+          sortOptions: ACCOUNT_LIST_SORTS.options,
         }}
       />
     </>
@@ -97,7 +116,10 @@ export default async function AdminAccountsPage({ searchParams }: PageProps) {
       role={user.role}
       userName={user.fullName || user.email}
     >
-      <Suspense fallback={<TableSectionSkeleton rows={10} columns={6} />}>
+      <Suspense
+        key={listKey(params, ACCOUNTS_LIST_KEYS)}
+        fallback={<TableSectionSkeleton rows={10} columns={6} />}
+      >
         <AccountsTableBody searchParams={params} />
       </Suspense>
     </AppShell>

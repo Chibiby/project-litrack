@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   BookOpen,
+  BookOpenCheck,
   CalendarDays,
   ClipboardList,
   Download,
@@ -83,6 +84,7 @@ const CARD_ICON: Record<ReportKind, typeof CalendarDays> = {
   TERM_GRADES: ClipboardList,
   TEACHER_SUMMARY: UserRound,
   CLASS_ROSTER: Users,
+  MOSY: BookOpenCheck,
   CUSTOM: FileText,
 };
 
@@ -94,6 +96,8 @@ const CARD_TONE: Record<ReportKind, string> = {
   TEACHER_SUMMARY:
     "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   CLASS_ROSTER: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  // Violet is the ARAL accent (tailwind.config.ts); MOSY carries ARAL profiling data.
+  MOSY: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
   CUSTOM: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
 };
 

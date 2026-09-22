@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,6 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LEARNER_PAGE_SIZE_OPTIONS } from "@/lib/learners/pagination";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
+import { LinkStatusPulse, useListNavigate } from "@/components/nav/list-navigation";
+import { adjacentPages } from "@/lib/nav/list-params";
 
 /**
  * Roster footer, to the comp: the range on the left, numbered pages in the
@@ -67,10 +68,15 @@ export function LearnerListFooter({
   pageSize: number;
   searchParams: Record<string, string | undefined>;
 }) {
-  const router = useRouter();
+  const navigate = useListNavigate();
 
   const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalCount);
+
+  // Only the page immediately before/after the current one is worth a hover
+  // prefetch — the footer can render up to seven numbered links, and each
+  // prefetch of this force-dynamic route re-runs auth plus Prisma work.
+  const adjacent = adjacentPages(page, totalPages);
 
   function changePageSize(next: string) {
     const params = new URLSearchParams();
@@ -83,7 +89,7 @@ export function LearnerListFooter({
     // Row count changed, so the old page index no longer means anything —
     // always land back on page 1.
     const qs = params.toString();
-    router.push(qs ? `${basePath}?${qs}` : basePath);
+    navigate(qs ? `${basePath}?${qs}` : basePath);
   }
 
   return (
@@ -114,9 +120,13 @@ export function LearnerListFooter({
             aria-label="Previous page"
           >
             {page > 1 ? (
-              <Link href={hrefFor(basePath, page - 1, searchParams)}>
+              <PrefetchLink
+                href={hrefFor(basePath, page - 1, searchParams)}
+                intent={adjacent.includes(page - 1)}
+              >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
-              </Link>
+                <LinkStatusPulse />
+              </PrefetchLink>
             ) : (
               <ChevronLeft className="h-4 w-4" aria-hidden />
             )}
@@ -143,12 +153,14 @@ export function LearnerListFooter({
                 className={cn("hidden h-8 w-8 tabular-nums sm:inline-flex")}
                 aria-current={entry === page ? "page" : undefined}
               >
-                <Link
+                <PrefetchLink
                   href={hrefFor(basePath, entry, searchParams)}
                   aria-label={`Page ${entry}`}
+                  intent={adjacent.includes(entry)}
                 >
                   {entry}
-                </Link>
+                  <LinkStatusPulse />
+                </PrefetchLink>
               </Button>
             )
           )}
@@ -162,9 +174,13 @@ export function LearnerListFooter({
             aria-label="Next page"
           >
             {page < totalPages ? (
-              <Link href={hrefFor(basePath, page + 1, searchParams)}>
+              <PrefetchLink
+                href={hrefFor(basePath, page + 1, searchParams)}
+                intent={adjacent.includes(page + 1)}
+              >
                 <ChevronRight className="h-4 w-4" aria-hidden />
-              </Link>
+                <LinkStatusPulse />
+              </PrefetchLink>
             ) : (
               <ChevronRight className="h-4 w-4" aria-hidden />
             )}

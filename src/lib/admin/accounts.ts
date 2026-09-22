@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { findSignInSchoolHeadIds } from "@/lib/auth/school-head-sign-in";
+import { assertOrderByCoversOptions, defineSort } from "@/lib/sort/registry";
+import { formatListingNameFromRecord } from "@/lib/names";
 
 /**
  * Super Admin accounts console read model.
@@ -24,6 +26,54 @@ import { findSignInSchoolHeadIds } from "@/lib/auth/school-head-sign-in";
  */
 
 export const ACCOUNTS_PAGE_SIZE = 20;
+
+/**
+ * "Sort by" for the Super Admin accounts console. Alphabetical is the
+ * default — this is a name-bearing list, and surname-first order (`lastName`
+ * then `firstName`) is what `listingName` renders, never the denormalized
+ * `fullName`.
+ */
+export const ACCOUNT_LIST_SORTS = defineSort(
+  [
+    { value: "alphabetical", label: "Alphabetical" },
+    { value: "role", label: "Role" },
+    { value: "school", label: "School" },
+    { value: "date-added", label: "Date added" },
+    { value: "status", label: "Status" },
+  ] as const,
+  "alphabetical"
+);
+
+export type AccountListSort = (typeof ACCOUNT_LIST_SORTS.options)[number]["value"];
+
+/**
+ * The primary `orderBy` clause per sort option, without the tiebreaker.
+ * Kept alongside `ACCOUNT_LIST_SORTS` so an option added to one and not the
+ * other is a build-time (`satisfies`) and test-time
+ * (`assertOrderByCoversOptions`) failure rather than a silently unsorted
+ * table.
+ */
+const ACCOUNT_SORT_ORDER_BY = {
+  alphabetical: [{ lastName: "asc" }, { firstName: "asc" }],
+  role: [{ role: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
+  school: [{ school: { name: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
+  "date-added": [{ createdAt: "desc" }],
+  status: [{ isActive: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
+} satisfies Record<AccountListSort, Prisma.UserOrderByWithRelationInput[]>;
+
+assertOrderByCoversOptions(ACCOUNT_LIST_SORTS, ACCOUNT_SORT_ORDER_BY);
+
+/**
+ * Prisma `orderBy` array for a parsed accounts list sort, always ending in
+ * the `id` tiebreaker. This list is server-paginated with skip/take — `role`,
+ * `school`, `date-added` and `status` are not unique keys, so without the
+ * tiebreaker Postgres can repeat or skip a row across pages.
+ */
+export function accountsListOrderBy(
+  sort: AccountListSort
+): Prisma.UserOrderByWithRelationInput[] {
+  return [...ACCOUNT_SORT_ORDER_BY[sort], { id: "asc" }];
+}
 
 /**
  * The Password cell, a discriminated union computed once here so the table
@@ -49,6 +99,14 @@ export type AccountRow = {
   id: string;
   role: UserRole;
   fullName: string;
+  /**
+   * Surname-first display form ("Lastname, Firstname Middlename"), built from
+   * `firstName`/`middleName`/`lastName` via `formatListingNameFromRecord` —
+   * never by parsing `fullName` apart. `fullName` keeps its existing shape
+   * and fallback above: search, import and dedupe depend on that stored
+   * value, so this is an added display field, not a replacement.
+   */
+  listingName: string;
   avatarPath: string | null;
   schoolId: string | null;
   school: { id: string; name: string; schoolIdCode: string } | null;
@@ -77,6 +135,7 @@ export type AccountsParams = {
   q: string;
   role?: UserRole;
   schoolId?: string;
+  sort: AccountListSort;
 };
 
 /** Small, all-account overview shown above the management list. */
@@ -95,7 +154,7 @@ function isUserRole(value: string | undefined): value is UserRole {
 }
 
 export function parseAccountsParams(
-  searchParams: { page?: string; q?: string; role?: string; schoolId?: string },
+  searchParams: { page?: string; q?: string; role?: string; schoolId?: string; sort?: string },
   pageSize: number = ACCOUNTS_PAGE_SIZE
 ): AccountsParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
@@ -104,7 +163,17 @@ export function parseAccountsParams(
   const size = pageSize > 0 ? pageSize : ACCOUNTS_PAGE_SIZE;
   const role = isUserRole(searchParams.role) ? searchParams.role : undefined;
   const schoolId = searchParams.schoolId?.trim() || undefined;
-  return { page, pageSize: size, skip: (page - 1) * size, take: size, q, role, schoolId };
+  const sort = ACCOUNT_LIST_SORTS.parse(searchParams.sort);
+  return {
+    page,
+    pageSize: size,
+    skip: (page - 1) * size,
+    take: size,
+    q,
+    role,
+    schoolId,
+    sort,
+  };
 }
 
 export function accountsTotalPages(
@@ -177,6 +246,7 @@ type AccountsPageUser = {
   role: UserRole;
   fullName: string;
   firstName: string;
+  middleName: string | null;
   lastName: string;
   email: string;
   username: string | null;
@@ -234,12 +304,7 @@ export async function getAccountsPage(
     prisma.user.findMany({
       relationLoadStrategy: "join",
       where,
-      orderBy: [
-        { school: { name: "asc" } },
-        { role: "asc" },
-        { lastName: "asc" },
-        { firstName: "asc" },
-      ],
+      orderBy: accountsListOrderBy(params.sort),
       skip: params.skip,
       take: params.take,
       select: {
@@ -247,6 +312,7 @@ export async function getAccountsPage(
         role: true,
         fullName: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         username: true,
@@ -277,6 +343,7 @@ export async function getAccountsPage(
       id: user.id,
       role: user.role,
       fullName: user.fullName || `${user.firstName} ${user.lastName}`.trim(),
+      listingName: formatListingNameFromRecord(user),
       avatarPath: user.avatarPath,
       schoolId: user.schoolId,
       school: user.school,

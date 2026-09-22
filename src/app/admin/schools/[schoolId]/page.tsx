@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ schoolId: string }>;
-  searchParams: Promise<{ learners?: string }>;
+  searchParams: Promise<{ learners?: string; learnersSort?: string }>;
 }
 
 /**
@@ -21,14 +21,26 @@ interface PageProps {
  * deciding whether any of it should stay — which is why nothing here is cached
  * and why the removal controls sit next to the rows rather than on a separate
  * screen.
+ *
+ * `SchoolDetailView` owns the Learners panel's keyed `<Suspense>` boundary
+ * (built from the raw `searchParams` passed straight through below) and its
+ * own `ListNavigationProvider`/`ListBusyRegion` pair, so paging or re-sorting
+ * that roster shows a skeleton over just that table. The (unpaginated,
+ * client-sorted) Teachers table never re-fetches, so it has no equivalent —
+ * see `SchoolDetailView`'s own comment.
  */
 export default async function SchoolDetailPage({ params, searchParams }: PageProps) {
   const user = await requireUser("SUPER_ADMIN");
   const { schoolId } = await params;
-  const { learners } = await searchParams;
+  const sp = await searchParams;
+  const { learners, learnersSort } = sp;
 
   const page = Number.parseInt(learners ?? "1", 10);
-  const detail = await getSchoolDetail(schoolId, Number.isNaN(page) ? 1 : page);
+  const detail = await getSchoolDetail(
+    schoolId,
+    Number.isNaN(page) ? 1 : page,
+    learnersSort
+  );
   if (!detail) notFound();
 
   return (
@@ -47,7 +59,7 @@ export default async function SchoolDetailPage({ params, searchParams }: PagePro
         </Button>
       </div>
 
-      <SchoolDetailView detail={detail} />
+      <SchoolDetailView detail={detail} searchParams={sp} />
     </AppShell>
   );
 }

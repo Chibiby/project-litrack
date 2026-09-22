@@ -40,7 +40,9 @@ describe("buildReadingLevelTable — null profile rendering", () => {
         writingLevel: null,
         notes: null,
         learner: {
-          fullName: "Asriel Gabby B. Andrews",
+          firstName: "Asriel Gabby",
+          middleName: "B.",
+          lastName: "Andrews",
           gradeLevel: { type: "G3" },
           section: { name: "A" },
         },
@@ -67,7 +69,9 @@ describe("buildReadingLevelTable — null profile rendering", () => {
         writingLevel: null,
         notes: null,
         learner: {
-          fullName: "Asriel Gabby B. Andrews",
+          firstName: "Asriel Gabby",
+          middleName: "B.",
+          lastName: "Andrews",
           gradeLevel: { type: "G3" },
           section: { name: "A" },
         },
@@ -78,5 +82,32 @@ describe("buildReadingLevelTable — null profile rendering", () => {
     const [row] = table.rows;
     expect(row[4]).toBe("Independent / Grade-level Ready");
     expect(row[5]).toBe("Instructional / Developing or Transitioning");
+  });
+});
+
+describe("buildReadingLevelTable — surname-first ordering and tenancy", () => {
+  it("orders by lastName then firstName, not by the retired fullName column", async () => {
+    readingLevelRecordFindMany.mockResolvedValueOnce([]);
+
+    await buildReadingLevelTable(SCOPE, {});
+
+    const args = readingLevelRecordFindMany.mock.calls[0][0] as { orderBy: unknown[] };
+    expect(args.orderBy).toEqual([
+      { weekStart: "asc" },
+      { learner: { lastName: "asc" } },
+      { learner: { firstName: "asc" } },
+      { id: "asc" },
+    ]);
+  });
+
+  it("carries schoolId on the learner predicate", async () => {
+    readingLevelRecordFindMany.mockResolvedValueOnce([]);
+
+    await buildReadingLevelTable(SCOPE, {});
+
+    const args = readingLevelRecordFindMany.mock.calls[0][0] as {
+      where: { learner: { schoolId?: string } };
+    };
+    expect(args.where.learner.schoolId).toBe("school-1");
   });
 });

@@ -611,6 +611,7 @@ export const REPORT_KIND_LABELS = {
   TERM_GRADES: "Grades",
   TEACHER_SUMMARY: "Teacher Summary",
   CLASS_ROSTER: "Class Roster",
+  MOSY: "MOSY",
   CUSTOM: "Custom",
 } as const;
 

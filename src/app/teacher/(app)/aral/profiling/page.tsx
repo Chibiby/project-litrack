@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { Surface } from "@/components/ui/surface";
 import { TableSectionSkeleton } from "@/components/loading";
+import { ListNavigationProvider } from "@/components/nav/list-navigation";
+import { listKey } from "@/lib/nav/list-params";
 import { ProfilingHero } from "@/components/aral/profiling-hero";
 import { ProfilingStatCards } from "@/components/aral/profiling-stat-cards";
 import { ProfilingToolbar } from "@/components/aral/profiling-toolbar";
@@ -33,6 +35,14 @@ import {
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Params that change which rows the profiling list shows — see `listKey`.
+ * `schoolId` is deliberately excluded: it is the Super Admin's view-context
+ * switch, not a facet of this list, and the Suspense boundary must not
+ * re-suspend for it.
+ */
+export const PROFILING_LIST_KEYS = ["page", "status", "q", "section"] as const;
 
 /**
  * ARAL Profiling — Sections C, D and E for every ARAL learner this teacher is the
@@ -241,47 +251,49 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
         <ProfilingStatCards stats={stats} />
       </div>
 
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <nav aria-label="Profile status" className="flex flex-wrap gap-2">
-          {PROFILING_STATUSES.map((s) => (
-            <Link
-              key={s}
-              href={statusHref(s, { schoolId: sp.schoolId, q, section: sectionFilter })}
-              aria-current={s === status ? "page" : undefined}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                s === status
-                  ? "border-violet bg-violet-soft text-violet"
-                  : "border-border text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {PROFILING_STATUS_LABELS[s]}
-              <span className="rounded-md bg-muted px-1.5 text-xs tabular-nums text-foreground">
-                {counts[s]}
-              </span>
-            </Link>
-          ))}
-        </nav>
+      <ListNavigationProvider>
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <nav aria-label="Profile status" className="flex flex-wrap gap-2">
+            {PROFILING_STATUSES.map((s) => (
+              <Link
+                key={s}
+                href={statusHref(s, { schoolId: sp.schoolId, q, section: sectionFilter })}
+                aria-current={s === status ? "page" : undefined}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                  s === status
+                    ? "border-violet bg-violet-soft text-violet"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {PROFILING_STATUS_LABELS[s]}
+                <span className="rounded-md bg-muted px-1.5 text-xs tabular-nums text-foreground">
+                  {counts[s]}
+                </span>
+              </Link>
+            ))}
+          </nav>
 
-        <ProfilingToolbar q={q} section={sectionFilter} sections={sections} status={status} />
-      </div>
+          <ProfilingToolbar q={q} section={sectionFilter} sections={sections} status={status} />
+        </div>
 
-      <Suspense
-        key={`${status}:${page}:${q}:${sectionFilter}`}
-        fallback={<TableSectionSkeleton rows={8} columns={7} />}
-      >
-        <ProfilingRows
-          where={listWhere}
-          totalCount={filteredTotalCount}
-          page={page}
-          pages={pages}
-          status={status}
-          canEdit={!isSuperAdmin}
-          schoolIdParam={sp.schoolId}
-          q={q}
-          sectionParam={sectionFilter !== "all" ? sectionFilter : undefined}
-        />
-      </Suspense>
+        <Suspense
+          key={listKey(sp, PROFILING_LIST_KEYS)}
+          fallback={<TableSectionSkeleton rows={8} columns={7} />}
+        >
+          <ProfilingRows
+            where={listWhere}
+            totalCount={filteredTotalCount}
+            page={page}
+            pages={pages}
+            status={status}
+            canEdit={!isSuperAdmin}
+            schoolIdParam={sp.schoolId}
+            q={q}
+            sectionParam={sectionFilter !== "all" ? sectionFilter : undefined}
+          />
+        </Suspense>
+      </ListNavigationProvider>
 
       <Surface as="section" className="mt-4 flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-2.5">

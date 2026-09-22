@@ -40,6 +40,7 @@ import {
   sectionIdWhere,
   genderWhere,
   gradeLevelIdWhere,
+  learnerListOrderBy,
   nameSearchWhere,
   parseLearnerListParams,
   parseLearnerPageSize,
@@ -47,6 +48,8 @@ import {
   LEARNER_LIST_DEFAULT_PAGE_SIZE,
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
+import { formatListingNameFromRecord } from "@/lib/names";
+import { listKey } from "@/lib/nav/list-params";
 import { Sparkles } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
 import { LEARNER_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
@@ -57,6 +60,30 @@ import type {
 } from "@/components/learners/learner-list-toolbar";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Params that change which rows the roster shows — page, sort, search, page
+ * size, the five facets, and the Active/Archived tab. Keying the rows
+ * Suspense boundary on exactly this set (and nothing else, e.g. `schoolId`,
+ * an admin view context that never changes row identity for a given school)
+ * is what lets it re-suspend for a real row change and stay put otherwise.
+ * `filter` is included even though the task brief's shorthand list didn't
+ * name it: switching the Active/Archived tab swaps the entire row set just
+ * as surely as a facet does, so leaving it out would freeze stale rows (or
+ * show no fallback) on that switch.
+ */
+const LEARNER_ROSTER_LIST_KEYS = [
+  "page",
+  "sort",
+  "q",
+  "perPage",
+  "grade",
+  "section",
+  "gender",
+  "aralStatus",
+  "advisory",
+  "filter",
+] as const;
 
 interface TeacherLearnersPageProps {
   searchParams: Promise<{
@@ -252,6 +279,9 @@ async function LearnersBody({
     where,
     select: {
       id: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
       fullName: true,
       age: true,
       gender: true,
@@ -264,10 +294,7 @@ async function LearnersBody({
       gradeLevel: { select: { type: true } },
       section: { select: { id: true, name: true } },
     },
-    orderBy:
-      list.sort === "age"
-        ? [{ age: "asc" }, { fullName: "asc" }]
-        : { fullName: "asc" },
+    orderBy: learnerListOrderBy(list.sort),
     skip,
     take: list.take,
   });
@@ -275,6 +302,7 @@ async function LearnersBody({
   const rows: LearnerListRow[] = learners.map((l) => ({
     id: l.id,
     fullName: l.fullName,
+    listingName: formatListingNameFromRecord(l),
     age: l.age,
     gender: l.gender,
     isAralLearner: l.isAralLearner,
@@ -508,7 +536,10 @@ export default async function TeacherLearnersPage({
           </div>
 
           <div className="mt-4">
-            <Suspense fallback={<LearnerTableSkeleton />}>
+            <Suspense
+              key={listKey(sp, LEARNER_ROSTER_LIST_KEYS)}
+              fallback={<LearnerTableSkeleton />}
+            >
               <LearnersBody
                 assignedGrades={assignedGrades}
                 schoolId={schoolId}

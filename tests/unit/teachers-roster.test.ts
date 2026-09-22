@@ -30,6 +30,9 @@ import {
 const BASE = {
   id: "teacher-marivic",
   fullName: "Marivic Cruz",
+  firstName: "Marivic",
+  middleName: null,
+  lastName: "Cruz",
   email: "marivic@example.test",
   avatarPath: null,
   profileCompleted: true,

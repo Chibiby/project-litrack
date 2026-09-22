@@ -6,7 +6,9 @@ import { prismaFresh } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/view";
 import {
+  TEACHER_LIST_SORTS,
   parseTeachersListParams,
+  teacherListOrderBy,
   teachersTotalPages,
 } from "@/lib/teachers/pagination";
 import {
@@ -36,6 +38,15 @@ import {
 } from "@/components/teachers-active-table";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { listKey } from "@/lib/nav/list-params";
+
+/**
+ * Only the params that change which active-teacher rows are shown. `schoolId`
+ * (Super Admin's view context) deliberately stays out — switching schools
+ * already re-navigates to a fresh URL, and including it here would just
+ * re-suspend the boundary for a param that isn't a list facet.
+ */
+export const ACTIVE_TEACHERS_LIST_KEYS = ["page", "sort", "q", "filter"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +56,7 @@ interface TeachersPageProps {
     page?: string;
     q?: string;
     filter?: string;
+    sort?: string;
   }>;
 }
 
@@ -85,7 +97,7 @@ async function ActiveTeachersBody({
     prismaFresh.user.findMany({
       where: activeWhere,
       select: managedTeacherSelect,
-      orderBy: { createdAt: "desc" },
+      orderBy: teacherListOrderBy(list.sort),
       skip: list.skip,
       take: list.take,
     }),
@@ -211,10 +223,17 @@ async function ActiveTeachersBody({
           q: list.q,
           filter: list.filter,
           basePath: SCHOOL_HEAD_ROUTES.teachers,
+          sort: list.sort,
+          sortOptions: TEACHER_LIST_SORTS.options,
           searchParams: {
             schoolId: isSuperAdminView ? schoolId : undefined,
             q: list.q || undefined,
             filter: list.filter === "all" ? undefined : list.filter,
+            // Default sort stays out of the URL (clean links); every other
+            // sort must survive paging, filtering and search — see
+            // pushListQuery/LearnerPagination below, which both rebuild the
+            // URL from this bag alone.
+            sort: list.sort === "alphabetical" ? undefined : list.sort,
           },
         }}
       />
@@ -249,7 +268,10 @@ export default async function TeachersPage({ searchParams }: TeachersPageProps) 
         />
       }
     >
-      <Suspense fallback={<TableSectionSkeleton rows={8} columns={7} />}>
+      <Suspense
+        key={listKey(params, ACTIVE_TEACHERS_LIST_KEYS)}
+        fallback={<TableSectionSkeleton rows={8} columns={7} />}
+      >
         <ActiveTeachersBody
           view={view}
           list={list}

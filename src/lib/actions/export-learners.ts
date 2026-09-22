@@ -15,6 +15,7 @@ import {
   ETHNICITY_LABELS,
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { formatListingNameFromRecord } from "@/lib/names";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -122,7 +123,12 @@ async function fetchLearnersForExport(opts: {
     relationLoadStrategy: "join",
     where: learnerWhere(opts),
     select: learnerExportSelect,
-    orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],
+    orderBy: [
+      { gradeLevelId: "asc" },
+      { lastName: "asc" },
+      { firstName: "asc" },
+      { id: "asc" },
+    ],
   });
 }
 
@@ -137,7 +143,12 @@ async function fetchLearnersForReport(opts: {
     relationLoadStrategy: "join",
     where: learnerWhere(opts),
     select: learnerReportSelect,
-    orderBy: [{ gradeLevelId: "asc" }, { fullName: "asc" }],
+    orderBy: [
+      { gradeLevelId: "asc" },
+      { lastName: "asc" },
+      { firstName: "asc" },
+      { id: "asc" },
+    ],
   });
 }
 
@@ -153,7 +164,7 @@ async function buildLearnersWorkbook(
 
   const sheet = wb.addWorksheet("Learners");
   sheet.columns = [
-    { header: "Full name", key: "fullName", width: 28 },
+    { header: "Name", key: "fullName", width: 28 },
     { header: "First name", key: "firstName", width: 14 },
     { header: "Middle name", key: "middleName", width: 14 },
     { header: "Last name", key: "lastName", width: 14 },
@@ -187,7 +198,7 @@ async function buildLearnersWorkbook(
 
   for (const l of learners) {
     sheet.addRow({
-      fullName: l.fullName,
+      fullName: formatListingNameFromRecord(l),
       firstName: l.firstName,
       middleName: l.middleName ?? "",
       lastName: l.lastName,
@@ -221,7 +232,7 @@ async function buildLearnersWorkbook(
 
   const aralSheet = wb.addWorksheet("ARAL summary");
   aralSheet.columns = [
-    { header: "Full name", key: "fullName", width: 28 },
+    { header: "Name", key: "fullName", width: 28 },
     { header: "Grade", key: "grade", width: 12 },
     { header: "Section", key: "section", width: 12 },
     { header: "Transportation", key: "transport", width: 18 },
@@ -235,7 +246,7 @@ async function buildLearnersWorkbook(
 
   for (const l of learners.filter((x) => x.isAralLearner)) {
     aralSheet.addRow({
-      fullName: l.fullName,
+      fullName: formatListingNameFromRecord(l),
       grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       section: l.section?.name ?? "",
       transport: l.modeOfTransportation ?? "",

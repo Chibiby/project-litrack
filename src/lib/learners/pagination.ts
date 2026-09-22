@@ -1,3 +1,6 @@
+import type { Prisma } from "@prisma/client";
+import { assertOrderByCoversOptions, defineSort } from "@/lib/sort/registry";
+
 export const LEARNER_PAGE_SIZE = 20;
 
 /**
@@ -18,7 +21,77 @@ export function parseLearnerPageSize(raw: string | undefined): LearnerPageSize {
 }
 
 export type LearnerListFilter = "all" | "aral" | "archived";
-export type LearnerListSort = "name" | "age";
+
+/**
+ * "Sort by" for the teacher learner roster. `name` and `age` are the two
+ * legacy values a bookmarked roster URL may already carry — kept as the
+ * exact same tokens rather than renamed, so `?sort=name` and `?sort=age`
+ * keep resolving. `name` is relabeled "Alphabetical" here: the table always
+ * displayed name-sorted, and the owner has decided Alphabetical is the
+ * roster's default, so the existing default value and the new default
+ * requirement are the same option.
+ *
+ * Alphabetical orders by `lastName` then `firstName` — the roster's
+ * `formatListingNameFromRecord` column reads surname-first, and ordering by
+ * the denormalized `fullName` (Firstname-first) would sort against what the
+ * column shows and land page boundaries mid-alphabet.
+ */
+export const LEARNER_LIST_SORTS = defineSort(
+  [
+    { value: "name", label: "Alphabetical" },
+    { value: "age", label: "Age (youngest first)" },
+    { value: "grade", label: "Grade level" },
+    { value: "section", label: "Section" },
+    { value: "date-added", label: "Date added (newest)" },
+    { value: "reading-level", label: "Filipino reading level" },
+    { value: "aral-status", label: "ARAL status" },
+  ] as const,
+  "name"
+);
+
+export type LearnerListSort = (typeof LEARNER_LIST_SORTS.options)[number]["value"];
+
+/**
+ * The primary `orderBy` clause per sort option, without the tiebreaker.
+ * Kept alongside `LEARNER_LIST_SORTS` so an option added to one and not the
+ * other is a build-time (`satisfies`) and test-time
+ * (`assertOrderByCoversOptions`) failure rather than a silently unsorted
+ * table. Mirrors `TEACHER_SORT_ORDER_BY` in `src/lib/teachers/pagination.ts`.
+ */
+const LEARNER_SORT_ORDER_BY = {
+  name: [{ lastName: "asc" }, { firstName: "asc" }],
+  age: [{ age: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
+  grade: [{ gradeLevel: { type: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
+  section: [{ section: { name: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
+  "date-added": [{ createdAt: "desc" }],
+  // `ReadingProfile`'s declaration order in `prisma/schema.prisma` IS the
+  // rubric order (lowest to highest reading level) — this is an intentional
+  // free win from Postgres enum ordinal ordering, not alphabetical. Do not
+  // "fix" this to a labeled sort; the rubric order is what a teacher scanning
+  // for struggling readers wants, and alphabetical would scramble it.
+  "reading-level": [
+    { filipinoReadingProfile: "asc" },
+    { lastName: "asc" },
+    { firstName: "asc" },
+  ],
+  // Enrolled-in-ARAL first: `desc` puts `true` ahead of `false`.
+  "aral-status": [{ isAralLearner: "desc" }, { lastName: "asc" }, { firstName: "asc" }],
+} satisfies Record<LearnerListSort, Prisma.LearnerOrderByWithRelationInput[]>;
+
+assertOrderByCoversOptions(LEARNER_LIST_SORTS, LEARNER_SORT_ORDER_BY);
+
+/**
+ * Prisma `orderBy` array for a parsed learner list sort, always ending in
+ * the `id` tiebreaker. This roster is server-paginated with skip/take, and
+ * every option here (grade, section, reading level, ARAL status) is
+ * low-cardinality — without the tiebreaker Postgres can repeat or skip a
+ * learner across pages.
+ */
+export function learnerListOrderBy(
+  sort: LearnerListSort
+): Prisma.LearnerOrderByWithRelationInput[] {
+  return [...LEARNER_SORT_ORDER_BY[sort], { id: "asc" }];
+}
 
 /** Roster gender facet. `all` = no filter. */
 export type LearnerGenderFilter = "all" | "MALE" | "FEMALE";
@@ -60,7 +133,6 @@ export type LearnerListParams = {
 };
 
 const FILTERS: readonly LearnerListFilter[] = ["all", "aral", "archived"];
-const SORTS: readonly LearnerListSort[] = ["name", "age"];
 const ARAL_STATUSES: readonly LearnerAralStatusFilter[] = [
   "all",
   "enrolled",
@@ -95,10 +167,7 @@ export function parseLearnerListParams(
   const filter: LearnerListFilter = FILTERS.includes(filterRaw as LearnerListFilter)
     ? (filterRaw as LearnerListFilter)
     : "all";
-  const sortRaw = (searchParams.sort ?? "name").toLowerCase();
-  const sort: LearnerListSort = SORTS.includes(sortRaw as LearnerListSort)
-    ? (sortRaw as LearnerListSort)
-    : "name";
+  const sort: LearnerListSort = LEARNER_LIST_SORTS.parse(searchParams.sort);
 
   const sectionRaw = (searchParams.section ?? "").trim();
   const sectionLower = sectionRaw.toLowerCase();
