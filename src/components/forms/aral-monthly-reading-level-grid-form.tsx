@@ -186,7 +186,13 @@ export function bandWithLegacyValue(
 
 export type MonthlyReadingLevelGridLearner = {
   id: string;
+  /** Stored Firstname-first name. Kept for the avatar's initials and for
+   * anything that speaks the name. */
   fullName: string;
+  /** Surname-first display form ("Lastname, Firstname Middlename"), built
+   * server-side by `formatListingNameFromRecord`. This is what the Learner
+   * column shows and what the server's "Alphabetical" ordering matches. */
+  listingName: string;
 };
 
 export type MonthlyReadingLevelGridExisting = {
@@ -483,7 +489,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
         <TableCell>
           <span className="flex items-center gap-2.5">
             <LearnerAvatar id={learner.id} fullName={learner.fullName} />
-            <span className="font-medium">{learner.fullName}</span>
+            <span className="font-medium">{learner.listingName}</span>
           </span>
         </TableCell>
         {includesEnglish ? (

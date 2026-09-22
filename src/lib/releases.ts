@@ -135,6 +135,26 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.8.1",
+    date: "2026-09-23",
+    title: "Sort by on the two ARAL entry sheets",
+    announce: false,
+    fixes: [
+      // Unrestricted: a Super Admin opens both sheets too, read-only, and
+      // sees the same dropdown and the same surname-first names.
+      "Weekly Attendance and Monthly Reading Level were the two sheets the new Sort by dropdown missed. Both have it now, alongside the options that suit them — by section, by who has the most absences this week, or by Filipino reading level.",
+      "Learner names on those two sheets now read surname-first, matching every other list.",
+      {
+        text: "Sorting Weekly Attendance no longer reloads the sheet, so marks you have typed but not yet saved stay exactly where they are.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Fixed a fault on Monthly Reading Level where paging through a long roster could show the same learner on two pages and leave another off entirely.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+    ],
+  },
+  {
     version: "2.8.0",
     date: "2026-09-23",
     title: "Sort any list, names read surname-first, and a new MOSY report",

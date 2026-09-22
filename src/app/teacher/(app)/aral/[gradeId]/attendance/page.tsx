@@ -29,6 +29,7 @@ import {
 } from "@/lib/date-keys";
 import { formatWeekRange } from "@/lib/week-range";
 import { getMonday } from "@/lib/utils";
+import { formatListingNameFromRecord } from "@/lib/names";
 import { readUnlockState } from "@/lib/unlock/grants";
 import { BookOpen, FileText } from "lucide-react";
 
@@ -221,9 +222,15 @@ async function AralWeeklyAttendanceGrid({
         select: {
           id: true,
           fullName: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
           sectionId: true,
         },
-        orderBy: { fullName: "asc" },
+        // Surname-first, matching what the Learner column shows. The panel
+        // re-sorts in the browser once a teacher picks an option; this is the
+        // order it starts from and the one "Alphabetical" returns to.
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
       }),
       prisma.attendance.findMany({
         where: {
@@ -280,6 +287,7 @@ async function AralWeeklyAttendanceGrid({
   const gridLearners = learners.map((l) => ({
     id: l.id,
     fullName: l.fullName,
+    listingName: formatListingNameFromRecord(l),
     sectionName: (l.sectionId && sectionNames.get(l.sectionId)) ?? null,
   }));
 

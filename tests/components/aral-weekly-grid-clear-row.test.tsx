@@ -57,8 +57,18 @@ const TUE = "2026-09-08";
 const WED_HOLIDAY = "2026-09-09";
 
 const LEARNERS: WeeklyAttendanceGridLearner[] = [
-  { id: "learner-1", fullName: "Ana Santos", sectionName: null },
-  { id: "learner-2", fullName: "Ben Cruz", sectionName: null },
+  {
+    id: "learner-1",
+    fullName: "Ana Santos",
+    listingName: "Santos, Ana",
+    sectionName: null,
+  },
+  {
+    id: "learner-2",
+    fullName: "Ben Cruz",
+    listingName: "Cruz, Ben",
+    sectionName: null,
+  },
 ];
 
 const EXISTING: WeeklyAttendanceGridExisting[] = [
@@ -106,7 +116,7 @@ describe("weekly attendance grid — row Clear", () => {
     render(<Harness />);
 
     fireEvent.click(
-      within(rowFor("Ana Santos")).getByRole("button", {
+      within(rowFor("Santos, Ana")).getByRole("button", {
         name: "Clear Ana Santos's week",
       })
     );
@@ -135,7 +145,7 @@ describe("weekly attendance grid — row Clear", () => {
     render(<Harness />);
 
     fireEvent.click(
-      within(rowFor("Ben Cruz")).getByRole("button", {
+      within(rowFor("Cruz, Ben")).getByRole("button", {
         name: "Clear Ben Cruz's week",
       })
     );
@@ -152,7 +162,7 @@ describe("weekly attendance grid — row Clear", () => {
     // which is exactly the regression this case exists to catch.
     render(<Harness readOnly />);
 
-    const button = within(rowFor("Ana Santos")).getByRole("button", {
+    const button = within(rowFor("Santos, Ana")).getByRole("button", {
       name: "Clear Ana Santos's week",
     });
     expect((button as HTMLButtonElement).disabled).toBe(true);
@@ -161,7 +171,7 @@ describe("weekly attendance grid — row Clear", () => {
   it("leaves the Clear button enabled when the grid is editable", () => {
     render(<Harness />);
 
-    const button = within(rowFor("Ana Santos")).getByRole("button", {
+    const button = within(rowFor("Santos, Ana")).getByRole("button", {
       name: "Clear Ana Santos's week",
     });
     expect((button as HTMLButtonElement).disabled).toBe(false);

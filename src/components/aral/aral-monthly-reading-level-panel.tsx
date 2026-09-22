@@ -32,6 +32,10 @@ import { ReadingLevelLegend } from "@/components/aral/reading-level-legend";
 import { fetchAralReadingLevelForMonth } from "@/lib/actions/aral-grid";
 import type { MonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
+import {
+  ARAL_READING_LEVEL_SORTS,
+  type AralReadingLevelSort,
+} from "@/lib/aral/grid-sorts";
 import { parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import {
   currentMonthKey,
@@ -163,6 +167,10 @@ type Props = {
   sections: SectionOption[];
   showSection: boolean;
   gender: LearnerGenderFilter;
+  /** Parsed `?sort=`. The ordering is applied server-side (this grid is
+   * paginated), so the panel only reflects it in the control and carries it
+   * through every link it builds. */
+  sort: AralReadingLevelSort;
   schoolId?: string;
   /** The current page of learners. Row numbering continues from `indexOffset`. */
   learners: MonthlyReadingLevelGridLearner[];
@@ -203,6 +211,7 @@ export function AralMonthlyReadingLevelPanel({
   sections,
   showSection,
   gender,
+  sort,
   schoolId,
   learners,
   initialExisting,
@@ -277,6 +286,9 @@ export function AralMonthlyReadingLevelPanel({
     schoolId,
     section: section !== "all" ? section : undefined,
     gender: gender !== "all" ? gender : undefined,
+    // Omitted at the default so the common URL stays clean; the page parses a
+    // missing value back to the same default.
+    sort: sort !== ARAL_READING_LEVEL_SORTS.fallback ? sort : undefined,
     perPage:
       pageSize !== LEARNER_LIST_DEFAULT_PAGE_SIZE ? String(pageSize) : undefined,
   };
@@ -344,14 +356,21 @@ export function AralMonthlyReadingLevelPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- URL/month identity only
   }, [urlMonthParam, initialMonthKey]);
 
-  function pushFilters(next: { section?: string; gender?: string }) {
+  function pushFilters(next: {
+    section?: string;
+    gender?: string;
+    sort?: AralReadingLevelSort;
+  }) {
     const nextSection = next.section ?? section;
     const nextGender = next.gender ?? gender;
+    const nextSort = next.sort ?? sort;
     const qs = buildQuery({
       schoolId,
       month: pickerMonth,
       section: nextSection !== "all" ? nextSection : undefined,
       gender: nextGender !== "all" ? nextGender : undefined,
+      sort:
+        nextSort !== ARAL_READING_LEVEL_SORTS.fallback ? nextSort : undefined,
       perPage:
         pageSize !== LEARNER_LIST_DEFAULT_PAGE_SIZE ? String(pageSize) : undefined,
       // `page` is dropped on purpose: narrowing the roster invalidates the index,
@@ -438,6 +457,21 @@ export function AralMonthlyReadingLevelPanel({
                   { value: "FEMALE", label: "Female" },
                 ]}
               />
+              <FacetSelect
+                id="aral-reading-level-sort"
+                name="Sort by"
+                ariaLabel="Sort by"
+                value={sort}
+                disabled={busy}
+                onChange={(value) =>
+                  pushFilters({ sort: value as AralReadingLevelSort })
+                }
+                // Section is only offered where this grade has sections —
+                // with none, the option would sort nothing.
+                options={ARAL_READING_LEVEL_SORTS.options
+                  .filter((o) => showSection || o.value !== "section")
+                  .map((o) => ({ value: o.value, label: o.label }))}
+              />
             </>
           }
           actions={
@@ -467,9 +501,12 @@ export function AralMonthlyReadingLevelPanel({
             aria-busy={loading}
           >
             <AralMonthlyReadingLevelGridForm
-              // Remount on month, page, and page size: all three change which
-              // learners and which saved values the rows are seeded from.
-              key={`${loadedMonth}:${page}:${pageSize}`}
+              // Remount on month, page, page size, and sort: all four change
+              // which learners and which saved values the rows are seeded
+              // from. Sort belongs here because re-ordering a paginated grid
+              // changes WHICH learners this page holds, and the row state is
+              // seeded once at mount.
+              key={`${loadedMonth}:${page}:${pageSize}:${sort}`}
               ref={formRef}
               monthStartKey={loadedMonth}
               gradeType={gradeType}
@@ -544,18 +581,25 @@ function FacetSelect({
   options,
   disabled,
   onChange,
+  id,
+  ariaLabel,
 }: {
   name: string;
   value: string;
   options: { value: string; label: string }[];
   disabled?: boolean;
   onChange: (value: string) => void;
+  id?: string;
+  /** Overrides the default "Filter by …" label — the sort control is not a
+   * filter, and reading it as one misdescribes what it does. */
+  ariaLabel?: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
+        id={id}
         className="h-11 w-auto min-w-[8rem] gap-1.5 sm:h-9"
-        aria-label={`Filter by ${name.toLowerCase()}`}
+        aria-label={ariaLabel ?? `Filter by ${name.toLowerCase()}`}
       >
         <span className="text-muted-foreground">{name}</span>
         <SelectValue />

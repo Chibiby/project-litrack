@@ -15,6 +15,11 @@ import { getGradeSections } from "@/lib/cache/grade-sections";
 import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 import { countMonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import {
+  ARAL_READING_LEVEL_SORTS,
+  aralReadingLevelOrderBy,
+} from "@/lib/aral/grid-sorts";
+import { formatListingNameFromRecord } from "@/lib/names";
+import {
   genderWhere,
   parseLearnerListParams,
   parseLearnerPageSize,
@@ -55,6 +60,7 @@ type ReadingLevelSearchParams = {
   month?: string;
   page?: string;
   perPage?: string;
+  sort?: string;
 };
 
 interface PageProps {
@@ -212,6 +218,8 @@ async function AralMonthlyReadingLevelGrid({
     ...genderWhere(list.gender),
   };
 
+  const sort = ARAL_READING_LEVEL_SORTS.parse(sp.sort);
+
   const schoolIdForGrades =
     (isSuperAdmin ? sp.schoolId : user.schoolId) ?? grade.schoolId;
 
@@ -273,8 +281,17 @@ async function AralMonthlyReadingLevelGrid({
       select: {
         id: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
       },
-      orderBy: { fullName: "asc" },
+      // Sorted server-side, because this grid is paginated: ordering only the
+      // rows already on screen would leave page 2 holding whoever the previous
+      // order put there. `aralReadingLevelOrderBy` ends in the `id`
+      // tiebreaker — none of the sort keys is unique, and without a unique
+      // last key `skip`/`take` can repeat a learner on two pages and drop
+      // another entirely.
+      orderBy: aralReadingLevelOrderBy(sort),
       skip,
       take: pageSize,
     }),
@@ -315,6 +332,7 @@ async function AralMonthlyReadingLevelGrid({
   const gridLearners = learners.map((l) => ({
     id: l.id,
     fullName: l.fullName,
+    listingName: formatListingNameFromRecord(l),
   }));
 
   // The panel is a client component, so the lock state has to travel as props
@@ -343,6 +361,7 @@ async function AralMonthlyReadingLevelGrid({
       sections={gradeSections}
       showSection={showSection}
       gender={list.gender}
+      sort={sort}
       schoolId={sp.schoolId}
       learners={gridLearners}
       initialExisting={[...latestByLearner.values()]}

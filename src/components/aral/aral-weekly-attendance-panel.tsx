@@ -1,16 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AralDateNav } from "@/components/aral/date-nav";
 import { type AralGradeOption } from "@/components/aral/aral-filter-popover";
 import { AralGradeSelect, AralSectionSelect } from "@/components/aral/aral-scope-select";
 import { AttendanceWeekStats } from "@/components/aral/attendance-week-stats";
 import { computeWeekStats } from "@/lib/attendance/week-stats";
+import {
+  ARAL_ATTENDANCE_SORTS,
+  sortAttendanceLearners,
+  type AralAttendanceSort,
+} from "@/lib/aral/grid-sorts";
 import {
   AralWeeklyAttendanceGridForm,
   BulkAttendanceActions,
@@ -131,6 +143,14 @@ export function AralWeeklyAttendancePanel({
   const [savePending, setSavePending] = useState(false);
   /** Mirrored out of the grid so the toolbar's Bulk Actions can show a count. */
   const [selectedCount, setSelectedCount] = useState(0);
+  // Sort is client-side and lives in state rather than the URL. This grid is
+  // not paginated — every learner is already on screen — and the grid holds
+  // unsaved marks in state keyed by learner id, so reordering the array cannot
+  // disturb them while a navigation would discard them. See
+  // `src/lib/aral/grid-sorts.ts`.
+  const [sort, setSort] = useState<AralAttendanceSort>(
+    ARAL_ATTENDANCE_SORTS.fallback
+  );
   const formRef = useRef<AralWeeklyAttendanceGridFormHandle>(null);
   const desiredWeekRef = useRef(initialWeekKey);
   const requestIdRef = useRef(0);
@@ -208,6 +228,29 @@ export function AralWeeklyAttendancePanel({
     loadWeek(urlWeek, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- URL/week identity only
   }, [urlWeekParam, initialWeekKey]);
+
+  // Saved absences for the loaded week, for the "Absences this week" option.
+  // Built from the server records, never the live grid state: sorting on what
+  // the teacher is currently typing would move a row out from under the cursor.
+  const absencesByLearner = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const record of existing) {
+      if (record.status !== "ABSENT") continue;
+      counts.set(record.learnerId, (counts.get(record.learnerId) ?? 0) + 1);
+    }
+    return counts;
+  }, [existing]);
+
+  const sortedLearners = useMemo(
+    () => sortAttendanceLearners(learners, sort, absencesByLearner),
+    [learners, sort, absencesByLearner]
+  );
+
+  // Section is only an option where this grade actually has sections — with
+  // none, every row would read "—" and the option would sort nothing.
+  const sortOptions = showSection
+    ? ARAL_ATTENDANCE_SORTS.options
+    : ARAL_ATTENDANCE_SORTS.options.filter((o) => o.value !== "section");
 
   const deadlineLabel = formatLongDate(picked.deadline);
   const canSave = !readOnly && !picked.locked && learners.length > 0;
@@ -317,7 +360,6 @@ export function AralWeeklyAttendancePanel({
           snapToMonday
           pending={loading}
           filter={
-            grades.length > 1 || showSection ? (
               <>
                 <AralGradeSelect
                   gradeId={gradeId}
@@ -338,8 +380,27 @@ export function AralWeeklyAttendancePanel({
                     className="w-full sm:w-48"
                   />
                 ) : null}
+                <Select
+                  value={sort}
+                  onValueChange={(value) => setSort(value as AralAttendanceSort)}
+                >
+                  <SelectTrigger
+                    id="aral-attendance-sort"
+                    aria-label="Sort by"
+                    className="h-11 w-full gap-1.5 sm:h-9 sm:w-56"
+                  >
+                    <span className="text-muted-foreground">Sort by</span>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </>
-            ) : undefined
           }
           actions={
             <>
@@ -381,7 +442,7 @@ export function AralWeeklyAttendancePanel({
               ref={formRef}
               gradeId={gradeId}
               weekStartKey={loadedWeek}
-              learners={learners}
+              learners={sortedLearners}
               existing={existing}
               holidayKeys={holidayKeys}
               showSection={showSection}

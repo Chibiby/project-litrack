@@ -52,8 +52,8 @@ import type {
 const MONTH_START = "2026-09-01";
 
 const LEARNERS: MonthlyReadingLevelGridLearner[] = [
-  { id: "learner-1", fullName: "Ana Santos" },
-  { id: "learner-2", fullName: "Ben Cruz" },
+  { id: "learner-1", fullName: "Ana Santos", listingName: "Santos, Ana" },
+  { id: "learner-2", fullName: "Ben Cruz", listingName: "Cruz, Ben" },
 ];
 
 /** Ana has a stored record; Ben never had one. */
@@ -87,6 +87,17 @@ function Harness({ existing = EXISTING }: { existing?: MonthlyReadingLevelGridEx
   );
 }
 
+/**
+ * The Learner column shows the surname-first `listingName`, while the row's
+ * controls are still labelled with the stored `fullName` — the name a screen
+ * reader should speak. So a row is FOUND by its listing name and its controls
+ * are ADDRESSED by the stored one; this map keeps the two straight.
+ */
+const STORED_NAME: Record<string, string> = {
+  "Santos, Ana": "Ana Santos",
+  "Cruz, Ben": "Ben Cruz",
+};
+
 function rowFor(name: string): HTMLElement {
   const cell = screen.getByText(name);
   const row = cell.closest("tr");
@@ -96,14 +107,9 @@ function rowFor(name: string): HTMLElement {
 
 /** Opens a learner's English band picker and selects one option by its code. */
 async function pickEnglish(learnerName: string, code: string) {
-  fireEvent.click(
-    within(rowFor(learnerName)).getByRole("button", {
-      name: `${learnerName} — English reading level`,
-    })
-  );
-  const listbox = await screen.findByRole("listbox", {
-    name: `${learnerName} — English reading level`,
-  });
+  const label = `${STORED_NAME[learnerName]} — English reading level`;
+  fireEvent.click(within(rowFor(learnerName)).getByRole("button", { name: label }));
+  const listbox = await screen.findByRole("listbox", { name: label });
   fireEvent.click(within(listbox).getByText(code));
 }
 
@@ -112,7 +118,7 @@ async function clearRow(learnerName: string) {
   // a plain click event — jsdom's fireEvent.click never fires a pointerdown.
   fireEvent.keyDown(
     within(rowFor(learnerName)).getByRole("button", {
-      name: `Actions for ${learnerName}`,
+      name: `Actions for ${STORED_NAME[learnerName]}`,
     }),
     { key: "Enter" }
   );
@@ -138,7 +144,7 @@ describe("monthly reading-level grid — partial save", () => {
     render(<Harness existing={[]} />);
 
     // Grade Ready = "GR" on the K-3 label set.
-    await pickEnglish("Ana Santos", "GR");
+    await pickEnglish("Santos, Ana", "GR");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -166,7 +172,7 @@ describe("monthly reading-level grid — partial save", () => {
   it("posts both a partial row and a complete (existing) row on the same page", async () => {
     render(<Harness existing={EXISTING} />);
 
-    await pickEnglish("Ben Cruz", "GR");
+    await pickEnglish("Cruz, Ben", "GR");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -183,7 +189,7 @@ describe("monthly reading-level grid — partial save", () => {
   it("posts a cleared row that HAD a stored record in clears, not entries", async () => {
     render(<Harness existing={EXISTING} />);
 
-    await clearRow("Ana Santos");
+    await clearRow("Santos, Ana");
     expect(toast.success).toHaveBeenCalledWith(
       "Row cleared. Save to keep the change."
     );
@@ -204,7 +210,7 @@ describe("monthly reading-level grid — partial save", () => {
   it("posts a row that never had a record in neither array when cleared and saved", async () => {
     render(<Harness existing={EXISTING} />);
 
-    await clearRow("Ben Cruz");
+    await clearRow("Cruz, Ben");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     // Ana's row is prefilled from `existing` and untouched, so it still posts as
@@ -225,8 +231,8 @@ describe("monthly reading-level grid — partial save", () => {
 
     // Ben gets a fresh value (an entry); Ana, who started with a stored record,
     // gets cleared (a clear). Every id must land in exactly one array.
-    await pickEnglish("Ben Cruz", "GR");
-    await clearRow("Ana Santos");
+    await pickEnglish("Cruz, Ben", "GR");
+    await clearRow("Santos, Ana");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -261,13 +267,13 @@ describe("monthly reading-level grid — partial save", () => {
     // same row, must know it now has a record to delete.
     render(<Harness existing={[]} />);
 
-    await pickEnglish("Ben Cruz", "GR");
+    await pickEnglish("Cruz, Ben", "GR");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(bulkRecordMonthlyReadingLevel).toHaveBeenCalledTimes(1)
     );
 
-    await clearRow("Ben Cruz");
+    await clearRow("Cruz, Ben");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>

@@ -38,7 +38,7 @@ import type {
 } from "@/components/forms/aral-monthly-reading-level-grid-form";
 
 const LEARNERS: MonthlyReadingLevelGridLearner[] = [
-  { id: "learner-1", fullName: "Ana Santos" },
+  { id: "learner-1", fullName: "Ana Santos", listingName: "Santos, Ana" },
 ];
 
 const EXISTING: MonthlyReadingLevelGridExisting[] = [];

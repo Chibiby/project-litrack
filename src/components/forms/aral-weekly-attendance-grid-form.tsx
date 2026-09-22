@@ -175,7 +175,12 @@ function parseNote(note: string): { reason: string; details: string } {
 
 export type WeeklyAttendanceGridLearner = {
   id: string;
+  /** Stored Firstname-first name. Kept for anything that speaks the name. */
   fullName: string;
+  /** Surname-first display form ("Lastname, Firstname Middlename"), built
+   * server-side by `formatListingNameFromRecord`. This is what the Learner
+   * column shows and what the panel's "Alphabetical" sort compares. */
+  listingName: string;
   sectionName: string | null;
 };
 
@@ -634,7 +639,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
                     {index + 1}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {learner.fullName}
+                    {learner.listingName}
                   </TableCell>
                   {showSection && (
                     <TableCell className="text-sm text-muted-foreground">

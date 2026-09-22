@@ -57,7 +57,9 @@ const PAST_MONTH = "2026-06-01";
 /** August 2026 — still inside its September 7 grace deadline on that same "today". */
 const IN_GRACE_MONTH = "2026-08-01";
 
-const LEARNERS = [{ id: "learner-1", fullName: "Ana Santos" }];
+const LEARNERS = [
+  { id: "learner-1", fullName: "Ana Santos", listingName: "Santos, Ana" },
+];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof AralMonthlyReadingLevelPanel>> = {}) {
   return render(
@@ -71,6 +73,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof AralMonthlyR
       sections={[]}
       showSection={false}
       gender="all"
+      sort="name"
       learners={LEARNERS}
       initialExisting={[]}
       initialProgress={{ completed: 0, total: 1 }}
