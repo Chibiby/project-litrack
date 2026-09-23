@@ -44,7 +44,11 @@ export type ReportFilters = {
   term?: string | null;
 };
 
-/** The five cards on the hub, in the order the design lays them out. */
+/**
+ * The six cards on the hub, in the order the design lays them out: MOSY leads
+ * since it is the report ARAL work is judged on, then the rest keep their
+ * existing relative order.
+ */
 export const REPORT_CARDS: {
   kind: ReportKind;
   title: string;
@@ -53,6 +57,16 @@ export const REPORT_CARDS: {
   /** Not yet built: renders inert with a "Soon" pill, as the nav does. */
   soon?: boolean;
 }[] = [
+  {
+    kind: "MOSY",
+    title: "MOSY Report",
+    blurb: "Mid-year reading level profile per grade and ARAL profiling results.",
+    bullets: [
+      "Reading level profile per grade",
+      "ARAL profiling summary",
+      "Middle of school year window",
+    ],
+  },
   {
     kind: "ATTENDANCE",
     title: "Attendance Records",
@@ -78,16 +92,6 @@ export const REPORT_CARDS: {
     bullets: ["Class performance summary", "Attendance overview", "Reading level insights"],
   },
   {
-    kind: "MOSY",
-    title: "MOSY Report",
-    blurb: "Mid-year reading level profile per grade and ARAL profiling results.",
-    bullets: [
-      "Reading level profile per grade",
-      "ARAL profiling summary",
-      "Middle of school year window",
-    ],
-  },
-  {
     kind: "CUSTOM",
     title: "Custom Report",
     blurb: "Create a custom report based on your selected data.",
@@ -104,13 +108,13 @@ export const QUICK_ACTIONS: {
   /** Resolved against the school's local today when the chip is pressed. */
   range: "this-week" | "this-month" | "none";
 }[] = [
+  // MOSY's window comes from the school year's start date plus any term-window
+  // overrides, both server-side only — the browser has neither, so this stays
+  // "none" rather than a client-computed date range. Do not change this.
+  { id: "mosy", label: "MOSY Report", kind: "MOSY", range: "none" },
   { id: "week-attendance", label: "This Week Attendance", kind: "ATTENDANCE", range: "this-week" },
   { id: "month-attendance", label: "This Month Attendance", kind: "ATTENDANCE", range: "this-month" },
   { id: "week-reading", label: "This Week Reading Level", kind: "READING_LEVEL", range: "this-week" },
   { id: "term-grades", label: "This Term Grades", kind: "TERM_GRADES", range: "none" },
   { id: "class-roster", label: "Class Roster", kind: "CLASS_ROSTER", range: "none" },
-  // MOSY's window comes from the school year's start date plus any term-window
-  // overrides, both server-side only — the browser has neither, so this stays
-  // "none" rather than a client-computed date range. Do not change this.
-  { id: "mosy", label: "MOSY Report", kind: "MOSY", range: "none" },
 ];

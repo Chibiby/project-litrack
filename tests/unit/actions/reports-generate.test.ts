@@ -44,18 +44,15 @@ vi.mock("@/lib/auth/session", () => ({
 
 // Typed with its argument so `.mock.calls[0][0].where` is inspectable — the
 // tenant predicate is the whole point of this file and it lives in that arg.
+// Aug 24-28, 2026 are Mon-Fri (5 weekdays, no weekend to drop) — matched by
+// the mocked active school year below, so the default (no filter) grid range
+// is deterministic: 5 dates x 1 in-scope learner = 5 rows.
 const attendanceFindMany = vi.fn(async (_args: { where: Record<string, unknown> }) => [
   {
     date: new Date(2026, 7, 25),
     status: "ABSENT",
     notes: "Sick / Illness",
-    learner: {
-      firstName: "Asriel Gabby",
-      middleName: "B.",
-      lastName: "Andrews",
-      gradeLevel: { type: "G3" },
-      section: { name: "A" },
-    },
+    learnerId: "learner-1",
   },
 ]);
 
@@ -97,6 +94,29 @@ const reportCreate = vi.fn(async (args: { data: Record<string, unknown> }) => {
 });
 let createdReport: Record<string, unknown> = {};
 
+// A DepEd teacher advising a section by default — no report kind is locked
+// for this fixture unless a test overrides it.
+let teacherProfileFixture: { designation: string | null; advisoryMode: string } | null = {
+  designation: null,
+  advisoryMode: "DEFAULT",
+};
+const teacherProfileFindFirst = vi.fn(async () => teacherProfileFixture);
+
+// `learner.findMany` backs the grid builders' roster read (Attendance /
+// Reading Level); the fixture learner matches the attendance row above so a
+// grid cell exists for it, and `attendanceFindMany`'s single-arg style
+// above the mock stays the shape these tenancy/audit assertions read.
+const learnerFindMany = vi.fn(async () => [
+  {
+    id: "learner-1",
+    firstName: "Asriel Gabby",
+    middleName: "B.",
+    lastName: "Andrews",
+    gradeLevel: { type: "G3" },
+    section: { name: "A" },
+  },
+]);
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     school: { findFirst: async () => ({ name: "Malandag Central Elem." }) },
@@ -104,9 +124,17 @@ vi.mock("@/lib/prisma", () => ({
       findMany: (...a: unknown[]) =>
         attendanceFindMany(...(a as [{ where: Record<string, unknown> }])),
     },
+    learner: { findMany: () => learnerFindMany() },
     section: { findFirst: (...a: unknown[]) => sectionFindFirst(...(a as [never])) },
     gradeLevel: { findFirst: (...a: unknown[]) => gradeFindFirst(...(a as [never])) },
-    schoolYear: { findFirst: async () => null },
+    schoolYear: {
+      findFirst: async () => ({ startDate: new Date(2026, 7, 24), endDate: new Date(2026, 7, 28) }),
+    },
+    teacherProfile: {
+      findFirst: () => teacherProfileFindFirst(),
+    },
+    termGrade: { findMany: async () => [] },
+    termSubject: { findMany: async () => [] },
     report: { create: (...a: unknown[]) => reportCreate(...(a as [never])) },
   },
 }));
@@ -129,6 +157,54 @@ beforeEach(() => {
   role = "TEACHER";
   userId = TEACHER_ID;
   createdReport = {};
+  teacherProfileFixture = { designation: null, advisoryMode: "DEFAULT" };
+});
+
+describe("generateReport — locked report kinds", () => {
+  const VOLUNTEER_MESSAGE = "End of Term grades are for DepEd teachers who advise a section.";
+  const FLOATING_MESSAGE =
+    "Floating teachers do not advise a section, so there are no term grades to report.";
+
+  it("refuses TERM_GRADES for a Non-DepEd ARAL Volunteer, before any builder query", async () => {
+    teacherProfileFixture = { designation: "Non-DepEd ARAL Volunteer", advisoryMode: "DEFAULT" };
+
+    const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
+
+    expect(res).toEqual({ ok: false, error: VOLUNTEER_MESSAGE });
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses TERM_GRADES for a FLOATING DepEd teacher", async () => {
+    teacherProfileFixture = { designation: null, advisoryMode: "FLOATING" };
+
+    const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
+
+    expect(res).toEqual({ ok: false, error: FLOATING_MESSAGE });
+    expect(reportCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not lock a DepEd teacher with a live advisory", async () => {
+    teacherProfileFixture = { designation: null, advisoryMode: "DEFAULT" };
+
+    const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("never locks a SCHOOL_HEAD, even holding a volunteer-shaped profile row", async () => {
+    role = "SCHOOL_HEAD";
+    userId = HEAD_ID;
+    // A School Head is not a TEACHER, so `scope.teacherId` is null and this
+    // profile is never even read — set to what would lock a teacher to prove
+    // the branch is skipped by construction, not by a lucky designation.
+    teacherProfileFixture = { designation: "Non-DepEd ARAL Volunteer", advisoryMode: "FLOATING" };
+
+    const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
+
+    expect(res.ok).toBe(true);
+    expect(teacherProfileFindFirst).not.toHaveBeenCalled();
+  });
 });
 
 describe("generateReport — tenancy", () => {
@@ -220,7 +296,9 @@ describe("generateReport — history and audit", () => {
     await generateReport({ kind: "ATTENDANCE", format: "EXCEL" });
 
     const metadata = writeAudit.mock.calls[0][0].metadata;
-    expect(metadata).toMatchObject({ kind: "ATTENDANCE", format: "EXCEL", rows: 1 });
+    // 5 weekdays (Aug 24-28) x 1 in-scope learner from the fixture — the grid
+    // builder always emits one row per date/learner pair, blank or not.
+    expect(metadata).toMatchObject({ kind: "ATTENDANCE", format: "EXCEL", rows: 5 });
     expect(JSON.stringify(metadata)).not.toContain("Asriel");
     expect(JSON.stringify(metadata)).not.toContain("Sick / Illness");
   });

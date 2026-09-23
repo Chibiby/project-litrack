@@ -12,6 +12,8 @@ import {
   REPORT_KIND_LABELS,
   type ReportFilters,
 } from "@/lib/reports/kinds";
+import { reportLocksFor } from "@/lib/reports/availability";
+import { advisoryRosterDenial } from "@/lib/teachers/scope";
 import { renderReport, reportBlocks } from "@/lib/reports/render";
 import {
   buildAttendanceTable,
@@ -123,6 +125,27 @@ export async function generateReport(
   const { kind, format, ...filters } = parsed.data;
   if (kind === "CUSTOM") {
     return { ok: false, error: "Custom reports are not available yet" };
+  }
+
+  // A real TEACHER (never a Super Admin impersonating the shell — that is
+  // exactly what `scope.teacherId === null` means here) may be locked out of
+  // a report kind: a Non-DepEd ARAL Volunteer or a FLOATING DepEd teacher
+  // advises no section, so there is no End of Term sheet to cover. Checked
+  // BEFORE any builder runs, so a locked kind never touches a query.
+  if (resolved.scope.teacherId) {
+    const profile = await prisma.teacherProfile.findFirst({
+      where: { userId: resolved.scope.teacherId, user: { schoolId: resolved.scope.schoolId } },
+      select: { designation: true, advisoryMode: true },
+    });
+    const locks = reportLocksFor(
+      advisoryRosterDenial({
+        isSuperAdmin: false,
+        designation: profile?.designation,
+        advisoryMode: profile?.advisoryMode,
+      })
+    );
+    const lockMessage = locks[kind];
+    if (lockMessage) return { ok: false, error: lockMessage };
   }
 
   // Every id in the filter set is verified against this tenant before it

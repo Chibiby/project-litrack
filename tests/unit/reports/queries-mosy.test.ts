@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `buildMosyTable` (`src/lib/reports/queries.ts`) — the Prisma half of the
+ * `buildMosyTable` (`src/lib/reports/queries.ts`) â€” the Prisma half of the
  * MOSY report. `mosy.ts` (blocks) and `mosy-window.ts` (dates) have their own
  * tests; what is only testable here is the four reads, their tenant
  * predicates, the window/filter interaction and the record pick.
@@ -16,6 +16,15 @@ const schoolYearFindFirst = vi.fn();
 const termWindowOverrideFindMany = vi.fn();
 const gradeLevelFindMany = vi.fn();
 const learnerFindMany = vi.fn();
+// `buildReportHeader` reads the school row once for the DepEd-style header
+// block; no test here asserts on its content.
+const schoolFindFirst = vi.fn(async () => ({
+  schoolIdCode: "123456",
+  name: "Malandag ES",
+  region: null,
+  division: null,
+  district: null,
+}));
 
 /** Every `where` any of the four reads was called with, in call order. */
 const capturedWheres: { model: string; where: unknown }[] = [];
@@ -35,6 +44,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     gradeLevel: { findMany: capture("gradeLevel", gradeLevelFindMany) },
     learner: { findMany: capture("learner", learnerFindMany) },
+    school: { findFirst: (...a: unknown[]) => schoolFindFirst(...(a as [])) },
   },
 }));
 
@@ -55,7 +65,7 @@ const TEACHER_SCOPE = reportScope({
 });
 
 /**
- * School year starting August 2025 → Second Term (MOSY) is Nov 2025 - Jan 2026.
+ * School year starting August 2025 â†’ Second Term (MOSY) is Nov 2025 - Jan 2026.
  *
  * Database-shaped (`new Date("YYYY-MM-DD")`, i.e. UTC midnight), matching how
  * `createSchoolYear` writes `startDate` and how `getTermWindows` reads the
@@ -90,7 +100,7 @@ function learnerRow(overrides: {
   isAralLearner?: boolean;
   /** Selected the same way as `learner`'s own name fields (defect: this used
    * to be a single `fullName`, which rendered next to the surname-first
-   * `Learner` column in the wrong convention — see queries.ts). */
+   * `Learner` column in the wrong convention â€” see queries.ts). */
   aralTutor?: { firstName: string; middleName?: string | null; lastName: string } | null;
   profile?: { updatedAt: Date; suggestedInterventions: string[] } | null;
   readingLevels?: RecordRow[];
@@ -121,7 +131,7 @@ function completeRecord(weekStart: Date): RecordRow {
   };
 }
 
-/** Same, minus the English profile — incomplete for G5. */
+/** Same, minus the English profile â€” incomplete for G5. */
 function partialRecord(weekStart: Date): RecordRow {
   return { ...completeRecord(weekStart), englishProfile: null };
 }
@@ -153,7 +163,7 @@ beforeEach(() => {
   learnerFindMany.mockResolvedValue([]);
 });
 
-describe("buildMosyTable — tenancy", () => {
+describe("buildMosyTable â€” tenancy", () => {
   it("carries schoolId on every where, school year and term overrides included", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 
@@ -187,11 +197,11 @@ describe("buildMosyTable — tenancy", () => {
   });
 });
 
-describe("buildMosyTable — scope", () => {
+describe("buildMosyTable â€” scope", () => {
   it("narrows grades and learners for a TEACHER", async () => {
     await buildMosyTable(TEACHER_SCOPE, {});
 
-    // Advised UNION ARAL-tutored (`teacherLearnerScope`) — the same scope
+    // Advised UNION ARAL-tutored (`teacherLearnerScope`) â€” the same scope
     // every other builder uses, deliberately NOT the tutor-only one.
     expect(learnerWhereOf().OR).toEqual([
       { teacherId: "teacher-1" },
@@ -218,7 +228,7 @@ describe("buildMosyTable — scope", () => {
   });
 });
 
-describe("buildMosyTable — the window", () => {
+describe("buildMosyTable â€” the window", () => {
   it("uses the school year's Second Term as a half-open range", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 
@@ -284,7 +294,7 @@ describe("buildMosyTable — the window", () => {
 
     const table = await buildMosyTable(ADMIN_SCOPE, {});
 
-    expect(table.blocks).toHaveLength(4);
+    expect(table.blocks).toHaveLength(6);
     expect(table.auditMeta).toMatchObject({
       windowStartKey: null,
       windowEndKey: null,
@@ -295,13 +305,13 @@ describe("buildMosyTable — the window", () => {
     expect(termWindowOverrideFindMany).not.toHaveBeenCalled();
     expect(readingLevelsWhere()).toEqual({ id: { in: [] } });
     // The learner appears, simply as not assessed.
-    const detail = table.blocks![3];
+    const detail = table.blocks![5];
     expect(detail.rows).toHaveLength(1);
     expect(detail.rows[0][11]).toBe("Not assessed");
   });
 });
 
-describe("buildMosyTable — the record pick", () => {
+describe("buildMosyTable â€” the record pick", () => {
   it("takes the latest COMPLETE in-window record, not merely the latest", async () => {
     learnerFindMany.mockResolvedValue([
       learnerRow({
@@ -316,7 +326,7 @@ describe("buildMosyTable — the record pick", () => {
     ]);
 
     const table = await buildMosyTable(ADMIN_SCOPE, {});
-    const detail = table.blocks![3];
+    const detail = table.blocks![5];
 
     expect(detail.rows[0][6]).toBe("December 2025");
     expect(detail.rows[0][11]).toBe("Complete");
@@ -335,14 +345,14 @@ describe("buildMosyTable — the record pick", () => {
     ]);
 
     const table = await buildMosyTable(ADMIN_SCOPE, {});
-    const detail = table.blocks![3];
+    const detail = table.blocks![5];
 
     expect(detail.rows[0][6]).toBe("January 2026");
     expect(detail.rows[0][11]).toBe("Partial");
   });
 });
 
-describe("buildMosyTable — ARAL profiles are optional", () => {
+describe("buildMosyTable â€” ARAL profiles are optional", () => {
   it("generates for a school with zero profiles and never filters on one", async () => {
     learnerFindMany.mockResolvedValue([
       learnerRow({
@@ -357,8 +367,8 @@ describe("buildMosyTable — ARAL profiles are optional", () => {
 
     const table = await buildMosyTable(ADMIN_SCOPE, {});
 
-    expect(table.blocks).toHaveLength(4);
-    // `aralProfile` is a select, never a where — no part of the learner
+    expect(table.blocks).toHaveLength(6);
+    // `aralProfile` is a select, never a where â€” no part of the learner
     // predicate may mention it (docs/aral-profile.md).
     expect(JSON.stringify(learnerWhereOf())).not.toContain("aralProfile");
     const args = learnerFindMany.mock.calls[0][0] as { select: Record<string, unknown> };
@@ -366,7 +376,7 @@ describe("buildMosyTable — ARAL profiles are optional", () => {
       select: { updatedAt: true, suggestedInterventions: true },
     });
 
-    const detail = table.blocks![3];
+    const detail = table.blocks![5];
     expect(detail.rows[0][12]).toBe("Not completed");
     // The ARAL Tutor column is what makes the advised-union-tutored scope
     // visible on the sheet, formatted surname-first like the Learner column
@@ -375,7 +385,7 @@ describe("buildMosyTable — ARAL profiles are optional", () => {
   });
 });
 
-describe("buildMosyTable — person-name conventions", () => {
+describe("buildMosyTable â€” person-name conventions", () => {
   it("orders learners by lastName then firstName, not by the retired fullName column", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 

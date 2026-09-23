@@ -34,6 +34,7 @@ function learner(overrides: Partial<MosyLearner> & Pick<MosyLearner, "id" | "gra
     aralTutorName: null,
     record: null,
     profile: null,
+    sex: "MALE",
     ...overrides,
   };
 }
@@ -45,11 +46,13 @@ function findBlock(blocks: ReturnType<typeof buildMosyBlocks>, heading: string) 
 }
 
 describe("buildMosyBlocks — shape", () => {
-  it("always returns exactly four blocks, in order, even with no learners", () => {
+  it("always returns exactly six blocks, in order, even with no learners", () => {
     const input: MosyInput = { window: RESOLVED_WINDOW, grades: [KINDER], learners: [] };
     const blocks = buildMosyBlocks(input);
-    expect(blocks).toHaveLength(4);
+    expect(blocks).toHaveLength(6);
     expect(blocks.map((b) => b.heading)).toEqual([
+      "Summary by Grade and Sex — CRLA (Grades 1-3)",
+      "Summary by Grade and Sex — Phil-IRI (Grades 4+)",
       "Reading Level Profile per Grade Level (English)",
       "Reading Level Profile per Grade Level (Filipino)",
       "ARAL Profiling",
@@ -97,8 +100,12 @@ describe("buildMosyBlocks — shape", () => {
       ],
     };
     const blocks = buildMosyBlocks(input);
-    expect(blocks).toHaveLength(4);
+    expect(blocks).toHaveLength(6);
+    // Every block that has a G3 row is non-empty; Phil-IRI's bucket is
+    // Grades 4+ and G3 is the only grade in scope here, so that one block is
+    // legitimately empty rather than a bug.
     for (const block of blocks) {
+      if (block.heading === "Summary by Grade and Sex — Phil-IRI (Grades 4+)") continue;
       expect(block.rows.length).toBeGreaterThan(0);
     }
     const aral = findBlock(blocks, "ARAL Profiling");
@@ -492,6 +499,140 @@ describe("buildMosyBlocks — reconciliation across a mixed two-grade fixture", 
     ).length;
     expect(aral.rows[0]![1]).toBe(kinderAralDetailCount); // Kinder ARAL Learners
     expect(aral.rows[1]![1]).toBe(g3AralDetailCount); // Grade 3 ARAL Learners
+  });
+});
+
+describe("buildMosyBlocks — Summary by Grade and Sex (CRLA / Phil-IRI)", () => {
+  it("CRLA (Grades 1-3): counts ARAL/Assessed/Not-Assessed and bands per grade x sex, with DepEd CRLA labels", () => {
+    const input: MosyInput = {
+      window: RESOLVED_WINDOW,
+      grades: [G3],
+      learners: [
+        learner({
+          id: "m1",
+          gradeLevelId: G3.id,
+          gradeType: G3.type,
+          gradeLabel: G3.label,
+          sex: "MALE",
+          isAralLearner: true,
+          record: {
+            weekStartKey: "2026-11-10",
+            englishProfile: "INDEPENDENT_GRADE_READY",
+            filipinoProfile: "INDEPENDENT_GRADE_READY",
+            wordRecognitionLevel: "LEVEL_5",
+            readingComprehensionLevel: "LEVEL_3",
+            complete: true,
+          },
+        }),
+        learner({
+          id: "m2",
+          gradeLevelId: G3.id,
+          gradeType: G3.type,
+          gradeLabel: G3.label,
+          sex: "MALE",
+          isAralLearner: true,
+          record: null,
+        }),
+      ],
+    };
+    const blocks = buildMosyBlocks(input);
+    const crla = findBlock(blocks, "Summary by Grade and Sex — CRLA (Grades 1-3)");
+
+    expect(crla.columns.map((c) => c.header)).toEqual([
+      "Grade Level",
+      "Sex",
+      "ARAL Learners",
+      "Assessed",
+      "Not Assessed",
+      "Low Emerging",
+      "High Emerging",
+      "Developing",
+      "Grade Ready",
+    ]);
+    // No "Transitioning" column is ever invented.
+    expect(crla.columns.map((c) => c.header)).not.toContain("Transitioning");
+
+    const maleRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Male")!;
+    expect(maleRow).toEqual([G3.label, "Male", 2, 1, 1, 0, 0, 0, 1]);
+
+    const femaleRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Female")!;
+    expect(femaleRow).toEqual([G3.label, "Female", 0, 0, 0, 0, 0, 0, 0]);
+
+    const totalRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Total")!;
+    expect(totalRow).toEqual([G3.label, "Total", 2, 1, 1, 0, 0, 0, 1]);
+  });
+
+  it("Phil-IRI (Grades 4+): counts Non-decoder as its own band, separate from Frustration", () => {
+    const G7 = { id: "grade-7", type: "G7", label: "Grade 7" };
+    const input: MosyInput = {
+      window: RESOLVED_WINDOW,
+      grades: [G7],
+      learners: [
+        learner({
+          id: "f1",
+          gradeLevelId: G7.id,
+          gradeType: G7.type,
+          gradeLabel: G7.label,
+          sex: "FEMALE",
+          isAralLearner: true,
+          record: {
+            weekStartKey: "2026-11-10",
+            englishProfile: "NON_DECODER_LOW_EMERGENT",
+            filipinoProfile: "NON_DECODER_LOW_EMERGENT",
+            wordRecognitionLevel: "LEVEL_1",
+            readingComprehensionLevel: "LEVEL_0",
+            complete: true,
+          },
+        }),
+      ],
+    };
+    const blocks = buildMosyBlocks(input);
+    const philIri = findBlock(blocks, "Summary by Grade and Sex — Phil-IRI (Grades 4+)");
+
+    expect(philIri.columns.map((c) => c.header)).toEqual([
+      "Grade Level",
+      "Sex",
+      "ARAL Learners",
+      "Assessed",
+      "Not Assessed",
+      "Non-decoder",
+      "Frustration",
+      "Instructional",
+      "Independent",
+    ]);
+
+    const femaleRow = philIri.rows.find((r) => r[0] === G7.label && r[1] === "Female")!;
+    // Non-decoder = 1, Frustration = 0 — the two are never conflated.
+    expect(femaleRow).toEqual([G7.label, "Female", 1, 1, 0, 1, 0, 0, 0]);
+  });
+
+  it("excludes Kinder from both DepEd summary blocks", () => {
+    const input: MosyInput = {
+      window: RESOLVED_WINDOW,
+      grades: [KINDER],
+      learners: [
+        learner({ id: "k1", gradeLevelId: KINDER.id, gradeType: KINDER.type, gradeLabel: KINDER.label }),
+      ],
+    };
+    const blocks = buildMosyBlocks(input);
+    const crla = findBlock(blocks, "Summary by Grade and Sex — CRLA (Grades 1-3)");
+    const philIri = findBlock(blocks, "Summary by Grade and Sex — Phil-IRI (Grades 4+)");
+    expect(crla.rows).toHaveLength(0);
+    expect(philIri.rows).toHaveLength(0);
+  });
+
+  it("marks the Total row bold so it stands out in the export", () => {
+    const input: MosyInput = {
+      window: RESOLVED_WINDOW,
+      grades: [G3],
+      learners: [
+        learner({ id: "m1", gradeLevelId: G3.id, gradeType: G3.type, gradeLabel: G3.label, sex: "MALE" }),
+      ],
+    };
+    const blocks = buildMosyBlocks(input);
+    const crla = findBlock(blocks, "Summary by Grade and Sex — CRLA (Grades 1-3)");
+    const totalIdx = crla.rows.findIndex((r) => r[1] === "Total");
+    expect(crla.boldRowIndices).toContain(totalIdx);
   });
 });
 

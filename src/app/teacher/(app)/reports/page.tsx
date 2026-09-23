@@ -9,7 +9,8 @@ import {
   ReportSettingsButton,
 } from "@/components/reports/reports-hub";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { teacherGradeScope } from "@/lib/teachers/scope";
+import { advisoryRosterDenial, teacherGradeScope } from "@/lib/teachers/scope";
+import { reportLocksFor } from "@/lib/reports/availability";
 import { loadRecentReports } from "@/lib/reports/recent";
 import { TableSectionSkeleton } from "@/components/loading";
 
@@ -32,7 +33,7 @@ async function TeacherReportBody({
 
   // Filters and history only. No learner rows load here — every report is
   // generated on demand, so opening this page never dumps a roster.
-  const [grades, sections, schoolYears, recent] = await Promise.all([
+  const [grades, sections, schoolYears, recent, teacherProfile] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: gradeWhere,
       select: { id: true, type: true },
@@ -49,7 +50,25 @@ async function TeacherReportBody({
       orderBy: { startDate: "desc" },
     }),
     loadRecentReports({ schoolId, createdById: teacherId }),
+    isTeacher
+      ? prisma.teacherProfile.findFirst({
+          where: { userId: teacherId, user: { schoolId } },
+          select: { designation: true, advisoryMode: true },
+        })
+      : Promise.resolve(null),
   ]);
+
+  // Super Admin impersonating a teacher shell never gets locks (isTeacher is
+  // false for them), matching `advisoryRosterDenial`'s own Super Admin branch.
+  const locks = isTeacher
+    ? reportLocksFor(
+        advisoryRosterDenial({
+          isSuperAdmin: false,
+          designation: teacherProfile?.designation ?? null,
+          advisoryMode: teacherProfile?.advisoryMode ?? null,
+        })
+      )
+    : {};
 
   return (
     <ReportsHub
@@ -65,6 +84,7 @@ async function TeacherReportBody({
       }))}
       recent={recent}
       canDelete
+      locks={locks}
     />
   );
 }

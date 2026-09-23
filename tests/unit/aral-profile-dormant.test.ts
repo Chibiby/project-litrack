@@ -194,6 +194,7 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
           aralTutorName: "T. Santos",
           record: null,
           profile: null,
+          sex: "MALE",
         },
         {
           id: "l2",
@@ -208,13 +209,21 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
           aralTutorName: "T. Santos",
           record: null,
           profile: null,
+          sex: "FEMALE",
         },
       ],
     };
 
     const blocks = buildMosyBlocks(input);
-    expect(blocks).toHaveLength(4);
+    // Six blocks now — the two DepEd (CRLA / Phil-IRI) summaries lead the
+    // original four; the dormant-safety rule this test guards ("no throw,
+    // no vanishing block when every profile is null") still holds for all six.
+    expect(blocks).toHaveLength(6);
+    // Every block with a G3 row is non-empty; the Phil-IRI summary's bucket
+    // is Grades 4+ and G3 is the only grade in this fixture, so that block is
+    // legitimately empty rather than a bug.
     for (const block of blocks) {
+      if (block.heading === "Summary by Grade and Sex — Phil-IRI (Grades 4+)") continue;
       expect(block.rows.length).toBeGreaterThan(0);
     }
   });

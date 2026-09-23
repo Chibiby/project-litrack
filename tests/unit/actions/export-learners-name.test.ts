@@ -47,7 +47,19 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     learner: { findMany: (...args: unknown[]) => findManyLearner(...args) },
     attendance: { findMany: (...args: unknown[]) => attendanceFindMany(...args) },
-    school: { findUnique: async () => ({ name: "Malandag ES" }) },
+    school: {
+      findUnique: async () => ({ name: "Malandag ES" }),
+      // `buildReportHeader` (Reports Hub) reads the school row once for its
+      // DepEd-style header block; the export action's own `school.findUnique`
+      // above is a separate call this test does not touch.
+      findFirst: async () => ({
+        schoolIdCode: "123456",
+        name: "Malandag ES",
+        region: null,
+        division: null,
+        district: null,
+      }),
+    },
     gradeLevel: { findFirst: async () => ({ id: "grade-g4" }) },
     section: { findFirst: async () => ({ id: "section-sampaguita" }) },
   },
@@ -192,19 +204,21 @@ describe("learners export — name columns", () => {
       schoolName: "Malandag ES",
       actorName: "Marivic M Acibar",
     });
-    attendanceFindMany.mockResolvedValueOnce([
+    // `buildAttendanceTable` now renders a grid (date x in-scope learner), so
+    // it reads the learner roster separately from the Attendance rows — set
+    // both explicitly rather than relying on `exportSheets`'s leftover mock.
+    findManyLearner.mockResolvedValueOnce([
       {
-        date: new Date(2026, 7, 3),
-        status: "PRESENT",
-        notes: null,
-        learner: {
-          ...fixture,
-          gradeLevel: { type: "G4" },
-          section: { name: "Sampaguita" },
-        },
+        id: "learner-1",
+        ...fixture,
+        gradeLevel: { type: "G4" },
+        section: { name: "Sampaguita" },
       },
     ]);
-    const table = await buildAttendanceTable(SCOPE, {});
+    attendanceFindMany.mockResolvedValueOnce([
+      { date: new Date(2026, 7, 3), status: "PRESENT", notes: null, learnerId: "learner-1" },
+    ]);
+    const table = await buildAttendanceTable(SCOPE, { from: "2026-08-03", to: "2026-08-03" });
     const reportedName = table.rows[0][1];
 
     expect(exportedName).toBe(reportedName);

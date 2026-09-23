@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   Lightbulb,
   Loader2,
+  Lock,
   PencilRuler,
   Search,
   Settings,
@@ -53,6 +54,7 @@ import {
   type ReportFormat,
   type ReportKind,
 } from "@/lib/reports/kinds";
+import type { ReportLocks } from "@/lib/reports/availability";
 
 export type ReportsHubOption = { id: string; label: string };
 export type ReportsHubSection = ReportsHubOption & { gradeLevelId: string };
@@ -75,6 +77,8 @@ type Props = {
   recent: RecentReportRow[];
   /** Whether the viewer may remove a history row (their own reports only). */
   canDelete: boolean;
+  /** Kinds this account cannot run, keyed to the sentence shown on the card. */
+  locks?: ReportLocks;
 };
 
 /** Card icon and tint, in the order the design lays the cards out. */
@@ -163,7 +167,11 @@ export function ReportsHub({
   sections,
   recent,
   canDelete,
+  locks = {},
 }: Props) {
+  // "ALL" is the hub's only default-selected tab and it is never lockable, so
+  // there is no locked-default case to fall back from here — each per-kind
+  // tab button is individually disabled below instead.
   const [tab, setTab] = useState<"ALL" | ReportKind>("ALL");
   const [schoolYearId, setSchoolYearId] = useState(ALL);
   const [gradeLevelId, setGradeLevelId] = useState(ALL);
@@ -210,7 +218,7 @@ export function ReportsHub({
     override?: Partial<ReportFilters>,
     key: string = kind
   ) {
-    if (busy) return;
+    if (busy || locks[kind]) return;
     setBusy(key);
     startTransition(async () => {
       const res = await generateReport({
@@ -296,18 +304,23 @@ export function ReportsHub({
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
+          const reason = t.id === "ALL" ? undefined : locks[t.id];
           return (
             <Button
               key={t.id}
               type="button"
               variant="ghost"
               onClick={() => setTab(t.id)}
+              disabled={!!reason}
               aria-pressed={active}
+              aria-disabled={!!reason}
+              title={reason}
               className={cn(
                 "inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                reason && "opacity-50"
               )}
             >
               <Icon className="h-4 w-4" aria-hidden />
@@ -419,10 +432,15 @@ export function ReportsHub({
         {visibleCards.map((card) => {
           const Icon = CARD_ICON[card.kind];
           const running = busy === card.kind;
+          const lockReason = locks[card.kind];
           return (
             <div
               key={card.kind}
-              className="flex flex-col rounded-xl border border-border bg-card p-4"
+              aria-disabled={!!lockReason}
+              className={cn(
+                "flex flex-col rounded-xl border border-border bg-card p-4",
+                lockReason && "opacity-60"
+              )}
             >
               <div className="flex items-start gap-3">
                 <span
@@ -455,7 +473,12 @@ export function ReportsHub({
 
               <div className="flex-1" />
 
-              {card.soon ? (
+              {lockReason ? (
+                <div className="mt-4 flex items-start gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {lockReason}
+                </div>
+              ) : card.soon ? (
                 <div className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                   <PencilRuler className="h-3.5 w-3.5" aria-hidden />
                   Create Custom
@@ -493,23 +516,28 @@ export function ReportsHub({
               One-click reports for your most used data.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => (
-                <Button
-                  key={action.id}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() => quick(action)}
-                >
-                  {busy === action.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" aria-hidden />
-                  )}
-                  {action.label}
-                </Button>
-              ))}
+              {QUICK_ACTIONS.map((action) => {
+                const lockReason = locks[action.kind];
+                return (
+                  <Button
+                    key={action.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy !== null || !!lockReason}
+                    aria-disabled={!!lockReason}
+                    title={lockReason ?? undefined}
+                    onClick={() => quick(action)}
+                  >
+                    {busy === action.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <CalendarDays className="h-4 w-4" aria-hidden />
+                    )}
+                    {action.label}
+                  </Button>
+                );
+              })}
             </div>
           </div>
 
@@ -579,10 +607,11 @@ export function ReportsHub({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              disabled={busy !== null}
+                              disabled={busy !== null || !!locks[row.kind]}
+                              aria-disabled={!!locks[row.kind]}
                               onClick={() => regenerate(row)}
                               aria-label={`Re-generate ${row.name}`}
-                              title="Re-generate and download"
+                              title={locks[row.kind] ?? "Re-generate and download"}
                             >
                               {busy === `row-${row.id}` ? (
                                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

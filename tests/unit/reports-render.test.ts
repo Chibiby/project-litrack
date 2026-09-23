@@ -164,6 +164,75 @@ describe("reportBlocks", () => {
   it("returns table.blocks when set, ignoring the table's own columns/rows", () => {
     expect(reportBlocks(MULTI_TABLE)).toBe(MULTI_TABLE.blocks);
   });
+
+  it("falls back when blocks is an empty array, so Excel still gets a sheet", async () => {
+    const empty = { ...TABLE, rows: [], blocks: [] };
+    expect(reportBlocks(empty)).toEqual([{ columns: TABLE.columns, rows: [] }]);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await renderExcel(empty)) as unknown as ExcelLoadable);
+    expect(wb.worksheets.length).toBe(1);
+  });
+});
+
+describe("report header block", () => {
+  const WITH_HEADER: ReportTable = {
+    ...TABLE,
+    header: [
+      { label: "School ID", value: "123456" },
+      { label: "School Name", value: "Malandag Central Elem." },
+      { label: "School Year", value: "2026-2027" },
+      { label: "Grade / Section", value: "All Classes" },
+      { label: "Prepared by", value: "Marivic M Acibar" },
+    ],
+  };
+
+  it("draws every header field on the single Excel sheet, above the column headers", async () => {
+    const buf = await renderExcel(WITH_HEADER);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+    const ws = wb.worksheets[0]!;
+
+    const cellTexts: string[] = [];
+    for (let r = 1; r <= ws.rowCount; r++) {
+      cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
+    }
+    expect(cellTexts).toEqual(
+      expect.arrayContaining(["School ID:", "School Name:", "School Year:", "Prepared by:"])
+    );
+  });
+
+  it("draws the header block on EVERY sheet of a multi-block report", async () => {
+    const multi: ReportTable = { ...MULTI_TABLE, header: WITH_HEADER.header };
+    const buf = await renderExcel(multi);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+
+    for (const ws of wb.worksheets) {
+      const cellTexts: string[] = [];
+      for (let r = 1; r <= ws.rowCount; r++) {
+        cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
+      }
+      expect(cellTexts).toContain("School ID:");
+    }
+  });
+
+  it("still produces a valid PDF with the header drawn once at the top", async () => {
+    const buf = await renderPdf(WITH_HEADER);
+    expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("renders exactly as before when header is unset (no regression for existing reports)", async () => {
+    const buf = await renderExcel(TABLE);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+    const ws = wb.worksheets[0]!;
+    // Row 1 is the first subtitle line, exactly as before this field existed.
+    expect(ws.getRow(1).getCell(1).value).toBe(TABLE.subtitle[0]);
+  });
 });
 
 describe("multi-block reports", () => {

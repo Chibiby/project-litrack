@@ -17,9 +17,22 @@
  * here" instead of two competing conventions.
  *
  * Hard rule (see the calling task and `docs/aral-profile.md`): this function
- * must never throw and must never emit fewer than four blocks, even when
+ * must never throw and must never emit fewer than six blocks, even when
  * every learner's `profile` is `null` — the ARAL Profile is a dormant-safe,
  * optional record, and no workflow (this report included) may gate on it.
+ *
+ * DECISION — no invented "Transitioning" band. DepEd's CRLA rubric (Grades
+ * 1-3) has FIVE bands (Low Emerging, High Emerging, Developing, Transitioning,
+ * Grade Ready); LITRACK's `ReadingProfile` enum has FOUR values. Rather than
+ * split `INSTRUCTIONAL_DEVELOPING` or `INDEPENDENT_GRADE_READY` into a
+ * fabricated fifth band with no underlying data, the CRLA summary block below
+ * shows exactly LITRACK's four bands under DepEd's CRLA names (`Developing`
+ * and `Grade Ready` absorb whatever a paper CRLA form would have called
+ * "Transitioning") and its note says so explicitly. Kinder is excluded from
+ * both DepEd summary blocks below — it is assessed on a separate letter/word
+ * readiness rubric (`EARLY_RUBRIC_VALUES`), not the CRLA/Phil-IRI four bands,
+ * and mapping one onto the other would be inventing data the school never
+ * recorded.
  */
 import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
 import { parseLocalDateKey } from "@/lib/date-keys";
@@ -81,6 +94,8 @@ export type MosyLearner = {
   aralTutorName: string | null;
   record: MosyReadingRecord | null;
   profile: MosyAralProfileInfo | null;
+  /** `null` when unset — grouped into neither the Male nor Female summary row. */
+  sex: "MALE" | "FEMALE" | null;
 };
 
 export type MosyInput = {
@@ -252,6 +267,147 @@ function pickModalIntervention(profiles: MosyAralProfileInfo[]): string | null {
   return INTERVENTION_LABELS[bestKey as keyof typeof INTERVENTION_LABELS] ?? bestKey;
 }
 
+/** Grades DepEd's CRLA consolidation covers (docs research: DO 18 s. 2025). */
+const CRLA_GRADE_TYPES = new Set(["G1", "G2", "G3"]);
+/** Grades DepEd's Phil-IRI (English) consolidation covers (DM 64 s. 2025). */
+const PHIL_IRI_GRADE_TYPES = new Set([
+  "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "FLOATING",
+]);
+
+/** Band order shared by both DepEd summaries — see the file header decision on "Transitioning". */
+const BAND_VALUES = [
+  "NON_DECODER_LOW_EMERGENT",
+  "FRUSTRATION_HIGH_EMERGENT",
+  "INSTRUCTIONAL_DEVELOPING",
+  "INDEPENDENT_GRADE_READY",
+] as const;
+
+const CRLA_BAND_LABELS: Record<string, string> = {
+  NON_DECODER_LOW_EMERGENT: "Low Emerging",
+  FRUSTRATION_HIGH_EMERGENT: "High Emerging",
+  INSTRUCTIONAL_DEVELOPING: "Developing",
+  INDEPENDENT_GRADE_READY: "Grade Ready",
+};
+
+const PHIL_IRI_BAND_LABELS: Record<string, string> = {
+  NON_DECODER_LOW_EMERGENT: "Non-decoder",
+  FRUSTRATION_HIGH_EMERGENT: "Frustration",
+  INSTRUCTIONAL_DEVELOPING: "Instructional",
+  INDEPENDENT_GRADE_READY: "Independent",
+};
+
+/**
+ * The profile a grade is banded on: English when the grade collects it
+ * (`languagesForGrade`), Filipino otherwise (Grade 1/Grade 2, which are
+ * Filipino-only per the reading policy) — Phil-IRI English is the required
+ * Grades 4+ submission, but a G1/G2 CRLA row has no English profile to read
+ * at all, so it falls back to the language the grade actually collects.
+ */
+function primaryBandValue(learner: MosyLearner): string | null {
+  if (!learner.record) return null;
+  return languagesForGrade(learner.gradeType).includes("ENGLISH")
+    ? learner.record.englishProfile
+    : learner.record.filipinoProfile;
+}
+
+function sexRowLabel(sex: "MALE" | "FEMALE" | "TOTAL"): string {
+  return sex === "TOTAL" ? "Total" : sex === "MALE" ? "Male" : "Female";
+}
+
+/**
+ * One DepEd-style consolidation block (CRLA or Phil-IRI): a row per grade x
+ * (Male, Female, Total), columns ARAL Learners / Assessed / Not Assessed then
+ * the bucket's four DepEd-labelled bands. `bandLabels` distinguishes the two
+ * callers below; the underlying `ReadingProfile` values and their order are
+ * identical, only the DepEd-facing header text differs.
+ */
+function buildGradeSexSummaryBlock(
+  heading: string,
+  sheetName: string,
+  note: string,
+  gradeTypes: Set<string>,
+  grades: MosyGrade[],
+  learners: MosyLearner[],
+  bandLabels: Record<string, string>
+): ReportBlock {
+  const inScope = grades.filter((g) => gradeTypes.has(g.type));
+  const rows: (string | number | null)[][] = [];
+  const boldRowIndices: number[] = [];
+
+  for (const grade of inScope) {
+    const learnersInGrade = learners.filter((l) => l.gradeLevelId === grade.id);
+    const allowed = allowedReadingValuesForGrade(grade.type);
+    const sexGroups: { sex: "MALE" | "FEMALE" | "TOTAL"; group: MosyLearner[] }[] = [
+      { sex: "MALE", group: learnersInGrade.filter((l) => l.sex === "MALE") },
+      { sex: "FEMALE", group: learnersInGrade.filter((l) => l.sex === "FEMALE") },
+      { sex: "TOTAL", group: learnersInGrade },
+    ];
+
+    for (const { sex, group } of sexGroups) {
+      const aralLearners = group.filter((l) => l.isAralLearner);
+      const assessed = group.filter((l) => {
+        const value = primaryBandValue(l);
+        return value != null && allowed.includes(value);
+      });
+      const notAssessed = group.length - assessed.length;
+      const bandCounts = BAND_VALUES.map((value) => {
+        if (!allowed.includes(value)) return null;
+        return group.filter((l) => primaryBandValue(l) === value).length;
+      });
+
+      if (sex === "TOTAL") boldRowIndices.push(rows.length);
+      rows.push([
+        grade.label,
+        sexRowLabel(sex),
+        aralLearners.length,
+        assessed.length,
+        notAssessed,
+        ...bandCounts,
+      ]);
+    }
+  }
+
+  return {
+    heading,
+    sheetName,
+    columns: [
+      { header: "Grade Level", width: 14 },
+      { header: "Sex", width: 8 },
+      { header: "ARAL Learners", width: 12 },
+      { header: "Assessed", width: 10 },
+      { header: "Not Assessed", width: 12 },
+      ...BAND_VALUES.map((v) => ({ header: bandLabels[v], width: 16 })),
+    ],
+    rows,
+    boldRowIndices,
+    note,
+  };
+}
+
+function buildCrlaSummaryBlock(grades: MosyGrade[], learners: MosyLearner[]): ReportBlock {
+  return buildGradeSexSummaryBlock(
+    "Summary by Grade and Sex — CRLA (Grades 1-3)",
+    "CRLA Summary",
+    "CRLA per DO 18 s. 2025 defines five bands including Transitioning; LITRACK's rubric has four, so Developing and Grade Ready absorb what a paper CRLA form would separate out as Transitioning — no band is invented. Kinder is not included here; it is assessed on a separate letter/word readiness rubric.",
+    CRLA_GRADE_TYPES,
+    grades,
+    learners,
+    CRLA_BAND_LABELS
+  );
+}
+
+function buildPhilIriSummaryBlock(grades: MosyGrade[], learners: MosyLearner[]): ReportBlock {
+  return buildGradeSexSummaryBlock(
+    "Summary by Grade and Sex — Phil-IRI (Grades 4+)",
+    "Phil-IRI Summary",
+    "Per DM 64 s. 2025, Phil-IRI English is the required submission; a grade that does not collect English (none in this bucket) would band on Filipino instead. Non-decoder is counted as its own band, separate from Frustration.",
+    PHIL_IRI_GRADE_TYPES,
+    grades,
+    learners,
+    PHIL_IRI_BAND_LABELS
+  );
+}
+
 function buildAralProfilingBlock(grades: MosyGrade[], learners: MosyLearner[]): ReportBlock {
   const rows: (string | number | null)[][] = grades.map((grade) => {
     const aralLearners = learners.filter(
@@ -390,8 +546,9 @@ function buildLearnerDetailBlock(learners: MosyLearner[]): ReportBlock {
 }
 
 /**
- * Builds the four MOSY blocks in report order. Never throws and never omits
- * a block: an empty `learners`/`grades` list yields blocks with zero or
+ * Builds the six MOSY blocks in report order (the two DepEd-form summaries
+ * first, then the four original blocks). Never throws and never omits a
+ * block: an empty `learners`/`grades` list yields blocks with zero or
  * null-filled rows, not fewer blocks — see the file header on the ARAL
  * Profile dormant-safety rule this guards.
  */
@@ -400,6 +557,8 @@ export function buildMosyBlocks(input: MosyInput): ReportBlock[] {
   const bandColumns = collectBandColumns(grades);
 
   return [
+    buildCrlaSummaryBlock(grades, learners),
+    buildPhilIriSummaryBlock(grades, learners),
     buildLanguageBlock(
       "Reading Level Profile per Grade Level (English)",
       "Reading Level (English)",

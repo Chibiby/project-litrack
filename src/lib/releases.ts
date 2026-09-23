@@ -135,6 +135,24 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.9.0",
+    date: "2026-09-23",
+    title: "Reports in DepEd format, with every learner listed",
+    announce: true,
+    fixes: [
+      "MOSY Report is now the first report on the Reports Hub.",
+      "Attendance, Reading Level and End of Term reports now list every learner and every date in the range. Anything not yet filled in stays blank, so you can see what is missing.",
+      "The Attendance report follows the SF2 layout: one sheet per month, boys then girls, x for absent, L for late, E for excused, grey for days not yet recorded, and daily totals with average daily attendance.",
+      "The MOSY Report opens with a summary per grade and sex, using the CRLA levels for Grades 1–3 and the Phil-IRI levels for Grades 4 and up.",
+      "Every exported sheet now starts with the School ID, school name, region, division, district and school year.",
+      "If you pick no dates, reports cover the school year so far.",
+      {
+        text: "Non-DepEd ARAL Volunteers and floating teachers now see End of Term grades greyed out with the reason, since they do not advise a section.",
+        roles: ["TEACHER"],
+      },
+    ],
+  },
+  {
     version: "2.8.1",
     date: "2026-09-23",
     title: "Sort by on the two ARAL entry sheets",

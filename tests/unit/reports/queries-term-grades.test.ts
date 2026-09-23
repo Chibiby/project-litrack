@@ -17,10 +17,29 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 const termGradeFindMany = vi.fn();
+// Defaults to an empty roster/sheet so every existing test below — which only
+// cares about `TermGrade` row grouping — keeps working unchanged; the new
+// blank-fill tests further down override these per-call.
+const learnerFindMany = vi.fn(async () => [] as unknown[]);
+const termSubjectFindMany = vi.fn(async () => [] as unknown[]);
+// `buildReportHeader` / `schoolYearLabelFor` read these once for the
+// DepEd-style header block; no test here asserts on their content.
+const schoolYearFindFirst = vi.fn(async () => null);
+const schoolFindFirst = vi.fn(async () => ({
+  schoolIdCode: "123456",
+  name: "Malandag ES",
+  region: null,
+  division: null,
+  district: null,
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     termGrade: { findMany: (...args: unknown[]) => termGradeFindMany(...(args as [])) },
+    learner: { findMany: (...args: unknown[]) => learnerFindMany(...(args as [])) },
+    termSubject: { findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [])) },
+    schoolYear: { findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [])) },
+    school: { findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [])) },
   },
 }));
 
@@ -453,5 +472,122 @@ describe("buildTermGradesTable — surname-first display", () => {
       where: { learner: { schoolId?: string } };
     };
     expect(args.where.learner.schoolId).toBe("school-1");
+  });
+});
+
+describe("buildTermGradesTable — blank-fill", () => {
+  const learnerRow = (overrides: {
+    id: string;
+    lastName: string;
+    firstName: string;
+    gradeType: string;
+    gradeLevelId?: string;
+    section?: string | null;
+  }) => ({
+    id: overrides.id,
+    firstName: overrides.firstName,
+    middleName: null,
+    lastName: overrides.lastName,
+    gradeLevelId: overrides.gradeLevelId ?? "grade-g7",
+    gradeLevel: { type: overrides.gradeType },
+    section: overrides.section === null ? null : { name: overrides.section ?? "A" },
+  });
+
+  it("gives a learner with zero TermGrade rows one blank row per term", async () => {
+    learnerFindMany.mockResolvedValueOnce([
+      learnerRow({ id: "l1", lastName: "Abad", firstName: "Ana", gradeType: "G7" }),
+    ]);
+    termGradeFindMany.mockResolvedValueOnce([]);
+    termSubjectFindMany.mockResolvedValueOnce([]);
+
+    const table = await buildTermGradesTable(SCOPE, {});
+
+    // FIRST, SECOND, THIRD — one row each, none of them dropped for lack of data.
+    expect(table.rows).toHaveLength(3);
+    expect(table.rows.map((r) => r[3]).sort()).toEqual(
+      ["First Term", "Second Term", "Third Term"].sort()
+    );
+    for (const row of table.rows) {
+      expect(row[0]).toBe("Abad, Ana");
+      // General Average, the last column, is null with no subjects at all.
+      expect(row[row.length - 1]).toBeNull();
+    }
+  });
+
+  it("blank-fills only the requested term when `filters.term` narrows it", async () => {
+    learnerFindMany.mockResolvedValueOnce([
+      learnerRow({ id: "l1", lastName: "Abad", firstName: "Ana", gradeType: "G7" }),
+    ]);
+    termGradeFindMany.mockResolvedValueOnce([]);
+    termSubjectFindMany.mockResolvedValueOnce([]);
+
+    const table = await buildTermGradesTable(SCOPE, { term: "SECOND" });
+
+    expect(table.rows).toHaveLength(1);
+    expect(table.rows[0][3]).toBe("Second Term");
+  });
+
+  it("adds every TermSubject sheet column even when no grade has been recorded yet", async () => {
+    learnerFindMany.mockResolvedValueOnce([
+      learnerRow({ id: "l1", lastName: "Abad", firstName: "Ana", gradeType: "G7" }),
+    ]);
+    termGradeFindMany.mockResolvedValueOnce([]);
+    termSubjectFindMany.mockResolvedValueOnce([
+      { name: "English", position: 0 },
+      { name: "Mathematics", position: 1 },
+    ]);
+
+    const table = await buildTermGradesTable(SCOPE, { term: "FIRST" });
+
+    expect(table.columns.map((c) => c.header)).toEqual([
+      "Learner",
+      "Grade",
+      "Section",
+      "Term",
+      "English",
+      "Mathematics",
+      "General Average",
+    ]);
+    expect(table.rows[0][4]).toBeNull();
+    expect(table.rows[0][5]).toBeNull();
+  });
+
+  it("does not blank-fill a KINDER or FLOATING learner — no numeric sheet exists for them", async () => {
+    learnerFindMany.mockResolvedValueOnce([
+      learnerRow({ id: "l1", lastName: "Cruz", firstName: "Kyla", gradeType: "KINDER", gradeLevelId: "grade-k" }),
+      learnerRow({ id: "l2", lastName: "Reyes", firstName: "Tom", gradeType: "FLOATING", gradeLevelId: "grade-f" }),
+    ]);
+    termGradeFindMany.mockResolvedValueOnce([]);
+    termSubjectFindMany.mockResolvedValueOnce([]);
+
+    const table = await buildTermGradesTable(SCOPE, { term: "FIRST" });
+
+    expect(table.rows).toHaveLength(0);
+  });
+
+  it("still shows a KINDER/FLOATING learner if they hold an actual recorded TermGrade row", async () => {
+    learnerFindMany.mockResolvedValueOnce([
+      learnerRow({ id: "l1", lastName: "Cruz", firstName: "Kyla", gradeType: "KINDER", gradeLevelId: "grade-k" }),
+    ]);
+    termGradeFindMany.mockResolvedValueOnce([
+      row({
+        learnerId: "l1",
+        fullName: "Cruz, Kyla",
+        gradeType: "KINDER",
+        section: "A",
+        term: "FIRST",
+        score: 90,
+        subjectName: "English",
+        subjectPosition: 0,
+        learnerGradeLevelId: "grade-k",
+        subjectGradeLevelId: "grade-k",
+      }),
+    ]);
+    termSubjectFindMany.mockResolvedValueOnce([]);
+
+    const table = await buildTermGradesTable(SCOPE, { term: "FIRST" });
+
+    expect(table.rows).toHaveLength(1);
+    expect(table.rows[0][0]).toBe("Cruz, Kyla");
   });
 });
