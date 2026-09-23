@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TEACHER_LIST_SORTS } from "@/lib/teachers/pagination";
 
@@ -75,7 +75,10 @@ describe("TeachersActiveTable — Name column", () => {
   it("renders listingName (surname-first), not fullName", () => {
     render(<TeachersActiveTable rows={[ROW]} />);
 
-    expect(screen.getByText("Cruz, Marivic Santos")).not.toBeNull();
+    // Scoped to the `lg`-and-up table: below `lg` the same row repeats as a
+    // stacked list row, so an unscoped query would find both.
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Cruz, Marivic Santos")).not.toBeNull();
     expect(screen.queryByText("Marivic Santos Cruz")).toBeNull();
   });
 });

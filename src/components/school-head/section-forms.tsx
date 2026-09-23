@@ -109,7 +109,7 @@ export function SectionRowActions({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <form
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 max-lg:w-full"
         action={(fd) => {
           const nextName = String(fd.get("name") ?? "").trim();
           if (onRename) {
@@ -127,7 +127,7 @@ export function SectionRowActions({
         <Input
           name="name"
           defaultValue={name}
-          className="h-8 w-36"
+          className="w-36 max-lg:w-full max-lg:flex-1 max-lg:min-w-0 max-sm:h-11 sm:h-10 lg:h-10"
           maxLength={100}
           autoCapitalize="words"
           disabled={isPending}
@@ -139,6 +139,7 @@ export function SectionRowActions({
           variant="outline"
           loading={isPending}
           loadingText="Saving…"
+          className="sm:h-10 lg:h-9"
         >
           Save
         </Button>
@@ -154,7 +155,7 @@ export function SectionRowActions({
             type="button"
             size="sm"
             variant="ghost"
-            className="text-destructive"
+            className="text-destructive sm:h-10 lg:h-9"
             disabled={isPending}
           >
             Delete
@@ -255,7 +256,7 @@ export function GradeSectionsPanel({
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 px-3 py-2"
             >
               {readOnly ? (
-                <span className="text-sm font-medium">{s.name}</span>
+                <span className="text-sm font-medium max-lg:min-w-0 max-lg:break-words">{s.name}</span>
               ) : (
                 <SectionRowActions
                   sectionId={s.id}
@@ -294,7 +295,7 @@ export function GradeSectionsPanel({
                 maxLength={100}
                 autoCapitalize="words"
                 disabled={pending}
-                className="h-8"
+                className="max-sm:h-11 sm:h-10 lg:h-10"
               />
             </div>
             <Button
@@ -303,6 +304,7 @@ export function GradeSectionsPanel({
               variant="outline"
               loading={pending}
               loadingText="Saving…"
+              className="sm:h-10 lg:h-9"
             >
               Add
             </Button>
@@ -325,6 +327,7 @@ export function GradeSectionsPanel({
               type="submit"
               size="sm"
               disabled={pending || !nextLetter}
+              className="sm:h-10 lg:h-9"
               title={
                 nextLetter
                   ? `Quick-add section ${nextLetter}`

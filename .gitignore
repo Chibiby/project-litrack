@@ -49,3 +49,6 @@ skill-observations/
 skill-updates/
 
 .env.migrate
+
+# Local Playwright sessions (e2e/auth/*.mjs)
+e2e/.auth/

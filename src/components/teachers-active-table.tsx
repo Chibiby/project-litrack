@@ -149,13 +149,22 @@ export type RemovedTeacherRow = {
  * for free, and a native control inside a table row stays keyboard- and
  * screen-reader-navigable without a popover fighting the row for space.
  */
-function AdvisoryCell({
+/**
+ * The advisory picker's content, shared by the desktop table cell and the
+ * below-`lg` list row so both drive the same handlers rather than each
+ * re-implementing the chips/select. `idPrefix` keeps the native `<select>`'s
+ * `id` unique between the two — both can be mounted at once (table hidden via
+ * `hidden`, list via `lg:hidden`), and a duplicate `id` would break the
+ * `<Label htmlFor>` pairing for whichever one lost the collision.
+ */
+function AdvisoryPicker({
   row,
   held,
   options,
   saving,
   disabled,
   onChange,
+  idPrefix = "advisory-add",
 }: {
   row: ActiveTeacherRow;
   /** Section ids this teacher advises, optimistic overrides already applied. */
@@ -168,28 +177,25 @@ function AdvisoryCell({
     sectionId: string,
     op: "add" | "remove"
   ) => void;
+  idPrefix?: string;
 }) {
-  const selectId = `advisory-add-${row.id}`;
+  const selectId = `${idPrefix}-${row.id}`;
   const cap = advisoryCapFor(row.designation, row.advisoryMode);
 
   // A Volunteer or a Floating teacher advises no section at all — no picker to
   // offer, only the reason there isn't one.
   if (cap === 0) {
     return (
-      <TableCell className="text-sm text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {advisoryCapReason(row.designation, row.advisoryMode)}
-      </TableCell>
+      </span>
     );
   }
 
   // No grade has a section, so there is nothing to offer. Saying so beats a
   // dropdown with nothing in it.
   if (options.length === 0) {
-    return (
-      <TableCell className="text-sm text-muted-foreground">
-        No sections yet
-      </TableCell>
-    );
+    return <span className="text-sm text-muted-foreground">No sections yet</span>;
   }
 
   // Names for the chips, including one just added optimistically — the row this
@@ -209,7 +215,7 @@ function AdvisoryCell({
     row.advisoryMode === "FLOATING" ? FLOATING_CHIP_LABEL : UNASSIGNED_CHIP_LABEL;
 
   return (
-    <TableCell>
+    <>
       <div className="flex flex-wrap items-center gap-1.5">
         {held.map((sectionId) => (
           <span
@@ -252,7 +258,7 @@ function AdvisoryCell({
       </Label>
       <select
         id={selectId}
-        className="mt-1.5 h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50"
+        className="mt-1.5 h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 max-lg:h-11"
         value=""
         disabled={disabled || atCap}
         onChange={(e) => {
@@ -286,18 +292,31 @@ function AdvisoryCell({
         ))}
       </select>
       {saving ? <p className="mt-1 text-xs text-muted-foreground">Saving…</p> : null}
+    </>
+  );
+}
+
+/** The desktop table's advisory cell — same picker, wrapped in a `<TableCell>`. */
+function AdvisoryCell(props: {
+  row: ActiveTeacherRow;
+  held: string[];
+  options: AdvisoryGradeOption[];
+  saving: boolean;
+  disabled: boolean;
+  onChange: (
+    row: ActiveTeacherRow,
+    sectionId: string,
+    op: "add" | "remove"
+  ) => void;
+}) {
+  return (
+    <TableCell>
+      <AdvisoryPicker {...props} />
     </TableCell>
   );
 }
 
-function TeacherManageActions({
-  row,
-  mode,
-  busy,
-  onSetActive,
-  onRemove,
-  onRemovePhoto,
-}: {
+type TeacherManageActionsProps = {
   row: ActiveTeacherRow;
   mode: "active" | "inactive";
   /** Which of this row's actions is in flight, or `null` when the row is idle. */
@@ -305,7 +324,25 @@ function TeacherManageActions({
   onSetActive: (row: ActiveTeacherRow, isActive: boolean) => Promise<void>;
   onRemove: (row: ActiveTeacherRow) => Promise<void>;
   onRemovePhoto: (row: ActiveTeacherRow) => Promise<void>;
-}) {
+};
+
+/**
+ * The row's action buttons, shared by the desktop table cell and the
+ * below-`lg` list row. `size="sm"` alone drops to `h-9` (36px) from 640px up
+ * (`button.tsx`), which is under 40px on tablet. `sm:h-10 lg:h-9` raises the
+ * 640–1023px band to 40px and then restores the original 36px at `lg` and up
+ * — a plain `max-lg:h-10` will not do this: Tailwind emits `max-lg:` rules
+ * before `sm:` rules, so at 640–1023px the primitive's own `sm:h-9` would
+ * still win over `max-lg:h-10` by source order.
+ */
+function TeacherManageButtons({
+  row,
+  mode,
+  busy,
+  onSetActive,
+  onRemove,
+  onRemovePhoto,
+}: TeacherManageActionsProps) {
   // The server blocks removal only while the teacher is someone's designated
   // ARAL teacher. Mirror it here so the button explains itself instead of
   // failing on click. Advisory learners do not block: removal releases them.
@@ -326,7 +363,7 @@ function TeacherManageActions({
   const rowBusy = busy !== null;
 
   return (
-    <TableCell className="space-x-1 text-right">
+    <>
       {mode === "active" ? (
         <ConfirmAction
           title="Deactivate teacher?"
@@ -338,6 +375,7 @@ function TeacherManageActions({
             <Button
               size="sm"
               variant="outline"
+              className="sm:h-10 lg:h-9"
               loading={busy === "setActive"}
               loadingText="Deactivating…"
               disabled={rowBusy}
@@ -358,6 +396,7 @@ function TeacherManageActions({
             <Button
               size="sm"
               variant="outline"
+              className="sm:h-10 lg:h-9"
               loading={busy === "setActive"}
               loadingText="Reactivating…"
               disabled={rowBusy}
@@ -379,6 +418,7 @@ function TeacherManageActions({
             <Button
               size="sm"
               variant="outline"
+              className="sm:h-10 lg:h-9"
               loading={busy === "removePhoto"}
               loadingText="Removing…"
               disabled={rowBusy}
@@ -399,7 +439,7 @@ function TeacherManageActions({
           <Button
             size="sm"
             variant="ghost"
-            className="text-destructive"
+            className="sm:h-10 lg:h-9 text-destructive"
             loading={busy === "remove"}
             loadingText="Removing…"
             disabled={blockedReason !== null || rowBusy}
@@ -410,6 +450,15 @@ function TeacherManageActions({
         }
         onConfirm={() => onRemove(row)}
       />
+    </>
+  );
+}
+
+/** The desktop table's action cell — same buttons, wrapped in a `<TableCell>`. */
+function TeacherManageActions(props: TeacherManageActionsProps) {
+  return (
+    <TableCell className="space-x-1 text-right">
+      <TeacherManageButtons {...props} />
     </TableCell>
   );
 }
@@ -797,6 +846,25 @@ function TeachersManagedTable({
             />
           }
         >
+        {/* `rowsWithBusy` is shared by the table below (lg and up) and the
+            stacked list under it (below lg) so the two never compute the busy
+            key differently. */}
+        {(() => {
+          const rowsWithBusy = optimisticRows.map((row) => ({
+            row,
+            rowBusy:
+              actingKey === `${row.id}:setActive`
+                ? ("setActive" as const)
+                : actingKey === `${row.id}:remove`
+                  ? ("remove" as const)
+                  : actingKey === `${row.id}:removePhoto`
+                    ? ("removePhoto" as const)
+                    : null,
+          }));
+          return (
+            <>
+        {/* lg and up: the unchanged table. */}
+        <div className="hidden lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -818,15 +886,7 @@ function TeachersManagedTable({
                 </TableCell>
               </TableRow>
             ) : (
-              optimisticRows.map((row) => {
-                const rowBusy =
-                  actingKey === `${row.id}:setActive`
-                    ? ("setActive" as const)
-                    : actingKey === `${row.id}:remove`
-                      ? ("remove" as const)
-                      : actingKey === `${row.id}:removePhoto`
-                        ? ("removePhoto" as const)
-                        : null;
+              rowsWithBusy.map(({ row, rowBusy }) => {
                 return (
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">
@@ -929,6 +989,121 @@ function TeachersManagedTable({
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Below lg: one stacked row per teacher. */}
+        <ul className="divide-y divide-border/60 lg:hidden" aria-label={title}>
+          {rowsWithBusy.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {emptyLabel}
+            </li>
+          ) : (
+            rowsWithBusy.map(({ row, rowBusy }) => (
+              <li key={row.id} className="flex flex-col gap-3 px-3 py-3 sm:px-4">
+                <div className="flex items-start gap-3">
+                  <UserAvatar
+                    name={row.fullName}
+                    avatarPath={row.avatarPath}
+                    size={40}
+                    variant="thumb"
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate font-medium text-foreground">
+                      {row.listingName}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {row.email}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {row.designation === null ? (
+                        "Hasn't finished profiling"
+                      ) : readOnly ? (
+                        row.designation
+                      ) : (
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          {row.designation}
+                          <TeacherRoleDialog
+                            row={row}
+                            onSaved={() =>
+                              setAdvisoryOverrides((prev) => {
+                                if (!(row.id in prev)) return prev;
+                                const next = { ...prev };
+                                delete next[row.id];
+                                return next;
+                              })
+                            }
+                          />
+                        </span>
+                      )}
+                    </p>
+                    <div className="text-sm text-muted-foreground">
+                      {editableAdvisory ? (
+                        <AdvisoryPicker
+                          row={row}
+                          held={advisoryIdsFor(row)}
+                          options={editableAdvisory}
+                          saving={savingAdvisoryId === row.id}
+                          disabled={savingAdvisoryId === row.id || rowBusy !== null}
+                          onChange={onChangeAdvisory}
+                          idPrefix="advisory-add-m"
+                        />
+                      ) : row.assignments.length > 0 ? (
+                        row.assignments
+                          .map((a) => `${a.gradeName} · ${a.sectionName}`)
+                          .join(", ")
+                      ) : (
+                        <span>
+                          {row.advisoryMode === "FLOATING"
+                            ? FLOATING_CHIP_LABEL
+                            : UNASSIGNED_CHIP_LABEL}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {row.aralLearnerCount > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="border-violet-200 text-violet-800 dark:text-violet-200"
+                        >
+                          {row.aralLearnerCount} ARAL learner
+                          {row.aralLearnerCount === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
+                      {row.profileCompleted ? (
+                        <Badge variant="secondary">Profiled</Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-300 text-amber-800 dark:text-amber-300"
+                        >
+                          Awaiting profiling
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Approved {row.approvedAt ? formatDate(row.approvedAt) : "—"}
+                    </p>
+                  </div>
+                </div>
+                {!readOnly ? (
+                  <div className="flex flex-wrap gap-2">
+                    <TeacherManageButtons
+                      row={row}
+                      mode={mode}
+                      busy={rowBusy}
+                      onSetActive={onSetActive}
+                      onRemove={onRemove}
+                      onRemovePhoto={onRemovePhoto}
+                    />
+                  </div>
+                ) : null}
+              </li>
+            ))
+          )}
+        </ul>
+            </>
+          );
+        })()}
         </ListBusyRegion>
         {list ? (
           <LearnerPagination
@@ -1020,6 +1195,7 @@ export function TeachersRemovedTable({ rows }: { rows: RemovedTeacherRow[] }) {
         <div className="border-b px-4 py-3 text-sm font-medium">
           Removed teachers ({rows.length})
         </div>
+        <div className="hidden lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1042,6 +1218,22 @@ export function TeachersRemovedTable({ rows }: { rows: RemovedTeacherRow[] }) {
             ))}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Below lg: one stacked row per removed teacher. */}
+        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed teachers">
+          {rows.map((row) => (
+            <li key={row.id} className="px-3 py-3 sm:px-4">
+              <p className="truncate font-medium text-foreground">{row.fullName}</p>
+              <p className="truncate text-sm text-muted-foreground">
+                {row.email ?? "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Removed {formatDate(row.removedAt)}
+              </p>
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );
@@ -1089,6 +1281,7 @@ export function TeachersDeclinedTable({
     <Card>
       <CardContent className="p-0">
         <div className="border-b px-4 py-3 text-sm font-medium">Declined ({rows.length})</div>
+        <div className="hidden lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1123,6 +1316,34 @@ export function TeachersDeclinedTable({
             ))}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Below lg: one stacked row per declined teacher. */}
+        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Declined">
+          {rows.map((row) => (
+            <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">{row.fullName}</p>
+                <p className="truncate text-sm text-muted-foreground">{row.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  Rejected {row.rejectedAt ? formatDate(row.rejectedAt) : "—"}
+                </p>
+              </div>
+              {!readOnly ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="sm:h-10 lg:h-9"
+                  loading={actingId === row.id}
+                  loadingText="Allowing…"
+                  onClick={() => runClear(row.id, row.fullName)}
+                >
+                  Allow re-register
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );

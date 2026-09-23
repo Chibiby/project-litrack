@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -25,6 +26,28 @@ const tooltipStyle = {
   fontSize: 12,
 };
 
+const PHONE_QUERY = "(max-width: 639px)";
+
+function subscribePhone(onChange: () => void): () => void {
+  const mql = window.matchMedia(PHONE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+/** True below `sm`. The server snapshot is false, so tablet and desktop never change. */
+function useIsPhone(): boolean {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false
+  );
+}
+
+/** Phone-width category label: long reading-level names clipped so angled ticks stay inside the card. */
+function clipTick(label: string): string {
+  return label.length > 12 ? `${label.slice(0, 11)}…` : label;
+}
+
 export function DashboardBarChart({
   data,
   color = "hsl(var(--primary))",
@@ -38,19 +61,28 @@ export function DashboardBarChart({
     label: d.name ?? d.date ?? "",
     value: d.value,
   }));
+  const isPhone = useIsPhone();
+  const angled = keyed.length > 4;
+  // Phones only: at -25° the long reading-level names ran off the card's left
+  // edge and into each other. Steeper, clipped and given more room instead.
+  const phoneTicks = isPhone && angled;
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div className="w-full" style={{ height: phoneTicks ? height + 24 : height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={keyed} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <BarChart
+          data={keyed}
+          margin={{ top: 8, right: 8, left: phoneTicks ? 12 : 0, bottom: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: phoneTicks ? 10 : 11 }}
             interval={0}
-            angle={keyed.length > 4 ? -25 : 0}
-            textAnchor={keyed.length > 4 ? "end" : "middle"}
-            height={keyed.length > 4 ? 56 : 30}
+            angle={phoneTicks ? -50 : angled ? -25 : 0}
+            textAnchor={angled ? "end" : "middle"}
+            height={phoneTicks ? 80 : angled ? 56 : 30}
+            tickFormatter={phoneTicks ? clipTick : undefined}
           />
           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
           <Tooltip contentStyle={tooltipStyle} />

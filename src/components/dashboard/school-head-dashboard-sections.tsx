@@ -165,7 +165,7 @@ export async function SchoolHeadIpSection({
           tone="primary"
         />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 max-lg:grid-cols-1 lg:grid-cols-2">
       <ChartCard
         title="IP learners"
         description={`${ip?.ipLearners ?? 0} of ${ip?.totalLearners ?? 0} enrolled learners (${ip?.ipPercent ?? "—"})`}
@@ -184,7 +184,10 @@ export async function SchoolHeadIpSection({
             icon={Users}
           />
         ) : (
-          <Table>
+          // Below lg the card is too narrow for four columns, so cells stay on one
+          // line and the table scrolls inside its own container (Table wraps itself
+          // in overflow-auto) instead of wrapping "0 / 3" a character at a time.
+          <Table className="max-lg:[&_td]:whitespace-nowrap max-lg:[&_th]:whitespace-nowrap max-sm:[&_td]:px-2 max-sm:[&_th]:px-2">
             <TableHeader>
               <TableRow>
                 <TableHead>Grade</TableHead>

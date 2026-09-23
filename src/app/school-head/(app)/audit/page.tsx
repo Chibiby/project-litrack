@@ -168,7 +168,7 @@ async function SchoolAuditTable({
                 </div>
               }
             >
-              <div className="overflow-x-auto">
+              <div className="hidden overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -197,6 +197,30 @@ async function SchoolAuditTable({
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Below lg: one stacked row per event, as in the learner roster's
+                  phone list (src/components/learners/learner-list-client.tsx). */}
+              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Audit events">
+                {logs.map((log) => (
+                  <li key={log.id} className="flex flex-col gap-1 px-3 py-3 sm:px-4">
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-medium text-foreground">{log.action}</span>
+                      <span className="text-sm text-muted-foreground">{log.resource}</span>
+                    </span>
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap">
+                        {log.timestamp
+                          .toISOString()
+                          .replace("T", " ")
+                          .slice(0, 19)}
+                      </span>
+                      <span className="min-w-0 break-all font-mono">
+                        {log.resourceId ?? "—"}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </ListBusyRegion>
             <LearnerPagination
               basePath={SCHOOL_HEAD_ROUTES.audit}

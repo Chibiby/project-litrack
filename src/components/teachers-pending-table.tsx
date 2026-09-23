@@ -82,6 +82,7 @@ export function TeachersPendingTable({
         <div className="border-b px-4 py-3 text-sm font-medium">
           Pending requests ({optimisticRows.length})
         </div>
+        <div className="hidden lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -150,6 +151,65 @@ export function TeachersPendingTable({
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Below lg: one stacked row per pending request. */}
+        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Pending requests">
+          {optimisticRows.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No pending registration requests.
+            </li>
+          ) : (
+            optimisticRows.map((row) => {
+              const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
+              return (
+                <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{row.fullName}</p>
+                    <p className="truncate text-sm text-muted-foreground">{row.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Requested {formatDate(row.requestedAt)}
+                    </p>
+                  </div>
+                  {!readOnly ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="sm:h-10 lg:h-9"
+                        loading={actingKey === `${row.id}:approve`}
+                        loadingText="Approving…"
+                        disabled={rowBusy}
+                        onClick={() => runApprove(row.id)}
+                      >
+                        Approve
+                      </Button>
+                      <ConfirmAction
+                        title="Decline registration?"
+                        description={`${row.fullName} will not be able to sign in.`}
+                        confirmLabel="Decline"
+                        variant="destructive"
+                        disabled={rowBusy}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="sm:h-10 lg:h-9 text-destructive"
+                            loading={actingKey === `${row.id}:reject`}
+                            loadingText="Declining…"
+                            disabled={rowBusy}
+                          >
+                            Decline
+                          </Button>
+                        }
+                        onConfirm={() => runReject(row.id)}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })
+          )}
+        </ul>
       </CardContent>
     </Card>
   );

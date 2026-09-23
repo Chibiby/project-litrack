@@ -529,7 +529,7 @@ export function ReportsHub({
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid gap-4 max-lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
           {/* Quick Generate */}
           <div className="rounded-xl border border-border bg-card p-4">

@@ -243,7 +243,7 @@ export function TermSubjectsManager({
                 placeholder="e.g. Filipino"
                 maxLength={60}
                 disabled={pending || atCap}
-                className="h-9"
+                className="max-sm:h-11 sm:h-10 lg:h-10"
               />
             </div>
             <Button
@@ -252,6 +252,7 @@ export function TermSubjectsManager({
               disabled={pending || atCap}
               loading={pending}
               loadingText="Saving…"
+              className="sm:h-10 lg:h-9"
             >
               <Plus className="h-4 w-4" aria-hidden />
               Add subject
@@ -302,7 +303,7 @@ export function TermSubjectsManager({
                     key={subject.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border/80 px-3 py-2"
                   >
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground max-lg:min-w-0 max-lg:break-words">
                       {subject.name}
                     </span>
                     <Button
@@ -310,6 +311,7 @@ export function TermSubjectsManager({
                       size="sm"
                       variant="outline"
                       disabled={pending}
+                      className="sm:h-10 lg:h-9"
                       onClick={() => void restore(subject.id, subject.name).catch(swallow)}
                     >
                       <RotateCcw className="h-4 w-4" aria-hidden />
@@ -347,12 +349,12 @@ function TermSubjectRow({
 }) {
   return (
     <li className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 px-3 py-2">
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 max-sm:order-2">
         <Button
           type="button"
           size="icon"
           variant="outline"
-          className="h-8 w-8"
+          className="max-sm:size-11 sm:size-10 lg:size-10"
           disabled={pending || isFirst}
           onClick={onMoveUp}
           aria-label={`Move ${subject.name} up`}
@@ -363,7 +365,7 @@ function TermSubjectRow({
           type="button"
           size="icon"
           variant="outline"
-          className="h-8 w-8"
+          className="max-sm:size-11 sm:size-10 lg:size-10"
           disabled={pending || isLast}
           onClick={onMoveDown}
           aria-label={`Move ${subject.name} down`}
@@ -373,7 +375,7 @@ function TermSubjectRow({
       </div>
 
       <form
-        className="flex flex-1 items-center gap-2"
+        className="flex flex-1 items-center gap-2 max-sm:order-1 max-sm:w-full max-sm:basis-full"
         onSubmit={(e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
@@ -386,9 +388,9 @@ function TermSubjectRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="h-8 min-w-[10rem] flex-1"
+          className="min-w-[10rem] flex-1 max-lg:min-w-0 max-sm:h-11 sm:h-10 lg:h-10"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        <Button type="submit" size="sm" variant="outline" disabled={pending} className="sm:h-10 lg:h-9">
           Save
         </Button>
       </form>
@@ -404,7 +406,7 @@ function TermSubjectRow({
             type="button"
             size="sm"
             variant="ghost"
-            className="text-destructive"
+            className="text-destructive max-sm:order-2 sm:h-10 lg:h-9"
             disabled={pending}
           >
             Archive

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -113,7 +113,11 @@ describe("TeachersActiveTable — instant feedback while a list navigation is pe
 
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region?.getAttribute("aria-busy")).toBeNull();
-    expect(screen.getByText("Cruz, Marivic Santos")).not.toBeNull();
+    // Scoped to the `lg`-and-up table: below `lg` the same row repeats as a
+    // stacked list row, so an unscoped query would find both.
+    expect(
+      within(screen.getByRole("table")).getByText("Cruz, Marivic Santos")
+    ).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 

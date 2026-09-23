@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
@@ -112,7 +112,12 @@ describe("School Head audit table — rows region busy state", () => {
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region).toBeTruthy();
     expect(region?.getAttribute("aria-busy")).toBeNull();
-    expect(screen.getByText("TEACHER_REMOVED")).not.toBeNull();
+    // The list view below `lg` repeats each row's action text beside the
+    // table, so this must be scoped to the desktop table rather than the
+    // whole document.
+    const table = document.querySelector("table");
+    expect(table).toBeTruthy();
+    expect(within(table as HTMLElement).getByText("TEACHER_REMOVED")).not.toBeNull();
   });
 
   it("marks the rows region aria-busy while the pager's Next link is pending", async () => {

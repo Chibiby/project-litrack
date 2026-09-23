@@ -14,7 +14,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { resolvePooledDatabaseUrl } from "../../src/lib/db-url";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { resolvePgDriverUrl, resolvePooledDatabaseUrl } from "../../src/lib/db-url";
 
 /**
  * Fill `process.env` from a dotenv file, without overwriting anything already set —
@@ -107,7 +108,12 @@ export async function connectScriptPrisma(): Promise<PrismaClient> {
 
   const failures: string[] = [];
   for (const candidate of candidates) {
-    const prisma = new PrismaClient({ datasources: { db: { url: candidate.url } } });
+    // The schema generates Prisma's JavaScript engine (`engineType = "client"`),
+    // which refuses to start without a driver adapter; a `datasources` URL alone
+    // throws P2038. Built like `createPrismaClient`, minus its Workers-only
+    // `maxUses: 1`: a long-running script wants normal pool reuse.
+    const adapter = new PrismaPg({ connectionString: resolvePgDriverUrl(candidate.url) ?? candidate.url });
+    const prisma = new PrismaClient({ adapter });
     try {
       // A trivial round trip: enough to prove the socket and the credentials, cheap
       // enough to throw away. Anything less and the failure surfaces mid-transaction.

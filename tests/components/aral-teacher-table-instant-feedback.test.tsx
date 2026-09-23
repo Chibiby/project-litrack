@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -91,7 +91,9 @@ describe("AralTeacherTable — instant feedback while a list navigation is pendi
 
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region?.getAttribute("aria-busy")).toBeNull();
-    expect(screen.getByText("Ada Cruz")).not.toBeNull();
+    // Scoped to the `lg`-and-up table: below `lg` the same row repeats as a
+    // stacked list row, so an unscoped query would find both.
+    expect(within(screen.getByRole("table")).getByText("Ada Cruz")).not.toBeNull();
 
     // Drive the shared pending flag the way it is actually observable in
     // jsdom: the pager's own `<Link>` reporting through `useLinkStatus`, not

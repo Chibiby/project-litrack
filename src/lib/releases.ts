@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.12.0",
+    date: "2026-09-24",
+    title: "School Head pages fit phones and tablets",
+    announce: true,
+    fixes: [
+      "On a phone or tablet, the Teachers tabs, ARAL assignments and the Audit log now show each row as an easy-to-read list instead of a wide table you had to scroll sideways.",
+      "Term Subjects and Sections rows stack neatly on a phone, with bigger buttons that are easier to tap.",
+      "The Reports page no longer runs off the side of a phone or tablet screen.",
+      "On the dashboard, the IP learners table fits a phone screen, and the reading profile charts keep their labels inside the card.",
+      "Nothing changes on a computer screen.",
+    ],
+  },
+  {
     version: "2.11.0",
     date: "2026-09-23",
     title: "Reports print on the official DepEd layout, or export as a plain table",

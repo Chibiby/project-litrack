@@ -67,7 +67,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="min-w-[12rem] flex-1 space-y-1">
+      <div className="min-w-[12rem] max-lg:basis-full flex-1 space-y-1">
         <Label htmlFor="audit-search" className="text-xs text-muted-foreground">
           Search actor or action
         </Label>
@@ -82,10 +82,10 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
             }
           }}
           placeholder="Name or action…"
-          className="max-w-sm"
+          className="max-w-sm max-lg:max-w-none"
         />
       </div>
-      <div className="space-y-1">
+      <div className="max-lg:flex-1 space-y-1">
         <Label htmlFor="audit-from" className="text-xs text-muted-foreground">
           From
         </Label>
@@ -95,10 +95,10 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           value={from}
           max={to || undefined}
           onChange={(e) => setFrom(e.target.value)}
-          className="w-40"
+          className="w-40 max-lg:w-full"
         />
       </div>
-      <div className="space-y-1">
+      <div className="max-lg:flex-1 space-y-1">
         <Label htmlFor="audit-to" className="text-xs text-muted-foreground">
           To
         </Label>
@@ -108,13 +108,14 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           value={to}
           min={from || undefined}
           onChange={(e) => setTo(e.target.value)}
-          className="w-40"
+          className="w-40 max-lg:w-full"
         />
       </div>
       <Button
         type="button"
         size="sm"
         variant="outline"
+        className="sm:h-10 lg:h-9"
         onClick={() => push({ q, from: from || null, to: to || null })}
       >
         Apply
@@ -124,6 +125,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           type="button"
           size="sm"
           variant="ghost"
+          className="sm:h-10 lg:h-9"
           onClick={() => {
             setQ("");
             setFrom("");
