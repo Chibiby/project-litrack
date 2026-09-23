@@ -178,7 +178,19 @@ let session: {
   schoolId: string | null;
   role: "TEACHER" | "SUPER_ADMIN";
   advisorySectionId: string | null;
+  fullName: string;
 };
+
+/** Backs `loadReportHeader`'s school read. Fixed, not asserted on. */
+const schoolFindFirst = vi.fn(async (_args?: unknown) => ({
+  schoolIdCode: "123456",
+  name: "Malandag ES",
+  region: null,
+  division: null,
+  district: null,
+}));
+/** Backs `loadReportFooter`'s School Head read. Fixed, not asserted on. */
+const userFindFirst = vi.fn(async (_args?: unknown) => null);
 
 /** Every `where`/`orderBy` the action read the roster with. */
 let learnerFindManyArgs: {
@@ -479,6 +491,15 @@ vi.mock("@/lib/prisma", () => ({
     schoolYear: {
       findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [never])),
     },
+    // `loadReportHeader` reads the school row once per sheet for the shared
+    // DepEd-style header block; `loadReportFooter` reads the school's School
+    // Head once. Neither is asserted on in this file.
+    school: {
+      findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [never])),
+    },
+    user: {
+      findFirst: (...args: unknown[]) => userFindFirst(...(args as [never])),
+    },
     termSubject: {
       findMany: (...args: unknown[]) => termSubjectFindMany(...(args as [never])),
       createMany: (...args: unknown[]) => termSubjectCreateMany(...(args as [never])),
@@ -604,17 +625,43 @@ function normalize(value: CellValue): Cell {
  * that were never in the workbook. Read exactly as many columns as the header
  * row actually has, falling back to `width` only when the sheet is empty.
  */
+/**
+ * Every DATA sheet now opens with the shared DepEd-style header block
+ * (`writeSheetHeader`) before the table itself, so the table's own header row
+ * ("#", "Complete Name", ...) is no longer row 1 — this locates it (the row
+ * whose first cell is "#") rather than assume, so every caller below keeps
+ * reading `rows[0]` as the table header and `rows[1..]` as data, unaffected
+ * by how many optional header/subtitle lines preceded it. A sheet with no
+ * such row (the "Export info" meta sheet, which gets no header block) falls
+ * back to row 1, unchanged from before.
+ */
 function grid(sheet: Worksheet, width: number): Cell[][] {
-  const header = sheet.getRow(1);
+  let headerRowNum = 1;
+  for (let r = 1; r <= sheet.rowCount; r += 1) {
+    if (String(sheet.getRow(r).getCell(1).value ?? "") === "#") {
+      headerRowNum = r;
+      break;
+    }
+  }
+  const header = sheet.getRow(headerRowNum);
   const actualWidth = header.cellCount > 0 ? header.cellCount : width;
   const rows: Cell[][] = [];
-  for (let r = 1; r <= sheet.rowCount; r += 1) {
+  for (let r = headerRowNum; r <= sheet.rowCount; r += 1) {
     const row = sheet.getRow(r);
     rows.push(
       Array.from({ length: actualWidth }, (_, i) => normalize(row.getCell(i + 1).value))
     );
   }
-  return rows;
+  // Every data sheet also ends with the shared "Prepared by / Noted by /
+  // system-generated" footer (`writeSheetFooter`) after a blank separator
+  // row — trimmed here so every existing exact-array assertion below keeps
+  // describing the TABLE only. The footer itself is asserted separately.
+  const footerIdx = rows.findIndex((r) => r[0] === "Prepared by:");
+  const trimmed = footerIdx === -1 ? rows : rows.slice(0, footerIdx);
+  while (trimmed.length > 0 && trimmed[trimmed.length - 1].every((c) => c === null)) {
+    trimmed.pop();
+  }
+  return trimmed;
 }
 
 /**
@@ -661,6 +708,7 @@ function asSuperAdmin(schoolId: string | null = null) {
     schoolId,
     role: "SUPER_ADMIN",
     advisorySectionId: null,
+    fullName: "Super Admin",
   };
 }
 
@@ -713,6 +761,7 @@ beforeEach(() => {
     schoolId: SCHOOL_ID,
     role: "TEACHER",
     advisorySectionId: SECTION_ID,
+    fullName: "Marivic Acibar",
   };
   learnerFindManyArgs = [];
   cellFindManyArgs = [];
@@ -739,6 +788,30 @@ describe("exportTermGrades — the fixture clock", () => {
     // Anchors the "Export info" sheet assertions below.
     expect(first.rangeLabel).toBe("August - October");
     expect(second.rangeLabel).toBe("November - January");
+  });
+});
+
+describe("exportTermGrades — the shared header and footer", () => {
+  it("opens the data sheet with the shared DepEd header and closes it with the shared footer", async () => {
+    const file = fileOf(await post());
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
+    const sheet = wb.getWorksheet("Second Term")!;
+
+    const column1: string[] = [];
+    for (let r = 1; r <= sheet.rowCount; r++) {
+      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
+    }
+    expect(column1[0]).toBe("School ID:");
+    expect(column1).toContain("Prepared by:");
+    expect(column1).toContain("Noted by:");
+    expect(column1).toContain(
+      "This is a system-generated report from LITRACK. No signature is required."
+    );
+    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    expect(sheet.getImages().length).toBe(4);
   });
 });
 

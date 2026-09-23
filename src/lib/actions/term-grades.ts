@@ -36,6 +36,14 @@ import {
   termGradesSaveSchema,
   type TermGradesSaveInput,
 } from "@/lib/validators/term-grade.schema";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import {
+  loadReportFooter,
+  loadReportHeader,
+  writeSheetFooter,
+  withGradeSection,
+  writeSheetHeader,
+} from "@/lib/reports/sheet-header";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -590,6 +598,12 @@ export async function exportTermGrades(
       ? window.label
       : (label.replace(/[:\\/?*[\]]/g, "-").slice(0, 28) || `Section ${index + 1}`);
 
+  // Both read once for every sheet: only "Grade / Section" differs per target.
+  const [footer, baseHeader] = await Promise.all([
+    loadReportFooter({ schoolId, preparedBy: user.fullName }),
+    loadReportHeader({ schoolId, schoolYearId: schoolYear.id, preparedBy: user.fullName }),
+  ]);
+
   let learnerCount = 0;
   let cellCount = 0;
   for (const [index, target] of targets.entries()) {
@@ -657,17 +671,31 @@ export async function exportTermGrades(
     // drops the column rather than leaving it blank.
     const isLetterScale = termGradingScale(target.gradeType) === "LETTER";
     const sheet = wb.addWorksheet(sheetName(target.label, index));
+
+    writeSheetHeader(
+      sheet,
+      withGradeSection(
+        baseHeader,
+        target.label || (GRADE_LEVEL_LABELS[target.gradeType] ?? target.gradeType)
+      )
+    );
+
+    // Widths only (no `header` key) — a `header` here would ask ExcelJS to
+    // write these labels into row 1, which the block above just claimed. The
+    // table's own header row is written explicitly below instead.
     sheet.columns = [
-      { header: "#", key: "index", width: 6 },
-      { header: "Complete Name", key: "fullName", width: 30 },
-      ...subjects.map((subject) => ({
-        header: subject.name,
-        key: columnKey(subject.id),
-        width: 16,
-      })),
-      ...(isLetterScale ? [] : [{ header: "General Average", key: "average", width: 18 }]),
+      { key: "index", width: 6 },
+      { key: "fullName", width: 30 },
+      ...subjects.map((subject) => ({ key: columnKey(subject.id), width: 16 })),
+      ...(isLetterScale ? [] : [{ key: "average", width: 18 }]),
     ];
-    sheet.getRow(1).font = { bold: true };
+    const tableHeaderRow = sheet.addRow([
+      "#",
+      "Complete Name",
+      ...subjects.map((subject) => subject.name),
+      ...(isLetterScale ? [] : ["General Average"]),
+    ]);
+    tableHeaderRow.font = { bold: true };
 
     learners.forEach((learner, index) => {
       const cells = byLearner.get(learner.id);
@@ -690,6 +718,8 @@ export async function exportTermGrades(
       }
       sheet.addRow(row);
     });
+
+    writeSheetFooter(wb, sheet, footer);
   }
 
   const meta = wb.addWorksheet("Export info");

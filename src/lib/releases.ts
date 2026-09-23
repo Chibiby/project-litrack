@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.10.0",
+    date: "2026-09-23",
+    title: "Every report now carries the school header and a signed-off footer",
+    announce: true,
+    fixes: [
+      "Every Excel and PDF you export now starts with the School ID, school name, region, division, district, school year, grade and section, and who prepared it.",
+      "Every export now ends with Prepared by and Noted by (your School Head), a note that the report is system-generated, and the DepEd, Bagong Pilipinas and Division of Sarangani logos.",
+      "This covers the Reports Hub, learner lists, End of Term grades and the Kindergarten checklist.",
+    ],
+  },
+  {
     version: "2.9.0",
     date: "2026-09-23",
     title: "Reports in DepEd format, with every learner listed",

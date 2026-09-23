@@ -30,6 +30,9 @@ vi.mock("@/lib/prisma", () => ({
     learner: { findMany: (...args: unknown[]) => learnerFindMany(...(args as [])) },
     schoolYear: { findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [])) },
     school: { findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [])) },
+    // `loadReportFooter` reads the school's School Head once for "Noted by";
+    // no test here asserts on its content.
+    user: { findFirst: async () => null },
   },
 }));
 
@@ -201,12 +204,19 @@ describe("buildAttendanceTable — default range resolution", () => {
     expect(table.rows).toHaveLength(5); // 5 weekdays x 1 learner
   });
 
-  it("skips the school-year lookup when `from` is supplied", async () => {
+  it("does not use the active school year to resolve the RANGE when `from` is supplied", async () => {
     learnerFindMany.mockResolvedValueOnce([]);
     attendanceFindMany.mockResolvedValueOnce([]);
+    // `loadReportHeader` (`sheet-header.ts`) still looks the active year up
+    // once, for the shared header block's own "School Year" field — a report
+    // that narrows its date range explicitly still names the year it ran in.
+    schoolYearFindFirst.mockResolvedValueOnce(null);
 
-    await buildAttendanceTable(SCOPE, { from: "2026-08-24" });
+    const table = await buildAttendanceTable(SCOPE, { from: "2026-08-24" });
 
-    expect(schoolYearFindFirst).not.toHaveBeenCalled();
+    // Range resolution read `from` verbatim rather than falling back to an
+    // active year's start date.
+    expect(table.subtitle.some((l) => l.includes("2026-08-24 to today"))).toBe(true);
+    expect(schoolYearFindFirst).toHaveBeenCalledTimes(1);
   });
 });

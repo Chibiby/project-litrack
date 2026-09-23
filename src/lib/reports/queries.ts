@@ -39,7 +39,8 @@ import { resolveMosyWindow } from "@/lib/reports/mosy-window";
 import { buildSf2Blocks, groupBySex, type Sf2Learner, type Sf2Status } from "@/lib/reports/sf2";
 import type { TermPeriodValue } from "@/lib/terms/windows";
 import type { ReportFilters } from "@/lib/reports/kinds";
-import type { ReportHeaderField, ReportTable } from "@/lib/reports/render";
+import type { ReportTable } from "@/lib/reports/render";
+import { loadReportFooter, loadReportHeader } from "@/lib/reports/sheet-header";
 
 /**
  * The data half of the Reports Hub: one builder per report kind, each returning
@@ -159,54 +160,11 @@ function subtitleForGrid(scope: ReportScope, extra: string[] = []): string[] {
  */
 async function activeSchoolYear(
   schoolId: string
-): Promise<{ startDate: Date; endDate: Date; label: string } | null> {
+): Promise<{ id: string; startDate: Date; endDate: Date; label: string } | null> {
   return prisma.schoolYear.findFirst({
     where: { schoolId, isActive: true },
-    select: { startDate: true, endDate: true, label: true },
+    select: { id: true, startDate: true, endDate: true, label: true },
   });
-}
-
-/** The school year LABEL only, honoring `filters.schoolYearId` when set —
- * used by builders (Term Grades, MOSY-adjacent) that do not already read the
- * active school year for range math the way the two grid builders do. */
-async function schoolYearLabelFor(
-  schoolId: string,
-  schoolYearId?: string | null
-): Promise<string | null> {
-  const year = await prisma.schoolYear.findFirst({
-    where: { schoolId, ...(schoolYearId ? { id: schoolYearId } : { isActive: true }) },
-    select: { label: true },
-  });
-  return year?.label ?? null;
-}
-
-/**
- * The DepEd-style header block ("School ID", "School Name", ...) drawn at
- * the top of every sheet/page (`render.ts`). One tenancy-safe read, pinned to
- * `scope.schoolId` — the only place any report builder reads School fields
- * beyond the name already carried on `scope`.
- */
-async function buildReportHeader(
-  scope: ReportScope,
-  extra: { schoolYearLabel?: string | null; gradeSectionLabel?: string | null } = {}
-): Promise<ReportHeaderField[]> {
-  const school = await prisma.school.findFirst({
-    where: { id: scope.schoolId, deletedAt: null },
-    select: { schoolIdCode: true, name: true, region: true, division: true, district: true },
-  });
-  const fields: ReportHeaderField[] = [
-    { label: "School ID", value: school?.schoolIdCode ?? "—" },
-    { label: "School Name", value: school?.name ?? scope.schoolName },
-  ];
-  if (school?.region) fields.push({ label: "Region", value: school.region });
-  if (school?.division) fields.push({ label: "Division", value: school.division });
-  if (school?.district) fields.push({ label: "District", value: school.district });
-  fields.push(
-    { label: "School Year", value: extra.schoolYearLabel ?? "—" },
-    { label: "Grade / Section", value: extra.gradeSectionLabel ?? "All" },
-    { label: "Prepared by", value: scope.actorName }
-  );
-  return fields;
 }
 
 /** "Grade 3 - A" from the first learner in an already-filtered roster, else "All Classes" / a grade-only label. */
@@ -317,10 +275,14 @@ export async function buildAttendanceTable(
     includeGradeSection,
   });
 
-  const header = await buildReportHeader(scope, {
-    schoolYearLabel: schoolYear?.label ?? null,
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: schoolYear?.id ?? null,
     gradeSectionLabel: gradeSectionLabelFromLearners(learners, filters),
+    preparedBy: scope.actorName,
   });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
 
   return {
     title: "Attendance Records",
@@ -340,6 +302,7 @@ export async function buildAttendanceTable(
     rows,
     blocks,
     header,
+    footer,
   };
 }
 
@@ -492,10 +455,14 @@ export async function buildReadingLevelTable(
     };
   });
 
-  const header = await buildReportHeader(scope, {
-    schoolYearLabel: schoolYear?.label ?? null,
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: schoolYear?.id ?? null,
     gradeSectionLabel: gradeSectionLabelFromLearners(learners, filters),
+    preparedBy: scope.actorName,
   });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
 
   return {
     title: "Weekly Reading Level",
@@ -519,6 +486,7 @@ export async function buildReadingLevelTable(
     rows,
     blocks,
     header,
+    footer,
   };
 }
 
@@ -699,15 +667,20 @@ export async function buildTermGradesTable(
     }
   }
 
-  const header = await buildReportHeader(scope, {
-    schoolYearLabel: await schoolYearLabelFor(scope.schoolId, filters.schoolYearId),
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: filters.schoolYearId ?? null,
     gradeSectionLabel: gradeSectionLabelFromLearners(learners, filters),
+    preparedBy: scope.actorName,
   });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
 
   return {
     title: "End of Term Report (Grades)",
     subtitle: subtitleFor(scope, filters, [`${groups.size} learner-term row(s)`]),
     header,
+    footer,
     columns: [
       { header: "Learner", width: 26 },
       { header: "Grade", width: 11 },
@@ -755,9 +728,20 @@ export async function buildClassRosterTable(
     take: 5000,
   });
 
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: filters.schoolYearId ?? null,
+    gradeSectionLabel: gradeSectionLabelFromLearners(learners, filters),
+    preparedBy: scope.actorName,
+  });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
+
   return {
     title: "Class Roster",
     subtitle: subtitleFor(scope, filters, [`${learners.length} learner(s)`]),
+    header,
+    footer,
     columns: [
       { header: "#", width: 6 },
       { header: "Learner", width: 30 },
@@ -856,9 +840,33 @@ export async function buildTeacherSummaryTable(
     ]);
   }
 
+  // Same rule as `gradeSectionLabelFromLearners`, applied to `sections`
+  // (this builder groups by class, not by learner, so there is no learner
+  // roster to read the label off of).
+  const firstSection = sections[0];
+  const gradeSectionLabel = (() => {
+    if (filters.sectionId && firstSection) {
+      return `${GRADE_LEVEL_LABELS[firstSection.gradeLevel.type] ?? firstSection.gradeLevel.type} - ${firstSection.name}`;
+    }
+    if (filters.gradeLevelId && firstSection) {
+      return GRADE_LEVEL_LABELS[firstSection.gradeLevel.type] ?? firstSection.gradeLevel.type;
+    }
+    return "All Classes";
+  })();
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: filters.schoolYearId ?? null,
+    gradeSectionLabel,
+    preparedBy: scope.actorName,
+  });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
+
   return {
     title: "Teacher Summary",
     subtitle: subtitleFor(scope, filters, [`${sections.length} class(es)`]),
+    header,
+    footer,
     columns: [
       { header: "Class", width: 22 },
       { header: "Adviser", width: 24 },
@@ -1014,10 +1022,14 @@ export async function buildMosyTable(
   const assessed = mosyLearners.filter((l) => l.record !== null).length;
   const detail = blocks[blocks.length - 1];
 
-  const header = await buildReportHeader(scope, {
-    schoolYearLabel: schoolYear?.label ?? null,
+  const header = await loadReportHeader({
+    schoolName: scope.schoolName,
+    schoolId: scope.schoolId,
+    schoolYearId: schoolYear?.id ?? null,
     gradeSectionLabel: gradeSectionLabelFromLearners(learners, filters),
+    preparedBy: scope.actorName,
   });
+  const footer = await loadReportFooter({ schoolId: scope.schoolId, preparedBy: scope.actorName });
 
   return {
     title: "MOSY Report",
@@ -1030,6 +1042,7 @@ export async function buildMosyTable(
       ...(windowNote ? [windowNote] : []),
     ]),
     header,
+    footer,
     // `blocks` is what both renderers read (`reportBlocks`). The learner
     // detail block is mirrored into the flat pair so anything still reading
     // `columns`/`rows` sees the row-per-learner listing rather than nothing.

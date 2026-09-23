@@ -60,6 +60,11 @@ vi.mock("@/lib/prisma", () => ({
         district: null,
       }),
     },
+    // `loadReportHeader` also reads the active school year for the shared
+    // header's "School Year" field; `loadReportFooter` reads the school's
+    // School Head. Neither is asserted on here.
+    schoolYear: { findFirst: async () => ({ label: "2026-2027" }) },
+    user: { findFirst: async () => null },
     gradeLevel: { findFirst: async () => ({ id: "grade-g4" }) },
     section: { findFirst: async () => ({ id: "section-sampaguita" }) },
   },
@@ -114,11 +119,23 @@ async function exportSheets(rows: ReturnType<typeof learner>[]) {
   function readSheet(name: string) {
     const sheet = wb.getWorksheet(name);
     if (!sheet) throw new Error(`no ${name} sheet`);
-    const headers = (sheet.getRow(1).values as CellValue[])
+
+    // The sheet now opens with the shared DepEd-style header block
+    // (`writeSheetHeader`) before the table itself, so the table's own header
+    // row is no longer row 1 — find it (first cell "Name") rather than assume.
+    let headerRowNum = 1;
+    for (let r = 1; r <= sheet.rowCount; r += 1) {
+      if (String(sheet.getRow(r).getCell(1).value ?? "") === "Name") {
+        headerRowNum = r;
+        break;
+      }
+    }
+
+    const headers = (sheet.getRow(headerRowNum).values as CellValue[])
       .slice(1)
       .map((v) => String(v ?? ""));
     const cells = (index: number) => {
-      const values = (sheet.getRow(1 + index).values as CellValue[]).slice(1);
+      const values = (sheet.getRow(headerRowNum + index).values as CellValue[]).slice(1);
       return Object.fromEntries(
         headers.map((h, i) => [h, values[i] == null ? "" : String(values[i])])
       );
@@ -141,6 +158,7 @@ describe("learners export — name columns", () => {
       role: "SCHOOL_HEAD",
       schoolId: SCHOOL_ID,
       profileCompleted: true,
+      fullName: "Remedios Santos",
     });
   });
   afterEach(() => {

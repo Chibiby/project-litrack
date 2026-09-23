@@ -1,5 +1,15 @@
 import "server-only";
 
+import {
+  FOOTER_LOGO_BUFFERS,
+  FOOTER_LOGO_HEIGHT,
+  SYSTEM_GENERATED_NOTE,
+  writeSheetFooter,
+  writeSheetHeader,
+  type ReportFooter,
+  type ReportHeaderField,
+} from "@/lib/reports/sheet-header";
+
 /**
  * Turns a report table into a downloadable file, in either format the hub
  * offers. Every report kind reduces to the same `ReportTable` shape first, so
@@ -7,8 +17,8 @@ import "server-only";
  * sixth report means writing one query, not two exporters.
  */
 
-/** A DepEd-style "Label: Value" header line (School ID, School Year, ...). */
-export type ReportHeaderField = { label: string; value: string };
+/** A DepEd-style "Label: Value" header line (School ID, School Year, ...). Re-exported from `sheet-header.ts`, the shared module every Excel-producing action now draws this block from. */
+export type { ReportHeaderField };
 
 export type ReportBlock = {
   /** PDF section heading (and Excel tab name fallback when `sheetName` is unset). */
@@ -71,6 +81,13 @@ export type ReportTable = {
    * that omits it renders exactly as it did before this field existed.
    */
   header?: ReportHeaderField[];
+  /**
+   * The shared "Prepared by / Noted by / system-generated" footer, drawn
+   * after the last row of EVERY Excel sheet and once at the end of the PDF.
+   * Optional for the same reason `header` is: a report that omits it renders
+   * exactly as it did before this field existed.
+   */
+  footer?: ReportFooter;
 };
 
 /**
@@ -158,17 +175,11 @@ export async function renderExcel(table: ReportTable): Promise<Buffer> {
     // The DepEd-style header block ("School ID", "School Name", ...) is drawn
     // on EVERY sheet, not just the first — a School Head who prints one
     // month's SF2 sheet in isolation still needs to know whose it is.
-    if (table.header && table.header.length > 0) {
-      for (const field of table.header) {
-        const row = ws.addRow([`${field.label}:`, field.value]);
-        row.getCell(1).font = { bold: true };
-      }
-      ws.addRow([]);
-    }
-
     // Subtitle lines (school, filters, generated-at) belong to the report as
     // a whole, not to any one block, so they go on the first sheet only.
-    if (i === 0) {
+    if (table.header && table.header.length > 0) {
+      writeSheetHeader(ws, table.header, i === 0 ? table.subtitle : []);
+    } else if (i === 0) {
       for (const line of table.subtitle) {
         ws.addRow([line]);
       }
@@ -205,6 +216,12 @@ export async function renderExcel(table: ReportTable): Promise<Buffer> {
     if (block.note) {
       const noteRow = ws.addRow([block.note]);
       noteRow.font = { italic: true, color: { argb: "FF666666" } };
+    }
+
+    // The shared "Prepared by / Noted by / system-generated" footer, on
+    // EVERY sheet — same reasoning as the header repeating per sheet.
+    if (table.footer) {
+      writeSheetFooter(wb, ws, table.footer);
     }
 
     ws.columns.forEach((col, idx) => {
@@ -367,6 +384,35 @@ export async function renderPdf(table: ReportTable): Promise<Buffer> {
 
       if (idx < blocks.length - 1) doc.moveDown(1);
     });
+
+    // The shared footer, once at the end of the document (a PDF's pages are
+    // one continuous document, same reasoning `header` above gives for
+    // drawing only once here vs. per-sheet in Excel). A page break first if
+    // it would not otherwise fit, never after — see `ensureSpace`.
+    if (table.footer) {
+      const FOOTER_H = 95;
+      ensureSpace(FOOTER_H);
+      doc.moveDown(1);
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#000");
+      doc.text("Prepared by: ", left, doc.y, { continued: true });
+      doc.font("Helvetica").text(table.footer.preparedBy);
+      doc.font("Helvetica-Bold").text("Noted by: ", left, doc.y, { continued: true });
+      doc.font("Helvetica").text(table.footer.notedBy);
+      doc.moveDown(0.3);
+      doc
+        .font("Helvetica-Oblique")
+        .fontSize(8)
+        .fillColor("#666")
+        .text(SYSTEM_GENERATED_NOTE, left, doc.y);
+      doc.fillColor("#000");
+      doc.moveDown(0.4);
+      const logoY = doc.y;
+      let logoX = left;
+      for (const logo of FOOTER_LOGO_BUFFERS) {
+        doc.image(logo.buffer, logoX, logoY, { height: FOOTER_LOGO_HEIGHT });
+        logoX += logo.width + 6;
+      }
+    }
 
     doc.end();
   });

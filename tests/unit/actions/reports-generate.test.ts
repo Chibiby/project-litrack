@@ -136,6 +136,10 @@ vi.mock("@/lib/prisma", () => ({
     termGrade: { findMany: async () => [] },
     termSubject: { findMany: async () => [] },
     report: { create: (...a: unknown[]) => reportCreate(...(a as [never])) },
+    // `loadReportFooter` (`src/lib/reports/sheet-header.ts`) reads the
+    // school's School Head once for the shared footer's "Noted by" field;
+    // no test here asserts on its content.
+    user: { findFirst: async () => null },
   },
 }));
 

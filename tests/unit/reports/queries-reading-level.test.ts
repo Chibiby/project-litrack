@@ -31,6 +31,9 @@ vi.mock("@/lib/prisma", () => ({
     learner: { findMany: (...args: unknown[]) => learnerFindMany(...(args as [])) },
     schoolYear: { findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [])) },
     school: { findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [])) },
+    // `loadReportFooter` reads the school's School Head once for "Noted by";
+    // no test here asserts on its content.
+    user: { findFirst: async () => null },
   },
 }));
 

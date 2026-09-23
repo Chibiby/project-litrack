@@ -31,6 +31,13 @@ import {
   kinderCompetencyExportSchema,
   kinderCompetencySaveSchema,
 } from "@/lib/validators/kinder-competency.schema";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import {
+  loadReportFooter,
+  loadReportHeader,
+  writeSheetFooter,
+  writeSheetHeader,
+} from "@/lib/reports/sheet-header";
 
 /**
  * Server actions for the Kindergarten End-of-Term competency checklist — see
@@ -470,16 +477,40 @@ export const exportKinderChecklist = action(
     wb.created = new Date();
 
     const sheet = wb.addWorksheet("Checklist");
+
+    // This export is Kindergarten-only by construction (`isKinderGradeType`
+    // above), so the header's "Grade / Section" is always Kindergarten — no
+    // extra read needed for a section name the sheet never varies by.
+    const header = await loadReportHeader({
+      schoolId,
+      schoolYearId: schoolYear.id,
+      gradeSectionLabel: GRADE_LEVEL_LABELS.KINDER ?? "Kindergarten",
+      preparedBy: user.fullName,
+    });
+    writeSheetHeader(sheet, header);
+
+    // Widths only (no `header` key) — a `header` here would ask ExcelJS to
+    // write these labels into row 1, which the block above just claimed. The
+    // table's own header row is written explicitly below instead.
     sheet.columns = [
-      { header: "#", key: "index", width: 6 },
-      { header: "Domain", key: "domain", width: 10 },
-      { header: "Competency", key: "competency", width: 60 },
-      { header: "T1", key: "t1", width: 14 },
-      { header: "T2", key: "t2", width: 14 },
-      { header: "T3", key: "t3", width: 14 },
-      { header: "Remarks", key: "remarks", width: 30 },
+      { key: "index", width: 6 },
+      { key: "domain", width: 10 },
+      { key: "competency", width: 60 },
+      { key: "t1", width: 14 },
+      { key: "t2", width: 14 },
+      { key: "t3", width: 14 },
+      { key: "remarks", width: 30 },
     ];
-    sheet.getRow(1).font = { bold: true };
+    const tableHeaderRow = sheet.addRow([
+      "#",
+      "Domain",
+      "Competency",
+      "T1",
+      "T2",
+      "T3",
+      "Remarks",
+    ]);
+    tableHeaderRow.font = { bold: true };
 
     KINDER_COMPETENCY_ENTRIES_IN_ORDER.forEach((entry, index) => {
       const row = byKey.get(entry.key);
@@ -493,6 +524,9 @@ export const exportKinderChecklist = action(
         remarks: row?.remark ?? "",
       });
     });
+
+    const footer = await loadReportFooter({ schoolId, preparedBy: user.fullName });
+    writeSheetFooter(wb, sheet, footer);
 
     const meta = wb.addWorksheet("Export info");
     meta.addRow(["School year", schoolYear.label]);

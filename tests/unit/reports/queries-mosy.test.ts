@@ -45,6 +45,9 @@ vi.mock("@/lib/prisma", () => ({
     gradeLevel: { findMany: capture("gradeLevel", gradeLevelFindMany) },
     learner: { findMany: capture("learner", learnerFindMany) },
     school: { findFirst: (...a: unknown[]) => schoolFindFirst(...(a as [])) },
+    // `loadReportFooter` reads the school's School Head once for "Noted by";
+    // no test here asserts on its content.
+    user: { findFirst: async () => null },
   },
 }));
 
@@ -167,12 +170,16 @@ describe("buildMosyTable â€” tenancy", () => {
   it("carries schoolId on every where, school year and term overrides included", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 
-    // Four reads: school year, its overrides, grades, learners.
+    // Four reads for the report itself (school year, its overrides, grades,
+    // learners), plus a fifth: `loadReportHeader` (`sheet-header.ts`) reads
+    // the school year again, pinned to the same id, for the shared header
+    // block's "School Year" field.
     expect(capturedWheres.map((c) => c.model)).toEqual([
       "schoolYear",
       "termWindowOverride",
       "gradeLevel",
       "learner",
+      "schoolYear",
     ]);
     for (const captured of capturedWheres) {
       expect(

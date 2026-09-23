@@ -13,6 +13,21 @@ const learnerFindMany = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     learner: { findMany: (...args: unknown[]) => learnerFindMany(...(args as [])) },
+    // `loadReportHeader` (`src/lib/reports/sheet-header.ts`) reads these once
+    // for the DepEd-style header block every sheet now opens with.
+    school: {
+      findFirst: async () => ({
+        schoolIdCode: "123456",
+        name: "Malandag ES",
+        region: null,
+        division: null,
+        district: null,
+      }),
+    },
+    schoolYear: { findFirst: async () => ({ label: "2026-2027" }) },
+    // `loadReportFooter` reads the school's School Head once for "Noted by";
+    // no test here asserts on its content.
+    user: { findFirst: async () => null },
   },
 }));
 

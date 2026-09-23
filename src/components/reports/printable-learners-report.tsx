@@ -8,6 +8,12 @@ import type {
   PrintableReportLearner,
   PrintableReportSectionRow,
 } from "@/lib/actions/export-learners";
+import {
+  REPORT_FOOTER_LOGO_SOURCES,
+  SYSTEM_GENERATED_NOTE,
+  type ReportFooter,
+  type ReportHeaderField,
+} from "@/lib/reports/report-frame";
 
 type LearnerRow = PrintableReportLearner;
 type SectionSummaryRow = PrintableReportSectionRow;
@@ -25,6 +31,9 @@ type Props = {
     | Map<string, SectionSummaryRow[]>
     | PrintableReportData["byGradeSection"];
   subtitle?: string;
+  /** The shared DepEd-style header/footer block. Absent for older callers — the report still renders without it. */
+  header?: ReportHeaderField[];
+  footer?: ReportFooter;
 };
 
 function gradeEntries(
@@ -57,6 +66,8 @@ export function PrintableLearnersReport({
   byGrade,
   byGradeSection,
   subtitle,
+  header,
+  footer,
 }: Props) {
   const grades = gradeEntries(byGrade);
   const sectionRows =
@@ -68,6 +79,17 @@ export function PrintableLearnersReport({
 
   return (
     <div className="printable-report space-y-6 text-foreground">
+      {header && header.length > 0 && (
+        <dl className="space-y-0.5 border-b border-border pb-3 text-xs">
+          {header.map((field) => (
+            <div key={field.label} className="flex gap-1">
+              <dt className="font-bold">{field.label}:</dt>
+              <dd>{field.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       <header className="border-b border-border pb-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           PROJECT LITRACK
@@ -182,6 +204,20 @@ export function PrintableLearnersReport({
           <p className="text-sm text-muted-foreground">No learners to report.</p>
         )}
       </section>
+
+      {footer && (
+        <footer className="space-y-1 border-t border-border pt-3 text-xs">
+          <p className="font-bold">Prepared by: {footer.preparedBy}</p>
+          <p className="font-bold">Noted by: {footer.notedBy}</p>
+          <p className="italic text-muted-foreground">{SYSTEM_GENERATED_NOTE}</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            {REPORT_FOOTER_LOGO_SOURCES.map((logo) => (
+              // eslint-disable-next-line @next/next/no-img-element -- small static print logos, next/image's overhead buys nothing here
+              <img key={logo.src} src={logo.src} alt={logo.alt} className="h-8 w-auto" />
+            ))}
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

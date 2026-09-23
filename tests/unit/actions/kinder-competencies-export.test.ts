@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Each case builds and re-reads a real workbook (header, footer, logo image).
+// Alone that takes well under a second, but under the full suite's parallel
+// load it has crossed the 5 s default, so this file gets headroom.
+vi.setConfig({ testTimeout: 20_000 });
+
 /**
  * Action-level coverage for `exportKinderChecklist` — specifically the
  * SCHOOL_HEAD authorization branch added alongside the existing TEACHER
@@ -67,6 +72,7 @@ let session: {
   id: string;
   schoolId: string | null;
   role: "TEACHER" | "SCHOOL_HEAD" | "SUPER_ADMIN";
+  fullName?: string;
 };
 
 function learner(overrides: Partial<LearnerRow> & { id: string; fullName: string }): LearnerRow {
@@ -145,6 +151,17 @@ const schoolYearFindFirst = vi.fn(
 );
 
 const kinderCompetencyRecordFindMany = vi.fn(async (_args?: unknown) => []);
+// `loadReportHeader` reads the school row once for the shared DepEd-style
+// header block; `loadReportFooter` reads the school's School Head. Neither
+// is asserted on in this file.
+const schoolFindFirst = vi.fn(async (_args?: unknown) => ({
+  schoolIdCode: "123456",
+  name: "Malandag ES",
+  region: null,
+  division: null,
+  district: null,
+}));
+const userFindFirst = vi.fn(async (_args?: unknown) => null);
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -159,6 +176,12 @@ vi.mock("@/lib/prisma", () => ({
     },
     kinderCompetencyRecord: {
       findMany: (...args: unknown[]) => kinderCompetencyRecordFindMany(...(args as [never])),
+    },
+    school: {
+      findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [never])),
+    },
+    user: {
+      findFirst: (...args: unknown[]) => userFindFirst(...(args as [never])),
     },
   },
 }));
@@ -223,7 +246,7 @@ beforeEach(() => {
   ];
   schoolYearActive = true;
 
-  session = { id: TEACHER_ID, schoolId: SCHOOL_ID, role: "TEACHER" };
+  session = { id: TEACHER_ID, schoolId: SCHOOL_ID, role: "TEACHER", fullName: "Marivic Acibar" };
 });
 
 describe("exportKinderChecklist — teacher branch (unchanged)", () => {
@@ -232,6 +255,30 @@ describe("exportKinderChecklist — teacher branch (unchanged)", () => {
 
     expect(requireUser).toHaveBeenCalledWith(["TEACHER", "SCHOOL_HEAD"]);
     expect(file.filename).toMatch(/^litrack-kinder-checklist-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
+
+  it("opens the Checklist sheet with the shared header and closes it with the shared footer", async () => {
+    const file = fileOf(await post());
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as Parameters<
+      typeof wb.xlsx.load
+    >[0]);
+    const sheet = wb.getWorksheet("Checklist")!;
+
+    const column1: string[] = [];
+    for (let r = 1; r <= sheet.rowCount; r++) {
+      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
+    }
+    expect(column1[0]).toBe("School ID:");
+    expect(column1).toContain("Prepared by:");
+    expect(column1).toContain("Noted by:");
+    expect(column1).toContain(
+      "This is a system-generated report from LITRACK. No signature is required."
+    );
+    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    expect(sheet.getImages().length).toBe(4);
   });
 
   it("still refuses a learner outside the advisory section", async () => {
@@ -270,7 +317,12 @@ describe("exportKinderChecklist — teacher branch (unchanged)", () => {
 
 describe("exportKinderChecklist — School Head branch (new)", () => {
   beforeEach(() => {
-    session = { id: SCHOOL_HEAD_ID, schoolId: SCHOOL_ID, role: "SCHOOL_HEAD" };
+    session = {
+      id: SCHOOL_HEAD_ID,
+      schoolId: SCHOOL_ID,
+      role: "SCHOOL_HEAD",
+      fullName: "Lourdes Santos",
+    };
   });
 
   it("exports any Kindergarten learner in the School Head's own school", async () => {

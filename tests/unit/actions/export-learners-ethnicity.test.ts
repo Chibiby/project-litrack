@@ -52,7 +52,21 @@ const findManyLearner = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     learner: { findMany: (...args: unknown[]) => findManyLearner(...args) },
-    school: { findUnique: async () => ({ name: "Malandag ES" }) },
+    // `loadReportHeader` (`src/lib/reports/sheet-header.ts`) reads the school
+    // row and the active school year once for the shared DepEd-style header
+    // block; `loadReportFooter` reads the school's School Head. None of the
+    // three is asserted on in this file.
+    school: {
+      findFirst: async () => ({
+        schoolIdCode: "123456",
+        name: "Malandag ES",
+        region: null,
+        division: null,
+        district: null,
+      }),
+    },
+    schoolYear: { findFirst: async () => ({ label: "2026-2027" }) },
+    user: { findFirst: async () => null },
     gradeLevel: { findFirst: async () => ({ id: "grade-g4" }) },
     section: { findFirst: async () => ({ id: "section-sampaguita" }) },
   },
@@ -121,12 +135,23 @@ async function exportSheet(rows: ReturnType<typeof learner>[]) {
   const sheet = wb.getWorksheet("Learners");
   if (!sheet) throw new Error("no Learners sheet");
 
-  const headers = (sheet.getRow(1).values as CellValue[])
+  // The sheet now opens with the shared DepEd-style header block
+  // (`writeSheetHeader`) before the table itself, so the table's own header
+  // row is no longer row 1 — find it (first cell "Name") rather than assume.
+  let headerRowNum = 1;
+  for (let r = 1; r <= sheet.rowCount; r += 1) {
+    if (String(sheet.getRow(r).getCell(1).value ?? "") === "Name") {
+      headerRowNum = r;
+      break;
+    }
+  }
+
+  const headers = (sheet.getRow(headerRowNum).values as CellValue[])
     .slice(1)
     .map((v) => String(v ?? ""));
   /** One data row as { header: cell }, which is how a human reads the sheet. */
   const cells = (index: number) => {
-    const values = (sheet.getRow(1 + index).values as CellValue[]).slice(1);
+    const values = (sheet.getRow(headerRowNum + index).values as CellValue[]).slice(1);
     return Object.fromEntries(
       headers.map((h, i) => [h, values[i] == null ? "" : String(values[i])])
     );
@@ -146,10 +171,37 @@ describe("learners export — ethnicity", () => {
       role: "SCHOOL_HEAD",
       schoolId: SCHOOL_ID,
       profileCompleted: true,
+      fullName: "Remedios Santos",
     });
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("opens the Learners sheet with the shared header and closes it with the shared footer", async () => {
+    findManyLearner.mockResolvedValue([learner()]);
+    const res = await exportSchoolHeadLearnersExcel({});
+    if (!res.ok) throw new Error(`export failed: ${res.error}`);
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(
+      Buffer.from(res.data.base64, "base64") as unknown as ExcelLoadable
+    );
+    const sheet = wb.getWorksheet("Learners")!;
+
+    const column1: string[] = [];
+    for (let r = 1; r <= sheet.rowCount; r++) {
+      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
+    }
+    expect(column1[0]).toBe("School ID:");
+    expect(column1).toContain("Prepared by:");
+    expect(column1).toContain("Noted by:");
+    expect(column1).toContain(
+      "This is a system-generated report from LITRACK. No signature is required."
+    );
+    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    expect(sheet.getImages().length).toBe(4);
   });
 
   it("emits a specify column beside each ethnicity column", async () => {

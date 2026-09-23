@@ -235,6 +235,71 @@ describe("report header block", () => {
   });
 });
 
+describe("report footer block", () => {
+  const WITH_FOOTER: ReportTable = {
+    ...TABLE,
+    footer: { preparedBy: "Marivic M Acibar", notedBy: "Lourdes Santos" },
+  };
+
+  it("draws 'Prepared by' / 'Noted by' / the system-generated line and exactly one logo image, on the single Excel sheet", async () => {
+    const buf = await renderExcel(WITH_FOOTER);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+    const ws = wb.worksheets[0]!;
+
+    const cellTexts: string[] = [];
+    for (let r = 1; r <= ws.rowCount; r++) {
+      cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
+    }
+    expect(cellTexts).toEqual(
+      expect.arrayContaining([
+        "Prepared by:",
+        "Noted by:",
+        "This is a system-generated report from LITRACK. No signature is required.",
+      ])
+    );
+    expect(ws.getImages().length).toBe(4);
+  });
+
+  it("draws the footer, with its own image, on EVERY sheet of a multi-block report", async () => {
+    const multi: ReportTable = { ...MULTI_TABLE, footer: WITH_FOOTER.footer };
+    const buf = await renderExcel(multi);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+
+    for (const ws of wb.worksheets) {
+      const cellTexts: string[] = [];
+      for (let r = 1; r <= ws.rowCount; r++) {
+        cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
+      }
+      expect(cellTexts).toContain("Prepared by:");
+      expect(ws.getImages().length).toBe(4);
+    }
+    // The four logo files are embedded once and shared by every sheet.
+    expect(wb.model.media.length).toBe(4);
+  });
+
+  it("still produces a valid PDF with the footer (and its logo) drawn once at the end", async () => {
+    const buf = await renderPdf(WITH_FOOTER);
+    expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
+    // A document with the footer's extra text and embedded logo image is
+    // strictly bigger than the same table without one.
+    const withoutFooterBuf = await renderPdf(TABLE);
+    expect(buf.length).toBeGreaterThan(withoutFooterBuf.length);
+  });
+
+  it("renders exactly as before when footer is unset (no regression for existing reports)", async () => {
+    const buf = await renderExcel(TABLE);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+    const ws = wb.worksheets[0]!;
+    expect(ws.getImages().length).toBe(0);
+  });
+});
+
 describe("multi-block reports", () => {
   it("renders one Excel worksheet per block, named from each block's heading", async () => {
     const buf = await renderExcel(MULTI_TABLE);

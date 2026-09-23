@@ -1,0 +1,227 @@
+import { describe, expect, it, vi } from "vitest";
+import type { CellValue, Workbook } from "exceljs";
+
+/**
+ * `loadReportHeader` / `writeSheetHeader` / `loadReportFooter` /
+ * `writeSheetFooter` (`src/lib/reports/sheet-header.ts`) — the ONE shared
+ * module every Excel-producing action (`render.ts`, `export-learners.ts`,
+ * `term-grades.ts`, `kinder-competencies.ts`) now draws the DepEd-style
+ * header block and the "Prepared by / Noted by / system-generated" footer
+ * from. `render.ts`'s own tests (`tests/unit/reports-render.test.ts`) cover
+ * the header/footer being drawn through the renderers; this file pins the
+ * two writers' own row-by-row contract directly, with real exceljs.
+ */
+
+// `server-only` throws when imported outside a React Server Component, and
+// this module (and its `@/lib/prisma` import) is imported directly here.
+vi.mock("server-only", () => ({}));
+
+const schoolFindFirst = vi.fn();
+const schoolYearFindFirst = vi.fn();
+const userFindFirst = vi.fn();
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    school: { findFirst: (...args: unknown[]) => schoolFindFirst(...(args as [])) },
+    schoolYear: { findFirst: (...args: unknown[]) => schoolYearFindFirst(...(args as [])) },
+    user: { findFirst: (...args: unknown[]) => userFindFirst(...(args as [])) },
+  },
+}));
+
+const { loadReportFooter, loadReportHeader, writeSheetFooter, writeSheetHeader } = await import(
+  "@/lib/reports/sheet-header"
+);
+
+type ExcelLoadable = Parameters<Workbook["xlsx"]["load"]>[0];
+
+async function newSheet() {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Sheet");
+  return { wb, ws };
+}
+
+/** Reads column A of every row back as plain strings, for label assertions. */
+async function firstColumnOf(wb: Workbook): Promise<string[]> {
+  const buf = await wb.xlsx.writeBuffer();
+  const ExcelJS = (await import("exceljs")).default;
+  const reloaded = new ExcelJS.Workbook();
+  await reloaded.xlsx.load(buf as unknown as ExcelLoadable);
+  const ws = reloaded.worksheets[0]!;
+  const out: string[] = [];
+  for (let r = 1; r <= ws.rowCount; r++) {
+    out.push(String(ws.getRow(r).getCell(1).value ?? ""));
+  }
+  return out;
+}
+
+describe("loadReportHeader", () => {
+  it("reads a schoolId-pinned School and SchoolYear, and builds the eight-field header", async () => {
+    schoolFindFirst.mockResolvedValueOnce({
+      schoolIdCode: "123456",
+      name: "Malandag ES",
+      region: "Region XI",
+      division: "Davao del Sur",
+      district: "Malandag District",
+    });
+    schoolYearFindFirst.mockResolvedValueOnce({ label: "2026-2027" });
+
+    const header = await loadReportHeader({
+      schoolId: "school-1",
+      gradeSectionLabel: "Grade 3 - A",
+      preparedBy: "Marivic M Acibar",
+    });
+
+    expect(header).toEqual([
+      { label: "School ID", value: "123456" },
+      { label: "School Name", value: "Malandag ES" },
+      { label: "Region", value: "Region XI" },
+      { label: "Division", value: "Davao del Sur" },
+      { label: "District", value: "Malandag District" },
+      { label: "School Year", value: "2026-2027" },
+      { label: "Grade / Section", value: "Grade 3 - A" },
+      { label: "Prepared by", value: "Marivic M Acibar" },
+    ]);
+    expect(schoolFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "school-1", deletedAt: null } })
+    );
+  });
+
+  it("pins the SchoolYear read to the given id, scoped to the same school", async () => {
+    schoolFindFirst.mockResolvedValueOnce(null);
+    schoolYearFindFirst.mockResolvedValueOnce({ label: "2025-2026" });
+
+    await loadReportHeader({
+      schoolId: "school-1",
+      schoolYearId: "sy-2025",
+      preparedBy: "Someone",
+    });
+
+    expect(schoolYearFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: "school-1", id: "sy-2025" } })
+    );
+  });
+
+  it("falls back to the active year when no schoolYearId is given", async () => {
+    schoolFindFirst.mockResolvedValueOnce(null);
+    schoolYearFindFirst.mockResolvedValueOnce(null);
+
+    await loadReportHeader({ schoolId: "school-1", preparedBy: "Someone" });
+
+    expect(schoolYearFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: "school-1", isActive: true } })
+    );
+  });
+});
+
+describe("writeSheetHeader", () => {
+  it("writes the labelled rows bold, a blank row, then the subtitle lines, then a trailing blank row", async () => {
+    const { wb, ws } = await newSheet();
+    const header = [
+      { label: "School ID", value: "123456" },
+      { label: "School Name", value: "Malandag ES" },
+      { label: "School Year", value: "2026-2027" },
+      { label: "Grade / Section", value: "All Classes" },
+      { label: "Prepared by", value: "Marivic M Acibar" },
+    ];
+
+    const lastRow = writeSheetHeader(ws, header, ["Malandag ES", "Generated by Marivic on 2026-09-23"]);
+
+    expect(ws.getRow(1).getCell(1).value).toBe("School ID:");
+    expect(ws.getRow(1).getCell(1).font).toEqual({ bold: true });
+    expect(ws.getRow(1).getCell(2).value).toBe("123456");
+    expect(ws.getRow(5).getCell(1).value).toBe("Prepared by:");
+    expect(ws.getRow(5).getCell(1).font).toEqual({ bold: true });
+    // Row 6: blank separator after the header fields.
+    expect(ws.getRow(6).getCell(1).value).toBeNull();
+    // Rows 7-8: the subtitle lines, verbatim.
+    expect(ws.getRow(7).getCell(1).value).toBe("Malandag ES");
+    expect(ws.getRow(8).getCell(1).value).toBe("Generated by Marivic on 2026-09-23");
+    // Row 9: trailing blank row, ready for the caller's own table header.
+    expect(ws.getRow(9).getCell(1).value).toBeNull();
+    expect(lastRow).toBe(9);
+
+    const column1 = await firstColumnOf(wb);
+    expect(column1.slice(0, 9)).toEqual([
+      "School ID:",
+      "School Name:",
+      "School Year:",
+      "Grade / Section:",
+      "Prepared by:",
+      "",
+      "Malandag ES",
+      "Generated by Marivic on 2026-09-23",
+      "",
+    ]);
+  });
+
+  it("omits the subtitle rows entirely when none are given, still leaving one blank row after the header", async () => {
+    const { ws } = await newSheet();
+    const lastRow = writeSheetHeader(ws, [{ label: "School ID", value: "123456" }]);
+
+    expect(ws.rowCount).toBe(2);
+    expect(ws.getRow(2).getCell(1).value).toBeNull();
+    expect(lastRow).toBe(2);
+  });
+});
+
+describe("loadReportFooter", () => {
+  it("reads the school's School Head for 'Noted by', carrying the given preparedBy through", async () => {
+    userFindFirst.mockResolvedValueOnce({ fullName: "Lourdes Santos" });
+
+    const footer = await loadReportFooter({ schoolId: "school-1", preparedBy: "Marivic M Acibar" });
+
+    expect(footer).toEqual({ preparedBy: "Marivic M Acibar", notedBy: "Lourdes Santos" });
+    expect(userFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { schoolId: "school-1", role: "SCHOOL_HEAD", deletedAt: null },
+      })
+    );
+  });
+
+  it("leaves notedBy blank, never a placeholder, when the school has no School Head on file", async () => {
+    userFindFirst.mockResolvedValueOnce(null);
+
+    const footer = await loadReportFooter({ schoolId: "school-1", preparedBy: "Marivic M Acibar" });
+
+    expect(footer.notedBy).toBe("");
+  });
+});
+
+describe("writeSheetFooter", () => {
+  it("writes 'Prepared by:' and 'Noted by:' bold, the system-generated note, and exactly one logo image", async () => {
+    const { wb, ws } = await newSheet();
+    ws.addRow(["#", "Name"]);
+    ws.addRow([1, "Dela Cruz, Juan"]);
+
+    writeSheetFooter(wb, ws, { preparedBy: "Marivic M Acibar", notedBy: "Lourdes Santos" });
+
+    const column1 = await firstColumnOf(wb);
+    expect(column1).toContain("Prepared by:");
+    expect(column1).toContain("Noted by:");
+    expect(column1).toContain(
+      "This is a system-generated report from LITRACK. No signature is required."
+    );
+    // No signature blanks/underscores — the report is system-generated.
+    expect(column1.join(" ")).not.toMatch(/_{3,}/);
+
+    const preparedRowIdx = column1.indexOf("Prepared by:") + 1;
+    expect(ws.getRow(preparedRowIdx).getCell(1).font).toEqual({ bold: true });
+    expect(ws.getRow(preparedRowIdx).getCell(2).value).toBe("Marivic M Acibar");
+    const notedRowIdx = column1.indexOf("Noted by:") + 1;
+    expect(ws.getRow(notedRowIdx).getCell(1).font).toEqual({ bold: true });
+    expect(ws.getRow(notedRowIdx).getCell(2).value).toBe("Lourdes Santos");
+
+    expect(ws.getImages().length).toBe(4);
+  });
+
+  it("never shrinks or shifts a column width the table above it depends on", async () => {
+    const { wb, ws } = await newSheet();
+    ws.columns = [{ key: "a", width: 30 }, { key: "b", width: 40 }];
+    const widthsBefore = ws.columns.map((c) => c.width);
+
+    writeSheetFooter(wb, ws, { preparedBy: "Someone", notedBy: "" });
+
+    expect(ws.columns.map((c) => c.width)).toEqual(widthsBefore);
+  });
+});

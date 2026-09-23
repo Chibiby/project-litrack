@@ -105,6 +105,8 @@ export function OnDemandReportPanel({
             byGrade={report.byGrade}
             byGradeSection={report.byGradeSection}
             subtitle={subtitle}
+            header={report.header}
+            footer={report.footer}
           />
         </div>
       ) : (
