@@ -180,10 +180,11 @@ export function KinderChecklistClient({
           advisories={[]}
           advisoryId={null}
           onAdvisoryChange={() => {}}
-          onExport={() =>
+          onExport={(purpose) =>
             exportKinderChecklist({
               learnerId: learnerId ?? "",
               advisorySectionId,
+              purpose,
             }) as Promise<KinderChecklistActionResult<KinderChecklistExportResult>>
           }
         />

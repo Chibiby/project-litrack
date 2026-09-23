@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { KINDER_COMPETENCY_COUNT } from "@/lib/terms/kinder-competencies";
+import { reportPurposeSchema } from "./report.schema";
 
 /**
  * Kindergarten End-of-Term competency checklist save payload — see
@@ -46,6 +47,8 @@ export type KinderCompetencySaveInput = z.infer<typeof kinderCompetencySaveSchem
 export const kinderCompetencyExportSchema = z.object({
   learnerId: z.string().min(1),
   advisorySectionId: z.string().min(1).optional(),
+  /** PRINT (default) or RECORDS — see `reportPurposeSchema`. */
+  purpose: reportPurposeSchema,
 });
 
 export type KinderCompetencyExportInput = z.infer<typeof kinderCompetencyExportSchema>;

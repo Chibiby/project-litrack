@@ -37,13 +37,7 @@ import {
   type TermGradesSaveInput,
 } from "@/lib/validators/term-grade.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import {
-  loadReportFooter,
-  loadReportHeader,
-  writeSheetFooter,
-  withGradeSection,
-  writeSheetHeader,
-} from "@/lib/reports/sheet-header";
+import { loadReportFrame, writeTemplateSheet } from "@/lib/reports/sheet-header";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -484,6 +478,8 @@ export async function exportTermGrades(
     gradeType: string;
     sectionId: string | null;
     label: string;
+    /** For the template's info row. Null when the sheet is not one known section. */
+    sectionName: string | null;
     rosterWhere: Prisma.LearnerWhereInput;
   }[] = [];
 
@@ -500,6 +496,16 @@ export async function exportTermGrades(
 
     schoolId = grade.schoolId;
     const section = parsed.data.section ?? "all";
+    // A real section id names itself on the sheet even when nobody is enrolled
+    // in it — reading the name off the roster would print "All Sections" then.
+    // Pinned to this grade's school and grade, so a foreign id names nothing.
+    const namedSection =
+      section !== "all" && section !== "none"
+        ? await prisma.section.findFirst({
+            where: { id: section, schoolId, gradeLevelId: grade.id, deletedAt: null },
+            select: { name: true },
+          })
+        : null;
     // `"none"` is kept verbatim rather than flattened to null, so the audit row
     // distinguishes "the whole grade" from "the learners with no section" —
     // matching how `export-learners.ts` logs its own section filter.
@@ -508,6 +514,7 @@ export async function exportTermGrades(
       gradeType: grade.type,
       sectionId: section === "all" ? null : section,
       label: "",
+      sectionName: section === "none" ? "No section" : (namedSection?.name ?? null),
       rosterWhere: {
         schoolId,
         gradeLevelId: grade.id,
@@ -545,6 +552,7 @@ export async function exportTermGrades(
         gradeType: advisory.gradeType,
         sectionId: advisory.sectionId,
         label: advisory.label,
+        sectionName: advisory.sectionName,
         rosterWhere: {
           schoolId: teacherSchoolId,
           gradeLevelId: advisory.gradeLevelId,
@@ -581,9 +589,6 @@ export async function exportTermGrades(
   );
   if (!window) return { ok: false, error: "Invalid input" };
 
-  // Prefixed so a subject id can never collide with a fixed column key.
-  const columnKey = (id: string) => `subject:${id}`;
-
   // Dynamic import keeps exceljs off every other code path in this module.
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
@@ -598,11 +603,14 @@ export async function exportTermGrades(
       ? window.label
       : (label.replace(/[:\\/?*[\]]/g, "-").slice(0, 28) || `Section ${index + 1}`);
 
-  // Both read once for every sheet: only "Grade / Section" differs per target.
-  const [footer, baseHeader] = await Promise.all([
-    loadReportFooter({ schoolId, preparedBy: user.fullName }),
-    loadReportHeader({ schoolId, schoolYearId: schoolYear.id, preparedBy: user.fullName }),
-  ]);
+  // Read once for every sheet: only the grade/section line differs per target.
+  const frame = await loadReportFrame({
+    schoolId,
+    schoolYearId: schoolYear.id,
+    preparedBy: user.fullName,
+  });
+  const templateCtx = { frame, generatedOn: schoolToday() };
+  const purpose = parsed.data.purpose;
 
   let learnerCount = 0;
   let cellCount = 0;
@@ -639,7 +647,7 @@ export async function exportTermGrades(
     const [learners, rows] = await Promise.all([
       prisma.learner.findMany({
         where: target.rosterWhere,
-        select: { id: true, fullName: true },
+        select: { id: true, fullName: true, section: { select: { name: true } } },
         orderBy: { fullName: "asc" },
       }),
       prisma.termGrade.findMany({
@@ -672,54 +680,46 @@ export async function exportTermGrades(
     const isLetterScale = termGradingScale(target.gradeType) === "LETTER";
     const sheet = wb.addWorksheet(sheetName(target.label, index));
 
-    writeSheetHeader(
-      sheet,
-      withGradeSection(
-        baseHeader,
-        target.label || (GRADE_LEVEL_LABELS[target.gradeType] ?? target.gradeType)
-      )
-    );
-
-    // Widths only (no `header` key) — a `header` here would ask ExcelJS to
-    // write these labels into row 1, which the block above just claimed. The
-    // table's own header row is written explicitly below instead.
-    sheet.columns = [
-      { key: "index", width: 6 },
-      { key: "fullName", width: 30 },
-      ...subjects.map((subject) => ({ key: columnKey(subject.id), width: 16 })),
-      ...(isLetterScale ? [] : [{ key: "average", width: 18 }]),
-    ];
-    const tableHeaderRow = sheet.addRow([
-      "#",
-      "Complete Name",
-      ...subjects.map((subject) => subject.name),
-      ...(isLetterScale ? [] : ["General Average"]),
-    ]);
-    tableHeaderRow.font = { bold: true };
-
-    learners.forEach((learner, index) => {
+    const rowsOut = learners.map((learner, index) => {
       const cells = byLearner.get(learner.id);
       const rowCells = subjects.map((subject) => cells?.get(subject.id) ?? null);
-      const row: Record<string, string | number> = {
-        index: index + 1,
-        fullName: learner.fullName,
-      };
-      subjects.forEach((subject, i) => {
-        const cell = rowCells[i];
+      return [
+        index + 1,
+        learner.fullName,
         // A score stays a number cell, exactly as before; a mark is its label.
-        row[columnKey(subject.id)] = !cell
-          ? ""
-          : cell.mark
-            ? termCellText(cell)
-            : (cell.score ?? "");
-      });
-      if (!isLetterScale) {
-        row.average = rowGeneralAverage(target.gradeType, rowCells) ?? "";
-      }
-      sheet.addRow(row);
+        ...rowCells.map((cell) =>
+          !cell ? "" : cell.mark ? termCellText(cell) : (cell.score ?? "")
+        ),
+        ...(isLetterScale ? [] : [rowGeneralAverage(target.gradeType, rowCells) ?? ""]),
+      ];
     });
 
-    writeSheetFooter(wb, sheet, footer);
+    writeTemplateSheet(
+      wb,
+      sheet,
+      templateCtx,
+      {
+        reportTitle: "End of Term Report",
+        gradeSection: {
+          gradeLevel: GRADE_LEVEL_LABELS[target.gradeType] ?? target.gradeType,
+          // A Super Admin's sheet of one section id names it off the roster
+          // itself (every learner in it shares that section); "all" names none.
+          section:
+            target.sectionName ??
+            (target.sectionId ? (learners[0]?.section?.name ?? null) : null),
+        },
+        reportingPeriod: `${window.label} (${window.rangeLabel})`,
+        columns: [
+          { header: "#", width: 6 },
+          { header: "Complete Name", width: 30 },
+          ...subjects.map((subject) => ({ header: subject.name, width: 16 })),
+          ...(isLetterScale ? [] : [{ header: "General Average", width: 18 }]),
+        ],
+        rows: rowsOut,
+        summary: [`${learners.length} learner(s), ${subjects.length} subject(s)`],
+      },
+      purpose
+    );
   }
 
   const meta = wb.addWorksheet("Export info");
@@ -752,6 +752,7 @@ export async function exportTermGrades(
       schoolYearId: schoolYear.id,
       learnerCount,
       cellCount,
+      purpose,
       role: user.role,
     },
   });

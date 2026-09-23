@@ -9,10 +9,15 @@ import type {
   PrintableReportSectionRow,
 } from "@/lib/actions/export-learners";
 import {
-  REPORT_FOOTER_LOGO_SOURCES,
-  SYSTEM_GENERATED_NOTE,
+  EMPTY_REPORT_FRAME,
+  formatReportDate,
+  REPORT_BOTTOM_LOGO_SOURCES,
+  REPORT_TOP_LOGO_SOURCE,
+  SIGNATURE_CAPTION,
+  templateHeaderLines,
   type ReportFooter,
   type ReportHeaderField,
+  type TemplateHeaderLine,
 } from "@/lib/reports/report-frame";
 
 type LearnerRow = PrintableReportLearner;
@@ -58,6 +63,42 @@ function sectionEntries(
   );
 }
 
+function fieldValue(header: ReportHeaderField[] | undefined, label: string): string {
+  return header?.find((f) => f.label === label)?.value ?? "";
+}
+
+/**
+ * Tailwind classes for one centred header line, derived from the same
+ * bold/size signal `templateHeaderLines` gives the Excel/PDF renderers —
+ * never its ARGB `color` (that's for spreadsheet cells; this view sticks to
+ * design tokens, per house rule). Only "DEPARTMENT OF EDUCATION" is both
+ * bold and size 16+; the school name is bold at a smaller size; everything
+ * else (Republic of the Philippines, Region, Division, District, Address)
+ * prints plain.
+ */
+function headerLineClassName(line: TemplateHeaderLine): string {
+  if (line.bold && line.size >= 16) {
+    return "text-lg font-bold uppercase tracking-wide";
+  }
+  if (line.bold) {
+    return "text-sm font-bold";
+  }
+  return "text-sm";
+}
+
+function SignatureColumn({ label, name }: { label: string; name: string }) {
+  return (
+    <div className="flex flex-col items-center gap-10 text-center">
+      <p className="self-start text-xs font-bold">{label}</p>
+      <div className="w-full">
+        <p className="min-h-[1.25rem] text-sm font-medium">{name || " "}</p>
+        <div className="mt-1 border-t border-foreground" />
+        <p className="mt-1 text-[10px] text-muted-foreground">{SIGNATURE_CAPTION}</p>
+      </div>
+    </div>
+  );
+}
+
 export function PrintableLearnersReport({
   schoolName,
   generatedAt,
@@ -77,33 +118,64 @@ export function PrintableLearnersReport({
   const generated =
     generatedAt instanceof Date ? generatedAt : new Date(generatedAt);
 
-  return (
-    <div className="printable-report space-y-6 text-foreground">
-      {header && header.length > 0 && (
-        <dl className="space-y-0.5 border-b border-border pb-3 text-xs">
-          {header.map((field) => (
-            <div key={field.label} className="flex gap-1">
-              <dt className="font-bold">{field.label}:</dt>
-              <dd>{field.value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+  const headerLines = templateHeaderLines({
+    ...EMPTY_REPORT_FRAME,
+    schoolName,
+    region: fieldValue(header, "Region"),
+    division: fieldValue(header, "Division"),
+    district: fieldValue(header, "District"),
+    // No "School Address" field is resolved anywhere yet — omitted rather
+    // than a placeholder, same rule `templateHeaderLines` already follows
+    // for every other blank field.
+    address: fieldValue(header, "School Address") || fieldValue(header, "Address"),
+  });
 
-      <header className="border-b border-border pb-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          PROJECT LITRACK
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight">{schoolName}</h1>
-        <p className="text-sm text-muted-foreground">
-          Learner & ARAL summary report
-          {subtitle ? ` · ${subtitle}` : ""}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Generated {generated.toLocaleString()} · {learners.length} learner
-          {learners.length === 1 ? "" : "s"} · {aralCount} ARAL
-        </p>
+  const reportTitle = subtitle
+    ? `Learner & ARAL Summary Report — ${subtitle}`
+    : "Learner & ARAL Summary Report";
+
+  return (
+    <div className="printable-report mx-auto max-w-3xl space-y-6 text-foreground">
+      {/*
+        A4 page size and keeping the signature block off a page break are
+        specific to this print template, so they live here rather than in
+        `globals.css`'s shared `@media print` block (that block covers every
+        printable view, not just this one's page geometry).
+      */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 16mm;
+          }
+          .printable-report footer {
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
+
+      <header className="flex flex-col items-center gap-1 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element -- small static print seal, next/image's overhead buys nothing in a print-only view */}
+        <img
+          src={REPORT_TOP_LOGO_SOURCE.src}
+          alt={REPORT_TOP_LOGO_SOURCE.alt}
+          className="mb-1 h-20 w-20 object-contain"
+        />
+        {headerLines.map((line) => (
+          <p key={line.text} className={headerLineClassName(line)}>
+            {line.text}
+          </p>
+        ))}
       </header>
+
+      <hr className="border-border" />
+
+      <div className="space-y-1 text-center">
+        <h1 className="text-base font-bold uppercase tracking-wide">{reportTitle}</h1>
+        <p className="text-xs text-muted-foreground">
+          {learners.length} learner{learners.length === 1 ? "" : "s"} · {aralCount} ARAL
+        </p>
+      </div>
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Summary by grade</h2>
@@ -206,15 +278,26 @@ export function PrintableLearnersReport({
       </section>
 
       {footer && (
-        <footer className="space-y-1 border-t border-border pt-3 text-xs">
-          <p className="font-bold">Prepared by: {footer.preparedBy}</p>
-          <p className="font-bold">Noted by: {footer.notedBy}</p>
-          <p className="italic text-muted-foreground">{SYSTEM_GENERATED_NOTE}</p>
-          <div className="mt-1 flex items-center gap-1.5">
-            {REPORT_FOOTER_LOGO_SOURCES.map((logo) => (
-              // eslint-disable-next-line @next/next/no-img-element -- small static print logos, next/image's overhead buys nothing here
-              <img key={logo.src} src={logo.src} alt={logo.alt} className="h-8 w-auto" />
-            ))}
+        <footer className="space-y-8 pt-6">
+          <div className="grid grid-cols-3 gap-6">
+            <SignatureColumn label="Prepared by:" name={footer.preparedBy} />
+            <SignatureColumn label="Checked by:" name="" />
+            <SignatureColumn label="Noted by:" name={footer.notedBy} />
+          </div>
+
+          <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-3">
+            <div className="flex items-center gap-2">
+              {REPORT_BOTTOM_LOGO_SOURCES.map((logo) => (
+                // eslint-disable-next-line @next/next/no-img-element -- small static print logos, next/image's overhead buys nothing here
+                <img key={logo.src} src={logo.src} alt={logo.alt} className="h-12 w-auto" />
+              ))}
+            </div>
+            <div className="text-right text-[11px] text-muted-foreground">
+              <p>LITRACK | {reportTitle}</p>
+              <p>
+                Generated by {footer.preparedBy || "—"} on {formatReportDate(generated)}
+              </p>
+            </div>
           </div>
         </footer>
       )}

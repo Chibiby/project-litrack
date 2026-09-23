@@ -9,8 +9,9 @@
  */
 
 import type { ReportFormat, ReportKind } from "@prisma/client";
+import type { ReportPurpose } from "@/lib/reports/report-frame";
 
-export type { ReportFormat, ReportKind };
+export type { ReportFormat, ReportKind, ReportPurpose };
 
 // The labels themselves live with every other enum's, per the repo rule that
 // adding an enum value means updating `enum-labels.ts` too. Re-exported here so
@@ -42,6 +43,12 @@ export type ReportFilters = {
   /** Inclusive local date key. */
   to?: string | null;
   term?: string | null;
+  /**
+   * PRINT (the full template, default) or RECORDS (a plain data sheet).
+   * Stored with the filters on the history row so Re-generate replays it; a
+   * row saved before this field existed has none and replays as PRINT.
+   */
+  purpose?: ReportPurpose | null;
 };
 
 /**

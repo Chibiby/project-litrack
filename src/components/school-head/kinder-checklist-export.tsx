@@ -42,8 +42,8 @@ export function SchoolHeadKinderChecklistExport({
     <>
       <div className="flex justify-end print:hidden">
         <KinderChecklistExportControls
-          onExport={() =>
-            exportKinderChecklist({ learnerId }) as Promise<
+          onExport={(purpose) =>
+            exportKinderChecklist({ learnerId, purpose }) as Promise<
               KinderChecklistActionResult<KinderChecklistExportResult>
             >
           }

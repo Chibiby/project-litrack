@@ -32,12 +32,7 @@ import {
   kinderCompetencySaveSchema,
 } from "@/lib/validators/kinder-competency.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import {
-  loadReportFooter,
-  loadReportHeader,
-  writeSheetFooter,
-  writeSheetHeader,
-} from "@/lib/reports/sheet-header";
+import { loadReportFrame, writeTemplateSheet } from "@/lib/reports/sheet-header";
 
 /**
  * Server actions for the Kindergarten End-of-Term competency checklist — see
@@ -478,55 +473,50 @@ export const exportKinderChecklist = action(
 
     const sheet = wb.addWorksheet("Checklist");
 
-    // This export is Kindergarten-only by construction (`isKinderGradeType`
-    // above), so the header's "Grade / Section" is always Kindergarten — no
-    // extra read needed for a section name the sheet never varies by.
-    const header = await loadReportHeader({
+    const frame = await loadReportFrame({
       schoolId,
       schoolYearId: schoolYear.id,
-      gradeSectionLabel: GRADE_LEVEL_LABELS.KINDER ?? "Kindergarten",
       preparedBy: user.fullName,
     });
-    writeSheetHeader(sheet, header);
 
-    // Widths only (no `header` key) — a `header` here would ask ExcelJS to
-    // write these labels into row 1, which the block above just claimed. The
-    // table's own header row is written explicitly below instead.
-    sheet.columns = [
-      { key: "index", width: 6 },
-      { key: "domain", width: 10 },
-      { key: "competency", width: 60 },
-      { key: "t1", width: 14 },
-      { key: "t2", width: 14 },
-      { key: "t3", width: 14 },
-      { key: "remarks", width: 30 },
-    ];
-    const tableHeaderRow = sheet.addRow([
-      "#",
-      "Domain",
-      "Competency",
-      "T1",
-      "T2",
-      "T3",
-      "Remarks",
-    ]);
-    tableHeaderRow.font = { bold: true };
-
-    KINDER_COMPETENCY_ENTRIES_IN_ORDER.forEach((entry, index) => {
-      const row = byKey.get(entry.key);
-      sheet.addRow({
-        index: index + 1,
-        domain: entry.domain,
-        competency: entry.text,
-        t1: row?.t1Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t1Rating] : "",
-        t2: row?.t2Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t2Rating] : "",
-        t3: row?.t3Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t3Rating] : "",
-        remarks: row?.remark ?? "",
-      });
-    });
-
-    const footer = await loadReportFooter({ schoolId, preparedBy: user.fullName });
-    writeSheetFooter(wb, sheet, footer);
+    // This export is Kindergarten-only by construction (`isKinderGradeType`
+    // above), so the grade line is always Kindergarten — no extra read needed
+    // for a grade name the sheet never varies by.
+    writeTemplateSheet(
+      wb,
+      sheet,
+      { frame, generatedOn: schoolToday() },
+      {
+        reportTitle: "Kindergarten Checklist",
+        gradeSection: { gradeLevel: GRADE_LEVEL_LABELS.KINDER ?? "Kindergarten", section: null },
+        reportingPeriod: `School Year ${schoolYear.label}`,
+        columns: [
+          { header: "#", width: 6 },
+          { header: "Domain", width: 10 },
+          { header: "Competency", width: 60 },
+          { header: "T1", width: 14 },
+          { header: "T2", width: 14 },
+          { header: "T3", width: 14 },
+          { header: "Remarks", width: 30 },
+        ],
+        rows: KINDER_COMPETENCY_ENTRIES_IN_ORDER.map((entry, index) => {
+          const row = byKey.get(entry.key);
+          return [
+            index + 1,
+            entry.domain,
+            entry.text,
+            row?.t1Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t1Rating] : "",
+            row?.t2Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t2Rating] : "",
+            row?.t3Rating ? KINDER_COMPETENCY_RATING_LABELS[row.t3Rating] : "",
+            row?.remark ?? "",
+          ];
+        }),
+        summary: [`Learner: ${learner.fullName}`],
+        // The competency text is what a reader scans, not the domain code.
+        primaryColumn: 2,
+      },
+      parsed.purpose
+    );
 
     const meta = wb.addWorksheet("Export info");
     meta.addRow(["School year", schoolYear.label]);
@@ -550,6 +540,7 @@ export const exportKinderChecklist = action(
         learnerId: learner.id,
         schoolYearId: schoolYear.id,
         recordCount: records.length,
+        purpose: parsed.purpose,
         role: user.role,
       },
     });

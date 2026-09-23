@@ -17,13 +17,16 @@ import {
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { formatListingNameFromRecord } from "@/lib/names";
 import {
-  loadReportFooter,
-  loadReportHeader,
-  writeSheetFooter,
-  writeSheetHeader,
+  loadReportFrame,
+  writeTemplateSheet,
+  type GradeSectionLine,
   type ReportFooter,
+  type ReportFrame,
   type ReportHeaderField,
+  type ReportPurpose,
 } from "@/lib/reports/sheet-header";
+import { formatGradeSectionLine, frameFooter, frameHeaderFields } from "@/lib/reports/report-frame";
+import { reportPurposeSchema } from "@/lib/validators/report.schema";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -46,6 +49,8 @@ export type ExportLearnersFilter = {
   /** Filter to one section; `"none"` = learners with no section. */
   sectionId?: string;
   aralOnly?: boolean;
+  /** PRINT (default: the DepEd print template) or RECORDS (a plain sortable sheet). */
+  purpose?: ReportPurpose;
 };
 
 /** Fields rendered by PrintableLearnersReport (+ relations). */
@@ -93,23 +98,36 @@ const learnerExportSelect = {
 } as const;
 
 /**
- * "Grade 3 - A" / "Grade 3" / "All" for the shared header's "Grade / Section"
- * field — same rule `gradeSectionLabelFromLearners` (`src/lib/reports/queries.ts`)
- * follows for the Reports Hub, applied to this export's own already-filtered
- * roster rather than importing across module boundaries for one label.
+ * The template's grade/section line — same rule `gradeSectionLabelFromLearners`
+ * (`src/lib/reports/queries.ts`) follows for the Reports Hub, applied to this
+ * export's own already-filtered roster rather than importing across module
+ * boundaries for one label.
  */
-function gradeSectionLabelFor(
+function gradeSectionFor(
   learners: { gradeLevel: { type: string }; section: { name: string } | null }[],
   filter: { gradeLevelId?: string; sectionId?: string }
-): string {
+): GradeSectionLine {
   const first = learners[0];
+  const grade = first ? (GRADE_LEVEL_LABELS[first.gradeLevel.type] ?? first.gradeLevel.type) : null;
   if (filter.sectionId && first) {
-    return `${GRADE_LEVEL_LABELS[first.gradeLevel.type] ?? first.gradeLevel.type} - ${first.section?.name ?? "—"}`;
+    return { gradeLevel: grade, section: first.section?.name ?? "—" };
   }
-  if (filter.gradeLevelId && first) {
-    return GRADE_LEVEL_LABELS[first.gradeLevel.type] ?? first.gradeLevel.type;
+  if (filter.gradeLevelId && first) return { gradeLevel: grade, section: null };
+  return { label: "All" };
+}
+
+/**
+ * `purpose` arrives on a plain object, not FormData, so it is parsed here at
+ * the boundary. Missing means PRINT.
+ */
+function parsePurpose(
+  value: unknown
+): { ok: true; purpose: ReportPurpose } | { ok: false; error: string } {
+  const parsed = reportPurposeSchema.safeParse(value);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
-  return "All";
+  return { ok: true, purpose: parsed.data };
 }
 
 function sectionFilterClause(sectionId?: string) {
@@ -182,8 +200,9 @@ async function fetchLearnersForReport(opts: {
 
 async function buildLearnersWorkbook(
   learners: Awaited<ReturnType<typeof fetchLearnersForExport>>,
-  header: ReportHeaderField[],
-  footer: ReportFooter
+  frame: ReportFrame,
+  gradeSection: GradeSectionLine,
+  purpose: ReportPurpose
 ): Promise<Buffer> {
   // Dynamic import keeps exceljs off the reports (`loadLearnersForReport`) cold path.
   const ExcelJS = (await import("exceljs")).default;
@@ -191,148 +210,121 @@ async function buildLearnersWorkbook(
   wb.creator = "LITRACK";
   wb.created = new Date();
 
+  // Local day, never `toISOString()`: the school runs at UTC+8.
+  const ctx = { frame, generatedOn: schoolToday() };
+  const aralLearners = learners.filter((l) => l.isAralLearner);
+
   const sheet = wb.addWorksheet("Learners");
-  writeSheetHeader(sheet, header);
-  // Widths only (no `header` key) — a `header` here would ask ExcelJS to
-  // write these labels into row 1, which the DepEd header block above just
-  // claimed. The table's own header row is written explicitly below instead.
-  sheet.columns = [
-    { key: "fullName", width: 28 },
-    { key: "firstName", width: 14 },
-    { key: "middleName", width: 14 },
-    { key: "lastName", width: 14 },
-    { key: "age", width: 8 },
-    { key: "gender", width: 10 },
-    { key: "nutrition", width: 18 },
-    { key: "ethnicity", width: 16 },
-    { key: "ethnicityOther", width: 18 },
-    { key: "secondaryEthnicity", width: 16 },
-    { key: "secondaryEthnicityOther", width: 18 },
-    { key: "grade", width: 12 },
-    { key: "section", width: 12 },
-    { key: "english", width: 28 },
-    { key: "filipino", width: 28 },
-    { key: "benefits", width: 14 },
-    { key: "parentEd", width: 22 },
-    { key: "aral", width: 8 },
-  ];
-  const tableHeaderRow = sheet.addRow([
-    "Name",
-    "First name",
-    "Middle name",
-    "Last name",
-    "Age",
-    "Gender",
-    "Nutritional status",
-    // Four columns, not two. The label column names the enum answer and the
-    // "specify" column beside it carries the free text. Folding the free text
-    // into the label — which this sheet used to do — erased the answer itself:
-    // an Others/"Manobo" learner exported as `Manobo`, which is not one of the
-    // thirteen and so resolves to nothing on the way back in.
-    "Ethnicity",
-    "Ethnicity (specify)",
-    // Its own column rather than one cell holding both, so the sheet stays
-    // sortable and filterable on each answer.
-    "Second ethnicity",
-    "Second ethnicity (specify)",
-    "Grade",
-    "Section",
-    "English profile",
-    "Filipino profile",
-    "Gov benefits",
-    "Parent education",
-    "ARAL",
-  ]);
-  tableHeaderRow.font = { bold: true };
-
-  for (const l of learners) {
-    sheet.addRow({
-      fullName: formatListingNameFromRecord(l),
-      firstName: l.firstName,
-      middleName: l.middleName ?? "",
-      lastName: l.lastName,
-      age: l.age,
-      gender: GENDER_LABELS[l.gender as keyof typeof GENDER_LABELS] ?? l.gender,
-      nutrition: l.nutritionalStatus
-        ? NUTRITIONAL_STATUS_LABELS[l.nutritionalStatus]
-        : "",
-      ethnicity: labelEthnicityOnly(l.ethnicity),
-      ethnicityOther: l.ethnicityOther ?? "",
-      secondaryEthnicity: labelEthnicityOnly(l.secondaryEthnicity),
-      secondaryEthnicityOther: l.secondaryEthnicityOther ?? "",
-      grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
-      section: l.section?.name ?? "",
-      english: l.englishReadingProfile
-        ? labelReadingProfile(l.englishReadingProfile, l.gradeLevel.type)
-        : "",
-      filipino: labelReadingProfile(
-        l.filipinoReadingProfile,
-        l.gradeLevel.type
-      ),
-      benefits: l.governmentBenefits
-        .map((b) => GOV_BENEFIT_LABELS[b as keyof typeof GOV_BENEFIT_LABELS] ?? b)
-        .join("; "),
-      parentEd:
+  writeTemplateSheet(
+    wb,
+    sheet,
+    ctx,
+    {
+      reportTitle: "Learner List",
+      gradeSection,
+      columns: [
+        { header: "Name", width: 28 },
+        { header: "First name", width: 14 },
+        { header: "Middle name", width: 14 },
+        { header: "Last name", width: 14 },
+        { header: "Age", width: 8 },
+        { header: "Gender", width: 10 },
+        { header: "Nutritional status", width: 18 },
+        // Four columns, not two. The label column names the enum answer and
+        // the "specify" column beside it carries the free text. Folding the
+        // free text into the label — which this sheet used to do — erased the
+        // answer itself: an Others/"Manobo" learner exported as `Manobo`,
+        // which is not one of the thirteen and so resolves to nothing on the
+        // way back in.
+        { header: "Ethnicity", width: 16 },
+        { header: "Ethnicity (specify)", width: 18 },
+        // Its own column rather than one cell holding both, so the sheet
+        // stays sortable and filterable on each answer.
+        { header: "Second ethnicity", width: 16 },
+        { header: "Second ethnicity (specify)", width: 18 },
+        { header: "Grade", width: 12 },
+        { header: "Section", width: 12 },
+        { header: "English profile", width: 28 },
+        { header: "Filipino profile", width: 28 },
+        { header: "Gov benefits", width: 14 },
+        { header: "Parent education", width: 22 },
+        { header: "ARAL", width: 8 },
+      ],
+      rows: learners.map((l) => [
+        formatListingNameFromRecord(l),
+        l.firstName,
+        l.middleName ?? "",
+        l.lastName,
+        l.age,
+        GENDER_LABELS[l.gender as keyof typeof GENDER_LABELS] ?? l.gender,
+        l.nutritionalStatus ? NUTRITIONAL_STATUS_LABELS[l.nutritionalStatus] : "",
+        labelEthnicityOnly(l.ethnicity),
+        l.ethnicityOther ?? "",
+        labelEthnicityOnly(l.secondaryEthnicity),
+        l.secondaryEthnicityOther ?? "",
+        GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+        l.section?.name ?? "",
+        l.englishReadingProfile
+          ? labelReadingProfile(l.englishReadingProfile, l.gradeLevel.type)
+          : "",
+        labelReadingProfile(l.filipinoReadingProfile, l.gradeLevel.type),
+        l.governmentBenefits
+          .map((b) => GOV_BENEFIT_LABELS[b as keyof typeof GOV_BENEFIT_LABELS] ?? b)
+          .join("; "),
         PARENT_EDUCATION_LABELS[l.parentEducation as keyof typeof PARENT_EDUCATION_LABELS] ??
-        l.parentEducation,
-      aral: l.isAralLearner ? "Yes" : "No",
-    });
-  }
-
-  writeSheetFooter(wb, sheet, footer);
+          l.parentEducation,
+        l.isAralLearner ? "Yes" : "No",
+      ]),
+      summary: [`${learners.length} learner(s), ${aralLearners.length} in ARAL`],
+    },
+    purpose
+  );
 
   const aralSheet = wb.addWorksheet("ARAL summary");
-  writeSheetHeader(aralSheet, header);
-  aralSheet.columns = [
-    { key: "fullName", width: 28 },
-    { key: "grade", width: 12 },
-    { key: "section", width: 12 },
-    { key: "transport", width: 18 },
-    { key: "distance", width: 16 },
-    { key: "transfers", width: 16 },
-    { key: "absenteeism", width: 22 },
-    { key: "reasons", width: 40 },
-    { key: "hasProfile", width: 14 },
-  ];
-  const aralHeaderRow = aralSheet.addRow([
-    "Name",
-    "Grade",
-    "Section",
-    "Transportation",
-    "Distance",
-    "Transfers",
-    "Absenteeism",
-    "Reasons",
-    "Has ARAL profile",
-  ]);
-  aralHeaderRow.font = { bold: true };
-
-  for (const l of learners.filter((x) => x.isAralLearner)) {
-    aralSheet.addRow({
-      fullName: formatListingNameFromRecord(l),
-      grade: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
-      section: l.section?.name ?? "",
-      transport: l.modeOfTransportation ?? "",
-      distance: l.distanceHomeToSchool ?? "",
-      transfers: l.previousTransfers ?? "",
-      absenteeism: l.aralProfile?.absenteeismFrequency ?? "",
-      reasons: (l.aralProfile?.absenteeismReasons ?? [])
-        .map((r) => ABSENTEEISM_REASON_LABELS[r])
-        .join("; "),
-      hasProfile: l.aralProfile ? "Yes" : "No",
-    });
-  }
-
-  writeSheetFooter(wb, aralSheet, footer);
+  writeTemplateSheet(
+    wb,
+    aralSheet,
+    ctx,
+    {
+      reportTitle: "ARAL Learner Summary",
+      gradeSection,
+      columns: [
+        { header: "Name", width: 28 },
+        { header: "Grade", width: 12 },
+        { header: "Section", width: 12 },
+        { header: "Transportation", width: 18 },
+        { header: "Distance", width: 16 },
+        { header: "Transfers", width: 16 },
+        { header: "Absenteeism", width: 22 },
+        { header: "Reasons", width: 40 },
+        { header: "Has ARAL profile", width: 14 },
+      ],
+      rows: aralLearners.map((l) => [
+        formatListingNameFromRecord(l),
+        GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+        l.section?.name ?? "",
+        l.modeOfTransportation ?? "",
+        l.distanceHomeToSchool ?? "",
+        l.previousTransfers ?? "",
+        l.aralProfile?.absenteeismFrequency ?? "",
+        (l.aralProfile?.absenteeismReasons ?? [])
+          .map((r) => ABSENTEEISM_REASON_LABELS[r])
+          .join("; "),
+        l.aralProfile ? "Yes" : "No",
+      ]),
+      summary: [`${aralLearners.length} ARAL learner(s)`],
+    },
+    purpose
+  );
 
   const meta = wb.addWorksheet("Export info");
-  meta.addRow(["School", header.find((f) => f.label === "School Name")?.value ?? "School"]);
+  meta.addRow(["School", frame.schoolName || "School"]);
   // Local date key, never `toISOString()`: the school runs at UTC+8, so a UTC
   // instant names the wrong civil day for anyone reading this sheet in Manila
   // between 00:00 and 08:00 — the same rule every filename in this file follows.
-  meta.addRow(["Exported at", formatLocalDateKey(schoolToday())]);
+  meta.addRow(["Exported at", formatLocalDateKey(ctx.generatedOn)]);
   meta.addRow(["Learner count", learners.length]);
-  meta.addRow(["ARAL count", learners.filter((l) => l.isAralLearner).length]);
+  meta.addRow(["ARAL count", aralLearners.length]);
 
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
@@ -346,6 +338,10 @@ export async function exportTeacherLearnersExcel(
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
+
+  const purposeResult = parsePurpose(filter.purpose);
+  if (!purposeResult.ok) return purposeResult;
+  const { purpose } = purposeResult;
 
   if (filter.gradeLevelId) {
     // Read-only export: an ARAL-only teacher reaches the grade through the
@@ -382,13 +378,13 @@ export async function exportTeacherLearnersExcel(
     aralOnly: filter.aralOnly,
   });
 
-  const header = await loadReportHeader({
-    schoolId: user.schoolId,
-    gradeSectionLabel: gradeSectionLabelFor(learners, filter),
-    preparedBy: user.fullName,
-  });
-  const footer = await loadReportFooter({ schoolId: user.schoolId, preparedBy: user.fullName });
-  const buffer = await buildLearnersWorkbook(learners, header, footer);
+  const frame = await loadReportFrame({ schoolId: user.schoolId, preparedBy: user.fullName });
+  const buffer = await buildLearnersWorkbook(
+    learners,
+    frame,
+    gradeSectionFor(learners, filter),
+    purpose
+  );
   // Local date key, never `toISOString()`: the school runs at UTC+8, so between
   // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
   const filename = `litrack-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
@@ -403,6 +399,7 @@ export async function exportTeacherLearnersExcel(
       gradeLevelId: filter.gradeLevelId ?? null,
       sectionId: filter.sectionId ?? null,
       aralOnly: Boolean(filter.aralOnly),
+      purpose,
       role: "TEACHER",
     },
   });
@@ -428,6 +425,10 @@ export async function exportSchoolHeadLearnersExcel(
     schoolId = filter.schoolId;
   }
   if (!schoolId) return { ok: false, error: "Not found" };
+
+  const purposeResult = parsePurpose(filter.purpose);
+  if (!purposeResult.ok) return purposeResult;
+  const { purpose } = purposeResult;
 
   if (filter.gradeLevelId) {
     const grade = await prisma.gradeLevel.findFirst({
@@ -459,13 +460,13 @@ export async function exportSchoolHeadLearnersExcel(
     aralOnly: filter.aralOnly,
   });
 
-  const header = await loadReportHeader({
-    schoolId,
-    gradeSectionLabel: gradeSectionLabelFor(learners, filter),
-    preparedBy: user.fullName,
-  });
-  const footer = await loadReportFooter({ schoolId, preparedBy: user.fullName });
-  const buffer = await buildLearnersWorkbook(learners, header, footer);
+  const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
+  const buffer = await buildLearnersWorkbook(
+    learners,
+    frame,
+    gradeSectionFor(learners, filter),
+    purpose
+  );
   // Local date key, never `toISOString()`: the school runs at UTC+8, so between
   // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
   const filename = `litrack-school-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
@@ -480,6 +481,7 @@ export async function exportSchoolHeadLearnersExcel(
       gradeLevelId: filter.gradeLevelId ?? null,
       sectionId: filter.sectionId ?? null,
       aralOnly: Boolean(filter.aralOnly),
+      purpose,
       role: user.role,
     },
   });
@@ -643,12 +645,18 @@ export async function fetchPrintableReport(input: {
     aralOnly: input.aralOnly,
   });
 
-  const header = await loadReportHeader({
-    schoolId,
-    gradeSectionLabel: gradeSectionLabelFor(learners, input),
-    preparedBy: user.fullName,
-  });
-  const footer = await loadReportFooter({ schoolId, preparedBy: user.fullName });
+  // The printable (HTML) report keeps its "Label: Value" header and
+  // "Prepared by / Noted by" footer; both come off the same frame the
+  // spreadsheets use, so the two never disagree about the school.
+  const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
+  const gradeSection = gradeSectionFor(learners, input);
+  const header = frameHeaderFields(
+    frame,
+    gradeSection.gradeLevel
+      ? [gradeSection.gradeLevel, gradeSection.section].filter(Boolean).join(" - ")
+      : formatGradeSectionLine(gradeSection)
+  );
+  const footer = frameFooter(frame);
 
   await writeAudit({
     userId: user.id,

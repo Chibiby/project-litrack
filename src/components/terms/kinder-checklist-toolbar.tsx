@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { AdvisorySelect } from "@/components/learners/advisory-select";
+import {
+  ExportPurposeToggle,
+  useExportPurpose,
+  type ExportPurpose,
+} from "@/components/reports/export-purpose-toggle";
 
 export type KinderChecklistLearnerOption = { id: string; fullName: string };
 export type KinderChecklistAdvisoryOption = { id: string; label: string };
@@ -49,18 +54,21 @@ export function KinderChecklistExportControls({
   onPrint,
 }: {
   disabled?: boolean;
-  onExport: () => Promise<KinderChecklistActionResult<KinderChecklistExportResult>>;
+  onExport: (
+    purpose: ExportPurpose
+  ) => Promise<KinderChecklistActionResult<KinderChecklistExportResult>>;
   /** When omitted, Print calls `window.print()` directly, same as `ExportControls`. */
   onPrint?: () => void | Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<"excel" | "print" | null>(null);
+  const [purpose, setPurpose] = useExportPurpose();
 
   function handleExcel() {
     setBusy("excel");
     startTransition(async () => {
       try {
-        const res = await onExport();
+        const res = await onExport(purpose);
         if (!res.ok) {
           toast.error(res.error);
           return;
@@ -89,7 +97,8 @@ export function KinderChecklistExportControls({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 print:hidden">
+    <div className="flex flex-wrap items-end gap-2 print:hidden">
+      <ExportPurposeToggle value={purpose} onChange={setPurpose} disabled={disabled} />
       <Button
         type="button"
         variant="outline"
@@ -133,7 +142,9 @@ export interface KinderChecklistToolbarProps {
   /** A section id, or `null` while the advisory is "unspecified" (spec section 4). */
   advisoryId: string | null;
   onAdvisoryChange: (advisorySectionId: string | null) => void;
-  onExport: () => Promise<KinderChecklistActionResult<KinderChecklistExportResult>>;
+  onExport: (
+    purpose: ExportPurpose
+  ) => Promise<KinderChecklistActionResult<KinderChecklistExportResult>>;
   onPrint?: () => void | Promise<void>;
 }
 

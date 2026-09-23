@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TermMark } from "@prisma/client";
+import { reportPurposeSchema } from "./report.schema";
 
 /**
  * Mirrors the Prisma `TermMark` enum. A `z.enum` rather than `z.nativeEnum` so
@@ -94,9 +95,12 @@ export const termGradesExportSchema = z
      * export does; a teacher advises at most three.
      */
     sectionIds: z.array(z.string().min(1)).min(1).max(3).optional(),
+    /** PRINT (default) or RECORDS — see `reportPurposeSchema`. */
+    purpose: reportPurposeSchema,
   })
   .refine((v) => v.gradeLevelId || v.sectionIds, {
     message: "Invalid input",
   });
 
-export type TermGradesExportInput = z.infer<typeof termGradesExportSchema>;
+/** What a caller sends: `purpose` is optional here and defaults to PRINT once parsed. */
+export type TermGradesExportInput = z.input<typeof termGradesExportSchema>;

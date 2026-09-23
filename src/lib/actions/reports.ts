@@ -122,7 +122,7 @@ export async function generateReport(
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const { kind, format, ...filters } = parsed.data;
+  const { kind, format, purpose, ...filters } = parsed.data;
   if (kind === "CUSTOM") {
     return { ok: false, error: "Custom reports are not available yet" };
   }
@@ -179,7 +179,7 @@ export async function generateReport(
   let table: ReportTableWithAudit;
   try {
     table = await BUILDERS[kind](resolved.scope, filters);
-    buffer = await renderReport(table, format);
+    buffer = await renderReport(table, format, { purpose, generatedOn: schoolToday() });
   } catch (err) {
     console.error("[generateReport] failed:", err);
     return { ok: false, error: "Could not generate the report. Please try again." };
@@ -201,7 +201,9 @@ export async function generateReport(
       format,
       name,
       scopeLabel,
-      filters,
+      // `purpose` rides with the filters so Re-generate replays it (the
+      // history row has no column of its own for it).
+      filters: { ...filters, purpose },
     },
     select: { id: true },
   });
@@ -223,6 +225,7 @@ export async function generateReport(
       ...(table.auditMeta ?? {}),
       kind,
       format,
+      purpose,
       rows: table.rows.length,
       // A multi-block report (MOSY) exports more than one table, so the single
       // `rows` count above does not describe what was generated on its own.

@@ -9,6 +9,16 @@ import { nonEmpty } from "./common";
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 /**
+ * What an export is for: `PRINT` (the full DepEd print template, the default)
+ * or `RECORDS` (a plain sortable data sheet). Optional on every export input;
+ * missing means `PRINT`. Shared by every export's schema so the vocabulary
+ * has one definition.
+ */
+export const reportPurposeSchema = z
+  .enum(["PRINT", "RECORDS"], { message: "Choose Print or Records" })
+  .default("PRINT");
+
+/**
  * One report request from the hub.
  *
  * Every filter is optional — a request with none of them is the widest report
@@ -34,6 +44,7 @@ export const reportGenerateSchema = z
     from: dateKey.nullish(),
     to: dateKey.nullish(),
     term: z.enum(["FIRST", "SECOND", "THIRD"]).nullish(),
+    purpose: reportPurposeSchema,
   })
   .refine((d) => !d.from || !d.to || d.from <= d.to, {
     message: "The start date must be on or before the end date",

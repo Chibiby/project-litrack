@@ -185,7 +185,7 @@ describe("buildAttendanceTable — the grid", () => {
     // The kept dates are the LATEST, not the earliest.
     expect(dateKeys).toContain("2026-08-28");
     expect(dateKeys).not.toContain("2026-08-24");
-    expect(table.subtitle.some((l) => l.includes("Showing the latest"))).toBe(true);
+    expect(table.summary.some((l) => l.includes("Showing the latest"))).toBe(true);
   });
 });
 
@@ -200,7 +200,7 @@ describe("buildAttendanceTable — default range resolution", () => {
 
     const table = await buildAttendanceTable(SCOPE, {});
 
-    expect(table.subtitle.some((l) => l.includes("active school year"))).toBe(true);
+    expect(table.reportingPeriod).toContain("active school year");
     expect(table.rows).toHaveLength(5); // 5 weekdays x 1 learner
   });
 
@@ -216,7 +216,7 @@ describe("buildAttendanceTable — default range resolution", () => {
 
     // Range resolution read `from` verbatim rather than falling back to an
     // active year's start date.
-    expect(table.subtitle.some((l) => l.includes("2026-08-24 to today"))).toBe(true);
+    expect(table.reportingPeriod).toContain("2026-08-24 to today");
     expect(schoolYearFindFirst).toHaveBeenCalledTimes(1);
   });
 });

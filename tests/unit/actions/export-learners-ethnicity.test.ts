@@ -190,18 +190,49 @@ describe("learners export — ethnicity", () => {
     );
     const sheet = wb.getWorksheet("Learners")!;
 
-    const column1: string[] = [];
-    for (let r = 1; r <= sheet.rowCount; r++) {
-      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
-    }
-    expect(column1[0]).toBe("School ID:");
-    expect(column1).toContain("Prepared by:");
-    expect(column1).toContain("Noted by:");
-    expect(column1).toContain(
-      "This is a system-generated report from LITRACK. No signature is required."
+    const texts: string[] = [];
+    sheet.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (cell.value !== null && cell.value !== "") texts.push(String(cell.value));
+      })
     );
-    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    // The PRINT template by default.
+    expect(sheet.getRow(3).getCell(1).value).toBe("DEPARTMENT OF EDUCATION");
+    expect(texts).toContain("LEARNER LIST");
+    expect(texts).toContain("Prepared by:");
+    expect(texts).toContain("Noted by:");
+    expect(texts).toContain("Signature over printed name");
+    expect(texts).toContain("This is a system-generated report from LITRACK.");
+    // The seal plus the three bottom logos.
     expect(sheet.getImages().length).toBe(4);
+  });
+  it("writes plain sortable sheets for purpose RECORDS, and audits the purpose", async () => {
+    findManyLearner.mockResolvedValue([learner()]);
+    const res = await exportSchoolHeadLearnersExcel({ purpose: "RECORDS" });
+    if (!res.ok) throw new Error(`export failed: ${res.error}`);
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(res.data.base64, "base64") as unknown as ExcelLoadable);
+    for (const name of ["Learners", "ARAL summary"]) {
+      const sheet = wb.getWorksheet(name)!;
+      expect(sheet.getImages()).toHaveLength(0);
+      expect(((sheet.model as { merges?: string[] }).merges ?? []).length).toBe(0);
+      expect(sheet.getRow(3).getCell(1).value).toBe("Name");
+      expect(sheet.autoFilter).toBeTruthy();
+    }
+    expect(writeAudit.mock.calls[0]?.[0]).toMatchObject({ metadata: { purpose: "RECORDS" } });
+  });
+
+  it("defaults the audited purpose to PRINT and refuses an unknown one", async () => {
+    findManyLearner.mockResolvedValue([learner()]);
+    await exportSchoolHeadLearnersExcel({});
+    expect(writeAudit.mock.calls[0]?.[0]).toMatchObject({ metadata: { purpose: "PRINT" } });
+
+    const bad = await exportSchoolHeadLearnersExcel({
+      purpose: "POSTER" as unknown as "PRINT",
+    });
+    expect(bad).toEqual({ ok: false, error: "Choose Print or Records" });
   });
 
   it("emits a specify column beside each ethnicity column", async () => {

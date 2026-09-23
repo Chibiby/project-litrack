@@ -307,6 +307,44 @@ describe("generateReport — history and audit", () => {
     expect(JSON.stringify(metadata)).not.toContain("Sick / Illness");
   });
 
+  it("defaults the purpose to PRINT, storing it with the filters and in the audit", async () => {
+    await generateReport({ kind: "ATTENDANCE", format: "EXCEL" });
+
+    expect((createdReport as { filters: Record<string, unknown> }).filters).toMatchObject({
+      purpose: "PRINT",
+    });
+    expect(writeAudit.mock.calls[0][0].metadata).toMatchObject({ purpose: "PRINT" });
+  });
+
+  it("round-trips RECORDS through the history row, so Re-generate replays it", async () => {
+    const first = await generateReport({ kind: "ATTENDANCE", format: "EXCEL", purpose: "RECORDS" });
+    if (!first.ok || !first.data) throw new Error("expected a report");
+    const saved = (createdReport as { filters: Record<string, unknown> }).filters;
+    expect(saved).toMatchObject({ purpose: "RECORDS" });
+
+    // A RECORDS workbook: header at row 3, no images.
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(
+      Buffer.from(first.data.base64, "base64") as unknown as Parameters<typeof wb.xlsx.load>[0]
+    );
+    for (const ws of wb.worksheets) {
+      expect(ws.getImages()).toHaveLength(0);
+      expect(ws.getRow(3).getCell(1).value).toBe("#");
+    }
+
+    // Re-generate sends the saved filters back as they were stored.
+    await generateReport({ kind: "ATTENDANCE", format: "EXCEL", ...saved });
+    expect((createdReport as { filters: Record<string, unknown> }).filters).toEqual(saved);
+  });
+
+  it("refuses an unknown purpose before any query", async () => {
+    const res = await generateReport({ kind: "ATTENDANCE", format: "EXCEL", purpose: "POSTER" });
+
+    expect(res).toEqual({ ok: false, error: "Choose Print or Records" });
+    expect(attendanceFindMany).not.toHaveBeenCalled();
+  });
+
   it("refuses CUSTOM, which has no builder", async () => {
     const res = await generateReport({ kind: "CUSTOM", format: "EXCEL" });
 

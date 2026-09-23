@@ -427,7 +427,8 @@ const gradeLevelFindFirst = vi.fn(
       if (args.where.deletedAt === null && g.deletedAt !== null) return false;
       return true;
     });
-    return found ? { id: found.id, schoolId: found.schoolId } : null;
+    // `type` mirrors the real select; every grade in this file is Grade 7.
+    return found ? { id: found.id, schoolId: found.schoolId, type: "G7" } : null;
   }
 );
 
@@ -652,16 +653,12 @@ function grid(sheet: Worksheet, width: number): Cell[][] {
       Array.from({ length: actualWidth }, (_, i) => normalize(row.getCell(i + 1).value))
     );
   }
-  // Every data sheet also ends with the shared "Prepared by / Noted by /
-  // system-generated" footer (`writeSheetFooter`) after a blank separator
-  // row — trimmed here so every existing exact-array assertion below keeps
-  // describing the TABLE only. The footer itself is asserted separately.
-  const footerIdx = rows.findIndex((r) => r[0] === "Prepared by:");
-  const trimmed = footerIdx === -1 ? rows : rows.slice(0, footerIdx);
-  while (trimmed.length > 0 && trimmed[trimmed.length - 1].every((c) => c === null)) {
-    trimmed.pop();
-  }
-  return trimmed;
+  // Every data sheet continues past the table (a blank row, the summary line,
+  // the signature block and the footer) — the table ends at its first blank
+  // row, so every exact-array assertion below keeps describing the TABLE only.
+  // The frame itself is asserted separately.
+  const end = rows.findIndex((r) => r.every((c) => c === null));
+  return end === -1 ? rows : rows.slice(0, end);
 }
 
 /**
@@ -792,7 +789,8 @@ describe("exportTermGrades — the fixture clock", () => {
 });
 
 describe("exportTermGrades — the shared header and footer", () => {
-  it("opens the data sheet with the shared DepEd header and closes it with the shared footer", async () => {
+  // The first exceljs load in this file; slow cold under full-suite load.
+  it("opens the data sheet with the shared DepEd header and closes it with the shared footer", { timeout: 30_000 }, async () => {
     const file = fileOf(await post());
 
     const ExcelJS = (await import("exceljs")).default;
@@ -800,18 +798,47 @@ describe("exportTermGrades — the shared header and footer", () => {
     await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
     const sheet = wb.getWorksheet("Second Term")!;
 
-    const column1: string[] = [];
-    for (let r = 1; r <= sheet.rowCount; r++) {
-      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
-    }
-    expect(column1[0]).toBe("School ID:");
-    expect(column1).toContain("Prepared by:");
-    expect(column1).toContain("Noted by:");
-    expect(column1).toContain(
-      "This is a system-generated report from LITRACK. No signature is required."
+    const texts: string[] = [];
+    sheet.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (cell.value !== null && cell.value !== "") texts.push(String(cell.value));
+      })
     );
-    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    // The PRINT template by default: DepEd header, uppercase title, info rows,
+    // signature block and generated lines.
+    expect(sheet.getRow(3).getCell(1).value).toBe("DEPARTMENT OF EDUCATION");
+    expect(texts).toContain("END OF TERM REPORT");
+    expect(texts).toContain("School ID: 123456");
+    expect(texts).toContain("Grade Level: Grade 7    /    Section: Sampaguita");
+    expect(texts.some((t) => t.startsWith("Reporting Period: Second Term"))).toBe(true);
+    expect(texts).toContain("Prepared by:");
+    expect(texts).toContain("Noted by:");
+    expect(texts).toContain("Signature over printed name");
+    expect(texts).toContain("This is a system-generated report from LITRACK.");
+    // The seal plus the three bottom logos.
     expect(sheet.getImages().length).toBe(4);
+    expect(sheet.pageSetup).toMatchObject({ paperSize: 9, fitToWidth: 1, fitToHeight: 0 });
+  });
+
+  it("writes a plain sortable sheet for purpose RECORDS", async () => {
+    const file = fileOf(await exportTermGrades({ gradeLevelId: GRADE_ID, term: OPEN_TERM, purpose: "RECORDS" }));
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
+    const sheet = wb.getWorksheet("Second Term")!;
+
+    expect(sheet.getImages()).toHaveLength(0);
+    expect(((sheet.model as { merges?: string[] }).merges ?? []).length).toBe(0);
+    expect(sheet.getRow(3).getCell(1).value).toBe("#");
+    expect(sheet.autoFilter).toBeTruthy();
+    expect(writeAudit.mock.calls[0][0].metadata.purpose).toBe("RECORDS");
+  });
+
+  it("refuses an unknown purpose before reading anything", async () => {
+    const res = await exportTermGrades({ gradeLevelId: GRADE_ID, term: OPEN_TERM, purpose: "POSTER" });
+    expect(errorOf(res)).toBe("Choose Print or Records");
+    expectRefusedBeforeReading();
   });
 });
 
@@ -1345,6 +1372,39 @@ describe("exportTermGrades — the Super Admin branch", () => {
     });
   });
 
+  it("names a requested section on the sheet even when nobody is enrolled in it", { timeout: 30_000 }, async () => {
+    asSuperAdmin(null);
+    sections.push({
+      id: OTHER_SECTION_ID,
+      name: "Rosal",
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      gradeType: "G7",
+      deletedAt: null,
+      adviserId: null,
+    });
+
+    const file = fileOf(await post({ section: OTHER_SECTION_ID }));
+
+    // Pinned to the grade's school and grade, never trusted from the post.
+    expect(sectionFindFirst.mock.calls[0][0].where).toMatchObject({
+      id: OTHER_SECTION_ID,
+      schoolId: SCHOOL_ID,
+      gradeLevelId: GRADE_ID,
+      deletedAt: null,
+    });
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
+    const texts: string[] = [];
+    wb.worksheets[0]!.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (cell.value !== null && cell.value !== "") texts.push(String(cell.value));
+      })
+    );
+    expect(texts).toContain("Grade Level: Grade 7    /    Section: Rosal");
+  });
+
   it("works for an admin holding no schoolId at all", async () => {
     // The reason the action uses `requireUser` and not `requireSchoolUser`.
     asSuperAdmin(null);
@@ -1501,6 +1561,8 @@ describe("exportTermGrades — the audit row", () => {
       schoolYearId: SCHOOL_YEAR_ID,
       learnerCount: 2,
       cellCount: 3,
+      // Missing on the request, so the default.
+      purpose: "PRINT",
       role: "TEACHER",
     });
 

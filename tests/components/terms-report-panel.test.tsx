@@ -185,4 +185,17 @@ describe("TermsReportPanel", () => {
       sectionIds: ["atis", "mabolo"],
     });
   });
+
+  it("defaults the export to the For-printing layout, and sends Records once chosen", async () => {
+    window.localStorage.clear();
+    renderPanel();
+    fireEvent.click(screen.getAllByRole("button", { name: /export/i })[0]);
+    await waitFor(() => expect(exportTermGrades).toHaveBeenCalledTimes(1));
+    expect(exportTermGrades.mock.calls[0][0]).toMatchObject({ purpose: "PRINT" });
+
+    fireEvent.click(screen.getAllByRole("radio", { name: /For records/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /export/i })[0]);
+    await waitFor(() => expect(exportTermGrades).toHaveBeenCalledTimes(2));
+    expect(exportTermGrades.mock.calls[1][0]).toMatchObject({ purpose: "RECORDS" });
+  });
 });

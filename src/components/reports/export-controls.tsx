@@ -10,6 +10,7 @@ import {
   exportTeacherLearnersExcel,
 } from "@/lib/actions/export-learners";
 import { Download, Printer } from "lucide-react";
+import { ExportPurposeToggle, useExportPurpose } from "@/components/reports/export-purpose-toggle";
 
 export type ReportSectionOption = {
   id: string;
@@ -22,6 +23,13 @@ export type ReportExportFilters = {
   sectionId?: string;
   aralOnly?: boolean;
   schoolId?: string;
+  /**
+   * Widens the action's own `ExportLearnersFilter` (backend-owned,
+   * `src/lib/actions/export-learners.ts`) — deliberately kept local rather
+   * than added there, since a non-literal value of this wider type is still
+   * assignable to the narrower parameter.
+   */
+  purpose?: "PRINT" | "RECORDS";
 };
 
 type Props = {
@@ -60,6 +68,7 @@ export function ExportControls({
   const [aralOnly, setAralOnly] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState(gradeLevelId ?? "");
   const [selectedSection, setSelectedSection] = useState("");
+  const [purpose, setPurpose] = useExportPurpose();
   const [pending, startTransition] = useTransition();
   /**
    * Which export is running. Both buttons share one transition, so `pending`
@@ -78,6 +87,7 @@ export function ExportControls({
       sectionId: selectedSection || undefined,
       aralOnly,
       schoolId,
+      purpose,
     };
   }
 
@@ -173,6 +183,8 @@ export function ExportControls({
           ARAL learners only
         </Label>
       </div>
+
+      <ExportPurposeToggle value={purpose} onChange={setPurpose} />
 
       <div className="flex flex-wrap gap-2">
         <Button

@@ -267,18 +267,37 @@ describe("exportKinderChecklist — teacher branch (unchanged)", () => {
     >[0]);
     const sheet = wb.getWorksheet("Checklist")!;
 
-    const column1: string[] = [];
-    for (let r = 1; r <= sheet.rowCount; r++) {
-      column1.push(String(sheet.getRow(r).getCell(1).value ?? ""));
-    }
-    expect(column1[0]).toBe("School ID:");
-    expect(column1).toContain("Prepared by:");
-    expect(column1).toContain("Noted by:");
-    expect(column1).toContain(
-      "This is a system-generated report from LITRACK. No signature is required."
+    const texts: string[] = [];
+    sheet.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (cell.value !== null && cell.value !== "") texts.push(String(cell.value));
+      })
     );
-    // Exactly one image on this data sheet — the LITRACK logo the footer draws.
+    // The PRINT template by default.
+    expect(sheet.getRow(3).getCell(1).value).toBe("DEPARTMENT OF EDUCATION");
+    expect(texts).toContain("KINDERGARTEN CHECKLIST");
+    expect(texts).toContain("Prepared by:");
+    expect(texts).toContain("Noted by:");
+    expect(texts).toContain("Signature over printed name");
+    expect(texts).toContain("This is a system-generated report from LITRACK.");
+    // The seal plus the three bottom logos.
     expect(sheet.getImages().length).toBe(4);
+  });
+  it("writes a plain sortable sheet for purpose RECORDS", async () => {
+    const file = fileOf(
+      await exportKinderChecklist({ learnerId: "learner-nico", purpose: "RECORDS" })
+    );
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as Parameters<
+      typeof wb.xlsx.load
+    >[0]);
+    const sheet = wb.getWorksheet("Checklist")!;
+    expect(sheet.getImages()).toHaveLength(0);
+    expect(((sheet.model as { merges?: string[] }).merges ?? []).length).toBe(0);
+    expect(sheet.getRow(3).getCell(1).value).toBe("#");
+    expect(sheet.autoFilter).toBeTruthy();
   });
 
   it("still refuses a learner outside the advisory section", async () => {

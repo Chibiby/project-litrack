@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.11.0",
+    date: "2026-09-23",
+    title: "Reports print on the official DepEd layout, or export as a plain table",
+    announce: true,
+    fixes: [
+      "Every Excel and PDF report now uses the official layout: the Kagawaran ng Edukasyon seal at the top, the DepEd heading with your region, division, district and school, the report title, School ID, school year and report date, then the table.",
+      "Reports end with Prepared by, Checked by and Noted by signature lines, and the DepEd, Bagong Pilipinas and Division of Sarangani logos at the bottom.",
+      "Excel files are set up for A4 printing: fitted to the page width, the table heading repeats on every page, and each page is numbered.",
+      "Before you download an Excel file, choose For printing (the official layout) or For records (a plain table you can sort, filter or import). LITRACK remembers your choice.",
+    ],
+  },
+  {
     version: "2.10.0",
     date: "2026-09-23",
     title: "Every report now carries the school header and a signed-off footer",

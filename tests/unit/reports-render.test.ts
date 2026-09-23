@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CellValue, Workbook } from "exceljs";
+import type { CellValue, Workbook, Worksheet } from "exceljs";
 import type { ReportTable } from "@/lib/reports/render";
 
 type ExcelLoadable = Parameters<Workbook["xlsx"]["load"]>[0];
@@ -28,9 +28,23 @@ const { renderExcel, renderPdf, renderReport, reportBlocks } = await import(
   "@/lib/reports/render"
 );
 
-const TABLE = {
+const FRAME = {
+  schoolName: "Malandag Central Elem.",
+  schoolIdCode: "130517",
+  region: "XII",
+  division: "Sarangani",
+  district: "Malungon West",
+  address: "Malandag, Malungon",
+  schoolYearLabel: "2026-2027",
+  schoolHeadName: "Lourdes Santos",
+  preparedBy: "Marivic M Acibar",
+};
+
+const TABLE: ReportTable = {
   title: "Attendance Records",
-  subtitle: ["Malandag Central Elem.", "Range: 2026-08-24 to 2026-08-28"],
+  summary: ["3 record(s)"],
+  reportingPeriod: "2026-08-24 to 2026-08-28",
+  frame: FRAME,
   columns: [
     { header: "Date", width: 12 },
     { header: "Learner", width: 28 },
@@ -43,6 +57,21 @@ const TABLE = {
     ["2026-08-27", "BRANDNLEE S HGOS", "Excused", null],
   ],
 };
+
+async function load(buf: Buffer): Promise<Workbook> {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as unknown as ExcelLoadable);
+  return wb;
+}
+
+/** The row whose first cell is `text`, or -1. */
+function rowStarting(ws: Worksheet, text: string): number {
+  for (let r = 1; r <= ws.rowCount; r++) {
+    if (String(ws.getRow(r).getCell(1).value ?? "") === text) return r;
+  }
+  return -1;
+}
 
 describe("renderPdf", () => {
   it("produces a real PDF", async () => {
@@ -63,7 +92,7 @@ describe("renderPdf", () => {
     expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
   });
 
-  it("paginates a table longer than one page without throwing", async () => {
+  it("paginates a 400-row table without throwing, numbering every page", async () => {
     // The page break is decided BEFORE a row is drawn; getting that backwards
     // clips the last row of every page into the margin.
     const rows = Array.from({ length: 400 }, (_, i) => [
@@ -77,6 +106,25 @@ describe("renderPdf", () => {
 
     expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(buf.length).toBeGreaterThan(5000);
+    // pdfkit writes one /Type /Page object per page; a 400-row list is many.
+    const pages = buf.toString("latin1").match(/\/Type \/Page\b/g) ?? [];
+    expect(pages.length).toBeGreaterThan(5);
+  });
+
+  it("renders portrait for a narrow table and landscape for a wide one", async () => {
+    const mediaBox = (buf: Buffer) =>
+      /\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(buf.toString("latin1"))!.slice(1).map(Number);
+
+    const [pw, ph] = mediaBox(await renderPdf(TABLE));
+    expect(pw).toBeLessThan(ph);
+
+    const wide: ReportTable = {
+      ...TABLE,
+      columns: Array.from({ length: 9 }, (_, i) => ({ header: `C${i}`, width: 10 })),
+      rows: [Array.from({ length: 9 }, (_, i) => i)],
+    };
+    const [lw, lh] = mediaBox(await renderPdf(wide));
+    expect(lw).toBeGreaterThan(lh);
   });
 
   it("handles a null cell without printing 'null'", async () => {
@@ -86,6 +134,13 @@ describe("renderPdf", () => {
     });
 
     expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("embeds the seal and the three bottom logos", async () => {
+    const buf = await renderPdf(TABLE);
+    const images = buf.toString("latin1").match(/\/Subtype \/Image/g) ?? [];
+    // Each PNG with an alpha channel adds an SMask image too, so at least four.
+    expect(images.length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -108,6 +163,30 @@ describe("renderExcel", () => {
 
     expect(buf.subarray(0, 2).toString()).toBe("PK");
   });
+
+  it("defaults to the PRINT template: seal + 3 logos, uppercase title, navy table header", async () => {
+    const wb = await load(await renderExcel(TABLE));
+    const ws = wb.worksheets[0]!;
+
+    expect(ws.getImages()).toHaveLength(4);
+    expect(rowStarting(ws, "ATTENDANCE RECORDS")).toBeGreaterThan(1);
+    const header = rowStarting(ws, "Date");
+    expect(ws.getRow(header).getCell(1).fill).toMatchObject({ fgColor: { argb: "FF17365D" } });
+    expect(ws.getRow(header + 1).getCell(2).value).toBe("Asriel Gabby B. Andrews");
+    expect(rowStarting(ws, "3 record(s)")).toBeGreaterThan(header + 3);
+    expect(rowStarting(ws, "Reporting Period: 2026-08-24 to 2026-08-28")).toBe(-1); // right half, not col A
+    expect(ws.pageSetup.paperSize).toBe(9);
+  });
+
+  it("draws a plain RECORDS sheet when asked", async () => {
+    const wb = await load(await renderExcel(TABLE, { purpose: "RECORDS" }));
+    const ws = wb.worksheets[0]!;
+
+    expect(ws.getImages()).toHaveLength(0);
+    expect(((ws.model as { merges?: string[] }).merges ?? []).length).toBe(0);
+    expect(ws.getRow(3).getCell(1).value).toBe("Date");
+    expect(ws.autoFilter).toBe("A3:D6");
+  });
 });
 
 describe("renderReport", () => {
@@ -117,6 +196,11 @@ describe("renderReport", () => {
 
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(excel.subarray(0, 2).toString()).toBe("PK");
+  });
+
+  it("gives a PDF the print template even when RECORDS is asked for", async () => {
+    const pdf = await renderReport(TABLE, "PDF", { purpose: "RECORDS" });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
   });
 });
 
@@ -128,7 +212,8 @@ describe("renderReport", () => {
  */
 const MULTI_TABLE: ReportTable = {
   title: "Combined Report",
-  subtitle: [],
+  summary: [],
+  frame: FRAME,
   columns: [{ header: "IGNORED_COL" }],
   rows: [["ignored"]],
   blocks: [
@@ -156,9 +241,7 @@ const MULTI_TABLE: ReportTable = {
 
 describe("reportBlocks", () => {
   it("falls back to the table's own columns/rows when blocks is absent", () => {
-    expect(reportBlocks(TABLE)).toEqual([
-      { columns: TABLE.columns, rows: TABLE.rows },
-    ]);
+    expect(reportBlocks(TABLE)).toEqual([{ columns: TABLE.columns, rows: TABLE.rows }]);
   });
 
   it("returns table.blocks when set, ignoring the table's own columns/rows", () => {
@@ -168,176 +251,41 @@ describe("reportBlocks", () => {
   it("falls back when blocks is an empty array, so Excel still gets a sheet", async () => {
     const empty = { ...TABLE, rows: [], blocks: [] };
     expect(reportBlocks(empty)).toEqual([{ columns: TABLE.columns, rows: [] }]);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load((await renderExcel(empty)) as unknown as ExcelLoadable);
+    const wb = await load(await renderExcel(empty));
     expect(wb.worksheets.length).toBe(1);
-  });
-});
-
-describe("report header block", () => {
-  const WITH_HEADER: ReportTable = {
-    ...TABLE,
-    header: [
-      { label: "School ID", value: "123456" },
-      { label: "School Name", value: "Malandag Central Elem." },
-      { label: "School Year", value: "2026-2027" },
-      { label: "Grade / Section", value: "All Classes" },
-      { label: "Prepared by", value: "Marivic M Acibar" },
-    ],
-  };
-
-  it("draws every header field on the single Excel sheet, above the column headers", async () => {
-    const buf = await renderExcel(WITH_HEADER);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-    const ws = wb.worksheets[0]!;
-
-    const cellTexts: string[] = [];
-    for (let r = 1; r <= ws.rowCount; r++) {
-      cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
-    }
-    expect(cellTexts).toEqual(
-      expect.arrayContaining(["School ID:", "School Name:", "School Year:", "Prepared by:"])
-    );
-  });
-
-  it("draws the header block on EVERY sheet of a multi-block report", async () => {
-    const multi: ReportTable = { ...MULTI_TABLE, header: WITH_HEADER.header };
-    const buf = await renderExcel(multi);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-
-    for (const ws of wb.worksheets) {
-      const cellTexts: string[] = [];
-      for (let r = 1; r <= ws.rowCount; r++) {
-        cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
-      }
-      expect(cellTexts).toContain("School ID:");
-    }
-  });
-
-  it("still produces a valid PDF with the header drawn once at the top", async () => {
-    const buf = await renderPdf(WITH_HEADER);
-    expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
-  });
-
-  it("renders exactly as before when header is unset (no regression for existing reports)", async () => {
-    const buf = await renderExcel(TABLE);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-    const ws = wb.worksheets[0]!;
-    // Row 1 is the first subtitle line, exactly as before this field existed.
-    expect(ws.getRow(1).getCell(1).value).toBe(TABLE.subtitle[0]);
-  });
-});
-
-describe("report footer block", () => {
-  const WITH_FOOTER: ReportTable = {
-    ...TABLE,
-    footer: { preparedBy: "Marivic M Acibar", notedBy: "Lourdes Santos" },
-  };
-
-  it("draws 'Prepared by' / 'Noted by' / the system-generated line and exactly one logo image, on the single Excel sheet", async () => {
-    const buf = await renderExcel(WITH_FOOTER);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-    const ws = wb.worksheets[0]!;
-
-    const cellTexts: string[] = [];
-    for (let r = 1; r <= ws.rowCount; r++) {
-      cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
-    }
-    expect(cellTexts).toEqual(
-      expect.arrayContaining([
-        "Prepared by:",
-        "Noted by:",
-        "This is a system-generated report from LITRACK. No signature is required.",
-      ])
-    );
-    expect(ws.getImages().length).toBe(4);
-  });
-
-  it("draws the footer, with its own image, on EVERY sheet of a multi-block report", async () => {
-    const multi: ReportTable = { ...MULTI_TABLE, footer: WITH_FOOTER.footer };
-    const buf = await renderExcel(multi);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-
-    for (const ws of wb.worksheets) {
-      const cellTexts: string[] = [];
-      for (let r = 1; r <= ws.rowCount; r++) {
-        cellTexts.push(String(ws.getRow(r).getCell(1).value ?? ""));
-      }
-      expect(cellTexts).toContain("Prepared by:");
-      expect(ws.getImages().length).toBe(4);
-    }
-    // The four logo files are embedded once and shared by every sheet.
-    expect(wb.model.media.length).toBe(4);
-  });
-
-  it("still produces a valid PDF with the footer (and its logo) drawn once at the end", async () => {
-    const buf = await renderPdf(WITH_FOOTER);
-    expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
-    // A document with the footer's extra text and embedded logo image is
-    // strictly bigger than the same table without one.
-    const withoutFooterBuf = await renderPdf(TABLE);
-    expect(buf.length).toBeGreaterThan(withoutFooterBuf.length);
-  });
-
-  it("renders exactly as before when footer is unset (no regression for existing reports)", async () => {
-    const buf = await renderExcel(TABLE);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-    const ws = wb.worksheets[0]!;
-    expect(ws.getImages().length).toBe(0);
   });
 });
 
 describe("multi-block reports", () => {
   it("renders one Excel worksheet per block, named from each block's heading", async () => {
-    const buf = await renderExcel(MULTI_TABLE);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-
+    const wb = await load(await renderExcel(MULTI_TABLE));
     expect(wb.worksheets.map((ws) => ws.name)).toEqual(["Summary", "Details"]);
   });
 
-  it("ignores the table's own columns/rows once blocks is set", async () => {
-    const buf = await renderExcel(MULTI_TABLE);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
+  it("gives EVERY sheet the full template, sharing four embedded images", async () => {
+    const wb = await load(await renderExcel(MULTI_TABLE));
 
-    const summary = wb.getWorksheet("Summary")!;
-    // No subtitle lines in this fixture, so row 1 is the header row.
-    const headerValues = summary.getRow(1).values as CellValue[];
-    expect(headerValues.slice(1)).toEqual(["Grade", "Count"]);
-    // Header + 2 data rows only — never the ignored top-level row.
-    expect(summary.rowCount).toBe(3);
+    for (const ws of wb.worksheets) {
+      expect(ws.getImages()).toHaveLength(4);
+      expect(rowStarting(ws, "Prepared by:")).toBeGreaterThan(0);
+      expect(rowStarting(ws, "DEPARTMENT OF EDUCATION")).toBe(3);
+    }
+    expect(rowStarting(wb.getWorksheet("Summary")!, "COMBINED REPORT — SUMMARY")).toBeGreaterThan(0);
+    expect(wb.model.media.length).toBe(4);
   });
 
-  it("still renders a block with zero rows, and its sibling with rows", async () => {
-    const buf = await renderExcel(MULTI_TABLE);
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ExcelLoadable);
-
-    const details = wb.getWorksheet("Details")!;
-    const detailsHeaderValues = details.getRow(1).values as CellValue[];
-    expect(detailsHeaderValues.slice(1)).toEqual(["Name", "Status"]);
-    // Header only — the empty block has no data rows.
-    expect(details.rowCount).toBe(1);
+  it("ignores the table's own columns/rows once blocks is set", async () => {
+    const wb = await load(await renderExcel(MULTI_TABLE, { purpose: "RECORDS" }));
 
     const summary = wb.getWorksheet("Summary")!;
-    expect(summary.rowCount).toBe(3);
+    const headerValues = summary.getRow(3).values as CellValue[];
+    expect(headerValues.slice(1)).toEqual(["Grade", "Count"]);
+    // Line, blank, header + 2 data rows — never the ignored top-level row.
+    expect(summary.rowCount).toBe(5);
+
+    const details = wb.getWorksheet("Details")!;
+    expect((details.getRow(3).values as CellValue[]).slice(1)).toEqual(["Name", "Status"]);
+    expect(details.rowCount).toBe(3);
   });
 
   it("produces a PDF that starts with the PDF magic number and still draws the non-empty block", async () => {
