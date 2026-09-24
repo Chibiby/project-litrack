@@ -60,11 +60,17 @@ export async function updateAnnouncement(formData: FormData): Promise<ActionResu
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  // `broadcastId != null` means this copy came from a district/division
+  // broadcast (docs/specs/district-admin.md I13). Leaving it out of the where
+  // makes a broadcast row invisible to a School Head's edit — indistinguishable
+  // from one that does not exist, the same NOT_FOUND every other tenant
+  // boundary in this app gives.
   const existing = await prisma.announcement.findFirst({
     where: {
       id: parsed.data.announcementId,
       schoolId: user.schoolId,
       deletedAt: null,
+      broadcastId: null,
     },
   });
   if (!existing) return { ok: false, error: "Announcement not found" };
@@ -98,11 +104,14 @@ export async function deleteAnnouncement(formData: FormData): Promise<ActionResu
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
+  // Same refusal as `updateAnnouncement` above, and the same reason: a
+  // broadcast is read-only to the School Head it was sent to.
   const existing = await prisma.announcement.findFirst({
     where: {
       id: parsed.data.announcementId,
       schoolId: user.schoolId,
       deletedAt: null,
+      broadcastId: null,
     },
   });
   if (!existing) return { ok: false, error: "Announcement not found" };

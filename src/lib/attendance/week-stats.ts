@@ -31,6 +31,39 @@ export type WeekStats = {
   daysRecorded: number;
 };
 
+export type AttendanceRateInput = {
+  /** PRESENT marks on school days (LATE is not present, spec Q5). */
+  presentMarks: number;
+  /** The grade's current ARAL roster size. */
+  learnerCount: number;
+  /** Mon–Fri minus that grade's holidays. */
+  schoolDays: number;
+};
+
+/**
+ * The maximum number of marks a roster can hold over `schoolDays`: the
+ * denominator of every attendance rate in the app. The division summary sums it
+ * across grades and weeks before dividing, so it is exported on its own.
+ */
+export function attendancePossibleMarks({
+  learnerCount,
+  schoolDays,
+}: Pick<AttendanceRateInput, "learnerCount" | "schoolDays">): number {
+  return learnerCount * schoolDays;
+}
+
+/**
+ * The attendance rate, as every teacher and School Head card shows it: PRESENT
+ * marks over possible marks, rounded to a whole percent, 0 when nothing was
+ * possible. The one definition of the rate; `computeWeekStats` and the division
+ * summary both go through it (the summary via `attendancePossibleMarks`, with
+ * its own one-decimal `pct` for display).
+ */
+export function attendanceRatePct(input: AttendanceRateInput): number {
+  const possible = attendancePossibleMarks(input);
+  return possible > 0 ? Math.round((input.presentMarks / possible) * 100) : 0;
+}
+
 /**
  * Pure attendance-week math shared by the stat cards and its Vitest coverage.
  * No React, no server action — just the four numbers the mockup's cards show.
@@ -51,13 +84,13 @@ export function computeWeekStats({
     if (!holidays.has(key)) schoolDayKeys.push(key);
   }
   const schoolDays = schoolDayKeys.length;
-  const possible = learnerCount * schoolDays;
+  const possible = attendancePossibleMarks({ learnerCount, schoolDays });
 
   const schoolDaySet = new Set(schoolDayKeys);
   const presentMarks = records.filter(
     (r) => r.status === "PRESENT" && schoolDaySet.has(r.dateKey)
   ).length;
-  const ratePct = possible > 0 ? Math.round((presentMarks / possible) * 100) : 0;
+  const ratePct = attendanceRatePct({ presentMarks, learnerCount, schoolDays });
 
   // A day is "recorded" when every learner in the roster has a mark for it, so
   // a day with zero learners can never count — there is nobody to record.

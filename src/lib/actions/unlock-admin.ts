@@ -1,9 +1,10 @@
 "use server";
 
-import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+import { resourceNotFound } from "@/lib/errors/app-error";
 import { action } from "@/lib/errors/action";
 import { parseInput } from "@/lib/errors/validation";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminScope, loadSchoolInScope } from "@/lib/auth/district-scope";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { revalidateUnlockGrants } from "@/lib/cache/revalidate";
 import { prisma } from "@/lib/prisma";
 import {
@@ -16,47 +17,22 @@ import {
 import { issueUnlockSchema, revokeUnlockSchema } from "@/lib/validators/support.schema";
 
 /**
- * The Super Admin unlock console.
+ * The unlock console: a Super Admin division-wide, or a district admin within
+ * their own districts (`docs/specs/district-admin.md` 3.5).
  *
- * Deliberately cross-tenant, like `/admin/audit` and the support inbox: the
- * division admin issues access to any school, so there is no `schoolId` filter
- * to apply and no session school to filter by. That makes the role guard the
- * ONLY thing standing between one school's data and another's, so it is written
- * out rather than implied — see `requireSuperAdmin` below.
+ * `requireAdminScope()` is the ONLY gate — never `requireUser(["DISTRICT_ADMIN"])`
+ * or a hand-rolled Super Admin check next to it, because `requireAdminScope`
+ * already makes the Super Admin branch explicit (`docs/specs/district-admin.md`
+ * I8) and is the one place a role becomes a scope. Every target this file loads
+ * — the teacher's school, the named school, the grant being revoked — is loaded
+ * WITH that scope in the `where`, never checked afterwards: an out-of-scope
+ * target reads as NOT_FOUND, the same as one that does not exist.
  *
- * New actions, so they use the `action()` wrapper and throw `AppError` instead
- * of hand-building `{ ok: false, error }` (docs/errors.md). The grant rows
- * themselves are written by `src/lib/unlock/issue.ts`; nothing in this file
- * touches `UnlockGrant` or `SchoolUnlockGrant` directly.
+ * Uses the `action()` wrapper and throws `AppError` instead of hand-building
+ * `{ ok: false, error }` (docs/errors.md). The grant rows themselves are
+ * written by `src/lib/unlock/issue.ts`; nothing in this file touches
+ * `UnlockGrant` or `SchoolUnlockGrant` directly.
  */
-
-/**
- * A Super Admin, proven.
- *
- * `requireUser(["SUPER_ADMIN"])` on its own does NOT prove this. It proves the
- * caller passed *a* role check, and `allowSuperAdmin` defaults to true, which
- * means a Super Admin satisfies every role list in the app by impersonation.
- * Read the other direction — the direction that matters here — the helper is
- * one flipped default or one edited argument away from admitting somebody else,
- * and what it would admit them to is every school at once. The equality check
- * is the actual gate; the `requireUser` call is what redirects a signed-out
- * person to the right login page.
- *
- * A School Head or teacher reaching this is a refusal worth recording, which is
- * what `AUTH_FORBIDDEN`'s `security` severity does — it lands in `ErrorEvent`
- * rather than passing as an ordinary user mistake.
- */
-async function requireSuperAdmin() {
-  const admin = await requireUser(["SUPER_ADMIN"]);
-  if (admin.role !== "SUPER_ADMIN") {
-    throw new AppError("AUTH_FORBIDDEN", {
-      params: { what: "the unlock console" },
-      detail: `role ${admin.role} reached the unlock console`,
-      context: { role: admin.role },
-    });
-  }
-  return admin;
-}
 
 export type IssuedUnlock = {
   id: string;
@@ -70,26 +46,32 @@ export type IssuedUnlock = {
  *
  * The tenant story, in the order it happens:
  *
- * 1. The caller is proven to be a Super Admin, who is division-wide.
+ * 1. `requireAdminScope()` proves the caller is a Super Admin (division scope)
+ *    or a district admin (their own districts) — never a School Head or
+ *    teacher, and never a district admin's *other* districts.
  * 2. The payload is validated — including the day count, so a mistyped 500 is
  *    refused rather than clamped to 90 behind the person's back.
- * 3. The target row is LOADED, and the grant's `schoolId` is taken from that
- *    row. In teacher mode the payload's own `schoolId` is refused by the schema
- *    outright, so there is no path by which a client-supplied school reaches a
- *    grant.
- * 4. A missing, removed or school-less target answers `NOT_FOUND` in the same
- *    words either way.
+ * 3. The target row is LOADED WITH THE SCOPE IN ITS WHERE (`loadSchoolInScope`),
+ *    and the grant's `schoolId` is taken from that row. In teacher mode the
+ *    payload's own `schoolId` is refused by the schema outright, so there is no
+ *    path by which a client-supplied school reaches a grant.
+ * 4. A missing, removed, school-less, or out-of-scope target answers
+ *    `NOT_FOUND` in the same words either way (`docs/specs/district-admin.md`
+ *    I7) — a district admin cannot learn that a teacher or school exists
+ *    outside their districts.
  */
 export const issueUnlock = action(
   "issueUnlock",
   async (input: unknown): Promise<{ ok: true; data: IssuedUnlock }> => {
-    const admin = await requireSuperAdmin();
+    const { user: admin, scope } = await requireAdminScope();
     const data = parseInput(issueUnlockSchema, input);
 
     if (data.mode === "teacher") {
       // `userId` is guaranteed present in this mode by the schema's superRefine.
       const target = await findUnlockRecipient(data.userId as string);
       if (!target) throw resourceNotFound("Teacher");
+      // Throws NOT_FOUND when the teacher's school is outside the caller's scope.
+      await loadSchoolInScope(scope, target.schoolId, { id: true });
 
       const issued = await issueTeacherUnlock({
         actorId: admin.id,
@@ -108,11 +90,7 @@ export const issueUnlock = action(
       };
     }
 
-    const school = await prisma.school.findFirst({
-      where: { id: data.schoolId as string, deletedAt: null },
-      select: { id: true },
-    });
-    if (!school) throw resourceNotFound("School");
+    const school = await loadSchoolInScope(scope, data.schoolId as string, { id: true });
 
     const issued = await issueSchoolUnlock({
       actorId: admin.id,
@@ -145,12 +123,30 @@ export const issueUnlock = action(
  * `kind` says which table to look in, and looking in the wrong one is
  * indistinguishable from a grant that does not exist, which is the correct
  * thing for it to look like.
+ *
+ * The grant is loaded WITH the caller's scope in its `where` before either
+ * `revoke*Unlock` function (which look it up again, by id alone) ever runs —
+ * an out-of-scope grant id must never reach them.
  */
 export const revokeUnlock = action(
   "revokeUnlock",
   async (input: unknown): Promise<{ ok: true }> => {
-    const admin = await requireSuperAdmin();
+    const { user: admin, scope } = await requireAdminScope();
     const data = parseInput(revokeUnlockSchema, input);
+
+    if (data.kind === "teacher") {
+      const grant = await prisma.unlockGrant.findFirst({
+        where: { id: data.grantId, school: schoolWhereForScope(scope) },
+        select: { id: true },
+      });
+      if (!grant) throw resourceNotFound("Grant");
+    } else {
+      const grant = await prisma.schoolUnlockGrant.findFirst({
+        where: { id: data.grantId, school: schoolWhereForScope(scope) },
+        select: { id: true },
+      });
+      if (!grant) throw resourceNotFound("Grant");
+    }
 
     const outcome =
       data.kind === "teacher"

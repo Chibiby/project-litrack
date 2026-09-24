@@ -18,6 +18,7 @@ export function getShellWarmHrefs(role: UserRole): string[] {
     case "TEACHER":
     case "SUPER_ADMIN":
     case "SCHOOL_HEAD":
+    case "DISTRICT_ADMIN":
       return [home, profile, security];
     default:
       return [security];

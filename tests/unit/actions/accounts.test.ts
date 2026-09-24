@@ -32,6 +32,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *  - getAccountProfile refuses a non-Super-Admin caller.
  *  - getAccountProfile's advisory/aral are null for a non-teacher, and the
  *    query count for that shape is bounded (3 calls: user + 2 in Promise.all).
+ *  - impersonateUser refuses a DISTRICT_ADMIN target the same way as a
+ *    SUPER_ADMIN target — the new allow-list (I14, T13, district-admin spec).
+ *  - resetDistrictAdminPassword: Super-Admin-only, sets mustChangePassword,
+ *    app_metadata.role DISTRICT_ADMIN, and never leaks the credential.
  *
  * Everything below the auth line is mocked to leaf infrastructure only, in the
  * style of the other files in this directory.
@@ -53,10 +57,34 @@ vi.mock("@/lib/auth/session", () => ({
   requireUser: (...a: unknown[]) => requireUser(...(a as [])),
 }));
 
+/**
+ * Honors a `where.role` filter against `targetRow.role`, so the new
+ * `impersonateUser` allow-list (`role: { in: IMPERSONATABLE_ROLES }`,
+ * docs/specs/district-admin.md I14) is actually exercised: deleting that
+ * filter from the action would let a DISTRICT_ADMIN `targetRow` through this
+ * fake and reach `startImpersonation`, turning the NOT_FOUND test below red.
+ * Every test in this file that needs a different row overrides with
+ * `mockResolvedValueOnce`, which takes priority over this default and is
+ * untouched by the filter added here.
+ */
+function matchesRoleWhere(role: string, where: unknown): boolean {
+  const roleFilter = (where as { role?: unknown } | undefined)?.role;
+  if (roleFilter === undefined) return true;
+  if (typeof roleFilter === "string") return roleFilter === role;
+  if (typeof roleFilter === "object" && roleFilter !== null && "in" in roleFilter) {
+    const list = (roleFilter as { in?: unknown }).in;
+    return Array.isArray(list) && list.includes(role);
+  }
+  return true;
+}
+
 // ── prisma ───────────────────────────────────────────────────────────────
 const prismaMock = {
   user: {
-    findFirst: vi.fn(async (_args: unknown): Promise<unknown> => targetRow),
+    findFirst: vi.fn(async (args: { where?: unknown } = {}): Promise<unknown> => {
+      if (!targetRow) return null;
+      return matchesRoleWhere(targetRow.role, args.where) ? targetRow : null;
+    }),
     findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     update: vi.fn(async (_args: unknown) => ({})),
   },
@@ -179,8 +207,9 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolsList: vi.fn() }));
 
 // ── the module under test ────────────────────────────────────────────────
-const { impersonateUser, endImpersonation, resetTeacherPassword, getAccountProfile,
-  revealSchoolHeadPassword, resetSchoolHeadPasswordToDefault, startTestLabSession } = await import(
+const { impersonateUser, endImpersonation, resetTeacherPassword, resetDistrictAdminPassword,
+  getAccountProfile, revealSchoolHeadPassword, resetSchoolHeadPasswordToDefault,
+  startTestLabSession } = await import(
   "@/lib/actions/accounts"
 );
 const { logoutAction } = await import("@/lib/actions/auth");
@@ -239,7 +268,10 @@ beforeEach(() => {
   requireUser.mockResolvedValue({ id: ADMIN_ID, authId: ADMIN_AUTH_ID, role: "SUPER_ADMIN" });
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   targetRow = teacher();
-  prismaMock.user.findFirst.mockImplementation(async () => targetRow);
+  prismaMock.user.findFirst.mockImplementation(async (args: { where?: unknown } = {}) => {
+    if (!targetRow) return null;
+    return matchesRoleWhere(targetRow.role, args.where) ? targetRow : null;
+  });
   prismaMock.school.findFirst.mockResolvedValue(null);
   generateLink.mockResolvedValue({ data: { properties: { hashed_token: "hashed-token" } }, error: null });
   detachedVerifyOtp.mockResolvedValue({
@@ -265,10 +297,34 @@ describe("impersonateUser", () => {
     expect(setImpersonationCookie).not.toHaveBeenCalled();
   });
 
-  it("refuses a SUPER_ADMIN target — the privilege-escalation guard", async () => {
+  it("refuses a SUPER_ADMIN target — now via the impersonatable-role allow-list (I14)", async () => {
+    // Behaviour change from the pre-district-admin action: the allow-list
+    // (`role: { in: IMPERSONATABLE_ROLES }`) is now IN the target lookup's
+    // `where`, so a SUPER_ADMIN id is simply not found — the same generic
+    // refusal as any other disallowed role — rather than reaching
+    // `startImpersonation`'s own privilege-escalation guard. That guard is
+    // still there (see `matchesRoleWhere`'s doc comment above): if this
+    // allow-list were ever deleted from the action, a SUPER_ADMIN target
+    // would still be caught by it and this test would fail on the wrong code
+    // (AUTH_FORBIDDEN, not NOT_FOUND) rather than passing by coincidence.
     targetRow = teacher({ role: "SUPER_ADMIN" });
     const res = await impersonateUser(form());
-    expect(res).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+    expect(serverSetSession).not.toHaveBeenCalled();
+  });
+
+  it("refuses a DISTRICT_ADMIN target the same way — I14, T13", async () => {
+    // Before this allow-list existed, a DISTRICT_ADMIN target passed the old
+    // `role === "SUPER_ADMIN"` refusal outright and the admin would have been
+    // redirected to `/school-head` (spec 5, the accounts.ts row) — this is
+    // the case that regression guards against. Removing the allow-list from
+    // `impersonateUser` reproduces exactly that: the fake's `matchesRoleWhere`
+    // would then let this row through and `redirect("/school-head")` would
+    // throw, failing this test rather than passing it.
+    targetRow = teacher({ role: "DISTRICT_ADMIN", schoolId: null, school: null });
+    const res = await impersonateUser(form());
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(setImpersonationCookie).not.toHaveBeenCalled();
     expect(serverSetSession).not.toHaveBeenCalled();
   });
@@ -708,6 +764,69 @@ describe("resetTeacherPassword", () => {
       resource: "User",
       resourceId: TARGET_ID,
       metadata: { schoolId: SCHOOL_ID, via: "admin_accounts" },
+    });
+    expect(JSON.stringify(entry)).not.toContain(password);
+  });
+});
+
+describe("resetDistrictAdminPassword", () => {
+  it("refuses a non-Super-Admin caller — a district admin cannot reset its own or another's password this way", async () => {
+    // T13: "resetDistrictAdminPassword as a DA is forbidden." `requireUser`
+    // itself redirects a signed-in DISTRICT_ADMIN caller (the real gate lives
+    // in `src/lib/auth/session.ts`); this fake reproduces that refusal the
+    // same way every other "non-Super-Admin caller" case in this file does.
+    requireUser.mockRejectedValueOnce(new Error("NEXT_REDIRECT:/admin/login"));
+    await expect(resetDistrictAdminPassword(form())).rejects.toThrow(
+      "NEXT_REDIRECT:/admin/login"
+    );
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-DISTRICT_ADMIN target", async () => {
+    // `role: "DISTRICT_ADMIN"` is baked into the `where`, and the default
+    // fake honors it (`matchesRoleWhere`): a TEACHER row does not match, so
+    // this reads exactly as Prisma would with that filter in place. Deleting
+    // the filter from the action would make this fake return the teacher row
+    // instead of null, and the action would go on to reset a teacher's
+    // password under the district admin's own audit action — turning this
+    // test red.
+    targetRow = teacher({ role: "TEACHER" });
+    const res = await resetDistrictAdminPassword(form());
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("sets mustChangePassword true, app_metadata.role DISTRICT_ADMIN, and never leaks the credential in metadata", async () => {
+    const targetId = "66666666-6666-4666-8666-666666666666";
+    prismaMock.user.findFirst.mockResolvedValueOnce({
+      id: targetId,
+      authId: "auth-district-1",
+      schoolId: null,
+    });
+
+    const res = await resetDistrictAdminPassword(form(targetId));
+    expect(res.ok).toBe(true);
+    const password = res.ok ? res.data.password : "";
+    expect(password.length).toBeGreaterThan(0);
+
+    expect(updateUserById).toHaveBeenCalledWith(
+      "auth-district-1",
+      expect.objectContaining({ password, app_metadata: { role: "DISTRICT_ADMIN", schoolId: null } })
+    );
+
+    expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+    const call = prismaMock.user.update.mock.calls[0][0] as { where: unknown; data: Record<string, unknown> };
+    expect(call.where).toEqual({ id: targetId });
+    expect(call.data).toMatchObject({ mustChangePassword: true });
+
+    expect(writeAudit).toHaveBeenCalledTimes(1);
+    const entry = writeAudit.mock.calls[0][0] as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      userId: ADMIN_ID,
+      schoolId: null,
+      action: AUDIT_ACTIONS.DISTRICT_ADMIN_PASSWORD_RESET,
+      resource: "User",
+      resourceId: targetId,
     });
     expect(JSON.stringify(entry)).not.toContain(password);
   });

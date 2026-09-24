@@ -160,7 +160,8 @@ export function AssistantPanel({
   // Super Admin answers tickets rather than filing them: `submitTicket` takes
   // `requireSchoolUser`, and an admin holds no school to file against. The
   // whole escalation path is hidden for them rather than offered and refused.
-  const canEscalate = role !== "SUPER_ADMIN";
+  // A district admin is school-less the same way.
+  const canEscalate = role !== "SUPER_ADMIN" && role !== "DISTRICT_ADMIN";
   const firstName = userName.trim().split(/\s+/)[0] || "there";
   const pageUrl = pathname && PAGE_PATH_RE.test(pathname) ? pathname : undefined;
 

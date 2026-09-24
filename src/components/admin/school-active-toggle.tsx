@@ -11,6 +11,7 @@ export function SchoolActiveToggle({
   schoolName,
   onToggle,
   pending: pendingProp,
+  className,
 }: {
   schoolId: string;
   isActive: boolean;
@@ -18,6 +19,7 @@ export function SchoolActiveToggle({
   /** Parent-owned optimistic mutation (table). */
   onToggle?: (nextActive: boolean) => void | Promise<void>;
   pending?: boolean;
+  className?: string;
 }) {
   const [optimisticActive, setOptimisticActive] = useOptimistic(isActive);
   const [localPending, startTransition] = useTransition();
@@ -48,6 +50,7 @@ export function SchoolActiveToggle({
       type="button"
       variant="ghost"
       size="sm"
+      className={className}
       loading={pending}
       loadingText={
         busyNext === null

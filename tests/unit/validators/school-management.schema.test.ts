@@ -108,7 +108,12 @@ describe("announcement schemas", () => {
 });
 
 describe("school info / admin schemas", () => {
-  it("updateSchoolInfoSchema omits schoolIdCode", () => {
+  it("updateSchoolInfoSchema omits schoolIdCode, region, division and district", () => {
+    // Region/division/district moved to the Super Admin's `updateSchoolAsAdmin`
+    // (docs/specs/district-admin.md 3.5/3.7): School.district now decides which
+    // district admin supervises a school, so a School Head can no longer move
+    // it by retyping the field. A stale cached form that still posts them has
+    // the extras simply stripped, not written.
     const ok = updateSchoolInfoSchema.safeParse({
       name: "Sample School",
       region: "NCR",
@@ -117,7 +122,9 @@ describe("school info / admin schemas", () => {
     expect(ok.success).toBe(true);
     if (ok.success) {
       expect(ok.data.address).toBeUndefined();
-      expect(ok.data.region).toBe("NCR");
+      expect(ok.data).not.toHaveProperty("region");
+      expect(ok.data).not.toHaveProperty("division");
+      expect(ok.data).not.toHaveProperty("district");
     }
   });
 

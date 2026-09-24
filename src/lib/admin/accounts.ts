@@ -79,10 +79,10 @@ export function accountsListOrderBy(
  * The Password cell, a discriminated union computed once here so the table
  * only ever renders what it is given, never re-derives it.
  *
- * A teacher (or Super Admin) row can only ever be `never_stored`: the branch
- * that produces `sealed` / `school_id` / `not_recorded` sits inside the
- * `role === "SCHOOL_HEAD"` check in `accountPasswordState` below, so nothing
- * else can reach it.
+ * A teacher, Super Admin or district admin row can only ever be
+ * `never_stored`: the branch that produces `sealed` / `school_id` /
+ * `not_recorded` sits inside the `role === "SCHOOL_HEAD"` check in
+ * `accountPasswordState` below, so nothing else can reach it.
  */
 export type AccountPasswordState =
   | { kind: "school_id"; value: string }
@@ -119,6 +119,13 @@ export type AccountRow = {
   /** True only for the oldest active School Head row used by school sign-in. */
   signInHead: boolean;
   /**
+   * Districts a DISTRICT_ADMIN row supervises, sorted; `null` for every other
+   * role. Never derived from the row itself — `DistrictAdminAssignment` is a
+   * separate table (docs/specs/district-admin.md 3.1) — so this is filled in
+   * by a batched lookup alongside the page, never a per-row query.
+   */
+  districtAdminDistricts: string[] | null;
+  /**
    * True when `email` is a real mailbox, i.e. NOT synthetic. Computed once
    * here from `isSyntheticEmail` — the table must not re-derive this from the
    * address string, because the "no mailbox" chip and the reset-vs-recover
@@ -145,9 +152,15 @@ export type AccountSummary = {
   inactiveCount: number;
   schoolHeadCount: number;
   teacherCount: number;
+  districtAdminCount: number;
 };
 
-const ROLE_VALUES: readonly UserRole[] = ["SUPER_ADMIN", "SCHOOL_HEAD", "TEACHER"];
+const ROLE_VALUES: readonly UserRole[] = [
+  "SUPER_ADMIN",
+  "SCHOOL_HEAD",
+  "TEACHER",
+  "DISTRICT_ADMIN",
+];
 
 function isUserRole(value: string | undefined): value is UserRole {
   return value !== undefined && (ROLE_VALUES as readonly string[]).includes(value);
@@ -205,9 +218,17 @@ export async function getAccountSummary(): Promise<AccountSummary> {
       else summary.inactiveCount += count;
       if (group.role === "SCHOOL_HEAD") summary.schoolHeadCount += count;
       if (group.role === "TEACHER") summary.teacherCount += count;
+      if (group.role === "DISTRICT_ADMIN") summary.districtAdminCount += count;
       return summary;
     },
-    { totalCount: 0, activeCount: 0, inactiveCount: 0, schoolHeadCount: 0, teacherCount: 0 }
+    {
+      totalCount: 0,
+      activeCount: 0,
+      inactiveCount: 0,
+      schoolHeadCount: 0,
+      teacherCount: 0,
+      districtAdminCount: 0,
+    }
   );
 }
 
@@ -279,21 +300,27 @@ function accountPasswordState(user: AccountsPageUser): AccountPasswordState {
 }
 
 function accountSignIn(user: AccountsPageUser): AccountSignIn {
-  if (user.role === "SUPER_ADMIN") {
+  // Both admin roles sign in with a username, like `loginAdmin` resolves
+  // (spec 3.3) — a district admin's email is synthetic and never shown as a
+  // sign-in value.
+  if (user.role === "SUPER_ADMIN" || user.role === "DISTRICT_ADMIN") {
     return { kind: "username", value: user.username ?? user.email };
   }
   return { kind: "email", value: user.email, synthetic: isSyntheticEmail(user.email) };
 }
 
 /**
- * At most 3 Prisma calls, constant in row count:
+ * At most 4 Prisma calls, constant in row count:
  *  1. `user.findMany` with `relationLoadStrategy: "join"` — one SQL statement
  *     for the page of rows plus their joined `school`.
  *  2. `user.count` for the pager.
  *  3. one batch lookup for the oldest active School Head in each page school.
- * The page and count run inside one `Promise.all`; the final lookup is one
- * bounded query for the whole page. No per-row query, no per-row `await`
- * inside `.map()`, no per-row Supabase Admin call — the mapping below is pure.
+ *  4. one batch lookup for every DISTRICT_ADMIN row's assigned districts.
+ * The page and count run inside one `Promise.all`; the two batch lookups are
+ * each one bounded query for the whole page, never a per-row query. No
+ * per-row `await` inside `.map()`, no per-row Supabase Admin call — the
+ * mapping below is pure. Call 4 is skipped outright when the page holds no
+ * DISTRICT_ADMIN row, which is every page until district admins exist.
  */
 export async function getAccountsPage(
   params: AccountsParams
@@ -337,6 +364,23 @@ export async function getAccountsPage(
     )
   );
 
+  const districtAdminIds = users
+    .filter((user) => user.role === "DISTRICT_ADMIN")
+    .map((user) => user.id);
+  const districtsByUserId = new Map<string, string[]>();
+  if (districtAdminIds.length > 0) {
+    const assignments = await prisma.districtAdminAssignment.findMany({
+      where: { userId: { in: districtAdminIds } },
+      select: { userId: true, district: true },
+      orderBy: { district: "asc" },
+    });
+    for (const row of assignments) {
+      const list = districtsByUserId.get(row.userId);
+      if (list) list.push(row.district);
+      else districtsByUserId.set(row.userId, [row.district]);
+    }
+  }
+
   return {
     totalCount,
     rows: users.map((user) => ({
@@ -353,6 +397,8 @@ export async function getAccountsPage(
       approvalStatus: user.approvalStatus,
       password: accountPasswordState(user),
       signInHead: signInHeadIds.has(user.id),
+      districtAdminDistricts:
+        user.role === "DISTRICT_ADMIN" ? districtsByUserId.get(user.id) ?? [] : null,
       canRecoverByEmail: !isSyntheticEmail(user.email),
     })),
   };

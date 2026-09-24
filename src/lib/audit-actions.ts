@@ -347,6 +347,35 @@ export const AUDIT_ACTIONS = {
    * open.
    */
   READING_LEVEL_UNLOCK_ALL_SET: "READING_LEVEL_UNLOCK_ALL_SET",
+
+  /**
+   * District admin accounts (`docs/specs/district-admin.md`).
+   *
+   * `DISTRICT_ADMIN_CREATE` and `DISTRICT_ASSIGNMENT_ADD` are written by
+   * `scripts/create-district-admins.ts`, run by a human, not a request.
+   * Metadata is the username and district names — never the one-time password,
+   * which exists only in the credentials CSV that script writes once.
+   * `DISTRICT_ADMIN_PASSWORD_RESET` is a Super Admin issuing a new one-time
+   * credential; same rule as `TEACHER_PASSWORD_RESET`: ids only, never the
+   * credential.
+   */
+  DISTRICT_ADMIN_CREATE: "DISTRICT_ADMIN_CREATE",
+  DISTRICT_ASSIGNMENT_ADD: "DISTRICT_ASSIGNMENT_ADD",
+  DISTRICT_ADMIN_PASSWORD_RESET: "DISTRICT_ADMIN_PASSWORD_RESET",
+  /**
+   * One announcement fanned out to many schools by a district admin or the
+   * division office, and its retraction. Metadata is `{ broadcastId,
+   * schoolCount }` — the per-school copies are found by `broadcastId`, so the
+   * row never needs to list school names.
+   */
+  ANNOUNCEMENT_BROADCAST: "ANNOUNCEMENT_BROADCAST",
+  ANNOUNCEMENT_BROADCAST_RETRACT: "ANNOUNCEMENT_BROADCAST_RETRACT",
+  /**
+   * A division or district summary downloaded. Facet, level, scope kind,
+   * district and school COUNTS, format and purpose — never a school, learner or
+   * teacher name. Summaries hold counts only, and so does this row.
+   */
+  SUMMARY_EXPORT: "SUMMARY_EXPORT",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

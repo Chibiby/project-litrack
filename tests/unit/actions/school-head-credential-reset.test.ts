@@ -127,7 +127,7 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
 
     const res = await regenerateSchoolHeadCredential(form());
 
-    expect(res).toEqual({ ok: false, error: "Failed to reset password" });
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR" });
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });

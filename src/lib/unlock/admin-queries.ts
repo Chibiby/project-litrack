@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma, UnlockScope } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { TEACHER_ROSTER_STATE } from "@/lib/teachers/roster";
+import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
 
 /**
  * Reads behind the Super Admin unlock console.
@@ -70,14 +71,29 @@ function liveWhere() {
 /**
  * Every unlock in force right now, both kinds, newest first.
  *
+ * `scope` is the caller's `AdminScope` (from `requireAdminScope()`); this
+ * turns it into a `Prisma.SchoolWhereInput` via `schoolWhereForScope` itself,
+ * required rather than defaulted so an unmigrated call site fails to compile
+ * instead of silently reading every school. `extraWhere` merges in on top for
+ * a caller that needs a narrower view than the scope alone gives (the
+ * district portal always excludes the demo tenant, even from a Super Admin's
+ * division scope) — same combine-with-`demoSchoolFilter` pattern
+ * `src/lib/auth/admin-scope.ts` documents for school-listing call sites.
+ * Callers must already have established an admin role; this function does not
+ * check it.
+ *
  * Capped at 100 per kind. The console is a list of exceptions, not a report: if
  * a hundred windows are open at once the answer is not a longer page, it is that
  * submission locking is doing nothing and should be switched off deliberately.
  */
-export async function listActiveUnlocks(): Promise<ActiveUnlocks> {
+export async function listActiveUnlocks(
+  scope: AdminScope,
+  extraWhere: Prisma.SchoolWhereInput = {}
+): Promise<ActiveUnlocks> {
+  const schoolWhere = { ...schoolWhereForScope(scope), ...extraWhere };
   const [teacherGrants, schoolGrants] = await Promise.all([
     prisma.unlockGrant.findMany({
-      where: liveWhere(),
+      where: { ...liveWhere(), school: schoolWhere },
       orderBy: { createdAt: "desc" },
       take: 100,
       select: {
@@ -93,7 +109,7 @@ export async function listActiveUnlocks(): Promise<ActiveUnlocks> {
       },
     }),
     prisma.schoolUnlockGrant.findMany({
-      where: liveWhere(),
+      where: { ...liveWhere(), school: schoolWhere },
       orderBy: { createdAt: "desc" },
       take: 100,
       select: {
@@ -144,6 +160,11 @@ export type UnlockTargetSchool = {
 /**
  * Every school and its active teachers, for the console's two pickers.
  *
+ * `scope` narrows both queries to the caller's scope via
+ * `schoolWhereForScope`, with `extraWhere` merged on top — same
+ * required-parameter and extra-narrowing reasoning as `listActiveUnlocks`
+ * above.
+ *
  * "Active" is the teacher roster's own definition
  * (`teacherRosterScope` + `TEACHER_ROSTER_STATE.active`), which is also what
  * `issueSchoolUnlock` notifies. A picker built from a wider rule than the write
@@ -153,15 +174,19 @@ export type UnlockTargetSchool = {
  * LITRACK access is switched off still has encoding somebody may need reopened,
  * and the caller can say so in the label.
  */
-export async function listUnlockTargets(): Promise<UnlockTargetSchool[]> {
+export async function listUnlockTargets(
+  scope: AdminScope,
+  extraWhere: Prisma.SchoolWhereInput = {}
+): Promise<UnlockTargetSchool[]> {
+  const schoolWhere = { ...schoolWhereForScope(scope), ...extraWhere };
   const [schools, teachers] = await Promise.all([
     prisma.school.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...schoolWhere },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
     prisma.user.findMany({
-      where: { ...ACTIVE_TEACHER_ANY_SCHOOL, school: { deletedAt: null } },
+      where: { ...ACTIVE_TEACHER_ANY_SCHOOL, school: { deletedAt: null, ...schoolWhere } },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       select: {
         id: true,

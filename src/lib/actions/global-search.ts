@@ -2,8 +2,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { requireAdminScope } from "@/lib/auth/district-scope";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import {
   GLOBAL_SEARCH_MIN_CHARS,
   type GlobalSearchHit,
@@ -24,6 +27,14 @@ import {
  *      whole school roster, and no teacher/section/school results at all. The
  *      header is not a place to widen what a role can see.
  *
+ * A District Admin is its own explicit branch, checked before any of the
+ * above: `requireAdminScope()` narrows to `schoolWhereForScope(scope)`, and
+ * ONLY schools are ever queried for this role — no learner query and no
+ * teacher query run at all (`docs/specs/district-admin.md`, non-goal: "No
+ * learner-level lists in the district portal"). Without this branch a district
+ * admin would fall through to `!isAdmin && !user.schoolId` below (their
+ * `schoolId` is always NULL) and get an empty result — safe, but useless.
+ *
  * Soft-deleted rows are excluded everywhere (`deletedAt: null`); archived
  * learners are excluded too, matching the transfer typeahead.
  */
@@ -40,6 +51,10 @@ export async function globalSearch(input: { q: string }): Promise<SearchResult> 
 
   const q = (input?.q ?? "").trim();
   if (q.length < GLOBAL_SEARCH_MIN_CHARS) return { ok: true, data: [] };
+
+  if (user.role === "DISTRICT_ADMIN") {
+    return { ok: true, data: await districtAdminSearch(q) };
+  }
 
   const isAdmin = user.role === "SUPER_ADMIN";
   const isTeacher = user.role === "TEACHER" && !isAdmin;
@@ -164,4 +179,33 @@ export async function globalSearch(input: { q: string }): Promise<SearchResult> 
   }
 
   return { ok: true, data: hits };
+}
+
+/**
+ * A district admin's header search: schools in their own districts only.
+ *
+ * `requireAdminScope()` here is a second, cheap call — `requireUser()` above
+ * already proved the signed-in role, and `requireAdminScope`'s own guard is
+ * memoized per request with React `cache()` (`src/lib/auth/district-scope.ts`),
+ * so this does not re-run the assignment lookup. It is called explicitly
+ * anyway rather than trusting `user.role` alone, so the scope this function
+ * queries with is always the one the admin console itself would compute.
+ */
+async function districtAdminSearch(q: string): Promise<GlobalSearchHit[]> {
+  const { scope } = await requireAdminScope();
+
+  const schools = await prisma.school.findMany({
+    where: { ...schoolWhereForScope(scope), name: { contains: q, mode: "insensitive" as const } },
+    select: { id: true, name: true, district: true },
+    orderBy: { name: "asc" },
+    take: PER_GROUP_TAKE,
+  });
+
+  return schools.map((s) => ({
+    id: s.id,
+    kind: "school" as const,
+    title: s.name,
+    subtitle: s.district,
+    href: DISTRICT_ROUTES.school(s.id),
+  }));
 }

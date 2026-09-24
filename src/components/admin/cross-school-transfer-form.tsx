@@ -24,6 +24,7 @@ export function CrossSchoolTransferForm({
   grades,
   sections,
   teachers,
+  basePath = "/admin/transfers",
 }: {
   schools: SchoolOption[];
   fromSchoolId: string;
@@ -31,6 +32,8 @@ export function CrossSchoolTransferForm({
   grades: GradeOption[];
   sections: SectionOption[];
   teachers: TeacherOption[];
+  /** The page this form re-navigates to when a school picker changes. */
+  basePath?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -74,7 +77,7 @@ export function CrossSchoolTransferForm({
     if (nextFrom) params.set("from", nextFrom);
     if (nextTo) params.set("to", nextTo);
     const qs = params.toString();
-    router.push(qs ? `/admin/transfers?${qs}` : "/admin/transfers");
+    router.push(qs ? `${basePath}?${qs}` : basePath);
   }
 
   return (

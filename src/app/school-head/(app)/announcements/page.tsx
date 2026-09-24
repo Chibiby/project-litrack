@@ -28,7 +28,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
   const announcements = await prisma.announcement.findMany({
     where: { schoolId: view.schoolId, deletedAt: null },
     orderBy: { publishedAt: "desc" },
-    include: { author: { select: { fullName: true } } },
+    include: { author: { select: { fullName: true, role: true } } },
   });
 
   return (
@@ -86,6 +86,11 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
                 body: a.body,
                 authorName: a.author?.fullName ?? PURGED_USER_LABEL,
                 publishedAt: a.publishedAt.toISOString().slice(0, 10),
+                broadcastFrom: a.broadcastId
+                  ? a.author?.role === "DISTRICT_ADMIN"
+                    ? "district"
+                    : "division"
+                  : null,
               }))}
             />
           )}

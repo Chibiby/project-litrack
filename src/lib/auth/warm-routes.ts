@@ -118,3 +118,18 @@ export async function warmAdminRoutes(): Promise<void> {
     () => getAdminRecentSchools(),
   ]);
 }
+
+/**
+ * Warm a district admin's `/district` overview.
+ *
+ * Deliberately NOT `warmAdminRoutes`: those are division-wide aggregates a
+ * district admin never reads. The overview's scoped queries (the summary facets
+ * and `resolveScopeSchools`) join this list when they exist; each must be keyed
+ * with `scopeCacheKey`, the same key the page reads, or warming fills entries
+ * nobody hits.
+ */
+const DISTRICT_WARMERS: ReadonlyArray<() => Promise<unknown>> = [];
+
+export async function warmDistrictRoutes(): Promise<void> {
+  await warmAll(DISTRICT_WARMERS);
+}

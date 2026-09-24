@@ -293,8 +293,10 @@ export async function requireUser(
 ): Promise<User> {
   const user = await getCurrentUser({ allowPending: options?.allowPending });
   if (!user) {
-    const isAdminRoute =
-      roles === "SUPER_ADMIN" || (Array.isArray(roles) && roles.includes("SUPER_ADMIN"));
+    // Both admin roles sign in at `/admin/login`, so a signed-out visitor to a
+    // district page must land there too, not on the school login.
+    const wanted = roles === undefined ? [] : Array.isArray(roles) ? roles : [roles];
+    const isAdminRoute = wanted.includes("SUPER_ADMIN") || wanted.includes("DISTRICT_ADMIN");
     redirect(loginPath(isAdminRoute ? "admin" : "school", sessionEndNote().reason));
   }
 

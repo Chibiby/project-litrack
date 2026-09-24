@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { requireAdminScope, loadSchoolInScope } from "@/lib/auth/district-scope";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
@@ -18,6 +19,11 @@ import {
   revalidateSchoolDashboard,
   revalidateSchoolsList,
 } from "@/lib/cache/revalidate";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
+import { action } from "@/lib/errors/action";
+import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
+import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { z } from "zod";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -144,7 +150,8 @@ export async function createSchool(
 }
 
 /**
- * Super Admin: put a School Head's password back to the school's School ID.
+ * Super Admin or district admin: put a School Head's password back to the
+ * school's School ID.
  *
  * This used to issue a random one-time credential, shown to the admin once. It
  * reached the school — if at all — by being read out, and heads went on typing
@@ -154,71 +161,90 @@ export async function createSchool(
  * `createSchool` and the roster import issue, and the one
  * `resetSchoolHeadPasswordToDefault` restores — so this now does the same.
  *
- * The School ID is printed on the schools table, so returning it reveals nothing.
+ * Authorization and tenant story: `requireAdminScope()` gives an explicit
+ * Super-Admin-or-district-admin branch (never `requireUser("DISTRICT_ADMIN")`
+ * alone, which would let a Super Admin through implicitly). `loadSchoolInScope`
+ * puts the scope in the `WHERE` of the one query that loads the target school,
+ * so an out-of-scope `schoolId` is NOT_FOUND before the rate limit, the
+ * School Head lookup, the Supabase call, or the audit row — none of them run
+ * (spec T3). The School ID is printed on the schools table, so returning it
+ * reveals nothing new.
  */
-export async function regenerateSchoolHeadCredential(
-  formData: FormData
-): Promise<ActionResult<{ password: string }>> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const regenerateSchoolHeadCredential = action(
+  "regenerateSchoolHeadCredential",
+  async (formData: FormData): Promise<{ ok: true; data: { password: string } }> => {
+    const { user: admin, scope } = await requireAdminScope();
 
-  const parsed = z.object({ schoolId: z.string().uuid() }).safeParse({
-    schoolId: formData.get("schoolId"),
-  });
-  if (!parsed.success) return { ok: false, error: "Invalid school" };
+    const { schoolId } = parseInput(z.object({ schoolId: z.string().uuid("Invalid school") }), {
+      schoolId: formData.get("schoolId"),
+    });
 
-  const rate = await checkRateLimit(`regen:sh:${parsed.data.schoolId}`, REGEN_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    const school = await loadSchoolInScope(scope, schoolId, { id: true, schoolIdCode: true });
 
-  const school = await prisma.school.findFirst({
-    where: { id: parsed.data.schoolId, deletedAt: null },
-    select: { id: true, schoolIdCode: true },
-  });
-  if (!school) return { ok: false, error: "School not found" };
+    const rate = await checkRateLimit(`regen:sh:${school.id}`, REGEN_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
 
-  const shUser = await findSignInSchoolHead(school.id);
-  if (!shUser) return { ok: false, error: "School Head account not found" };
+    const shUser = await findSignInSchoolHead(school.id);
+    if (!shUser) throw resourceNotFound("School Head account");
 
-  const password = defaultSchoolHeadPassword(school.schoolIdCode);
-  const supabaseAdmin = createSupabaseAdminClient();
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(shUser.authId, {
-    password,
-    app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
-  });
-  if (error) return { ok: false, error: "Failed to reset password" };
+    const password = defaultSchoolHeadPassword(school.schoolIdCode);
+    const supabaseAdmin = createSupabaseAdminClient();
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(shUser.authId, {
+      password,
+      app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
+    });
+    if (error) {
+      throw new AppError(mapSupabaseAuthError(error, "server"), {
+        cause: error,
+        detail: `regenerateSchoolHeadCredential: password reset failed for school ${school.id}`,
+      });
+    }
 
-  await prisma.user.update({
-    where: { id: shUser.id },
-    // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
-    // on the very next sign-in, with no forced interstitial, and the console can
-    // show it because the live password is once again the School ID.
-    data: {
-      mustChangePassword: false,
-      isActive: true,
-      passwordIsSchoolId: true,
-      // Any password the head had chosen is gone from Auth, so the sealed copy
-      // of it must go too — showing it would hand out a dead credential.
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    },
-  });
+    await prisma.user.update({
+      where: { id: shUser.id },
+      // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
+      // on the very next sign-in, with no forced interstitial, and the console can
+      // show it because the live password is once again the School ID.
+      data: {
+        mustChangePassword: false,
+        isActive: true,
+        passwordIsSchoolId: true,
+        // Any password the head had chosen is gone from Auth, so the sealed copy
+        // of it must go too — showing it would hand out a dead credential.
+        passwordVaultCipher: null,
+        passwordVaultSetAt: null,
+      },
+    });
 
-  // Recorded as a reset-to-default, not a regeneration: the audit trail is how
-  // `passwordIsSchoolId` is replayed (see the 20260910000004 backfill), and a
-  // REGENERATED row would say the School ID stopped working when it just started.
-  await writeAudit({
-    userId: admin.id,
-    schoolId: school.id,
-    action: AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_RESET_DEFAULT,
-    resource: "User",
-    resourceId: shUser.id,
-    metadata: { schoolId: school.id, via: "schools_table" },
-  });
+    // Recorded as a reset-to-default, not a regeneration: the audit trail is how
+    // `passwordIsSchoolId` is replayed (see the 20260910000004 backfill), and a
+    // REGENERATED row would say the School ID stopped working when it just
+    // started. `via` says which console reached it, and `actorRole` marks a
+    // district admin's row distinctly from the Super Admin's, matching the
+    // "reused actions add actorRole" rule (spec 3.5) — a district admin's change
+    // still surfaces on the school's own `/school-head/audit`.
+    await writeAudit({
+      userId: admin.id,
+      schoolId: school.id,
+      action: AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_RESET_DEFAULT,
+      resource: "User",
+      resourceId: shUser.id,
+      metadata: {
+        schoolId: school.id,
+        via: admin.role === "DISTRICT_ADMIN" ? "district_portal" : "schools_table",
+        ...(admin.role === "DISTRICT_ADMIN" ? { actorRole: admin.role } : {}),
+      },
+    });
 
-  revalidatePath("/admin/schools");
-  revalidatePath("/admin/accounts");
-  revalidateSchoolsList();
-  return { ok: true, data: { password } };
-}
+    revalidatePath("/admin/schools");
+    revalidatePath("/admin/accounts");
+    revalidatePath(DISTRICT_ROUTES.schools);
+    revalidatePath(DISTRICT_ROUTES.school(school.id));
+    revalidateSchoolsList();
+    return { ok: true, data: { password } };
+  },
+  { verb: "reset that password" }
+);
 
 /**
  * Active schools (id + name). Cached ~60s under `schools-list`.

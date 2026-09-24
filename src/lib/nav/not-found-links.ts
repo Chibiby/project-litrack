@@ -1,5 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 
 /**
  * Where to offer to go from a page that does not exist.
@@ -27,6 +28,12 @@ export function notFoundLinksFor(role: UserRole | null): Array<{ href: string; l
         { href: "/admin", label: "Dashboard" },
         { href: "/admin/schools", label: "Schools" },
         { href: "/admin/audit", label: "Audit" },
+      ];
+    case "DISTRICT_ADMIN":
+      return [
+        { href: DISTRICT_ROUTES.home, label: "Overview" },
+        { href: DISTRICT_ROUTES.schools, label: "Schools" },
+        { href: DISTRICT_ROUTES.support, label: "Support" },
       ];
     default:
       return [{ href: "/login", label: "Sign in" }];

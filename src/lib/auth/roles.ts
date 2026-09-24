@@ -2,7 +2,7 @@
  * Pure role helpers safe for Edge middleware (no Prisma / server-only).
  */
 
-export type AppRole = "SUPER_ADMIN" | "SCHOOL_HEAD" | "TEACHER";
+export type AppRole = "SUPER_ADMIN" | "SCHOOL_HEAD" | "TEACHER" | "DISTRICT_ADMIN";
 
 export function roleHomePath(role: AppRole): string {
   switch (role) {
@@ -12,7 +12,14 @@ export function roleHomePath(role: AppRole): string {
       return "/school-head";
     case "TEACHER":
       return "/teacher";
+    case "DISTRICT_ADMIN":
+      return "/district";
   }
+}
+
+/** `/district` itself or anything under it — never `/districtfoo`. */
+function isDistrictPath(pathname: string): boolean {
+  return pathname === "/district" || pathname.startsWith("/district/");
 }
 
 function roleBasePath(role: AppRole): string {
@@ -41,7 +48,12 @@ export function rolePasswordPath(role: AppRole): string {
 }
 
 export function parseAppMetadataRole(value: unknown): AppRole | null {
-  if (value === "SUPER_ADMIN" || value === "SCHOOL_HEAD" || value === "TEACHER") {
+  if (
+    value === "SUPER_ADMIN" ||
+    value === "SCHOOL_HEAD" ||
+    value === "TEACHER" ||
+    value === "DISTRICT_ADMIN"
+  ) {
     return value;
   }
   return null;
@@ -81,9 +93,10 @@ export function enforceRolePrefix(
   const needsAdmin = pathname.startsWith("/admin");
   const needsSchoolHead = pathname.startsWith("/school-head");
   const needsTeacher = pathname.startsWith("/teacher");
+  const needsDistrict = isDistrictPath(pathname);
   const needsAccount = pathname.startsWith("/account");
 
-  if (!needsAdmin && !needsSchoolHead && !needsTeacher && !needsAccount) {
+  if (!needsAdmin && !needsSchoolHead && !needsTeacher && !needsDistrict && !needsAccount) {
     return { ok: true };
   }
 
@@ -102,6 +115,11 @@ export function enforceRolePrefix(
     return { ok: false, redirectTo: roleHomePath(role) };
   }
   if (needsTeacher && role !== "TEACHER" && role !== "SUPER_ADMIN") {
+    return { ok: false, redirectTo: roleHomePath(role) };
+  }
+  // A DISTRICT_ADMIN is in none of the three allow-lists above, so it is sent
+  // to `/district` from `/admin`, `/school-head` and `/teacher` already.
+  if (needsDistrict && role !== "DISTRICT_ADMIN" && role !== "SUPER_ADMIN") {
     return { ok: false, redirectTo: roleHomePath(role) };
   }
 

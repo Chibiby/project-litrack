@@ -19,6 +19,7 @@ import {
   revealSchoolHeadPassword,
   resetSchoolHeadPasswordToDefault,
   resetTeacherPassword,
+  resetDistrictAdminPassword,
   impersonateUser,
 } from "@/lib/actions/accounts";
 import type { AccountRow } from "@/lib/admin/accounts";
@@ -139,10 +140,10 @@ export function PasswordCell({ row }: { row: AccountRow }) {
 /**
  * Row controls, by role (spec section 3.1):
  *  - View profile: every row.
- *  - Sign in as: every row except Super Admin — the server refuses that
- *    target too, this is only the courtesy of not offering the button.
- *  - Reset password: School Heads reset to the School ID; teachers get a
- *    fresh random one-time credential. Both are shown exactly once.
+ *  - Sign in as: teachers and School Heads only — the server refuses admin
+ *    targets too, this is only the courtesy of not offering the button.
+ *  - Reset password: School Heads reset to the School ID; teachers and
+ *    district admins get a fresh random one-time credential. Shown once.
  */
 export function AccountRowActions({ row }: { row: AccountRow }) {
   const router = useRouter();
@@ -151,13 +152,17 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const reasonId = useId();
 
-  const canResetPassword = row.role === "SCHOOL_HEAD" || row.role === "TEACHER";
+  const isDistrictAdmin = row.role === "DISTRICT_ADMIN";
+  const canImpersonate = row.role === "SCHOOL_HEAD" || row.role === "TEACHER";
+  const canResetPassword = row.role === "SCHOOL_HEAD" || row.role === "TEACHER" || isDistrictAdmin;
   const isNonSignInHead = row.role === "SCHOOL_HEAD" && !row.signInHead;
 
   const resetDescription =
     row.role === "SCHOOL_HEAD"
       ? `Put ${row.fullName}'s password back to their School ID? Any password they chose stops working immediately. This is shown once and cannot be read again — write it down now.`
-      : row.canRecoverByEmail
+      : isDistrictAdmin
+        ? `Issue ${row.fullName} a new one-time password? Their current password stops working, and they must choose a new one when they next sign in. This is shown once and cannot be read again — write it down now.`
+        : row.canRecoverByEmail
         ? `Issue ${row.fullName} a new one-time password? Their current password stops working. If their email works, "Forgot password" is preferred — it never puts a credential in your hands. This is shown once and cannot be read again — write it down now.`
         : `Issue ${row.fullName} a new one-time password? Their current password stops working, and this account has no working mailbox, so this is the only way back in. This is shown once and cannot be read again — write it down now.`;
 
@@ -167,7 +172,9 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
     const res =
       row.role === "SCHOOL_HEAD"
         ? await resetSchoolHeadPasswordToDefault(fd)
-        : await resetTeacherPassword(fd);
+        : isDistrictAdmin
+          ? await resetDistrictAdminPassword(fd)
+          : await resetTeacherPassword(fd);
     if (!res.ok) {
       toast.error(res.error);
       throw new Error(res.error);
@@ -196,7 +203,7 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
             View profile
           </Button>
 
-          {row.role !== "SUPER_ADMIN" ? (
+          {canImpersonate ? (
             <ConfirmAction
               title={`Sign in as ${row.fullName}?`}
               description={`You will be signed in as ${row.fullName} until you end the session from the banner. Everything you do while signed in is recorded against their account.`}
@@ -248,6 +255,7 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
             Not the account this school signs in with.
           </p>
         ) : null}
+        {isDistrictAdmin ? <DistrictAdminDistricts districts={row.districtAdminDistricts ?? []} /> : null}
       </div>
 
       <Dialog
@@ -296,5 +304,23 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
 
       <AccountProfileDialog row={row} open={profileOpen} onOpenChange={setProfileOpen} />
     </>
+  );
+}
+
+function DistrictAdminDistricts({ districts }: { districts: string[] }) {
+  if (districts.length === 0) {
+    return <p className="text-xs text-muted-foreground">No districts assigned</p>;
+  }
+  return (
+    <ul className="flex flex-wrap justify-end gap-1" aria-label="Assigned districts">
+      {districts.map((district) => (
+        <li
+          key={district}
+          className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+        >
+          {district}
+        </li>
+      ))}
+    </ul>
   );
 }

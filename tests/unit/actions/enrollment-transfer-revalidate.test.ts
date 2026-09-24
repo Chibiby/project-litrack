@@ -183,14 +183,30 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 const requireSchoolUser = vi.fn(async () => ({ id: HEAD_ID, schoolId: SCHOOL_ID }));
-const requireUser = vi.fn(async () => ({
-  id: ADMIN_ID,
-  schoolId: null,
-  role: "SUPER_ADMIN",
-}));
 vi.mock("@/lib/auth/session", () => ({
   requireSchoolUser: (...a: unknown[]) => requireSchoolUser(...(a as [])),
-  requireUser: (...a: unknown[]) => requireUser(...(a as [])),
+}));
+
+/**
+ * `transferLearnerCrossSchool` now goes through `requireAdminScope()`
+ * (docs/specs/district-admin.md 3.5, I12), not `requireUser("SUPER_ADMIN")`
+ * directly, so that is what this file mocks. `loadSchoolInScope` stands in
+ * for the destination-school lookup the action used to run against
+ * `prisma.school.findFirst` — its fake mirrors that same shape
+ * (`{ id, isActive }`) so the cross-school cases below need no other change.
+ */
+const requireAdminScope = vi.fn(async () => ({
+  user: { id: ADMIN_ID, schoolId: null, role: "SUPER_ADMIN" },
+  scope: { kind: "division" },
+}));
+const loadSchoolInScope = vi.fn(async (_scope: unknown, schoolId: string, _select?: unknown) => ({
+  id: schoolId,
+  isActive: true,
+}));
+vi.mock("@/lib/auth/district-scope", () => ({
+  requireAdminScope: (...a: unknown[]) => requireAdminScope(...(a as [])),
+  loadSchoolInScope: (...a: unknown[]) =>
+    loadSchoolInScope(...(a as [unknown, string, unknown])),
 }));
 
 /**
@@ -272,11 +288,14 @@ beforeEach(() => {
   learnerRow = makeLearner();
   txCalls = { learnerUpdate: [] };
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
-  requireUser.mockResolvedValue({
-    id: ADMIN_ID,
-    schoolId: null,
-    role: "SUPER_ADMIN",
+  requireAdminScope.mockResolvedValue({
+    user: { id: ADMIN_ID, schoolId: null, role: "SUPER_ADMIN" },
+    scope: { kind: "division" },
   });
+  loadSchoolInScope.mockImplementation(async (_scope: unknown, schoolId: string, _select?: unknown) => ({
+    id: schoolId,
+    isActive: true,
+  }));
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -403,7 +422,7 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     const result = await transferLearnerCrossSchool(crossSchoolFormData());
     expect(result).toEqual({ ok: true });
 
-    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+    expect(requireAdminScope).toHaveBeenCalled();
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(OTHER_SCHOOL_ID);
     expect(revalidateSchoolsList).toHaveBeenCalled();

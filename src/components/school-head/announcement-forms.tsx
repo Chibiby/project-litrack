@@ -2,6 +2,7 @@
 
 import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +59,16 @@ export type AnnouncementListItem = {
   body: string;
   authorName: string;
   publishedAt: string;
+  /**
+   * Set for a copy of a district or division broadcast. Those rows are
+   * read-only to the School Head (the server refuses edit and delete too).
+   */
+  broadcastFrom?: "district" | "division" | null;
+};
+
+const BROADCAST_LABEL: Record<"district" | "division", string> = {
+  district: "From the district office",
+  division: "From the division office",
 };
 
 export function AnnouncementActions({
@@ -162,6 +173,11 @@ export function AnnouncementsList({
     <ul className="space-y-4">
       {optimisticItems.map((a) => (
         <li key={a.id} className="rounded-lg border border-border/80 p-4">
+          {a.broadcastFrom ? (
+            <Badge variant="secondary" className="mb-2">
+              {BROADCAST_LABEL[a.broadcastFrom]}
+            </Badge>
+          ) : null}
           <h3 className="font-semibold">{a.title}</h3>
           <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
             {a.body}
@@ -169,7 +185,7 @@ export function AnnouncementsList({
           <p className="mt-2 text-xs text-muted-foreground">
             {a.authorName} · {a.publishedAt}
           </p>
-          {!readOnly ? (
+          {!readOnly && !a.broadcastFrom ? (
             <AnnouncementActions
               announcementId={a.id}
               title={a.title}

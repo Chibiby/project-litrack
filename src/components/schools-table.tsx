@@ -22,7 +22,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Search, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -60,6 +61,48 @@ export type SchoolRow = {
    * see and manage the school whose visibility they are switching.
    */
   isDemo: boolean;
+};
+
+/**
+ * A district admin's list comes from `resolveScopeSchools`, which carries the
+ * district but no user/learner counts, so those two are optional here and the
+ * district column set never renders them.
+ */
+export type SchoolsTableRow = Omit<SchoolRow, "users" | "learners"> & {
+  users?: number;
+  learners?: number;
+  district?: string | null;
+};
+
+/**
+ * What the viewer may do from this table. The server actions enforce the same
+ * rules; hiding a control is only the courtesy of not offering it.
+ */
+export type SchoolsTableCapabilities = {
+  toggleActive: boolean;
+  resetHead: boolean;
+  /** The row link leads to an edit form rather than a read-only view. */
+  edit: boolean;
+  delete: boolean;
+  /** "Open as School Head" (`?schoolId=` impersonated view). */
+  openAsSchoolHead: boolean;
+  /** Region filter and the Region/Division/Users/Learners columns. */
+  columns: "admin" | "district";
+  basePath: string;
+  emptyMessage: string;
+};
+
+// Not exported: a Server Component importing a value from this client module
+// would receive a client reference, not the object.
+const ADMIN_SCHOOLS_TABLE_CAPABILITIES: SchoolsTableCapabilities = {
+  toggleActive: true,
+  resetHead: true,
+  edit: false,
+  delete: true,
+  openAsSchoolHead: true,
+  columns: "admin",
+  basePath: "/admin/schools",
+  emptyMessage: "No schools found. Create your first school to get started.",
 };
 
 export type SchoolsTableList = {
@@ -108,10 +151,12 @@ function RegenButton({
   schoolId,
   schoolName,
   onCredential,
+  className = "h-9 w-10",
 }: {
   schoolId: string;
   schoolName: string;
   onCredential: (value: string) => void;
+  className?: string;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -124,7 +169,7 @@ function RegenButton({
       // beside it; h-9/w-10 keeps the exact footprint `size="sm"` gave it, so the
       // row of actions is unchanged when idle.
       size="icon"
-      className="h-9 w-10"
+      className={className}
       loading={pending}
       loadingText="Resetting password…"
       title="Reset School Head password to the School ID"
@@ -156,7 +201,7 @@ function RegenButton({
   );
 }
 
-function hrefFor(list: SchoolsTableList, page: number): string {
+function hrefFor(list: SchoolsTableList, page: number, basePath: string): string {
   const params = new URLSearchParams();
   if (list.q) params.set("q", list.q);
   if (list.region) params.set("region", list.region);
@@ -164,7 +209,7 @@ function hrefFor(list: SchoolsTableList, page: number): string {
   if (list.sort) params.set("sort", list.sort);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
-  return qs ? `/admin/schools?${qs}` : "/admin/schools";
+  return qs ? `${basePath}?${qs}` : basePath;
 }
 
 function SchoolsPager({
@@ -228,7 +273,12 @@ function SchoolsPager({
  * call sees only ANCESTOR context, so it must live inside the provider's
  * subtree, not in the same component that renders the provider.
  */
-export function SchoolsTable(props: { schools: SchoolRow[]; list: SchoolsTableList }) {
+export function SchoolsTable(props: {
+  schools: SchoolsTableRow[];
+  list: SchoolsTableList;
+  /** Defaults to the Super Admin console's full set. */
+  capabilities?: Partial<SchoolsTableCapabilities>;
+}) {
   return (
     <ListNavigationProvider>
       <SchoolsTableInner {...props} />
@@ -239,10 +289,21 @@ export function SchoolsTable(props: { schools: SchoolRow[]; list: SchoolsTableLi
 function SchoolsTableInner({
   schools,
   list,
+  capabilities,
 }: {
-  schools: SchoolRow[];
+  schools: SchoolsTableRow[];
   list: SchoolsTableList;
+  capabilities?: Partial<SchoolsTableCapabilities>;
 }) {
+  const caps: SchoolsTableCapabilities = { ...ADMIN_SCHOOLS_TABLE_CAPABILITIES, ...capabilities };
+  const { basePath } = caps;
+  const isAdminColumns = caps.columns === "admin";
+  const detailHref = (id: string) => `${basePath}/${id}`;
+  const DetailIcon = caps.edit ? Pencil : Eye;
+  const detailVerb = caps.edit ? "Edit" : "View";
+  // The district list stays a card list through tablet widths, so its controls
+  // keep a 40px target there; `size="sm"` drops to 36px from `sm` up.
+  const mobileTouch = isAdminColumns ? undefined : "sm:h-10";
   const navigate = useListNavigate();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -257,7 +318,7 @@ function SchoolsTableInner({
   const [prevListQ, setPrevListQ] = useState(list.q);
   const [optimisticSchools, dispatchOptimistic] = useOptimistic(
     schools,
-    (state: SchoolRow[], op: ListOptimisticOp<SchoolRow>) =>
+    (state: SchoolsTableRow[], op: ListOptimisticOp<SchoolsTableRow>) =>
       listOptimisticReducer(state, op)
   );
 
@@ -278,10 +339,10 @@ function SchoolsTableInner({
     if (list.sort) params.set("sort", list.sort);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
-    navigate(qs ? `/admin/schools?${qs}` : "/admin/schools");
+    navigate(qs ? `${basePath}?${qs}` : basePath);
   };
 
-  const toggleActive = (school: SchoolRow, nextActive: boolean) => {
+  const toggleActive = (school: SchoolsTableRow, nextActive: boolean) => {
     setActingId(school.id);
     // The rejection still travels to the toggle, which is what keeps its own
     // busy label alive until the action settles either way.
@@ -369,24 +430,26 @@ function SchoolsTableInner({
         </div>
 
         <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">
-          <Select
-            value={list.region || "all"}
-            onValueChange={(value) =>
-              pushList({ page: 1, region: value === "all" ? "" : value })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by region">
-              <SelectValue placeholder="Filter by..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All regions</SelectItem>
-              {REGIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isAdminColumns ? (
+            <Select
+              value={list.region || "all"}
+              onValueChange={(value) =>
+                pushList({ page: 1, region: value === "all" ? "" : value })
+              }
+            >
+              <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by region">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All regions</SelectItem>
+                {REGIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={list.status || "all"}
             onValueChange={(value) =>
@@ -406,7 +469,7 @@ function SchoolsTableInner({
             <SortSelect
               mode="link"
               id="schools-sort"
-              basePath="/admin/schools"
+              basePath={basePath}
               value={list.sort}
               options={list.sortOptions}
               searchParams={{
@@ -450,16 +513,27 @@ function SchoolsTableInner({
         label="schools"
         skeleton={<TableSectionSkeleton rows={8} columns={8} showToolbar={false} />}
       >
-      <div className="hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card md:block">
+      <div
+        className={cn(
+          "hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card",
+          isAdminColumns ? "md:block" : "lg:block"
+        )}
+      >
         <Table>
           <TableHeader>
             <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/40">
               <TableHead>School Name</TableHead>
               <TableHead>School ID</TableHead>
-              <TableHead>Region</TableHead>
-              <TableHead>Division</TableHead>
-              <TableHead>Users</TableHead>
-              <TableHead>Learners</TableHead>
+              {isAdminColumns ? (
+                <>
+                  <TableHead>Region</TableHead>
+                  <TableHead>Division</TableHead>
+                  <TableHead>Users</TableHead>
+                  <TableHead>Learners</TableHead>
+                </>
+              ) : (
+                <TableHead>District</TableHead>
+              )}
               <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
@@ -468,10 +542,10 @@ function SchoolsTableInner({
             {optimisticSchools.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={isAdminColumns ? 8 : 5}
                   className="py-10 text-center text-muted-foreground"
                 >
-                  No schools found. Create your first school to get started.
+                  {caps.emptyMessage}
                 </TableCell>
               </TableRow>
             ) : (
@@ -480,7 +554,7 @@ function SchoolsTableInner({
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Link
-                        href={`/admin/schools/${school.id}`}
+                        href={detailHref(school.id)}
                         prefetch={false}
                         className="font-medium underline-offset-4 hover:underline"
                       >
@@ -494,14 +568,16 @@ function SchoolsTableInner({
                           Demo
                         </span>
                       ) : null}
-                      <Link
-                        href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-                        prefetch={true}
-                        aria-label={`Open ${school.name} as School Head`}
-                        className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                      </Link>
+                      {caps.openAsSchoolHead ? (
+                        <Link
+                          href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+                          prefetch={true}
+                          aria-label={`Open ${school.name} as School Head`}
+                          className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                        </Link>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -509,22 +585,32 @@ function SchoolsTableInner({
                       {school.schoolIdCode}
                     </code>
                   </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">
-                      {school.region || "—"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">
-                      {school.division || "—"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{school.users}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{school.learners}</Badge>
-                  </TableCell>
+                  {isAdminColumns ? (
+                    <>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {school.region || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {school.division || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{school.users}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{school.learners}</Badge>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {school.district || "—"}
+                      </span>
+                    </TableCell>
+                  )}
                   <TableCell>
                     {school.isActive ? (
                       <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
@@ -540,56 +626,62 @@ function SchoolsTableInner({
                         asChild
                         variant="ghost"
                         size="sm"
-                        aria-label={`View ${school.name}`}
+                        aria-label={`${detailVerb} ${school.name}`}
                       >
-                        <Link href={`/admin/schools/${school.id}`} prefetch={false}>
-                          <Eye className="h-4 w-4" aria-hidden />
+                        <Link href={detailHref(school.id)} prefetch={false}>
+                          <DetailIcon className="h-4 w-4" aria-hidden />
                         </Link>
                       </Button>
-                      <SchoolActiveToggle
-                        schoolId={school.id}
-                        isActive={school.isActive}
-                        schoolName={school.name}
-                        pending={actingId === school.id}
-                        onToggle={(nextActive) => toggleActive(school, nextActive)}
-                      />
-                      <RegenButton
-                        schoolId={school.id}
-                        schoolName={school.name}
-                        onCredential={setCredential}
-                      />
-                      <ConfirmAction
-                        title="Remove this school?"
-                        description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
-                        confirmLabel="Remove"
-                        variant="destructive"
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            type="button"
-                            className="text-destructive hover:text-destructive"
-                            aria-label={`Remove ${school.name}`}
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </Button>
-                        }
-                        onConfirm={async () => {
-                          const fd = new FormData();
-                          fd.set("id", school.id);
-                          try {
-                            await deleteSchool(fd);
-                            toast.success("School removed");
-                          } catch (err) {
-                            toast.error(
-                              err instanceof Error
-                                ? err.message
-                                : "Could not remove school"
-                            );
-                            throw err;
+                      {caps.toggleActive ? (
+                        <SchoolActiveToggle
+                          schoolId={school.id}
+                          isActive={school.isActive}
+                          schoolName={school.name}
+                          pending={actingId === school.id}
+                          onToggle={(nextActive) => toggleActive(school, nextActive)}
+                        />
+                      ) : null}
+                      {caps.resetHead ? (
+                        <RegenButton
+                          schoolId={school.id}
+                          schoolName={school.name}
+                          onCredential={setCredential}
+                        />
+                      ) : null}
+                      {caps.delete ? (
+                        <ConfirmAction
+                          title="Remove this school?"
+                          description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+                          confirmLabel="Remove"
+                          variant="destructive"
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              className="text-destructive hover:text-destructive"
+                              aria-label={`Remove ${school.name}`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </Button>
                           }
-                        }}
-                      />
+                          onConfirm={async () => {
+                            const fd = new FormData();
+                            fd.set("id", school.id);
+                            try {
+                              await deleteSchool(fd);
+                              toast.success("School removed");
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not remove school"
+                              );
+                              throw err;
+                            }
+                          }}
+                        />
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -599,10 +691,10 @@ function SchoolsTableInner({
         </Table>
       </div>
 
-      <div className="space-y-3 md:hidden">
+      <div className={cn("space-y-3", isAdminColumns ? "md:hidden" : "lg:hidden")}>
         {optimisticSchools.length === 0 ? (
           <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            No schools found. Create your first school to get started.
+            {caps.emptyMessage}
           </div>
         ) : (
           optimisticSchools.map((school) => (
@@ -611,9 +703,12 @@ function SchoolsTableInner({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/admin/schools/${school.id}`}
+                      href={detailHref(school.id)}
                       prefetch={false}
-                      className="font-medium underline-offset-4 hover:underline"
+                      className={cn(
+                        "font-medium underline-offset-4 hover:underline",
+                        !isAdminColumns && "max-lg:inline-flex max-lg:min-h-10 max-lg:items-center"
+                      )}
                     >
                       {school.name}
                     </Link>
@@ -633,78 +728,97 @@ function SchoolsTableInner({
                   <Badge variant="secondary" className="shrink-0">Inactive</Badge>
                 )}
               </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Region</dt>
-                  <dd className="mt-1 text-muted-foreground">{school.region || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Division</dt>
-                  <dd className="mt-1 text-muted-foreground">{school.division || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Users</dt>
-                  <dd className="mt-1"><Badge variant="secondary">{school.users}</Badge></dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Learners</dt>
-                  <dd className="mt-1"><Badge variant="outline">{school.learners}</Badge></dd>
-                </div>
-              </dl>
+              {isAdminColumns ? (
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Region</dt>
+                    <dd className="mt-1 text-muted-foreground">{school.region || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Division</dt>
+                    <dd className="mt-1 text-muted-foreground">{school.division || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Users</dt>
+                    <dd className="mt-1"><Badge variant="secondary">{school.users}</Badge></dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Learners</dt>
+                    <dd className="mt-1"><Badge variant="outline">{school.learners}</Badge></dd>
+                  </div>
+                </dl>
+              ) : (
+                <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">District</dt>
+                    <dd className="mt-1 text-muted-foreground">{school.district || "—"}</dd>
+                  </div>
+                </dl>
+              )}
               <div className="mt-4 flex flex-wrap items-center gap-1 border-t pt-3">
-                <Button asChild variant="ghost" size="sm" aria-label={`View ${school.name}`}>
-                  <Link href={`/admin/schools/${school.id}`} prefetch={false}>
-                    <Eye className="h-4 w-4" aria-hidden />
-                    <span className="sr-only">View</span>
+                <Button asChild variant="ghost" size="sm" className={mobileTouch} aria-label={`${detailVerb} ${school.name}`}>
+                  <Link href={detailHref(school.id)} prefetch={false}>
+                    <DetailIcon className="h-4 w-4" aria-hidden />
+                    {isAdminColumns ? <span className="sr-only">View</span> : <span>Edit</span>}
                   </Link>
                 </Button>
-                <SchoolActiveToggle
-                  schoolId={school.id}
-                  isActive={school.isActive}
-                  schoolName={school.name}
-                  pending={actingId === school.id}
-                  onToggle={(nextActive) => toggleActive(school, nextActive)}
-                />
-                <RegenButton
-                  schoolId={school.id}
-                  schoolName={school.name}
-                  onCredential={setCredential}
-                />
-                <ConfirmAction
-                  title="Remove this school?"
-                  description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
-                  confirmLabel="Remove"
-                  variant="destructive"
-                  trigger={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      type="button"
-                      className="text-destructive hover:text-destructive"
-                      aria-label={`Remove ${school.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </Button>
-                  }
-                  onConfirm={async () => {
-                    const fd = new FormData();
-                    fd.set("id", school.id);
-                    try {
-                      await deleteSchool(fd);
-                      toast.success("School removed");
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Could not remove school");
-                      throw err;
+                {caps.toggleActive ? (
+                  <SchoolActiveToggle
+                    schoolId={school.id}
+                    isActive={school.isActive}
+                    schoolName={school.name}
+                    pending={actingId === school.id}
+                    onToggle={(nextActive) => toggleActive(school, nextActive)}
+                    className={mobileTouch}
+                  />
+                ) : null}
+                {caps.resetHead ? (
+                  <RegenButton
+                    schoolId={school.id}
+                    schoolName={school.name}
+                    onCredential={setCredential}
+                    className={isAdminColumns ? undefined : "size-11 sm:size-10"}
+                  />
+                ) : null}
+                {caps.delete ? (
+                  <ConfirmAction
+                    title="Remove this school?"
+                    description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+                    confirmLabel="Remove"
+                    variant="destructive"
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        className="text-destructive hover:text-destructive"
+                        aria-label={`Remove ${school.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </Button>
                     }
-                  }}
-                />
-                <Link
-                  href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-                  prefetch={true}
-                  className="ml-auto inline-flex min-h-10 items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Open as School Head
-                </Link>
+                    onConfirm={async () => {
+                      const fd = new FormData();
+                      fd.set("id", school.id);
+                      try {
+                        await deleteSchool(fd);
+                        toast.success("School removed");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Could not remove school");
+                        throw err;
+                      }
+                    }}
+                  />
+                ) : null}
+                {caps.openAsSchoolHead ? (
+                  <Link
+                    href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+                    prefetch={true}
+                    className="ml-auto inline-flex min-h-10 items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Open as School Head
+                  </Link>
+                ) : null}
               </div>
             </article>
           ))
@@ -713,7 +827,7 @@ function SchoolsTableInner({
       </ListBusyRegion>
 
       {list.totalPages > 1 ? (
-        <SchoolsPager list={list} hrefFor={hrefFor} />
+        <SchoolsPager list={list} hrefFor={(l, page) => hrefFor(l, page, basePath)} />
       ) : null}
     </div>
   );

@@ -9,6 +9,19 @@ import {
   isServerActionRequest,
 } from "@/lib/db/read-consistency";
 
+/**
+ * Which login a signed-out visitor is sent to. Super Admins and district admins
+ * both sign in at `/admin/login`. `/district` is matched as a whole segment so
+ * an unrelated `/districtfoo` is not treated as an admin area.
+ */
+function loginAreaFor(pathname: string): "admin" | "school" {
+  return pathname.startsWith("/admin") ||
+    pathname === "/district" ||
+    pathname.startsWith("/district/")
+    ? "admin"
+    : "school";
+}
+
 function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
@@ -37,10 +50,7 @@ export async function middleware(request: NextRequest) {
     if (isPublicPath(pathname)) {
       return NextResponse.next();
     }
-    const loginUrl = pathname.startsWith("/admin")
-      ? new URL("/admin/login", request.url)
-      : new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL(loginPath(loginAreaFor(pathname)), request.url));
   }
 
   // Anonymous public API: skip updateSession entirely.
@@ -73,9 +83,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    const area = pathname.startsWith("/admin") ? "admin" : "school";
     return NextResponse.redirect(
-      new URL(loginPath(area, hadSession ? "session_expired" : null), request.url)
+      new URL(loginPath(loginAreaFor(pathname), hadSession ? "session_expired" : null), request.url)
     );
   }
 

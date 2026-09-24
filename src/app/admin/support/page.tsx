@@ -57,7 +57,7 @@ async function SupportQueue({
   initialChannelId?: string;
 }) {
   const [tickets, schools, emailRecipients] = await Promise.all([
-    listInboxTickets(),
+    listInboxTickets({ kind: "division" }),
     listAdminChatSchools(adminId),
     listAdminEmailRecipients(),
   ]);

@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The Super Admin unlock console.
+ * The unlock console: a Super Admin division-wide, or a district admin within
+ * their own districts (`docs/specs/district-admin.md` 3.5).
  *
  * This is the highest-consequence pair of actions in the app after the database
  * danger zone: one of them hands every teacher in a school write access to a
- * window that had closed. Four properties are pinned deliberately.
+ * window that had closed. Properties pinned deliberately:
  *
- * - **A School Head is refused.** `requireUser(["SUPER_ADMIN"])` proves the
- *   caller passed *a* role check, not that they are a Super Admin — the helper's
- *   `allowSuperAdmin` default means an admin satisfies every role list in the
- *   app. Reading that the other way round, the console needs its own equality
- *   check, and this is the test that fails if somebody ever deletes it.
+ * - **`requireAdminScope()` is the only gate.** Never a bare `requireUser` role
+ *   check next to it — a School Head or teacher must be refused, and a district
+ *   admin must never reach a school or grant outside their own districts.
+ * - **Every target is loaded WITH the scope in its `where`**, never checked
+ *   afterwards. `loadSchoolInScope` for a school (teacher or school mode);
+ *   a `findFirst` carrying `school: schoolWhereForScope(scope)` for a grant
+ *   being revoked.
  * - **The school is read from a row, never from the payload.** In teacher mode
  *   the schema refuses a `schoolId` outright; the grant's school comes from the
  *   teacher's own record.
@@ -19,20 +22,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *   open?" depend on row order.
  * - **No name, no email, no learner anything reaches an audit row.**
  *
- * Mocked at the module boundary like the other action tests here: real Prisma,
- * real Supabase and real Redis are out of scope. `src/lib/unlock/issue.ts` is
- * deliberately NOT mocked — it is the module under test as much as the actions
- * are, because it is where the grant rows are actually written.
+ * `@/lib/auth/admin-scope` is deliberately NOT mocked — it is pure (no Prisma,
+ * no `server-only`), and the point of the scope tests here is to prove the real
+ * `schoolWhereForScope` output reaches the grant lookup's `where`.
+ * `@/lib/auth/district-scope` IS mocked, the same as the other action tests in
+ * this directory mock their auth boundary — `requireAdminScope` and
+ * `loadSchoolInScope` are the module's server half (Prisma, `requireUser`,
+ * React `cache()`), out of scope for a unit test of this file's own logic.
+ * `src/lib/unlock/issue.ts` is likewise NOT mocked — it is the module under
+ * test as much as the actions are, because it is where the grant rows are
+ * actually written.
  */
 
 const userFindFirst = vi.fn();
 const userFindMany = vi.fn();
-const schoolFindFirst = vi.fn();
 const grantUpsert = vi.fn();
 const grantFindUnique = vi.fn();
+const grantFindFirst = vi.fn();
 const grantUpdate = vi.fn();
 const schoolGrantUpsert = vi.fn();
 const schoolGrantFindUnique = vi.fn();
+const schoolGrantFindFirst = vi.fn();
 const schoolGrantUpdate = vi.fn();
 const notificationCreate = vi.fn();
 const notificationCreateMany = vi.fn();
@@ -47,17 +57,15 @@ vi.mock("@/lib/prisma", () => ({
         return userFindMany;
       },
     },
-    school: {
-      get findFirst() {
-        return schoolFindFirst;
-      },
-    },
     unlockGrant: {
       get upsert() {
         return grantUpsert;
       },
       get findUnique() {
         return grantFindUnique;
+      },
+      get findFirst() {
+        return grantFindFirst;
       },
       get update() {
         return grantUpdate;
@@ -69,6 +77,9 @@ vi.mock("@/lib/prisma", () => ({
       },
       get findUnique() {
         return schoolGrantFindUnique;
+      },
+      get findFirst() {
+        return schoolGrantFindFirst;
       },
       get update() {
         return schoolGrantUpdate;
@@ -85,9 +96,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-const requireUser = vi.fn();
-vi.mock("@/lib/auth/session", () => ({
-  requireUser: (...args: unknown[]) => requireUser(...args),
+const requireAdminScope = vi.fn();
+const loadSchoolInScope = vi.fn();
+vi.mock("@/lib/auth/district-scope", () => ({
+  requireAdminScope: () => requireAdminScope(),
+  loadSchoolInScope: (...args: unknown[]) => loadSchoolInScope(...args),
 }));
 
 const writeAudit = vi.fn();
@@ -114,9 +127,13 @@ vi.mock("@/lib/errors/report", () => ({
 }));
 
 const { issueUnlock, revokeUnlock } = await import("@/lib/actions/unlock-admin");
+const { AppError, resourceNotFound } = await import("@/lib/errors/app-error");
+const { schoolWhereForScope } = await import("@/lib/auth/admin-scope");
 
 const ADMIN = { id: "admin-1", schoolId: null, role: "SUPER_ADMIN" };
-const HEAD = { id: "head-1", schoolId: "school-1", role: "SCHOOL_HEAD" };
+const DIVISION_SCOPE = { kind: "division" as const };
+const DISTRICT_ADMIN = { id: "da-1", schoolId: null, role: "DISTRICT_ADMIN" };
+const DISTRICT_SCOPE = { kind: "districts" as const, districts: ["Alabel 1"] };
 
 const TEACHER_ID = "0f1e2d3c-4b5a-4968-8776-655443332211";
 const SCHOOL_ID = "11112222-3333-4444-8555-666677778888";
@@ -167,16 +184,23 @@ function noGrantWasWritten() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireUser.mockResolvedValue(ADMIN);
+  requireAdminScope.mockResolvedValue({ user: ADMIN, scope: DIVISION_SCOPE });
+  // Default: whatever school id is asked for is "in scope" — the object it
+  // resolves with is exactly what `loadSchoolInScope`'s real `select: {id:true}`
+  // call would return.
+  loadSchoolInScope.mockImplementation(async (_scope: unknown, schoolId: string) => ({
+    id: schoolId,
+  }));
   userFindFirst.mockResolvedValue({ id: TEACHER_ID, schoolId: SCHOOL_ID });
   userFindMany.mockResolvedValue([
     { id: "teacher-a" },
     { id: "teacher-b" },
     { id: "teacher-c" },
   ]);
-  schoolFindFirst.mockResolvedValue({ id: SCHOOL_ID });
   grantUpsert.mockResolvedValue({ id: GRANT_ID });
   schoolGrantUpsert.mockResolvedValue({ id: GRANT_ID });
+  grantFindFirst.mockResolvedValue({ id: GRANT_ID });
+  schoolGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
   grantUpdate.mockResolvedValue({ id: GRANT_ID });
   schoolGrantUpdate.mockResolvedValue({ id: GRANT_ID });
   notificationCreate.mockResolvedValue({ id: "notif-1" });
@@ -184,25 +208,29 @@ beforeEach(() => {
 });
 
 describe("issueUnlock — authorization", () => {
-  it("refuses a School Head", async () => {
-    // The single most important test in this file. `requireUser` is mocked to
-    // let the head through exactly as a flipped `allowSuperAdmin` default or an
-    // edited role list would, so what is being asserted is the console's own
-    // equality check and nothing else.
-    requireUser.mockResolvedValue(HEAD);
+  it("refuses a School Head or teacher — requireAdminScope is the only gate", async () => {
+    // The single most important test in this file. `requireAdminScope` throws
+    // exactly what the real module throws for a role outside
+    // ["SUPER_ADMIN", "DISTRICT_ADMIN"], so what is being asserted is that
+    // this action has no second, looser path in.
+    requireAdminScope.mockRejectedValue(
+      new AppError("AUTH_FORBIDDEN", { params: { what: "the admin console" } })
+    );
 
     const result = await issueUnlock(schoolGrant());
 
     expect(result).toEqual({
       ok: false,
       code: "AUTH_FORBIDDEN",
-      error: "You don't have access to the unlock console.",
+      error: "You don't have access to the admin console.",
     });
     noGrantWasWritten();
   });
 
-  it("refuses a teacher just as flatly", async () => {
-    requireUser.mockResolvedValue({ id: "t-9", schoolId: "school-1", role: "TEACHER" });
+  it("refuses just as flatly on revoke", async () => {
+    requireAdminScope.mockRejectedValue(
+      new AppError("AUTH_FORBIDDEN", { params: { what: "the admin console" } })
+    );
 
     const result = await revokeUnlock({ kind: "school", grantId: GRANT_ID });
 
@@ -210,10 +238,48 @@ describe("issueUnlock — authorization", () => {
     expect(schoolGrantUpdate).not.toHaveBeenCalled();
   });
 
-  it("asks the session for a Super Admin before reading anything", async () => {
+  it("asks for the caller's admin scope before reading anything", async () => {
     await issueUnlock(teacherGrant());
 
-    expect(requireUser).toHaveBeenCalledWith(["SUPER_ADMIN"]);
+    expect(requireAdminScope).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("issueUnlock — district admin scope", () => {
+  it("loads the teacher's school WITH the caller's scope, never checks it afterwards", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+
+    await issueUnlock(teacherGrant());
+
+    expect(loadSchoolInScope).toHaveBeenCalledWith(DISTRICT_SCOPE, SCHOOL_ID, { id: true });
+  });
+
+  it("refuses a teacher whose school is outside the caller's districts", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    loadSchoolInScope.mockRejectedValue(resourceNotFound("School", { crossTenant: true }));
+
+    const result = await issueUnlock(teacherGrant());
+
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    noGrantWasWritten();
+  });
+
+  it("loads the named school WITH the caller's scope in school mode too", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+
+    await issueUnlock(schoolGrant());
+
+    expect(loadSchoolInScope).toHaveBeenCalledWith(DISTRICT_SCOPE, SCHOOL_ID, { id: true });
+  });
+
+  it("refuses a named school outside the caller's districts, and writes no grant", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    loadSchoolInScope.mockRejectedValue(resourceNotFound("School", { crossTenant: true }));
+
+    const result = await issueUnlock(schoolGrant());
+
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    noGrantWasWritten();
   });
 });
 
@@ -424,15 +490,12 @@ describe("issueUnlock — school mode", () => {
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
-  it("refuses a school that is missing or soft-deleted", async () => {
-    schoolFindFirst.mockResolvedValue(null);
+  it("refuses a school that is missing, soft-deleted, or out of scope", async () => {
+    loadSchoolInScope.mockRejectedValue(resourceNotFound("School"));
 
     const result = await issueUnlock(schoolGrant());
 
-    expect(schoolFindFirst.mock.calls[0]?.[0]?.where).toMatchObject({
-      id: SCHOOL_ID,
-      deletedAt: null,
-    });
+    expect(loadSchoolInScope).toHaveBeenCalledWith(DIVISION_SCOPE, SCHOOL_ID, { id: true });
     expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
     noGrantWasWritten();
   });
@@ -496,6 +559,44 @@ describe("issueUnlock — audit", () => {
 });
 
 describe("revokeUnlock", () => {
+  it("loads the grant WITH the caller's scope before revoking it", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+
+    await revokeUnlock({ kind: "teacher", grantId: GRANT_ID });
+
+    // The assertion this whole test fails without: with the scope filter
+    // removed, the `where` would be `{ id: GRANT_ID }` alone.
+    expect(grantFindFirst.mock.calls[0]?.[0]?.where).toEqual({
+      id: GRANT_ID,
+      school: schoolWhereForScope(DISTRICT_SCOPE),
+    });
+  });
+
+  it("refuses an out-of-scope grant id before either revoke function ever runs", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    grantFindFirst.mockResolvedValue(null);
+
+    const result = await revokeUnlock({ kind: "teacher", grantId: GRANT_ID });
+
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(grantUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("checks the school-grant table's own scope for a school-wide revoke", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    schoolGrantFindFirst.mockResolvedValue(null);
+
+    const result = await revokeUnlock({ kind: "school", grantId: GRANT_ID });
+
+    expect(schoolGrantFindFirst.mock.calls[0]?.[0]?.where).toEqual({
+      id: GRANT_ID,
+      school: schoolWhereForScope(DISTRICT_SCOPE),
+    });
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(schoolGrantUpdate).not.toHaveBeenCalled();
+  });
+
   it("marks a teacher grant revoked instead of deleting it", async () => {
     grantFindUnique.mockResolvedValue({
       id: GRANT_ID,
@@ -561,11 +662,11 @@ describe("revokeUnlock", () => {
   it("looks only in the table `kind` names", async () => {
     // A teacher grant id passed as `kind: "school"` is indistinguishable from a
     // grant that does not exist, which is exactly what it should look like.
-    schoolGrantFindUnique.mockResolvedValue(null);
+    schoolGrantFindFirst.mockResolvedValue(null);
 
     const result = await revokeUnlock({ kind: "school", grantId: GRANT_ID });
 
-    expect(grantFindUnique).not.toHaveBeenCalled();
+    expect(grantFindFirst).not.toHaveBeenCalled();
     expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 
@@ -573,7 +674,7 @@ describe("revokeUnlock", () => {
     const result = await revokeUnlock({ kind: "teacher", grantId: "all" });
 
     expect(result).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
-    expect(grantFindUnique).not.toHaveBeenCalled();
+    expect(grantFindFirst).not.toHaveBeenCalled();
   });
 });
 

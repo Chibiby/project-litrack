@@ -13,11 +13,13 @@ export function AdminProfileForm({
   middleName,
   lastName,
   email,
+  securityHref = "/admin/settings/security",
 }: {
   firstName: string;
   middleName: string | null;
   lastName: string;
   email: string;
+  securityHref?: string;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -88,7 +90,7 @@ export function AdminProfileForm({
           Change your password or email from Settings → Security.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-3">
-          <Link href="/admin/settings/security" prefetch={true}>
+          <Link href={securityHref} prefetch={true}>
             Open Security
           </Link>
         </Button>

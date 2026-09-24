@@ -52,3 +52,7 @@ skill-updates/
 
 # Local Playwright sessions (e2e/auth/*.mjs)
 e2e/.auth/
+
+# One-time district admin credentials CSV (scripts/create-district-admins.ts).
+# Hand each row to its person, then delete the file — never committed.
+.credentials/

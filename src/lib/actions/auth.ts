@@ -42,6 +42,7 @@ import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration"
 import { sendPasswordRecoveryEmail } from "@/lib/auth/recovery-email";
 import {
   warmAdminRoutes,
+  warmDistrictRoutes,
   warmSchoolHeadRoutes,
   warmTeacherRoutes,
 } from "@/lib/auth/warm-routes";
@@ -458,13 +459,25 @@ export const registerTeacher = action(
   { verb: "create your account" }
 );
 
+/** The roles that sign in at `/admin/login`: the division office and district admins. */
+const ADMIN_CONSOLE_ROLES = ["SUPER_ADMIN", "DISTRICT_ADMIN"] as const;
+type AdminConsoleRole = (typeof ADMIN_CONSOLE_ROLES)[number];
+
+function isAdminConsoleRole(role: string): role is AdminConsoleRole {
+  return (ADMIN_CONSOLE_ROLES as readonly string[]).includes(role);
+}
+
 /**
- * Super Admin login: username + password.
+ * Admin login (Super Admin or district admin): username + password.
  *
  * The console signs in by handle rather than by email, but Supabase Auth only
  * authenticates on an address — so the handle is resolved against
  * `User.username` here and the row's `email` is what actually reaches Supabase.
  * Password recovery is unaffected and still runs entirely off that email.
+ *
+ * Each role lands on its own home: `/admin` for the division office,
+ * `/district` for a district admin. A district admin's first sign-in is then
+ * forced through `/account/set-password` by `requireUser`.
  */
 export const loginAdmin = action("loginAdmin", async (formData: FormData): Promise<never> => {
   assertSupabaseConfigured();
@@ -481,26 +494,28 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
     // Supabase Auth authenticates on an email address, so the handle has to be
     // resolved to one before we can hand anything to `signInWithPassword`.
     //
-    // Scoping the lookup to an active, non-deleted SUPER_ADMIN is the point of
-    // doing it here rather than after sign-in: a handle that once belonged to a
-    // revoked or lower-privileged account never reaches Supabase at all, so a
-    // stale username cannot be used to probe for a live password.
+    // Scoping the lookup to an active, non-deleted admin-console account is the
+    // point of doing it here rather than after sign-in: a handle that once
+    // belonged to a revoked account, or to a School Head or teacher, never
+    // reaches Supabase at all, so a stale username cannot be used to probe for a
+    // live password.
     const account = await prisma.user.findFirst({
       where: {
         username,
-        role: "SUPER_ADMIN",
+        role: { in: [...ADMIN_CONSOLE_ROLES] },
         isActive: true,
         deletedAt: null,
       },
-      select: { id: true, email: true },
+      select: { id: true, email: true, role: true },
     });
     if (!account) {
       await writeAudit({
         action: AUDIT_ACTIONS.LOGIN_DENIED,
         resource: "User",
         // The username itself is deliberately not logged — an audit row for a
-        // failed attempt would otherwise record whatever a stranger typed.
-        metadata: { role: "SUPER_ADMIN", reason: "unknown_username" },
+        // failed attempt would otherwise record whatever a stranger typed. The
+        // role is unknown too, so the row names the console, not a role.
+        metadata: { role: "ADMIN_CONSOLE", reason: "unknown_username" },
       });
       // Identical to the wrong-password message below, so the field cannot be
       // used to enumerate which handles exist. This is the one login where the
@@ -522,7 +537,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
         action: AUDIT_ACTIONS.LOGIN_DENIED,
         resource: "User",
         resourceId: account.id,
-        metadata: { role: "SUPER_ADMIN", reason: loginFailureReasonFor(mapped) },
+        metadata: { role: account.role, reason: loginFailureReasonFor(mapped) },
       });
       // Collapsed to the same message as an unknown handle — but only for the
       // credential case. A rate limit or an outage still says what it is.
@@ -533,7 +548,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
     }
 
     const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
-    if (!user || user.role !== "SUPER_ADMIN" || !user.isActive || user.deletedAt) {
+    if (!user || !isAdminConsoleRole(user.role) || !user.isActive || user.deletedAt) {
       await supabase.auth.signOut();
       await writeAudit({
         userId: user?.id,
@@ -544,8 +559,8 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       });
       throw new AppError("AUTH_FORBIDDEN", {
         params: { what: "the admin console" },
-        detail: `Signed in, but the account is not an active Super Admin (role ${user?.role ?? "none"})`,
-        context: { reason: "not_super_admin" },
+        detail: `Signed in, but the account is not an active admin-console account (role ${user?.role ?? "none"})`,
+        context: { reason: "not_admin_console_role" },
       });
     }
 
@@ -554,12 +569,16 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       action: AUDIT_ACTIONS.LOGIN_SUCCESS,
       resource: "User",
       resourceId: user.id,
-      metadata: { role: "SUPER_ADMIN" },
+      metadata: { role: user.role },
     });
 
-    await warmAdminRoutes();
+    if (user.role === "SUPER_ADMIN") {
+      await warmAdminRoutes();
+    } else {
+      await warmDistrictRoutes();
+    }
 
-    redirect("/admin");
+    redirect(roleHomePath(user.role));
   }
   // The try/catch that used to live here sniffed error messages for "SUPABASE",
   // "Prisma" and "Environment variable not found", then told an anonymous
@@ -726,6 +745,13 @@ export const skipPasswordChange = action(
   if (user.role === "TEACHER") {
     throw new AppError("AUTH_FORBIDDEN", {
       detail: "Teachers must choose a new password after an administrator reset it",
+    });
+  }
+  // A district admin's first password travelled in a credentials sheet, so it
+  // must be retired at the first sign-in, not kept.
+  if (user.role === "DISTRICT_ADMIN") {
+    throw new AppError("AUTH_FORBIDDEN", {
+      detail: "District admins must replace the one-time password they were issued",
     });
   }
 

@@ -26,7 +26,7 @@
  * `@prisma/client` into it for three string literals would drag the generated
  * client into the browser bundle.
  */
-export type ReleaseAudience = "SUPER_ADMIN" | "SCHOOL_HEAD" | "TEACHER";
+export type ReleaseAudience = "SUPER_ADMIN" | "SCHOOL_HEAD" | "TEACHER" | "DISTRICT_ADMIN";
 
 /**
  * One line of "what changed".
@@ -134,6 +134,35 @@ export type ReleaseWelcome = {
  * test enforces strict descending order so it cannot quietly stop being true.
  */
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.13.0",
+    date: "2026-09-25",
+    title: "District admins and the Division Summary",
+    announce: true,
+    fixes: [
+      {
+        text: "Welcome! Your district portal shows your schools, their learners, reading levels, attendance, end-of-term grades, compliance and teacher profiles, and lets you export any of it.",
+        roles: ["DISTRICT_ADMIN"],
+      },
+      {
+        text: "District admins can now sign in at the admin sign-in page. Each one sees and manages only the schools in their own districts.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Division Summary shows learners, reading, attendance, grades, compliance and profiling for all schools, by district and by school, with Excel and PDF export.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Your school's district, division and region are now set by the division office.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "Announcements from your district or division office now appear with your own, marked with where they came from.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      "Page subtitles on phones and tablets now show in full instead of being cut off.",
+    ],
+  },
   {
     version: "2.12.1",
     date: "2026-09-24",

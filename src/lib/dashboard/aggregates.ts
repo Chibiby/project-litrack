@@ -18,6 +18,7 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import { isDemoVisible } from "@/lib/demo/session";
 import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
+import { ACTIVE_ENROLLED_LEARNER } from "@/lib/learners/population";
 import {
   adminDashboard,
   schoolsList,
@@ -195,17 +196,6 @@ export async function getAdminRecentSchools() {
 }
 
 // ─── IP learners & learners per advisory teacher ───────────────────────────
-
-/**
- * The learner population both new metrics count: live learners holding an
- * ACTIVE enrollment in an active school year. A learner's ACTIVE enrollment is
- * unique (partial index) and belongs to their school, so grouping by the
- * learner's `schoolId` attributes each one to exactly one school.
- */
-const ACTIVE_ENROLLED_LEARNER: Prisma.LearnerWhereInput = {
-  deletedAt: null,
-  enrollments: { some: { status: "ACTIVE", schoolYear: { isActive: true } } },
-};
 
 const IP_LEARNER: Prisma.LearnerWhereInput = {
   OR: [

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { KeyRound, Lock, MonitorPlay, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsRoleBase = "/admin" | "/school-head" | "/teacher";
+export type SettingsRoleBase = "/admin" | "/school-head" | "/teacher" | "/district";
 
 function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
   const pathname = usePathname();

@@ -20,7 +20,7 @@ import { revalidateSchoolsList } from "@/lib/cache/revalidate";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { openPassword } from "@/lib/auth/password-vault";
-import { generateActivationCredential } from "@/lib/auth/credentials";
+import { generateActivationCredential, generateReadableCredential } from "@/lib/auth/credentials";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -93,6 +93,19 @@ const IMPERSONATE_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
  * schools to harvest passwords is not, and this is what stops it being cheap.
  */
 const REVEAL_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+
+/**
+ * Who `impersonateUser` may sign the Super Admin in as. Deliberately an
+ * allow-list rather than "everyone except X": a SUPER_ADMIN target was always
+ * refused, and a DISTRICT_ADMIN target must be too — district admins do not
+ * enter School Head or teacher pages, so redirecting one to `/school-head`
+ * would put the admin somewhere the impersonated role could never legitimately
+ * be (docs/specs/district-admin.md I14). Listed in the `WHERE` of
+ * `impersonateUser`'s own lookup, so a disallowed target reads as "not found"
+ * before `startImpersonation` — see the comment there for why its own
+ * SUPER_ADMIN check stays as a second, independent guard.
+ */
+const IMPERSONATABLE_ROLES: readonly UserRole[] = ["TEACHER", "SCHOOL_HEAD"];
 
 /**
  * Generic refusal for every target lookup below.
@@ -296,6 +309,65 @@ export async function resetSchoolHeadPasswordToDefault(
 }
 
 export type ResetTeacherPasswordResult = { ok: true; data: { password: string } };
+export type ResetDistrictAdminPasswordResult = { ok: true; data: { password: string } };
+
+/**
+ * Shared body of `resetTeacherPassword` and `resetDistrictAdminPassword`:
+ * install an already-generated random credential on an account with no
+ * mailbox that could carry a reset link, and flip it into "must change at
+ * next sign-in" state. Factored out so the two paths cannot silently diverge
+ * (docs/specs/district-admin.md 3.5, the "resetTeacherPassword pattern" row).
+ *
+ * Takes the password rather than generating one itself: the two callers use
+ * different shapes on purpose (`generateActivationCredential` for a teacher,
+ * `generateReadableCredential` — meant to be read off a sheet — for a
+ * district admin), so picking the generator stays the caller's decision.
+ *
+ * Three things it does NOT do, each easy to get wrong by copying the School
+ * Head path:
+ *  - It writes no `isActive`. `regenerateSchoolHeadCredential` does, and
+ *    `docs/backlog.md` already logs that as a HIGH finding: a password reset
+ *    must never silently resurrect an account someone switched off on
+ *    purpose. Turning the account back on is a separate decision.
+ *  - It does not call `sealPassword`. `passwordChangeFields` already refuses to
+ *    seal a non-`SCHOOL_HEAD` role; the columns are written explicitly here
+ *    because this path needs `mustChangePassword: true` and that helper
+ *    hardcodes `false`.
+ *  - It never writes the credential anywhere. Not the audit row, not a log
+ *    line, not an error message — the caller returns it once, shown once, and
+ *    it exists nowhere else. `mustChangePassword: true` retires it at first
+ *    sign-in, because unlike the School ID a random string read out over the
+ *    phone IS a secret in transit.
+ */
+async function issueRandomPassword(
+  target: { id: string; authId: string; schoolId: string | null },
+  role: "TEACHER" | "DISTRICT_ADMIN",
+  password: string
+): Promise<void> {
+  const supabaseAdmin = createSupabaseAdminClient();
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
+    password,
+    app_metadata: { role, schoolId: target.schoolId },
+  });
+  if (error) {
+    // `detail` names the account, never the credential — same rule as audit
+    // metadata, and `detail` is stored in full on `/admin/errors`.
+    throw new AppError(mapSupabaseAuthError(error, "server"), {
+      cause: error,
+      detail: `issueRandomPassword: ${role} password reset failed for user ${target.id}`,
+    });
+  }
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      mustChangePassword: true,
+      passwordIsSchoolId: false,
+      passwordVaultCipher: null,
+      passwordVaultSetAt: null,
+    },
+  });
+}
 
 /**
  * Issue a teacher a fresh random one-time credential.
@@ -313,23 +385,6 @@ export type ResetTeacherPasswordResult = { ok: true; data: { password: string } 
  * `/forgot-password` instead, because that path never puts a credential in the
  * admin's hands at all; a teacher on `@school.local` has no mailbox, which is
  * the whole reason this action exists.
- *
- * Three things it does NOT do, each easy to get wrong by copying the School
- * Head path:
- *  - It writes no `isActive`. `regenerateSchoolHeadCredential` does, and
- *    `docs/backlog.md` already logs that as a HIGH finding: a password reset
- *    must never silently resurrect an account a School Head switched off on
- *    purpose. Turning the account back on is the School Head's decision and
- *    lives on their roster, not here.
- *  - It does not call `sealPassword`. `passwordChangeFields` already refuses to
- *    seal a non-`SCHOOL_HEAD` role; the columns are written explicitly here
- *    because this path needs `mustChangePassword: true` and that helper
- *    hardcodes `false`.
- *  - It never writes the credential anywhere. Not the audit row, not a log
- *    line, not an error message — it is returned once, shown once, and exists
- *    nowhere else. `mustChangePassword: true` retires it at first sign-in,
- *    because unlike the School ID a random string read out over the phone IS a
- *    secret in transit.
  */
 export const resetTeacherPassword = action(
   "resetTeacherPassword",
@@ -355,30 +410,7 @@ export const resetTeacherPassword = action(
     if (!target) throw accountNotFound(`resetTeacherPassword: no live TEACHER ${userId}`);
 
     const password = generateActivationCredential();
-
-    const supabaseAdmin = createSupabaseAdminClient();
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
-      password,
-      app_metadata: { role: "TEACHER", schoolId: target.schoolId },
-    });
-    if (error) {
-      // `detail` names the account, never the credential — same rule as audit
-      // metadata, and `detail` is stored in full on `/admin/errors`.
-      throw new AppError(mapSupabaseAuthError(error, "server"), {
-        cause: error,
-        detail: `teacher password reset failed for user ${target.id}`,
-      });
-    }
-
-    await prisma.user.update({
-      where: { id: target.id },
-      data: {
-        mustChangePassword: true,
-        passwordIsSchoolId: false,
-        passwordVaultCipher: null,
-        passwordVaultSetAt: null,
-      },
-    });
+    await issueRandomPassword(target, "TEACHER", password);
 
     await writeAudit({
       userId: admin.id,
@@ -387,6 +419,59 @@ export const resetTeacherPassword = action(
       resource: "User",
       resourceId: target.id,
       metadata: { schoolId: target.schoolId, via: "admin_accounts" },
+    });
+
+    revalidatePath("/admin/accounts");
+    return { ok: true, data: { password } };
+  },
+  { verb: "reset that password" }
+);
+
+/**
+ * Super Admin only: issue a district admin a fresh one-time credential.
+ *
+ * Their first password travelled in a CSV at account creation
+ * (`scripts/create-district-admins.ts`) and, like a teacher's, must be
+ * replaced rather than reused indefinitely — `skipPasswordChange` already
+ * refuses `DISTRICT_ADMIN` for the same reason (spec 3.3). A district admin
+ * has no `schoolId` (`User.schoolId` is null by design, spec 3.1), so the
+ * audit row carries none, and `app_metadata.role` stays `DISTRICT_ADMIN` —
+ * never widened to `SUPER_ADMIN`, which is exactly the privilege the account
+ * must not gain from a password reset.
+ *
+ * `generateReadableCredential` (not `generateActivationCredential`): the same
+ * "read off a printed sheet" shape the creation script hands out, because the
+ * person on the other end has no mailbox to receive a link either way.
+ */
+export const resetDistrictAdminPassword = action(
+  "resetDistrictAdminPassword",
+  async (formData: FormData): Promise<ResetDistrictAdminPasswordResult> => {
+    const admin = await requireUser("SUPER_ADMIN");
+
+    const rate = await checkRateLimit(`reset:district-admin:${admin.id}`, RESET_RATE);
+    if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
+
+    const { userId } = parseInput(accountUserIdSchema, { userId: formData.get("userId") });
+
+    // `role: "DISTRICT_ADMIN"` is in the `where`, so any other role's id is
+    // simply not found — same one-refusal shape as `resetTeacherPassword`.
+    const target = await prisma.user.findFirst({
+      where: { id: userId, role: "DISTRICT_ADMIN", deletedAt: null },
+      select: { id: true, authId: true, schoolId: true },
+    });
+    if (!target) throw accountNotFound(`resetDistrictAdminPassword: no live DISTRICT_ADMIN ${userId}`);
+
+    const password = generateReadableCredential();
+    await issueRandomPassword(target, "DISTRICT_ADMIN", password);
+
+    // Ids only, never the credential — same rule as `TEACHER_PASSWORD_RESET`.
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.DISTRICT_ADMIN_PASSWORD_RESET,
+      resource: "User",
+      resourceId: target.id,
+      metadata: { via: "admin_accounts" },
     });
 
     revalidatePath("/admin/accounts");
@@ -454,9 +539,18 @@ export const impersonateUser = action(
     // `where` rather than by a branch afterwards. `getCurrentUser` signs such an
     // account out on its very next request — see the inactive guard below for
     // why that is fatal at this point in the flow.
+    //
+    // REFUSAL — ROLE ALLOW-LIST (I14): `role: { in: IMPERSONATABLE_ROLES }`
+    // means a SUPER_ADMIN or DISTRICT_ADMIN id is simply not found, the same
+    // generic refusal every other mismatch gets here, and the reason
+    // `startImpersonation`'s own SUPER_ADMIN check below is never reached for
+    // this caller — it is kept there anyway as an independent guard for
+    // `startTestLabSession`, whose own lookup restricts by fixed persona email
+    // instead of by role.
     const target = await prisma.user.findFirst({
       where: {
         id: userId,
+        role: { in: [...IMPERSONATABLE_ROLES] },
         deletedAt: null,
         OR: [{ schoolId: null }, { school: { deletedAt: null } }],
       },

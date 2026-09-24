@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getNavGroups, type NavGrade } from "@/lib/nav/nav-config";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const SEARCH_HREF: Record<UserRole, string> = {
   SUPER_ADMIN: "/admin/schools",
   SCHOOL_HEAD: SCHOOL_HEAD_ROUTES.teachers,
   TEACHER: "/teacher/learners",
+  DISTRICT_ADMIN: DISTRICT_ROUTES.schools,
 };
 
 /**
@@ -37,6 +39,7 @@ const SEARCH_PLACEHOLDER: Record<UserRole, string> = {
   SUPER_ADMIN: "Search schools, learners, pages…",
   SCHOOL_HEAD: "Search learners, teachers, pages…",
   TEACHER: "Search your learners and pages…",
+  DISTRICT_ADMIN: "Search your schools and pages…",
 };
 
 /**

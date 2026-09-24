@@ -43,29 +43,24 @@ export function SchoolInfoForm({ school }: { school: SchoolInfo }) {
         <Label htmlFor="address">Address</Label>
         <Input id="address" name="address" defaultValue={school.address ?? ""} disabled={pending} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label htmlFor="region">Region</Label>
-          <Input id="region" name="region" defaultValue={school.region ?? ""} disabled={pending} />
+      {/* No `name` attributes: the district decides which district admin
+          supervises this school, so only the division office sets these. */}
+      <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="region">Region</Label>
+            <Input id="region" value={school.region ?? ""} placeholder="—" disabled readOnly />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="division">Division</Label>
+            <Input id="division" value={school.division ?? ""} placeholder="—" disabled readOnly />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="district">District</Label>
+            <Input id="district" value={school.district ?? ""} placeholder="—" disabled readOnly />
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="division">Division</Label>
-          <Input
-            id="division"
-            name="division"
-            defaultValue={school.division ?? ""}
-            disabled={pending}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="district">District</Label>
-          <Input
-            id="district"
-            name="district"
-            defaultValue={school.district ?? ""}
-            disabled={pending}
-          />
-        </div>
+        <p className="text-xs text-muted-foreground">Set by the division office.</p>
       </div>
       <Button type="submit" loading={pending} loadingText="Saving…">
         Save changes

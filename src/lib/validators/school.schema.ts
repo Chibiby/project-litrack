@@ -41,13 +41,22 @@ export const createSchoolSchema = z.object({
   schoolHeadEmail: z.string().email().optional(),
 });
 
-/** School Head may edit display fields; schoolIdCode is immutable. */
+/**
+ * School Head may edit display fields; schoolIdCode is immutable.
+ *
+ * `region`, `division` and `district` are deliberately NOT in this shape —
+ * see `docs/specs/district-admin.md` 3.5 and 3.7. `School.district` decides
+ * which district admin supervises a school, so a School Head retyping it
+ * could silently move their own school into another admin's scope, or out of
+ * every scope. Only the Super Admin may set it now, through
+ * `updateSchoolAsAdmin` (`adminSchoolEditFullSchema` below). Because a plain
+ * `z.object()` strips unrecognized keys rather than erroring, a stale cached
+ * form that still posts `district` simply has it ignored — the action never
+ * sees the value, let alone writes it.
+ */
 export const updateSchoolInfoSchema = z.object({
   name: nonEmpty("School name required").max(200),
   address: optionalField,
-  region: optionalShort,
-  division: optionalShort,
-  district: optionalShort,
 });
 
 export const setSchoolActiveSchema = z.object({
@@ -63,7 +72,31 @@ export const adminProfileSchema = z.object({
   lastName: nonEmpty("Last name required").max(100),
 });
 
+/**
+ * Super Admin / district admin edit of one school's info
+ * (`updateSchoolAsAdmin`, `src/lib/actions/school-management.ts`).
+ *
+ * Two shapes, picked by `scope.kind` in the action, never by a role flag the
+ * client could send: a district admin may edit `name` and `address` only,
+ * while the Super Admin's superset (`adminSchoolEditFullSchema`) also carries
+ * `region`, `division` and `district` — the division office is the only actor
+ * allowed to move a school between districts (spec 3.7).
+ */
+export const adminSchoolEditBasicSchema = z.object({
+  schoolId: nonEmpty("School required"),
+  name: nonEmpty("School name required").max(200),
+  address: optionalField,
+});
+
+export const adminSchoolEditFullSchema = adminSchoolEditBasicSchema.extend({
+  region: optionalShort,
+  division: optionalShort,
+  district: optionalShort,
+});
+
 export type CreateSchoolInput = z.infer<typeof createSchoolSchema>;
 export type UpdateSchoolInfoInput = z.infer<typeof updateSchoolInfoSchema>;
 export type SetSchoolActiveInput = z.infer<typeof setSchoolActiveSchema>;
 export type AdminProfileInput = z.infer<typeof adminProfileSchema>;
+export type AdminSchoolEditBasicInput = z.infer<typeof adminSchoolEditBasicSchema>;
+export type AdminSchoolEditFullInput = z.infer<typeof adminSchoolEditFullSchema>;

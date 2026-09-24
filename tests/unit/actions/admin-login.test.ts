@@ -24,10 +24,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const userFindFirst = vi.fn();
 const userFindUnique = vi.fn();
+const userUpdate = vi.fn();
 const signInWithPassword = vi.fn();
+const signOut = vi.fn();
 const writeAudit = vi.fn();
 const checkRateLimit = vi.fn();
 const redirect = vi.fn();
+const requireUser = vi.fn();
+const warmAdminRoutes = vi.fn();
+const warmDistrictRoutes = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -38,6 +43,9 @@ vi.mock("@/lib/prisma", () => ({
       get findUnique() {
         return userFindUnique;
       },
+      get update() {
+        return userUpdate;
+      },
     },
   },
 }));
@@ -46,7 +54,9 @@ vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({
     auth: {
       signInWithPassword,
-      signOut: vi.fn(),
+      get signOut() {
+        return signOut;
+      },
       getUser: vi.fn(),
     },
   }),
@@ -75,14 +85,19 @@ vi.mock("@/lib/rate-limit", () => ({
   peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
 }));
 
-vi.mock("@/lib/auth/session", () => ({
-  requireUser: vi.fn(),
-  roleHomePath: vi.fn(),
-  roleSecurityPath: vi.fn(),
-}));
+// The real role → home mapping: where each admin role lands is under test.
+vi.mock("@/lib/auth/session", async () => {
+  const roles = await vi.importActual<typeof import("@/lib/auth/roles")>("@/lib/auth/roles");
+  return {
+    requireUser: (...args: unknown[]) => requireUser(...args),
+    roleHomePath: roles.roleHomePath,
+    roleSecurityPath: roles.roleSecurityPath,
+  };
+});
 
 vi.mock("@/lib/auth/warm-routes", () => ({
-  warmAdminRoutes: vi.fn(),
+  warmAdminRoutes: (...args: unknown[]) => warmAdminRoutes(...args),
+  warmDistrictRoutes: (...args: unknown[]) => warmDistrictRoutes(...args),
   warmSchoolHeadRoutes: vi.fn(),
   warmTeacherRoutes: vi.fn(),
 }));
@@ -118,7 +133,7 @@ vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF4") }
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { loginAdmin } from "@/lib/actions/auth";
+import { loginAdmin, skipPasswordChange } from "@/lib/actions/auth";
 
 const ADMIN_ROW = {
   id: "user-1",
@@ -169,7 +184,7 @@ describe("loginAdmin", () => {
     expect(redirect).toHaveBeenCalledWith("/admin");
   });
 
-  it("scopes the lookup to a live Super Admin", async () => {
+  it("scopes the lookup to a live Super Admin or district admin", async () => {
     userFindFirst.mockResolvedValue(null);
 
     await run(form("admin", "s3cret"));
@@ -178,7 +193,7 @@ describe("loginAdmin", () => {
       expect.objectContaining({
         where: {
           username: "admin",
-          role: "SUPER_ADMIN",
+          role: { in: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
           isActive: true,
           deletedAt: null,
         },
@@ -256,5 +271,149 @@ describe("loginAdmin", () => {
       code: "VALIDATION_FAILED",
       error: "Username required",
     });
+  });
+
+  it("warms the division dashboard for a Super Admin, not the district one", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "user-1",
+      role: "SUPER_ADMIN",
+      isActive: true,
+      deletedAt: null,
+    });
+
+    await run(form("admin", "s3cret"));
+
+    expect(warmAdminRoutes).toHaveBeenCalledTimes(1);
+    expect(warmDistrictRoutes).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * District admins sign in on the same form (docs/specs/district-admin.md 3.3,
+ * T15). What must hold: they land on `/district`, never `/admin`; a School
+ * Head or teacher who happens to have a username still cannot use this form;
+ * and a district admin cannot keep the one-time password they were handed.
+ */
+describe("loginAdmin — district admins", () => {
+  const DA_ROW = {
+    id: "da-1",
+    email: "ferdinand.simon@accounts.litrack.invalid",
+    username: "ferdinand.simon",
+    role: "DISTRICT_ADMIN",
+  };
+
+  /**
+   * A tiny users table that honours the lookup's `where`, so a test fails if
+   * the role filter is dropped rather than only if its spelling changes.
+   */
+  function usersTable(rows: Array<{ id: string; email: string; username: string; role: string }>) {
+    userFindFirst.mockImplementation(
+      async ({ where }: { where: { username: string; role: { in: string[] } } }) =>
+        rows.find((r) => r.username === where.username && where.role.in.includes(r.role)) ?? null
+    );
+  }
+
+  it("redirects a district admin to /district and records their role", async () => {
+    usersTable([DA_ROW]);
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-da" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "da-1",
+      role: "DISTRICT_ADMIN",
+      isActive: true,
+      deletedAt: null,
+    });
+
+    const result = await run(form("ferdinand.simon", "k7mp-x3qa-9d2r-hn4w"));
+
+    expect(result).toEqual({ redirected: true });
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: DA_ROW.email,
+      password: "k7mp-x3qa-9d2r-hn4w",
+    });
+    expect(redirect).toHaveBeenCalledWith("/district");
+    expect(redirect).not.toHaveBeenCalledWith("/admin");
+    expect(warmDistrictRoutes).toHaveBeenCalledTimes(1);
+    expect(warmAdminRoutes).not.toHaveBeenCalled();
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "LOGIN_SUCCESS",
+        metadata: { role: "DISTRICT_ADMIN" },
+      })
+    );
+  });
+
+  it("never reaches Supabase for a teacher's username, and says the generic thing", async () => {
+    usersTable([{ id: "t-1", email: "t@example.com", username: "maria.cruz", role: "TEACHER" }]);
+
+    const result = await run(form("maria.cruz", "s3cret"));
+
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      code: "AUTH_INCORRECT_CREDENTIALS",
+      error: "Incorrect username or password.",
+    });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "LOGIN_DENIED",
+        metadata: { role: "ADMIN_CONSOLE", reason: "unknown_username" },
+      })
+    );
+  });
+
+  it("signs out and refuses when the signed-in row is not an admin role", async () => {
+    // The row changed between the lookup and sign-in: the post-sign-in check is
+    // the second gate and must hold on its own.
+    usersTable([DA_ROW]);
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-t" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "da-1",
+      role: "TEACHER",
+      isActive: true,
+      deletedAt: null,
+    });
+
+    const result = await run(form("ferdinand.simon", "s3cret"));
+
+    expect(result).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("records a district admin's wrong password under their role", async () => {
+    usersTable([DA_ROW]);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+
+    const result = await run(form("ferdinand.simon", "wrong"));
+
+    expect(result).toMatchObject({ ok: false, code: "AUTH_INCORRECT_CREDENTIALS" });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "LOGIN_DENIED",
+        metadata: expect.objectContaining({ role: "DISTRICT_ADMIN" }),
+      })
+    );
+  });
+});
+
+describe("skipPasswordChange", () => {
+  it("refuses a district admin with AUTH_FORBIDDEN and keeps mustChangePassword (I16)", async () => {
+    requireUser.mockResolvedValue({
+      id: "da-1",
+      role: "DISTRICT_ADMIN",
+      schoolId: null,
+      mustChangePassword: true,
+    });
+
+    const result = await skipPasswordChange();
+
+    expect(result).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(userUpdate).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

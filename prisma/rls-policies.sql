@@ -60,6 +60,11 @@ ALTER TABLE "SystemSetting"        ENABLE ROW LEVEL SECURITY;
 -- grade's sheet seeds with. Deny-all, same as SystemSetting above.
 ALTER TABLE "TermSubjectDefault"   ENABLE ROW LEVEL SECURITY;
 
+-- Which districts a DISTRICT_ADMIN supervises. This is an authorization
+-- table -- a writable path to it from PostgREST would let an outsider grant
+-- themselves scope over a whole district. Deny-all, same as SystemSetting above.
+ALTER TABLE "DistrictAdminAssignment" ENABLE ROW LEVEL SECURITY;
+
 -- Chat. These hold free text one member of staff wrote for another, which is
 -- the most directly readable content in the database — not a code or an id, but
 -- sentences about named children. Deny-all, like everything else.

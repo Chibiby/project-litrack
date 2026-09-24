@@ -652,4 +652,5 @@ export const USER_ROLE_LABELS = {
   SUPER_ADMIN: "Division admin",
   SCHOOL_HEAD: "School Head",
   TEACHER: "Teacher",
+  DISTRICT_ADMIN: "District admin",
 } as const;

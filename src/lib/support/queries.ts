@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupportTicketCategory, SupportTicketStatus, UnlockScope } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
 
 /**
  * Reads for support tickets.
@@ -98,14 +99,24 @@ function toRow(ticket: RawTicket): TicketRow {
 }
 
 /**
- * The division admin's queue: every school's tickets, unanswered first.
+ * The admin queue: unanswered tickets first, from every school the caller may
+ * see.
  *
- * Deliberately unfiltered by school — see the trust-boundary note in
- * `src/lib/actions/support.ts`. Callers must already have established the
- * Super Admin role; this function does not check it.
+ * `scope` is the caller's own `AdminScope` (`src/lib/auth/admin-scope.ts`,
+ * from `requireAdminScope()`) — a Super Admin's scope covers every school, so
+ * this reads exactly as it did before district admins existed; a district
+ * admin's narrower `schoolWhereForScope(scope)` is what makes this their own
+ * inbox rather than the whole division's. Required, not defaulted: a caller
+ * that has not resolved a scope must not compile. Callers must already have
+ * established an admin role — this function does not check it.
+ *
+ * Deliberately uncached: an admin looking at the inbox needs the ticket that
+ * arrived a second ago, and `cachedQuery` would buy a round trip and cost
+ * exactly the freshness this queue exists for.
  */
-export async function listInboxTickets(limit = 100): Promise<TicketRow[]> {
+export async function listInboxTickets(scope: AdminScope, limit = 100): Promise<TicketRow[]> {
   const tickets = await prisma.supportTicket.findMany({
+    where: { school: schoolWhereForScope(scope) },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: limit,
     select: TICKET_SELECT,

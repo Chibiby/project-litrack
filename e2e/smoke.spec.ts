@@ -54,7 +54,7 @@ test.describe("smoke", () => {
 
   test("admin login shows email and password form", async ({ page }) => {
     await page.goto("/admin/login");
-    await expect(page.getByRole("heading", { name: "Super Admin" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Admin sign-in" })).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     // Prefer the password input; getByLabel("Password") also matches "Show password".
     await expect(page.locator('input[type="password"][name="password"]')).toBeVisible();

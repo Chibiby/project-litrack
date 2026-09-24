@@ -26,6 +26,7 @@ import {
   resolveTicket,
   revokeUnlockGrant,
 } from "@/lib/actions/support";
+import { revokeUnlock } from "@/lib/actions/unlock-admin";
 import {
   DEFAULT_UNLOCK_DAYS,
   MAX_UNLOCK_DAYS,
@@ -87,7 +88,17 @@ const STATUS_VARIANT: Record<
   DECLINED: "outline",
 };
 
-export function SupportInbox({ tickets }: { tickets: TicketRow[] }) {
+export function SupportInbox({
+  tickets,
+  districtScoped = false,
+}: {
+  tickets: TicketRow[];
+  /**
+   * A district admin's inbox. Ending a ticket's grant goes through the scoped
+   * `revokeUnlock` instead of `revokeUnlockGrant`, which is Super Admin only.
+   */
+  districtScoped?: boolean;
+}) {
   const router = useRouter();
   const [active, setActive] = useState<{ ticket: TicketRow; mode: Mode } | null>(
     null
@@ -96,7 +107,7 @@ export function SupportInbox({ tickets }: { tickets: TicketRow[] }) {
   if (tickets.length === 0) {
     return (
       <EmptyState
-        title="No requests yet"
+        title={districtScoped ? "No support requests from your schools" : "No requests yet"}
         description="Teachers and school heads can send access requests and questions from the assistant on any page."
         icon={LifeBuoy}
       />
@@ -110,6 +121,7 @@ export function SupportInbox({ tickets }: { tickets: TicketRow[] }) {
           <TicketCard
             key={ticket.id}
             ticket={ticket}
+            districtScoped={districtScoped}
             onAnswer={(mode) => setActive({ ticket, mode })}
             onChanged={() => router.refresh()}
           />
@@ -133,10 +145,12 @@ export function SupportInbox({ tickets }: { tickets: TicketRow[] }) {
 
 function TicketCard({
   ticket,
+  districtScoped,
   onAnswer,
   onChanged,
 }: {
   ticket: TicketRow;
+  districtScoped: boolean;
   onAnswer: (mode: Mode) => void;
   onChanged: () => void;
 }) {
@@ -146,7 +160,9 @@ function TicketCard({
 
   function revoke(grantId: string) {
     startRevoke(async () => {
-      const result = await revokeUnlockGrant({ grantId });
+      const result = districtScoped
+        ? await revokeUnlock({ kind: "teacher", grantId })
+        : await revokeUnlockGrant({ grantId });
       if (!result.ok) {
         toast.error(result.error);
         return;

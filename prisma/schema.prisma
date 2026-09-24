@@ -40,6 +40,7 @@ enum UserRole {
   SUPER_ADMIN
   SCHOOL_HEAD
   TEACHER
+  DISTRICT_ADMIN
 }
 
 enum TeacherApprovalStatus {
@@ -797,7 +798,7 @@ model User {
   updatedAt                 DateTime               @updatedAt
   deletedAt                 DateTime?
 
-  school                     School?                  @relation(fields: [schoolId], references: [id])
+  school                     School?                   @relation(fields: [schoolId], references: [id])
   schoolHeadProfile          SchoolHeadProfile?
   teacherProfile             TeacherProfile?
   /// Authoritative. The sections this teacher advises — up to three, and the cap
@@ -805,34 +806,37 @@ model User {
   /// without a migration. Deliberately renamed from `advisorySection`: every
   /// read site that assumed at most one now fails to compile rather than
   /// silently rendering the first of several.
-  advisorySections           Section[]                @relation("SectionAdviser")
-  taughtGrades               GradeLevel[]             @relation("TeacherGrades")
+  advisorySections           Section[]                 @relation("SectionAdviser")
+  taughtGrades               GradeLevel[]              @relation("TeacherGrades")
   taughtSections             TeacherSection[]
-  managedLearners            Learner[]                @relation("TeacherLearners")
-  aralLearners               Learner[]                @relation("AralTeacherLearners")
-  recordedAttendance         Attendance[]             @relation("AttendanceRecorder")
-  recordedReadingLevels      ReadingLevelRecord[]     @relation("ReadingRecorder")
-  recordedTermGrades         TermGrade[]              @relation("TermGradeRecorder")
-  recordedKinderCompetencies KinderCompetencyRecord[] @relation("KinderCompetencyRecorder")
-  recordedAttendanceDays     AttendanceDayMeta[]      @relation("AttendanceDayRecorder")
-  teacherEnrollments         Enrollment[]             @relation("TeacherEnrollments")
+  managedLearners            Learner[]                 @relation("TeacherLearners")
+  aralLearners               Learner[]                 @relation("AralTeacherLearners")
+  recordedAttendance         Attendance[]              @relation("AttendanceRecorder")
+  recordedReadingLevels      ReadingLevelRecord[]      @relation("ReadingRecorder")
+  recordedTermGrades         TermGrade[]               @relation("TermGradeRecorder")
+  recordedKinderCompetencies KinderCompetencyRecord[]  @relation("KinderCompetencyRecorder")
+  recordedAttendanceDays     AttendanceDayMeta[]       @relation("AttendanceDayRecorder")
+  teacherEnrollments         Enrollment[]              @relation("TeacherEnrollments")
   announcements              Announcement[]
-  teacherInvites             TeacherInvite[]          @relation("TeacherInviteUser")
-  notifications              Notification[]           @relation("NotificationRecipient")
-  notificationsCaused        Notification[]           @relation("NotificationActor")
-  reports                    Report[]                 @relation("ReportCreator")
-  chatChannels               ChatChannel[]            @relation("ChatChannelMember")
-  chatMessages               ChatMessage[]            @relation("ChatMessageAuthor")
-  chatMentions               ChatMention[]            @relation("ChatMentionUser")
-  chatReads                  ChatRead[]               @relation("ChatReadUser")
-  supportTickets             SupportTicket[]          @relation("SupportTicketRequester")
-  supportTicketsResolved     SupportTicket[]          @relation("SupportTicketResolver")
-  unlockGrants               UnlockGrant[]            @relation("UnlockGrantUser")
-  unlockGrantsIssued         UnlockGrant[]            @relation("UnlockGrantGranter")
-  unlockGrantsRevoked        UnlockGrant[]            @relation("UnlockGrantRevoker")
-  schoolUnlockGrantsIssued   SchoolUnlockGrant[]      @relation("SchoolUnlockGrantGranter")
-  schoolUnlockGrantsRevoked  SchoolUnlockGrant[]      @relation("SchoolUnlockGrantRevoker")
-  termWindowOverridesSet     TermWindowOverride[]     @relation("TermWindowSetter")
+  teacherInvites             TeacherInvite[]           @relation("TeacherInviteUser")
+  notifications              Notification[]            @relation("NotificationRecipient")
+  notificationsCaused        Notification[]            @relation("NotificationActor")
+  reports                    Report[]                  @relation("ReportCreator")
+  chatChannels               ChatChannel[]             @relation("ChatChannelMember")
+  chatMessages               ChatMessage[]             @relation("ChatMessageAuthor")
+  chatMentions               ChatMention[]             @relation("ChatMentionUser")
+  chatReads                  ChatRead[]                @relation("ChatReadUser")
+  supportTickets             SupportTicket[]           @relation("SupportTicketRequester")
+  supportTicketsResolved     SupportTicket[]           @relation("SupportTicketResolver")
+  unlockGrants               UnlockGrant[]             @relation("UnlockGrantUser")
+  unlockGrantsIssued         UnlockGrant[]             @relation("UnlockGrantGranter")
+  unlockGrantsRevoked        UnlockGrant[]             @relation("UnlockGrantRevoker")
+  schoolUnlockGrantsIssued   SchoolUnlockGrant[]       @relation("SchoolUnlockGrantGranter")
+  schoolUnlockGrantsRevoked  SchoolUnlockGrant[]       @relation("SchoolUnlockGrantRevoker")
+  termWindowOverridesSet     TermWindowOverride[]      @relation("TermWindowSetter")
+  /// The districts this user supervises, when `role = DISTRICT_ADMIN`. Empty
+  /// for every other role — see `DistrictAdminAssignment`.
+  districtAssignments        DistrictAdminAssignment[] @relation("DistrictAdminAssignments")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -842,6 +846,25 @@ model User {
   /// it — that query supplies no `schoolId`, so `deletedAt` is never a usable
   /// leading column there. Same reasoning as `Learner`'s twin of this index.
   @@index([deletedAt])
+}
+
+/// Which districts a DISTRICT_ADMIN supervises. `district` is the exact,
+/// canonical `School.district` string: a join by value, not a foreign key,
+/// because `School.district` is free text (spec section 13, alternative A).
+/// Read only for users whose role is DISTRICT_ADMIN (`requireAdminScope`);
+/// rows on any other role grant nothing. Composite PK, same shape as TeacherSection.
+/// SQL-only CHECK `DistrictAdminAssignment_district_canonical`: preserve it.
+model DistrictAdminAssignment {
+  userId      String
+  district    String
+  createdAt   DateTime @default(now())
+  /// Plain column, no relation: same shape and reason as School.createdById.
+  createdById String?
+
+  user User @relation("DistrictAdminAssignments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, district])
+  @@index([district])
 }
 
 model SchoolHeadProfile {
@@ -1255,6 +1278,10 @@ model Announcement {
   title       String
   body        String
   publishedAt DateTime  @default(now())
+  /// Groups the per-school copies of one district/division broadcast. NULL =
+  /// written by the school's own School Head, which is what every existing row
+  /// already means. Non-null rows are read-only to School Heads.
+  broadcastId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -1266,6 +1293,7 @@ model Announcement {
   @@index([deletedAt])
   /// R6 #5. FK lookup side — now the side `SetNull` scans on a `User` delete.
   @@index([authorId])
+  @@index([broadcastId])
 }
 
 model AralProfile {

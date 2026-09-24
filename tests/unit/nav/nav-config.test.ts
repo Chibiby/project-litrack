@@ -495,6 +495,7 @@ describe("getNavGroups — admin", () => {
       "Schools",
       "User Accounts",
       "Learner Transfers",
+      "Division Summary",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
       "School Years",

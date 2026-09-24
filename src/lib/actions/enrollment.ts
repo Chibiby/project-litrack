@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireSchoolUser, requireUser } from "@/lib/auth/session";
+import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
+import { requireAdminScope, loadSchoolInScope } from "@/lib/auth/district-scope";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import {
   transferLearnerSchema,
   transferLearnerCrossSchoolSchema,
@@ -12,6 +14,9 @@ import {
 } from "@/lib/validators/enrollment.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { ensureFloatingGradeLevel } from "@/lib/grades/floating";
+import { action } from "@/lib/errors/action";
+import { resourceNotFound, fieldError } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 import {
   revalidateSchoolDashboard,
   revalidateSchoolHeadTeachers,
@@ -19,6 +24,7 @@ import {
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -281,186 +287,206 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
 }
 
 /**
- * SUPER_ADMIN only: move a learner to another school's grade/section/teacher.
- * Ends ACTIVE enrollment as TRANSFERRED; creates new ACTIVE enrollment in the
- * target school's active school year when one exists (otherwise pointers only).
+ * Super Admin, or a district admin whose scope covers BOTH schools: move a
+ * learner to another school's grade/section/teacher. Ends ACTIVE enrollment as
+ * TRANSFERRED; creates new ACTIVE enrollment in the target school's active
+ * school year when one exists (otherwise pointers only).
+ *
+ * Authorization and tenant story (spec I12): `requireAdminScope()` gives an
+ * explicit Super-Admin-or-district-admin branch, never
+ * `requireUser("DISTRICT_ADMIN")` alone. The learner is then loaded WITH
+ * `school: schoolWhereForScope(scope)` in its own `WHERE` — an out-of-scope
+ * *source* school is NOT_FOUND before the destination is even read — and the
+ * destination school is loaded through `loadSchoolInScope`, which puts the
+ * same scope in its `WHERE` — an out-of-scope *destination* is NOT_FOUND too.
+ * Both checks run before any write. For a district admin covering Alabel 1
+ * and Alabel 2, a transfer between them is allowed; Alabel to Glan is refused
+ * on the destination side. For the Super Admin (division scope) both checks
+ * pass for every live, non-deleted school, so this is unchanged.
  */
-export async function transferLearnerCrossSchool(
-  formData: FormData
-): Promise<ActionResult> {
-  const user = await requireUser("SUPER_ADMIN");
+export const transferLearnerCrossSchool = action(
+  "transferLearnerCrossSchool",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const { user, scope } = await requireAdminScope();
 
-  const rawSection = formData.get("targetSectionId");
-  const parsed = transferLearnerCrossSchoolSchema.safeParse({
-    learnerId: formData.get("learnerId"),
-    targetSchoolId: formData.get("targetSchoolId"),
-    targetGradeLevelId: formData.get("targetGradeLevelId"),
-    targetSectionId: rawSection === null ? undefined : rawSection,
-    targetTeacherId: formData.get("targetTeacherId"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-
-  const {
-    learnerId,
-    targetSchoolId,
-    targetGradeLevelId,
-    targetSectionId,
-    targetTeacherId,
-  } = parsed.data;
-
-  const learner = await prisma.learner.findFirst({
-    where: { id: learnerId, deletedAt: null },
-  });
-  if (!learner) return { ok: false, error: "Learner not found" };
-
-  const fromSchoolId = learner.schoolId;
-  if (fromSchoolId === targetSchoolId) {
-    return {
-      ok: false,
-      error: "Use same-school transfer when the learner stays at the same school",
-    };
-  }
-
-  const targetSchool = await prisma.school.findFirst({
-    where: { id: targetSchoolId, deletedAt: null, isActive: true },
-  });
-  if (!targetSchool) return { ok: false, error: "Target school not found or inactive" };
-
-  const targetGrade = await prisma.gradeLevel.findFirst({
-    where: {
-      id: targetGradeLevelId,
-      schoolId: targetSchoolId,
-      deletedAt: null,
-    },
-  });
-  if (!targetGrade) {
-    return { ok: false, error: "Target grade level not found in destination school" };
-  }
-
-  // Advisory is one section per teacher now, so grade membership is derived from
-  // the advised section rather than the legacy `taughtGrades` m2m (which nothing
-  // writes any more). Cross-school transfer still requires a real receiving
-  // adviser — FLOATING is a same-school holding state, not a transfer target.
-  const targetTeacher = await prisma.user.findFirst({
-    where: {
-      id: targetTeacherId,
-      schoolId: targetSchoolId,
-      role: "TEACHER",
-      deletedAt: null,
-      isActive: true,
-      // Same rule as the same-school transfer above: any one live advisory in
-      // the target grade is enough.
-      advisorySections: {
-        some: { gradeLevelId: targetGradeLevelId, deletedAt: null },
-      },
-    },
-    select: { id: true },
-  });
-  if (!targetTeacher) {
-    return {
-      ok: false,
-      error:
-        "Teacher not found or does not advise a section in the target grade at the destination school",
-    };
-  }
-
-  const sectionResult = await resolveTransferSection({
-    targetSectionId,
-    targetGradeLevelId,
-    schoolId: targetSchoolId,
-    previousSectionId: learner.sectionId,
-    previousGradeLevelId: learner.gradeLevelId,
-    // Cross-school: previous section is never valid at destination
-    preserveOnSameGradeOmit: false,
-  });
-  if (!sectionResult.ok) {
-    return {
-      ok: false,
-      error:
-        sectionResult.error === "Section not found in target grade"
-          ? "Section not found in destination grade"
-          : sectionResult.error,
-    };
-  }
-  const resolvedSectionId = sectionResult.sectionId;
-
-  const previousGradeId = learner.gradeLevelId;
-
-  await prisma.$transaction(async (tx) => {
-    const active = await tx.enrollment.findFirst({
-      where: { learnerId: learner.id, status: "ACTIVE" },
+    const rawSection = formData.get("targetSectionId");
+    const parsed = parseInput(transferLearnerCrossSchoolSchema, {
+      learnerId: formData.get("learnerId"),
+      targetSchoolId: formData.get("targetSchoolId"),
+      targetGradeLevelId: formData.get("targetGradeLevelId"),
+      targetSectionId: rawSection === null ? undefined : rawSection,
+      targetTeacherId: formData.get("targetTeacherId"),
     });
 
-    if (active) {
-      await tx.enrollment.update({
-        where: { id: active.id },
-        data: { status: "TRANSFERRED", endedAt: new Date() },
-      });
+    const {
+      learnerId,
+      targetSchoolId,
+      targetGradeLevelId,
+      targetSectionId,
+      targetTeacherId,
+    } = parsed;
+
+    // Source school in scope: the scope sits IN the learner lookup's `WHERE`,
+    // so an out-of-scope learner is NOT_FOUND before the destination is looked
+    // at at all — same pattern as `schoolId: user.schoolId` everywhere else.
+    const learner = await prisma.learner.findFirst({
+      where: { id: learnerId, deletedAt: null, school: schoolWhereForScope(scope) },
+    });
+    if (!learner) throw resourceNotFound("Learner");
+
+    const fromSchoolId = learner.schoolId;
+    if (fromSchoolId === targetSchoolId) {
+      throw fieldError(
+        "targetSchoolId",
+        "Use same-school transfer when the learner stays at the same school"
+      );
     }
 
-    const activeYear = await tx.schoolYear.findFirst({
-      where: { schoolId: targetSchoolId, isActive: true },
+    // Destination school in scope too — both sides of I12.
+    const targetSchool = await loadSchoolInScope(scope, targetSchoolId, {
+      id: true,
+      isActive: true,
     });
+    if (!targetSchool.isActive) throw resourceNotFound("School");
 
-    await tx.learner.update({
-      where: { id: learner.id },
-      data: {
+    const targetGrade = await prisma.gradeLevel.findFirst({
+      where: {
+        id: targetGradeLevelId,
         schoolId: targetSchoolId,
-        gradeLevelId: targetGradeLevelId,
-        sectionId: resolvedSectionId,
-        teacherId: targetTeacherId,
-        archivedAt: null,
+        deletedAt: null,
       },
     });
+    if (!targetGrade) {
+      throw fieldError(
+        "targetGradeLevelId",
+        "Target grade level not found in destination school"
+      );
+    }
 
-    if (activeYear) {
-      await tx.enrollment.create({
+    // Advisory is one section per teacher now, so grade membership is derived from
+    // the advised section rather than the legacy `taughtGrades` m2m (which nothing
+    // writes any more). Cross-school transfer still requires a real receiving
+    // adviser — FLOATING is a same-school holding state, not a transfer target.
+    const targetTeacher = await prisma.user.findFirst({
+      where: {
+        id: targetTeacherId,
+        schoolId: targetSchoolId,
+        role: "TEACHER",
+        deletedAt: null,
+        isActive: true,
+        // Same rule as the same-school transfer above: any one live advisory in
+        // the target grade is enough.
+        advisorySections: {
+          some: { gradeLevelId: targetGradeLevelId, deletedAt: null },
+        },
+      },
+      select: { id: true },
+    });
+    if (!targetTeacher) {
+      throw fieldError(
+        "targetTeacherId",
+        "Teacher not found or does not advise a section in the target grade at the destination school"
+      );
+    }
+
+    const sectionResult = await resolveTransferSection({
+      targetSectionId,
+      targetGradeLevelId,
+      schoolId: targetSchoolId,
+      previousSectionId: learner.sectionId,
+      previousGradeLevelId: learner.gradeLevelId,
+      // Cross-school: previous section is never valid at destination
+      preserveOnSameGradeOmit: false,
+    });
+    if (!sectionResult.ok) {
+      throw fieldError(
+        "targetSectionId",
+        sectionResult.error === "Section not found in target grade"
+          ? "Section not found in destination grade"
+          : sectionResult.error
+      );
+    }
+    const resolvedSectionId = sectionResult.sectionId;
+
+    const previousGradeId = learner.gradeLevelId;
+
+    await prisma.$transaction(async (tx) => {
+      const active = await tx.enrollment.findFirst({
+        where: { learnerId: learner.id, status: "ACTIVE" },
+      });
+
+      if (active) {
+        await tx.enrollment.update({
+          where: { id: active.id },
+          data: { status: "TRANSFERRED", endedAt: new Date() },
+        });
+      }
+
+      const activeYear = await tx.schoolYear.findFirst({
+        where: { schoolId: targetSchoolId, isActive: true },
+      });
+
+      await tx.learner.update({
+        where: { id: learner.id },
         data: {
-          learnerId: learner.id,
           schoolId: targetSchoolId,
-          schoolYearId: activeYear.id,
           gradeLevelId: targetGradeLevelId,
           sectionId: resolvedSectionId,
           teacherId: targetTeacherId,
-          status: "ACTIVE",
+          archivedAt: null,
         },
       });
-    }
-  });
 
-  await writeAudit({
-    userId: user.id,
-    schoolId: targetSchoolId,
-    action: AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,
-    resource: "Learner",
-    resourceId: learner.id,
-    metadata: {
-      learnerId: learner.id,
-      fromSchoolId,
-      toSchoolId: targetSchoolId,
-      fromGradeLevelId: previousGradeId,
-      toGradeLevelId: targetGradeLevelId,
-      toSectionId: resolvedSectionId,
-      toTeacherId: targetTeacherId,
-    },
-  });
+      if (activeYear) {
+        await tx.enrollment.create({
+          data: {
+            learnerId: learner.id,
+            schoolId: targetSchoolId,
+            schoolYearId: activeYear.id,
+            gradeLevelId: targetGradeLevelId,
+            sectionId: resolvedSectionId,
+            teacherId: targetTeacherId,
+            status: "ACTIVE",
+          },
+        });
+      }
+    });
 
-  revalidatePath(`/teacher/grade/${previousGradeId}`);
-  revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
-  revalidatePath("/teacher/learners");
-  revalidatePath("/teacher/aral");
-  revalidatePath("/admin/transfers");
-  revalidatePath("/admin/schools");
-  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
-  revalidateSchoolDashboard(fromSchoolId);
-  revalidateSchoolDashboard(targetSchoolId);
-  revalidateSchoolsList();
-  if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
-  revalidateTeacherCaches(targetTeacherId);
-  // Same reason as the same-school transfer: `teacherGradeScope`'s learner arm
-  // makes the learner's grade part of their designated tutor's grade set.
-  if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
-  return { ok: true };
-}
+    await writeAudit({
+      userId: user.id,
+      schoolId: targetSchoolId,
+      action: AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,
+      resource: "Learner",
+      resourceId: learner.id,
+      metadata: {
+        learnerId: learner.id,
+        fromSchoolId,
+        toSchoolId: targetSchoolId,
+        fromGradeLevelId: previousGradeId,
+        toGradeLevelId: targetGradeLevelId,
+        toSectionId: resolvedSectionId,
+        toTeacherId: targetTeacherId,
+        ...(user.role === "DISTRICT_ADMIN" ? { actorRole: user.role } : {}),
+      },
+    });
+
+    revalidatePath(`/teacher/grade/${previousGradeId}`);
+    revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
+    revalidatePath("/teacher/learners");
+    revalidatePath("/teacher/aral");
+    revalidatePath("/admin/transfers");
+    revalidatePath("/admin/schools");
+    revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+    revalidatePath(DISTRICT_ROUTES.transfers);
+    revalidateSchoolDashboard(fromSchoolId);
+    revalidateSchoolDashboard(targetSchoolId);
+    revalidateSchoolsList();
+    if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
+    revalidateTeacherCaches(targetTeacherId);
+    // Same reason as the same-school transfer: `teacherGradeScope`'s learner arm
+    // makes the learner's grade part of their designated tutor's grade set.
+    if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
+    return { ok: true };
+  },
+  { verb: "transfer the learner" }
+);

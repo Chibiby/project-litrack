@@ -84,7 +84,7 @@ function PageTitleBlock({
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground lg:truncate">
             {subtitle}
           </p>
         ) : null}

@@ -12,19 +12,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *   reopened is read from the stored ticket row, so a caller cannot ask for a
  *   different week than the one they filed about, and cannot get a grant at all
  *   on a ticket that named no window.
- * - **An answered ticket cannot be answered again.** Otherwise a resolved
- *   request would stay a standing key to whatever window it named.
+ * - **An answered ticket cannot be answered again — even by a second admin
+ *   group racing the first.** `resolveTicket` and `declineTicket` now run for
+ *   both a Super Admin (division scope) and a district admin (their own
+ *   districts, `docs/specs/district-admin.md` 3.5), so two people can reach
+ *   the same open ticket at once; the conditional `updateMany` is what stops
+ *   the second one from re-closing it or issuing a second grant.
  * - **Neither the subject nor the body reaches an audit row or a notification.**
  *   They are free text about somebody's class, so they will name learners.
  *
- * Everything is mocked at the module boundary, matching the other action tests
- * in this directory: real Prisma, real Supabase, and real Redis are all out of
- * scope for a unit test of the decision logic.
+ * `@/lib/auth/admin-scope` is deliberately NOT mocked — it is a pure module
+ * (no Prisma, no `server-only`) and the whole point of these tests is to prove
+ * the real `schoolWhereForScope` output reaches the ticket lookup's `where`.
+ *
+ * Everything else is mocked at the module boundary, matching the other action
+ * tests in this directory: real Prisma, real Supabase, and real Redis are all
+ * out of scope for a unit test of the decision logic.
  */
 
 const create = vi.fn();
-const findUnique = vi.fn();
-const update = vi.fn();
+const findFirst = vi.fn();
+const updateMany = vi.fn();
 const userFindMany = vi.fn();
 const userFindFirst = vi.fn();
 const notificationCreate = vi.fn();
@@ -40,11 +48,11 @@ vi.mock("@/lib/prisma", () => ({
       get create() {
         return create;
       },
-      get findUnique() {
-        return findUnique;
+      get findFirst() {
+        return findFirst;
       },
-      get update() {
-        return update;
+      get updateMany() {
+        return updateMany;
       },
     },
     user: {
@@ -87,6 +95,11 @@ vi.mock("@/lib/auth/session", () => ({
   requireUser: (...args: unknown[]) => requireUser(...args),
 }));
 
+const requireAdminScope = vi.fn();
+vi.mock("@/lib/auth/district-scope", () => ({
+  requireAdminScope: () => requireAdminScope(),
+}));
+
 const writeAudit = vi.fn();
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => writeAudit(...args),
@@ -120,7 +133,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
 // Imported after the mock factories above are registered.
 // `src/lib/unlock/issue.ts` is deliberately NOT mocked: since the three grant
 // paths were folded onto it, it is where the upsert these tests assert actually
-// happens.
+// happens. `src/lib/auth/admin-scope.ts` is real too — see the module note.
 const {
   declineTicket,
   fetchMyTickets,
@@ -129,9 +142,13 @@ const {
   revokeUnlockGrant,
   submitTicket,
 } = await import("@/lib/actions/support");
+const { schoolWhereForScope } = await import("@/lib/auth/admin-scope");
 
 const TEACHER = { id: "teacher-1", schoolId: "school-1", role: "TEACHER" };
 const ADMIN = { id: "admin-1", schoolId: null, role: "SUPER_ADMIN" };
+const DIVISION_SCOPE = { kind: "division" as const };
+const DISTRICT_ADMIN = { id: "da-1", schoolId: null, role: "DISTRICT_ADMIN" };
+const DISTRICT_SCOPE = { kind: "districts" as const, districts: ["Alabel 1"] };
 
 const TICKET_ID = "3f0c2f9c-6d1e-4b6f-9a2a-8f4e7c1b5d90";
 const GRANT_ID = "9b1e4f0a-2c3d-4e5f-8a7b-6c5d4e3f2a10";
@@ -170,7 +187,7 @@ function storedTicket(overrides: Record<string, unknown> = {}) {
 function runTransaction() {
   transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
-      supportTicket: { update },
+      supportTicket: { updateMany },
       unlockGrant: { upsert: grantUpsert },
     })
   );
@@ -189,13 +206,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   requireSchoolUser.mockResolvedValue(TEACHER);
   requireUser.mockResolvedValue(ADMIN);
+  requireAdminScope.mockResolvedValue({ user: ADMIN, scope: DIVISION_SCOPE });
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   create.mockResolvedValue({ id: TICKET_ID });
   userFindMany.mockResolvedValue([{ id: "admin-1" }, { id: "admin-2" }]);
   userFindFirst.mockResolvedValue({ id: "teacher-1", schoolId: "school-1" });
   notificationCreateMany.mockResolvedValue({ count: 2 });
   notificationCreate.mockResolvedValue({ id: "notif-1" });
-  update.mockResolvedValue({ id: TICKET_ID });
+  findFirst.mockResolvedValue(storedTicket());
+  updateMany.mockResolvedValue({ count: 1 });
   grantUpsert.mockResolvedValue({ id: GRANT_ID });
   grantUpdate.mockResolvedValue({ id: GRANT_ID });
   runTransaction();
@@ -331,33 +350,59 @@ describe("submitTicket", () => {
 });
 
 describe("resolveTicket", () => {
-  it("is Super Admin only", async () => {
-    findUnique.mockResolvedValue(storedTicket());
+  it("uses requireAdminScope, never requireUser, so a Super Admin's scope is explicit", async () => {
+    await resolveTicket({ ticketId: TICKET_ID });
+
+    expect(requireAdminScope).toHaveBeenCalledTimes(1);
+    expect(requireUser).not.toHaveBeenCalled();
+  });
+
+  it("loads the ticket with the caller's scope in the where — the check this whole suite fails without", async () => {
+    // This is the assertion that fails if `school: schoolWhereForScope(scope)`
+    // is ever deleted from the lookup: with it removed the `where` would be
+    // `{ id: ticketId }` alone and this `toEqual` would no longer match.
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
 
     await resolveTicket({ ticketId: TICKET_ID });
 
-    expect(requireUser).toHaveBeenCalledWith(["SUPER_ADMIN"]);
+    expect(findFirst.mock.calls[0]?.[0]?.where).toEqual({
+      id: TICKET_ID,
+      school: schoolWhereForScope(DISTRICT_SCOPE),
+    });
+  });
+
+  it("says 'Not found' for a ticket outside the district admin's scope", async () => {
+    // A real Prisma query with this `where` would simply not match the row;
+    // the mock stands in for that by returning null, same as a ticket that
+    // does not exist at all — the two must read identically to the caller.
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    findFirst.mockResolvedValue(null);
+
+    const result = await resolveTicket({ ticketId: TICKET_ID });
+
+    expect(result).toEqual({ ok: false, error: "Not found" });
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it("resolves without granting anything when no grant is asked for", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     const result = await resolveTicket({ ticketId: TICKET_ID, note: "Reopened by hand" });
 
     expect(result).toEqual({ ok: true });
     expect(grantUpsert).not.toHaveBeenCalled();
-    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({
+    expect(updateMany.mock.calls[0]?.[0]?.data).toMatchObject({
       status: "RESOLVED",
       resolverId: "admin-1",
       resolutionNote: "Reopened by hand",
+    });
+    expect(updateMany.mock.calls[0]?.[0]?.where).toEqual({
+      id: TICKET_ID,
+      status: { in: ["OPEN", "IN_PROGRESS"] },
     });
   });
 
   it("issues the grant against the window the ticket named", async () => {
     // Not the window the caller passed — the payload carries only a day count.
     // This is what stops a request about week A from becoming access to week B.
-    findUnique.mockResolvedValue(storedTicket());
-
     const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
 
     expect(result).toEqual({ ok: true });
@@ -377,7 +422,6 @@ describe("resolveTicket", () => {
   });
 
   it("dates the expiry the requested number of days out", async () => {
-    findUnique.mockResolvedValue(storedTicket());
     const before = Date.now();
 
     await resolveTicket({ ticketId: TICKET_ID, grant: { days: 7 } });
@@ -391,8 +435,6 @@ describe("resolveTicket", () => {
   it("clears a previous revocation when re-granting the same window", async () => {
     // A re-grant that left `revokedAt` set would write a fresh expiry onto a row
     // every read still treats as revoked — access that looks granted and is not.
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID, grant: { days: 5 } });
 
     expect(grantUpsert.mock.calls[0]?.[0]?.update).toMatchObject({
@@ -403,15 +445,13 @@ describe("resolveTicket", () => {
   });
 
   it("closes the ticket and creates the grant in one transaction", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID, grant: { days: 2 } });
 
     expect(transaction).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a grant on a ticket that named no window", async () => {
-    findUnique.mockResolvedValue(
+    findFirst.mockResolvedValue(
       storedTicket({
         category: "BUG_REPORT",
         requestedScope: null,
@@ -430,7 +470,7 @@ describe("resolveTicket", () => {
   });
 
   it("refuses a grant on an unlock request missing its target key", async () => {
-    findUnique.mockResolvedValue(storedTicket({ requestedTargetKey: null }));
+    findFirst.mockResolvedValue(storedTicket({ requestedTargetKey: null }));
 
     const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 7 } });
 
@@ -441,7 +481,7 @@ describe("resolveTicket", () => {
   for (const status of ["RESOLVED", "DECLINED"] as const) {
     it(`refuses to answer a ${status} ticket again`, async () => {
       // Otherwise an answered request stays a standing key to its window.
-      findUnique.mockResolvedValue(storedTicket({ status }));
+      findFirst.mockResolvedValue(storedTicket({ status }));
 
       const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 7 } });
 
@@ -453,8 +493,25 @@ describe("resolveTicket", () => {
     });
   }
 
+  it("gives the second of two racing resolves 'already answered', not a second grant", async () => {
+    // Both admins loaded the ticket while it still read OPEN — the race is
+    // caught by the conditional `updateMany` inside the transaction, whose
+    // `count` comes back 0 for whichever request runs second.
+    updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 7 } });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "This request has already been answered",
+    });
+    expect(grantUpsert).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(notificationCreate).not.toHaveBeenCalled();
+  });
+
   it("says 'Not found' for a ticket that does not exist", async () => {
-    findUnique.mockResolvedValue(null);
+    findFirst.mockResolvedValue(null);
 
     expect(await resolveTicket({ ticketId: TICKET_ID })).toEqual({
       ok: false,
@@ -463,8 +520,6 @@ describe("resolveTicket", () => {
   });
 
   it("audits the grant by id, scope and expiry — never by the ticket's text", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID, note: "Reopened for you", grant: { days: 4 } });
 
     expect(allWrittenText()).not.toContain("Reyes");
@@ -508,7 +563,6 @@ describe("resolveTicket", () => {
     // it — and then holding the outer `$transaction` promise open with a gate
     // the test controls, standing in for "the callback finished but Postgres
     // has not committed yet". Nothing must be audited while that gate is shut.
-    findUnique.mockResolvedValue(storedTicket());
     let releaseCommit!: () => void;
     const commitGate = new Promise<void>((resolve) => {
       releaseCommit = resolve;
@@ -523,7 +577,7 @@ describe("resolveTicket", () => {
     });
     transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const result = await fn({
-        supportTicket: { update },
+        supportTicket: { updateMany },
         unlockGrant: { upsert: grantUpsert },
       });
       await commitGate;
@@ -560,10 +614,9 @@ describe("resolveTicket", () => {
     // happens, exactly as it would mid-transaction in Postgres before a later
     // statement forces a rollback), and only then does the surrounding
     // `$transaction` reject, standing in for the commit itself failing.
-    findUnique.mockResolvedValue(storedTicket());
     transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       await fn({
-        supportTicket: { update },
+        supportTicket: { updateMany },
         unlockGrant: { upsert: grantUpsert },
       });
       throw new Error("connection reset");
@@ -585,7 +638,6 @@ describe("resolveTicket", () => {
     // only ever resolves an active TEACHER — a School Head requester (or a
     // teacher deactivated after filing) must never end up with `granted: true`
     // and no real access behind it.
-    findUnique.mockResolvedValue(storedTicket());
     userFindFirst.mockResolvedValue(null);
 
     const result = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
@@ -596,23 +648,20 @@ describe("resolveTicket", () => {
     });
     expect(transaction).not.toHaveBeenCalled();
     expect(grantUpsert).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("still resolves without granting for a requester who cannot receive a grant", async () => {
-    findUnique.mockResolvedValue(storedTicket());
     userFindFirst.mockResolvedValue(null);
 
     const result = await resolveTicket({ ticketId: TICKET_ID, note: "Handled another way" });
 
     expect(result).toEqual({ ok: true });
-    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({ status: "RESOLVED" });
+    expect(updateMany.mock.calls[0]?.[0]?.data).toMatchObject({ status: "RESOLVED" });
     expect(grantUpsert).not.toHaveBeenCalled();
   });
 
   it("records granted: false when it only closed the ticket", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID });
 
     expect(writeAudit.mock.calls[0]?.[0]?.metadata).toEqual({
@@ -623,8 +672,6 @@ describe("resolveTicket", () => {
   });
 
   it("tells the requester, carrying only the ticket id", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID, note: "Reopened for you" });
 
     const data = notificationCreate.mock.calls[0]?.[0]?.data;
@@ -638,8 +685,6 @@ describe("resolveTicket", () => {
   });
 
   it("busts the requester's caches, not the admin's own", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID });
 
     expect(revalidateSupportTicket).toHaveBeenCalledWith("teacher-1");
@@ -648,15 +693,13 @@ describe("resolveTicket", () => {
 
 describe("declineTicket", () => {
   it("closes the ticket with the required reason and grants nothing", async () => {
-    findUnique.mockResolvedValue(storedTicket());
-
     const result = await declineTicket({
       ticketId: TICKET_ID,
       note: "The term is already submitted to the division office.",
     });
 
     expect(result).toEqual({ ok: true });
-    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({
+    expect(updateMany.mock.calls[0]?.[0]?.data).toMatchObject({
       status: "DECLINED",
       resolverId: "admin-1",
       resolutionNote: "The term is already submitted to the division office.",
@@ -668,11 +711,11 @@ describe("declineTicket", () => {
     const result = await declineTicket({ ticketId: TICKET_ID, note: "" });
 
     expect(result.ok).toBe(false);
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(findFirst).not.toHaveBeenCalled();
   });
 
   it("refuses to decline an already-answered ticket", async () => {
-    findUnique.mockResolvedValue(storedTicket({ status: "RESOLVED" }));
+    findFirst.mockResolvedValue(storedTicket({ status: "RESOLVED" }));
 
     const result = await declineTicket({ ticketId: TICKET_ID, note: "Too late" });
 
@@ -680,13 +723,46 @@ describe("declineTicket", () => {
       ok: false,
       error: "This request has already been answered",
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it("is Super Admin only", async () => {
-    findUnique.mockResolvedValue(storedTicket());
+  it("gives the second of two racing declines 'already answered'", async () => {
+    updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await declineTicket({ ticketId: TICKET_ID, note: "Too late" });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "This request has already been answered",
+    });
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("uses requireAdminScope, never requireUser", async () => {
     await declineTicket({ ticketId: TICKET_ID, note: "No." });
-    expect(requireUser).toHaveBeenCalledWith(["SUPER_ADMIN"]);
+    expect(requireAdminScope).toHaveBeenCalledTimes(1);
+    expect(requireUser).not.toHaveBeenCalled();
+  });
+
+  it("loads the ticket with the caller's scope in the where", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+
+    await declineTicket({ ticketId: TICKET_ID, note: "No." });
+
+    expect(findFirst.mock.calls[0]?.[0]?.where).toEqual({
+      id: TICKET_ID,
+      school: schoolWhereForScope(DISTRICT_SCOPE),
+    });
+  });
+
+  it("says 'Not found' for a ticket outside the district admin's scope", async () => {
+    requireAdminScope.mockResolvedValue({ user: DISTRICT_ADMIN, scope: DISTRICT_SCOPE });
+    findFirst.mockResolvedValue(null);
+
+    const result = await declineTicket({ ticketId: TICKET_ID, note: "No." });
+
+    expect(result).toEqual({ ok: false, error: "Not found" });
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -819,8 +895,6 @@ describe("one bell per act", () => {
   it("does not add an UNLOCK_GRANTED bell to a resolved ticket", async () => {
     // The requester already gets SUPPORT_TICKET_RESOLVED for this exact event,
     // and that notification is what carries the grant's expiry to them.
-    findUnique.mockResolvedValue(storedTicket());
-
     await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
 
     const types = notificationCreate.mock.calls.map((call) => call[0]?.data?.type);

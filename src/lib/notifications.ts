@@ -64,6 +64,7 @@ function honorificFor(actor: {
 }): string {
   if (actor.role === "SCHOOL_HEAD") return "School Head";
   if (actor.role === "SUPER_ADMIN") return "Administrator";
+  if (actor.role === "DISTRICT_ADMIN") return "District admin";
   if (actor.teacherProfile?.designation === ARAL_VOLUNTEER_DESIGNATION) {
     return "ARAL Volunteer";
   }

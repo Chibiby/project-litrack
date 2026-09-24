@@ -118,10 +118,21 @@ export function revalidateAdminDashboard() {
   expireTag(tags.adminDashboard);
 }
 
-/** Admin schools list (and related admin dashboard school snippets). */
+/**
+ * Admin schools list (and related admin dashboard school snippets).
+ *
+ * Also expires the division summary: a school created, archived, re-districted,
+ * or flagged demo changes which schools every summary scope covers.
+ */
 export function revalidateSchoolsList() {
   expireTag(tags.schoolsList);
   expireTag(tags.adminDashboard);
+  expireTag(tags.divisionSummary);
+}
+
+/** Every cached summary facet at every scope (division and district). */
+export function revalidateDivisionSummary() {
+  expireTag(tags.divisionSummary);
 }
 
 /** School-scoped dashboard + school name. */

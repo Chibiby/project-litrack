@@ -54,7 +54,11 @@ export function AdminLoginForm({
 
   return (
     <AuthCard>
-      <AuthCardHeader icon={ShieldCheck} title="Super Admin" subtitle="LITRACK administration" />
+      <AuthCardHeader
+        icon={ShieldCheck}
+        title="Admin sign-in"
+        subtitle="Division and district admin sign-in"
+      />
       <div className="mt-6 space-y-5 2xl:mt-8">
         {notice}
         <AppForm
@@ -144,6 +148,11 @@ export function AdminLoginForm({
               School login
             </Link>
           </div>
+          {/* Admin accounts sign in by username and most have no mailbox, so the
+              email reset above cannot reach them. */}
+          <p className="text-center text-sm text-slate-600">
+            No reset email? Ask the division office to reset your password.
+          </p>
         </AppForm>
       </div>
     </AuthCard>

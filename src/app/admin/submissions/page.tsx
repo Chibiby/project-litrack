@@ -16,9 +16,9 @@ export default async function AdminSubmissionsPage({ searchParams }: { searchPar
   if (user.role !== "SUPER_ADMIN") redirect("/forbidden");
   const params = await searchParams;
   const [schools, years, active, lockingEnabled, readingLevelUnlockedForAll] = await Promise.all([
-    listUnlockTargets(),
+    listUnlockTargets({ kind: "division" }),
     prisma.schoolYear.findMany({ where: { school: { deletedAt: null } }, include: { school: { select: { id: true, name: true } }, termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } } }, orderBy: [{ school: { name: "asc" } }, { isActive: "desc" }, { startDate: "desc" }] }),
-    listActiveUnlocks(),
+    listActiveUnlocks({ kind: "division" }),
     isSubmissionLockingEnabled(),
     isMonthlyReadingLevelUnlockedForAll(),
   ]);

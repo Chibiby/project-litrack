@@ -264,14 +264,22 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
             className="flex items-center gap-6"
           >
             <div className="flex items-center gap-2">
-              <RadioGroupItem value="teacher" id="unlock-mode-teacher" />
+              <RadioGroupItem
+                value="teacher"
+                id="unlock-mode-teacher"
+                className="relative max-lg:after:absolute max-lg:after:-inset-3 max-lg:after:content-['']"
+              />
               <Label htmlFor="unlock-mode-teacher" className="font-normal">
                 One teacher
               </Label>
             </div>
             {allowSchoolAudience ? (
               <div className="flex items-center gap-2">
-                <RadioGroupItem value="school" id="unlock-mode-school" />
+                <RadioGroupItem
+                  value="school"
+                  id="unlock-mode-school"
+                  className="relative max-lg:after:absolute max-lg:after:-inset-3 max-lg:after:content-['']"
+                />
                 <Label htmlFor="unlock-mode-school" className="font-normal">
                   All school
                 </Label>

@@ -79,6 +79,7 @@ const ROW: AccountRowType = {
   approvalStatus: null,
   password: { kind: "never_stored" },
   signInHead: false,
+  districtAdminDistricts: null,
   canRecoverByEmail: true,
 };
 

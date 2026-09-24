@@ -64,14 +64,70 @@ function clipTick(label: string): string {
   return label.length > 12 ? `${label.slice(0, 11)}…` : label;
 }
 
+const HORIZONTAL_ROW_HEIGHT = 40;
+const HORIZONTAL_CHART_PADDING = 32;
+const LABEL_COL_MIN = 110;
+const LABEL_COL_MAX = 200;
+/** Rough advance width of one character at the 12px tick size, for wrapping the label column. */
+const LABEL_CHAR_PX = 6.4;
+
+/** Greedily wraps `label` onto lines no wider than `maxCharsPerLine`, capped at 3 lines. */
+function wrapChartLabel(label: string, maxCharsPerLine: number): string[] {
+  const words = label.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxCharsPerLine && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines.slice(0, 3) : [label];
+}
+
+/** Recharts clones this with `x`/`y`/`payload`, keeping the `labelColWidth` already on the element. */
+function CategoryAxisTick(props: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+  labelColWidth: number;
+}) {
+  const { x = 0, y = 0, payload, labelColWidth } = props;
+  const maxChars = Math.max(8, Math.floor((labelColWidth - 8) / LABEL_CHAR_PX));
+  const lines = wrapChartLabel(String(payload?.value ?? ""), maxChars);
+  const lineHeight = 14;
+  const firstDy = -((lines.length - 1) * lineHeight) / 2 + 4;
+  return (
+    <text x={x} y={y} textAnchor="end" fontSize={12} fill="hsl(var(--muted-foreground))">
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? firstDy : lineHeight}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
 export function DashboardBarChart({
   data,
   color = "hsl(var(--primary))",
   height = 220,
+  horizontal = false,
 }: {
   data: Point[];
   color?: string;
   height?: number;
+  /**
+   * Categories on the y-axis with full (wrapped) labels and values on the
+   * x-axis — for a single-choice distribution, where a handful of long
+   * reading-level names never fit as angled x-axis ticks. Height then scales
+   * with the number of bars instead of using `height`.
+   */
+  horizontal?: boolean;
 }) {
   const keyed = data.map((d) => ({
     label: d.name ?? d.date ?? "",
@@ -79,6 +135,40 @@ export function DashboardBarChart({
   }));
   const isPhone = useIsPhone();
   const [widthRef, width] = useElementWidth();
+
+  if (horizontal) {
+    const labelColWidth = Math.min(
+      LABEL_COL_MAX,
+      Math.max(LABEL_COL_MIN, width > 0 ? Math.round(width * 0.4) : LABEL_COL_MIN)
+    );
+    const chartHeight = keyed.length * HORIZONTAL_ROW_HEIGHT + HORIZONTAL_CHART_PADDING;
+    return (
+      <div ref={widthRef} className="w-full" style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={keyed}
+            layout="vertical"
+            margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={labelColWidth}
+              interval={0}
+              axisLine={false}
+              tickLine={false}
+              tick={<CategoryAxisTick labelColWidth={labelColWidth} />}
+            />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Bar dataKey="value" fill={color} radius={[0, 6, 6, 0]} maxBarSize={28} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
   const angled = keyed.length > 4;
   // At -25° the long reading-level names run off the card's left edge and
   // into each other whenever a bar gets little width: on phones, and in the
@@ -266,10 +356,13 @@ export function DashboardLineChart({
   data,
   color = "hsl(var(--primary))",
   height = 220,
+  tickFontSize = 11,
 }: {
   data: Point[];
   color?: string;
   height?: number;
+  /** Summary charts need every tick at 12px; dashboards keep their existing 11px. */
+  tickFontSize?: number;
 }) {
   const keyed = data.map((d) => ({
     label: d.name ?? d.date ?? "",
@@ -281,8 +374,8 @@ export function DashboardLineChart({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={keyed} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
+          <XAxis dataKey="label" tick={{ fontSize: tickFontSize }} />
+          <YAxis allowDecimals={false} tick={{ fontSize: tickFontSize }} width={32} />
           <Tooltip contentStyle={tooltipStyle} />
           <Line
             type="monotone"

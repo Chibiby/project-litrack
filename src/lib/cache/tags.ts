@@ -15,6 +15,16 @@ export const adminDashboard = "admin-dashboard";
 
 export const schoolsList = "schools-list";
 
+/**
+ * Every cached summary facet (`src/lib/summary/**`), at every scope.
+ *
+ * Global rather than per-district: summary data is refreshed on a short TTL, and
+ * the only mutations that bust it explicitly are school-level ones (a school
+ * created, archived, moved between districts, or flagged demo) that change which
+ * schools a scope covers.
+ */
+export const divisionSummary = "division-summary";
+
 export function schoolDashboard(schoolId: string): string {
   return `school-dashboard:${schoolId}`;
 }

@@ -10,6 +10,8 @@ import type {
 } from "@prisma/client";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
+import { requireAdminScope } from "@/lib/auth/district-scope";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { revalidateSupportTicket } from "@/lib/cache/revalidate";
 import { prisma } from "@/lib/prisma";
 import { listMyTickets } from "@/lib/support/queries";
@@ -33,9 +35,11 @@ import {
  *
  * - **Raising** a ticket is school-scoped. A teacher or school head files
  *   against their own school and can only ever read their own tickets.
- * - **Answering** one is cross-tenant and Super Admin only, like `/admin/audit`.
- *   The division admin is a division-wide role by definition, so the inbox
- *   deliberately has no `schoolId` filter.
+ * - **Answering** one is cross-tenant: a Super Admin sees every school, and a
+ *   district admin sees the schools in their own districts
+ *   (`requireAdminScope`, `docs/specs/district-admin.md` 3.4). Both load the
+ *   ticket with `school: schoolWhereForScope(scope)` in the `where`, so an
+ *   out-of-scope ticket reads as NOT_FOUND rather than leaking its existence.
  *
  * The PII rule is stricter here than anywhere else in the app: `subject` and
  * `body` are free text written by somebody describing a problem with their
@@ -164,7 +168,7 @@ export async function submitTicket(input: unknown): Promise<ActionResult<{ id: s
  * they have access they do not have.
  */
 export async function resolveTicket(input: unknown): Promise<ActionResult> {
-  const admin = await requireUser(["SUPER_ADMIN"]);
+  const { user: admin, scope } = await requireAdminScope();
 
   const parsed = resolveTicketSchema.safeParse(input);
   if (!parsed.success) {
@@ -172,8 +176,11 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
   }
   const { ticketId, note, grant } = parsed.data;
 
-  const ticket = await prisma.supportTicket.findUnique({
-    where: { id: ticketId },
+  // The scope is IN the where, the same as every other tenant-scoped read in
+  // this app: an out-of-scope ticket never loads, so it reads as "Not found"
+  // rather than as a ticket that exists somewhere the caller cannot see.
+  const ticket = await prisma.supportTicket.findFirst({
+    where: { id: ticketId, school: schoolWhereForScope(scope) },
     select: {
       id: true,
       schoolId: true,
@@ -215,9 +222,15 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
     }
   }
 
+  // Two admin groups can now answer the same ticket — a Super Admin and a
+  // district admin whose scope includes the requester's school. The update is
+  // conditioned on the status still being open so a second resolver racing the
+  // first cannot re-close an already-answered ticket or issue a second grant
+  // for it; `count` is how the loser finds out it lost the race.
+  let raceLost = false;
   const issuedGrant = await prisma.$transaction(async (tx) => {
-    await tx.supportTicket.update({
-      where: { id: ticket.id },
+    const updated = await tx.supportTicket.updateMany({
+      where: { id: ticket.id, status: { in: ["OPEN", "IN_PROGRESS"] } },
       data: {
         status: "RESOLVED",
         resolverId: admin.id,
@@ -225,6 +238,10 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
         resolvedAt: new Date(),
       },
     });
+    if (updated.count !== 1) {
+      raceLost = true;
+      return null;
+    }
 
     if (!grant || !ticket.requestedScope || !ticket.requestedTargetKey) {
       return null;
@@ -258,6 +275,9 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
     });
     return issued;
   });
+  if (raceLost) {
+    return { ok: false, error: "This request has already been answered" };
+  }
   const grantId = issuedGrant?.id ?? null;
 
   if (issuedGrant && ticket.requestedScope && ticket.requestedTargetKey) {
@@ -299,15 +319,15 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
 
 /** Close a ticket without granting anything. The note is required — see the schema. */
 export async function declineTicket(input: unknown): Promise<ActionResult> {
-  const admin = await requireUser(["SUPER_ADMIN"]);
+  const { user: admin, scope } = await requireAdminScope();
 
   const parsed = declineTicketSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const ticket = await prisma.supportTicket.findUnique({
-    where: { id: parsed.data.ticketId },
+  const ticket = await prisma.supportTicket.findFirst({
+    where: { id: parsed.data.ticketId, school: schoolWhereForScope(scope) },
     select: { id: true, schoolId: true, requesterId: true, category: true, status: true },
   });
   if (!ticket) return { ok: false, error: "Not found" };
@@ -315,8 +335,11 @@ export async function declineTicket(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "This request has already been answered" };
   }
 
-  await prisma.supportTicket.update({
-    where: { id: ticket.id },
+  // Conditioned on status the same way `resolveTicket` is, so a decline racing
+  // another admin's resolve (or another decline) cannot overwrite the first
+  // answer.
+  const updated = await prisma.supportTicket.updateMany({
+    where: { id: ticket.id, status: { in: ["OPEN", "IN_PROGRESS"] } },
     data: {
       status: "DECLINED",
       resolverId: admin.id,
@@ -324,6 +347,9 @@ export async function declineTicket(input: unknown): Promise<ActionResult> {
       resolvedAt: new Date(),
     },
   });
+  if (updated.count !== 1) {
+    return { ok: false, error: "This request has already been answered" };
+  }
 
   await notifyRequester(ticket.schoolId, ticket.requesterId, admin.id, ticket.id);
 

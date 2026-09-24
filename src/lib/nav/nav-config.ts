@@ -1,6 +1,7 @@
 import {
   Archive,
   ArrowRightLeft,
+  BarChart3,
   BookOpen,
   CalendarDays,
   CalendarRange,
@@ -19,10 +20,12 @@ import {
   ScrollText,
   TriangleAlert,
   Sparkles,
+  Unlock,
   Users,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { DISTRICT_ROUTES, DISTRICT_SUMMARY_FACETS } from "@/lib/routes/district";
 
 export interface NavItem {
   id: string;
@@ -165,6 +168,7 @@ export function getNavGroups(
             { id: "admin-schools", label: "Schools", href: "/admin/schools", icon: School },
             { id: "admin-accounts", label: "User Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
             { id: "admin-transfers", label: "Learner Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
+            { id: "admin-summary", label: "Division Summary", href: "/admin/summary", icon: BarChart3 },
           ],
         },
         {
@@ -318,6 +322,45 @@ export function getNavGroups(
         },
       ];
     }
+    case "DISTRICT_ADMIN":
+      return [
+        {
+          label: "Overview",
+          items: [
+            { id: "district-dashboard", label: "Overview", href: DISTRICT_ROUTES.home, icon: LayoutDashboard },
+          ],
+        },
+        {
+          label: "Summary",
+          items: DISTRICT_SUMMARY_FACETS.map((facet) => ({
+            id: `district-summary-${facet.id}`,
+            label: facet.label,
+            href: DISTRICT_ROUTES.summary(facet.id),
+            icon: BarChart3,
+          })),
+        },
+        {
+          label: "Schools",
+          items: [
+            { id: "district-schools", label: "Schools", href: DISTRICT_ROUTES.schools, icon: School },
+          ],
+        },
+        {
+          label: "Operations",
+          items: [
+            { id: "district-support", label: "Support", href: DISTRICT_ROUTES.support, icon: LifeBuoy },
+            { id: "district-announcements", label: "Announcements", href: DISTRICT_ROUTES.announcements, icon: Megaphone },
+            { id: "district-transfers", label: "Transfers", href: DISTRICT_ROUTES.transfers, icon: ArrowRightLeft },
+            { id: "district-unlocks", label: "Unlocks", href: DISTRICT_ROUTES.unlocks, icon: Unlock },
+          ],
+        },
+        {
+          label: "Settings",
+          items: [
+            { id: "district-settings", label: "Settings", href: DISTRICT_ROUTES.settings, icon: KeyRound },
+          ],
+        },
+      ];
     default:
       return [];
   }

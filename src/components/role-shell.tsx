@@ -165,8 +165,12 @@ export function RoleShell({
           </div>
 
           {/* Outside the offset wrapper: the widget is fixed to the viewport, so
-              it must not sit inside a node whose margin animates with the rail. */}
-          <AssistantWidget role={role} userId={userId} userName={userName} aiEnabled={aiEnabled} />
+              it must not sit inside a node whose margin animates with the rail.
+              Not mounted for a district admin: `askAssistant` answers NO_SCHOOL
+              for a school-less account and `submitTicket` needs a school. */}
+          {role !== "DISTRICT_ADMIN" ? (
+            <AssistantWidget role={role} userId={userId} userName={userName} aiEnabled={aiEnabled} />
+          ) : null}
 
           {trackTeacherPresence ? <TeacherPresenceHeartbeat /> : null}
 

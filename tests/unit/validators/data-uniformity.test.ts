@@ -68,11 +68,27 @@ describe("school label fields", () => {
     expect(createSchoolSchema.parse({ ...base, district: "   " }).district).toBeUndefined();
   });
 
-  it("applies the same rules on the School Head's edit form", () => {
-    expect(updateSchoolInfoSchema.parse({ name: "A School", district: " Poblacion  West " }).district)
-      .toBe("Poblacion West");
+  it("applies the same whitespace rule on the School Head's edit form", () => {
+    expect(updateSchoolInfoSchema.parse({ name: "A School", address: "  Purok   1  " }).address)
+      .toBe("Purok 1");
     expect(updateSchoolInfoSchema.safeParse({ name: "A School", address: "x".repeat(501) }).success)
       .toBe(false);
+  });
+
+  it("no longer accepts district, division or region from the School Head — docs/specs/district-admin.md 3.5/3.7", () => {
+    // School.district decides which district admin supervises a school, so a
+    // School Head retyping it could move (or orphan) their own school from
+    // oversight. A stale cached form that still posts these fields simply has
+    // them dropped by Zod, rather than reaching the write.
+    const parsed = updateSchoolInfoSchema.parse({
+      name: "A School",
+      district: "Somewhere Else",
+      division: "Some Division",
+      region: "Some Region",
+    });
+    expect(parsed).not.toHaveProperty("district");
+    expect(parsed).not.toHaveProperty("division");
+    expect(parsed).not.toHaveProperty("region");
   });
 
   it("applies the same rules on the roster import row", () => {

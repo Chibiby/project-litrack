@@ -70,6 +70,7 @@ describe("getAccountSummary", () => {
       inactiveCount: 2,
       schoolHeadCount: 3,
       teacherCount: 10,
+      districtAdminCount: 0,
     });
     expect(prismaMock.user.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({ by: ["role", "isActive"], _count: { _all: true } })
