@@ -61,6 +61,13 @@ export function GreetingHero({
       bannerSrc={bannerSrc}
       artClassName="right-[calc(18%-272px)] sm:right-[calc(23%-272px)]"
       phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)]"
+      // lg only (1024–1279): the hero box is narrowest here (sidebar takes a
+      // quarter of the viewport, and the art is still full-size and
+      // right-0), so the illustration reaches further into the text column
+      // than at xl+. A scrim fading out toward the art keeps the greeting
+      // readable without touching the shared art geometry or changing
+      // anything at xl and up.
+      contentClassName="lg:max-xl:bg-gradient-to-r lg:max-xl:from-card/95 lg:max-xl:via-card/70 lg:max-xl:to-transparent lg:max-xl:rounded-2xl"
     >
       <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
         {greeting},

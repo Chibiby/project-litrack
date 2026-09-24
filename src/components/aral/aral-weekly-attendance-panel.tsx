@@ -387,7 +387,7 @@ export function AralWeeklyAttendancePanel({
                   <SelectTrigger
                     id="aral-attendance-sort"
                     aria-label="Sort by"
-                    className="h-11 w-full gap-1.5 sm:h-9 sm:w-56"
+                    className="h-11 w-full gap-1.5 max-sm:col-span-2 sm:h-9 sm:w-56"
                   >
                     <span className="text-muted-foreground">Sort by</span>
                     <SelectValue />

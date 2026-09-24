@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -43,7 +43,23 @@ function useIsPhone(): boolean {
   );
 }
 
-/** Phone-width category label: long reading-level names clipped so angled ticks stay inside the card. */
+/** Tracks an element's content width; 0 until the first measurement. */
+function useElementWidth(): [(node: HTMLDivElement | null) => void, number] {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const [value, setValue] = useState(0);
+  useLayoutEffect(() => {
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setValue(w);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return [setNode, value];
+}
+
+/** Narrow-chart category label: long reading-level names clipped so angled ticks stay inside the card. */
 function clipTick(label: string): string {
   return label.length > 12 ? `${label.slice(0, 11)}…` : label;
 }
@@ -62,27 +78,29 @@ export function DashboardBarChart({
     value: d.value,
   }));
   const isPhone = useIsPhone();
+  const [widthRef, width] = useElementWidth();
   const angled = keyed.length > 4;
-  // Phones only: at -25° the long reading-level names ran off the card's left
-  // edge and into each other. Steeper, clipped and given more room instead.
-  const phoneTicks = isPhone && angled;
+  // At -25° the long reading-level names run off the card's left edge and
+  // into each other whenever a bar gets little width: on phones, and in the
+  // half-width desktop cards. Steeper, clipped and given more room instead.
+  const steepTicks = angled && (isPhone || (width > 0 && width / keyed.length < 90));
 
   return (
-    <div className="w-full" style={{ height: phoneTicks ? height + 24 : height }}>
+    <div ref={widthRef} className="w-full" style={{ height: steepTicks ? height + 24 : height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={keyed}
-          margin={{ top: 8, right: 8, left: phoneTicks ? 12 : 0, bottom: 0 }}
+          margin={{ top: 8, right: 8, left: steepTicks ? 12 : 0, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: phoneTicks ? 10 : 11 }}
+            tick={{ fontSize: steepTicks ? 10 : 11 }}
             interval={0}
-            angle={phoneTicks ? -50 : angled ? -25 : 0}
+            angle={steepTicks ? -50 : angled ? -25 : 0}
             textAnchor={angled ? "end" : "middle"}
-            height={phoneTicks ? 80 : angled ? 56 : 30}
-            tickFormatter={phoneTicks ? clipTick : undefined}
+            height={steepTicks ? 80 : angled ? 56 : 30}
+            tickFormatter={steepTicks ? clipTick : undefined}
           />
           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
           <Tooltip contentStyle={tooltipStyle} />
@@ -109,6 +127,9 @@ export function shortGradeLabel(label: string): string {
   return m ? `G${m[1]}` : label;
 }
 
+/** Roughly what a full grade label ("Grade 1") needs at the axis's 12px type, plus the gap that keeps adjacent labels from touching. */
+const FULL_LABEL_PX = 52;
+
 export function GradeLevelBarChart({
   data,
   height = 260,
@@ -117,9 +138,17 @@ export function GradeLevelBarChart({
   data: { name: string; value: number }[];
   /** Accepts "100%" so the chart can fill a card stretched by its grid row. */
   height?: number | string;
-  /** Abbreviate axis labels so every grade fits at phone width. */
+  /** Force abbreviated axis labels regardless of measured width. */
   shortLabels?: boolean;
 }) {
+  // The card this chart sits in is a different width at every breakpoint
+  // (full-width on tablet and lg, squeezed beside a fixed-width rail from xl
+  // to a bit past it, roomier again past that). Measuring the plot directly
+  // means the labels never overlap, whichever layout put the card there.
+  const [containerRef, containerWidth] = useElementWidth();
+  const useShortLabels =
+    shortLabels || (containerWidth > 0 && containerWidth < data.length * FULL_LABEL_PX);
+
   const max = Math.max(...data.map((d) => d.value), 0);
   // Round the axis up to a clean ceiling so the tallest bar never touches the
   // top of the plot and the labels above it always have room.
@@ -131,7 +160,7 @@ export function GradeLevelBarChart({
   );
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div ref={containerRef} className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid
@@ -145,7 +174,7 @@ export function GradeLevelBarChart({
             tickLine={false}
             axisLine={{ stroke: "hsl(var(--border))" }}
             interval={0}
-            {...(shortLabels ? { tickFormatter: shortGradeLabel } : {})}
+            {...(useShortLabels ? { tickFormatter: shortGradeLabel } : {})}
           />
           <YAxis
             allowDecimals={false}

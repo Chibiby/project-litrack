@@ -812,7 +812,7 @@ function AttendanceCellPicker({
               <span
                 aria-hidden
                 className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                   CELL_DOT[option]
                 )}
               >
@@ -865,7 +865,7 @@ function AttendanceCellPicker({
                 onChange(status, composeNote(parsed.reason, e.target.value) ?? "")
               }
             />
-            <p className="text-right text-[11px] tabular-nums text-muted-foreground">
+            <p className="text-right text-xs tabular-nums text-muted-foreground">
               {parsed.details.length}/{DETAILS_MAX}
             </p>
           </div>
@@ -978,7 +978,7 @@ export function BulkAttendanceActions({
             >
               Apply remark
             </Button>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Applies only to days already marked Absent or Excused.
             </p>
           </div>
@@ -1014,7 +1014,7 @@ function Legend({ status, label }: { status: CellStatus; label: string }) {
     <span className="flex items-center gap-1.5">
       <span
         className={cn(
-          "inline-flex h-5 w-5 items-center justify-center rounded border text-[11px] font-semibold",
+          "inline-flex h-5 w-5 items-center justify-center rounded border text-xs font-semibold",
           CELL_TONE[status]
         )}
         aria-hidden

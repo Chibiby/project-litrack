@@ -50,7 +50,7 @@ export function UpcomingTasksPanel({
         <PrefetchLink
           href={viewAllHref}
           prefetch
-          className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-300"
+          className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-300 max-lg:-mx-2 max-lg:-my-2.5 max-lg:min-h-10 max-lg:px-2 max-lg:py-2.5"
         >
           View all
           <ArrowRight aria-hidden className="size-4 xl:hidden" />
@@ -76,7 +76,7 @@ export function UpcomingTasksPanel({
               {t.badge ? (
                 <span
                   className={cn(
-                    "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                    "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
                     BADGE[t.tone]
                   )}
                 >

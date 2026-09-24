@@ -90,7 +90,7 @@ export function Field({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
       <dd className="mt-1 break-words text-sm font-medium text-foreground">
@@ -116,7 +116,7 @@ export function RailRow({
         <Icon className="h-4 w-4" aria-hidden />
       </span>
       <span className="min-w-0">
-        <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
         <span className="block break-words font-medium text-foreground">

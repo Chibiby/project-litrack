@@ -98,7 +98,7 @@ export function LearnerBulkActions({
             <DropdownMenuItem key={key} disabled>
               <Icon className="h-4 w-4" aria-hidden />
               {label}
-              <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="ml-auto text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Soon
               </span>
             </DropdownMenuItem>

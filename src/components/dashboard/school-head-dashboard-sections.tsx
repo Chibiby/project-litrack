@@ -184,10 +184,13 @@ export async function SchoolHeadIpSection({
             icon={Users}
           />
         ) : (
-          // Below lg the card is too narrow for four columns, so cells stay on one
-          // line and the table scrolls inside its own container (Table wraps itself
-          // in overflow-auto) instead of wrapping "0 / 3" a character at a time.
-          <Table className="max-lg:[&_td]:whitespace-nowrap max-lg:[&_th]:whitespace-nowrap max-sm:[&_td]:px-2 max-sm:[&_th]:px-2">
+          // Below 2xl the card is too narrow for four columns, so cells stay on
+          // one line and the table scrolls inside its own container (Table wraps
+          // itself in overflow-auto) instead of wrapping "0 / 3" a character at a
+          // time. That includes the lg–xl desktop range (1024–1535), where this
+          // card sits in a `lg:grid-cols-2` row and is never wide enough to fit
+          // four columns unwrapped.
+          <Table className="max-2xl:[&_td]:whitespace-nowrap max-2xl:[&_th]:whitespace-nowrap max-sm:[&_td]:px-2 max-sm:[&_th]:px-2">
             <TableHeader>
               <TableRow>
                 <TableHead>Grade</TableHead>

@@ -32,27 +32,33 @@ export function AralPageHero({
       headClassName="max-lg:hidden"
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
-      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
-        <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
-        {eyebrow}
-      </p>
-      <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
-        {title}
-      </h1>
-      <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
-        {subtitle}
-      </p>
-      {description ? (
-        <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-base">
-          {description}
+      {/* Below lg: the art's handwritten doodle sits at the same height as
+          this text column and the mask doesn't fully hide it once the
+          subtitle/description runs past one line, so give the text its own
+          scrim to stay legible (z-index plus a soft background). */}
+      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-xl max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
+          <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
+          {eyebrow}
         </p>
-      ) : null}
-      {tagline != null ? (
-        <p className="mt-1 flex items-center gap-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
-          {tagline}
-          <Heart className="size-3 shrink-0 fill-current sm:size-3.5 lg:size-4" aria-hidden />
+        <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
+          {title}
+        </h1>
+        <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+          {subtitle}
         </p>
-      ) : null}
+        {description ? (
+          <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-base">
+            {description}
+          </p>
+        ) : null}
+        {tagline != null ? (
+          <p className="mt-1 flex items-center gap-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+            {tagline}
+            <Heart className="size-3 shrink-0 fill-current sm:size-3.5 lg:size-4" aria-hidden />
+          </p>
+        ) : null}
+      </div>
     </PageHero>
   );
 }

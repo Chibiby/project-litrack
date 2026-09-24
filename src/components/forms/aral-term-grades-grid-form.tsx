@@ -506,7 +506,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
             <span className="text-center">#</span>
             <span className="min-w-0 leading-tight">
               <span className="block">Learner Name</span>
-              <span className="block text-[11px] italic sm:text-xs">Advisory Section</span>
+              <span className="block text-xs italic">Advisory Section</span>
             </span>
             <span className={cn(PHONE_SUBJECTS, "truncate")}>Subjects ({termCaption})</span>
             <NextSubjectsButton onClick={onNextSubjects} windows={phoneWindow.windows} />
@@ -532,7 +532,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                   {phoneSubjects.map((subject) => {
                     const abbreviation = (
                       <span
-                        className="text-[10px] font-medium uppercase text-muted-foreground"
+                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-tighter text-muted-foreground"
                         aria-hidden
                       >
                         {subjectAbbreviation(subject.name)}

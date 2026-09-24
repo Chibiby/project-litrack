@@ -84,7 +84,7 @@ function Donut({
         <span className="text-2xl font-extrabold tabular-nums text-foreground sm:text-3xl">
           {rateLabel}
         </span>
-        <span className="text-[11px] text-muted-foreground sm:text-xs">{caption}</span>
+        <span className="text-xs text-muted-foreground">{caption}</span>
       </div>
     </div>
   );
@@ -98,6 +98,7 @@ function PanelShell({
   iconTile,
   children,
   action,
+  className,
 }: {
   title: string;
   period: string;
@@ -106,9 +107,11 @@ function PanelShell({
   iconTile: string;
   children: React.ReactNode;
   action: { label: string; href: string };
+  /** Grid placement for the caller, e.g. spanning the odd third panel full-width. */
+  className?: string;
 }) {
   return (
-    <Surface as="section" className="relative flex min-w-0 flex-col rounded-2xl">
+    <Surface as="section" className={cn("relative flex min-w-0 flex-col rounded-2xl", className)}>
       <div className="flex items-start gap-3 px-3 pt-4 sm:px-5 sm:pt-5">
         <span
           aria-hidden
@@ -296,9 +299,12 @@ export type SchoolAttendanceMix = {
 export function SchoolAttendancePanel({
   mix,
   href,
+  className,
 }: {
   mix: SchoolAttendanceMix;
   href: string;
+  /** Grid placement for the caller, e.g. spanning the odd third panel full-width. */
+  className?: string;
 }) {
   const segments: Segment[] = [
     { label: "Present", value: mix.present, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
@@ -322,6 +328,7 @@ export function SchoolAttendancePanel({
       icon={CalendarCheck}
       iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
       action={{ label: "View ARAL program", href }}
+      className={className}
     >
       <div className="lg:flex lg:items-center lg:gap-6">
         <Donut

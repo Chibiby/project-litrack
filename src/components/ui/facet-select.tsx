@@ -43,7 +43,7 @@ export function FacetSelect({
         {/* Block children, not flex: the clamp reset above sets display:block
             on this span, so its two lines must stack on their own. */}
         <span className="min-w-0 text-left">
-          <span className="block text-[11px] font-normal leading-tight text-muted-foreground">
+          <span className="block text-xs font-normal leading-tight text-muted-foreground">
             {label}
           </span>
           <span className="block truncate text-sm font-medium leading-tight text-foreground">

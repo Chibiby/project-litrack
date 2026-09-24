@@ -39,7 +39,7 @@ function SettingsNavCard({ active }: { active: TeacherSettingsSection }) {
                     <span className="flex-1 truncate">{row.label}</span>
                     <span
                       aria-hidden
-                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Soon
                     </span>

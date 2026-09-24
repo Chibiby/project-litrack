@@ -121,9 +121,9 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
         <CardContent className="space-y-6">
           <div>
             <p className="text-sm font-medium mb-2">Suggested Reading Interventions</p>
-            <div className="space-y-2">
+            <div className="space-y-2 max-lg:space-y-0.5">
               {interventionOptions.map((opt) => (
-                <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
                   <input
                     type="checkbox"
                     name="suggestedInterventions[]"
@@ -136,7 +136,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
                           : prev.filter((v) => v !== opt.value)
                       );
                     }}
-                    className="mt-0.5 h-4 w-4 accent-primary"
+                    className="mt-0.5 h-4 w-4 accent-primary max-lg:mt-0 max-lg:size-5 max-lg:shrink-0"
                   />
                   <span className="text-sm leading-tight">{opt.label}</span>
                 </label>
@@ -157,9 +157,9 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
           <Separator />
           <div>
             <p className="text-sm font-medium mb-2">Recommendation for Further Assessment</p>
-            <div className="space-y-2">
+            <div className="space-y-2 max-lg:space-y-0.5">
               {furtherOptions.map((opt) => (
-                <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
                   <input
                     type="checkbox"
                     name="furtherAssessment[]"
@@ -172,7 +172,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
                           : prev.filter((v) => v !== opt.value)
                       );
                     }}
-                    className="mt-0.5 h-4 w-4 accent-primary"
+                    className="mt-0.5 h-4 w-4 accent-primary max-lg:mt-0 max-lg:size-5 max-lg:shrink-0"
                   />
                   <span className="text-sm leading-tight">{opt.label}</span>
                 </label>

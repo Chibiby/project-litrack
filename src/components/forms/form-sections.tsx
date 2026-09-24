@@ -295,21 +295,21 @@ function SectionStatus({
 }) {
   if (progress.optional) {
     return (
-      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
         Optional
       </span>
     );
   }
   if (progress.complete) {
     return (
-      <span className="shrink-0 text-[11px] font-medium text-primary">
+      <span className="shrink-0 text-xs font-medium text-primary">
         Complete
         <span className="sr-only"> — {title}</span>
       </span>
     );
   }
   return (
-    <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+    <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
       {progress.missing.length} left
       <span className="sr-only"> in {title}</span>
     </span>

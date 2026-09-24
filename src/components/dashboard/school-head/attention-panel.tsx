@@ -59,7 +59,7 @@ export function SchoolAttentionPanel({ items }: { items: AttentionItem[] }) {
               {item.badge ? (
                 <span
                   className={cn(
-                    "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                    "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
                     BADGE[item.tone]
                   )}
                 >

@@ -54,8 +54,20 @@ try {
     undefined,
     { timeout: 180_000 },
   );
-  const tourSkip = page.getByRole("button", { name: /^explore later$/i });
-  if (await tourSkip.isVisible().catch(() => false)) await tourSkip.click();
+  // A modal marks the rest of the page hidden, so no persona button is found
+  // behind it: the first-visit tour, and the "System updated" notice after a
+  // release. The notice waits out the post-login splash (up to ~10s) first,
+  // so keep checking until the persona button itself is reachable.
+  const target = page.getByRole("button", { name: LABELS[persona] });
+  const openDemoProbe = page.getByRole("button", { name: /open demo session/i });
+  for (let i = 0; i < 24; i++) {
+    for (const name of [/^explore later$/i, /^got it$/i]) {
+      const dismiss = page.getByRole("button", { name });
+      if (await dismiss.isVisible().catch(() => false)) await dismiss.click().catch(() => {});
+    }
+    if (i >= 4 && ((await target.isVisible().catch(() => false)) || (await openDemoProbe.isVisible().catch(() => false)))) break;
+    await page.waitForTimeout(500);
+  }
   const openDemo = page.getByRole("button", { name: /open demo session/i });
   if (await openDemo.isVisible().catch(() => false)) {
     await openDemo.click();

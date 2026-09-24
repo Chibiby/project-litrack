@@ -92,7 +92,7 @@ export function ProfileWizardChrome({
                 >
                   <span
                     className={cn(
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
                       active && "bg-primary text-primary-foreground",
                       done && !active && "bg-primary/20 text-primary",
                       !done && !active && "bg-muted text-muted-foreground"

@@ -325,7 +325,7 @@ function DomainChip({
       variant={active ? "default" : "outline"}
       size="sm"
       onClick={onSelect}
-      className="h-8 rounded-full px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+      className="h-10 rounded-full px-3 text-xs sm:h-10 sm:px-4 sm:text-sm lg:h-9"
     >
       {label}
     </Button>

@@ -26,7 +26,7 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
 
   return (
     <nav aria-label="Settings" className="w-full shrink-0 lg:w-52">
-      <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+      <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
         Settings
       </p>
       <ul className="space-y-1">

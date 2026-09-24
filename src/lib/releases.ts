@@ -135,6 +135,21 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.12.1",
+    date: "2026-09-24",
+    title: "Dashboards and forms are easier to read and tap",
+    announce: true,
+    fixes: [
+      "On laptop screens, the Teacher and School Head dashboards no longer squeeze their cards: titles, buttons and chart labels fit on one line.",
+      "The Learners by Grade Level chart shows on phones again, and its grade labels no longer run into each other.",
+      "Page titles are no longer covered by the banner drawing on phones and tablets.",
+      "On a phone, the End of Terms Reports page shows the full grade name, the term dates and a roomier search box.",
+      "Choices you tap often are bigger on a phone or tablet: For printing or For records, the ARAL Profile answers, the Kindergarten domain filters, the ARAL Profiling tabs and the advisory remove button.",
+      "Small labels across the dashboards, grids and tables are a little larger and easier to read.",
+      "The Reports page no longer runs slightly off the side of a 1024-pixel-wide screen.",
+    ],
+  },
+  {
     version: "2.12.0",
     date: "2026-09-24",
     title: "School Head pages fit phones and tablets",

@@ -273,26 +273,21 @@ function GradeChartCard({
           {schoolYearLabel ? `SY ${schoolYearLabel}` : "No active school year"}
         </span>
       </div>
-      <div className="flex flex-1 flex-col gap-4 px-3 pb-4 pt-3 md:flex-row md:items-center md:px-5">
+      <div className="flex flex-1 flex-col gap-4 px-3 pb-4 pt-3 md:flex-row md:items-center md:px-5 xl:flex-col xl:items-stretch 2xl:flex-row 2xl:items-center">
         {/* min-h keeps the plot readable; flex-1 lets it absorb spare height. */}
-        <div className="h-[200px] min-w-0 flex-1">
+        <div className="h-[200px] min-h-[200px] min-w-0 flex-1">
           {chartData.length === 0 ? (
             <p className="px-3 py-10 text-center text-sm leading-relaxed text-muted-foreground">
               Grade levels are created by your School Head. Once they exist,
               your learners appear here by grade.
             </p>
           ) : (
-            <>
-              <div className="h-full sm:hidden">
-                <GradeLevelBarChart data={chartData} height="100%" shortLabels />
-              </div>
-              <div className="hidden h-full sm:block">
-                <GradeLevelBarChart data={chartData} height="100%" />
-              </div>
-            </>
+            // The chart measures its own width and abbreviates the axis
+            // labels whenever it is too narrow for them, phone through xl.
+            <GradeLevelBarChart data={chartData} height="100%" />
           )}
         </div>
-        <div className="shrink-0 md:w-64">
+        <div className="shrink-0 md:w-64 xl:w-auto 2xl:w-64">
           <div className="flex items-center gap-3 rounded-xl bg-violet-50 p-4 dark:bg-violet-950/40">
             <Users aria-hidden className="size-8 shrink-0 text-violet-600 dark:text-violet-300" />
             <div>

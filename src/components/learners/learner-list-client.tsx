@@ -142,7 +142,7 @@ export type LearnerListClientProps = {
 };
 
 const HEAD_CLASS =
-  "whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+  "whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 /** "Grade 3" → "3", "Kinder" → "K"; the Advisory chip's short grade. */
 function shortGrade(gradeType: string): string {

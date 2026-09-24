@@ -77,7 +77,7 @@ function Donut({
         <span className="text-2xl font-extrabold tabular-nums text-foreground sm:text-3xl">
           {rate}%
         </span>
-        <span className="text-[11px] text-muted-foreground sm:text-xs">{caption}</span>
+        <span className="text-xs text-muted-foreground">{caption}</span>
       </div>
     </div>
   );
@@ -184,8 +184,11 @@ function TipTile({
   className: string;
   iconClassName: string;
 }) {
+  // xl (1280–1535): the panel is only half the rail-shrunk main column, and
+  // there is no room for the donut, the legend and this tile side by side —
+  // it waits for 2xl, where the row has width to spare again.
   return (
-    <div className={cn("hidden w-44 shrink-0 rounded-xl p-4 xl:block", className)}>
+    <div className={cn("hidden w-44 shrink-0 rounded-xl p-4 2xl:block", className)}>
       <div className="flex items-start gap-2.5">
         <Icon aria-hidden className={cn("size-6 shrink-0", iconClassName)} />
         <p className="text-sm font-semibold leading-snug">{title}</p>
@@ -222,7 +225,11 @@ export function AttendanceOverviewPanel({
       iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
       action={{ label: "View weekly attendance", href }}
     >
-      <div className="lg:flex lg:items-center lg:gap-6">
+      {/* lg (1024) has the whole row to itself, so donut/legend/tile sit in
+          one line. xl (1280–1535) narrows the panel back down — stack the
+          donut over the legend and hold the tip tile back until 2xl, where
+          the row is wide again. */}
+      <div className="lg:flex lg:items-center lg:gap-6 xl:flex-col xl:items-stretch xl:gap-0 xl:space-y-4 2xl:flex-row 2xl:items-center 2xl:gap-6 2xl:space-y-0">
         <Donut
           segments={segments}
           total={total}
@@ -271,7 +278,7 @@ export function ReadingOverviewPanel({
       iconTile="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
       action={{ label: "Go to Monthly Reading Level", href }}
     >
-      <div className="lg:flex lg:items-center lg:gap-6">
+      <div className="lg:flex lg:items-center lg:gap-6 xl:flex-col xl:items-stretch xl:gap-0 xl:space-y-4 2xl:flex-row 2xl:items-center 2xl:gap-6 2xl:space-y-0">
         <Donut
           segments={segments}
           total={total}

@@ -269,7 +269,7 @@ export function HeaderSearch({
               return (
                 <div key={`${row.kind}-${row.id}`}>
                   {heading && (
-                    <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {heading}
                     </p>
                   )}

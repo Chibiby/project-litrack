@@ -603,7 +603,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
               <span
                 aria-hidden
                 className={cn(
-                  "inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded border px-1 text-[11px] font-semibold",
+                  "inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded border px-1 text-xs font-semibold",
                   option.tone
                 )}
               >
@@ -798,7 +798,7 @@ function BandSelect({
               <span
                 aria-hidden
                 className={cn(
-                  "flex h-6 min-w-[2rem] shrink-0 items-center justify-center rounded-full border px-1 text-[11px] font-bold tabular-nums",
+                  "flex h-6 min-w-[2rem] shrink-0 items-center justify-center rounded-full border px-1 text-xs font-bold tabular-nums",
                   entry.tone
                 )}
               >

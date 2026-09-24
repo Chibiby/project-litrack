@@ -25,7 +25,7 @@ export function EmploymentTypeChip({
   return (
     <Badge
       variant="outline"
-      className={`px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground ${className ?? ""}`}
+      className={`px-1.5 py-0 text-xs font-medium uppercase tracking-wide text-muted-foreground ${className ?? ""}`}
     >
       {EMPLOYMENT_TYPE_LABELS[employmentType]}
     </Badge>

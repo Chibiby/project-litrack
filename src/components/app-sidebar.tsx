@@ -147,7 +147,7 @@ function NavLink({
             <span className="flex-1 truncate">{item.label}</span>
             <span
               className={cn(
-                "ml-auto shrink-0 text-[10px] font-medium text-muted-foreground",
+                "ml-auto shrink-0 text-xs font-medium text-muted-foreground",
                 inert.pillUpper && "uppercase tracking-wide"
               )}
             >
@@ -226,7 +226,7 @@ function NavLink({
             className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-violet"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet text-[10px] font-medium text-violet-foreground">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 bg-violet text-xs font-medium text-violet-foreground">
             {item.badge}
           </span>
         )
@@ -433,7 +433,7 @@ export function AppSidebar({
             href="/releases"
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-1.5 rounded-md py-1 text-[11px] text-muted-foreground/80 transition-colors hover:text-foreground",
+              "flex items-center gap-1.5 rounded-md py-1 text-xs text-muted-foreground/80 transition-colors hover:text-foreground",
               isCollapsed ? "justify-center" : "px-3"
             )}
             title={`LITRACK v${APP_VERSION} — what's new`}

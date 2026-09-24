@@ -504,7 +504,7 @@ export function ReportsHub({
                 <div className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                   <PencilRuler className="h-3.5 w-3.5" aria-hidden />
                   Create Custom
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
                     Soon
                   </span>
                 </div>
@@ -529,7 +529,7 @@ export function ReportsHub({
         })}
       </div>
 
-      <div className="grid gap-4 max-lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
           {/* Quick Generate */}
           <div className="rounded-xl border border-border bg-card p-4">
@@ -612,7 +612,7 @@ export function ReportsHub({
                         <TableCell>
                           <span
                             className={cn(
-                              "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                              "rounded-full px-2 py-0.5 text-xs font-medium",
                               row.format === "PDF"
                                 ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
                                 : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"

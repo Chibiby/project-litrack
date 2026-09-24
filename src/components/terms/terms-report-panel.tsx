@@ -318,10 +318,14 @@ export function TermsReportPanel({
       {/* Phones and tablets, to the mockup: search and actions. The advisory
           dropdown lives in the page hero's top-right corner instead. */}
       <Surface className="flex flex-col gap-2 rounded-2xl p-2.5 xl:hidden">
-        <div className="flex items-center gap-2">
+        {/* Phones: search gets its own row, or the placeholder clips beside
+            the export/save buttons; sm and up keep the single row. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {searchBox}
-          {exportButton}
-          {saveButton}
+          <div className="flex items-center gap-2 sm:contents">
+            {exportButton}
+            {saveButton}
+          </div>
         </div>
         <div className="hidden grid-cols-2 gap-2 md:grid">{facets("phone")}</div>
         {exportPurposeToggle}

@@ -92,7 +92,7 @@ export function AralProfilePill({ hasProfile }: { hasProfile: boolean }) {
 /** The violet ARAL designation chip that sits beside the learner's name. */
 export function AralChip() {
   return (
-    <span className="inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-soft-foreground">
+    <span className="inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-violet-soft-foreground">
       ARAL
     </span>
   );

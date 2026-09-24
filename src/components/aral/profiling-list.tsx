@@ -29,7 +29,7 @@ export type ProfilingListRow = {
 };
 
 const HEAD_CLASS =
-  "whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+  "whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 const PILL_CLASS =
   "inline-flex items-center whitespace-nowrap rounded-lg bg-muted px-2 py-0.5 text-xs text-muted-foreground";

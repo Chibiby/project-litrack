@@ -133,7 +133,7 @@ export function ExportPurposeToggle({
             key={opt.value}
             title={opt.hint}
             className={cn(
-              "flex items-center gap-1.5 text-xs font-normal",
+              "flex items-center gap-1.5 text-xs font-normal max-lg:min-h-10 max-lg:py-2",
               disabled && "opacity-50"
             )}
           >

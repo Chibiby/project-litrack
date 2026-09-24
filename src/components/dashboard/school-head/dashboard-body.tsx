@@ -227,8 +227,22 @@ export async function loadSchoolHeadDashboard({
             />
           </SchoolHeadStatRow>
 
-          {/* flex-1: the panels absorb any height the rail has over this column. */}
-          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+          {/* flex-1: the panels absorb any height the rail has over this column.
+              Two-up from sm through lg (this column is full width there, no
+              rail yet). One-up at xl: the rail (`xl:grid-cols-[minmax(0,1fr)_20rem]`
+              above) narrows this column to ~640px, and each panel's header
+              (icon + title + the standalone period pill) and donut+legend row
+              need more like 400px to stay on comfortable lines, so two-up
+              there crushes both to ~290px. Two-up again at 2xl once the column
+              is wide enough. The odd third panel spans both columns from sm
+              so it reads as a full-width summary instead of a half-width
+              orphan. `xl:col-span-1` on the third panel matters, not just
+              decoration: at `xl` the grid itself drops to one explicit
+              column, and a `col-span-2` there would ask Grid for a column
+              the template doesn't have — Grid then fabricates an implicit,
+              content-sized second column for every row to satisfy it,
+              which is what was crushing the first two panels' widths. */}
+          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-1 2xl:grid-cols-2">
             <AralCoveragePanel
               aralCount={data.aralCount}
               learnerCount={data.learnerCount}
@@ -240,7 +254,11 @@ export async function loadSchoolHeadDashboard({
               ipPercent={data.ipPercent}
               href={ipLearnersHref(view)}
             />
-            <SchoolAttendancePanel mix={attendanceMix} href={aralHref(view)} />
+            <SchoolAttendancePanel
+              mix={attendanceMix}
+              href={aralHref(view)}
+              className="sm:col-span-2 xl:col-span-1 2xl:col-span-2"
+            />
           </div>
         </div>
 

@@ -432,7 +432,7 @@ export function LearnerProfileModal({
                     >
                       <ArrowLeftRight className="h-4 w-4" aria-hidden />
                       Transfer student
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Soon
                       </span>
                     </Button>

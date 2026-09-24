@@ -298,7 +298,7 @@ export function StatCard({
             <p
               className={cn(
                 "mt-0.5 text-muted-foreground sm:text-sm",
-                denseOnPhone ? "text-[11px] leading-tight" : "text-xs"
+                denseOnPhone ? "text-xs leading-tight" : "text-xs"
               )}
             >
               {hint}
@@ -386,7 +386,10 @@ export function StatCard({
 }
 
 export function StatCardRow({ children }: { children: React.ReactNode }) {
+  // xl (1280–1535) keeps the 20rem rail beside this column, which leaves too
+  // little room for four cards without crushing titles and CTA pills — stay
+  // 2-up through xl and only go 4-up once 2xl gives the row its own width.
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">{children}</div>
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">{children}</div>
   );
 }
