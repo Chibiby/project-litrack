@@ -23,6 +23,11 @@ vi.mock("@/lib/actions/release", () => ({
   acknowledgeRelease: () => mockAcknowledge(),
 }));
 
+const mockRefresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mockRefresh }),
+}));
+
 vi.mock("@/lib/post-login-flag", () => ({
   isPostLoginLoadingCover: () => covered,
 }));
@@ -223,6 +228,22 @@ describe("ReleaseNotesModal — acknowledging", () => {
 
     await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText(HEADING)).toBeNull());
+  });
+
+  it("stays closed on a page that still carries the old stamp after Got it", async () => {
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await screen.findByText(HEADING);
+    fireEvent.click(screen.getByRole("button", { name: /got it/i }));
+    await waitFor(() => expect(screen.queryByText(HEADING)).toBeNull());
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+
+    // A prefetched page from before the save renders the layout with the old
+    // (null) stamp again. It must not reopen the dialog.
+    cleanup();
+    vi.useFakeTimers();
+    render(<ReleaseNotesModal lastSeenVersion={null} role="TEACHER" />);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(screen.queryByText(HEADING)).toBeNull();
   });
 
   it("acknowledges on Escape too, so closing is never a way to be shown it again", async () => {

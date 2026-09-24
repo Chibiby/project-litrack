@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,6 +46,30 @@ function isSnoozed(version: string): boolean {
     return window.sessionStorage.getItem(snoozeKey(version)) === "1";
   } catch {
     return false;
+  }
+}
+
+/**
+ * Set once the stamp is saved, for the rest of this tab's session. The router
+ * keeps prefetched pages (`staleTimes`) whose layout still carries the old,
+ * unacknowledged stamp, so without this a navigation right after "Got it" can
+ * reopen the dialog until those cached pages expire.
+ */
+const ackKey = (version: string) => `litrack:release-acked:${version}`;
+
+function isAcknowledgedHere(): boolean {
+  try {
+    return window.sessionStorage.getItem(ackKey(APP_VERSION)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markAcknowledgedHere(): void {
+  try {
+    window.sessionStorage.setItem(ackKey(APP_VERSION), "1");
+  } catch {
+    // Blocked storage: the router refresh after saving still clears stale pages.
   }
 }
 
@@ -103,6 +128,7 @@ export function ReleaseNotesModal({
   // A string, so a re-render that rebuilds the release object does not reopen it.
   const landmarkVersion = landmark?.version ?? null;
 
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +141,7 @@ export function ReleaseNotesModal({
     // eslint-disable-next-line react-hooks/purity -- polls an external DOM/global loading flag with a real wall-clock timeout; the deadline must be "now" at the moment this effect starts polling, not a value frozen at an earlier render
     const deadline = Date.now() + COVER_WAIT_CAP_MS;
 
+    if (isAcknowledgedHere()) return;
     if (landmarkVersion && isSnoozed(landmarkVersion)) return;
 
     const whenUncovered = () => {
@@ -147,7 +174,10 @@ export function ReleaseNotesModal({
       setError(res.error);
       return;
     }
+    markAcknowledgedHere();
     setOpen(false);
+    // Drop cached pages that still carry the old stamp.
+    router.refresh();
   };
 
   if (landmark?.welcome) {
