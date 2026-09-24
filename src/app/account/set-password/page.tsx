@@ -35,7 +35,7 @@ export default async function SetPasswordPage() {
             skip this and do it later from Settings → Security.
           </p>
         </div>
-        <PasswordForm mode="set" allowSkip={user.role === "SCHOOL_HEAD"} dryRun={dryRun} />
+        <PasswordForm mode="set" allowSkip={user.role === "SCHOOL_HEAD" || user.role === "DISTRICT_ADMIN"} dryRun={dryRun} />
       </div>
     </main>
   );

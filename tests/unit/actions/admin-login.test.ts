@@ -402,7 +402,7 @@ describe("loginAdmin — district admins", () => {
 });
 
 describe("skipPasswordChange", () => {
-  it("refuses a district admin with AUTH_FORBIDDEN and keeps mustChangePassword (I16)", async () => {
+  it("lets a district admin skip for now and sends them to /district", async () => {
     requireUser.mockResolvedValue({
       id: "da-1",
       role: "DISTRICT_ADMIN",
@@ -410,10 +410,12 @@ describe("skipPasswordChange", () => {
       mustChangePassword: true,
     });
 
-    const result = await skipPasswordChange();
+    await expect(skipPasswordChange()).rejects.toThrow("NEXT_REDIRECT:/district");
 
-    expect(result).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
-    expect(userUpdate).not.toHaveBeenCalled();
-    expect(redirect).not.toHaveBeenCalled();
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "da-1" }, data: { mustChangePassword: false } })
+    );
+    expect(redirect).toHaveBeenCalledWith("/district");
+
   });
 });

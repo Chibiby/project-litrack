@@ -747,13 +747,6 @@ export const skipPasswordChange = action(
       detail: "Teachers must choose a new password after an administrator reset it",
     });
   }
-  // A district admin's first password travelled in a credentials sheet, so it
-  // must be retired at the first sign-in, not kept.
-  if (user.role === "DISTRICT_ADMIN") {
-    throw new AppError("AUTH_FORBIDDEN", {
-      detail: "District admins must replace the one-time password they were issued",
-    });
-  }
 
   if (await readTestLabSession(user)) {
     return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
