@@ -14,6 +14,7 @@ export const SUMMARY_FACET_IDS = [
   "reading-levels",
   "compliance",
   "profiling",
+  "aral",
 ] as const;
 
 export type SummaryFacetId = (typeof SUMMARY_FACET_IDS)[number];

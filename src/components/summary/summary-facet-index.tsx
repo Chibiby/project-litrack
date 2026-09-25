@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardList,
+  GraduationCap,
   ShieldAlert,
   UserRound,
   Users,
@@ -22,6 +23,7 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
   "reading-levels": BookOpen,
   compliance: ShieldAlert,
   profiling: UserRound,
+  aral: GraduationCap,
 };
 
 const PRIMARY_TILE = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200";
@@ -37,6 +39,7 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
   "reading-levels": ARAL_TILE,
   compliance: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
   profiling: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+  aral: ARAL_TILE,
 };
 
 /** One card per summary facet, linking to `${basePath}/<facet>`. */

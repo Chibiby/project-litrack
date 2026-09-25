@@ -85,7 +85,7 @@ describe("role-exhaustiveness", () => {
   it("getNavGroups covers every DISTRICT_ADMIN summary facet", () => {
     const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
     const summaryItems = items.filter((i) => i.href.startsWith("/district/summary/"));
-    expect(summaryItems.length).toBe(7);
+    expect(summaryItems.length).toBe(8);
   });
 
   it("USER_ROLE_LABELS has a distinct, non-empty label for every role", () => {

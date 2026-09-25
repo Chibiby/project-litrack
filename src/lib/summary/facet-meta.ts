@@ -56,6 +56,12 @@ export const SUMMARY_FACET_META: Record<SummaryFacetId, SummaryFacetMeta> = {
     description: "Designation, position, education, specialization, service and trainings.",
     paramKinds: [],
   },
+  aral: {
+    id: "aral",
+    label: "ARAL learners and tutors",
+    description: "ARAL learners per grade level, and teachers serving as ARAL tutors, DepEd vs Non-DepEd.",
+    paramKinds: [],
+  },
 };
 
 /** Every facet in nav order. */

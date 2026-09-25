@@ -28,6 +28,7 @@ import { queryAttendanceRows, shapeAttendance } from "@/lib/summary/queries/atte
 import { queryReadingLevelRows, shapeReadingLevels } from "@/lib/summary/queries/reading-levels";
 import { queryComplianceRows, shapeCompliance } from "@/lib/summary/queries/compliance";
 import { queryProfilingRows, shapeProfiling } from "@/lib/summary/queries/profiling";
+import { queryAralRows, shapeAral } from "@/lib/summary/queries/aral";
 import {
   SUMMARY_FACET_IDS,
   type FacetResult,
@@ -207,6 +208,16 @@ export const SUMMARY_FACETS: Record<SummaryFacetId, SummaryFacet> = {
     async run({ schools, params, computedAt }) {
       const raw = await queryProfilingRows(ids(schools));
       return shapeProfiling({ raw, schools, level: params.level, computedAt });
+    },
+  }),
+
+  aral: defineFacet({
+    id: "aral",
+    params: levelOnlyParamsSchema,
+    resolve: (p) => ({ level: p.level }),
+    async run({ schools, params, computedAt }) {
+      const raw = await queryAralRows(ids(schools));
+      return shapeAral({ raw, schools, level: params.level, computedAt });
     },
   }),
 };

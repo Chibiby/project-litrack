@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.15.0",
+    date: "2026-09-26",
+    title: "ARAL learners and tutors in the summaries",
+    announce: false,
+    fixes: [
+      "District and Division summaries now show how many ARAL learners each grade level has, and how many DepEd teachers serve as ARAL tutors.",
+    ],
+  },
+  {
     version: "2.14.1",
     date: "2026-09-25",
     title: "Fewer background sign-in checks",
