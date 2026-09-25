@@ -1,9 +1,12 @@
 import { Suspense } from "react";
+import { LifeBuoy } from "lucide-react";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import type { AdminScope } from "@/lib/auth/admin-scope";
 import { listInboxTickets } from "@/lib/support/queries";
 import { AppShell } from "@/components/app-shell";
+import { Surface } from "@/components/ui/surface";
 import { TableSectionSkeleton } from "@/components/loading";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SupportInbox } from "@/components/support/support-inbox";
 import { NoDistrictsState } from "@/components/district/no-districts-state";
 import { describeScope, hasNoDistricts } from "@/components/district/scope-label";
@@ -23,11 +26,21 @@ export default async function DistrictSupportPage() {
       subtitle={`Help requests · ${describeScope(scope)}`}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SchoolHeadHero
+          eyebrow="Help desk"
+          eyebrowIcon={LifeBuoy}
+          title="Support"
+          subtitle="Help requests from teachers and School Heads in your schools."
+          meta={describeScope(scope)}
+        />
+      </div>
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
-        <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
+        <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="rounded-2xl" />}>
           <DistrictTicketQueue scope={scope} />
         </Suspense>
       )}
@@ -38,8 +51,8 @@ export default async function DistrictSupportPage() {
 async function DistrictTicketQueue({ scope }: { scope: AdminScope }) {
   const tickets = await listInboxTickets(scope);
   return (
-    <div className="min-w-0 rounded-xl border bg-card p-3 shadow-sm sm:p-4">
+    <Surface as="section" aria-label="Support requests" className="min-w-0 rounded-2xl p-3 sm:p-4 lg:p-5">
       <SupportInbox tickets={tickets} districtScoped />
-    </div>
+    </Surface>
   );
 }

@@ -32,8 +32,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *  - getAccountProfile refuses a non-Super-Admin caller.
  *  - getAccountProfile's advisory/aral are null for a non-teacher, and the
  *    query count for that shape is bounded (3 calls: user + 2 in Promise.all).
- *  - impersonateUser refuses a DISTRICT_ADMIN target the same way as a
- *    SUPER_ADMIN target — the new allow-list (I14, T13, district-admin spec).
+ *  - impersonateUser allows a DISTRICT_ADMIN target for a Super Admin and lands
+ *    on /district; a SUPER_ADMIN target is still refused, and the caller must
+ *    be a Super Admin (I14, T13, district-admin spec).
  *  - resetDistrictAdminPassword: Super-Admin-only, sets mustChangePassword,
  *    app_metadata.role DISTRICT_ADMIN, and never leaks the credential.
  *
@@ -297,6 +298,24 @@ describe("impersonateUser", () => {
     expect(setImpersonationCookie).not.toHaveBeenCalled();
   });
 
+  it("gates the caller on SUPER_ADMIN alone — a district admin caller is refused (T13)", async () => {
+    // Stand-in for the real `requireUser`: only a SUPER_ADMIN passes a
+    // "SUPER_ADMIN" gate; a signed-in DISTRICT_ADMIN is sent home. If the
+    // action's gate were widened (or dropped), this caller would get through.
+    requireUser.mockImplementationOnce(async (...args: unknown[]) => {
+      const roles = args[0];
+      const allowed = roles === undefined ? null : Array.isArray(roles) ? roles : [roles];
+      if (allowed && !allowed.includes("DISTRICT_ADMIN")) throw new Error("NEXT_REDIRECT:/district");
+      return { id: "da-caller", authId: "da-caller-auth", role: "DISTRICT_ADMIN" };
+    });
+    targetRow = teacher({ role: "DISTRICT_ADMIN", schoolId: null, school: null });
+    await expect(impersonateUser(form())).rejects.toThrow("NEXT_REDIRECT:/district");
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+    expect(serverSetSession).not.toHaveBeenCalled();
+  });
+
   it("refuses a SUPER_ADMIN target — now via the impersonatable-role allow-list (I14)", async () => {
     // Behaviour change from the pre-district-admin action: the allow-list
     // (`role: { in: IMPERSONATABLE_ROLES }`) is now IN the target lookup's
@@ -314,17 +333,53 @@ describe("impersonateUser", () => {
     expect(serverSetSession).not.toHaveBeenCalled();
   });
 
-  it("refuses a DISTRICT_ADMIN target the same way — I14, T13", async () => {
-    // Before this allow-list existed, a DISTRICT_ADMIN target passed the old
-    // `role === "SUPER_ADMIN"` refusal outright and the admin would have been
-    // redirected to `/school-head` (spec 5, the accounts.ts row) — this is
-    // the case that regression guards against. Removing the allow-list from
-    // `impersonateUser` reproduces exactly that: the fake's `matchesRoleWhere`
-    // would then let this row through and `redirect("/school-head")` would
-    // throw, failing this test rather than passing it.
-    targetRow = teacher({ role: "DISTRICT_ADMIN", schoolId: null, school: null });
+  it("signs a Super Admin in as a DISTRICT_ADMIN and lands on /district — I14, T13", async () => {
+    // DISTRICT_ADMIN is on the allow-list, so the lookup finds the row (the
+    // fake honours `role: { in: [...] }`) and the session lands on the
+    // district portal, never on `/school-head`. Dropping DISTRICT_ADMIN from
+    // the allow-list turns this into NOT_FOUND; a hard-coded head/teacher
+    // redirect turns the destination wrong.
+    targetRow = teacher({ role: "DISTRICT_ADMIN", schoolId: null, school: null, approvalStatus: null });
+    const res = await run(impersonateUser(form()));
+    expect(res).toEqual({ redirectedTo: "/district" });
+    const where = (prismaMock.user.findFirst.mock.calls[0][0] as { where: { role: { in: string[] } } }).where;
+    expect(where.role.in).toContain("DISTRICT_ADMIN");
+    expect(where.role.in).not.toContain("SUPER_ADMIN");
+    expect(setImpersonationCookie).toHaveBeenCalledWith(
+      expect.objectContaining({ adminUserId: ADMIN_ID, targetUserId: TARGET_ID, sessionId: SESSION_ID })
+    );
+    expect(serverSetSession).toHaveBeenCalledTimes(1);
+    const entry = writeAudit.mock.calls[0][0] as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      userId: ADMIN_ID,
+      schoolId: null,
+      action: AUDIT_ACTIONS.IMPERSONATION_START,
+      resourceId: TARGET_ID,
+      metadata: { schoolId: null, schoolName: null, targetRole: "DISTRICT_ADMIN" },
+    });
+  });
+
+  it("signs returnTo=test-lab into the ticket only when asked, and refuses any other value", async () => {
+    await run(impersonateUser(form()));
+    expect(setImpersonationCookie.mock.calls[0][0]).not.toHaveProperty("returnTo");
+
+    vi.clearAllMocks();
+    const fd = form();
+    fd.set("returnTo", "test-lab");
+    await run(impersonateUser(fd));
+    expect(setImpersonationCookie).toHaveBeenCalledWith(expect.objectContaining({ returnTo: "test-lab" }));
+
+    vi.clearAllMocks();
+    const bad = form();
+    bad.set("returnTo", "https://evil.example");
+    expect(await impersonateUser(bad)).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(setImpersonationCookie).not.toHaveBeenCalled();
+  });
+
+  it("still refuses an inactive DISTRICT_ADMIN target before the swap", async () => {
+    targetRow = teacher({ role: "DISTRICT_ADMIN", schoolId: null, school: null, approvalStatus: null, isActive: false });
     const res = await impersonateUser(form());
-    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(res).toMatchObject({ ok: false, code: "ADMIN_IMPERSONATE_INACTIVE" });
     expect(setImpersonationCookie).not.toHaveBeenCalled();
     expect(serverSetSession).not.toHaveBeenCalled();
   });
@@ -573,6 +628,19 @@ describe("endImpersonation", () => {
     expect(res).toEqual({ redirectedTo: "/admin/accounts" });
     expect(adminSignOut).toHaveBeenCalledWith("the-bound-access-token", "local");
     expect(clearImpersonationCookie).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to Test Lab when the signed ticket says Test Lab started it (a real district admin)", async () => {
+    readImpersonationTicket.mockResolvedValue(ticket({ returnTo: "test-lab" }));
+    checkCurrentSession.mockResolvedValue({ status: "live", sessionId: SESSION_ID, accessToken: "tok" });
+    prismaMock.user.findFirst
+      .mockResolvedValueOnce({ id: ADMIN_ID, email: "admin@litrack.local" })
+      // The district admin: no school, so no demo flag decides the return.
+      .mockResolvedValueOnce({ school: null });
+
+    const res = await run(endImpersonation());
+
+    expect(res).toEqual({ redirectedTo: "/admin/test-lab" });
   });
 
   it.each([

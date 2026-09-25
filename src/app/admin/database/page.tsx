@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
+import { AdminPage } from "@/components/admin/admin-page";
 import { DatabaseConsole, type ConsoleData } from "@/components/admin/database-console";
 import {
   BACKUP_STORE_SETUP_MESSAGE,
@@ -71,13 +71,13 @@ export default async function DatabasePage() {
   };
 
   return (
-    <AppShell
-      title="Database Console"
-      subtitle="Backups, restore, and system-wide resets"
+    <AdminPage
+      title="Database console"
+      description="Backups, restore, and system-wide resets."
       role={user.role}
       userName={user.fullName || user.email}
     >
-      <div className="mb-4 rounded-xl border border-border/80 bg-muted/40 px-4 py-3 text-sm">
+      <div className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm">
         <p className="font-medium">What these backups are</p>
         <p className="mt-1 text-muted-foreground">
           Each backup is a complete copy of the data in every school, taken through the app and
@@ -89,13 +89,13 @@ export default async function DatabasePage() {
           responsibility to store and dispose of.
         </p>
         <p className="mt-2 text-muted-foreground">
-          Not included, on purpose: <code>{EXCLUDED_TABLES.join(", ")}</code> — an out-of-band
+          Not included, on purpose: <code className="break-all">{EXCLUDED_TABLES.join(", ")}</code> — an out-of-band
           Google-Sheets sync subsystem with no model in this app, one of whose columns holds a
           plaintext API key. Backups skip it and resets leave it alone.
         </p>
       </div>
 
       <DatabaseConsole data={data} />
-    </AppShell>
+    </AdminPage>
   );
 }

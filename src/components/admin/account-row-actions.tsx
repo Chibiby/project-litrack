@@ -92,7 +92,7 @@ export function PasswordCell({ row }: { row: AccountRow }) {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 gap-1.5 px-2 text-xs"
+          className="h-10 gap-1.5 px-2 text-xs lg:h-7"
           disabled={isNonSignInHead}
           aria-describedby={isNonSignInHead ? reasonId : undefined}
           onClick={() => setRevealed(password.value)}
@@ -111,7 +111,7 @@ export function PasswordCell({ row }: { row: AccountRow }) {
         type="button"
         variant="ghost"
         size="sm"
-        className="h-7 gap-1.5 px-2 text-xs"
+        className="h-10 gap-1.5 px-2 text-xs lg:h-7"
         loading={pending}
         loadingText="Revealing…"
         disabled={isNonSignInHead}
@@ -140,8 +140,10 @@ export function PasswordCell({ row }: { row: AccountRow }) {
 /**
  * Row controls, by role (spec section 3.1):
  *  - View profile: every row.
- *  - Sign in as: teachers and School Heads only — the server refuses admin
- *    targets too, this is only the courtesy of not offering the button.
+ *  - Sign in as: teachers, School Heads and district admins (a district admin
+ *    lands on `/district`, scoped to their own districts). Never Super Admins
+ *    — the server refuses them too, this is only the courtesy of not offering
+ *    the button.
  *  - Reset password: School Heads reset to the School ID; teachers and
  *    district admins get a fresh random one-time credential. Shown once.
  */
@@ -153,7 +155,7 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
   const reasonId = useId();
 
   const isDistrictAdmin = row.role === "DISTRICT_ADMIN";
-  const canImpersonate = row.role === "SCHOOL_HEAD" || row.role === "TEACHER";
+  const canImpersonate = row.role === "SCHOOL_HEAD" || row.role === "TEACHER" || isDistrictAdmin;
   const canResetPassword = row.role === "SCHOOL_HEAD" || row.role === "TEACHER" || isDistrictAdmin;
   const isNonSignInHead = row.role === "SCHOOL_HEAD" && !row.signInHead;
 
@@ -187,8 +189,8 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
     const fd = new FormData();
     fd.set("userId", row.id);
     const res = await impersonateUser(fd);
-    // Success redirects to /teacher or /school-head, so only a failure
-    // returns here.
+    // Success redirects to /teacher, /school-head or /district, so only a
+    // failure returns here.
     if (res && !res.ok) {
       toast.error(res.error);
       throw new Error(res.error);

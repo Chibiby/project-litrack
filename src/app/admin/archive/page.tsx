@@ -1,5 +1,7 @@
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
+import { Archive as ArchiveIcon } from "lucide-react";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { ArchiveView } from "@/components/admin/archive-view";
 import { getArchive, type Archive } from "@/lib/admin/archive";
 
@@ -72,11 +74,18 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
   });
 
   return (
-    <AppShell
-      title="Archived Records"
-      subtitle="Soft-deleted teachers and learners across all schools"
+    <AdminPage
+      title="Archived records"
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Records"
+          eyebrowIcon={ArchiveIcon}
+          title="Archived records"
+          subtitle="Removed teachers and learners from every school. Restore a mistake, or delete it for good."
+        />
+      }
     >
       <ArchiveView
         data={data}
@@ -84,6 +93,6 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
         filters={{ school: school ?? "", q: q ?? "" }}
         params={params}
       />
-    </AppShell>
+    </AdminPage>
   );
 }

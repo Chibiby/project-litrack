@@ -217,7 +217,7 @@ function TicketCard({
 
         {ticket.pageUrl && (
           <p className="text-xs text-muted-foreground">
-            Sent from <code className="font-mono">{ticket.pageUrl}</code>
+            Sent from <code className="break-all font-mono">{ticket.pageUrl}</code>
           </p>
         )}
 
@@ -244,6 +244,7 @@ function TicketCard({
                 type="button"
                 size="sm"
                 variant="outline"
+                className="sm:h-10 lg:h-9"
                 loading={revoking}
                 loadingText="Ending"
                 onClick={() => revoke(ticket.activeGrant!.id)}
@@ -259,7 +260,7 @@ function TicketCard({
               <Button
                 type="button"
                 size="sm"
-                className="bg-violet text-violet-foreground hover:bg-violet/90"
+                className="bg-violet text-violet-foreground hover:bg-violet/90 sm:h-10 lg:h-9"
                 onClick={() => onAnswer("resolve")}
               >
                 <Check className="size-4" aria-hidden />
@@ -269,6 +270,7 @@ function TicketCard({
                 type="button"
                 size="sm"
                 variant="outline"
+                className="sm:h-10 lg:h-9"
                 onClick={() => onAnswer("decline")}
               >
                 <X className="size-4" aria-hidden />
@@ -384,7 +386,7 @@ function AnswerDialog({
                     max={MAX_UNLOCK_DAYS}
                     value={days}
                     onChange={(event) => setDays(event.target.value)}
-                    className="h-9 w-24 text-sm"
+                    className="h-10 w-24 text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
                     Access ends by itself after this. Up to {MAX_UNLOCK_DAYS} days.

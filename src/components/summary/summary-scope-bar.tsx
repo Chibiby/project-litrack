@@ -35,6 +35,13 @@ export type SummaryScopeBarProps = {
   schools: readonly ScopeBarSchool[];
   /** "All my districts" for a district admin, "All districts" for the division. */
   allDistrictsLabel: string;
+  /**
+   * SUPER_ADMIN only: the division has too many schools (300+) to list at
+   * "By school" without a district first — loading them all times out. When
+   * true and no district is chosen yet, the "By school" toggle is disabled
+   * rather than navigating straight to the scope that times out.
+   */
+  requireDistrictForSchool?: boolean;
 };
 
 const LEVELS: { id: SummaryLevel; label: string }[] = [
@@ -49,7 +56,8 @@ const ALL = "__all__";
 /**
  * Which schools the figures cover and how the rows are grouped. Every choice
  * is a URL change, so a view can be bookmarked or shared, and the page stays
- * a server render.
+ * a server render. Bare controls: the facet view's toolbar card owns the
+ * chrome, so the period controls can share the same card.
  */
 export function SummaryScopeBar({
   basePath,
@@ -60,6 +68,7 @@ export function SummaryScopeBar({
   districts,
   schools,
   allDistrictsLabel,
+  requireDistrictForSchool = false,
 }: SummaryScopeBarProps) {
   const navigate = useListNavigate();
   const pending = useListPending();
@@ -80,7 +89,7 @@ export function SummaryScopeBar({
 
   return (
     <div
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-border/80 bg-card p-3 shadow-card sm:p-4 lg:flex-row lg:items-end"
+      className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end"
       aria-busy={pending || undefined}
     >
       <div className="min-w-0 lg:w-auto">
@@ -94,20 +103,24 @@ export function SummaryScopeBar({
         >
           {LEVELS.map((item) => {
             const active = item.id === level;
+            const disabled = item.id === "school" && requireDistrictForSchool && !district;
             return (
               <Button
                 key={item.id}
                 type="button"
                 variant="ghost"
                 aria-pressed={active}
+                disabled={disabled}
+                title={disabled ? "Pick a district first to see its schools" : undefined}
                 onClick={() => {
-                  if (!active) go({ level: item.id === "overall" ? null : item.id });
+                  if (!active && !disabled) go({ level: item.id === "overall" ? null : item.id });
                 }}
                 className={cn(
                   "h-10 px-2 text-sm sm:px-3 lg:h-9",
                   active
                     ? "bg-card text-foreground shadow-sm hover:bg-card"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
+                  disabled && "opacity-50"
                 )}
               >
                 {item.label}

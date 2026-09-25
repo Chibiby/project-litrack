@@ -135,6 +135,36 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.14.0",
+    date: "2026-09-25",
+    title: "A fresh look for the district and division pages",
+    announce: true,
+    fixes: [
+      {
+        text: "Your overview now greets you like the School Head dashboard, with headline figures, what needs your attention, and a card for each of your districts.",
+        roles: ["DISTRICT_ADMIN"],
+      },
+      {
+        text: "Every Division Office page has the same look as the School Head pages, and each one fits a phone or tablet screen.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Test Lab can open a district admin's portal, and User Accounts can sign in as a district admin, to see exactly what they see.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "When you sign in as someone who still has to change their password, you go straight to their pages and their password prompt is left for them.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "To see figures school by school for the whole division, pick a district first, so the page loads quickly.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "The welcome notice no longer comes back after you close it.",
+      "Buttons, filters and small labels in chat, support and settings are easier to tap and read on a phone.",
+    ],
+  },
+  {
     version: "2.13.0",
     date: "2026-09-25",
     title: "District admins and the Division Summary",

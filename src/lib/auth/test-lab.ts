@@ -3,7 +3,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
+import { readBoundImpersonationSession, type ImpersonationReturnTo } from "@/lib/auth/impersonation";
 
 /**
  * Page Test Lab guards (docs/test-lab-spec.md).
@@ -48,11 +48,15 @@ export function isTestLabSession(input: {
 }
 
 /**
- * Where "Return to admin" lands: Test Lab for a demo session, the accounts
- * console otherwise (unchanged behaviour for real accounts).
+ * Where "Return to admin" lands: Test Lab for a demo session or for a session
+ * Test Lab started on a real account (the signed ticket's `returnTo`, used for
+ * "Open as District Admin"), the accounts console otherwise.
  */
-export function impersonationReturnPath(input: { targetSchoolIsDemo: boolean }): string {
-  return input.targetSchoolIsDemo ? "/admin/test-lab" : "/admin/accounts";
+export function impersonationReturnPath(input: {
+  targetSchoolIsDemo: boolean;
+  returnTo?: ImpersonationReturnTo;
+}): string {
+  return input.targetSchoolIsDemo || input.returnTo === "test-lab" ? "/admin/test-lab" : "/admin/accounts";
 }
 
 const readTestLabSessionCached = cache(

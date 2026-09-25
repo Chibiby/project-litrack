@@ -4,6 +4,7 @@ import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { AppShell } from "@/components/app-shell";
 import { SummaryFacetView } from "@/components/summary/summary-facet-view";
+import { SummaryPageHero } from "@/components/summary/summary-page-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,11 @@ export default async function AdminSummaryFacetPage({
       subtitle={meta.description}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SummaryPageHero facetId={facet} portal="division" meta="Every school in the division" />
+      </div>
       <SummaryFacetView
         facetId={facet}
         adminScope={scope}

@@ -288,7 +288,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
           </RadioGroup>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="unlock-school">School</Label>
             <Select value={schoolId} onValueChange={changeSchool}>
@@ -324,7 +324,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
           ) : null}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="unlock-scope">What to reopen</Label>
             <Select value={scope} onValueChange={(v) => changeScope(v as UnlockScope)}>
@@ -465,7 +465,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
                         confirmLabel="Confirm revoke"
                         variant="destructive"
                         trigger={
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" className="sm:h-10 lg:h-9">
                             Revoke
                           </Button>
                         }

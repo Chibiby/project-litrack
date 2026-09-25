@@ -249,12 +249,13 @@ export function TermSubjectDefaultsManager({
                 placeholder="e.g. Filipino"
                 maxLength={60}
                 disabled={pending || atCap}
-                className="h-9"
+                className="sm:h-10 lg:h-9"
               />
             </div>
             <Button
               type="submit"
               size="sm"
+              className="sm:h-10 lg:h-9"
               disabled={pending || atCap}
               loading={pending}
               loadingText="Saving…"
@@ -314,6 +315,7 @@ export function TermSubjectDefaultsManager({
                     <Button
                       type="button"
                       size="sm"
+                      className="sm:h-10 lg:h-9"
                       variant="outline"
                       disabled={pending}
                       onClick={() => void restore(subject.id, subject.name).catch(swallow)}
@@ -358,7 +360,7 @@ function TermSubjectDefaultRow({
           type="button"
           size="icon"
           variant="outline"
-          className="h-8 w-8"
+          className="size-11 sm:size-10 lg:size-8"
           disabled={pending || isFirst}
           onClick={onMoveUp}
           aria-label={`Move ${subject.name} up`}
@@ -369,7 +371,7 @@ function TermSubjectDefaultRow({
           type="button"
           size="icon"
           variant="outline"
-          className="h-8 w-8"
+          className="size-11 sm:size-10 lg:size-8"
           disabled={pending || isLast}
           onClick={onMoveDown}
           aria-label={`Move ${subject.name} down`}
@@ -392,9 +394,9 @@ function TermSubjectDefaultRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="h-8 min-w-[10rem] flex-1"
+          className="h-11 min-w-[10rem] flex-1 sm:h-10 lg:h-8"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        <Button type="submit" size="sm" className="sm:h-10 lg:h-9" variant="outline" disabled={pending}>
           Save
         </Button>
       </form>
@@ -409,8 +411,9 @@ function TermSubjectDefaultRow({
           <Button
             type="button"
             size="sm"
+            
             variant="ghost"
-            className="text-destructive"
+            className="text-destructive sm:h-10 lg:h-9"
             disabled={pending}
           >
             Archive

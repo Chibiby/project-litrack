@@ -10,6 +10,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const schoolFindMany = vi.fn();
 const queryRaw = vi.fn();
+const executeRaw = vi.fn();
+// `queryLearnerRows` wraps its query in `prisma.$transaction` to scope a
+// `SET LOCAL work_mem` bump to just that statement; the mock's `tx` exposes
+// the same `$queryRaw`/`$executeRaw` stubs so callers don't need to branch.
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     school: {
@@ -20,6 +24,11 @@ vi.mock("@/lib/prisma", () => ({
     get $queryRaw() {
       return queryRaw;
     },
+    get $executeRaw() {
+      return executeRaw;
+    },
+    $transaction: (fn: (tx: { $queryRaw: typeof queryRaw; $executeRaw: typeof executeRaw }) => unknown) =>
+      fn({ $queryRaw: queryRaw, $executeRaw: executeRaw }),
   },
 }));
 

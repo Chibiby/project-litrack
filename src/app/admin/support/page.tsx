@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
+import { LifeBuoy } from "lucide-react";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { TableSectionSkeleton } from "@/components/loading";
 import { listInboxTickets } from "@/lib/support/queries";
 import { listAdminChatSchools } from "@/lib/chat/queries";
@@ -29,11 +31,18 @@ export default async function AdminSupportPage({
   const { tab, channel } = await searchParams;
 
   return (
-    <AppShell
-      title="Admin Support"
-      subtitle="Support schools through direct conversations and submitted tickets."
+    <AdminPage
+      title="Support"
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Help desk"
+          eyebrowIcon={LifeBuoy}
+          title="Support"
+          subtitle="Chat with schools, answer their tickets, and send private emails."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
         <SupportQueue
@@ -42,7 +51,7 @@ export default async function AdminSupportPage({
           initialChannelId={channel}
         />
       </Suspense>
-    </AppShell>
+    </AdminPage>
   );
 }
 

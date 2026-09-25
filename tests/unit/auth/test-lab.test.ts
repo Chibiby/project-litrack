@@ -149,6 +149,12 @@ describe("impersonationReturnPath", () => {
     expect(impersonationReturnPath({ targetSchoolIsDemo: true })).toBe("/admin/test-lab");
     expect(impersonationReturnPath({ targetSchoolIsDemo: false })).toBe("/admin/accounts");
   });
+
+  it("returns a real-account session Test Lab started (signed returnTo) to Test Lab", () => {
+    expect(impersonationReturnPath({ targetSchoolIsDemo: false, returnTo: "test-lab" })).toBe(
+      "/admin/test-lab"
+    );
+  });
 });
 
 describe("Test Lab personas", () => {

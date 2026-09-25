@@ -31,7 +31,10 @@ export function PageTip({
             type="button"
             variant="outline"
             size="icon"
-            className={cn("border-amber-300 text-amber-700 hover:bg-amber-50", className)}
+            className={cn(
+              "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40",
+              className
+            )}
             aria-label={`Show tip: ${title}`}
             title={title}
           >

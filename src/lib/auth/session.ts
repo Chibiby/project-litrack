@@ -8,7 +8,7 @@ import { primeReadMode } from "@/lib/db/read-mode";
 import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
 import { noteScopeUser } from "@/lib/errors/context";
-import { clearImpersonationCookie } from "@/lib/auth/impersonation";
+import { clearImpersonationCookie, isVerifiedImpersonationOf } from "@/lib/auth/impersonation";
 import type { User, UserRole } from "@prisma/client";
 
 export {
@@ -275,12 +275,33 @@ export async function peekCurrentUser(): Promise<User | null> {
 }
 
 /**
+ * The forced first-sign-in password change belongs to the real person. A Super
+ * Admin signed in as them ("Sign in as" / Test Lab) goes straight to the role
+ * home instead, and the flag is left for the person's own next sign-in.
+ *
+ * Proven, never assumed: `isVerifiedImpersonationOf` needs the HMAC-signed
+ * ticket, bound to this exact live Supabase session, naming this user. No
+ * ticket costs nothing (no auth round trip); a forged, mismatched or
+ * unverifiable one, or any error, keeps the redirect.
+ */
+async function isVerifiedImpersonationOfUser(userId: string): Promise<boolean> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    return await isVerifiedImpersonationOf(supabase.auth, userId);
+  } catch (err) {
+    console.error("[session] impersonation check for mustChangePassword failed:", err);
+    return false;
+  }
+}
+
+/**
  * Requires an authenticated user. Optionally enforces role(s).
  * Redirects to the appropriate login page if not authenticated or wrong role.
  * Super Admin can access any role-restricted page (impersonation mode).
  *
  * When the user must change their password, redirects to `/account/set-password`
- * unless `options.allowMustChangePassword` is true.
+ * unless `options.allowMustChangePassword` is true, or the request is a verified
+ * Super Admin impersonation of this user (see `isVerifiedImpersonationOfUser`).
  *
  * Pending teachers redirect to `/pending-approval` unless `options.allowPending` is true.
  *
@@ -305,7 +326,11 @@ export async function requireUser(
   // outside a wrapped action.
   noteScopeUser({ id: user.id, schoolId: user.schoolId });
 
-  if (user.mustChangePassword && !options?.allowMustChangePassword) {
+  if (
+    user.mustChangePassword &&
+    !options?.allowMustChangePassword &&
+    !(await isVerifiedImpersonationOfUser(user.id))
+  ) {
     redirect("/account/set-password");
   }
 

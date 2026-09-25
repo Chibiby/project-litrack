@@ -73,7 +73,21 @@ export type ImpersonationTicket = {
   sessionId: string;
   /** Epoch ms after which the ticket is refused. */
   expiresAt: number;
+  /**
+   * Where "Return to admin" should land when the target's own school does not
+   * decide it: `"test-lab"` for a session started from Page Test Lab on a real
+   * account (a district admin has no school, so no demo flag). Signed with the
+   * rest; omitted, the ticket keeps its original six-part format.
+   */
+  returnTo?: ImpersonationReturnTo;
 };
+
+export const IMPERSONATION_RETURN_TO = ["test-lab"] as const;
+export type ImpersonationReturnTo = (typeof IMPERSONATION_RETURN_TO)[number];
+
+function isReturnTo(value: string): value is ImpersonationReturnTo {
+  return (IMPERSONATION_RETURN_TO as readonly string[]).includes(value);
+}
 
 export type ImpersonationContext = {
   ticket: ImpersonationTicket;
@@ -104,13 +118,18 @@ function sign(payload: string, key: string): string {
  * and `decodeImpersonationTicket` would refuse it, never misread it.
  */
 function payloadOf(ticket: ImpersonationTicket): string {
-  return [
+  const fields = [
     ticket.adminAuthId,
     ticket.adminUserId,
     ticket.targetUserId,
     ticket.sessionId,
     String(ticket.expiresAt),
-  ].join(".");
+  ];
+  // Appended only when present, so a ticket without it is byte-identical to
+  // the format already in browsers. Either way it is inside the signature, so
+  // it can be neither added to nor stripped from a signed ticket.
+  if (ticket.returnTo) fields.push(ticket.returnTo);
+  return fields.join(".");
 }
 
 /**
@@ -149,19 +168,25 @@ function decodeSignedTicket(value: string | undefined): ImpersonationTicket | nu
   const key = signingKey();
   if (!key) return null;
 
-  // Six, not five: a pre-binding ticket (no session id) is refused here, which
-  // is what makes the format change fail closed.
+  // Six or seven, never five: a pre-binding ticket (no session id) is refused
+  // here, which is what makes the binding format change fail closed. Seven is
+  // the same ticket with the optional signed `returnTo`.
   const parts = value.split(".");
-  if (parts.length !== 6) return null;
-  const [adminAuthId, adminUserId, targetUserId, sessionId, expiresRaw, signature] = parts;
+  if (parts.length !== 6 && parts.length !== 7) return null;
+  const signature = parts[parts.length - 1];
+  const fields = parts.slice(0, -1);
+  const [adminAuthId, adminUserId, targetUserId, sessionId, expiresRaw, returnRaw] = fields;
 
-  const payload = [adminAuthId, adminUserId, targetUserId, sessionId, expiresRaw].join(".");
-  if (!signatureMatches(sign(payload, key), signature)) return null;
+  if (!signatureMatches(sign(fields.join("."), key), signature)) return null;
 
   const expiresAt = Number(expiresRaw);
   if (!Number.isFinite(expiresAt)) return null;
 
-  return { adminAuthId, adminUserId, targetUserId, sessionId, expiresAt };
+  if (returnRaw === undefined) {
+    return { adminAuthId, adminUserId, targetUserId, sessionId, expiresAt };
+  }
+  if (!isReturnTo(returnRaw)) return null;
+  return { adminAuthId, adminUserId, targetUserId, sessionId, expiresAt, returnTo: returnRaw };
 }
 
 export function decodeImpersonationTicket(
@@ -323,6 +348,22 @@ export async function checkCurrentSession(auth: AuthClient): Promise<SessionChec
  */
 export async function isBoundImpersonationSession(auth: AuthClient): Promise<boolean> {
   return (await readBoundImpersonationSession(auth)) !== null;
+}
+
+/**
+ * True only when this request is the Supabase session a Super Admin's signed
+ * ticket is bound to AND that ticket names `userId` as the target — the same
+ * HMAC + session-binding proof `ImpersonationNotice` and `endImpersonation`
+ * rely on. A cookie that is forged, re-signed, bound to another session, or
+ * naming someone else is `false`, and so is "could not tell": callers use this
+ * to relax the default only when the impersonation is proven.
+ *
+ * An expired-but-bound ticket still counts: the session is still the admin's
+ * impersonation (the banner offers sign-out), not the real person's.
+ */
+export async function isVerifiedImpersonationOf(auth: AuthClient, userId: string): Promise<boolean> {
+  const context = await readBoundImpersonationSession(auth);
+  return context !== null && context.ticket.targetUserId === userId;
 }
 
 /** Bound context for UI and sign-out. May be expired for redemption. */

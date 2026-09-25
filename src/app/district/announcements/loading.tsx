@@ -1,13 +1,16 @@
 import { ListCardSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
 export default function DistrictAnnouncementsLoading() {
   return (
     <RouteLoadingOverlay>
-      <div className="grid w-full grid-cols-1 gap-6 p-4 lg:grid-cols-2 lg:p-6">
-        <ListCardSkeleton items={4} />
-        <ListCardSkeleton items={4} />
-      </div>
+      <SchoolHeadPageSkeleton hero>
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+          <ListCardSkeleton items={4} className="rounded-2xl" />
+          <ListCardSkeleton items={4} className="rounded-2xl" />
+        </div>
+      </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );
 }

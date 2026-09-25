@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { AppShell } from "@/components/app-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
+import { Callout } from "@/components/ui/callout";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { CrossSchoolTransferForm } from "@/components/admin/cross-school-transfer-form";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -75,18 +77,17 @@ async function AdminTransferBody({
   return (
     <>
       {toSchoolId && !targetActiveYear ? (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Target school has no active school year. Transfer will update learner
-          school/grade pointers, but a new Enrollment row is only created when
-          an active year exists.
-        </div>
+        <Callout title="Target school has no active school year">
+          The transfer will update the learner&apos;s school and grade, but a new
+          enrollment is only created once that school has an active year.
+        </Callout>
       ) : null}
 
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-base">Transfer learner</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Surface as="section" className="min-w-0 max-w-2xl rounded-2xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold">Transfer a learner</h2>
+        </SurfaceHeader>
+        <SurfaceBody className="p-4 sm:p-5">
           {schools.length < 2 ? (
             <EmptyState
               title="Need at least two active schools"
@@ -115,8 +116,8 @@ async function AdminTransferBody({
               }))}
             />
           )}
-        </CardContent>
-      </Card>
+        </SurfaceBody>
+      </Surface>
     </>
   );
 }
@@ -128,11 +129,18 @@ export default async function AdminTransfersPage({ searchParams }: PageProps) {
   const toSchoolId = params.to?.trim() || "";
 
   return (
-    <AppShell
+    <AdminPage
       title="Cross-school transfers"
-      subtitle="Move a learner from one school to another (Super Admin)"
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Learners"
+          eyebrowIcon={ArrowRightLeft}
+          title="Cross-school transfers"
+          subtitle="Move a learner from one school to another. Pick the source school first, then the destination."
+        />
+      }
     >
       <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
         <AdminTransferBody
@@ -140,6 +148,6 @@ export default async function AdminTransfersPage({ searchParams }: PageProps) {
           toSchoolId={toSchoolId}
         />
       </Suspense>
-    </AppShell>
+    </AdminPage>
   );
 }

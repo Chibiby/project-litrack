@@ -17,12 +17,16 @@ describe("impersonation notice wiring", () => {
   it.each([
     "src/app/school-head/(app)/layout.tsx",
     "src/app/teacher/(app)/layout.tsx",
+    // A Super Admin signed in as a district admin (I14) needs the same way back.
+    "src/app/district/layout.tsx",
   ])("uses one bound result for the notice and shell decisions in %s", (file) => {
     const layout = read(file);
 
     expect(layout).toContain("const impersonation = await readBoundImpersonationSession(supabase.auth);");
     expect(layout).toContain("const impersonating = impersonation?.ticket.targetUserId === user.id;");
     expect(layout).toContain("impersonation={impersonation}");
+    expect(layout).toContain("<ImpersonationNotice");
+    expect(layout).toContain("userId={user.id}");
     expect(layout).toContain(
       "lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}"
     );

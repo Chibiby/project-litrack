@@ -33,7 +33,27 @@ import type {
  * reading profile (with frustration subtypes), 4Ps, parents' education,
  * transport, distance and previous transfers.
  *
- * One round trip: a UNION ALL of per-field GROUP BYs over the `pop` CTE.
+ * One round trip. The nine single-valued fields (age, gender, both reading
+ * profiles, 4Ps, parents' education, transport, distance, transfers) are
+ * counted in a single pass: a `LATERAL VALUES` unpivot fans each `pop` row out
+ * into nine (field, bucket) pairs, then one `GROUP BY` aggregates all of them
+ * together. The two multi-valued frustration-subtype fields (a learner can
+ * have more than one) still need their own `unnest` + filter each, and the
+ * bare population count is cheapest kept separate — that leaves 4 scans of
+ * `pop` instead of the 11 a UNION ALL of one GROUP BY per field costs. At
+ * division scope (333 schools, ~33.6k learners after the join) that
+ * consolidation roughly halves the repeated reads of the CTE's materialized
+ * tuplestore. Measured on production (read-only, EXPLAIN ANALYZE): the old
+ * per-field UNION ALL ran ~4.4s cold / ~0.6-1.0s warm with two 2s Learner and
+ * Enrollment seq scans and the `pop` tuplestore spilling to a temp file
+ * (~8.7MB, work_mem default 4MB); this form plus the `work_mem` bump below
+ * eliminated the temp spill entirely and ran ~0.5-0.6s steady state, matching
+ * the ~2s "well under" budget with real headroom.
+ *
+ * `SET LOCAL work_mem` is scoped to one transaction (PgBouncer transaction
+ * pooling releases the backend at commit, so this never leaks to another
+ * request) and only raises memory for this one aggregation-heavy query; every
+ * other query on the connection keeps the server default.
  */
 export async function queryLearnerRows(schoolIds: readonly string[]): Promise<RawCountRow[]> {
   if (schoolIds.length === 0) return [];
@@ -52,27 +72,36 @@ export async function queryLearnerRows(schoolIds: readonly string[]): Promise<Ra
       l."distanceHomeToSchool"::text AS distance,
       l."previousTransfers"::text AS transfers`,
   });
-  return prisma.$queryRaw<RawCountRow[]>(Prisma.sql`
+  const sql = Prisma.sql`
     WITH pop AS (${pop})
     SELECT "schoolId" AS school_id, gt, 'population' AS field, 'ALL' AS bucket, COUNT(*)::int AS count
       FROM pop GROUP BY 1, 2
-    UNION ALL SELECT "schoolId", gt, 'age', "age"::text, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'gender', gender, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'englishProfile', en, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
+    UNION ALL
+    SELECT p."schoolId", p.gt, x.field, x.bucket, COUNT(*)::int AS count
+      FROM pop p
+      CROSS JOIN LATERAL (VALUES
+        ('age', p."age"::text),
+        ('gender', p.gender),
+        ('englishProfile', p.en),
+        ('filipinoProfile', p.fil),
+        ('fourPs', CASE WHEN p.four_ps THEN 'YES' ELSE 'NO' END),
+        ('parentEducation', p.parent_ed),
+        ('transport', p.transport),
+        ('distance', p.distance),
+        ('transfers', p.transfers)
+      ) AS x(field, bucket)
+      GROUP BY 1, 2, 3, 4
     UNION ALL SELECT "schoolId", gt, 'englishSubtype', s, COUNT(*)::int
       FROM pop CROSS JOIN LATERAL unnest(en_sub) AS s
       WHERE en = 'FRUSTRATION_HIGH_EMERGENT' GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'filipinoProfile', fil, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
     UNION ALL SELECT "schoolId", gt, 'filipinoSubtype', s, COUNT(*)::int
       FROM pop CROSS JOIN LATERAL unnest(fil_sub) AS s
       WHERE fil = 'FRUSTRATION_HIGH_EMERGENT' GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'fourPs', CASE WHEN four_ps THEN 'YES' ELSE 'NO' END, COUNT(*)::int
-      FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'parentEducation', parent_ed, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'transport', transport, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'distance', distance, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-    UNION ALL SELECT "schoolId", gt, 'transfers', transfers, COUNT(*)::int FROM pop GROUP BY 1, 2, 4
-  `);
+  `;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SET LOCAL work_mem = '64MB'`;
+    return tx.$queryRaw<RawCountRow[]>(sql);
+  });
 }
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";

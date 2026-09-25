@@ -23,7 +23,7 @@ export function TermSubjectDefaultsGradeTypePicker({
   }
 
   return (
-    <div className="max-w-xs space-y-1.5">
+    <div className="w-full max-w-xs space-y-1.5">
       <Label htmlFor="term-subject-defaults-grade-type" className="text-xs">
         Grade level
       </Label>

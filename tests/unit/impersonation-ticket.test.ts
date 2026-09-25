@@ -79,6 +79,49 @@ describe("impersonation ticket", () => {
     expect(decodeImpersonationTicket(parts.join("."))).toBeNull();
   });
 
+  it("round-trips the optional signed returnTo, and omits it from the six-part format", async () => {
+    const { encodeImpersonationTicket, decodeImpersonationTicket } = await mod();
+    const withReturn = encodeImpersonationTicket({ ...ADMIN, returnTo: "test-lab" }).value;
+    const without = encodeImpersonationTicket(ADMIN).value;
+
+    expect(withReturn.split(".")).toHaveLength(7);
+    expect(without.split(".")).toHaveLength(6);
+    expect(decodeImpersonationTicket(withReturn)).toMatchObject({ ...ADMIN, returnTo: "test-lab" });
+    expect(decodeImpersonationTicket(without)).not.toHaveProperty("returnTo");
+  });
+
+  it("rejects a ticket whose returnTo was stripped, added or changed after signing", async () => {
+    const { encodeImpersonationTicket, decodeImpersonationTicket } = await mod();
+    const withReturn = encodeImpersonationTicket({ ...ADMIN, returnTo: "test-lab" }).value.split(".");
+    const without = encodeImpersonationTicket(ADMIN).value.split(".");
+
+    const stripped = [...withReturn.slice(0, 5), withReturn[6]].join(".");
+    const added = [...without.slice(0, 5), "test-lab", without[5]].join(".");
+    const changed = [...withReturn.slice(0, 5), "accounts", withReturn[6]].join(".");
+
+    expect(decodeImpersonationTicket(stripped)).toBeNull();
+    expect(decodeImpersonationTicket(added)).toBeNull();
+    expect(decodeImpersonationTicket(changed)).toBeNull();
+  });
+
+  it("refuses a validly signed ticket whose returnTo is not a known destination", async () => {
+    const { decodeImpersonationTicket } = await mod();
+    const payload = [
+      ADMIN.adminAuthId,
+      ADMIN.adminUserId,
+      ADMIN.targetUserId,
+      ADMIN.sessionId,
+      String(Date.now() + 60_000),
+      "evil",
+    ].join(".");
+    const signature = crypto
+      .createHmac("sha256", process.env.SUPABASE_SERVICE_ROLE_KEY as string)
+      .update(payload)
+      .digest("base64url");
+
+    expect(decodeImpersonationTicket(`${payload}.${signature}`)).toBeNull();
+  });
+
   it("refuses a validly signed pre-binding ticket, so the format change fails closed", async () => {
     const { decodeImpersonationTicket } = await mod();
     // Exactly what the previous encoder wrote: four fields, no session id,

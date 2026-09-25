@@ -90,6 +90,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
             type="button"
             variant="outline"
             size="sm"
+            className="sm:h-10 lg:h-9"
             disabled={learner.schoolDeleted}
             aria-label={`Restore ${learner.fullName}`}
           >
@@ -108,7 +109,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
             type="button"
             variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive sm:h-10 lg:h-9"
             aria-label={`Permanently delete ${learner.fullName}`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
@@ -165,6 +166,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
             type="button"
             variant="outline"
             size="sm"
+            className="sm:h-10 lg:h-9"
             disabled={teacher.schoolDeleted}
             aria-label={`Restore ${teacher.fullName}`}
           >
@@ -183,7 +185,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
             type="button"
             variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive sm:h-10 lg:h-9"
             aria-label={`Permanently delete ${teacher.fullName}`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />

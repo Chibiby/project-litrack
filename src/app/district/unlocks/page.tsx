@@ -5,6 +5,7 @@ import type { AdminScope } from "@/lib/auth/admin-scope";
 import { listActiveUnlocks, listUnlockTargets } from "@/lib/unlock/admin-queries";
 import { UNLOCK_SCOPES } from "@/lib/validators/support.schema";
 import { AppShell } from "@/components/app-shell";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListCardSkeleton } from "@/components/loading";
 import { UnlockConsole } from "@/components/admin/unlock-console";
@@ -27,11 +28,21 @@ export default async function DistrictUnlocksPage() {
       subtitle={describeScope(scope)}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SchoolHeadHero
+          eyebrow="Submissions"
+          eyebrowIcon={Unlock}
+          title="Revision access"
+          subtitle="Reopen a locked record so a school or a teacher can correct it."
+          meta={describeScope(scope)}
+        />
+      </div>
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
-        <Suspense fallback={<ListCardSkeleton items={5} />}>
+        <Suspense fallback={<ListCardSkeleton items={5} className="max-w-5xl rounded-2xl" />}>
           <DistrictUnlockBody scope={scope} />
         </Suspense>
       )}

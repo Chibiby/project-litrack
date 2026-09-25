@@ -7,7 +7,8 @@ import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Callout } from "@/components/ui/callout";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
@@ -73,11 +74,13 @@ async function DistrictTransferBody({
         </Callout>
       ) : null}
 
-      <Card className="min-w-0 max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-base">Transfer learner</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Surface as="section" aria-labelledby="district-transfer-title" className="min-w-0 max-w-2xl rounded-2xl">
+        <SurfaceHeader className="px-4 sm:px-5">
+          <h2 id="district-transfer-title" className="text-base font-semibold">
+            Transfer learner
+          </h2>
+        </SurfaceHeader>
+        <SurfaceBody className="p-4 sm:p-5">
           {schools.length < 2 ? (
             <EmptyState
               title="Need at least two active schools"
@@ -99,8 +102,8 @@ async function DistrictTransferBody({
               }))}
             />
           )}
-        </CardContent>
-      </Card>
+        </SurfaceBody>
+      </Surface>
     </div>
   );
 }
@@ -115,7 +118,17 @@ export default async function DistrictTransfersPage({ searchParams }: PageProps)
       subtitle={describeScope(scope)}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SchoolHeadHero
+          eyebrow="Learners"
+          eyebrowIcon={ArrowRightLeft}
+          title="Learner transfers"
+          subtitle="Move a learner from one of your schools to another, with their records."
+          meta={describeScope(scope)}
+        />
+      </div>
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
@@ -126,7 +139,7 @@ export default async function DistrictTransfersPage({ searchParams }: PageProps)
               office.
             </Callout>
           ) : null}
-          <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
+          <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="max-w-2xl rounded-2xl" />}>
             <DistrictTransferBody
               scope={scope}
               fromParam={params.from?.trim() ?? ""}

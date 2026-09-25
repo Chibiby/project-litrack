@@ -3,6 +3,11 @@
 //
 //   node e2e/auth/persona.mjs head       -> e2e/.auth/head.json
 //   node e2e/auth/persona.mjs teacher    -> e2e/.auth/teacher.json
+//   node e2e/auth/persona.mjs district   -> e2e/.auth/district.json
+//
+// "district" is NOT a demo account: the demo school is outside every district
+// scope, so Test Lab signs in as the first real district admin (by username)
+// and everything that session saves is real. Use it for read-only checks.
 //
 // The persona session rides an impersonation ticket that lasts two hours, so
 // re-run this before each check rather than reusing an old file. It also
@@ -16,8 +21,14 @@ const LABELS = {
   head: "Open as School Head",
   teacher: "Open as Teacher",
   "pending-teacher": "Open as Pending Teacher",
+  district: "Open as District Admin",
 };
-const DESTINATIONS = { head: /\/school-head/, teacher: /\/teacher/, "pending-teacher": /\/pending-approval|\/teacher/ };
+const DESTINATIONS = {
+  head: /\/school-head/,
+  teacher: /\/teacher/,
+  "pending-teacher": /\/pending-approval|\/teacher/,
+  district: /\/district/,
+};
 
 const persona = process.argv[2] ?? "head";
 if (!LABELS[persona]) {
@@ -69,7 +80,8 @@ try {
     await page.waitForTimeout(500);
   }
   const openDemo = page.getByRole("button", { name: /open demo session/i });
-  if (await openDemo.isVisible().catch(() => false)) {
+  // The district button needs no demo session or test data.
+  if (persona !== "district" && (await openDemo.isVisible().catch(() => false))) {
     await openDemo.click();
     await page.waitForLoadState("networkidle");
   }

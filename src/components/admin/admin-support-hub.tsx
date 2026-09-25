@@ -58,9 +58,9 @@ export function AdminSupportHub({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border bg-card px-2 shadow-sm">
-        <div className="flex gap-1" role="tablist" aria-label="Support sections">
+    <div className="min-w-0 space-y-3">
+      <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card px-2 shadow-card">
+        <div className="flex w-max min-w-full gap-1" role="tablist" aria-label="Support sections">
           <Button
             type="button"
             role="tab"
@@ -69,7 +69,7 @@ export function AdminSupportHub({
             aria-controls="admin-support-chat"
             onClick={() => selectTab("chat")}
             className={cn(
-              "h-11 rounded-none border-b-2 px-4 text-sm",
+              "h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4",
               tab === "chat"
                 ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet"
                 : "border-transparent text-muted-foreground"
@@ -78,7 +78,7 @@ export function AdminSupportHub({
             <MessageCircle className="size-4" aria-hidden />
             Chat
           </Button>
-          <Button type="button" role="tab" variant="ghost" aria-selected={tab === "email"} aria-controls="admin-support-email" onClick={() => selectTab("email")} className={cn("h-11 rounded-none border-b-2 px-4 text-sm", tab === "email" ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet" : "border-transparent text-muted-foreground")}>
+          <Button type="button" role="tab" variant="ghost" aria-selected={tab === "email"} aria-controls="admin-support-email" onClick={() => selectTab("email")} className={cn("h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4", tab === "email" ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet" : "border-transparent text-muted-foreground")}>
             <Mail className="size-4" aria-hidden />Email
           </Button>
           <Button
@@ -89,7 +89,7 @@ export function AdminSupportHub({
             aria-controls="admin-support-tickets"
             onClick={() => selectTab("tickets")}
             className={cn(
-              "h-11 rounded-none border-b-2 px-4 text-sm",
+              "h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4",
               tab === "tickets"
                 ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet"
                 : "border-transparent text-muted-foreground"
@@ -115,7 +115,7 @@ export function AdminSupportHub({
           />
         </div>
       ) : tab === "tickets" ? (
-        <div id="admin-support-tickets" role="tabpanel" className="rounded-xl border bg-card p-3 shadow-sm sm:p-4">
+        <div id="admin-support-tickets" role="tabpanel" className="min-w-0 rounded-2xl border border-border/80 bg-card p-3 shadow-card sm:p-4">
           <SupportInbox tickets={tickets} />
         </div>
       ) : <div id="admin-support-email" role="tabpanel"><AdminEmailComposer recipients={emailRecipients} configured={emailConfigured} /></div>}

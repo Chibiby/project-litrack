@@ -327,7 +327,7 @@ function ChatBubble({
     <div className={cn("flex gap-2", mine && "flex-row-reverse")}>
       <span
         className={cn(
-          "mt-auto flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+          "mt-auto flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
           showAuthor ? "bg-violet-soft text-violet-soft-foreground" : "invisible"
         )}
         aria-hidden
@@ -372,7 +372,7 @@ function ChatBubble({
             )
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {timeLabel(new Date(message.createdAt))}
         </p>
       </div>

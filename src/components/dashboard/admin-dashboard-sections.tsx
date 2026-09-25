@@ -1,6 +1,5 @@
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import {
-  getAdminMetricCounts,
   getAdminActivitySeries,
   getAdminRecentSchools,
   getAdminIpAndAdvisoryMetrics,
@@ -15,9 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
@@ -28,91 +27,17 @@ import {
 import {
   School,
   Users,
-  ExternalLink,
-  Sparkles,
+  ChevronRight,
   ScrollText,
-  UserCog,
-  AlertTriangle,
   GraduationCap,
 } from "lucide-react";
 
-export async function AdminMetricsSection() {
-  let metrics: Awaited<ReturnType<typeof getAdminMetricCounts>> | null = null;
-  try {
-    metrics = await getAdminMetricCounts();
-  } catch (err) {
-    console.error("[AdminMetricsSection] failed to load:", err);
-  }
-
-  return (
-    <>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 md:max-lg:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
-        <MetricCard
-          title="Schools"
-          value={metrics?.schoolsTotal ?? 0}
-          hint={`${metrics?.schoolsActive ?? 0} active · ${metrics?.schoolsInactive ?? 0} inactive`}
-          icon={School}
-          tone="primary"
-          href="/admin/schools"
-        />
-        <MetricCard
-          title="School Heads"
-          value={metrics?.schoolHeadCount ?? 0}
-          icon={UserCog}
-          href="/admin/schools"
-        />
-        <MetricCard
-          title="Teachers"
-          value={metrics?.teacherCount ?? 0}
-          icon={Users}
-          href="/admin/schools"
-        />
-        <MetricCard
-          title="Learners"
-          value={metrics?.learnerCount ?? 0}
-          icon={GraduationCap}
-          tone="amber"
-        />
-        <MetricCard
-          title="ARAL learners"
-          value={metrics?.aralCount ?? 0}
-          icon={Sparkles}
-          tone="violet"
-        />
-        <MetricCard
-          title="Alerts"
-          value={metrics?.pendingTeacherApprovals ?? 0}
-          hint="Teachers awaiting approval"
-          icon={AlertTriangle}
-          href="/admin/audit"
-        />
-      </div>
-
-      {(metrics?.schoolsInactive ?? 0) > 0 ||
-      (metrics?.pendingTeacherApprovals ?? 0) > 0 ? (
-        <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
-              Attention
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm text-amber-950 dark:text-amber-100">
-            {(metrics?.schoolsInactive ?? 0) > 0 ? (
-              <p>{metrics!.schoolsInactive} inactive school(s).</p>
-            ) : null}
-            {(metrics?.pendingTeacherApprovals ?? 0) > 0 ? (
-              <p>
-                {metrics!.pendingTeacherApprovals} teacher registration(s)
-                awaiting School Head approval.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-    </>
-  );
-}
+/**
+ * The Super Admin dashboard sections that fetch on their own and stream
+ * behind their own `<Suspense>`: IP metrics, the two trend charts and the
+ * recent-schools drill-down. The hero, stat row, attention rail and quick
+ * actions live in `src/components/dashboard/admin/dashboard-body.tsx`.
+ */
 
 export async function AdminChartsSection() {
   let activity: Awaited<ReturnType<typeof getAdminActivitySeries>> | null =
@@ -127,8 +52,12 @@ export async function AdminChartsSection() {
   const hasSchools = (activity?.schoolsTotal ?? 0) > 0;
 
   return (
-    <div className="mb-6 grid gap-4 lg:grid-cols-2">
-      <ChartCard title="School status" description="Active vs inactive schools">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <ChartCard
+        title="School status"
+        description="Active vs inactive schools"
+        className="min-w-0 rounded-2xl"
+      >
         {!hasSchools ? (
           <EmptyState
             title="No data yet"
@@ -144,6 +73,7 @@ export async function AdminChartsSection() {
       <ChartCard
         title="Platform activity (7 days)"
         description="Audit events per day"
+        className="min-w-0 rounded-2xl"
       >
         {!hasActivity ? (
           <EmptyState
@@ -176,43 +106,58 @@ export async function AdminIpAdvisorySection() {
   const schools = topSchoolsWithIp(data?.schools ?? [], 5);
   const kinds = collapseKindsToOthers(data?.ipKinds ?? [], 5);
 
+  const viewAll = (
+    <Button asChild size="sm" variant="outline" className="sm:h-10 lg:h-9">
+      <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
+    </Button>
+  );
+
   return (
-    <>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
+    <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <StatCard
           title="Learners per teacher"
           value={data?.national.learnersPerTeacher ?? "—"}
-          hint={`${data?.national.totalLearners ?? 0} enrolled learners · across ${data?.national.activeTeachers ?? 0} active teachers`}
+          hint={`${data?.national.totalLearners ?? 0} enrolled · ${data?.national.activeTeachers ?? 0} active teachers`}
           icon={Users}
           tone="primary"
+          decor="people"
+          inlineOnPhone
+          denseOnPhone
         />
-        <MetricCard
+        <StatCard
           title="IP learners"
           value={data?.national.ipLearners ?? 0}
           hint={`${data?.national.ipPercent ?? "—"} of enrolled learners`}
           icon={GraduationCap}
           tone="amber"
+          decor="bars"
+          inlineOnPhone
+          denseOnPhone
+          href="/admin/ip-learners"
         />
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      {/* One-up at xl, where the attention rail narrows this column; two-up
+          again at 2xl once it is wide enough for a table beside a donut. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
         <ChartCard
-          title="Schools"
-          description="Top 5 schools with IP learners, by count"
-          action={
-            <Button asChild size="sm" variant="outline">
-              <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
-            </Button>
-          }
+          title="Schools with IP learners"
+          description="Top 5 by count"
+          action={viewAll}
+          className="min-w-0 rounded-2xl"
+          contentClassName="p-0 sm:p-2"
         >
           {schools.length === 0 ? (
-            <EmptyState
-              title="No IP learners yet"
-              description="Appears once enrolled learners have an IP ethnicity recorded."
-              icon={School}
-            />
+            <div className="p-5">
+              <EmptyState
+                title="No IP learners yet"
+                description="Appears once enrolled learners have an IP ethnicity recorded."
+                icon={School}
+              />
+            </div>
           ) : (
-            <Table>
+            <Table className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap max-sm:[&_td]:px-3 max-sm:[&_th]:px-3">
               <TableHeader>
                 <TableRow>
                   <TableHead>School</TableHead>
@@ -225,7 +170,7 @@ export async function AdminIpAdvisorySection() {
               <TableBody>
                 {schools.map((s) => (
                   <TableRow key={s.schoolId}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="max-w-[14rem] truncate font-medium">{s.name}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {s.learnersPerTeacher}
                     </TableCell>
@@ -246,12 +191,9 @@ export async function AdminIpAdvisorySection() {
         </ChartCard>
         <ChartCard
           title="IP learners by group"
-          description="All schools; a learner with two IP groups counts in both"
-          action={
-            <Button asChild size="sm" variant="outline">
-              <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
-            </Button>
-          }
+          description="A learner with two IP groups counts in both"
+          action={viewAll}
+          className="min-w-0 rounded-2xl"
         >
           {kinds.length === 0 ? (
             <EmptyState
@@ -264,7 +206,7 @@ export async function AdminIpAdvisorySection() {
           )}
         </ChartCard>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -277,48 +219,55 @@ export async function AdminRecentSchoolsSection() {
   }
 
   return (
-    <Card className="mb-6 border-amber-200/80 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/40">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <School className="h-5 w-5 text-primary" />
-          School drill-down
-        </CardTitle>
-        <CardDescription>
-          Open a school with <code className="text-xs">?schoolId=</code> — first
-          view per school is audited (once per 8h).
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
-          {recentSchools.map((school) => (
-            <Button
-              key={school.id}
-              variant="outline"
-              size="sm"
-              asChild
-              className="bg-card"
-            >
-              <PrefetchLink
-                href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-              >
-                {school.name}
-                {!school.isActive ? " (inactive)" : ""}
-                <ExternalLink className="ml-1 h-3 w-3" />
-              </PrefetchLink>
-            </Button>
-          ))}
-          {recentSchools.length === 0 ? (
-            <EmptyState
-              title="No data yet"
-              description="Create a school to enable drill-down."
-              actionHref="/admin/schools/new"
-              actionLabel="New school"
-              icon={School}
-              className="w-full border-0 bg-transparent py-6"
-            />
-          ) : null}
+    <Surface as="section" className="rounded-2xl">
+      <SurfaceHeader className="flex-col gap-1 sm:flex-row sm:items-start">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <School className="size-5 text-primary" aria-hidden />
+            Open a school as its School Head
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            The newest schools. Your first view of each is audited, once per 8 hours.
+          </p>
         </div>
-      </CardContent>
-    </Card>
+        <Button asChild size="sm" variant="outline" className="sm:h-10 lg:h-9">
+          <PrefetchLink href="/admin/schools">All schools</PrefetchLink>
+        </Button>
+      </SurfaceHeader>
+      <SurfaceBody className="p-3 sm:p-4">
+        {recentSchools.length === 0 ? (
+          <EmptyState
+            title="No data yet"
+            description="Create a school to enable drill-down."
+            actionHref="/admin/schools/new"
+            actionLabel="New school"
+            icon={School}
+            className="border-0 bg-transparent py-6"
+          />
+        ) : (
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {recentSchools.map((school) => (
+              <li key={school.id} className="min-w-0">
+                <PrefetchLink
+                  href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+                  className="flex min-h-12 items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-foreground lg:truncate">
+                      {school.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {school.schoolIdCode}
+                      {!school.isActive ? " · Inactive" : ""}
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                </PrefetchLink>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SurfaceBody>
+    </Surface>
   );
 }

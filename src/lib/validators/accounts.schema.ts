@@ -16,3 +16,12 @@ export const accountUserIdSchema = z.object({
 });
 
 export type AccountUserIdInput = z.infer<typeof accountUserIdSchema>;
+
+/**
+ * `impersonateUser`. `returnTo: "test-lab"` only chooses where "Return to
+ * admin" lands (Page Test Lab instead of the accounts console) — both are
+ * Super Admin pages, so it grants nothing. Anything else is refused.
+ */
+export const impersonateUserSchema = accountUserIdSchema.extend({
+  returnTo: z.enum(["test-lab"]).optional(),
+});

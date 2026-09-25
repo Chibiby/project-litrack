@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, School } from "lucide-react";
 import { Table } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { SummaryList } from "@/lib/summary/types";
@@ -11,10 +11,21 @@ export function SummaryListCard({ list }: { list: SummaryList }) {
     <section
       id={anchor}
       aria-labelledby={`${anchor}-title`}
-      className="min-w-0 scroll-mt-24 rounded-xl border border-border/80 bg-card text-card-foreground shadow-card"
+      className="min-w-0 scroll-mt-24 rounded-2xl border border-border/80 bg-card text-card-foreground shadow-card"
     >
       <div className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-4 sm:px-5">
-        <div className="min-w-0">
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            list.rows.length > 0
+              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+          )}
+        >
+          {list.rows.length > 0 ? <School className="size-5" /> : <CheckCircle2 className="size-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
           <h2 id={`${anchor}-title`} className="text-base font-semibold tracking-tight">
             {list.title}
           </h2>

@@ -24,21 +24,25 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
   profiling: UserRound,
 };
 
-// Violet is the ARAL accent: only the facets whose population is ARAL learners.
-const TONE: Record<SummaryFacetId, string> = {
-  learners: "bg-primary/10 text-primary",
-  "reading-behavior": "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  "end-of-term": "bg-primary/10 text-primary",
-  attendance: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  "reading-levels": "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  compliance: "bg-secondary/25 text-secondary-foreground",
-  profiling: "bg-primary/10 text-primary",
+const PRIMARY_TILE = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200";
+const ARAL_TILE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200";
+
+// Same tile palette as the dashboard stat cards. Violet is the ARAL accent:
+// only the facets whose population is ARAL learners.
+export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
+  learners: PRIMARY_TILE,
+  "reading-behavior": ARAL_TILE,
+  "end-of-term": PRIMARY_TILE,
+  attendance: ARAL_TILE,
+  "reading-levels": ARAL_TILE,
+  compliance: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+  profiling: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
 };
 
 /** One card per summary facet, linking to `${basePath}/<facet>`. */
 export function SummaryFacetIndex({ basePath, query }: { basePath: string; query?: string }) {
   return (
-    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
       {SUMMARY_FACET_LIST.map((facet) => {
         const Icon = SUMMARY_FACET_ICON[facet.id];
         return (
@@ -46,16 +50,16 @@ export function SummaryFacetIndex({ basePath, query }: { basePath: string; query
             <Link
               href={`${basePath}/${facet.id}${query ? `?${query}` : ""}`}
               prefetch={true}
-              className="group flex h-full items-start gap-3 rounded-xl border border-border/80 bg-card p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
+              className="group flex h-full items-start gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
             >
               <span
                 aria-hidden
                 className={cn(
-                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
-                  TONE[facet.id]
+                  "flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11",
+                  SUMMARY_FACET_TILE[facet.id]
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="size-5" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold leading-tight text-foreground">{facet.label}</span>
@@ -63,7 +67,7 @@ export function SummaryFacetIndex({ basePath, query }: { basePath: string; query
               </span>
               <ChevronRight
                 aria-hidden
-                className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
               />
             </Link>
           </li>
@@ -73,7 +77,11 @@ export function SummaryFacetIndex({ basePath, query }: { basePath: string; query
   );
 }
 
-/** Links between facets on a facet page, keeping the chosen scope. */
+/**
+ * Links between facets on a facet page, keeping the chosen scope. Drawn like
+ * the School Head workspace tab bar (`TabNav`): an underlined strip that
+ * scrolls sideways inside itself on a phone instead of wrapping into rows.
+ */
 export function SummaryFacetSwitcher({
   basePath,
   current,
@@ -84,8 +92,8 @@ export function SummaryFacetSwitcher({
   scopeQuery: string;
 }) {
   return (
-    <nav aria-label="Summaries" className="min-w-0">
-      <ul className="flex flex-wrap gap-2">
+    <nav aria-label="Summaries" className="min-w-0 overflow-x-auto">
+      <ul className="flex min-w-max items-center gap-1 border-b border-border/70">
         {SUMMARY_FACET_LIST.map((facet) => {
           const active = facet.id === current;
           return (
@@ -95,10 +103,12 @@ export function SummaryFacetSwitcher({
                 prefetch={true}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-10 items-center rounded-full border px-3.5 text-sm font-medium transition-colors lg:min-h-9",
+                  // -mb-px lifts the 2px active underline over the ul's 1px rule.
+                  "-mb-px flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors sm:min-h-10 lg:min-h-9",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                 )}
               >
                 {facet.label}

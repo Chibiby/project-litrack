@@ -41,7 +41,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
         <p className="truncate font-mono text-sm text-foreground">{value}</p>
@@ -50,6 +50,7 @@ function Field({ label, value }: { label: string; value: string }) {
         type="button"
         variant="ghost"
         size="sm"
+        className="sm:h-10 lg:h-9"
         aria-label={`Copy ${label}`}
         onClick={() => {
           void navigator.clipboard.writeText(value);
@@ -190,7 +191,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
         </p>
       ) : null}
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle>Demo session</CardTitle>
         </CardHeader>
@@ -250,7 +251,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle>Demo data</CardTitle>
         </CardHeader>
@@ -265,7 +266,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                     className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         School
                       </p>
                       <p className="truncate font-mono text-sm text-foreground">{school.name}</p>
@@ -345,7 +346,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                   placeholder={RESET_DEMO_CONFIRMATION}
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="destructive"

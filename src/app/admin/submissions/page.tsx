@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { formatLocalDateKey } from "@/lib/date-keys";
 import { isMonthlyReadingLevelUnlockedForAll, isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 import { listActiveUnlocks, listUnlockTargets } from "@/lib/unlock/admin-queries";
-import { AppShell } from "@/components/app-shell";
+import { Lock } from "lucide-react";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SubmissionsConsole } from "@/components/admin/submissions-console";
 
 export const dynamic = "force-dynamic";
@@ -26,5 +28,5 @@ export default async function AdminSubmissionsPage({ searchParams }: { searchPar
   const selectedRow = years.find((year) => year.id === params.schoolYearId) ?? years.find((year) => year.school.id === params.schoolId) ?? years[0] ?? null;
   const selected = selectedRow ? { id: selectedRow.id, schoolId: selectedRow.school.id, schoolName: selectedRow.school.name, label: selectedRow.label, startKey: formatLocalDateKey(selectedRow.startDate), endKey: formatLocalDateKey(selectedRow.endDate), overrides: selectedRow.termWindowOverrides, isActive: selectedRow.isActive } : null;
   const yearOptions = years.map((year) => ({ id: year.id, schoolId: year.school.id, schoolName: year.school.name, label: year.label, startKey: formatLocalDateKey(year.startDate), endKey: formatLocalDateKey(year.endDate), overrides: year.termWindowOverrides, isActive: year.isActive }));
-  return <AppShell title="Report Submissions" subtitle="Control term windows and revision access across schools" role={user.role} userName={user.fullName || user.email}><SubmissionsConsole schools={schools} years={yearOptions} selected={selected} allSelected={allSelected} active={active} lockingEnabled={lockingEnabled} readingLevelUnlockedForAll={readingLevelUnlockedForAll} /></AppShell>;
+  return <AdminPage title="Report submissions" role={user.role} userName={user.fullName || user.email} hero={<SchoolHeadHero eyebrow="Reports" eyebrowIcon={Lock} title="Report submissions" subtitle="Set term windows, lock or unlock submissions, and grant revision access across schools." />}><SubmissionsConsole schools={schools} years={yearOptions} selected={selected} allSelected={allSelected} active={active} lockingEnabled={lockingEnabled} readingLevelUnlockedForAll={readingLevelUnlockedForAll} /></AdminPage>;
 }

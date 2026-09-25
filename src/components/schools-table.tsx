@@ -215,9 +215,11 @@ function hrefFor(list: SchoolsTableList, page: number, basePath: string): string
 function SchoolsPager({
   list,
   hrefFor: buildHref,
+  buttonClassName,
 }: {
   list: SchoolsTableList;
   hrefFor: (list: SchoolsTableList, page: number) => string;
+  buttonClassName?: string;
 }) {
   const pending = useListPending();
   const canGoBack = list.page > 1;
@@ -229,7 +231,7 @@ function SchoolsPager({
         asChild
         variant="outline"
         size="sm"
-        className="rounded-lg"
+        className={cn("rounded-lg", buttonClassName)}
         disabled={!canGoBack}
       >
         <Link
@@ -249,7 +251,7 @@ function SchoolsPager({
         asChild
         variant="outline"
         size="sm"
-        className="rounded-lg"
+        className={cn("rounded-lg", buttonClassName)}
         disabled={!canGoForward}
       >
         <Link
@@ -301,9 +303,9 @@ function SchoolsTableInner({
   const detailHref = (id: string) => `${basePath}/${id}`;
   const DetailIcon = caps.edit ? Pencil : Eye;
   const detailVerb = caps.edit ? "Edit" : "View";
-  // The district list stays a card list through tablet widths, so its controls
-  // keep a 40px target there; `size="sm"` drops to 36px from `sm` up.
-  const mobileTouch = isAdminColumns ? undefined : "sm:h-10";
+  // Both lists stay card lists through tablet widths, so their controls keep a
+  // 40px target there; `size="sm"` drops to 36px from `sm` up.
+  const mobileTouch = "sm:h-10";
   const navigate = useListNavigate();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -370,13 +372,28 @@ function SchoolsTableInner({
   return (
     <div className="space-y-4">
       {credential ? (
-        <Card className="border-amber-200 bg-amber-50">
+        <Card
+          className={cn(
+            "border-amber-200 bg-amber-50",
+            isAdminColumns && "dark:border-amber-900/60 dark:bg-amber-950/40"
+          )}
+        >
           <CardContent className="space-y-3 pt-4">
-            <div className="flex items-start gap-2 text-amber-950">
+            <div
+              className={cn(
+                "flex items-start gap-2 text-amber-950",
+                isAdminColumns && "dark:text-amber-100"
+              )}
+            >
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <p className="font-semibold">Password reset to the School ID</p>
-                <p className="text-sm text-amber-900/90">
+                <p
+                  className={cn(
+                    "text-sm text-amber-900/90",
+                    isAdminColumns && "dark:text-amber-100/90"
+                  )}
+                >
                   The School Head can sign in now with their School ID below, and choose a private
                   password afterwards.
                 </p>
@@ -411,8 +428,15 @@ function SchoolsTableInner({
         </Card>
       ) : null}
 
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="relative w-full sm:w-72">
+      {/* The admin set has five controls beside the search; they only fit on
+          one line from xl, so below that the search takes its own row. */}
+      <div
+        className={cn(
+          "flex flex-col items-start justify-between gap-3",
+          isAdminColumns ? "xl:flex-row xl:items-center" : "sm:flex-row sm:items-center"
+        )}
+      >
+        <div className={cn("relative w-full", isAdminColumns ? "xl:w-72" : "sm:w-72")}>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search schools…"
@@ -429,7 +453,12 @@ function SchoolsTableInner({
           />
         </div>
 
-        <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">
+        <div
+          className={cn(
+            "grid w-full gap-2 sm:flex sm:items-center",
+            isAdminColumns ? "sm:flex-wrap xl:w-auto" : "sm:w-auto"
+          )}
+        >
           {isAdminColumns ? (
             <Select
               value={list.region || "all"}
@@ -483,7 +512,7 @@ function SchoolsTableInner({
             type="button"
             variant="outline"
             size="sm"
-            className="w-full sm:w-auto"
+            className={cn("w-full sm:w-auto", isAdminColumns && "sm:h-10 lg:h-9")}
             onClick={() => pushList({ page: 1, q: searchValue.trim() })}
           >
             Search
@@ -493,7 +522,7 @@ function SchoolsTableInner({
               type="button"
               variant="ghost"
               size="sm"
-              className="w-full sm:w-auto"
+              className={cn("w-full sm:w-auto", isAdminColumns && "sm:h-10 lg:h-9")}
               onClick={() => {
                 setSearchValue("");
                 pushList({ page: 1, q: "", region: "", status: "" });
@@ -515,8 +544,7 @@ function SchoolsTableInner({
       >
       <div
         className={cn(
-          "hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card",
-          isAdminColumns ? "md:block" : "lg:block"
+          "hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card lg:block"
         )}
       >
         <Table>
@@ -562,7 +590,7 @@ function SchoolsTableInner({
                       </Link>
                       {school.isDemo ? (
                         <span
-                          className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+                          className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
                           title="Training data. Hidden from the login page except inside a demo session."
                         >
                           Demo
@@ -691,14 +719,20 @@ function SchoolsTableInner({
         </Table>
       </div>
 
-      <div className={cn("space-y-3", isAdminColumns ? "md:hidden" : "lg:hidden")}>
+      <div className={cn("lg:hidden", isAdminColumns ? "grid grid-cols-1 gap-3 md:grid-cols-2" : "space-y-3")}>
         {optimisticSchools.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2">
             {caps.emptyMessage}
           </div>
         ) : (
           optimisticSchools.map((school) => (
-            <article key={school.id} className="rounded-xl border bg-card p-4 shadow-sm">
+            <article
+              key={school.id}
+              className={cn(
+                "min-w-0 border bg-card p-4",
+                isAdminColumns ? "rounded-2xl border-border/80 shadow-card" : "rounded-xl shadow-sm"
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -707,13 +741,13 @@ function SchoolsTableInner({
                       prefetch={false}
                       className={cn(
                         "font-medium underline-offset-4 hover:underline",
-                        !isAdminColumns && "max-lg:inline-flex max-lg:min-h-10 max-lg:items-center"
+                        "max-lg:inline-flex max-lg:min-h-10 max-lg:items-center"
                       )}
                     >
                       {school.name}
                     </Link>
                     {school.isDemo ? (
-                      <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                      <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
                         Demo
                       </span>
                     ) : null}
@@ -777,7 +811,7 @@ function SchoolsTableInner({
                     schoolId={school.id}
                     schoolName={school.name}
                     onCredential={setCredential}
-                    className={isAdminColumns ? undefined : "size-11 sm:size-10"}
+                    className="size-11 sm:size-10"
                   />
                 ) : null}
                 {caps.delete ? (
@@ -791,7 +825,7 @@ function SchoolsTableInner({
                         variant="ghost"
                         size="sm"
                         type="button"
-                        className="text-destructive hover:text-destructive"
+                        className={cn("text-destructive hover:text-destructive", mobileTouch)}
                         aria-label={`Remove ${school.name}`}
                       >
                         <Trash2 className="h-4 w-4" aria-hidden />
@@ -827,7 +861,11 @@ function SchoolsTableInner({
       </ListBusyRegion>
 
       {list.totalPages > 1 ? (
-        <SchoolsPager list={list} hrefFor={(l, page) => hrefFor(l, page, basePath)} />
+        <SchoolsPager
+          list={list}
+          hrefFor={(l, page) => hrefFor(l, page, basePath)}
+          buttonClassName={isAdminColumns ? "sm:h-10 lg:h-9" : undefined}
+        />
       ) : null}
     </div>
   );

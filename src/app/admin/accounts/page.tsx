@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
+import { KeyRound } from "lucide-react";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { TableSectionSkeleton } from "@/components/loading";
 import { AccountsTable } from "@/components/admin/accounts-table";
 import { listKey } from "@/lib/nav/list-params";
@@ -110,11 +112,18 @@ export default async function AdminAccountsPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
   return (
-    <AppShell
-      title="Accounts Management"
-      subtitle="Manage all user accounts across schools and programs"
+    <AdminPage
+      title="Accounts"
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="People"
+          eyebrowIcon={KeyRound}
+          title="Accounts"
+          subtitle="Every account in every school. Find a person, check their sign-in, or reset their password."
+        />
+      }
     >
       <Suspense
         key={listKey(params, ACCOUNTS_LIST_KEYS)}
@@ -122,6 +131,6 @@ export default async function AdminAccountsPage({ searchParams }: PageProps) {
       >
         <AccountsTableBody searchParams={params} />
       </Suspense>
-    </AppShell>
+    </AdminPage>
   );
 }

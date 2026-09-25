@@ -11,6 +11,7 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { roleHomePath } from "@/lib/auth/roles";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
@@ -28,7 +29,7 @@ import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { parseInput } from "@/lib/errors/validation";
-import { accountUserIdSchema } from "@/lib/validators/accounts.schema";
+import { accountUserIdSchema, impersonateUserSchema } from "@/lib/validators/accounts.schema";
 import { startTestLabSessionSchema } from "@/lib/validators/test-lab.schema";
 import {
   resolveTestLabNext,
@@ -43,6 +44,7 @@ import {
   clearImpersonationCookie,
   readImpersonationTicket,
   setImpersonationCookie,
+  type ImpersonationReturnTo,
 } from "@/lib/auth/impersonation";
 
 /**
@@ -96,16 +98,17 @@ const REVEAL_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
 
 /**
  * Who `impersonateUser` may sign the Super Admin in as. Deliberately an
- * allow-list rather than "everyone except X": a SUPER_ADMIN target was always
- * refused, and a DISTRICT_ADMIN target must be too — district admins do not
- * enter School Head or teacher pages, so redirecting one to `/school-head`
- * would put the admin somewhere the impersonated role could never legitimately
- * be (docs/specs/district-admin.md I14). Listed in the `WHERE` of
- * `impersonateUser`'s own lookup, so a disallowed target reads as "not found"
- * before `startImpersonation` — see the comment there for why its own
+ * allow-list rather than "everyone except X": a SUPER_ADMIN target is always
+ * refused, and any role added to `UserRole` later stays refused until someone
+ * decides where its session should land. DISTRICT_ADMIN is on the list so the
+ * division office can see the district portal exactly as a district admin
+ * does (docs/specs/district-admin.md I14); it lands on `/district` through
+ * `roleHomePath`, never on a School Head or teacher page. Listed in the `WHERE`
+ * of `impersonateUser`'s own lookup, so a disallowed target reads as "not
+ * found" before `startImpersonation` — see the comment there for why its own
  * SUPER_ADMIN check stays as a second, independent guard.
  */
-const IMPERSONATABLE_ROLES: readonly UserRole[] = ["TEACHER", "SCHOOL_HEAD"];
+const IMPERSONATABLE_ROLES: readonly UserRole[] = ["TEACHER", "SCHOOL_HEAD", "DISTRICT_ADMIN"];
 
 /**
  * Generic refusal for every target lookup below.
@@ -533,7 +536,10 @@ export const impersonateUser = action(
     const rate = await checkRateLimit(`impersonate:${admin.id}`, IMPERSONATE_RATE);
     if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
 
-    const { userId } = parseInput(accountUserIdSchema, { userId: formData.get("userId") });
+    const { userId, returnTo } = parseInput(impersonateUserSchema, {
+      userId: formData.get("userId"),
+      returnTo: formData.get("returnTo") ?? undefined,
+    });
 
     // REFUSAL: a soft-deleted account is unreachable from here, enforced in the
     // `where` rather than by a branch afterwards. `getCurrentUser` signs such an
@@ -541,7 +547,7 @@ export const impersonateUser = action(
     // why that is fatal at this point in the flow.
     //
     // REFUSAL — ROLE ALLOW-LIST (I14): `role: { in: IMPERSONATABLE_ROLES }`
-    // means a SUPER_ADMIN or DISTRICT_ADMIN id is simply not found, the same
+    // means a SUPER_ADMIN id is simply not found, the same
     // generic refusal every other mismatch gets here, and the reason
     // `startImpersonation`'s own SUPER_ADMIN check below is never reached for
     // this caller — it is kept there anyway as an independent guard for
@@ -559,7 +565,12 @@ export const impersonateUser = action(
     if (!target) throw accountNotFound(`impersonateUser: no live account ${userId}`);
 
     return startImpersonation(admin, target, {
-      redirectTo: target.role === "TEACHER" ? "/teacher" : "/school-head",
+      // `/teacher`, `/school-head` or `/district`. A district admin has no
+      // school, so `requireAdminScope` there reads THEIR assignments: the
+      // swapped session is theirs, not the Super Admin's, so the scope is
+      // their districts and never the division.
+      redirectTo: roleHomePath(target.role),
+      returnTo,
       // Ids, a school name the admin already sees on the row, and the role.
       // `targetRole` is what lets the log answer "head or teacher" without a
       // join. Never the account's email or the person's name.
@@ -638,7 +649,12 @@ export const startTestLabSession = action(
 async function startImpersonation(
   admin: { id: string; authId: string },
   target: ImpersonationTarget,
-  options: { redirectTo: string; auditMetadata: Record<string, unknown> }
+  options: {
+    redirectTo: string;
+    auditMetadata: Record<string, unknown>;
+    /** Signed into the ticket; only picks where "Return to admin" lands. */
+    returnTo?: ImpersonationReturnTo;
+  }
 ): Promise<never> {
   // REFUSAL — PRIVILEGE ESCALATION GUARD. One Super Admin may never take over
   // another's session, not even with a valid admin session of their own. The
@@ -723,6 +739,7 @@ async function startImpersonation(
     adminUserId: admin.id,
     targetUserId: target.id,
     sessionId: minted.sessionId,
+    ...(options.returnTo ? { returnTo: options.returnTo } : {}),
   });
 
   const supabase = await createSupabaseServerClient();
@@ -846,7 +863,12 @@ export async function endImpersonation(): Promise<ActionResult> {
     })
     .catch(() => null);
 
-  redirect(impersonationReturnPath({ targetSchoolIsDemo: target?.school?.isDemo === true }));
+  redirect(
+    impersonationReturnPath({
+      targetSchoolIsDemo: target?.school?.isDemo === true,
+      returnTo: ticket.returnTo,
+    })
+  );
 }
 
 type AuthClient = SupabaseClient["auth"];

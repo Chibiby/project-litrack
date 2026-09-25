@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface } from "@/components/ui/surface";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -130,7 +130,7 @@ function DangerAction({
             type="button"
             variant="outline"
             size="sm"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+           className="sm:h-10 lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => setOpen(true)}
           >
             {label}
@@ -168,6 +168,7 @@ function DangerAction({
               type="button"
               variant="destructive"
               size="sm"
+              className="sm:h-10 lg:h-9"
               disabled={!ready}
               loading={pending}
               loadingText="Running…"
@@ -186,6 +187,7 @@ function DangerAction({
               type="button"
               variant="ghost"
               size="sm"
+              className="sm:h-10 lg:h-9"
               disabled={pending}
               onClick={() => {
                 setTyped("");
@@ -249,8 +251,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   return (
     <div className="space-y-6">
       {!data.storeReady ? (
-        <Card className="border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/40">
-          <CardContent className="flex gap-3 pt-6 text-sm text-amber-950 dark:text-amber-100">
+        <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/40 flex gap-3 text-sm text-amber-950 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">Backup storage is not connected</p>
@@ -261,13 +262,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                 before it runs.
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </Surface>
       ) : null}
 
       {/* Undo — first, because it is what someone who just made a mistake is looking for. */}
-      <Card>
-        <CardContent className="space-y-3 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -296,22 +295,21 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               Undo
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </Surface>
 
       {/* Current contents */}
-      <Card>
-        <CardContent className="space-y-4 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Database className="h-5 w-5" aria-hidden />
               Current contents
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{data.totalRows.toLocaleString()} rows</Badge>
               <Button
                 type="button"
                 size="sm"
+                className="sm:h-10 lg:h-9"
                 disabled={disabled}
                 loading={backingUp}
                 loadingText="Backing up…"
@@ -329,22 +327,20 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {Object.entries(data.counts)
               .filter(([, n]) => n > 0)
               .map(([model, n]) => (
                 <div key={model} className="flex justify-between gap-2 border-b border-border/40 py-1">
-                  <span className="truncate text-muted-foreground">{model}</span>
+                  <span className="min-w-0 truncate text-muted-foreground">{model}</span>
                   <span className="font-medium tabular-nums">{n.toLocaleString()}</span>
                 </div>
               ))}
           </div>
-        </CardContent>
-      </Card>
+        </Surface>
 
       {/* Stored backups */}
-      <Card>
-        <CardContent className="space-y-4 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold">Backups</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -383,7 +379,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                       <TableCell className="text-sm tabular-nums">{formatBytes(b.size)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap justify-end gap-1">
-                          <Button asChild variant="ghost" size="sm">
+                          <Button asChild variant="ghost" size="sm" className="sm:h-10 lg:h-9">
                             <a
                               href={`/api/admin/backups/download?path=${encodeURIComponent(b.pathname)}`}
                               aria-label={`Download the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
@@ -396,6 +392,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="sm:h-10 lg:h-9"
                             disabled={disabled || restoring}
                             onClick={() => {
                               const typed = window.prompt(
@@ -421,7 +418,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
+                             className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
                               disabled={disabled}
                               aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
                               onClick={() => {
@@ -447,12 +444,10 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </Surface>
 
       {/* Restore from file */}
-      <Card>
-        <CardContent className="space-y-3 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Upload className="h-5 w-5" aria-hidden />
@@ -463,7 +458,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               This replaces all current data. A safety point is saved first.
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
             <input
               ref={fileRef}
               type="file"
@@ -477,7 +472,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               placeholder={CONFIRM_PHRASES.restore}
               autoComplete="off"
               spellCheck={false}
-              className="w-40"
+              className="w-full sm:w-40"
               aria-label={`Type ${CONFIRM_PHRASES.restore} to confirm the upload restore`}
             />
             <Button
@@ -508,12 +503,10 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               Restore from file
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </Surface>
 
       {/* Danger zone */}
-      <Card className="border-destructive/40">
-        <CardContent className="space-y-3 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-destructive/40 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-destructive">
               <AlertTriangle className="h-5 w-5" aria-hidden />
@@ -630,8 +623,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               );
             }}
           />
-        </CardContent>
-      </Card>
+        </Surface>
     </div>
   );
 }

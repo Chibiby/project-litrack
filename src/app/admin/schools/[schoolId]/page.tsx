@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Button } from "@/components/ui/button";
 import { SchoolDetailView } from "@/components/admin/school-detail-view";
 import { getSchoolDetail } from "@/lib/admin/school-detail";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, School } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -44,22 +45,31 @@ export default async function SchoolDetailPage({ params, searchParams }: PagePro
   if (!detail) notFound();
 
   return (
-    <AppShell
+    <AdminPage
       title={detail.school.name}
-      subtitle={`School ID ${detail.school.schoolIdCode}`}
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="School"
+          eyebrowIcon={School}
+          title={detail.school.name}
+          subtitle={`School ID ${detail.school.schoolIdCode}`}
+          meta={[detail.school.district, detail.school.division]
+            .filter((part): part is string => Boolean(part?.trim()))
+            .join(" · ") || undefined}
+          topRight={
+            <Button asChild variant="ghost" size="sm" className="sm:h-10 lg:h-9">
+              <Link href="/admin/schools">
+                <ChevronLeft aria-hidden />
+                <span className="max-sm:sr-only">All schools</span>
+              </Link>
+            </Button>
+          }
+        />
+      }
     >
-      <div className="mb-4">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin/schools">
-            <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-            All schools
-          </Link>
-        </Button>
-      </div>
-
       <SchoolDetailView detail={detail} searchParams={sp} />
-    </AppShell>
+    </AdminPage>
   );
 }

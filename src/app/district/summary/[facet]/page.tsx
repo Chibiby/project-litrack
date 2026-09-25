@@ -3,6 +3,8 @@ import { requireAdminScope } from "@/lib/auth/district-scope";
 import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { AppShell } from "@/components/app-shell";
 import { SummaryFacetView } from "@/components/summary/summary-facet-view";
+import { SummaryPageHero } from "@/components/summary/summary-page-hero";
+import { describeScope } from "@/components/district/scope-label";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,11 @@ export default async function DistrictSummaryFacetPage({
       subtitle={meta.description}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SummaryPageHero facetId={facet} portal="district" meta={describeScope(scope)} />
+      </div>
       <SummaryFacetView
         facetId={facet}
         adminScope={scope}

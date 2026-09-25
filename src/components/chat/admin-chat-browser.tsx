@@ -186,7 +186,7 @@ export function AdminChatBrowser({
                   aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
                   className={cn(
-                    "h-7 whitespace-nowrap rounded-full px-3 text-xs font-medium",
+                    "h-10 whitespace-nowrap rounded-full px-3 text-xs font-medium lg:h-7",
                     filter === value
                       ? "bg-violet-soft text-violet-soft-foreground hover:bg-violet-soft"
                       : "bg-muted text-muted-foreground hover:bg-accent"
@@ -329,13 +329,13 @@ function ConversationButton({
             <span className="truncate text-sm font-medium">{conversation.label}</span>
             {conversation.isDemoSchool ? <DemoBadge /> : null}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className="shrink-0 text-xs text-muted-foreground">
             {conversation.lastMessageAt ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(conversation.lastMessageAt) : ""}
           </span>
         </span>
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">{conversation.preview}</span>
       </span>
-      {conversation.unread && <Badge className="size-5 justify-center rounded-full bg-red-500 p-0 text-[10px] text-white">1</Badge>}
+      {conversation.unread && <Badge className="size-5 justify-center rounded-full bg-red-500 p-0 text-xs text-white">1</Badge>}
     </Button>
   );
 }

@@ -7,7 +7,8 @@ import { listMyBroadcasts } from "@/lib/actions/district-announcements";
 import { schoolToday } from "@/lib/date-keys";
 import { formatLongDate } from "@/lib/week-range";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListCardSkeleton } from "@/components/loading";
 import { BroadcastComposer } from "@/components/district/broadcast-composer";
@@ -26,15 +27,27 @@ export default async function DistrictAnnouncementsPage() {
       subtitle={describeScope(scope)}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SchoolHeadHero
+          eyebrow="Announcements"
+          eyebrowIcon={Megaphone}
+          title="Announcements"
+          subtitle="Send a notice to your schools. It shows on each school's Announcements page."
+          meta={describeScope(scope)}
+        />
+      </div>
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Suspense fallback={<ListCardSkeleton items={4} />}>
+        // Stacked until xl: the composer's district and school pickers need
+        // more width than half of a laptop's content column gives them.
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-2xl" />}>
             <ComposeCard scope={scope} />
           </Suspense>
-          <Suspense fallback={<ListCardSkeleton items={4} />}>
+          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-2xl" />}>
             <SentCard />
           </Suspense>
         </div>
@@ -51,15 +64,17 @@ async function ComposeCard({ scope }: { scope: AdminScope }) {
       : [...new Set(schools.flatMap((school) => (school.district ? [school.district] : [])))].sort();
 
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">Send an announcement</CardTitle>
-        <CardDescription>
+    <Surface as="section" aria-labelledby="district-compose-title" className="min-w-0 rounded-2xl">
+      <SurfaceHeader className="block px-4 sm:px-5">
+        <h2 id="district-compose-title" className="text-base font-semibold">
+          Send an announcement
+        </h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           It appears on each chosen school&apos;s Announcements page, marked as coming from your
           office.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </p>
+      </SurfaceHeader>
+      <SurfaceBody className="p-4 sm:p-5">
         {schools.length === 0 ? (
           <EmptyState
             title="No schools to send to"
@@ -77,8 +92,8 @@ async function ComposeCard({ scope }: { scope: AdminScope }) {
             allLabel={scope.kind === "division" ? "Every school" : "All my districts"}
           />
         )}
-      </CardContent>
-    </Card>
+      </SurfaceBody>
+    </Surface>
   );
 }
 
@@ -86,11 +101,13 @@ async function SentCard() {
   const broadcasts = await listMyBroadcasts();
 
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">Sent</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Surface as="section" aria-labelledby="district-sent-title" className="min-w-0 rounded-2xl">
+      <SurfaceHeader className="px-4 sm:px-5">
+        <h2 id="district-sent-title" className="text-base font-semibold">
+          Sent
+        </h2>
+      </SurfaceHeader>
+      <SurfaceBody className="p-4 sm:p-5">
         {broadcasts.length === 0 ? (
           <EmptyState
             title="No announcements sent yet"
@@ -108,7 +125,7 @@ async function SentCard() {
             }))}
           />
         )}
-      </CardContent>
-    </Card>
+      </SurfaceBody>
+    </Surface>
   );
 }

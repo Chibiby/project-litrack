@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ErrorLogRow } from "@/components/admin/error-log-table";
 
@@ -38,7 +38,24 @@ describe("ErrorLogTable", () => {
       />
     );
 
-    expect(screen.getAllByText("Demo")).toHaveLength(1);
+    // One demo event, drawn once in the desktop table and once in the phone list.
+    const table = screen.getByRole("table");
+    const list = screen.getByRole("list", { name: "Error events" });
+    expect(within(table).getAllByText("Demo")).toHaveLength(1);
+    expect(within(list).getAllByText("Demo")).toHaveLength(1);
+  });
+
+  it("lists every event in the phone layout with its reference", () => {
+    render(
+      <ErrorLogTable
+        events={[row({ id: "a", ref: "E-AAAA1111" }), row({ id: "b", ref: "E-BBBB2222" })]}
+        hasRefFilter={false}
+      />
+    );
+    const list = screen.getByRole("list", { name: "Error events" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getByText("E-AAAA1111")).not.toBeNull();
+    expect(within(list).getByText("E-BBBB2222")).not.toBeNull();
   });
 
   it("shows the empty state when there are no events", () => {

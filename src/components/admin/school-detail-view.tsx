@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface } from "@/components/ui/surface";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -207,7 +207,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
             type="button"
             variant="outline"
             size="sm"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+           className="sm:h-10 lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => setOpen(true)}
           >
             Clear school
@@ -238,6 +238,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
               type="button"
               variant="destructive"
               size="sm"
+              className="sm:h-10 lg:h-9"
               disabled={!matches}
               loading={pending}
               loadingText="Clearing…"
@@ -249,6 +250,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
               type="button"
               variant="ghost"
               size="sm"
+              className="sm:h-10 lg:h-9"
               disabled={pending}
               onClick={() => {
                 setTyped("");
@@ -284,6 +286,15 @@ function SelectAll({
       aria-label={label}
       onCheckedChange={(v) => onChange(v === true ? new Set(ids) : new Set())}
     />
+  );
+}
+
+function TeacherStatusBadge({ teacher }: { teacher: TeacherRow }) {
+  if (teacher.approvalStatus === "PENDING") return <Badge variant="outline">Pending</Badge>;
+  return teacher.isActive ? (
+    <Badge className="bg-primary/10 text-primary hover:bg-primary/10">Active</Badge>
+  ) : (
+    <Badge variant="secondary">Inactive</Badge>
   );
 }
 
@@ -361,11 +372,10 @@ export function SchoolDetailView({
   return (
     <div className="space-y-6">
       {/* Profile */}
-      <Card>
-        <CardContent className="space-y-4 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold">{school.name}</h2>
+              <h2 className="text-lg font-semibold">Profile</h2>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <Badge variant={school.isActive ? "default" : "secondary"}>
                   {school.isActive ? "Active" : "Inactive"}
@@ -380,7 +390,7 @@ export function SchoolDetailView({
                 </span>
               </div>
             </div>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="sm:h-10 lg:h-9">
               <Link href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`} prefetch>
                 <ExternalLink className="mr-2 h-4 w-4" aria-hidden />
                 Open as School Head
@@ -388,7 +398,7 @@ export function SchoolDetailView({
             </Button>
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             <Fact label="School ID" value={school.schoolIdCode} />
             <Fact label="Region" value={school.region} />
             <Fact label="Division" value={school.division} />
@@ -396,22 +406,20 @@ export function SchoolDetailView({
             <Fact label="Address" value={school.address} />
           </dl>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <CountTile label="Teachers" value={counts.teachers} />
             <CountTile label="Learners" value={counts.learners} />
             <CountTile label="Sections" value={counts.sections} />
             <CountTile label="Grade levels" value={counts.gradeLevels} />
             <CountTile label="School years" value={counts.schoolYears} />
           </div>
-        </CardContent>
-      </Card>
+        </Surface>
 
       {/* Teachers — unpaginated, client-sorted only. No provider, no
           `router.push`, no `useListNavigate`: there is no server round trip
           for this table, so it stays outside the list-navigation machinery
           entirely. */}
-      <Card>
-        <CardContent className="space-y-3 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Users className="h-5 w-5" aria-hidden />
@@ -431,6 +439,7 @@ export function SchoolDetailView({
                   type="button"
                   variant="destructive"
                   size="sm"
+                  className="sm:h-10 lg:h-9"
                   loading={removingTeachers}
                   loadingText="Removing…"
                   onClick={() => removeTeachers([...pickedTeachers])}
@@ -447,7 +456,7 @@ export function SchoolDetailView({
               No teacher accounts in this school.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto lg:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -483,15 +492,7 @@ export function SchoolDetailView({
                         {teacher.email}
                       </TableCell>
                       <TableCell>
-                        {teacher.approvalStatus === "PENDING" ? (
-                          <Badge variant="outline">Pending</Badge>
-                        ) : teacher.isActive ? (
-                          <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Inactive</Badge>
-                        )}
+                        <TeacherStatusBadge teacher={teacher} />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {teacher.advisorySection ?? "—"}
@@ -501,7 +502,7 @@ export function SchoolDetailView({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="text-destructive hover:text-destructive"
+                         className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
                           disabled={removingTeachers}
                           aria-label={`Remove ${teacher.listingName}`}
                           onClick={() => removeTeachers([teacher.id])}
@@ -515,8 +516,54 @@ export function SchoolDetailView({
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+          {teachers.length > 0 ? (
+            <div className="lg:hidden">
+              <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
+                <SelectAll
+                  ids={sortedTeachers.map((t) => t.id)}
+                  selected={pickedTeachers}
+                  onChange={setPickedTeachers}
+                  label="Select every teacher"
+                />
+                Select all
+              </label>
+              <ul className="divide-y divide-border/60" aria-label="Teachers">
+                {sortedTeachers.map((teacher: TeacherRow) => (
+                  <li key={teacher.id} className="flex items-start gap-3 py-3">
+                    <span className="flex min-h-10 items-center">
+                      <Checkbox
+                        checked={pickedTeachers.has(teacher.id)}
+                        aria-label={`Select ${teacher.listingName}`}
+                        onCheckedChange={() => setPickedTeachers((s) => toggleId(s, teacher.id))}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                        {teacher.listingName}
+                        <TeacherStatusBadge teacher={teacher} />
+                      </div>
+                      <p className="break-all text-sm text-muted-foreground">{teacher.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Advisory: {teacher.advisorySection ?? "—"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-destructive hover:text-destructive"
+                      disabled={removingTeachers}
+                      aria-label={`Remove ${teacher.listingName}`}
+                      onClick={() => removeTeachers([teacher.id])}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </Surface>
 
       {/* Learners — server-paginated, own keyed Suspense so paging/sorting it
           never touches the teachers table above. */}
@@ -534,8 +581,7 @@ export function SchoolDetailView({
       </Suspense>
 
       {/* Danger zone, scoped to this school */}
-      <Card className="border-destructive/40">
-        <CardContent className="space-y-3 pt-6">
+      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-destructive/40 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-destructive">
               <AlertTriangle className="h-5 w-5" aria-hidden />
@@ -548,8 +594,7 @@ export function SchoolDetailView({
             </p>
           </div>
           <ClearEverything schoolId={school.id} schoolName={school.name} />
-        </CardContent>
-      </Card>
+        </Surface>
     </div>
   );
 }
@@ -649,8 +694,7 @@ function SchoolLearnersPanelBody({
   };
 
   return (
-    <Card>
-      <CardContent className="space-y-3 pt-6">
+    <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <GraduationCap className="h-5 w-5" aria-hidden />
@@ -671,6 +715,7 @@ function SchoolLearnersPanelBody({
                 type="button"
                 variant="destructive"
                 size="sm"
+                className="sm:h-10 lg:h-9"
                 loading={removingLearners}
                 loadingText="Removing…"
                 onClick={() => removeLearners([...pickedLearners])}
@@ -692,7 +737,7 @@ function SchoolLearnersPanelBody({
             </p>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="hidden overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -744,7 +789,7 @@ function SchoolLearnersPanelBody({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="text-destructive hover:text-destructive"
+                           className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
                             disabled={removingLearners}
                             aria-label={`Remove ${learner.listingName}`}
                             onClick={() => removeLearners([learner.id])}
@@ -757,6 +802,55 @@ function SchoolLearnersPanelBody({
                   </TableBody>
                 </Table>
               </div>
+              <div className="lg:hidden">
+                <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
+                  <SelectAll
+                    ids={learners.map((l) => l.id)}
+                    selected={pickedLearners}
+                    onChange={setPickedLearners}
+                    label="Select every learner on this page"
+                  />
+                  Select all on this page
+                </label>
+                <ul className="divide-y divide-border/60" aria-label="Learners">
+                  {learners.map((learner: LearnerRow) => (
+                    <li key={learner.id} className="flex items-start gap-3 py-3">
+                      <span className="flex min-h-10 items-center">
+                        <Checkbox
+                          checked={pickedLearners.has(learner.id)}
+                          aria-label={`Select ${learner.listingName}`}
+                          onCheckedChange={() => setPickedLearners((s) => toggleId(s, learner.id))}
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                          {learner.listingName}
+                          {learner.isAralLearner ? (
+                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
+                              ARAL
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {learner.gradeLevel}
+                          {learner.section ? ` · ${learner.section}` : ""}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-destructive hover:text-destructive"
+                        disabled={removingLearners}
+                        aria-label={`Remove ${learner.listingName}`}
+                        onClick={() => removeLearners([learner.id])}
+                      >
+                        <Trash2 aria-hidden />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </>
           )}
         </ListBusyRegion>
@@ -768,12 +862,12 @@ function SchoolLearnersPanelBody({
           with "Maximum update depth exceeded".
         */}
         {learnerPages > 1 ? (
-          <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <span className="text-sm text-muted-foreground">
               Page {learnerPage} of {learnerPages}
             </span>
             <div className="flex gap-2">
-              <Button asChild={learnerPage > 1} variant="outline" size="sm" disabled={learnerPage <= 1}>
+              <Button asChild={learnerPage > 1} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={learnerPage <= 1}>
                 {learnerPage > 1 ? (
                   <Link href={learnerHref(learnerPage - 1)}>
                     <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
@@ -791,6 +885,7 @@ function SchoolLearnersPanelBody({
                 asChild={learnerPage < learnerPages}
                 variant="outline"
                 size="sm"
+                className="sm:h-10 lg:h-9"
                 disabled={learnerPage >= learnerPages}
               >
                 {learnerPage < learnerPages ? (
@@ -809,7 +904,6 @@ function SchoolLearnersPanelBody({
             </div>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </Surface>
   );
 }

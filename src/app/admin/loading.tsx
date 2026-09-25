@@ -1,9 +1,6 @@
-import {
-  MetricsGridSkeleton,
-  ChartSectionSkeleton,
-} from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
+import { AdminDashboardSkeleton } from "@/components/dashboard/admin/dashboard-skeleton";
 
 /**
  * Fuller content-slot skeleton for admin soft navigations.
@@ -22,9 +19,8 @@ export default function AdminLoading() {
     // and fire a book into the middle of that handover.
     <PostLoginLoadingBridge>
       <RouteLoadingOverlay>
-        <div className="w-full space-y-6 p-4 lg:p-6">
-          <MetricsGridSkeleton variant="admin" />
-          <ChartSectionSkeleton columns={2} />
+        <div className="w-full p-4 lg:p-6">
+          <AdminDashboardSkeleton />
         </div>
       </RouteLoadingOverlay>
     </PostLoginLoadingBridge>

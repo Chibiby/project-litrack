@@ -140,7 +140,7 @@ export function AdminLoginForm({
           >
             Sign in
           </Button>
-          <div className="flex items-center justify-center gap-6 text-base font-medium">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-base font-medium">
             <Link href="/forgot-password" className={AUTH_LINK}>
               Forgot password?
             </Link>

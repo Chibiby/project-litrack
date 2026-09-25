@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
 import type { TestLabPageData } from "@/components/admin/test-lab";
@@ -28,8 +28,10 @@ vi.mock("@/lib/actions/demo", () => ({
 }));
 
 const startTestLabSession = vi.fn(async (_fd?: FormData) => ({ ok: true }));
+const impersonateUser = vi.fn(async (_fd?: FormData) => ({ ok: true }));
 vi.mock("@/lib/actions/accounts", () => ({
   startTestLabSession: (...args: unknown[]) => startTestLabSession(...(args as [])),
+  impersonateUser: (...args: unknown[]) => impersonateUser(...(args as [])),
 }));
 
 const toastFn = vi.fn() as unknown as typeof import("sonner").toast & {
@@ -56,6 +58,7 @@ function baseData(overrides: Partial<TestLabPageData["status"]> = {}): TestLabPa
       ...overrides,
     },
     checklist: [],
+    districtAdmins: [],
   };
 }
 
@@ -79,6 +82,7 @@ describe("TestLabClient", () => {
     const data: TestLabPageData = {
       status: { demoSchoolExists: true, prepared: true, demoSessionExpiresAt: null },
       checklist: CHECKLIST,
+      districtAdmins: [],
     };
     render(<TestLabClient data={data} />);
 
@@ -98,6 +102,51 @@ describe("TestLabClient", () => {
     expect(screen.queryByRole("button", { name: "Reset test data" })).toBeNull();
   });
 
+  describe("Open as District Admin", () => {
+    const DAS = [
+      { id: "da-a", label: "ana.reyes", districts: ["Glan 1"] },
+      { id: "da-f", label: "ferdinand.simon", districts: ["Alabel 1", "Alabel 2"] },
+    ];
+
+    it("is offered even before demo test data is prepared, labelled as real district data", () => {
+      render(<TestLabClient data={{ ...baseData(), districtAdmins: DAS }} />);
+
+      expect(screen.getByRole("button", { name: "Open as District Admin" })).toBeTruthy();
+      expect(screen.getByText("Real district data")).toBeTruthy();
+      expect(screen.getByRole("option", { name: "ferdinand.simon (Alabel 1, Alabel 2)" })).toBeTruthy();
+    });
+
+    it("opens the first district admin through impersonateUser, never startTestLabSession", async () => {
+      render(<TestLabClient data={{ ...baseData(), districtAdmins: DAS }} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Open as District Admin" }));
+
+      await waitFor(() => expect(impersonateUser).toHaveBeenCalledTimes(1));
+      const fd = impersonateUser.mock.calls[0][0] as FormData;
+      expect(fd.get("userId")).toBe("da-a");
+      // "Return to admin" comes back to Test Lab, not the accounts console.
+      expect(fd.get("returnTo")).toBe("test-lab");
+      expect(startTestLabSession).not.toHaveBeenCalled();
+    });
+
+    it("opens the district admin picked in the select", async () => {
+      render(<TestLabClient data={{ ...baseData(), districtAdmins: DAS }} />);
+
+      fireEvent.change(screen.getByLabelText("District admin"), { target: { value: "da-f" } });
+      fireEvent.click(screen.getByRole("button", { name: "Open as District Admin" }));
+
+      await waitFor(() => expect(impersonateUser).toHaveBeenCalledTimes(1));
+      expect((impersonateUser.mock.calls[0][0] as FormData).get("userId")).toBe("da-f");
+    });
+
+    it("shows no button when there is no active district admin", () => {
+      render(<TestLabClient data={baseData()} />);
+
+      expect(screen.queryByRole("button", { name: "Open as District Admin" })).toBeNull();
+      expect(screen.getByText("No active district admin accounts.")).toBeTruthy();
+    });
+  });
+
   it("does not crash when localStorage throws", () => {
     const original = window.localStorage.getItem;
     window.localStorage.getItem = () => {
@@ -107,6 +156,7 @@ describe("TestLabClient", () => {
     const data: TestLabPageData = {
       status: { demoSchoolExists: true, prepared: true, demoSessionExpiresAt: null },
       checklist: CHECKLIST,
+      districtAdmins: [],
     };
     expect(() => render(<TestLabClient data={data} />)).not.toThrow();
     expect(screen.getByText("School Head")).toBeTruthy();

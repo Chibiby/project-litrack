@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import { Building2 } from "lucide-react";
 import type { AdminScope, SummaryScope } from "@/lib/auth/admin-scope";
 import { isDemoVisible } from "@/lib/demo/session";
@@ -9,15 +9,17 @@ import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
 import type { FacetResult, SummaryFacetId, SummaryLevel } from "@/lib/summary/types";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { Surface } from "@/components/ui/surface";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
 import { ListBusyRegion } from "@/components/loading/list-busy-region";
 import { SummaryScopeBar } from "./summary-scope-bar";
+import { SummaryDistrictPickPrompt } from "./summary-district-pick-prompt";
 import { SummaryParamControls } from "./summary-param-controls";
 import { SummaryExportMenu, type SummaryExportRequest } from "./summary-export-menu";
 import { SummarySectionCard } from "./summary-section-card";
 import { SummaryListCard } from "./summary-list-card";
 import { SummaryNotes } from "./summary-notes";
-import { SummaryResultsSkeleton } from "./summary-skeleton";
+import { SummaryPeriodBarSkeleton, SummaryResultsSkeleton } from "./summary-skeleton";
 import { SummaryFacetSwitcher } from "./summary-facet-index";
 import { resolvePageSummaryScope } from "./resolve-page-scope";
 import { formatComputedAt, formatCount } from "./summary-format";
@@ -45,6 +47,23 @@ function scopeQuery(flat: FlatSearchParams): string {
   return href.startsWith("?") ? href.slice(1) : "";
 }
 
+/**
+ * The toolbar's period strip and the results below it stream behind separate
+ * boundaries but read one facet result: `cache` makes that one load per
+ * request. Both callers pass the very same `scope` and `searchParams` objects.
+ */
+const loadFacetResult = cache(
+  async (
+    facetId: SummaryFacetId,
+    scope: SummaryScope,
+    searchParams: Record<string, string | string[] | undefined>
+  ): Promise<FacetResult | null> => {
+    const facet = getSummaryFacet(facetId);
+    if (!facet) return null;
+    return facet.load(scope, facetParamsFromSearch(facet, searchParams));
+  }
+);
+
 export type SummaryFacetViewProps = {
   facetId: SummaryFacetId;
   adminScope: AdminScope;
@@ -57,7 +76,7 @@ export type SummaryFacetViewProps = {
 /**
  * One summary facet at three levels (spec 3.6). The scope is narrowed and a
  * requested school checked here, before anything is read; the facet's figures
- * then stream in behind a skeleton so the scope bar paints at once.
+ * then stream in behind a skeleton so the toolbar paints at once.
  */
 export async function SummaryFacetView({
   facetId,
@@ -92,38 +111,63 @@ export async function SummaryFacetView({
 
   const level = levelOf(flat);
   const resultsKey = JSON.stringify(flat);
+  const scopeLabel = page.school?.name ?? page.district;
+  // At division scope, "By school" with no district picked resolves to
+  // `{ kind: "all" }` — every school in the division. Loading that facet
+  // result (up to ~2 MB for 300+ schools) is what made this page never
+  // finish; render a prompt instead of ever calling `facet.load` for it.
+  const needsDistrictPick =
+    adminScope.kind === "division" && level === "school" && page.scope.kind === "all";
 
   return (
     <ListNavigationProvider>
       <div className="min-w-0 space-y-4">
         <SummaryFacetSwitcher basePath={basePath} current={facetId} scopeQuery={scopeQuery(flat)} />
-        <SummaryScopeBar
-          basePath={facetPath}
-          searchParams={flat}
-          level={level}
-          district={page.district}
-          schoolId={page.school?.id ?? null}
-          districts={districts}
-          schools={schools.map((s) => ({
-            id: s.id,
-            name: s.name,
-            schoolIdCode: s.schoolIdCode,
-            district: s.district,
-          }))}
-          allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
-        />
-        <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
-          <Suspense key={resultsKey} fallback={<SummaryResultsSkeleton />}>
-            <SummaryFacetResults
-              facetId={facetId}
-              scope={page.scope}
-              scopeLabel={page.school?.name ?? page.district}
-              searchParams={searchParams}
-              flat={flat}
-              facetPath={facetPath}
+
+        <Surface as="section" aria-label="Summary filters" className="min-w-0 rounded-2xl">
+          <div className="p-3 sm:p-4 lg:px-5">
+            <SummaryScopeBar
+              basePath={facetPath}
+              searchParams={flat}
+              level={level}
+              district={page.district}
+              schoolId={page.school?.id ?? null}
+              districts={districts}
+              schools={schools.map((s) => ({
+                id: s.id,
+                name: s.name,
+                schoolIdCode: s.schoolIdCode,
+                district: s.district,
+              }))}
+              allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
+              requireDistrictForSchool={adminScope.kind === "division"}
             />
-          </Suspense>
-        </ListBusyRegion>
+          </div>
+          {needsDistrictPick ? null : (
+            <div className="border-t border-border/60 p-3 sm:p-4 lg:px-5">
+              <Suspense key={resultsKey} fallback={<SummaryPeriodBarSkeleton />}>
+                <SummaryPeriodBar
+                  facetId={facetId}
+                  scope={page.scope}
+                  scopeLabel={scopeLabel}
+                  searchParams={searchParams}
+                  flat={flat}
+                  facetPath={facetPath}
+                />
+              </Suspense>
+            </div>
+          )}
+        </Surface>
+
+        {needsDistrictPick ? (
+          <SummaryDistrictPickPrompt basePath={facetPath} searchParams={flat} districts={districts} />
+        ) : (
+          <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
+            <Suspense key={resultsKey} fallback={<SummaryResultsSkeleton />}>
+              <SummaryFacetResults facetId={facetId} scope={page.scope} searchParams={searchParams} />
+            </Suspense>
+          </ListBusyRegion>
+        )}
       </div>
     </ListNavigationProvider>
   );
@@ -142,7 +186,8 @@ function exportRequest(result: FacetResult, flat: FlatSearchParams): SummaryExpo
   return req;
 }
 
-async function SummaryFacetResults({
+/** What the figures cover, the facet's own period controls, and Export. */
+async function SummaryPeriodBar({
   facetId,
   scope,
   scopeLabel,
@@ -158,39 +203,56 @@ async function SummaryFacetResults({
   flat: FlatSearchParams;
   facetPath: string;
 }) {
-  const facet = getSummaryFacet(facetId);
-  if (!facet) return null;
-  const result = await facet.load(scope, facetParamsFromSearch(facet, searchParams));
+  const result = await loadFacetResult(facetId, scope, searchParams);
+  if (!result) return null;
   const meta = SUMMARY_FACET_META[facetId];
   const time = formatComputedAt(result.computedAt);
   const schoolWord = result.schoolCount === 1 ? "school" : "schools";
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/80 bg-card p-4 shadow-card lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0 space-y-3">
-          <div>
-            <p className="font-semibold text-foreground">{result.subtitle}</p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {scopeLabel ? `${scopeLabel} · ` : ""}
-              {formatCount(result.schoolCount)} {schoolWord}
-              {time ? ` · Figures as of ${time} (refreshed every 5 minutes)` : ""}
-            </p>
-          </div>
-          <SummaryParamControls
-            basePath={facetPath}
-            searchParams={flat}
-            kinds={meta.paramKinds}
-            params={result.params}
-            monthOptions={monthOptions()}
-            schoolYearLabels={result.options?.schoolYearLabels}
-          />
+    <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0 space-y-3">
+        <div>
+          <p className="font-semibold text-foreground">{result.subtitle}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {scopeLabel ? `${scopeLabel} · ` : ""}
+            {formatCount(result.schoolCount)} {schoolWord}
+            {time ? ` · Figures as of ${time} (refreshed every 5 minutes)` : ""}
+          </p>
         </div>
-        <div className="shrink-0">
-          <SummaryExportMenu facetId={facetId} request={exportRequest(result, flat)} />
-        </div>
+        <SummaryParamControls
+          basePath={facetPath}
+          searchParams={flat}
+          kinds={meta.paramKinds}
+          params={result.params}
+          monthOptions={monthOptions()}
+          schoolYearLabels={result.options?.schoolYearLabels}
+        />
       </div>
+      <div className="shrink-0">
+        <SummaryExportMenu facetId={facetId} request={exportRequest(result, flat)} />
+      </div>
+    </div>
+  );
+}
 
+const JUMP_LINK =
+  "inline-flex min-h-10 max-w-full items-center rounded-full border border-border/80 bg-card px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8";
+
+async function SummaryFacetResults({
+  facetId,
+  scope,
+  searchParams,
+}: {
+  facetId: SummaryFacetId;
+  scope: SummaryScope;
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
+  const result = await loadFacetResult(facetId, scope, searchParams);
+  if (!result) return null;
+
+  return (
+    <div className="min-w-0 space-y-4">
       <SummaryNotes notes={result.notes} gaps={result.gaps} />
 
       {result.schoolCount === 0 ? (
@@ -202,26 +264,21 @@ async function SummaryFacetResults({
       ) : (
         <>
           {result.sections.length + result.lists.length > 3 ? (
-            <nav aria-label="On this page" className="min-w-0 rounded-xl border border-border/80 bg-card p-4 shadow-card">
+            <nav aria-label="On this page" className="min-w-0">
               <p className="mb-2 text-xs font-medium text-muted-foreground">On this page</p>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1">
+              <ul className="flex flex-wrap gap-2">
                 {result.sections.map((s) => (
-                  <li key={s.id}>
-                    <a
-                      href={`#${sectionAnchorId(s.id)}`}
-                      className="inline-flex min-h-10 items-center text-sm text-primary underline-offset-4 hover:underline lg:min-h-0"
-                    >
-                      {s.title}
+                  <li key={s.id} className="min-w-0 max-w-full">
+                    <a href={`#${sectionAnchorId(s.id)}`} className={JUMP_LINK}>
+                      <span className="truncate" title={s.title}>{s.title}</span>
                     </a>
                   </li>
                 ))}
                 {result.lists.map((l) => (
-                  <li key={l.id}>
-                    <a
-                      href={`#${sectionAnchorId(`list-${l.id}`)}`}
-                      className="inline-flex min-h-10 items-center text-sm text-primary underline-offset-4 hover:underline lg:min-h-0"
-                    >
-                      {l.title} ({l.rows.length})
+                  <li key={l.id} className="min-w-0 max-w-full">
+                    <a href={`#${sectionAnchorId(`list-${l.id}`)}`} className={JUMP_LINK}>
+                      <span className="truncate" title={l.title}>{l.title}</span>
+                      <span className="ml-1.5 tabular-nums">({l.rows.length})</span>
                     </a>
                   </li>
                 ))}

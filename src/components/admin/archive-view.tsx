@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Archive as ArchiveIcon, ChevronLeft, ChevronRight, GraduationCap, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface } from "@/components/ui/surface";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -109,12 +109,12 @@ function Paginator({
 }) {
   if (pages <= 1) return null;
   return (
-    <div className="flex items-center justify-between gap-3 pt-1">
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
       <span className="text-sm text-muted-foreground">
         Page {page} of {pages}
       </span>
       <div className="flex gap-2">
-        <Button asChild={page > 1} variant="outline" size="sm" disabled={page <= 1}>
+        <Button asChild={page > 1} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={page <= 1}>
           {page > 1 ? (
             <Link href={hrefFor(page - 1)}>
               <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
@@ -128,7 +128,7 @@ function Paginator({
             </span>
           )}
         </Button>
-        <Button asChild={page < pages} variant="outline" size="sm" disabled={page >= pages}>
+        <Button asChild={page < pages} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={page >= pages}>
           {page < pages ? (
             <Link href={hrefFor(page + 1)}>
               Next
@@ -232,10 +232,9 @@ export function ArchiveView({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardContent className="pt-6">
+      <Surface as="section" className="rounded-2xl p-3 sm:p-4">
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
             onSubmit={(event) => {
               event.preventDefault();
               apply({ q: query.trim() || null });
@@ -248,7 +247,7 @@ export function ArchiveView({
                 onValueChange={(value) => apply({ school: value })}
                 disabled={pending}
               >
-                <SelectTrigger id="archive-school" className="w-56">
+                <SelectTrigger id="archive-school" className="w-full sm:w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -269,7 +268,7 @@ export function ArchiveView({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Learner or teacher name"
-                className="w-56"
+                className="w-full sm:w-56"
                 disabled={pending}
               />
             </div>
@@ -291,8 +290,7 @@ export function ArchiveView({
               </Button>
             ) : null}
           </form>
-        </CardContent>
-      </Card>
+      </Surface>
 
       <Suspense
         key={listKey(params, ARCHIVE_TEACHERS_KEYS)}
@@ -356,8 +354,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
   };
 
   return (
-    <Card>
-      <CardContent className="space-y-3 pt-6">
+    <Surface as="section" className="min-w-0 space-y-3 rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="h-5 w-5" aria-hidden />
@@ -386,7 +383,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="hidden overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -418,6 +415,24 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
                   </TableBody>
                 </Table>
               </div>
+              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed teachers">
+                {data.rows.map((teacher) => (
+                  <li key={teacher.id} className="flex items-start gap-3 py-3">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-medium text-foreground">{teacher.listingName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        <SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />
+                        {" · "}
+                        {formatDate(teacher.deletedAt)}
+                      </p>
+                      <p className="break-all text-xs text-muted-foreground">
+                        {teacher.originalEmail ?? "Email not recoverable"}
+                      </p>
+                    </div>
+                    <TeacherRowActions teacher={teacher} />
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </ListBusyRegion>
@@ -431,8 +446,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
           which page they are on while the rows load.
         */}
         <Paginator page={data.page} pages={data.pages} hrefFor={teacherHref} />
-      </CardContent>
-    </Card>
+    </Surface>
   );
 }
 
@@ -471,8 +485,7 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
   };
 
   return (
-    <Card>
-      <CardContent className="space-y-3 pt-6">
+    <Surface as="section" className="min-w-0 space-y-3 rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <GraduationCap className="h-5 w-5" aria-hidden />
@@ -501,7 +514,7 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="hidden overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -547,12 +560,37 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
                   </TableBody>
                 </Table>
               </div>
+              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed learners">
+                {data.rows.map((learner) => (
+                  <li key={learner.id} className="flex items-start gap-3 py-3">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                        {learner.listingName}
+                        {learner.isAralLearner ? (
+                          <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
+                            ARAL
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        <SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {learner.gradeLevel}
+                        {learner.section ? ` · ${learner.section}` : ""}
+                        {" · removed "}
+                        {formatDate(learner.deletedAt)}
+                      </p>
+                    </div>
+                    <LearnerRowActions learner={learner} />
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </ListBusyRegion>
         {/* Outside the busy region — see the teachers bucket above for why. */}
         <Paginator page={data.page} pages={data.pages} hrefFor={learnerHref} />
-      </CardContent>
-    </Card>
+    </Surface>
   );
 }

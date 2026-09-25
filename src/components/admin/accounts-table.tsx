@@ -22,7 +22,8 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface } from "@/components/ui/surface";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -216,60 +217,56 @@ function StatusCell({ row }: { row: AccountRow }) {
 
 function AccountOverview({ summary }: { summary?: AccountSummary }) {
   if (!summary) return null;
-  const cards = [
-    {
-      label: "Total accounts",
-      value: summary.totalCount,
-      icon: Users,
-      tone: "bg-primary/10 text-primary",
-    },
-    {
-      label: "Active accounts",
-      value: summary.activeCount,
-      icon: CircleCheck,
-      tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    },
-    {
-      label: "Inactive accounts",
-      value: summary.inactiveCount,
-      icon: CircleX,
-      tone: "bg-muted text-muted-foreground",
-    },
-    {
-      label: "School Heads",
-      value: summary.schoolHeadCount,
-      icon: ShieldCheck,
-      tone: "bg-violet-soft text-violet-soft-foreground",
-    },
-    {
-      label: "Teachers",
-      value: summary.teacherCount,
-      icon: GraduationCap,
-      tone: "bg-primary/10 text-primary",
-    },
-  ];
   return (
     <section
       aria-label="Account overview"
-      className="grid gap-3 sm:grid-cols-2 md:max-lg:grid-cols-3 xl:grid-cols-5"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5"
     >
-      {cards.map(({ label, value, icon: Icon, tone }) => (
-        <Card key={label} className="shadow-none">
-          <CardContent className="flex items-center gap-3 p-4">
-            <span
-              className={`grid size-10 shrink-0 place-items-center rounded-full ${tone}`}
-            >
-              <Icon className="size-5" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-lg font-bold leading-none tabular-nums">
-                {value.toLocaleString()}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      <StatCard
+        title="Total accounts"
+        value={summary.totalCount.toLocaleString()}
+        hint="Every role"
+        icon={Users}
+        tone="primary"
+        inlineOnPhone
+        denseOnPhone
+      />
+      <StatCard
+        title="Active"
+        value={summary.activeCount.toLocaleString()}
+        hint="Can sign in"
+        icon={CircleCheck}
+        tone="emerald"
+        inlineOnPhone
+        denseOnPhone
+      />
+      <StatCard
+        title="Inactive"
+        value={summary.inactiveCount.toLocaleString()}
+        hint="Switched off"
+        icon={CircleX}
+        tone="neutral"
+        inlineOnPhone
+        denseOnPhone
+      />
+      <StatCard
+        title="School Heads"
+        value={summary.schoolHeadCount.toLocaleString()}
+        hint="One per school"
+        icon={ShieldCheck}
+        tone="amber"
+        inlineOnPhone
+        denseOnPhone
+      />
+      <StatCard
+        title="Teachers"
+        value={summary.teacherCount.toLocaleString()}
+        hint="Across every school"
+        icon={GraduationCap}
+        tone="primary"
+        inlineOnPhone
+        denseOnPhone
+      />
     </section>
   );
 }
@@ -330,12 +327,11 @@ function AccountsTableInner({
   };
 
   return (
-      <div className="space-y-3">
+      <div className="space-y-4">
       <AccountOverview summary={summary} />
-      <Card className="shadow-none">
-        <CardContent className="p-3 sm:p-4">
+      <Surface as="section" className="rounded-2xl p-3 sm:p-4">
           <form
-            className="grid gap-3 lg:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto] lg:items-end"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
             onSubmit={(event) => {
               event.preventDefault();
               apply({ q: query.trim() || null });
@@ -401,7 +397,7 @@ function AccountsTableInner({
             <div className="flex gap-2">
               <Button
                 type="submit"
-                className="h-10 flex-1 lg:flex-none"
+                className="h-10 flex-1 xl:flex-none"
                 loading={pending}
                 loadingText="Searching…"
               >
@@ -411,7 +407,7 @@ function AccountsTableInner({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 flex-1 lg:flex-none"
+                  className="h-10 flex-1 xl:flex-none"
                   disabled={pending}
                   onClick={() => {
                     setQuery("");
@@ -423,10 +419,8 @@ function AccountsTableInner({
               ) : null}
             </div>
           </form>
-        </CardContent>
-      </Card>
-      <Card className="overflow-hidden shadow-none">
-        <CardContent className="space-y-3 p-0">
+      </Surface>
+      <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
             <h2 className="text-base font-semibold">
               Accounts{" "}
@@ -454,7 +448,7 @@ function AccountsTableInner({
             </div>
           ) : (
             <>
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden overflow-x-auto lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -522,11 +516,11 @@ function AccountsTableInner({
                   </TableBody>
                 </Table>
               </div>
-              <div className="space-y-3 px-3 pb-1 md:hidden">
+              <div className="grid grid-cols-1 gap-3 px-3 pb-1 md:grid-cols-2 lg:hidden">
                 {rows.map((row) => (
                   <article
                     key={row.id}
-                    className="rounded-xl border bg-card p-4"
+                    className="min-w-0 rounded-xl border border-border/80 bg-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
@@ -545,7 +539,7 @@ function AccountsTableInner({
                       </div>
                       <StatusCell row={row} />
                     </div>
-                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-1">
                       <div className="min-w-0">
                         <dt className="text-xs font-medium text-muted-foreground">
                           School
@@ -591,8 +585,7 @@ function AccountsTableInner({
               hrefFor={hrefFor}
             />
           ) : null}
-        </CardContent>
-      </Card>
+      </Surface>
       </div>
   );
 }

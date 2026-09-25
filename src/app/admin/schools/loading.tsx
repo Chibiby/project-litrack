@@ -1,16 +1,16 @@
 import { TableSectionSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
-/**
- * Content-slot skeleton for the schools list. Sidebar stays mounted in
- * RoleShell; matches the heavy table route without remounting a shell.
- */
+/** Content-slot skeleton: the banded hero, then the schools table. RoleShell stays mounted. */
 export default function AdminSchoolsLoading() {
   return (
     <RouteLoadingOverlay>
-      <div className="w-full space-y-6 p-4 lg:p-6">
-        <TableSectionSkeleton rows={8} columns={5} />
-      </div>
+      <SchoolHeadPageSkeleton hero>
+        <div className="space-y-6">
+          <TableSectionSkeleton rows={8} columns={5} />
+        </div>
+      </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );
 }

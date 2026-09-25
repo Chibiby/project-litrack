@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { TestLabClient, type TestLabPageData } from "@/components/admin/test-lab";
 import { demoStatus } from "@/lib/demo/provision";
@@ -18,10 +19,24 @@ export const dynamic = "force-dynamic";
 export default async function AdminTestLabPage() {
   const user = await requireUser("SUPER_ADMIN");
 
-  const [demoSession, status, fixtures] = await Promise.all([
+  const [demoSession, status, fixtures, districtAdmins] = await Promise.all([
     readDemoSession(),
     demoStatus(),
     findTestLabFixtures(),
+    // The demo school is outside every district scope, so the district portal
+    // is opened as a REAL district admin, through the same `impersonateUser`
+    // path as User Accounts "Sign in as". Only accounts that action would
+    // accept: live and active (it refuses anything else as inactive).
+    prisma.user.findMany({
+      where: { role: "DISTRICT_ADMIN", deletedAt: null, isActive: true },
+      orderBy: { username: "asc" },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        districtAssignments: { select: { district: true }, orderBy: { district: "asc" } },
+      },
+    }),
   ]);
 
   let checklist: TestLabChecklistItem[] = [];
@@ -44,6 +59,11 @@ export default async function AdminTestLabPage() {
       demoSessionExpiresAt: demoSession?.expiresAt ?? null,
     },
     checklist,
+    districtAdmins: districtAdmins.map((da) => ({
+      id: da.id,
+      label: da.username ?? da.fullName,
+      districts: da.districtAssignments.map((a) => a.district),
+    })),
   };
 
   return (

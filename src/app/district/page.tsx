@@ -1,24 +1,34 @@
-import { Suspense } from "react";
-import Link from "next/link";
-import { BookOpenCheck, Building2, CalendarDays, ShieldAlert, Users } from "lucide-react";
+import { Suspense, cache } from "react";
+import type { User } from "@prisma/client";
+import { BarChart3, BookOpenCheck, CalendarDays, ShieldAlert, Users } from "lucide-react";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import type { AdminScope, SummaryScope } from "@/lib/auth/admin-scope";
 import { resolveSummaryScope } from "@/lib/auth/admin-scope";
 import { isDemoVisible } from "@/lib/demo/session";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
+import { teacherBannerSrc } from "@/lib/dashboard/banner";
+import { getDistrictNotifications } from "@/lib/district/notifications";
 import { SUMMARY_FACETS } from "@/lib/summary/facets";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { monthKeyOf, monthLabel } from "@/lib/summary/shape/months";
-import { cellOf, NO_DISTRICT_LABEL } from "@/lib/summary/shape/rollup";
+import { cellOf } from "@/lib/summary/shape/rollup";
 import type { FacetResult, SummaryGroup } from "@/lib/summary/types";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { AppShell } from "@/components/app-shell";
-import { EmptyState } from "@/components/dashboard/empty-state";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { Surface } from "@/components/ui/surface";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SchoolHeadGreetingHero } from "@/components/dashboard/school-head/greeting-hero";
+import { SchoolAttentionPanel } from "@/components/dashboard/school-head/attention-panel";
+import { CalendarCard } from "@/components/dashboard/teacher/calendar-card";
+import { StatCard, StatCardRow } from "@/components/dashboard/teacher/stat-cards";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { formatCount, formatPct } from "@/components/summary/summary-format";
+import { NoDistrictsState } from "@/components/district/no-districts-state";
+import { DistrictsPanel, type DistrictCard } from "@/components/district/districts-panel";
+import { buildDistrictAttention } from "@/components/district/overview-attention";
+import {
+  DistrictAttentionSkeleton,
+  DistrictStatSkeleton,
+} from "@/components/district/overview-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,26 +38,24 @@ function overallRow(result: FacetResult, sectionId: string): SummaryGroup | null
   return section?.table.groups.find((g) => !g.gradeType) ?? null;
 }
 
-function TileSkeleton() {
-  return (
-    <Surface className="p-5" aria-hidden>
-      <Skeleton className="h-4 w-24" />
-      <Skeleton className="mt-3 h-8 w-20" />
-      <Skeleton className="mt-1.5 h-3 w-28" />
-    </Surface>
-  );
-}
+// The flagged-schools tile and the attention rail read the same compliance
+// result; one load per request serves both.
+const loadCompliance = cache((scope: SummaryScope) =>
+  SUMMARY_FACETS.compliance.load(scope, { level: "overall" })
+);
 
 async function LearnersTile({ scope }: { scope: SummaryScope }) {
   const result = await SUMMARY_FACETS.learners.load(scope, { level: "overall" });
   const total = overallRow(result, "gender")?.base ?? 0;
   return (
-    <MetricCard
+    <StatCard
       title="Learners"
       value={formatCount(total)}
-      icon={Users}
       hint="Enrolled in the active school year"
-      href={DISTRICT_ROUTES.summary("learners")}
+      icon={Users}
+      tone="amber"
+      decor="bars"
+      action={{ label: "Learners summary", href: DISTRICT_ROUTES.summary("learners") }}
     />
   );
 }
@@ -56,13 +64,17 @@ async function AralLearnersTile({ scope, month }: { scope: SummaryScope; month: 
   const result = await SUMMARY_FACETS["reading-behavior"].load(scope, { level: "overall", month });
   const total = overallRow(result, "wordRecognition")?.base ?? 0;
   return (
-    <MetricCard
+    <StatCard
       title="ARAL learners"
       value={formatCount(total)}
+      hint="In the ARAL reading program"
       icon={BookOpenCheck}
       tone="violet"
-      hint="In the ARAL reading program"
-      href={`${DISTRICT_ROUTES.summary("reading-behavior")}?month=${month}`}
+      decor="sprout"
+      action={{
+        label: "Reading behaviour",
+        href: `${DISTRICT_ROUTES.summary("reading-behavior")}?month=${month}`,
+      }}
     />
   );
 }
@@ -76,30 +88,59 @@ async function AttendanceTile({ scope, month }: { scope: SummaryScope; month: st
   const row = overallRow(result, "monthly");
   const rate = row ? cellOf(row, month).pct : null;
   return (
-    <MetricCard
+    <StatCard
       title="Attendance this month"
       value={formatPct(rate)}
+      hint={`ARAL learners, ${monthLabel(month)}`}
       icon={CalendarDays}
       tone="violet"
-      hint={`ARAL learners, ${monthLabel(month)}`}
-      href={`${DISTRICT_ROUTES.summary("attendance")}?from=${month}&to=${month}`}
+      decor="wave"
+      action={{
+        label: "Attendance summary",
+        href: `${DISTRICT_ROUTES.summary("attendance")}?from=${month}&to=${month}`,
+      }}
     />
   );
 }
 
 async function ComplianceTile({ scope }: { scope: SummaryScope }) {
-  const result = await SUMMARY_FACETS.compliance.load(scope, { level: "overall" });
+  const result = await loadCompliance(scope);
   const row = overallRow(result, "flags");
   const active = row?.base ?? 0;
   const flagged = row ? active - cellOf(row, "COMPLIANT").count : 0;
   return (
-    <MetricCard
+    <StatCard
       title="Schools flagged"
       value={formatCount(flagged)}
-      icon={ShieldAlert}
-      tone={flagged > 0 ? "amber" : "default"}
       hint={`Of ${formatCount(active)} active schools`}
-      href={DISTRICT_ROUTES.summary("compliance")}
+      icon={ShieldAlert}
+      tone={flagged > 0 ? "amber" : "neutral"}
+      decor="clock"
+      action={{ label: "Non-compliance", href: DISTRICT_ROUTES.summary("compliance") }}
+    />
+  );
+}
+
+async function AttentionRail({
+  user,
+  adminScope,
+  scope,
+}: {
+  user: Pick<User, "id">;
+  adminScope: AdminScope;
+  scope: SummaryScope;
+}) {
+  const [notifications, compliance] = await Promise.all([
+    getDistrictNotifications(user, adminScope),
+    loadCompliance(scope),
+  ]);
+  return (
+    <SchoolAttentionPanel
+      items={buildDistrictAttention({
+        notifications,
+        complianceLists: compliance.lists,
+        complianceHref: DISTRICT_ROUTES.summary("compliance"),
+      })}
     />
   );
 }
@@ -110,105 +151,134 @@ function districtsOf(scope: AdminScope, schools: { district: string | null }[]):
   return [...names.filter((d): d is string => d !== null).sort(), ...(names.includes(null) ? [null] : [])];
 }
 
+function schoolsLabel(count: number): string {
+  return `${formatCount(count)} ${count === 1 ? "school" : "schools"}`;
+}
+
+function heroMeta(scope: AdminScope, districts: (string | null)[], schoolCount: number): string {
+  if (scope.kind === "districts" && scope.districts.length === 0) return "No districts assigned yet";
+  const where =
+    scope.kind === "division"
+      ? "Whole division"
+      : districts.length === 1
+        ? (districts[0] ?? "No district")
+        : `${districts.length} districts`;
+  return `${where} · ${schoolsLabel(schoolCount)}`;
+}
+
 export default async function DistrictOverviewPage() {
   const { user, scope } = await requireAdminScope();
   const schools = await resolveScopeSchools(scope, await isDemoVisible());
   const summaryScope = resolveSummaryScope(scope, {});
-  const month = monthKeyOf(formatLocalDateKey(schoolToday()));
+  const todayKey = formatLocalDateKey(schoolToday());
+  const month = monthKeyOf(todayKey);
   const districts = districtsOf(scope, schools);
   const noAssignments = scope.kind === "districts" && scope.districts.length === 0;
 
-  const subtitle =
-    scope.kind === "division"
-      ? "The whole division"
-      : `${districts.length === 1 ? "District" : "Districts"}: ${districts.join(", ") || "none assigned"}`;
+  const districtCards: DistrictCard[] = districts.map((district) => {
+    const inDistrict = schools.filter((s) => s.district === district);
+    return {
+      district,
+      schoolCount: inDistrict.length,
+      activeCount: inDistrict.filter((s) => s.isActive).length,
+    };
+  });
+
+  const quote = pickQuote();
+  // The calendar shows the next quote in the list, so it never repeats the hero.
+  const calendarQuote =
+    DASHBOARD_QUOTES[(DASHBOARD_QUOTES.indexOf(quote) + 1) % DASHBOARD_QUOTES.length];
+  const firstName = user.firstName.trim() || user.fullName.trim().split(/\s+/)[0] || "there";
 
   return (
     <AppShell
       title="District Overview"
-      subtitle={subtitle}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
-      {noAssignments ? (
-        <EmptyState
-          icon={Building2}
-          title="No districts assigned yet"
-          description="Your account has no district assigned, so there are no schools to show. Ask the division office to assign your districts."
+      <div className="mb-6">
+        {/* District admins have no profile gender, so they get the same
+            default art a Super Admin sees on the School Head dashboard. */}
+        <SchoolHeadGreetingHero
+          firstName={firstName}
+          todayKey={todayKey}
+          bannerSrc={teacherBannerSrc(null)}
+          quote={quote}
+          subtitle={
+            scope.kind === "division"
+              ? "Here's how the division's schools are doing."
+              : "Here's how your schools are doing today."
+          }
+          meta={heroMeta(scope, districts, schools.length)}
         />
-      ) : (
-        <div className="min-w-0 space-y-6">
-          <section aria-labelledby="district-headline" className="min-w-0">
-            <h2 id="district-headline" className="sr-only">
-              Headline figures
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Suspense fallback={<TileSkeleton />}>
-                <LearnersTile scope={summaryScope} />
-              </Suspense>
-              <Suspense fallback={<TileSkeleton />}>
-                <AralLearnersTile scope={summaryScope} month={month} />
-              </Suspense>
-              <Suspense fallback={<TileSkeleton />}>
-                <AttendanceTile scope={summaryScope} month={month} />
-              </Suspense>
-              <Suspense fallback={<TileSkeleton />}>
-                <ComplianceTile scope={summaryScope} />
-              </Suspense>
-            </div>
-          </section>
+      </div>
 
-          <section aria-labelledby="district-list" className="min-w-0">
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="district-list" className="text-base font-semibold tracking-tight">
-                {scope.kind === "districts" ? "Your districts" : "Districts"}
-              </h2>
-              <Link
-                href={DISTRICT_ROUTES.schools}
-                prefetch={true}
-                className="inline-flex min-h-10 items-center text-sm font-medium text-primary underline-offset-4 hover:underline lg:min-h-0"
-              >
-                {formatCount(schools.length)} {schools.length === 1 ? "school" : "schools"} in all
-              </Link>
+      {noAssignments ? (
+        <NoDistrictsState />
+      ) : (
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Desktop: the tiles rise into the hero's soft lower edge, as on the
+              School Head dashboard. */}
+          <div className="relative z-10 grid grid-cols-1 gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="flex min-w-0 flex-col gap-4">
+              <section aria-labelledby="district-headline" className="min-w-0">
+                <h2 id="district-headline" className="sr-only">
+                  Headline figures
+                </h2>
+                <StatCardRow>
+                  <Suspense fallback={<DistrictStatSkeleton />}>
+                    <LearnersTile scope={summaryScope} />
+                  </Suspense>
+                  <Suspense fallback={<DistrictStatSkeleton />}>
+                    <AralLearnersTile scope={summaryScope} month={month} />
+                  </Suspense>
+                  <Suspense fallback={<DistrictStatSkeleton />}>
+                    <AttendanceTile scope={summaryScope} month={month} />
+                  </Suspense>
+                  <Suspense fallback={<DistrictStatSkeleton />}>
+                    <ComplianceTile scope={summaryScope} />
+                  </Suspense>
+                </StatCardRow>
+              </section>
+
+              <DistrictsPanel
+                title={scope.kind === "districts" ? "Your districts" : "Districts"}
+                districts={districtCards}
+                totalSchools={schools.length}
+              />
             </div>
-            {districts.length === 0 ? (
-              <EmptyState icon={Building2} title="No schools yet" description="No schools are recorded in your scope." />
-            ) : (
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {districts.map((district) => {
-                  const count = schools.filter((s) => s.district === district).length;
-                  const label = district ?? NO_DISTRICT_LABEL;
-                  return (
-                    <li key={label} className="min-w-0">
-                      <Surface className="flex h-full items-center justify-between gap-3 p-4">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-foreground">{label}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatCount(count)} {count === 1 ? "school" : "schools"}
-                          </p>
-                        </div>
-                        {district !== null ? (
-                          <Link
-                            href={`${DISTRICT_ROUTES.summary("learners")}?district=${encodeURIComponent(district)}`}
-                            prefetch={true}
-                            className="inline-flex min-h-10 shrink-0 items-center text-sm font-medium text-primary underline-offset-4 hover:underline lg:min-h-0"
-                            aria-label={`Summary for ${district}`}
-                          >
-                            Summary
-                          </Link>
-                        ) : null}
-                      </Surface>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+
+            <aside
+              aria-label="Calendar and alerts"
+              className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-4"
+            >
+              <div className="hidden xl:block">
+                <CalendarCard todayKey={todayKey} quote={calendarQuote} />
+              </div>
+              <Suspense fallback={<DistrictAttentionSkeleton />}>
+                <AttentionRail user={user} adminScope={scope} scope={summaryScope} />
+              </Suspense>
+            </aside>
+          </div>
 
           <section aria-labelledby="district-summaries" className="min-w-0">
-            <h2 id="district-summaries" className="mb-3 text-base font-semibold tracking-tight">
-              Summaries
-            </h2>
+            <div className="mb-3 flex items-center gap-3">
+              <span
+                aria-hidden
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+              >
+                <BarChart3 className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 id="district-summaries" className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                  Summaries
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Overall, by district or by school, ready to export.
+                </p>
+              </div>
+            </div>
             <SummaryFacetIndex basePath="/district/summary" />
           </section>
         </div>

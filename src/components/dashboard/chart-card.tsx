@@ -26,7 +26,7 @@ export function ChartCard({
     >
       <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold tracking-tight">{title}</h3>
+          <h3 className="text-base font-semibold tracking-tight lg:truncate">{title}</h3>
           {description ? (
             <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
           ) : null}

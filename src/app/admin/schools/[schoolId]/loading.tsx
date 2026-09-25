@@ -1,17 +1,17 @@
 import { TableSectionSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
-/**
- * Two tables and a profile card. Matches the shape of the real page closely
- * enough that nothing jumps when the data lands.
- */
+/** Content-slot skeleton: the banded hero, then the profile card and both rosters. RoleShell stays mounted. */
 export default function AdminSchoolDetailLoading() {
   return (
     <RouteLoadingOverlay>
-      <div className="w-full space-y-6 p-4 lg:p-6">
-        <TableSectionSkeleton rows={3} columns={4} />
-        <TableSectionSkeleton rows={6} columns={4} />
-      </div>
+      <SchoolHeadPageSkeleton hero>
+        <div className="space-y-6">
+          <TableSectionSkeleton rows={3} columns={4} />
+          <TableSectionSkeleton rows={6} columns={4} />
+        </div>
+      </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );
 }

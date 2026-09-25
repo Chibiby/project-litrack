@@ -9,7 +9,7 @@ export default async function AdminSettingsSecurityPage() {
   const user = await requireUser("SUPER_ADMIN");
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
+    <div className="min-w-0 max-w-xl space-y-6">
       <PasswordForm mode="change" />
       <ChangeEmailForm
         currentEmail={user.email}

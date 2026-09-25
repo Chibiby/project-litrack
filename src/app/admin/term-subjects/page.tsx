@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import type { GradeLevelType } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { AppShell } from "@/components/app-shell";
+import { BookOpen } from "lucide-react";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import {
@@ -62,22 +64,32 @@ export default async function AdminTermSubjectDefaultsPage({ searchParams }: Pag
   }));
 
   return (
-    <AppShell
-      title="Default Term Subjects"
-      subtitle="New schools and resets use these subjects. Existing schools keep their own lists. Kindergarten uses the competency checklist instead, so it is not listed here."
+    <AdminPage
+      title="Default term subjects"
       role={user.role}
       userName={user.fullName || user.email}
-      actions={<ResetAllSchoolsTermSubjectsButton />}
+      hero={
+        <SchoolHeadHero
+          eyebrow="End of Terms"
+          eyebrowIcon={BookOpen}
+          title="Default term subjects"
+          subtitle="New schools and resets use these subjects. Existing schools keep their own lists."
+          meta="Kindergarten uses the competency checklist instead, so it is not listed here."
+        />
+      }
     >
       <div className="space-y-6">
-        <TermSubjectDefaultsGradeTypePicker
-          gradeTypes={gradeTypeOptions}
-          selectedGradeType={gradeType}
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <TermSubjectDefaultsGradeTypePicker
+            gradeTypes={gradeTypeOptions}
+            selectedGradeType={gradeType}
+          />
+          <ResetAllSchoolsTermSubjectsButton />
+        </div>
         <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
           <TermSubjectDefaultsBody gradeType={gradeType} />
         </Suspense>
       </div>
-    </AppShell>
+    </AdminPage>
   );
 }

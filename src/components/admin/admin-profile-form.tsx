@@ -39,7 +39,7 @@ export function AdminProfileForm({
           <Label htmlFor="email">Email</Label>
           <Input id="email" value={email} disabled readOnly />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="firstName">First name</Label>
             <Input

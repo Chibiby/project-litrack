@@ -9,12 +9,12 @@ export default async function AdminSettingsProfilePage() {
   const user = await requireUser("SUPER_ADMIN");
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="min-w-0 max-w-2xl space-y-6">
       <ProfilePhotoCard
         name={user.fullName || `${user.firstName} ${user.lastName}`}
         avatarPath={user.avatarPath}
       />
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base">Account details</CardTitle>
         </CardHeader>

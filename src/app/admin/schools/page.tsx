@@ -7,12 +7,13 @@ import {
   parseSchoolsListParams,
   schoolsTotalPages,
 } from "@/lib/cache/schools-list";
-import { AppShell } from "@/components/app-shell";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface, SurfaceBody } from "@/components/ui/surface";
 import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
 import { TableSectionSkeleton } from "@/components/loading";
-import { Plus } from "lucide-react";
+import { Plus, School } from "lucide-react";
 import { PageTip } from "@/components/admin/page-tip";
 import { listKey } from "@/lib/nav/list-params";
 
@@ -66,8 +67,8 @@ async function SchoolsTableBody({
         </p>
       ) : null}
 
-      <Card>
-        <CardContent className="p-6">
+      <Surface as="section" className="min-w-0 rounded-2xl">
+        <SurfaceBody className="p-3 sm:p-5">
           <SchoolsTable
             schools={tableData}
             list={{
@@ -82,8 +83,8 @@ async function SchoolsTableBody({
               sortOptions: SCHOOLS_LIST_SORTS.options,
             }}
           />
-        </CardContent>
-      </Card>
+        </SurfaceBody>
+      </Surface>
     </>
   );
 }
@@ -93,24 +94,31 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
   return (
-    <AppShell
+    <AdminPage
       title="Schools"
-      subtitle="All registered schools"
       role={user.role}
       userName={user.fullName || user.email}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Division"
+          eyebrowIcon={School}
+          title="Schools"
+          subtitle="Every registered school. Open one as its School Head, switch it off, or reset its head's password."
+          topRight={
+            <Button asChild size="sm" className="sm:h-10 lg:h-9">
+              <Link href="/admin/schools/new" prefetch={true}>
+                <Plus aria-hidden /> <span className="max-sm:sr-only">New school</span>
+              </Link>
+            </Button>
+          }
+        />
+      }
     >
-      <div className="mb-4 flex justify-end">
-        <Button asChild>
-          <Link href="/admin/schools/new" prefetch={true}>
-            <Plus className="h-4 w-4 mr-2" /> New School
-          </Link>
-        </Button>
-      </div>
-
-      <PageTip className="mb-4" title="School Head can't sign in?">
+      <PageTip title="School Head can't sign in?">
         Use the key icon on the school&apos;s row to put the School Head&apos;s password back to their
         School ID. They sign in with the School ID straight away and can choose a private password
-        afterwards. See <code className="rounded bg-amber-100 px-1 text-xs">docs/runbook.md</code>.
+        afterwards. See{" "}
+        <code className="rounded bg-amber-100 px-1 text-xs dark:bg-amber-900/60">docs/runbook.md</code>.
       </PageTip>
 
       <Suspense
@@ -119,6 +127,6 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
       >
         <SchoolsTableBody searchParams={params} />
       </Suspense>
-    </AppShell>
+    </AdminPage>
   );
 }

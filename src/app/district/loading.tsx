@@ -1,6 +1,6 @@
-import { ListCardSkeleton, MetricsGridSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 import { PostLoginLoadingBridge } from "@/components/post-login-loading-bridge";
+import { DistrictOverviewSkeleton } from "@/components/district/overview-skeleton";
 
 /**
  * Content-slot skeleton for the district overview. `/district` is where a
@@ -11,9 +11,8 @@ export default function DistrictLoading() {
   return (
     <PostLoginLoadingBridge>
       <RouteLoadingOverlay>
-        <div className="w-full space-y-6 p-4 lg:p-6">
-          <MetricsGridSkeleton variant="teacher" />
-          <ListCardSkeleton items={6} grid />
+        <div className="w-full p-4 lg:p-6">
+          <DistrictOverviewSkeleton />
         </div>
       </RouteLoadingOverlay>
     </PostLoginLoadingBridge>

@@ -68,10 +68,11 @@ function ChecklistRow({
         checked={checked}
         onCheckedChange={() => onToggle(item.id)}
         aria-label={`Checked: ${item.label}`}
+        className="relative before:absolute before:-inset-3 before:content-[''] lg:before:inset-0"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
-        <p className="truncate font-mono text-xs text-muted-foreground">{item.href}</p>
+        <p className="text-sm font-medium text-foreground lg:truncate">{item.label}</p>
+        <p className="font-mono text-xs text-muted-foreground lg:truncate">{item.href}</p>
       </div>
       <Button type="button" size="sm" variant="outline" loading={pending} onClick={open}>
         Open

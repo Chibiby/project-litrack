@@ -56,7 +56,7 @@ export function SubmissionLockingSettings({ enabled }: { enabled: boolean }) {
         </p>
       ) : null}
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {on ? (
@@ -83,6 +83,7 @@ export function SubmissionLockingSettings({ enabled }: { enabled: boolean }) {
               disabled={pending}
               onCheckedChange={toggle}
               aria-label="Enforce submission deadlines"
+              className="relative max-lg:before:absolute max-lg:before:-inset-y-2 max-lg:before:inset-x-0 max-lg:before:content-['']"
             />
           </div>
 
@@ -139,7 +140,7 @@ export function ReadingLevelUnlockSettings({ enabled }: { enabled: boolean }) {
         </p>
       ) : null}
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {on ? (
@@ -166,6 +167,7 @@ export function ReadingLevelUnlockSettings({ enabled }: { enabled: boolean }) {
               disabled={pending}
               onCheckedChange={toggle}
               aria-label="Keep every month's reading level open"
+              className="relative max-lg:before:absolute max-lg:before:-inset-y-2 max-lg:before:inset-x-0 max-lg:before:content-['']"
             />
           </div>
 

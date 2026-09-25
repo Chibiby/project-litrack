@@ -47,7 +47,7 @@ export function ErrorLogFilters({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3"
+      className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
       onSubmit={(event) => {
         event.preventDefault();
         apply({ ref: refValue.trim() || null });
@@ -60,7 +60,7 @@ export function ErrorLogFilters({
           value={refValue}
           onChange={(event) => setRefValue(event.target.value)}
           placeholder="E-7K2P9QXM"
-          className="w-48 font-mono"
+          className="w-full font-mono sm:w-48"
           disabled={pending}
         />
       </div>
@@ -72,7 +72,7 @@ export function ErrorLogFilters({
           onValueChange={(value) => apply({ severity: value })}
           disabled={pending}
         >
-          <SelectTrigger id="error-severity" className="w-40">
+          <SelectTrigger id="error-severity" className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -90,7 +90,7 @@ export function ErrorLogFilters({
           onValueChange={(value) => apply({ window: value })}
           disabled={pending}
         >
-          <SelectTrigger id="error-window" className="w-36">
+          <SelectTrigger id="error-window" className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

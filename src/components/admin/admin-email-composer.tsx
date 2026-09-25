@@ -66,7 +66,7 @@ export function AdminEmailComposer({ recipients, configured }: { recipients: Adm
         <span className="flex size-10 items-center justify-center rounded-lg bg-violet-soft text-violet"><Mail className="size-5" /></span>
         <div><h2 className="font-semibold">Send email</h2><p className="text-sm text-muted-foreground">Each recipient receives a separate private copy.</p></div>
       </div>
-      {!configured && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Outbound email is not configured. Add the Resend API key and support sender in deployment settings.</p>}
+      {!configured && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Outbound email is not configured. Add the Resend API key and support sender in deployment settings.</p>}
       <div className="space-y-4">
         <div className="relative">
           <label htmlFor="email-recipient-search" className="mb-1.5 block text-sm font-medium">Recipients</label>

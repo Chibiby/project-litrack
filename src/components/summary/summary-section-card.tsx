@@ -1,4 +1,4 @@
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Calculator, ListChecks, PieChart, TrendingUp, type LucideIcon } from "lucide-react";
 import { DashboardBarChart, DashboardLineChart } from "@/components/dashboard/lazy-charts";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { cellOf } from "@/lib/summary/shape/rollup";
@@ -6,6 +6,13 @@ import { NOT_ANSWERED, NOT_APPLICABLE, NOT_COLLECTED, NO_RECORD } from "@/lib/su
 import type { SummaryGroup, SummaryLevel, SummarySection } from "@/lib/summary/types";
 import { SummaryTable } from "./summary-table";
 import { sectionAnchorId } from "./summary-href";
+
+const KIND_ICON: Record<SummarySection["kind"], LucideIcon> = {
+  single: PieChart,
+  multi: ListChecks,
+  rate: TrendingUp,
+  average: Calculator,
+};
 
 const ROW_HEADER: Record<SummaryLevel, string> = {
   overall: "Scope",
@@ -74,21 +81,31 @@ export function SummarySectionCard({
         ? "One can be counted in more than one column, so rows do not add up to 100%."
         : null;
 
+  const Icon = KIND_ICON[section.kind];
+
   return (
     <section
       id={sectionAnchorId(section.id)}
       aria-labelledby={`${sectionAnchorId(section.id)}-title`}
-      className="min-w-0 scroll-mt-24 rounded-xl border border-border/80 bg-card text-card-foreground shadow-card"
+      className="min-w-0 scroll-mt-24 rounded-2xl border border-border/80 bg-card text-card-foreground shadow-card"
     >
-      <div className="border-b border-border/60 px-4 py-4 sm:px-5">
-        <h2 id={`${sectionAnchorId(section.id)}-title`} className="text-base font-semibold tracking-tight">
-          {section.title}
-        </h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {section.baseLabel}
-          {kindNote ? `. ${kindNote}` : ""}
-        </p>
-        {section.note ? <p className="mt-1.5 text-xs text-muted-foreground">{section.note}</p> : null}
+      <div className="flex items-start gap-3 border-b border-border/60 px-4 py-4 sm:px-5">
+        <span
+          aria-hidden
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+        >
+          <Icon className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 id={`${sectionAnchorId(section.id)}-title`} className="text-base font-semibold tracking-tight">
+            {section.title}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {section.baseLabel}
+            {kindNote ? `. ${kindNote}` : ""}
+          </p>
+          {section.note ? <p className="mt-1.5 text-xs text-muted-foreground">{section.note}</p> : null}
+        </div>
       </div>
       <div className="min-w-0 p-3 sm:p-5">
         {isEmpty(section) ? (

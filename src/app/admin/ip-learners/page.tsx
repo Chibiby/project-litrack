@@ -1,7 +1,9 @@
 import { requireUser } from "@/lib/auth/session";
-import { AppShell } from "@/components/app-shell";
 import { getAdminIpAndAdvisoryMetrics } from "@/lib/dashboard/aggregates";
 import { topSchoolsWithIp } from "@/lib/dashboard/ip-metrics";
+import { AdminPage } from "@/components/admin/admin-page";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
+import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import {
   Table,
   TableBody,
@@ -12,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { School, GraduationCap } from "lucide-react";
+import { School, GraduationCap, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -31,27 +33,65 @@ export default async function AdminIpLearnersPage() {
   const totalIp = kinds.reduce((sum, k) => sum + k.value, 0);
 
   return (
-    <AppShell
+    <AdminPage
       title="IP learners"
-      subtitle="Every school with an enrolled IP learner, and every IP group across schools"
       role={user.role}
       userName={user.fullName || user.email}
-    >
-      <div className="space-y-6">
-        <Surface as="section">
-          <SurfaceHeader>
-            <h2 className="text-base font-semibold">Schools with IP learners</h2>
-          </SurfaceHeader>
-          {schools.length === 0 ? (
-            <SurfaceBody>
-              <EmptyState
-                title="No IP learners yet"
-                description="Appears once enrolled learners have an IP ethnicity recorded."
-                icon={School}
+      hero={
+        <SchoolHeadHero
+          eyebrow="Learners"
+          eyebrowIcon={GraduationCap}
+          title="IP learners"
+          subtitle="Every school with an enrolled Indigenous Peoples learner, and every IP group across schools."
+          stats={
+            <>
+              <StatCard
+                title="IP learners"
+                value={data?.national.ipLearners ?? 0}
+                hint={`${data?.national.ipPercent ?? "—"} of enrolled`}
+                icon={GraduationCap}
+                tone="amber"
+                inlineOnPhone
+                denseOnPhone
               />
-            </SurfaceBody>
-          ) : (
-            <div className="overflow-x-auto">
+              <StatCard
+                title="Schools"
+                value={schools.length}
+                hint="With an IP learner"
+                icon={School}
+                tone="primary"
+                inlineOnPhone
+                denseOnPhone
+              />
+              <StatCard
+                title="Per teacher"
+                value={data?.national.learnersPerTeacher ?? "—"}
+                hint="Learners per teacher"
+                icon={Users}
+                tone="emerald"
+                inlineOnPhone
+                denseOnPhone
+              />
+            </>
+          }
+        />
+      }
+    >
+      <Surface as="section" className="min-w-0 rounded-2xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold">Schools with IP learners</h2>
+        </SurfaceHeader>
+        {schools.length === 0 ? (
+          <SurfaceBody>
+            <EmptyState
+              title="No IP learners yet"
+              description="Appears once enrolled learners have an IP ethnicity recorded."
+              icon={School}
+            />
+          </SurfaceBody>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -83,47 +123,64 @@ export default async function AdminIpLearnersPage() {
                 </TableBody>
               </Table>
             </div>
-          )}
-        </Surface>
+            <ul className="divide-y divide-border/60 lg:hidden" aria-label="Schools with IP learners">
+              {schools.map((s) => (
+                <li key={s.schoolId} className="flex items-start gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground">{s.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {s.totalLearners} enrolled · {s.learnersPerTeacher} per teacher
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold tabular-nums text-foreground">{s.ipLearners}</p>
+                    <p className="text-xs tabular-nums text-muted-foreground">{s.ipPercent}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Surface>
 
-        <Surface as="section">
-          <SurfaceHeader>
-            <h2 className="text-base font-semibold">IP learners by group</h2>
-          </SurfaceHeader>
-          {kinds.length === 0 ? (
-            <SurfaceBody>
-              <EmptyState
-                title="No IP learners yet"
-                description="Appears once enrolled learners have an IP ethnicity recorded."
-                icon={GraduationCap}
-              />
-            </SurfaceBody>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Group</TableHead>
-                    <TableHead className="text-right">Count</TableHead>
-                    <TableHead className="text-right">%</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {kinds.map((k) => (
-                    <TableRow key={k.name}>
-                      <TableCell className="font-medium">{k.name}</TableCell>
-                      <TableCell className="text-right tabular-nums">{k.value}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {totalIp > 0 ? `${((k.value / totalIp) * 100).toFixed(1)}%` : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Surface>
-      </div>
-    </AppShell>
+      <Surface as="section" className="min-w-0 rounded-2xl">
+        <SurfaceHeader>
+          <h2 className="text-base font-semibold">IP learners by group</h2>
+          <span className="text-xs text-muted-foreground">
+            A learner with two IP groups counts in both
+          </span>
+        </SurfaceHeader>
+        {kinds.length === 0 ? (
+          <SurfaceBody>
+            <EmptyState
+              title="No IP learners yet"
+              description="Appears once enrolled learners have an IP ethnicity recorded."
+              icon={GraduationCap}
+            />
+          </SurfaceBody>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Group</TableHead>
+                <TableHead className="text-right">Count</TableHead>
+                <TableHead className="text-right">%</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {kinds.map((k) => (
+                <TableRow key={k.name}>
+                  <TableCell className="font-medium">{k.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">{k.value}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {totalIp > 0 ? `${((k.value / totalIp) * 100).toFixed(1)}%` : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Surface>
+    </AdminPage>
   );
 }

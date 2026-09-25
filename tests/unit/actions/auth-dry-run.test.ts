@@ -143,6 +143,13 @@ vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-DRYR
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// No impersonation ticket in this browser: `skipPasswordChange` reads the
+// ticket cookie, and the real `cookies()` throws outside a request.
+vi.mock("next/headers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/headers")>()),
+  cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
+}));
+
 import {
   setPasswordAction,
   skipPasswordChange,

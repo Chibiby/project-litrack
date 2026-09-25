@@ -1,12 +1,13 @@
 import { ListCardSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
+import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
 export default function DistrictUnlocksLoading() {
   return (
     <RouteLoadingOverlay>
-      <div className="w-full max-w-5xl space-y-6 p-4 lg:p-6">
-        <ListCardSkeleton items={5} />
-      </div>
+      <SchoolHeadPageSkeleton hero>
+        <ListCardSkeleton items={5} className="max-w-5xl rounded-2xl" />
+      </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );
 }

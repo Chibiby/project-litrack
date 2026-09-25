@@ -7,7 +7,8 @@ import { parseSchoolsListParams, schoolsTotalPages } from "@/lib/cache/schools-l
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { listKey } from "@/lib/nav/list-params";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent } from "@/components/ui/card";
+import { Surface } from "@/components/ui/surface";
+import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
 import { SchoolsTable, type SchoolsTableRow } from "@/components/schools-table";
@@ -71,32 +72,30 @@ async function DistrictSchoolsBody({
   }));
 
   return (
-    <Card className="min-w-0">
-      <CardContent className="p-4 sm:p-6">
-        <SchoolsTable
-          schools={rows}
-          list={{
-            page,
-            totalPages,
-            totalCount: filtered.length,
-            pageSize: list.pageSize,
-            q: list.q,
-            region: "",
-            status: list.status,
-          }}
-          capabilities={{
-            toggleActive: true,
-            resetHead: true,
-            edit: true,
-            delete: false,
-            openAsSchoolHead: false,
-            columns: "district",
-            basePath: DISTRICT_ROUTES.schools,
-            emptyMessage: "No school matches your search.",
-          }}
-        />
-      </CardContent>
-    </Card>
+    <Surface as="section" aria-label="Schools" className="min-w-0 rounded-2xl p-4 sm:p-5 lg:p-6">
+      <SchoolsTable
+        schools={rows}
+        list={{
+          page,
+          totalPages,
+          totalCount: filtered.length,
+          pageSize: list.pageSize,
+          q: list.q,
+          region: "",
+          status: list.status,
+        }}
+        capabilities={{
+          toggleActive: true,
+          resetHead: true,
+          edit: true,
+          delete: false,
+          openAsSchoolHead: false,
+          columns: "district",
+          basePath: DISTRICT_ROUTES.schools,
+          emptyMessage: "No school matches your search.",
+        }}
+      />
+    </Surface>
   );
 }
 
@@ -110,13 +109,23 @@ export default async function DistrictSchoolsPage({ searchParams }: PageProps) {
       subtitle={describeScope(scope)}
       role={user.role}
       userName={user.fullName || user.email}
+      hideTitle
     >
+      <div className="mb-6">
+        <SchoolHeadHero
+          eyebrow="Your schools"
+          eyebrowIcon={School}
+          title="Schools"
+          subtitle="Open a school to edit its details, switch it on or off, or reset its School Head sign-in."
+          meta={describeScope(scope)}
+        />
+      </div>
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
         <Suspense
           key={listKey(params, DISTRICT_SCHOOLS_LIST_KEYS)}
-          fallback={<TableSectionSkeleton rows={8} columns={5} />}
+          fallback={<TableSectionSkeleton rows={8} columns={5} className="rounded-2xl" />}
         >
           <DistrictSchoolsBody scope={scope} searchParams={params} />
         </Suspense>

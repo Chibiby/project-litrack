@@ -27,7 +27,7 @@ import {
   resetDemoData,
   startDemoSession,
 } from "@/lib/actions/demo";
-import { startTestLabSession } from "@/lib/actions/accounts";
+import { impersonateUser, startTestLabSession } from "@/lib/actions/accounts";
 import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
 import type { TestLabPersona } from "@/lib/test-lab/personas";
@@ -41,6 +41,11 @@ export type TestLabPageData = {
     demoSessionExpiresAt: number | null;
   };
   checklist: TestLabChecklistItem[];
+  /**
+   * Live, active district admins, by username. Real accounts: the demo school
+   * is outside every district scope, so there is no demo district admin.
+   */
+  districtAdmins: { id: string; label: string; districts: string[] }[];
 };
 
 const START_BUTTONS: { persona: TestLabPersona; label: string }[] = [
@@ -127,6 +132,25 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
       }
       toast.success("Demo session ended. The demo school is hidden again.");
       router.refresh();
+    });
+  }
+
+  const [districtAdminId, setDistrictAdminId] = useState(data.districtAdmins[0]?.id ?? "");
+
+  /**
+   * Same action as User Accounts "Sign in as": a real district admin's session,
+   * so the district portal shows real district data and saves are real.
+   */
+  function startDistrictAdmin() {
+    if (!districtAdminId) return;
+    startStartTransition(async () => {
+      const fd = new FormData();
+      fd.set("userId", districtAdminId);
+      // "Return to admin" comes back here, not to the accounts console.
+      fd.set("returnTo", "test-lab");
+      const res = await impersonateUser(fd);
+      // Success redirects away, so only a failure returns here.
+      if (res && !res.ok) toast.error(res.error);
     });
   }
 
@@ -280,6 +304,57 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
                   {b.label}
                 </Button>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            District portal
+            <Badge variant="outline" className="border-amber-400 text-amber-900 dark:text-amber-300">
+              Real district data
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            The demo school belongs to no district, so this signs you in as a{" "}
+            <span className="font-medium text-foreground">real district admin</span>. You see
+            their real schools and figures, and anything you change is saved for real and recorded
+            against their account. &ldquo;Return to admin&rdquo; in the banner brings you back here.
+          </p>
+          {data.districtAdmins.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active district admin accounts.</p>
+          ) : (
+            <div className="flex min-w-0 flex-wrap items-end gap-2">
+              <div className="min-w-0 max-w-full space-y-1.5">
+                <Label htmlFor="test-lab-district-admin">District admin</Label>
+                <select
+                  id="test-lab-district-admin"
+                  value={districtAdminId}
+                  onChange={(e) => setDistrictAdminId(e.target.value)}
+                  className="h-9 w-full min-w-0 max-w-full truncate rounded-md border border-input bg-background px-3 text-sm lg:w-auto lg:max-w-none"
+                >
+                  {data.districtAdmins.map((da) => (
+                    <option key={da.id} value={da.id}>
+                      {da.districts.length > 0
+                        ? `${da.label} (${da.districts.join(", ")})`
+                        : `${da.label} (no districts)`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={startPending}
+                disabled={!districtAdminId}
+                onClick={startDistrictAdmin}
+              >
+                Open as District Admin
+              </Button>
             </div>
           )}
         </CardContent>

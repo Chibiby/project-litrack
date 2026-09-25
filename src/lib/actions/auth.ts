@@ -35,6 +35,7 @@ import { readTestLabSession } from "@/lib/auth/test-lab";
 import {
   clearImpersonationCookie,
   checkCurrentSession,
+  isVerifiedImpersonationOf,
   readImpersonationContext,
 } from "@/lib/auth/impersonation";
 import { clearDemoSessionCookie } from "@/lib/demo/session";
@@ -750,6 +751,25 @@ export const skipPasswordChange = action(
 
   if (await readTestLabSession(user)) {
     return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
+  }
+
+  // A Super Admin signed in as this account never clears the real person's
+  // first-sign-in prompt: no write, no audit row, just their role home (which
+  // `requireUser` lets a verified impersonation reach). Same HMAC + session
+  // binding proof as the banner. A signed ticket naming this account whose
+  // binding cannot be proven (auth outage, a different session) is refused
+  // rather than written through: the flag is only ever cleared with no
+  // impersonation ticket for this account in play.
+  const ticketForThisUser = (await readImpersonationContext())?.ticket.targetUserId === user.id;
+  if (ticketForThisUser) {
+    const supabase = await createSupabaseServerClient();
+    if (await isVerifiedImpersonationOf(supabase.auth, user.id)) {
+      redirect(roleHomePath(user.role));
+    }
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "this account" },
+      detail: `skipPasswordChange refused: impersonation ticket for ${user.id} present but not proven bound`,
+    });
   }
 
   await prisma.user.update({
