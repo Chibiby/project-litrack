@@ -39,7 +39,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: null } }), signOut: vi.fn() },
+    auth: { getClaims: async () => ({ data: null, error: null }), signOut: vi.fn() },
   }),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));

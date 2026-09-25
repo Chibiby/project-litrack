@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.14.1",
+    date: "2026-09-25",
+    title: "Fewer background sign-in checks",
+    announce: false,
+    fixes: [
+      "Pages check your sign-in without a round trip to the sign-in server each time, so moving between pages does less waiting.",
+      "A LITRACK tab left open in the background no longer keeps reloading pages you are not looking at.",
+    ],
+  },
+  {
     version: "2.14.0",
     date: "2026-09-25",
     title: "A fresh look for the district and division pages",

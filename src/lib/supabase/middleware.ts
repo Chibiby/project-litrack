@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { parseAppMetadataRole, type AppRole } from "@/lib/auth/roles";
+import { getSharedJwks } from "@/lib/supabase/jwks";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -22,7 +23,7 @@ export type SessionUser = {
  * - Falls back to getUser() only for legacy HS* symmetric JWTs
  *
  * Authoritative user lookups (ban/delete/pending gates) stay in RSC via
- * session.ts getUser() + Prisma — middleware only needs id + role for
+ * session.ts (getClaims + Prisma) — middleware only needs id + role for
  * redirect-if-authed and role-prefix gates.
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -55,7 +56,11 @@ export async function updateSession(request: NextRequest) {
 
   let claimsResult: Awaited<ReturnType<typeof supabase.auth.getClaims>>;
   try {
-    claimsResult = await supabase.auth.getClaims();
+    // Signed-out requests carry no Supabase cookie and getClaims returns before needing keys,
+    // so skip the KV read for them (login page, bots, health checks).
+    const hasSession = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+    const jwks = hasSession ? await getSharedJwks(env.url, env.anonKey) : undefined;
+    claimsResult = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
   } catch (err) {
     console.error("[middleware] getClaims failed:", err);
     return { supabaseResponse, user: null as SessionUser | null };

@@ -225,7 +225,7 @@ describe("requireUser / requireSchoolUser — a signed-in DISTRICT_ADMIN redirec
     vi.doMock("@/lib/supabase/server", () => ({
       createSupabaseServerClient: async () => ({
         auth: {
-          getUser: async () => ({ data: { user: { id: "auth-da-1" } } }),
+          getClaims: async () => ({ data: { claims: { sub: "auth-da-1" } }, error: null }),
           signOut: vi.fn(),
         },
       }),

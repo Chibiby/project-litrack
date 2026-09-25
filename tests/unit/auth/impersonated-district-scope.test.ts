@@ -27,7 +27,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({
     auth: {
       // The impersonation session: the district admin's own auth user.
-      getUser: async () => ({ data: { user: { id: DA_AUTH_ID } } }),
+      getClaims: async () => ({ data: { claims: { sub: DA_AUTH_ID } }, error: null }),
       signOut: vi.fn(),
     },
   }),

@@ -3,6 +3,8 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { getSharedJwks } from "@/lib/supabase/jwks";
 import { prisma } from "@/lib/prisma";
 import { primeReadMode } from "@/lib/db/read-mode";
 import { roleHomePath } from "@/lib/auth/roles";
@@ -170,9 +172,18 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
       // anonymous request — filter on span status too if you need those two separated.
       let authenticated = false;
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        // getClaims, not getUser: it verifies the access token locally against the project's
+        // asymmetric signing keys, while getUser is a network call to Supabase Auth on every
+        // render and every route prefetch — about 150k calls a day, and ~80% of the project's
+        // billed log ingestion (each call writes an edge log and an auth log). The cost: a
+        // signed-out session's unexpired token (up to 1h) still verifies here. Deleted, inactive,
+        // and rejected accounts are still refused by the Prisma row checks below, and
+        // impersonation keeps its own server-side session check (`checkCurrentSession`).
+        const env = getSupabasePublicEnv();
+        const jwks = env.ok ? await getSharedJwks(env.url, env.anonKey) : undefined;
+        const { data } = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
+        const sub = data?.claims?.sub;
+        const user = sub ? { id: sub } : null;
         authenticated = Boolean(user);
         return user;
       } catch (err) {

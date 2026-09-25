@@ -44,10 +44,14 @@ vi.mock("next/headers", () => ({
 /** What the auth server says about the current request's session. */
 let liveSessionId: string | null = SESSION_ID;
 let authOutage = false;
-const getClaims = vi.fn(async (_jwt: string) =>
-  authOutage
-    ? { data: null, error: { status: 503, name: "AuthApiError", message: "down" } }
-    : { data: { claims: { session_id: liveSessionId } }, error: null }
+const getClaims = vi.fn(async (jwt?: string) =>
+  // No token: `getCurrentUser` verifying the cookie session locally, which never
+  // asks the auth server and so is unaffected by an outage.
+  jwt === undefined
+    ? { data: { claims: { sub: "auth-target", session_id: liveSessionId } }, error: null }
+    : authOutage
+      ? { data: null, error: { status: 503, name: "AuthApiError", message: "down" } }
+      : { data: { claims: { session_id: liveSessionId } }, error: null }
 );
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({

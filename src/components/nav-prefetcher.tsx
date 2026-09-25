@@ -125,6 +125,11 @@ export function NavPrefetcher({ cacheKey, hrefs }: NavPrefetcherProps) {
 
     const scheduleWarm = () => {
       if (cancelled || isWarmFresh(cacheKey)) return;
+      // A hidden tab left open all day would otherwise re-warm every WARM_TTL_MS
+      // forever — each warm re-runs auth and the page's queries on the server for
+      // navigations nobody is about to make. The visibilitychange listener below
+      // warms again the moment the tab is shown.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
 
       if (typeof window !== "undefined" && "requestIdleCallback" in window) {
         idleId = window.requestIdleCallback(prefetchAll, { timeout: 1500 });
