@@ -24,6 +24,35 @@ function forbidden(role: string): AppError {
 }
 
 /**
+ * The scope-from-user logic, split out of `loadAdminScope` so a caller that
+ * already has the `User` row (e.g. the admin-console login action, which runs
+ * before the session cookie is readable back through `requireUser`) can
+ * resolve the same scope without a second Prisma round trip through
+ * `getCurrentUser`.
+ *
+ * Not memoized: the login caller runs it once per sign-in, and `loadAdminScope`
+ * below keeps its own per-request `cache()` wrapper for the page/action path.
+ */
+export async function loadAdminScopeForUser(user: Pick<User, "id" | "role">): Promise<AdminScope> {
+  if (user.role === "SUPER_ADMIN") {
+    return { kind: "division" };
+  }
+
+  if (user.role === "DISTRICT_ADMIN") {
+    const rows = await prisma.districtAdminAssignment.findMany({
+      where: { userId: user.id },
+      select: { district: true },
+    });
+    const scope = adminScopeFor(user.role, rows.map((r) => r.district));
+    if (scope) return scope;
+  }
+
+  // A School Head or teacher that got past `requireUser` (it redirects them in
+  // practice) is refused here and recorded with severity `security`.
+  throw forbidden(user.role);
+}
+
+/**
  * Memoized per request with React `cache()`. The assignments are read fresh on
  * every request and never put in a cross-request cache, so removing an
  * assignment takes effect on the admin's next request.
@@ -33,23 +62,8 @@ const loadAdminScope = cache(async (): Promise<{ user: User; scope: AdminScope }
   // neither list to their own home. `allowSuperAdmin` is off: SUPER_ADMIN is
   // named in the list, so nothing here rests on the impersonation default.
   const user = await requireUser(["SUPER_ADMIN", "DISTRICT_ADMIN"], false);
-
-  if (user.role === "SUPER_ADMIN") {
-    return { user, scope: { kind: "division" } };
-  }
-
-  if (user.role === "DISTRICT_ADMIN") {
-    const rows = await prisma.districtAdminAssignment.findMany({
-      where: { userId: user.id },
-      select: { district: true },
-    });
-    const scope = adminScopeFor(user.role, rows.map((r) => r.district));
-    if (scope) return { user, scope };
-  }
-
-  // A School Head or teacher that got past `requireUser` (it redirects them in
-  // practice) is refused here and recorded with severity `security`.
-  throw forbidden(user.role);
+  const scope = await loadAdminScopeForUser(user);
+  return { user, scope };
 });
 
 export async function requireAdminScope(): Promise<{ user: User; scope: AdminScope }> {

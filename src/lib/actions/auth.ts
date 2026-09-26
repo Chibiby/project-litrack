@@ -576,7 +576,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
     if (user.role === "SUPER_ADMIN") {
       await warmAdminRoutes();
     } else {
-      await warmDistrictRoutes();
+      await warmDistrictRoutes(user);
     }
 
     redirect(roleHomePath(user.role));

@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.16.1",
+    date: "2026-09-26",
+    title: "District pages open faster",
+    announce: true,
+    fixes: [
+      "The District Overview is ready sooner after you sign in.",
+      "District pages do less repeated work each time they load.",
+      "On the Schools list, a school's page starts loading as soon as you point at it, so it opens faster.",
+      "On the District Overview, Summaries now sit right under Your districts instead of after a large empty space.",
+    ],
+  },
+  {
     version: "2.16.0",
     date: "2026-09-26",
     title: "Faster pages and easier-to-read buttons",

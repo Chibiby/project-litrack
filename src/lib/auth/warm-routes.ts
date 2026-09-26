@@ -1,4 +1,5 @@
 import "server-only";
+import type { User } from "@prisma/client";
 import {
   getAdminActivitySeries,
   getAdminMetricCounts,
@@ -9,6 +10,14 @@ import {
   getTeacherShellGrades,
 } from "@/lib/dashboard/aggregates";
 import { getTeacherOverview } from "@/lib/dashboard/teacher-overview";
+import { loadAdminScopeForUser } from "@/lib/auth/district-scope";
+import { resolveSummaryScope } from "@/lib/auth/admin-scope";
+import { isDemoVisible } from "@/lib/demo/session";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { getDistrictNotifications } from "@/lib/district/notifications";
+import { SUMMARY_FACETS } from "@/lib/summary/facets";
+import { resolveScopeSchools } from "@/lib/summary/scope-schools";
+import { monthKeyOf } from "@/lib/summary/shape/months";
 
 /**
  * Server-side warming of a role's landing-page queries, run at login before
@@ -123,13 +132,51 @@ export async function warmAdminRoutes(): Promise<void> {
  * Warm a district admin's `/district` overview.
  *
  * Deliberately NOT `warmAdminRoutes`: those are division-wide aggregates a
- * district admin never reads. The overview's scoped queries (the summary facets
- * and `resolveScopeSchools`) join this list when they exist; each must be keyed
- * with `scopeCacheKey`, the same key the page reads, or warming fills entries
- * nobody hits.
+ * district admin never reads. Each leaf here is called with the exact
+ * arguments `src/app/district/page.tsx` uses, so it fills the same
+ * `scopeCacheKey`-keyed entries the first render reads instead of a
+ * differently-keyed one nobody hits.
+ *
+ * Takes the just-authenticated `User` row directly rather than going through
+ * `requireAdminScope()` / `requireUser()`: this runs from the login action,
+ * before the redirect, while the Supabase session cookie the request needs is
+ * still only just being written — `loadAdminScopeForUser` resolves the same
+ * scope from the row the caller already has, with no second round trip
+ * through `getCurrentUser`.
  */
-const DISTRICT_WARMERS: ReadonlyArray<() => Promise<unknown>> = [];
+export async function warmDistrictRoutes(user: Pick<User, "id" | "role">): Promise<void> {
+  // The setup below runs outside `warmAll`, so it carries its own guard: a
+  // throw here must cost the warm, never the sign-in.
+  try {
+    await warmDistrictOverview(user);
+  } catch {
+    // Warming is best-effort; the page loads the same data on first render.
+  }
+}
 
-export async function warmDistrictRoutes(): Promise<void> {
-  await warmAll(DISTRICT_WARMERS);
+async function warmDistrictOverview(user: Pick<User, "id" | "role">): Promise<void> {
+  const scope = await loadAdminScopeForUser(user).catch(() => null);
+  if (!scope) return;
+  // A district admin with no assignments sees `NoDistrictsState`, not the
+  // dashboard tiles — nothing to warm.
+  if (scope.kind === "districts" && scope.districts.length === 0) return;
+
+  const demoVisible = await isDemoVisible();
+  const summaryScope = resolveSummaryScope(scope, {});
+  const month = monthKeyOf(formatLocalDateKey(schoolToday()));
+
+  await warmAll([
+    () => resolveScopeSchools(scope, demoVisible),
+    () => SUMMARY_FACETS.learners.load(summaryScope, { level: "overall" }),
+    () =>
+      SUMMARY_FACETS["reading-behavior"].load(summaryScope, { level: "overall", month }),
+    () =>
+      SUMMARY_FACETS.attendance.load(summaryScope, {
+        level: "overall",
+        from: month,
+        to: month,
+      }),
+    () => SUMMARY_FACETS.compliance.load(summaryScope, { level: "overall" }),
+    () => getDistrictNotifications(user, scope),
+  ]);
 }

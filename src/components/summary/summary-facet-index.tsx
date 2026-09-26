@@ -43,9 +43,25 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
 };
 
 /** One card per summary facet, linking to `${basePath}/<facet>`. */
-export function SummaryFacetIndex({ basePath, query }: { basePath: string; query?: string }) {
+export function SummaryFacetIndex({
+  basePath,
+  query,
+  gridColsXl = 3,
+}: {
+  basePath: string;
+  query?: string;
+  /** Columns at `xl`. Callers that share the viewport with a fixed-width
+   * aside (e.g. the district overview's left column) need fewer than the
+   * default full-width 3. Always 3+ from `2xl` up. */
+  gridColsXl?: 2 | 3;
+}) {
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+    <ul
+      className={cn(
+        "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3",
+        gridColsXl === 2 ? "xl:grid-cols-2" : "xl:grid-cols-3"
+      )}
+    >
       {SUMMARY_FACET_LIST.map((facet) => {
         const Icon = SUMMARY_FACET_ICON[facet.id];
         return (

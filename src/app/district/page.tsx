@@ -219,9 +219,13 @@ export default async function DistrictOverviewPage() {
       ) : (
         <div className="flex min-w-0 flex-col gap-6">
           {/* Desktop: the tiles rise into the hero's soft lower edge, as on the
-              School Head dashboard. */}
-          <div className="relative z-10 grid grid-cols-1 gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="flex min-w-0 flex-col gap-4">
+              School Head dashboard. Below xl this is a single column, so DOM
+              order is the mobile reading order: tiles, districts, attention,
+              summaries — the attention rail stays above the fold instead of
+              sinking under nine summary cards. At xl, grid placement (not DOM
+              order) puts the aside beside row 1 and summaries under it. */}
+          <div className="relative z-10 grid grid-cols-1 gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem] xl:grid-rows-[auto_1fr]">
+            <div className="flex min-w-0 flex-col gap-4 xl:col-start-1 xl:row-start-1">
               <section aria-labelledby="district-headline" className="min-w-0">
                 <h2 id="district-headline" className="sr-only">
                   Headline figures
@@ -251,7 +255,7 @@ export default async function DistrictOverviewPage() {
 
             <aside
               aria-label="Calendar and alerts"
-              className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-4"
+              className="flex min-w-0 flex-col gap-4 xl:relative xl:z-10 xl:-mt-4 xl:col-start-2 xl:row-start-1 xl:row-span-2"
             >
               <div className="hidden xl:block">
                 <CalendarCard todayKey={todayKey} quote={calendarQuote} />
@@ -260,27 +264,30 @@ export default async function DistrictOverviewPage() {
                 <AttentionRail user={user} adminScope={scope} scope={summaryScope} />
               </Suspense>
             </aside>
-          </div>
 
-          <section aria-labelledby="district-summaries" className="min-w-0">
-            <div className="mb-3 flex items-center gap-3">
-              <span
-                aria-hidden
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-              >
-                <BarChart3 className="size-5" />
-              </span>
-              <div className="min-w-0">
-                <h2 id="district-summaries" className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
-                  Summaries
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Overall, by district or by school, ready to export.
-                </p>
+            <section
+              aria-labelledby="district-summaries"
+              className="mt-2 min-w-0 xl:col-start-1 xl:row-start-2"
+            >
+              <div className="mb-3 flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                >
+                  <BarChart3 className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="district-summaries" className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                    Summaries
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Overall, by district or by school, ready to export.
+                  </p>
+                </div>
               </div>
-            </div>
-            <SummaryFacetIndex basePath="/district/summary" />
-          </section>
+              <SummaryFacetIndex basePath="/district/summary" gridColsXl={2} />
+            </section>
+          </div>
         </div>
       )}
     </AppShell>

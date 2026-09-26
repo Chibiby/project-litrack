@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { schoolWhereForScope, scopeCacheKey, type AdminScope } from "@/lib/auth/admin-scope";
@@ -29,20 +30,39 @@ import type { ShellNotification } from "@/components/shell/notifications-menu";
  * `RoleShell`'s `lastSeenReleaseVersion` prop (read directly off the signed-in
  * `User` row, the same as every other role) drives the "what's new" modal —
  * neither needs a query from here.
+ *
+ * Called once from `layout.tsx` (the header bell) and again from the page's
+ * `AttentionRail` in the same request — layout and page each hold their own
+ * `AdminScope` object, and even where the underlying assignments are
+ * identical they are not the same object, so a `cache()`-wrapped function
+ * keyed on `scope` itself would miss both times. Instead a single per-request
+ * `Map` (its factory is the only thing wrapped in `cache()`, so React only
+ * dedupes a zero-arg call) is keyed on `user.id` + `scopeCacheKey` alone —
+ * primitives that fully determine the count, same as the `cachedQuery` key
+ * below.
  */
+const getRequestMemo = cache(() => new Map<string, Promise<number>>());
+
 export async function getDistrictNotifications(
   user: Pick<User, "id">,
   scope: AdminScope
 ): Promise<ShellNotification[]> {
-  const count = await cachedQuery(() => countOpenTicketsInScope(scope), {
-    // `user.id` plays no part in the count — two district admins over the same
-    // districts see the same number — but it is part of the key anyway so a
-    // future per-admin narrowing (e.g. "assigned to me") does not silently
-    // start serving one admin's entry to another.
-    keyParts: ["district-notifications", "open-tickets", "v1", user.id, scopeCacheKey(scope, false)],
-    tags: [supportInbox],
-  });
+  const key = `${user.id}|${scopeCacheKey(scope, false)}`;
+  const memo = getRequestMemo();
+  let pending = memo.get(key);
+  if (!pending) {
+    pending = cachedQuery(() => countOpenTicketsInScope(scope), {
+      // `user.id` plays no part in the count — two district admins over the same
+      // districts see the same number — but it is part of the key anyway so a
+      // future per-admin narrowing (e.g. "assigned to me") does not silently
+      // start serving one admin's entry to another.
+      keyParts: ["district-notifications", "open-tickets", "v1", key],
+      tags: [supportInbox],
+    });
+    memo.set(key, pending);
+  }
 
+  const count = await pending;
   if (count === 0) return [];
 
   return [

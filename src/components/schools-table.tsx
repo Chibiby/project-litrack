@@ -45,6 +45,7 @@ import {
   useListPending,
 } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 
 export type SchoolRow = {
   id: string;
@@ -581,13 +582,12 @@ function SchoolsTableInner({
                 <TableRow key={school.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Link
+                      <PrefetchLink
                         href={detailHref(school.id)}
-                        prefetch={false}
                         className="font-medium underline-offset-4 hover:underline"
                       >
                         {school.name}
-                      </Link>
+                      </PrefetchLink>
                       {school.isDemo ? (
                         <span
                           className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
@@ -656,9 +656,9 @@ function SchoolsTableInner({
                         size="sm"
                         aria-label={`${detailVerb} ${school.name}`}
                       >
-                        <Link href={detailHref(school.id)} prefetch={false}>
+                        <PrefetchLink href={detailHref(school.id)}>
                           <DetailIcon className="h-4 w-4" aria-hidden />
-                        </Link>
+                        </PrefetchLink>
                       </Button>
                       {caps.toggleActive ? (
                         <SchoolActiveToggle
@@ -736,16 +736,15 @@ function SchoolsTableInner({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
+                    <PrefetchLink
                       href={detailHref(school.id)}
-                      prefetch={false}
                       className={cn(
                         "font-medium underline-offset-4 hover:underline",
                         "max-lg:inline-flex max-lg:min-h-10 max-lg:items-center"
                       )}
                     >
                       {school.name}
-                    </Link>
+                    </PrefetchLink>
                     {school.isDemo ? (
                       <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
                         Demo
@@ -791,10 +790,10 @@ function SchoolsTableInner({
               )}
               <div className="mt-4 flex flex-wrap items-center gap-1 border-t pt-3">
                 <Button asChild variant="ghost" size="sm" className={mobileTouch} aria-label={`${detailVerb} ${school.name}`}>
-                  <Link href={detailHref(school.id)} prefetch={false}>
+                  <PrefetchLink href={detailHref(school.id)}>
                     <DetailIcon className="h-4 w-4" aria-hidden />
                     {isAdminColumns ? <span className="sr-only">View</span> : <span>Edit</span>}
-                  </Link>
+                  </PrefetchLink>
                 </Button>
                 {caps.toggleActive ? (
                   <SchoolActiveToggle
