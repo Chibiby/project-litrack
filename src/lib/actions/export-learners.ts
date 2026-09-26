@@ -27,10 +27,9 @@ import {
 } from "@/lib/reports/sheet-header";
 import { formatGradeSectionLine, frameFooter, frameHeaderFields } from "@/lib/reports/report-frame";
 import { reportPurposeSchema } from "@/lib/validators/report.schema";
-
-type ActionResult<T = unknown> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 
 /**
  * The enum's own label and nothing else — "Others" stays "Others", because the
@@ -114,20 +113,6 @@ function gradeSectionFor(
   }
   if (filter.gradeLevelId && first) return { gradeLevel: grade, section: null };
   return { label: "All" };
-}
-
-/**
- * `purpose` arrives on a plain object, not FormData, so it is parsed here at
- * the boundary. Missing means PRINT.
- */
-function parsePurpose(
-  value: unknown
-): { ok: true; purpose: ReportPurpose } | { ok: false; error: string } {
-  const parsed = reportPurposeSchema.safeParse(value);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-  return { ok: true, purpose: parsed.data };
 }
 
 function sectionFilterClause(sectionId?: string) {
@@ -332,165 +317,184 @@ async function buildLearnersWorkbook(
 
 /**
  * Teacher Excel export — assigned grades only (or one grade if filtered).
+ *
+ * Authorization: `requireSchoolUser("TEACHER")`. Tenancy: every lookup below
+ * (grade, section, learners) is scoped by `schoolId: user.schoolId`, and the
+ * learner query is further narrowed to this teacher's advisory-or-ARAL scope
+ * via `teacherLearnerScope`.
  */
-export async function exportTeacherLearnersExcel(
-  filter: ExportLearnersFilter = {}
-): Promise<ActionResult<{ base64: string; filename: string }>> {
-  const user = await requireSchoolUser("TEACHER");
-  if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
+export const exportTeacherLearnersExcel = action(
+  "exportTeacherLearnersExcel",
+  async (
+    filter: ExportLearnersFilter = {}
+  ): Promise<{ ok: true; data: { base64: string; filename: string } }> => {
+    const user = await requireSchoolUser("TEACHER");
+    if (!user.profileCompleted) {
+      throw new AppError("VALIDATION_FAILED", {
+        params: { message: "Complete your profile first" },
+      });
+    }
 
-  const purposeResult = parsePurpose(filter.purpose);
-  if (!purposeResult.ok) return purposeResult;
-  const { purpose } = purposeResult;
+    const purpose = parseInput(reportPurposeSchema, filter.purpose);
 
-  if (filter.gradeLevelId) {
-    // Read-only export: an ARAL-only teacher reaches the grade through the
-    // learners designated to them. `learnerWhere` still narrows the rows to
-    // the learners in their care.
-    const grade = await prisma.gradeLevel.findFirst({
-      where: {
-        id: filter.gradeLevelId,
-        schoolId: user.schoolId,
-        deletedAt: null,
-        ...teacherGradeScope(user.id),
+    if (filter.gradeLevelId) {
+      // Read-only export: an ARAL-only teacher reaches the grade through the
+      // learners designated to them. `learnerWhere` still narrows the rows to
+      // the learners in their care.
+      const grade = await prisma.gradeLevel.findFirst({
+        where: {
+          id: filter.gradeLevelId,
+          schoolId: user.schoolId,
+          deletedAt: null,
+          ...teacherGradeScope(user.id),
+        },
+      });
+      if (!grade) throw fieldError("gradeLevelId", "You are not assigned to this grade level");
+    }
+
+    if (filter.sectionId && filter.sectionId !== "none") {
+      const section = await prisma.section.findFirst({
+        where: {
+          id: filter.sectionId,
+          schoolId: user.schoolId,
+          deletedAt: null,
+          ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
+        },
+      });
+      if (!section) throw fieldError("sectionId", "Section not found");
+    }
+
+    const learners = await fetchLearnersForExport({
+      schoolId: user.schoolId,
+      teacherId: user.id,
+      gradeLevelId: filter.gradeLevelId,
+      sectionId: filter.sectionId,
+      aralOnly: filter.aralOnly,
+    });
+
+    const frame = await loadReportFrame({ schoolId: user.schoolId, preparedBy: user.fullName });
+    const buffer = await buildLearnersWorkbook(
+      learners,
+      frame,
+      gradeSectionFor(learners, filter),
+      purpose
+    );
+    // Local date key, never `toISOString()`: the school runs at UTC+8, so between
+    // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
+    const filename = `litrack-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: user.schoolId,
+      action: AUDIT_ACTIONS.EXPORT_LEARNERS_EXCEL,
+      resource: "Learner",
+      metadata: {
+        count: learners.length,
+        gradeLevelId: filter.gradeLevelId ?? null,
+        sectionId: filter.sectionId ?? null,
+        aralOnly: Boolean(filter.aralOnly),
+        purpose,
+        role: "TEACHER",
       },
     });
-    if (!grade) return { ok: false, error: "You are not assigned to this grade level" };
-  }
 
-  if (filter.sectionId && filter.sectionId !== "none") {
-    const section = await prisma.section.findFirst({
-      where: {
-        id: filter.sectionId,
-        schoolId: user.schoolId,
-        deletedAt: null,
-        ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
-      },
-    });
-    if (!section) return { ok: false, error: "Section not found" };
-  }
-
-  const learners = await fetchLearnersForExport({
-    schoolId: user.schoolId,
-    teacherId: user.id,
-    gradeLevelId: filter.gradeLevelId,
-    sectionId: filter.sectionId,
-    aralOnly: filter.aralOnly,
-  });
-
-  const frame = await loadReportFrame({ schoolId: user.schoolId, preparedBy: user.fullName });
-  const buffer = await buildLearnersWorkbook(
-    learners,
-    frame,
-    gradeSectionFor(learners, filter),
-    purpose
-  );
-  // Local date key, never `toISOString()`: the school runs at UTC+8, so between
-  // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
-  const filename = `litrack-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
-
-  await writeAudit({
-    userId: user.id,
-    schoolId: user.schoolId,
-    action: AUDIT_ACTIONS.EXPORT_LEARNERS_EXCEL,
-    resource: "Learner",
-    metadata: {
-      count: learners.length,
-      gradeLevelId: filter.gradeLevelId ?? null,
-      sectionId: filter.sectionId ?? null,
-      aralOnly: Boolean(filter.aralOnly),
-      purpose,
-      role: "TEACHER",
-    },
-  });
-
-  return {
-    ok: true,
-    data: { base64: buffer.toString("base64"), filename },
-  };
-}
+    return {
+      ok: true,
+      data: { base64: buffer.toString("base64"), filename },
+    };
+  },
+  { verb: "export the learners" }
+);
 
 /**
  * School Head Excel export — entire school (tenant-scoped).
  * `schoolId` optional override for Super Admin context views only.
+ *
+ * Authorization: `requireUser("SCHOOL_HEAD")` (Super Admin impersonates every
+ * role, so the branch below is keyed on `role === "SUPER_ADMIN"` explicitly,
+ * never on "the role check passed"). Tenancy: a real School Head's own
+ * `schoolId` is used unconditionally; only a Super Admin may supply
+ * `filter.schoolId`, and every lookup below is scoped by that resolved id.
  */
-export async function exportSchoolHeadLearnersExcel(
-  filter: ExportLearnersFilter & { schoolId?: string } = {}
-): Promise<ActionResult<{ base64: string; filename: string }>> {
-  const user = await requireUser("SCHOOL_HEAD");
+export const exportSchoolHeadLearnersExcel = action(
+  "exportSchoolHeadLearnersExcel",
+  async (
+    filter: ExportLearnersFilter & { schoolId?: string } = {}
+  ): Promise<{ ok: true; data: { base64: string; filename: string } }> => {
+    const user = await requireUser("SCHOOL_HEAD");
 
-  let schoolId = user.schoolId;
-  if (user.role === "SUPER_ADMIN") {
-    if (!filter.schoolId) return { ok: false, error: "schoolId required" };
-    schoolId = filter.schoolId;
-  }
-  if (!schoolId) return { ok: false, error: "Not found" };
+    let schoolId = user.schoolId;
+    if (user.role === "SUPER_ADMIN") {
+      if (!filter.schoolId) throw fieldError("schoolId", "schoolId required");
+      schoolId = filter.schoolId;
+    }
+    if (!schoolId) throw resourceNotFound("School");
 
-  const purposeResult = parsePurpose(filter.purpose);
-  if (!purposeResult.ok) return purposeResult;
-  const { purpose } = purposeResult;
+    const purpose = parseInput(reportPurposeSchema, filter.purpose);
 
-  if (filter.gradeLevelId) {
-    const grade = await prisma.gradeLevel.findFirst({
-      where: {
-        id: filter.gradeLevelId,
-        schoolId,
-        deletedAt: null,
+    if (filter.gradeLevelId) {
+      const grade = await prisma.gradeLevel.findFirst({
+        where: {
+          id: filter.gradeLevelId,
+          schoolId,
+          deletedAt: null,
+        },
+      });
+      if (!grade) throw fieldError("gradeLevelId", "Grade level not found");
+    }
+
+    if (filter.sectionId && filter.sectionId !== "none") {
+      const section = await prisma.section.findFirst({
+        where: {
+          id: filter.sectionId,
+          schoolId,
+          deletedAt: null,
+          ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
+        },
+      });
+      if (!section) throw fieldError("sectionId", "Section not found");
+    }
+
+    const learners = await fetchLearnersForExport({
+      schoolId,
+      gradeLevelId: filter.gradeLevelId,
+      sectionId: filter.sectionId,
+      aralOnly: filter.aralOnly,
+    });
+
+    const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
+    const buffer = await buildLearnersWorkbook(
+      learners,
+      frame,
+      gradeSectionFor(learners, filter),
+      purpose
+    );
+    // Local date key, never `toISOString()`: the school runs at UTC+8, so between
+    // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
+    const filename = `litrack-school-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
+
+    await writeAudit({
+      userId: user.id,
+      schoolId,
+      action: AUDIT_ACTIONS.EXPORT_LEARNERS_EXCEL,
+      resource: "Learner",
+      metadata: {
+        count: learners.length,
+        gradeLevelId: filter.gradeLevelId ?? null,
+        sectionId: filter.sectionId ?? null,
+        aralOnly: Boolean(filter.aralOnly),
+        purpose,
+        role: user.role,
       },
     });
-    if (!grade) return { ok: false, error: "Grade level not found" };
-  }
 
-  if (filter.sectionId && filter.sectionId !== "none") {
-    const section = await prisma.section.findFirst({
-      where: {
-        id: filter.sectionId,
-        schoolId,
-        deletedAt: null,
-        ...(filter.gradeLevelId ? { gradeLevelId: filter.gradeLevelId } : {}),
-      },
-    });
-    if (!section) return { ok: false, error: "Section not found" };
-  }
-
-  const learners = await fetchLearnersForExport({
-    schoolId,
-    gradeLevelId: filter.gradeLevelId,
-    sectionId: filter.sectionId,
-    aralOnly: filter.aralOnly,
-  });
-
-  const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
-  const buffer = await buildLearnersWorkbook(
-    learners,
-    frame,
-    gradeSectionFor(learners, filter),
-    purpose
-  );
-  // Local date key, never `toISOString()`: the school runs at UTC+8, so between
-  // 00:00 and 08:00 Manila the UTC slice names the export for yesterday.
-  const filename = `litrack-school-learners-${formatLocalDateKey(schoolToday())}.xlsx`;
-
-  await writeAudit({
-    userId: user.id,
-    schoolId,
-    action: AUDIT_ACTIONS.EXPORT_LEARNERS_EXCEL,
-    resource: "Learner",
-    metadata: {
-      count: learners.length,
-      gradeLevelId: filter.gradeLevelId ?? null,
-      sectionId: filter.sectionId ?? null,
-      aralOnly: Boolean(filter.aralOnly),
-      purpose,
-      role: user.role,
-    },
-  });
-
-  return {
-    ok: true,
-    data: { base64: buffer.toString("base64"), filename },
-  };
-}
+    return {
+      ok: true,
+      data: { base64: buffer.toString("base64"), filename },
+    };
+  },
+  { verb: "export the learners" }
+);
 
 /** Record printable/PDF report view (browser print). */
 export async function auditPrintableReport(input: {
@@ -611,71 +615,82 @@ function buildPrintableReportData(
  * On-demand printable report loader (auth + tenant checks).
  * Prefer this from the reports UI so page visits do not dump full rosters.
  */
-export async function fetchPrintableReport(input: {
-  scope: "TEACHER" | "SCHOOL_HEAD";
-  schoolId?: string;
-  gradeLevelId?: string;
-  sectionId?: string;
-  aralOnly?: boolean;
-}): Promise<ActionResult<PrintableReportData>> {
-  const user =
-    input.scope === "TEACHER"
-      ? await requireSchoolUser("TEACHER")
-      : await requireUser("SCHOOL_HEAD");
+/**
+ * Authorization: `requireSchoolUser`/`requireUser` per scope (Super Admin
+ * impersonates every role, so branches below key on `role === "SUPER_ADMIN"`
+ * explicitly). Tenancy: a non-Super-Admin's `schoolId` always comes from the
+ * session, never `input.schoolId`; a Super Admin's `input.schoolId` is used
+ * as given (impersonation view) and every downstream lookup is scoped by it.
+ */
+export const fetchPrintableReport = action(
+  "fetchPrintableReport",
+  async (input: {
+    scope: "TEACHER" | "SCHOOL_HEAD";
+    schoolId?: string;
+    gradeLevelId?: string;
+    sectionId?: string;
+    aralOnly?: boolean;
+  }): Promise<{ ok: true; data: PrintableReportData }> => {
+    const user =
+      input.scope === "TEACHER"
+        ? await requireSchoolUser("TEACHER")
+        : await requireUser("SCHOOL_HEAD");
 
-  const schoolId =
-    user.role === "SUPER_ADMIN"
-      ? input.schoolId
-      : user.schoolId ?? undefined;
-  if (!schoolId) return { ok: false, error: "School not found" };
-  if (user.role !== "SUPER_ADMIN" && schoolId !== user.schoolId) {
-    return { ok: false, error: "Not found" };
-  }
+    const schoolId =
+      user.role === "SUPER_ADMIN"
+        ? input.schoolId
+        : user.schoolId ?? undefined;
+    if (!schoolId) throw resourceNotFound("School");
+    if (user.role !== "SUPER_ADMIN" && schoolId !== user.schoolId) {
+      throw resourceNotFound("School");
+    }
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { name: true, schoolIdCode: true },
-  });
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { name: true, schoolIdCode: true },
+    });
 
-  const learners = await fetchLearnersForReport({
-    schoolId,
-    teacherId: user.role === "TEACHER" ? user.id : undefined,
-    gradeLevelId: input.gradeLevelId,
-    sectionId: input.sectionId,
-    aralOnly: input.aralOnly,
-  });
+    const learners = await fetchLearnersForReport({
+      schoolId,
+      teacherId: user.role === "TEACHER" ? user.id : undefined,
+      gradeLevelId: input.gradeLevelId,
+      sectionId: input.sectionId,
+      aralOnly: input.aralOnly,
+    });
 
-  // The printable (HTML) report keeps its "Label: Value" header and
-  // "Prepared by / Noted by" footer; both come off the same frame the
-  // spreadsheets use, so the two never disagree about the school.
-  const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
-  const gradeSection = gradeSectionFor(learners, input);
-  const header = frameHeaderFields(
-    frame,
-    gradeSection.gradeLevel
-      ? [gradeSection.gradeLevel, gradeSection.section].filter(Boolean).join(" - ")
-      : formatGradeSectionLine(gradeSection)
-  );
-  const footer = frameFooter(frame);
+    // The printable (HTML) report keeps its "Label: Value" header and
+    // "Prepared by / Noted by" footer; both come off the same frame the
+    // spreadsheets use, so the two never disagree about the school.
+    const frame = await loadReportFrame({ schoolId, preparedBy: user.fullName });
+    const gradeSection = gradeSectionFor(learners, input);
+    const header = frameHeaderFields(
+      frame,
+      gradeSection.gradeLevel
+        ? [gradeSection.gradeLevel, gradeSection.section].filter(Boolean).join(" - ")
+        : formatGradeSectionLine(gradeSection)
+    );
+    const footer = frameFooter(frame);
 
-  await writeAudit({
-    userId: user.id,
-    schoolId,
-    action: AUDIT_ACTIONS.EXPORT_PRINTABLE_REPORT,
-    resource: "Report",
-    metadata: {
-      scope: input.scope,
-      gradeLevelId: input.gradeLevelId ?? null,
-      sectionId: input.sectionId ?? null,
-      aralOnly: Boolean(input.aralOnly),
-    },
-  });
+    await writeAudit({
+      userId: user.id,
+      schoolId,
+      action: AUDIT_ACTIONS.EXPORT_PRINTABLE_REPORT,
+      resource: "Report",
+      metadata: {
+        scope: input.scope,
+        gradeLevelId: input.gradeLevelId ?? null,
+        sectionId: input.sectionId ?? null,
+        aralOnly: Boolean(input.aralOnly),
+      },
+    });
 
-  return {
-    ok: true,
-    data: { ...buildPrintableReportData(school, learners), header, footer },
-  };
-}
+    return {
+      ok: true,
+      data: { ...buildPrintableReportData(school, learners), header, footer },
+    };
+  },
+  { verb: "load the report" }
+);
 
 /**
  * @deprecated Prefer `fetchPrintableReport` (on-demand + auth). Kept for

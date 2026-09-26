@@ -11,10 +11,8 @@ import {
   PROFILE_READING_TAKE,
   type LearnerProfileData,
 } from "@/lib/learners/profile";
-
-type ActionResult<T = unknown> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
 
 /** Nullable Date → local `YYYY-MM-DD`, never `toISOString()` (UTC+8 shifts). */
 function dateKey(value: Date | null | undefined): string | null {
@@ -56,22 +54,29 @@ function teacherLearnerWhere(
  * the soft-delete filter (see the same branch on the detail page).
  *
  * Read-only, so no audit row and no rate limit — matching `searchActiveLearners`.
+ *
+ * Authorization: `requireUser("TEACHER")` (Super Admin impersonates every
+ * role, so the branch below is keyed on `role === "SUPER_ADMIN"` explicitly).
+ * Tenancy: `teacherLearnerWhere` puts school scope plus the teacher's
+ * advisory-or-ARAL scope in the same `WHERE` the lookup runs — a learner in
+ * another school, or in this school but another teacher's care, is the same
+ * generic NOT_FOUND as one that does not exist.
  */
-export async function getLearnerProfile(
-  learnerId: string
-): Promise<ActionResult<LearnerProfileData>> {
-  const user = await requireUser("TEACHER");
-  const id = learnerId?.trim();
-  if (!id) return { ok: false, error: "Not found" };
+export const getLearnerProfile = action(
+  "getLearnerProfile",
+  async (learnerId: string): Promise<{ ok: true; data: LearnerProfileData }> => {
+    const user = await requireUser("TEACHER");
+    const id = learnerId?.trim();
+    if (!id) throw resourceNotFound("Learner");
 
-  const isSuperAdmin = user.role === "SUPER_ADMIN";
+    const isSuperAdmin = user.role === "SUPER_ADMIN";
 
-  const where: Prisma.LearnerWhereInput | null = isSuperAdmin
-    ? { id, deletedAt: null }
-    : teacherLearnerWhere(user, id);
-  if (!where) return { ok: false, error: "Not found" };
+    const where: Prisma.LearnerWhereInput | null = isSuperAdmin
+      ? { id, deletedAt: null }
+      : teacherLearnerWhere(user, id);
+    if (!where) throw resourceNotFound("Learner");
 
-  const learner = await prisma.learner.findFirst({
+    const learner = await prisma.learner.findFirst({
     where,
     select: {
       id: true,
@@ -165,7 +170,7 @@ export async function getLearnerProfile(
     },
   });
 
-  if (!learner) return { ok: false, error: "Not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
   return {
     ok: true,
@@ -250,7 +255,9 @@ export async function getLearnerProfile(
         : null,
     },
   };
-}
+  },
+  { verb: "load the learner profile" }
+);
 
 /*
  * There is no `getLearnerEditContext` any more.

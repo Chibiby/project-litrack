@@ -1,6 +1,6 @@
 # LITRACK — Technical Documentation
 
-**Stack (actual):** Next.js 14.2.28 · React 18.3.1 · Prisma 5 · Supabase Auth + Postgres · Zod · Recharts · papaparse · exceljs
+**Stack (actual):** Next.js 16.3.5 · React 19.2.8 · Prisma 6 · Supabase Auth + Postgres · Zod · Recharts · papaparse · exceljs
 
 This document describes architecture and platform behavior. For end-user UI walkthroughs, prefer role dashboards after login. For ops, see `docs/runbook.md` and `docs/deployment.md`.
 

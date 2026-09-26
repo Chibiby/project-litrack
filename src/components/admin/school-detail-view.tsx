@@ -207,7 +207,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
             type="button"
             variant="outline"
             size="sm"
-           className="sm:h-10 lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+           className="lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => setOpen(true)}
           >
             Clear school
@@ -238,7 +238,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
               type="button"
               variant="destructive"
               size="sm"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               disabled={!matches}
               loading={pending}
               loadingText="Clearing…"
@@ -250,7 +250,7 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
               type="button"
               variant="ghost"
               size="sm"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               disabled={pending}
               onClick={() => {
                 setTyped("");
@@ -390,7 +390,7 @@ export function SchoolDetailView({
                 </span>
               </div>
             </div>
-            <Button asChild variant="outline" size="sm" className="sm:h-10 lg:h-9">
+            <Button asChild variant="outline" size="sm" className="lg:h-9">
               <Link href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`} prefetch>
                 <ExternalLink className="mr-2 h-4 w-4" aria-hidden />
                 Open as School Head
@@ -439,7 +439,7 @@ export function SchoolDetailView({
                   type="button"
                   variant="destructive"
                   size="sm"
-                  className="sm:h-10 lg:h-9"
+                  className="lg:h-9"
                   loading={removingTeachers}
                   loadingText="Removing…"
                   onClick={() => removeTeachers([...pickedTeachers])}
@@ -502,7 +502,7 @@ export function SchoolDetailView({
                           type="button"
                           variant="ghost"
                           size="sm"
-                         className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
+                         className="lg:h-9 text-destructive hover:text-destructive"
                           disabled={removingTeachers}
                           aria-label={`Remove ${teacher.listingName}`}
                           onClick={() => removeTeachers([teacher.id])}
@@ -715,7 +715,7 @@ function SchoolLearnersPanelBody({
                 type="button"
                 variant="destructive"
                 size="sm"
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
                 loading={removingLearners}
                 loadingText="Removing…"
                 onClick={() => removeLearners([...pickedLearners])}
@@ -789,7 +789,7 @@ function SchoolLearnersPanelBody({
                             type="button"
                             variant="ghost"
                             size="sm"
-                           className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
+                           className="lg:h-9 text-destructive hover:text-destructive"
                             disabled={removingLearners}
                             aria-label={`Remove ${learner.listingName}`}
                             onClick={() => removeLearners([learner.id])}
@@ -867,7 +867,7 @@ function SchoolLearnersPanelBody({
               Page {learnerPage} of {learnerPages}
             </span>
             <div className="flex gap-2">
-              <Button asChild={learnerPage > 1} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={learnerPage <= 1}>
+              <Button asChild={learnerPage > 1} variant="outline" size="sm" className="lg:h-9" disabled={learnerPage <= 1}>
                 {learnerPage > 1 ? (
                   <Link href={learnerHref(learnerPage - 1)}>
                     <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
@@ -885,7 +885,7 @@ function SchoolLearnersPanelBody({
                 asChild={learnerPage < learnerPages}
                 variant="outline"
                 size="sm"
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
                 disabled={learnerPage >= learnerPages}
               >
                 {learnerPage < learnerPages ? (

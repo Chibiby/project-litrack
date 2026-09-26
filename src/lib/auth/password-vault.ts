@@ -49,6 +49,9 @@ let cachedKey: Buffer | null = null;
 let cachedKeySource: string | null = null;
 let warnedNoKey = false;
 
+let cachedLegacyKeys: Buffer[] = [];
+let cachedLegacyKeysSource: string | null = null;
+
 /**
  * Accepts a 32-byte key as base64, base64url, or hex — whichever form the
  * operator's key generator produced. Anything that does not decode to exactly
@@ -120,6 +123,69 @@ function resolveKey(): Buffer | null {
   return key;
 }
 
+const LEGACY_DERIVE_PREFIX = "derive:";
+
+/**
+ * Resolve `PASSWORD_VAULT_LEGACY_KEYS` — a comma-separated list of keys the
+ * vault can still *open* blobs with, never seal new ones with.
+ *
+ * This exists for exactly one situation: the key used to seal changed (a
+ * `PASSWORD_VAULT_KEY` rotation, or — the common case — the service-role key
+ * changing under a Supabase project move, since that key silently doubles as
+ * the vault key when `PASSWORD_VAULT_KEY` is unset) and blobs sealed under the
+ * old key are still sitting in `passwordVaultCipher`. Each entry is either a
+ * raw 32-byte key (hex or base64, same rules as `PASSWORD_VAULT_KEY`) or
+ * `derive:<old service-role key>`, which runs that value through the same
+ * HKDF used for the implicit-derivation path so operators don't have to derive
+ * it by hand. A malformed entry is skipped with a warning rather than
+ * rejecting the whole list, so one typo doesn't take down recovery for every
+ * other legacy key.
+ */
+function resolveLegacyKeys(): Buffer[] {
+  const raw = process.env.PASSWORD_VAULT_LEGACY_KEYS?.trim() ?? "";
+  if (!raw) {
+    if (cachedLegacyKeysSource !== "") {
+      cachedLegacyKeys = [];
+      cachedLegacyKeysSource = "";
+    }
+    return cachedLegacyKeys;
+  }
+
+  const fingerprint = createHash("sha256").update(raw).digest("base64");
+  if (cachedLegacyKeysSource === fingerprint) return cachedLegacyKeys;
+
+  const entries = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const keys: Buffer[] = [];
+  for (const entry of entries) {
+    let key: Buffer | null = null;
+    if (entry.startsWith(LEGACY_DERIVE_PREFIX)) {
+      const material = entry.slice(LEGACY_DERIVE_PREFIX.length).trim();
+      if (material) {
+        key = Buffer.from(hkdfSync("sha256", material, DERIVE_SALT, DERIVE_INFO, KEY_BYTES));
+      }
+    } else {
+      key = parseExplicitKey(entry);
+    }
+
+    if (key) {
+      keys.push(key);
+    } else {
+      console.error(
+        "[password-vault] skipping one PASSWORD_VAULT_LEGACY_KEYS entry — not a 32-byte hex/base64 key or a valid derive:<key> form."
+      );
+    }
+  }
+
+  cachedLegacyKeys = keys;
+  cachedLegacyKeysSource = fingerprint;
+  console.warn(`[password-vault] loaded ${keys.length} legacy key(s) for opening old blobs.`);
+  return keys;
+}
+
 /** Whether sealing and opening can work at all in this environment. */
 export function isPasswordVaultConfigured(): boolean {
   return resolveKey() !== null;
@@ -157,30 +223,14 @@ export function sealPassword(plaintext: string): string | null {
   }
 }
 
-/**
- * Open a sealed password. Returns null for anything that does not open cleanly:
- * a blob from another key, a truncated column, a future version, or tampering.
- * The caller cannot tell those apart on purpose — every one of them means the
- * same thing to an admin, which is "reset it".
- */
-export function openPassword(sealed: string | null | undefined): string | null {
-  if (!sealed) return null;
-
-  const parts = sealed.split(".");
-  if (parts.length !== 4) return null;
-
-  const [version, ivPart, tagPart, ctPart] = parts;
-  if (version !== VERSION) return null;
-
-  const key = resolveKey();
-  if (!key) return null;
-
+/** Attempt to open one blob with one candidate key. Null on any failure. */
+function tryOpenWithKey(
+  key: Buffer,
+  iv: Buffer,
+  tag: Buffer,
+  ciphertext: Buffer
+): string | null {
   try {
-    const iv = Buffer.from(ivPart, "base64url");
-    const tag = Buffer.from(tagPart, "base64url");
-    const ciphertext = Buffer.from(ctPart, "base64url");
-    if (iv.length !== IV_BYTES || tag.length !== 16 || ciphertext.length === 0) return null;
-
     const decipher = createDecipheriv("aes-256-gcm", key, iv);
     decipher.setAuthTag(tag);
     const plaintext = Buffer.concat([
@@ -193,6 +243,58 @@ export function openPassword(sealed: string | null | undefined): string | null {
     // the key rotated, so this is not logged as an error.
     return null;
   }
+}
+
+/**
+ * Open a sealed password, trying the current key first and then, in order,
+ * each `PASSWORD_VAULT_LEGACY_KEYS` entry. Returns null for anything that does
+ * not open under any of them: a blob from a key not on this list, a truncated
+ * column, a future version, or tampering. The caller cannot tell those apart
+ * on purpose — every one of them means the same thing to an admin, which is
+ * "reset it".
+ *
+ * `usedLegacyKey` tells a caller whether the current key opened it directly
+ * (`false`) or a legacy key had to be used (`true`), so a caller that can
+ * re-seal knows when there is anything worth re-sealing. Use `openPassword`
+ * when that distinction doesn't matter.
+ */
+export function openPasswordWithSource(
+  sealed: string | null | undefined
+): { password: string; usedLegacyKey: boolean } | null {
+  if (!sealed) return null;
+
+  const parts = sealed.split(".");
+  if (parts.length !== 4) return null;
+
+  const [version, ivPart, tagPart, ctPart] = parts;
+  if (version !== VERSION) return null;
+
+  const iv = Buffer.from(ivPart, "base64url");
+  const tag = Buffer.from(tagPart, "base64url");
+  const ciphertext = Buffer.from(ctPart, "base64url");
+  if (iv.length !== IV_BYTES || tag.length !== 16 || ciphertext.length === 0) return null;
+
+  const key = resolveKey();
+  if (key) {
+    const opened = tryOpenWithKey(key, iv, tag, ciphertext);
+    if (opened !== null) return { password: opened, usedLegacyKey: false };
+  }
+
+  for (const legacyKey of resolveLegacyKeys()) {
+    const opened = tryOpenWithKey(legacyKey, iv, tag, ciphertext);
+    if (opened !== null) return { password: opened, usedLegacyKey: true };
+  }
+
+  return null;
+}
+
+/**
+ * Open a sealed password. See `openPasswordWithSource` for the full
+ * current-key/legacy-key fallback behavior; this is the plain form for
+ * callers that don't need to know which key opened it.
+ */
+export function openPassword(sealed: string | null | undefined): string | null {
+  return openPasswordWithSource(sealed)?.password ?? null;
 }
 
 /**
@@ -251,4 +353,6 @@ export function resetPasswordVaultKeyCache(): void {
   cachedKey = null;
   cachedKeySource = null;
   warnedNoKey = false;
+  cachedLegacyKeys = [];
+  cachedLegacyKeysSource = null;
 }

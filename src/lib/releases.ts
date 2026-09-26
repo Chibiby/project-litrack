@@ -135,6 +135,28 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.17.0",
+    date: "2026-09-26",
+    title: "Easier to use on tablets, and safer backups",
+    announce: true,
+    fixes: [
+      "On a tablet held upright, buttons, boxes and menus are now full touch size instead of the small desktop size, so they are easier to tap.",
+      "On a tablet held sideways, the side menu starts folded so your page has more room. Tap the menu button to open it, and it stays the way you leave it.",
+      "In Weekly Attendance, the day buttons and checkboxes are bigger to tap, learner names stay in view when you scroll across the week, and the totals are easier to read.",
+      "Changing one attendance mark no longer makes the whole week redraw, so the grid stays quick with a full class.",
+      "If your device is set to reduce motion, windows and menus now open without animation.",
+      {
+        text: "Daily backups work again on the live system, and restoring from the undo point works again.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "Notifications you have read are cleared after 90 days, and all notifications after 180 days.",
+      {
+        text: "Audit history is kept for two years.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.16.1",
     date: "2026-09-26",
     title: "District pages open faster",

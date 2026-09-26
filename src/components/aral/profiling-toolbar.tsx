@@ -107,7 +107,7 @@ export function ProfilingToolbar({
             }
           }}
           placeholder="Search learner name…"
-          className="h-11 rounded-xl pl-9 sm:h-9"
+          className="h-11 rounded-xl pl-9 lg:h-9"
           aria-label="Search learners by name"
         />
       </div>
@@ -116,7 +116,7 @@ export function ProfilingToolbar({
         value={section === "all" ? "all" : section}
         onValueChange={(value) => navigate({ section: value === "all" ? undefined : value })}
       >
-        <SelectTrigger aria-label="Section" className="h-11 sm:h-9 sm:w-40">
+        <SelectTrigger aria-label="Section" className="h-11 sm:w-40 lg:h-9">
           <SelectValue placeholder="All sections" />
         </SelectTrigger>
         <SelectContent>
@@ -134,7 +134,7 @@ export function ProfilingToolbar({
         value={status}
         onValueChange={(value) => navigate({ status: value === "all" ? undefined : value })}
       >
-        <SelectTrigger aria-label="Status" className="h-11 sm:h-9 sm:w-40">
+        <SelectTrigger aria-label="Status" className="h-11 sm:w-40 lg:h-9">
           <SelectValue placeholder="All statuses" />
         </SelectTrigger>
         <SelectContent>

@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSnapshot } from "@/lib/db/snapshot";
-import { isBackupStoreConfigured, saveBackup, type BackupKind } from "@/lib/db/backup-store";
+import { backUpDatabase } from "@/lib/db/snapshot";
+import { isBackupStoreConfigured, type BackupKind } from "@/lib/db/backup-store";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { route } from "@/lib/errors/route";
 import { AppError } from "@/lib/errors/app-error";
 import { purgeExpiredErrorEvents } from "@/lib/errors/retention";
+import { runDailyRetention, type RetentionReport } from "@/lib/retention/purge";
 
 /**
  * Scheduled backup endpoint, driven by the `triggers.crons` entries in
@@ -49,13 +50,14 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
   // Housekeeping runs BEFORE the snapshot, not after it.
   //
   // It used to ride on the tail of a successful backup, which meant a snapshot
-  // that could not complete also silently stopped `ErrorEvent` retention. That
-  // is exactly the situation on Cloudflare today: the snapshot loads every
-  // table into one isolate and exceeds the Worker memory limit, so nothing past
-  // it ran. The two jobs are independent, so order them that way.
+  // that could not complete also silently stopped retention. The jobs are
+  // independent, so order them that way — and purging first also means the
+  // snapshot does not spend time and space on rows about to be deleted.
   //
-  // A failed purge must still never fail a backup.
+  // A failed purge must still never fail a backup: each purge swallows its own
+  // failure (runDailyRetention reports `failed` per rule).
   let errorEventsPurged: number | null = null;
+  let retention: RetentionReport | null = null;
   if (kind === "daily") {
     try {
       errorEventsPurged = await purgeExpiredErrorEvents();
@@ -65,13 +67,16 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
         err instanceof Error ? err.message : err
       );
     }
+    retention = await runDailyRetention();
+    // Counts only. Workers Logs is where "is retention keeping up?" gets
+    // answered, so the line is written whether or not the backup succeeds.
+    console.log("[cron/backup] retention", JSON.stringify({ errorEventsPurged, ...retention }));
   }
 
   // A failure here is still logged and still returns non-200 for the cron
   // dashboard — the wrapper does both — but the response no longer echoes the
   // raw error text, which could name tables and values.
-  const snapshot = await createSnapshot();
-  const saved = await saveBackup(kind, snapshot);
+  const { saved, totalRows } = await backUpDatabase(kind);
 
   await writeAudit({
     action: AUDIT_ACTIONS.DB_BACKUP_CREATE,
@@ -80,7 +85,7 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
     metadata: {
       trigger: "cron",
       kind,
-      totalRows: snapshot.meta.totalRows,
+      totalRows,
       bytes: saved.size,
     },
   });
@@ -90,7 +95,8 @@ export const GET = route("GET /api/cron/backup", async (request: NextRequest) =>
     kind,
     stamp: saved.stamp,
     bytes: saved.size,
-    totalRows: snapshot.meta.totalRows,
+    totalRows,
     errorEventsPurged,
+    retention,
   });
 });

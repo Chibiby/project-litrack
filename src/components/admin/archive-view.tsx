@@ -114,7 +114,7 @@ function Paginator({
         Page {page} of {pages}
       </span>
       <div className="flex gap-2">
-        <Button asChild={page > 1} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={page <= 1}>
+        <Button asChild={page > 1} variant="outline" size="sm" className="lg:h-9" disabled={page <= 1}>
           {page > 1 ? (
             <Link href={hrefFor(page - 1)}>
               <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
@@ -128,7 +128,7 @@ function Paginator({
             </span>
           )}
         </Button>
-        <Button asChild={page < pages} variant="outline" size="sm" className="sm:h-10 lg:h-9" disabled={page >= pages}>
+        <Button asChild={page < pages} variant="outline" size="sm" className="lg:h-9" disabled={page >= pages}>
           {page < pages ? (
             <Link href={hrefFor(page + 1)}>
               Next

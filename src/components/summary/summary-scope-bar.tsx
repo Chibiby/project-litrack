@@ -168,7 +168,7 @@ export function SummaryScopeBar({
             searchPlaceholder="Search schools by name or ID"
             emptyMessage="No school matches."
             leadingIcon={<Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            triggerClassName="h-11 rounded-lg bg-card sm:h-10"
+            triggerClassName="h-11 rounded-lg bg-card lg:h-10"
             chevron="down"
           />
         </div>

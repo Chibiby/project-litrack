@@ -178,17 +178,17 @@ describe("getLearnerProfile — teacher scope", () => {
 
   it("hides a learner in the same school but another teacher's care", async () => {
     const res = await getLearnerProfile("other-advisory");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 
   it("hides a learner in another school", async () => {
     const res = await getLearnerProfile("other-school");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 
   it("hides a soft-deleted learner", async () => {
     const res = await getLearnerProfile("soft-deleted");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 
   it("scopes the query by school and teacher rather than by id alone", async () => {
@@ -204,7 +204,7 @@ describe("getLearnerProfile — teacher scope", () => {
 
   it("rejects a blank id without querying", async () => {
     const res = await getLearnerProfile("   ");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(findFirst).not.toHaveBeenCalled();
   });
 
@@ -215,7 +215,7 @@ describe("getLearnerProfile — teacher scope", () => {
       schoolId: null,
     });
     const res = await getLearnerProfile("own-advisory");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(findFirst).not.toHaveBeenCalled();
   });
 });
@@ -240,7 +240,7 @@ describe("getLearnerProfile — super admin", () => {
 
   it("still hides soft-deleted learners", async () => {
     const res = await getLearnerProfile("soft-deleted");
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 });
 

@@ -3,8 +3,7 @@
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { APP_VERSION } from "@/lib/releases";
-
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+import { action } from "@/lib/errors/action";
 
 /**
  * Stamp the version this user just read.
@@ -25,18 +24,17 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
  * is derived from the committed `RELEASES` list, so it needs no stored rows.
  * `RELEASE_PUBLISHED` notification rows written before 1.6.0 are no longer read.
  */
-export async function acknowledgeRelease(): Promise<ActionResult> {
-  const user = await requireUser();
+export const acknowledgeRelease = action(
+  "acknowledgeRelease",
+  async (): Promise<{ ok: true }> => {
+    const user = await requireUser();
 
-  try {
     await prisma.user.update({
       where: { id: user.id },
       data: { lastSeenReleaseVersion: APP_VERSION },
     });
-  } catch (err) {
-    console.error("[release] acknowledge failed:", err);
-    return { ok: false, error: "Could not save that you have seen this. Try again." };
-  }
 
-  return { ok: true };
-}
+    return { ok: true };
+  },
+  { verb: "save that you have seen this" }
+);

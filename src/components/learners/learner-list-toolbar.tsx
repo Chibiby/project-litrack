@@ -131,7 +131,7 @@ export function withSection(s: RosterUrlState, section: string): RosterUrlState 
 }
 
 const TAB_BASE =
-  "h-9 shrink-0 gap-1.5 rounded-xl px-3 text-[13px] font-medium sm:h-10 sm:gap-2 sm:px-4 sm:text-sm";
+  "h-11 shrink-0 gap-1.5 rounded-xl px-3 text-[13px] font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
 const TAB_ON =
   "border-transparent bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30 hover:from-violet-600 hover:to-violet-600 hover:text-white";
 

@@ -10,7 +10,7 @@ export function SummaryPeriodBarSkeleton() {
         <Skeleton className="h-5 w-56 max-w-full" />
         <Skeleton className="h-4 w-72 max-w-full" />
       </div>
-      <Skeleton className="h-11 w-full sm:h-10 sm:w-28" />
+      <Skeleton className="h-11 w-full sm:w-28 lg:h-10" />
     </div>
   );
 }

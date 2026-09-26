@@ -44,6 +44,9 @@ jobs:
   e2e:
     name: E2E smoke (optional)
     runs-on: ubuntu-latest
+    # Non-blocking: needs a live server (PLAYWRIGHT_BASE_URL) that this workflow
+    # does not stand up, so a failure here must never fail the required `quality`
+    # gate or block a merge.
     continue-on-error: true
     if: ${{ vars.PLAYWRIGHT_BASE_URL != '' }}
     steps:

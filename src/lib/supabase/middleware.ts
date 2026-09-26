@@ -44,12 +44,17 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet: CookieToSet[]) {
+      setAll(cookiesToSet: CookieToSet[], headers: Record<string, string>) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         supabaseResponse = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
           supabaseResponse.cookies.set(name, value, options)
         );
+        // A CDN or reverse proxy must never cache a response carrying one
+        // user's auth Set-Cookie for the next visitor. @supabase/ssr hands us
+        // the Cache-Control/Expires/Pragma headers that prevent that; apply
+        // them to the response object we just (re)created.
+        Object.entries(headers).forEach(([key, value]) => supabaseResponse.headers.set(key, value));
       },
     },
   });

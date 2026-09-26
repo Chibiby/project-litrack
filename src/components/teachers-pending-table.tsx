@@ -175,7 +175,7 @@ export function TeachersPendingTable({
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        className="sm:h-10 lg:h-9"
+                        className="lg:h-9"
                         loading={actingKey === `${row.id}:approve`}
                         loadingText="Approving…"
                         disabled={rowBusy}
@@ -193,7 +193,7 @@ export function TeachersPendingTable({
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="sm:h-10 lg:h-9 text-destructive"
+                            className="lg:h-9 text-destructive"
                             loading={actingKey === `${row.id}:reject`}
                             loadingText="Declining…"
                             disabled={rowBusy}

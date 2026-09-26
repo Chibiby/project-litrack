@@ -71,7 +71,11 @@ describe("searchActiveLearners — district admin scope", () => {
   it("refuses an out-of-scope schoolId with NOT_FOUND and runs no learner query", async () => {
     const res = await searchActiveLearners({ schoolId: SCHOOL_OUT_OF_SCOPE.id, q: "juan" });
 
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toEqual({
+      ok: false,
+      code: "NOT_FOUND",
+      error: "School not found. It may have been deleted or moved.",
+    });
     expect(loadSchoolInScope).toHaveBeenCalledWith(scope, SCHOOL_OUT_OF_SCOPE.id, expect.anything());
     expect(learnerFindMany).not.toHaveBeenCalled();
   });

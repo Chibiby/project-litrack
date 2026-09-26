@@ -31,7 +31,7 @@ export function AdvisoryHeroControl({
       onChange={(advisory) =>
         router.push(rosterHref(basePath, withAdvisory(state, advisory, advisories)))
       }
-      className="h-9 w-36 gap-1.5 px-2 text-xs max-sm:[&_svg:first-child]:hidden sm:h-10 sm:w-44 sm:gap-2 sm:px-3 sm:text-sm lg:h-11 lg:w-56"
+      className="h-11 w-36 gap-1.5 px-2 text-xs max-sm:[&_svg:first-child]:hidden sm:w-44 sm:gap-2 sm:px-3 sm:text-sm lg:w-56"
     />
   );
 }

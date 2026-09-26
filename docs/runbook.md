@@ -21,6 +21,33 @@ and cannot be read back by anyone; teachers use `/forgot-password` (real email)
 or a re-invite. The privacy consequences of storing these at all are in
 `docs/privacy.md`.
 
+## Recover passwords sealed under a previous key
+
+**When:** the eye icon says "not on record" for accounts you know had a
+password set, right after a `PASSWORD_VAULT_KEY` rotation or a Supabase
+project move (which rotates `SUPABASE_SERVICE_ROLE_KEY`, and the vault key is
+derived from it when `PASSWORD_VAULT_KEY` is unset).
+
+1. Get the **old** project's `service_role` key from that Supabase project's
+   dashboard (Settings → API). If the key was rotated but the project didn't
+   move, get the old `PASSWORD_VAULT_KEY` value instead — whichever one was
+   sealing blobs before the change.
+2. Set it as a Worker secret: `PASSWORD_VAULT_LEGACY_KEYS=derive:<old service-role key>`
+   (for an old `PASSWORD_VAULT_KEY` value, drop the `derive:` prefix — it is
+   already a 32-byte key, not something to derive from). Multiple old keys can
+   be comma-separated if more than one rotation happened.
+3. Reveal as usual. Each password that opens under the legacy key is
+   automatically re-sealed under the current key as part of that reveal — no
+   separate migration step, and a reveal never fails because the re-seal did.
+4. Once the accounts you need have been read (or after a bulk pass through
+   `/admin/accounts`), remove `PASSWORD_VAULT_LEGACY_KEYS`. It only exists to
+   bridge a rotation, and leaving an old service-role key configured longer
+   than necessary is exposure with no upside.
+
+The old key never seals anything new — only `PASSWORD_VAULT_KEY` (or its
+service-role derivation) does that — so there's no risk of newly-set passwords
+ending up encrypted under a retired key while this is configured.
+
 ## Reset a School Head's password to the School ID
 
 **When:** SH forgot the password they chose and it is not on record (see above) /
@@ -211,6 +238,32 @@ change) and adding grade levels. The **School Head** button needs only a selecte
 2. **Export:** Logical dumps via Supabase tooling / `pg_dump` against a direct connection (credentials from Dashboard — do not commit).
 3. **Restore:** Follow Supabase restore docs for the project plan; verify app env still points at the restored project; re-run `prisma migrate deploy` only if schema drift requires it.
 4. After restore, smoke: admin login, one school head, one teacher grade list.
+
+## In-app backups, restore and retention (`/admin/database`)
+
+- **Did last night's backup run?** Workers Logs: `[cron] run ok /api/cron/backup?kind=daily`.
+  The file shows on `/admin/database` as `daily/<date>.ndjson.gz`. A `[cron] run failed … 5xx`
+  line carries a reference; look it up at `/admin/errors`. To force a run:
+  `curl -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/backup?kind=daily"`.
+  Same-day re-runs replace that day's file. A run that fails midway leaves the old file, plus
+  orphaned upload parts in the Blob store (`@vercel/blob` 2.8 cannot abort a multipart upload).
+  After several failed runs, check the store's usage in the Vercel dashboard.
+- **Formats.** New files are v2 (`.ndjson.gz`, gzipped NDJSON). Older `.json.gz` files are v1
+  and still restore. Upload restore accepts either, zipped or unzipped. The server-action body
+  limit is 5 MB, so a large backup should be restored from the stored list, not uploaded.
+- **Restore refused "incomplete" / "damaged" / "out of order".** The file failed validation, and
+  nothing was deleted. If the refusal came mid-restore, the transaction rolled back, and the
+  message says so. Try another backup. Do not hand-edit a backup file: the per-table counts and
+  the footer are checked.
+- **Restore failed on a foreign key.** A backup is not a point-in-time copy (tables are read one
+  after another). A write during the backup can leave a child row whose parent is missing. The
+  restore rolled back; use the previous night's file.
+- **Retention.** The daily cron logs `[cron/backup] retention {…}` with per-rule `status`,
+  `deleted` and `capped`. `capped: true` means more than 100k rows were due, and the rest go on
+  the following nights. To stop a rule, set its variable to `0`: `NOTIFICATION_READ_RETENTION_DAYS`,
+  `NOTIFICATION_RETENTION_DAYS` or `AUDIT_LOG_RETENTION_DAYS`. A value that does not parse also
+  switches it off. **Purged `AuditLog` rows are not in any in-app backup.** Only Supabase PITR can
+  bring them back, which is why that setting cannot go below 90 days.
 
 ## A user quotes a reference E-XXXXXXXX
 

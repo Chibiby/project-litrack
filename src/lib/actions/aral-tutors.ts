@@ -5,10 +5,7 @@ import {
   listAralTutors,
   type AralTutorOption,
 } from "@/lib/teachers/aral-tutor";
-
-type ActionResult<T = unknown> =
-  | { ok: true; data?: T }
-  | { ok: false; error: string; data?: T };
+import { action } from "@/lib/errors/action";
 
 export type AralTutorPickerData = {
   tutors: AralTutorOption[];
@@ -25,19 +22,18 @@ export type AralTutorPickerData = {
  * School Head ARAL tab) still read `listAralTutors` directly in their server
  * component — same rule, same order, no waterfall where none is needed.
  *
- * Reads nothing from the client: the school comes from the session, so a caller
- * cannot ask for another tenant's teachers.
+ * Authorization: `requireSchoolUser(["TEACHER","SCHOOL_HEAD"])`. Tenancy: the
+ * caller takes no id at all — the school comes from the session
+ * (`user.schoolId`), so there is nothing for a caller to craft to reach
+ * another tenant's teacher list.
  */
-export async function listAralTutorOptions(): Promise<
-  ActionResult<AralTutorPickerData>
-> {
-  const user = await requireSchoolUser(["TEACHER", "SCHOOL_HEAD"]);
+export const listAralTutorOptions = action(
+  "listAralTutorOptions",
+  async (): Promise<{ ok: true; data: AralTutorPickerData }> => {
+    const user = await requireSchoolUser(["TEACHER", "SCHOOL_HEAD"]);
 
-  try {
     const tutors = await listAralTutors(user.schoolId);
     return { ok: true, data: { tutors, selfId: user.id } };
-  } catch (err) {
-    console.error("[aral-tutors] list failed:", err);
-    return { ok: false, error: "Could not load teachers. Please try again." };
-  }
-}
+  },
+  { verb: "load the teacher list" }
+);

@@ -243,7 +243,7 @@ export function TermSubjectsManager({
                 placeholder="e.g. Filipino"
                 maxLength={60}
                 disabled={pending || atCap}
-                className="max-sm:h-11 sm:h-10 lg:h-10"
+                className="max-sm:h-11 lg:h-10"
               />
             </div>
             <Button
@@ -252,7 +252,7 @@ export function TermSubjectsManager({
               disabled={pending || atCap}
               loading={pending}
               loadingText="Saving…"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
             >
               <Plus className="h-4 w-4" aria-hidden />
               Add subject
@@ -311,7 +311,7 @@ export function TermSubjectsManager({
                       size="sm"
                       variant="outline"
                       disabled={pending}
-                      className="sm:h-10 lg:h-9"
+                      className="lg:h-9"
                       onClick={() => void restore(subject.id, subject.name).catch(swallow)}
                     >
                       <RotateCcw className="h-4 w-4" aria-hidden />
@@ -354,7 +354,7 @@ function TermSubjectRow({
           type="button"
           size="icon"
           variant="outline"
-          className="max-sm:size-11 sm:size-10 lg:size-10"
+          className="max-sm:size-11 lg:size-10"
           disabled={pending || isFirst}
           onClick={onMoveUp}
           aria-label={`Move ${subject.name} up`}
@@ -365,7 +365,7 @@ function TermSubjectRow({
           type="button"
           size="icon"
           variant="outline"
-          className="max-sm:size-11 sm:size-10 lg:size-10"
+          className="max-sm:size-11 lg:size-10"
           disabled={pending || isLast}
           onClick={onMoveDown}
           aria-label={`Move ${subject.name} down`}
@@ -388,9 +388,9 @@ function TermSubjectRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="min-w-[10rem] flex-1 max-lg:min-w-0 max-sm:h-11 sm:h-10 lg:h-10"
+          className="min-w-[10rem] flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={pending} className="sm:h-10 lg:h-9">
+        <Button type="submit" size="sm" variant="outline" disabled={pending} className="lg:h-9">
           Save
         </Button>
       </form>
@@ -406,7 +406,7 @@ function TermSubjectRow({
             type="button"
             size="sm"
             variant="ghost"
-            className="text-destructive max-sm:order-2 sm:h-10 lg:h-9"
+            className="text-destructive max-sm:order-2 lg:h-9"
             disabled={pending}
           >
             Archive

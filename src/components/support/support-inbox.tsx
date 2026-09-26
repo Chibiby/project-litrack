@@ -244,7 +244,7 @@ function TicketCard({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
                 loading={revoking}
                 loadingText="Ending"
                 onClick={() => revoke(ticket.activeGrant!.id)}
@@ -260,7 +260,7 @@ function TicketCard({
               <Button
                 type="button"
                 size="sm"
-                className="bg-violet text-violet-foreground hover:bg-violet/90 sm:h-10 lg:h-9"
+                className="bg-violet text-violet-foreground hover:bg-violet/90 lg:h-9"
                 onClick={() => onAnswer("resolve")}
               >
                 <Check className="size-4" aria-hidden />
@@ -270,7 +270,7 @@ function TicketCard({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
                 onClick={() => onAnswer("decline")}
               >
                 <X className="size-4" aria-hidden />

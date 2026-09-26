@@ -363,7 +363,7 @@ function LanguageSwitch({
           aria-checked={locale === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "h-auto min-h-8 rounded-full px-3",
+            "h-auto min-h-11 rounded-full px-3 lg:min-h-8",
             locale === o.value
               ? "bg-violet text-violet-foreground hover:bg-violet hover:text-violet-foreground"
               : "text-muted-foreground hover:bg-transparent hover:text-foreground"

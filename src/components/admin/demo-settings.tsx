@@ -50,7 +50,7 @@ function Field({ label, value }: { label: string; value: string }) {
         type="button"
         variant="ghost"
         size="sm"
-        className="sm:h-10 lg:h-9"
+        className="lg:h-9"
         aria-label={`Copy ${label}`}
         onClick={() => {
           void navigator.clipboard.writeText(value);

@@ -328,12 +328,10 @@ type TeacherManageActionsProps = {
 
 /**
  * The row's action buttons, shared by the desktop table cell and the
- * below-`lg` list row. `size="sm"` alone drops to `h-9` (36px) from 640px up
- * (`button.tsx`), which is under 40px on tablet. `sm:h-10 lg:h-9` raises the
- * 640–1023px band to 40px and then restores the original 36px at `lg` and up
- * — a plain `max-lg:h-10` will not do this: Tailwind emits `max-lg:` rules
- * before `sm:` rules, so at 640–1023px the primitive's own `sm:h-9` would
- * still win over `max-lg:h-10` by source order.
+ * below-`lg` list row. `size="sm"` alone already carries the primitive's 44px
+ * touch floor below `lg` and its 36px `h-9` from `lg` up (`button.tsx`), so no
+ * local override is needed to keep the 640–1023px tablet band at a full
+ * height — only the `lg` collapse to `h-9` needs restating here.
  */
 function TeacherManageButtons({
   row,
@@ -375,7 +373,7 @@ function TeacherManageButtons({
             <Button
               size="sm"
               variant="outline"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               loading={busy === "setActive"}
               loadingText="Deactivating…"
               disabled={rowBusy}
@@ -396,7 +394,7 @@ function TeacherManageButtons({
             <Button
               size="sm"
               variant="outline"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               loading={busy === "setActive"}
               loadingText="Reactivating…"
               disabled={rowBusy}
@@ -418,7 +416,7 @@ function TeacherManageButtons({
             <Button
               size="sm"
               variant="outline"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               loading={busy === "removePhoto"}
               loadingText="Removing…"
               disabled={rowBusy}
@@ -439,7 +437,7 @@ function TeacherManageButtons({
           <Button
             size="sm"
             variant="ghost"
-            className="sm:h-10 lg:h-9 text-destructive"
+            className="lg:h-9 text-destructive"
             loading={busy === "remove"}
             loadingText="Removing…"
             disabled={blockedReason !== null || rowBusy}
@@ -1333,7 +1331,7 @@ export function TeachersDeclinedTable({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="sm:h-10 lg:h-9"
+                  className="lg:h-9"
                   loading={actingId === row.id}
                   loadingText="Allowing…"
                   onClick={() => runClear(row.id, row.fullName)}

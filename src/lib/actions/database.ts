@@ -8,22 +8,28 @@ import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
+import { action } from "@/lib/errors/action";
+import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
+import { classifyError } from "@/lib/errors/classify";
 import {
   BACKUP_STORE_SETUP_MESSAGE,
   deleteBackup,
   isBackupStoreConfigured,
   latestSafetyBackup,
-  parseUploadedBackup,
-  readBackup,
-  saveBackup,
+  openBackupStream,
+  pruneKind,
+  parseBackupPath,
 } from "@/lib/db/backup-store";
 import {
+  backUpDatabase,
   clearOperationalData,
-  createSnapshot,
-  restoreSnapshot,
-  validateSnapshot,
+  inspectBackup,
+  restoreBackup,
+  type BackupOpener,
+  type InspectedBackup,
   type SnapshotCounts,
 } from "@/lib/db/snapshot";
+import { SnapshotFormatError } from "@/lib/db/snapshot-format";
 import { removeAllTeacherAccounts, resetAllSchoolHeadPasswords } from "@/lib/db/account-reset";
 
 /**
@@ -43,60 +49,97 @@ import { removeAllTeacherAccounts, resetAllSchoolHeadPasswords } from "@/lib/db/
  * `requireUser("SUPER_ADMIN")` is load-bearing on its own rather than backed by
  * a school-scoped query. The three Danger-zone actions also accept a
  * `schoolId` that narrows them to one school; see `resolveTarget`.
+ *
+ * Every export is wrapped once by `action()`: refusals are thrown as
+ * `AppError`s and anything unexpected is classified, recorded and answered
+ * with a safe message. The raw error text these actions used to return (a
+ * Prisma message could name tables and values) now reaches only the admin
+ * error log.
  */
-
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
 /** Deliberately tight. These are not operations anyone should run in a loop. */
 const DESTRUCTIVE_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const BACKUP_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 
 /**
- * Typed into the confirmation box before a destructive action will run — and
- * `noBackupAck`, which is ticked rather than typed.
- *
- * The Danger-zone actions normally refuse without somewhere to put the safety
- * snapshot. On a project whose Blob store is not wired up yet that would leave
- * an admin unable to clear seed data at all, so `noBackupAck` is the
- * deliberate escape hatch: it travels with one submission, is never
- * remembered, and what it lets through genuinely cannot be undone.
- *
- * The phrases themselves live in `@/lib/constants/confirm-phrases`, which is a
- * plain module. They cannot be defined here: a "use server" file may export
- * nothing but async functions, and an exported `as const` map trips that rule
- * at runtime — on whatever unrelated page happens to pull this module into its
+ * Completes "Couldn't {verb}: …" when a restore fails in the database. A failed
+ * restore has already deleted rows inside its transaction, so Postgres has
+ * rolled the whole thing back — but an admin staring at an error needs to be
+ * told that explicitly, not left guessing whether the database is half empty.
+ */
+const RESTORE_VERB = "restore the backup (it was rolled back, so the database is unchanged)";
+
+/*
+ * The confirmation phrases live in `@/lib/constants/confirm-phrases`, a plain
+ * module. They cannot be defined here: a "use server" file may export nothing
+ * but async functions, and an exported `as const` map trips that rule at
+ * runtime — on whatever unrelated page happens to pull this module into its
  * action chunk. See that file's header for the full story.
  */
 
-const backupPath = z.object({ pathname: z.string().min(1).max(300) });
+/**
+ * The store would reject a path outside the backup layout too, but as a plain
+ * throw that classifies as a system error and emails an alert. Checking here
+ * makes a tampered path the refusal it is.
+ */
+const backupPath = z.object({
+  pathname: z
+    .string()
+    .min(1)
+    .max(300)
+    .refine((p) => parseBackupPath(p) !== null),
+});
 
-/** Null when the store is usable; otherwise the refusal to return as-is. */
-function storeReady(): { ok: false; error: string } | null {
-  return isBackupStoreConfigured() ? null : { ok: false, error: BACKUP_STORE_SETUP_MESSAGE };
+/**
+ * A refusal the admin can act on, worded exactly as the console has always
+ * shown it. `VALIDATION_FAILED` is the catalog's carrier for a caller-written
+ * sentence, and its `user` severity keeps a mistyped confirmation phrase out of
+ * the error log and the alert email.
+ */
+function refuse(message: string): AppError {
+  return new AppError("VALIDATION_FAILED", { params: { message } });
+}
+
+/** Throws when there is no store: backing up, restoring and undoing all need one. */
+function requireStore(): void {
+  if (!isBackupStoreConfigured()) throw refuse(BACKUP_STORE_SETUP_MESSAGE);
+}
+
+async function enforceRate(key: string, limits: { limit: number; windowMs: number }): Promise<void> {
+  const rate = await checkRateLimit(key, limits);
+  if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs, "RATE_LIMITED");
 }
 
 /**
  * Snapshot the current state into the `safety` slot so the operation about to
- * run can be undone. Returns an error result the caller must propagate — a
- * destructive action whose safety net failed must not proceed.
+ * run can be undone. Throws when it cannot — a destructive action whose safety
+ * net failed must not proceed, and the throw is what stops it.
  */
-async function takeSafetySnapshot(operation: string): Promise<ActionResult<{ stamp: string }>> {
+async function takeSafetySnapshot(
+  operation: string,
+  options: { prune?: boolean } = {}
+): Promise<{ stamp: string; pathname: string }> {
   try {
-    const snapshot = await createSnapshot();
-    const saved = await saveBackup("safety", snapshot);
-    return { ok: true, data: { stamp: saved.stamp } };
+    const { saved } = await backUpDatabase("safety", { prune: options.prune });
+    return { stamp: saved.stamp, pathname: saved.pathname };
   } catch (err) {
-    console.error(`[database] safety snapshot before ${operation} failed:`, err);
-    return {
-      ok: false,
-      error: `Could not take the safety backup that makes this reversible, so nothing was changed. (${err instanceof Error ? err.message : "Unknown error"})`,
-    };
+    const classified = classifyError(err, {
+      verb: "take the safety backup that makes this reversible, so nothing was changed",
+    });
+    // Database failures already read correctly with the verb above. Anything
+    // else here is the backup store or the snapshot itself.
+    if (classified.code !== "INTERNAL_ERROR") throw classified;
+    throw new AppError("SERVICE_UNAVAILABLE", {
+      params: { service: "Backup storage" },
+      cause: err,
+      detail: `Safety snapshot before ${operation} failed; nothing was changed. ${classified.detail ?? ""}`.trim(),
+      context: { service: "blob", operation },
+    });
   }
 }
 
 /**
- * The safety snapshot a Danger-zone action runs behind, or the refusal to
- * propagate.
+ * The safety snapshot a Danger-zone action runs behind.
  *
  * With a store connected the snapshot is mandatory — if it cannot be written
  * the action does not run. With no store connected there is nowhere to write
@@ -104,19 +147,12 @@ async function takeSafetySnapshot(operation: string): Promise<ActionResult<{ sta
  * admin's acknowledgement, in which case `stamp` is null and the operation is
  * irreversible.
  */
-async function safetyFor(
-  operation: string,
-  formData: FormData
-): Promise<{ ok: true; stamp: string | null } | { ok: false; error: string }> {
-  if (isBackupStoreConfigured()) {
-    const snapshot = await takeSafetySnapshot(operation);
-    if (!snapshot.ok) return snapshot;
-    return { ok: true, stamp: snapshot.data?.stamp ?? null };
-  }
+async function safetyFor(operation: string, formData: FormData): Promise<{ stamp: string | null }> {
+  if (isBackupStoreConfigured()) return takeSafetySnapshot(operation);
   if (formData.get("ackNoBackup") !== CONFIRM_PHRASES.noBackupAck) {
-    return { ok: false, error: BACKUP_STORE_SETUP_MESSAGE };
+    throw refuse(BACKUP_STORE_SETUP_MESSAGE);
   }
-  return { ok: true, stamp: null };
+  return { stamp: null };
 }
 
 /**
@@ -131,23 +167,21 @@ async function safetyFor(
  * The safety snapshot stays whole-database either way. It is the undo point,
  * and restoring more than was touched is correct; restoring less is not.
  */
-async function resolveTarget(
-  formData: FormData
-): Promise<{ ok: true; schoolId: string | null; name: string | null } | { ok: false; error: string }> {
+async function resolveTarget(formData: FormData): Promise<{ schoolId: string | null; name: string | null }> {
   const raw = formData.get("schoolId");
   const value = typeof raw === "string" ? raw.trim() : "";
-  if (!value) return { ok: true, schoolId: null, name: null };
+  if (!value) return { schoolId: null, name: null };
 
   const parsed = z.string().uuid().safeParse(value);
-  if (!parsed.success) return { ok: false, error: "That school could not be identified." };
+  if (!parsed.success) throw refuse("That school could not be identified.");
 
   const school = await prisma.school.findFirst({
     where: { id: parsed.data, deletedAt: null },
     select: { id: true, name: true },
   });
-  if (!school) return { ok: false, error: "That school no longer exists." };
+  if (!school) throw refuse("That school no longer exists.");
 
-  return { ok: true, schoolId: school.id, name: school.name };
+  return { schoolId: school.id, name: school.name };
 }
 
 /** Audit fields shared by the three Danger-zone actions. */
@@ -162,18 +196,101 @@ function totalOf(counts: SnapshotCounts): number {
   return Object.values(counts).reduce((a, b) => a + b, 0);
 }
 
-/** Manual "Back up now" — writes into today's daily slot and prunes to 3. */
-export async function createBackupNow(): Promise<ActionResult<{ stamp: string; size: number }>> {
-  const admin = await requireUser("SUPER_ADMIN");
-  const notReady = storeReady();
-  if (notReady) return notReady;
-
-  const rate = await checkRateLimit(`db:backup:${admin.id}`, BACKUP_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
+/**
+ * Bring the `safety` slot back to its one file once a restore has committed
+ * and no longer needs the file it read. Best-effort: the restore succeeded,
+ * and an extra undo point left behind is pruned by the next safety snapshot.
+ */
+async function pruneSafetyAfterRestore(): Promise<void> {
   try {
-    const snapshot = await createSnapshot();
-    const saved = await saveBackup("daily", snapshot);
+    await pruneKind("safety");
+  } catch (err) {
+    console.error("[database] safety prune after restore failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
+ * Undo the safety snapshot a restore just took, because the restore itself
+ * never committed. Best-effort: `runRestore` already has the real error to
+ * rethrow, and a cleanup failure here must not replace or mask it — it would
+ * otherwise leave a fresh, redundant undo point (identical to the state the
+ * database was already in) shadowing the real previous undo point.
+ */
+async function discardSafetyAfterFailedRestore(pathname: string): Promise<void> {
+  try {
+    await deleteBackup(pathname);
+  } catch (err) {
+    console.error(
+      "[database] safety snapshot cleanup after failed restore failed:",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+/**
+ * The undo point a completed restore consumed. Best-effort, same reasoning as
+ * `pruneSafetyAfterRestore`: the restore already committed, so a delete
+ * failure here must never surface as "the restore failed" — the caller's
+ * audit row and cache revalidation still have to run.
+ */
+async function deleteConsumedUndoPoint(pathname: string): Promise<void> {
+  try {
+    await deleteBackup(pathname);
+  } catch (err) {
+    console.error(
+      "[database] undo point delete after restore failed:",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+/** A stored backup, re-opened on each call. */
+function storedBackup(pathname: string): BackupOpener {
+  return async () => (await openBackupStream(pathname))?.stream ?? null;
+}
+
+/**
+ * Validate a backup end to end before anything destructive: refuses with the
+ * file's own problem, or with `missing` when it is not in storage.
+ */
+async function requireRestorable(
+  open: BackupOpener,
+  missing: string
+): Promise<Extract<InspectedBackup, { ok: true }>> {
+  const inspected = await inspectBackup(open);
+  if (!inspected) throw refuse(missing);
+  if (!inspected.ok) throw refuse(inspected.error);
+  return inspected;
+}
+
+/**
+ * Run the restore itself. A file that passed inspection but fails the same
+ * checks mid-stream (it changed in storage, or was cut short in transit) is
+ * still the admin's to know about, and the transaction has rolled back.
+ */
+async function runRestore(
+  inspected: Extract<InspectedBackup, { ok: true }>,
+  open: BackupOpener
+): Promise<SnapshotCounts> {
+  try {
+    return await restoreBackup(inspected, open);
+  } catch (err) {
+    if (err instanceof SnapshotFormatError) {
+      throw refuse(`${err.message} The restore was rolled back; the database is unchanged.`);
+    }
+    throw err;
+  }
+}
+
+/** Manual "Back up now" — writes into today's daily slot and prunes to 3. */
+export const createBackupNow = action(
+  "createBackupNow",
+  async () => {
+    const admin = await requireUser("SUPER_ADMIN");
+    requireStore();
+    await enforceRate(`db:backup:${admin.id}`, BACKUP_RATE);
+
+    const { saved, totalRows } = await backUpDatabase("daily");
 
     await writeAudit({
       userId: admin.id,
@@ -183,47 +300,52 @@ export async function createBackupNow(): Promise<ActionResult<{ stamp: string; s
       metadata: {
         trigger: "manual",
         kind: "daily",
-        totalRows: snapshot.meta.totalRows,
+        totalRows,
         bytes: saved.size,
       },
     });
 
     revalidatePath("/admin/database");
-    return { ok: true, data: { stamp: saved.stamp, size: saved.size } };
-  } catch (err) {
-    console.error("[database] manual backup failed:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Backup failed" };
-  }
-}
+    return { ok: true as const, data: { stamp: saved.stamp, size: saved.size } };
+  },
+  { verb: "back up the database" }
+);
 
 /** Restore one of the stored backups over the whole database. */
-export async function restoreFromBackup(formData: FormData): Promise<ActionResult<{ counts: SnapshotCounts }>> {
-  const admin = await requireUser("SUPER_ADMIN");
-  const notReady = storeReady();
-  if (notReady) return notReady;
+export const restoreFromBackup = action(
+  "restoreFromBackup",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
+    requireStore();
 
-  const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });
-  if (!parsed.success) return { ok: false, error: "Invalid backup" };
-  if (formData.get("confirm") !== CONFIRM_PHRASES.restore) {
-    return { ok: false, error: "Type RESTORE to confirm." };
-  }
+    const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });
+    if (!parsed.success) throw refuse("Invalid backup");
+    if (formData.get("confirm") !== CONFIRM_PHRASES.restore) {
+      throw refuse(`Type ${CONFIRM_PHRASES.restore} to confirm.`);
+    }
 
-  const rate = await checkRateLimit(`db:restore:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    await enforceRate(`db:restore:${admin.id}`, DESTRUCTIVE_RATE);
 
-  try {
-    const snapshot = await readBackup(parsed.data.pathname);
-    if (!snapshot) return { ok: false, error: "That backup is no longer in storage." };
+    const open = storedBackup(parsed.data.pathname);
+    const inspected = await requireRestorable(open, "That backup is no longer in storage.");
 
-    const check = validateSnapshot(snapshot);
-    if (!check.ok) return { ok: false, error: check.error };
+    // Before, not after: the point of no return is the delete inside the
+    // restore, and the undo point has to predate it. Unpruned: the file being
+    // restored may itself be the current undo point, and `safety` keeps one
+    // — pruning now would delete the file the restore is about to read.
+    const safety = await takeSafetySnapshot("restore", { prune: false });
 
-    // Before, not after: the point of no return is the delete inside
-    // restoreSnapshot, and the undo point has to predate it.
-    const safety = await takeSafetySnapshot("restore");
-    if (!safety.ok) return safety;
-
-    const counts = await restoreSnapshot(check.snapshot);
+    let counts: SnapshotCounts;
+    try {
+      counts = await runRestore(inspected, open);
+    } catch (err) {
+      // The restore never committed, so the fresh snapshot just taken is
+      // identical to the state the database is still in — leaving it behind
+      // would let it outrank the real previous undo point.
+      await discardSafetyAfterFailedRestore(safety.pathname);
+      throw err;
+    }
+    await pruneSafetyAfterRestore();
 
     await writeAudit({
       userId: admin.id,
@@ -231,52 +353,64 @@ export async function restoreFromBackup(formData: FormData): Promise<ActionResul
       resource: "Database",
       resourceId: parsed.data.pathname,
       metadata: {
-        takenAt: check.snapshot.meta.takenAt,
+        takenAt: inspected.takenAt,
+        format: inspected.format,
         rowsWritten: totalOf(counts),
-        safetyStamp: safety.data?.stamp,
+        safetyStamp: safety.stamp,
       },
     });
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    return { ok: true, data: { counts } };
-  } catch (err) {
-    console.error("[database] restore failed:", err);
-    return { ok: false, error: restoreErrorMessage(err) };
-  }
-}
+    return { ok: true as const, data: { counts } };
+  },
+  { verb: RESTORE_VERB }
+);
 
 /** Restore from a file the admin uploaded. */
-export async function restoreFromUpload(formData: FormData): Promise<ActionResult<{ counts: SnapshotCounts }>> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const restoreFromUpload = action(
+  "restoreFromUpload",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  if (formData.get("confirm") !== CONFIRM_PHRASES.restore) {
-    return { ok: false, error: "Type RESTORE to confirm." };
-  }
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Choose a backup file first." };
-  }
-
-  const rate = await checkRateLimit(`db:restore:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  try {
-    const bytes = Buffer.from(await file.arrayBuffer());
-    let parsedJson: unknown;
-    try {
-      parsedJson = parseUploadedBackup(bytes);
-    } catch {
-      return { ok: false, error: "That file could not be read as a LITRACK backup (.json or .json.gz)." };
+    if (formData.get("confirm") !== CONFIRM_PHRASES.restore) {
+      throw refuse(`Type ${CONFIRM_PHRASES.restore} to confirm.`);
+    }
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      throw refuse("Choose a backup file first.");
     }
 
-    const check = validateSnapshot(parsedJson);
-    if (!check.ok) return { ok: false, error: check.error };
+    await enforceRate(`db:restore:${admin.id}`, DESTRUCTIVE_RATE);
 
-    const safety = await takeSafetySnapshot("upload restore");
-    if (!safety.ok) return safety;
+    // `File.stream()` re-reads the upload each call, which is what the
+    // validate-then-restore double pass needs.
+    const open: BackupOpener = async () => file.stream();
 
-    const counts = await restoreSnapshot(check.snapshot);
+    let inspected: Extract<InspectedBackup, { ok: true }>;
+    try {
+      inspected = await requireRestorable(open, "Choose a backup file first.");
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      // The bytes are local, so a failure to decode them (a bad gzip stream,
+      // invalid UTF-8) is the file, not the network.
+      throw refuse("That file could not be read as a LITRACK backup (.ndjson.gz, .json.gz or .json).");
+    }
+
+    // Unpruned until the restore commits, the same as a stored restore: the
+    // previous undo point should outlive a restore that fails.
+    const safety = await takeSafetySnapshot("upload restore", { prune: false });
+
+    let counts: SnapshotCounts;
+    try {
+      counts = await runRestore(inspected, open);
+    } catch (err) {
+      // Same reasoning as restoreFromBackup: the restore never committed, so
+      // this snapshot is redundant and must not shadow the real undo point.
+      await discardSafetyAfterFailedRestore(safety.pathname);
+      throw err;
+    }
+    await pruneSafetyAfterRestore();
 
     await writeAudit({
       userId: admin.id,
@@ -284,80 +418,72 @@ export async function restoreFromUpload(formData: FormData): Promise<ActionResul
       resource: "Database",
       metadata: {
         filename: file.name,
-        takenAt: check.snapshot.meta.takenAt,
+        takenAt: inspected.takenAt,
+        format: inspected.format,
         rowsWritten: totalOf(counts),
-        safetyStamp: safety.data?.stamp,
+        safetyStamp: safety.stamp,
       },
     });
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    return { ok: true, data: { counts } };
-  } catch (err) {
-    console.error("[database] upload restore failed:", err);
-    return { ok: false, error: restoreErrorMessage(err) };
-  }
-}
+    return { ok: true as const, data: { counts } };
+  },
+  { verb: RESTORE_VERB }
+);
 
 /** Put the database back to the safety snapshot taken before the last operation. */
-export async function undoLastOperation(): Promise<ActionResult<{ counts: SnapshotCounts }>> {
-  const admin = await requireUser("SUPER_ADMIN");
-  const notReady = storeReady();
-  if (notReady) return notReady;
+export const undoLastOperation = action(
+  "undoLastOperation",
+  async () => {
+    const admin = await requireUser("SUPER_ADMIN");
+    requireStore();
+    await enforceRate(`db:rollback:${admin.id}`, DESTRUCTIVE_RATE);
 
-  const rate = await checkRateLimit(`db:rollback:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
-
-  try {
     const safety = await latestSafetyBackup();
-    if (!safety) return { ok: false, error: "There is no operation to undo." };
+    if (!safety) throw refuse("There is no operation to undo.");
 
-    const snapshot = await readBackup(safety.pathname);
-    if (!snapshot) return { ok: false, error: "The undo point is no longer in storage." };
+    const open = storedBackup(safety.pathname);
+    const inspected = await requireRestorable(open, "The undo point is no longer in storage.");
 
-    const check = validateSnapshot(snapshot);
-    if (!check.ok) return { ok: false, error: check.error };
-
-    const counts = await restoreSnapshot(check.snapshot);
+    const counts = await runRestore(inspected, open);
 
     // The undo point is consumed. Leaving it would let a second Undo silently
     // re-apply a state two operations old and look like it did nothing.
-    await deleteBackup(safety.pathname);
+    // Best-effort: the restore already committed, so a delete failure here
+    // must not surface as the RESTORE_VERB failure — the audit row and cache
+    // revalidation below still have to run, and a retry must not re-apply.
+    await deleteConsumedUndoPoint(safety.pathname);
 
     await writeAudit({
       userId: admin.id,
       action: AUDIT_ACTIONS.DB_ROLLBACK,
       resource: "Database",
       resourceId: safety.pathname,
-      metadata: { restoredTo: check.snapshot.meta.takenAt, rowsWritten: totalOf(counts) },
+      metadata: { restoredTo: inspected.takenAt, format: inspected.format, rowsWritten: totalOf(counts) },
     });
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    return { ok: true, data: { counts } };
-  } catch (err) {
-    console.error("[database] undo failed:", err);
-    return { ok: false, error: restoreErrorMessage(err) };
-  }
-}
+    return { ok: true as const, data: { counts } };
+  },
+  { verb: RESTORE_VERB }
+);
 
 /** Empty learners and everything recorded about them; keep schools and accounts. */
-export async function resetOperationalData(formData: FormData): Promise<ActionResult<{ removed: SnapshotCounts }>> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const resetOperationalData = action(
+  "resetOperationalData",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  if (formData.get("confirm") !== CONFIRM_PHRASES.resetOperational) {
-    return { ok: false, error: `Type ${CONFIRM_PHRASES.resetOperational} to confirm.` };
-  }
+    if (formData.get("confirm") !== CONFIRM_PHRASES.resetOperational) {
+      throw refuse(`Type ${CONFIRM_PHRASES.resetOperational} to confirm.`);
+    }
 
-  const rate = await checkRateLimit(`db:reset:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    await enforceRate(`db:reset:${admin.id}`, DESTRUCTIVE_RATE);
 
-  const target = await resolveTarget(formData);
-  if (!target.ok) return target;
-
-  try {
+    const target = await resolveTarget(formData);
     const safety = await safetyFor("clear operational data", formData);
-    if (!safety.ok) return safety;
 
     const removed = await clearOperationalData(target.schoolId);
 
@@ -377,30 +503,25 @@ export async function resetOperationalData(formData: FormData): Promise<ActionRe
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    return { ok: true, data: { removed } };
-  } catch (err) {
-    console.error("[database] operational reset failed:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Reset failed" };
-  }
-}
+    return { ok: true as const, data: { removed } };
+  },
+  { verb: "clear the data" }
+);
 
 /** Every School Head password back to its School ID. */
-export async function resetAllSchoolAccounts(formData: FormData): Promise<ActionResult<{ processed: number; failed: number }>> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const resetAllSchoolAccounts = action(
+  "resetAllSchoolAccounts",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  if (formData.get("confirm") !== CONFIRM_PHRASES.resetSchoolAccounts) {
-    return { ok: false, error: `Type ${CONFIRM_PHRASES.resetSchoolAccounts} to confirm.` };
-  }
+    if (formData.get("confirm") !== CONFIRM_PHRASES.resetSchoolAccounts) {
+      throw refuse(`Type ${CONFIRM_PHRASES.resetSchoolAccounts} to confirm.`);
+    }
 
-  const rate = await checkRateLimit(`db:reset-accounts:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    await enforceRate(`db:reset-accounts:${admin.id}`, DESTRUCTIVE_RATE);
 
-  const target = await resolveTarget(formData);
-  if (!target.ok) return target;
-
-  try {
+    const target = await resolveTarget(formData);
     const safety = await safetyFor("reset school accounts", formData);
-    if (!safety.ok) return safety;
 
     const result = await resetAllSchoolHeadPasswords(target.schoolId);
 
@@ -421,30 +542,25 @@ export async function resetAllSchoolAccounts(formData: FormData): Promise<Action
     revalidatePath("/admin/database");
     revalidateAllCachedData();
     revalidatePath("/admin/accounts");
-    return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
-  } catch (err) {
-    console.error("[database] school account reset failed:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Reset failed" };
-  }
-}
+    return { ok: true as const, data: { processed: result.processed, failed: result.failed.length } };
+  },
+  { verb: "reset the school accounts" }
+);
 
 /** Remove every teacher account (soft delete + Supabase auth deletion). */
-export async function removeAllTeachers(formData: FormData): Promise<ActionResult<{ processed: number; failed: number }>> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const removeAllTeachers = action(
+  "removeAllTeachers",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  if (formData.get("confirm") !== CONFIRM_PHRASES.removeTeachers) {
-    return { ok: false, error: `Type ${CONFIRM_PHRASES.removeTeachers} to confirm.` };
-  }
+    if (formData.get("confirm") !== CONFIRM_PHRASES.removeTeachers) {
+      throw refuse(`Type ${CONFIRM_PHRASES.removeTeachers} to confirm.`);
+    }
 
-  const rate = await checkRateLimit(`db:remove-teachers:${admin.id}`, DESTRUCTIVE_RATE);
-  if (!rate.ok) return { ok: false, error: "Too many attempts. Please try again later." };
+    await enforceRate(`db:remove-teachers:${admin.id}`, DESTRUCTIVE_RATE);
 
-  const target = await resolveTarget(formData);
-  if (!target.ok) return target;
-
-  try {
+    const target = await resolveTarget(formData);
     const safety = await safetyFor("remove teacher accounts", formData);
-    if (!safety.ok) return safety;
 
     const result = await removeAllTeacherAccounts(target.schoolId);
 
@@ -464,22 +580,20 @@ export async function removeAllTeachers(formData: FormData): Promise<ActionResul
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    return { ok: true, data: { processed: result.processed, failed: result.failed.length } };
-  } catch (err) {
-    console.error("[database] teacher removal failed:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Removal failed" };
-  }
-}
+    return { ok: true as const, data: { processed: result.processed, failed: result.failed.length } };
+  },
+  { verb: "remove the teacher accounts" }
+);
 
-export async function removeBackup(formData: FormData): Promise<ActionResult> {
-  const admin = await requireUser("SUPER_ADMIN");
-  const notReady = storeReady();
-  if (notReady) return notReady;
+export const removeBackup = action(
+  "removeBackup",
+  async (formData: FormData) => {
+    const admin = await requireUser("SUPER_ADMIN");
+    requireStore();
 
-  const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });
-  if (!parsed.success) return { ok: false, error: "Invalid backup" };
+    const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });
+    if (!parsed.success) throw refuse("Invalid backup");
 
-  try {
     await deleteBackup(parsed.data.pathname);
     await writeAudit({
       userId: admin.id,
@@ -488,20 +602,7 @@ export async function removeBackup(formData: FormData): Promise<ActionResult> {
       resourceId: parsed.data.pathname,
     });
     revalidatePath("/admin/database");
-    return { ok: true };
-  } catch (err) {
-    console.error("[database] backup delete failed:", err);
-    return { ok: false, error: "Could not delete that backup." };
-  }
-}
-
-/**
- * A failed restore has already deleted rows inside its transaction, so Postgres
- * has rolled the whole thing back — but an admin staring at an error needs to
- * be told that explicitly, not left guessing whether the database is half
- * empty.
- */
-function restoreErrorMessage(err: unknown): string {
-  const detail = err instanceof Error ? err.message : "Unknown error";
-  return `Restore failed and was rolled back — the database is unchanged. (${detail})`;
-}
+    return { ok: true as const };
+  },
+  { verb: "delete that backup" }
+);

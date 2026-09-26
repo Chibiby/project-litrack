@@ -13,8 +13,8 @@ const listSchoolsPublic = vi.fn();
 const checkRateLimit = vi.fn();
 const reportError = vi.fn((..._args: unknown[]) => "E-TESTREF8");
 const purgeExpiredErrorEvents = vi.fn();
-const createSnapshot = vi.fn();
-const saveBackup = vi.fn();
+const backUpDatabase = vi.fn();
+const runDailyRetention = vi.fn();
 
 vi.mock("@/lib/actions/school", () => ({
   get listSchoolsPublic() {
@@ -37,17 +37,19 @@ vi.mock("@/lib/errors/retention", () => ({
     return purgeExpiredErrorEvents;
   },
 }));
+vi.mock("@/lib/retention/purge", () => ({
+  get runDailyRetention() {
+    return runDailyRetention;
+  },
+}));
 vi.mock("@/lib/db/snapshot", () => ({
-  get createSnapshot() {
-    return createSnapshot;
+  get backUpDatabase() {
+    return backUpDatabase;
   },
 }));
 vi.mock("@/lib/db/backup-store", () => ({
   isBackupStoreConfigured: () => true,
-  get saveBackup() {
-    return saveBackup;
-  },
-  readBackupBytes: vi.fn(),
+  openBackupStream: vi.fn(),
 }));
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn(),
@@ -73,8 +75,17 @@ beforeEach(() => {
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   listSchoolsPublic.mockResolvedValue([{ id: "s1", name: "School" }]);
   purgeExpiredErrorEvents.mockResolvedValue(3);
-  createSnapshot.mockResolvedValue({ meta: { totalRows: 10 } });
-  saveBackup.mockResolvedValue({ pathname: "daily/x.gz", size: 100, stamp: "2026-09-11" });
+  backUpDatabase.mockResolvedValue({
+    saved: { pathname: "daily/x.gz", size: 100, stamp: "2026-09-11" },
+    takenAt: "2026-09-11T16:00:00.000Z",
+    totalRows: 10,
+  });
+  runDailyRetention.mockResolvedValue({
+    notificationsRead: { status: "ran", days: 90, deleted: 4, batches: 1, capped: false },
+    notifications: { status: "disabled" },
+    auditLogs: { status: "failed" },
+  });
+  vi.spyOn(console, "log").mockImplementation(() => {});
   reportError.mockReturnValue("E-TESTREF8");
   process.env.CRON_SECRET = "s3cret";
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -109,7 +120,7 @@ describe("/api/cron/backup", () => {
   });
 
   it("never echoes the underlying error text", async () => {
-    createSnapshot.mockRejectedValue(new Error('relation "Learner" does not exist'));
+    backUpDatabase.mockRejectedValue(new Error('relation "Learner" does not exist'));
     const res = await cronBackup(
       request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" })
     );
@@ -140,5 +151,32 @@ describe("/api/cron/backup", () => {
   it("does not purge on the weekly run", async () => {
     await cronBackup(request("/api/cron/backup?kind=weekly", { authorization: "Bearer s3cret" }));
     expect(purgeExpiredErrorEvents).not.toHaveBeenCalled();
+    expect(runDailyRetention).not.toHaveBeenCalled();
+  });
+
+  it("runs Notification and AuditLog retention on the daily run and reports counts only", async () => {
+    const res = await cronBackup(
+      request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" })
+    );
+    expect(res.status).toBe(200);
+    expect(runDailyRetention).toHaveBeenCalledTimes(1);
+    await expect(res.json()).resolves.toMatchObject({
+      totalRows: 10,
+      retention: {
+        notificationsRead: { status: "ran", deleted: 4 },
+        notifications: { status: "disabled" },
+        auditLogs: { status: "failed" },
+      },
+    });
+  });
+
+  it("purges before the snapshot, so a failed backup does not stop retention", async () => {
+    backUpDatabase.mockRejectedValue(new Error("exceededMemory"));
+    const res = await cronBackup(
+      request("/api/cron/backup?kind=daily", { authorization: "Bearer s3cret" })
+    );
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(purgeExpiredErrorEvents).toHaveBeenCalledTimes(1);
+    expect(runDailyRetention).toHaveBeenCalledTimes(1);
   });
 });

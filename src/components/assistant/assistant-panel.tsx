@@ -293,7 +293,7 @@ export function AssistantPanel({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 gap-1 px-2 md:hidden"
+            className="h-11 gap-1 px-2 md:hidden lg:h-8"
             onClick={onHide}
           >
             <PanelRightClose className="size-4" aria-hidden />
@@ -307,7 +307,7 @@ export function AssistantPanel({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="size-11 lg:size-8"
           onClick={onMinimize}
         >
           <Minus className="size-4" aria-hidden />
@@ -317,7 +317,7 @@ export function AssistantPanel({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="size-11 lg:size-8"
           onClick={onClose}
         >
           <X className="size-4" aria-hidden />
@@ -574,7 +574,7 @@ function BotEntry({
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 w-full text-xs"
+            className="h-11 w-full text-xs lg:h-8"
             onClick={onEscalate}
           >
             <LifeBuoy className="size-3.5" aria-hidden />

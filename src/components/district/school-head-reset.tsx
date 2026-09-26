@@ -61,7 +61,7 @@ export function SchoolHeadReset({
               type="button"
               variant="outline"
               size="sm"
-              className="sm:h-10"
+              className="lg:h-9"
               onClick={async () => {
                 await navigator.clipboard.writeText(credential);
                 setCopied(true);
@@ -71,7 +71,7 @@ export function SchoolHeadReset({
               {copied ? <CheckCircle2 aria-hidden /> : <Copy aria-hidden />}
               {copied ? "Copied" : "Copy"}
             </Button>
-            <Button type="button" size="sm" className="sm:h-10" onClick={() => setCredential(null)}>
+            <Button type="button" size="sm" className="lg:h-9" onClick={() => setCredential(null)}>
               Dismiss
             </Button>
           </div>

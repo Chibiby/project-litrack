@@ -104,7 +104,7 @@ export function AralDateNav({
       className={
         rangeLabel != null
           ? "h-6 w-auto border-0 bg-transparent p-0 text-xs text-muted-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          : "h-8 w-auto"
+          : "h-11 w-auto lg:h-8"
       }
       onChange={(e) => handleChange(e.target.value)}
     />
@@ -116,7 +116,7 @@ export function AralDateNav({
       className={
         rangeLabel != null
           ? "h-6 w-auto border-0 bg-transparent p-0 text-xs text-muted-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          : "h-8 w-auto"
+          : "h-11 w-auto lg:h-8"
       }
       onChange={(e) => handleChange(e.target.value)}
     />
@@ -127,10 +127,10 @@ export function AralDateNav({
       <SelectTrigger
         aria-label={label}
         className={cn(
-          // A phone gives it the whole row, at a 44px touch height. Wider screens
-          // hold it at a width the longest label fits, so the box does not resize
+          // Below `lg` it gets the whole row, at a 44px touch height. From `lg` up
+          // it holds a width the longest label fits, so the box does not resize
           // as the teacher moves between periods.
-          "h-11 w-full gap-2 bg-background text-sm font-medium sm:h-9 sm:w-auto",
+          "h-11 w-full gap-2 bg-background text-sm font-medium sm:w-auto lg:h-9",
           snapToMonth ? "sm:min-w-[13rem]" : "sm:min-w-[21rem]"
         )}
       >
@@ -163,12 +163,12 @@ export function AralDateNav({
       </label>
     ));
 
-  // A bare chevron is a 36px target that says nothing about what it steps. On a
-  // phone, where the buttons get their own row and there is width to spend, they
-  // carry their label at a 44px height; from `sm` up they collapse back to the
-  // icon-only square the desktop row was drawn around, unless `navLabels` asks
-  // for the text at every width.
-  const stepButtonClass = "h-11 w-full sm:h-9 sm:w-auto";
+  // A bare chevron is a 36px target that says nothing about what it steps. Below
+  // `lg` (tablet and phone), where the buttons get their own row and there is
+  // width to spend, they carry their label at a 44px height; from `lg` up they
+  // collapse back to the icon-only square the desktop row was drawn around,
+  // unless `navLabels` asks for the text at every width.
+  const stepButtonClass = "h-11 w-full sm:w-auto lg:h-9";
 
   /** Whether the period sits between the step buttons (every current caller). */
   const leadsWithPrev = rangeLabel != null || options != null;

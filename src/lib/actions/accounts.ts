@@ -20,7 +20,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { revalidateSchoolsList } from "@/lib/cache/revalidate";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
-import { openPassword } from "@/lib/auth/password-vault";
+import { openPasswordWithSource, sealPassword } from "@/lib/auth/password-vault";
 import { generateActivationCredential, generateReadableCredential } from "@/lib/auth/credentials";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
@@ -189,8 +189,8 @@ export async function revealSchoolHeadPassword(
     };
   }
 
-  const password = openPassword(target.passwordVaultCipher);
-  if (!password) {
+  const opened = openPasswordWithSource(target.passwordVaultCipher);
+  if (!opened) {
     // Three different causes — never recorded, vault key missing, key rotated
     // since sealing — and the same remedy for all of them, so they are not
     // distinguished here.
@@ -198,6 +198,33 @@ export async function revealSchoolHeadPassword(
       ok: false,
       error: "This password is not on record. Use Reset to put the School ID back.",
     };
+  }
+  const { password } = opened;
+
+  if (opened.usedLegacyKey) {
+    // Opened under PASSWORD_VAULT_LEGACY_KEYS, not the current key. Re-seal
+    // under the current key so the next reveal (and any future key rotation)
+    // doesn't need the legacy key anymore. Best-effort: a failed re-seal must
+    // never turn a successful reveal into a failed one, and the update itself
+    // is fire-and-forget from the caller's perspective.
+    const resealed = sealPassword(password);
+    if (resealed) {
+      // Compare-and-swap on the cipher that was opened, so a reset landing
+      // between the read and this write is never overwritten.
+      await prisma.user
+        .updateMany({
+          where: { id: target.id, passwordVaultCipher: target.passwordVaultCipher },
+          data: { passwordVaultCipher: resealed },
+        })
+        .catch((err) => {
+          // The message only: a Prisma error object carries the query
+          // arguments, and these include the sealed cipher.
+          console.error(
+            "[accounts] re-seal after legacy-key reveal failed:",
+            err instanceof Error ? err.message : String(err)
+          );
+        });
+    }
   }
 
   await writeAudit({

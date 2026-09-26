@@ -72,7 +72,7 @@ export function PasswordCell({ row }: { row: AccountRow }) {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0"
+          className="h-11 w-11 shrink-0 lg:h-7 lg:w-7"
           onClick={() => setRevealed(null)}
           aria-label={`Hide password for ${row.fullName}`}
         >

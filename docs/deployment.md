@@ -61,6 +61,11 @@ drop the Vercel-only code paths at build time.
      set. At most one email per error code every 15 minutes. See `docs/errors.md`.
    - `ERROR_EVENT_RETENTION_DAYS` — optional, default 30. Days to keep rows in the `ErrorEvent`
      table before the daily backup cron (`/api/cron/backup`) purges them.
+   - `NOTIFICATION_READ_RETENTION_DAYS` (default 90), `NOTIFICATION_RETENTION_DAYS` (default 180),
+     `AUDIT_LOG_RETENTION_DAYS` (default 730, never below 90) — optional. The daily cron deletes
+     read notifications, then any notification, then audit rows older than these (by creation
+     time). Unset means the default; `0` or anything unparseable switches that rule **off**. See
+     "Retention" below.
    - Seed vars are **not** required on the Worker — run seed locally as a one-off.
 5. Deploy. Confirm build logs show OpenNext build + Prisma generate success, then
    `npx wrangler deployments list` and `npx wrangler tail` for the live Worker.
@@ -78,8 +83,62 @@ Cron Triggers invoke a Worker's `scheduled()` handler; they cannot fetch a URL t
 
 The two lists must stay in step — an expression in `wrangler.jsonc` with no entry in `worker.js`
 fires and does nothing. The route authorizes itself against `CRON_SECRET` and **fails closed**, so
-an unset secret means no backups, silently, forever. The daily run also purges expired `ErrorEvent`
-rows.
+an unset secret means no backups, silently, forever. The daily run also runs retention (below)
+**before** the snapshot, so a failed backup never stops it.
+
+#### How a backup is written (format v2)
+
+`backUpDatabase` (`src/lib/db/snapshot.ts`) streams. Each table in `WRITE_ORDER` is read 2,000 rows
+at a time by keyset pagination on its primary key (`KEYSET_KEYS` in
+`src/lib/db/snapshot-format.ts` for the composite ones), written as NDJSON, gzipped through
+`CompressionStream`, and uploaded to Vercel Blob with the manual multipart API
+(`saveBackupStream` in `src/lib/db/backup-store.ts`), one 8 MiB part at a time. The stream is
+pull-driven, so a slow upload pauses the database reads. Peak memory is one page of rows plus
+one upload part (well under 30 MB), whatever the database size. The SDK's own
+`put(..., { multipart: true })` is deliberately not used: it reads ahead up to 128 MB.
+
+Reads go through `prismaFresh`, not the cached Hyperdrive binding, so a backup is never a
+minute-old cache. A backup smaller than one part is sent as a single `put`. The file only appears
+when the upload completes, so a run that dies midway leaves the previous file in its slot. The
+parts it had already uploaded are **orphaned**, though. `@vercel/blob` 2.8 has no abort call, so
+they stay in the store, unlisted and unreadable, and they count toward its storage until Vercel
+expires incomplete uploads. A run of repeated failures is worth a look at the store's usage.
+
+A restore's safety snapshot is written **without pruning**. The `safety` slot keeps one file,
+and the file being restored may be that one. The slot is pruned only after the restore commits.
+A failed restore leaves both files, and the next safety snapshot prunes them.
+
+The file is `litrack/backups/<kind>/<stamp>.ndjson.gz`: a header line
+(`{"format":"litrack-snapshot","version":2,…}`), then per table `["table",M]`, one `["row",{…}]`
+per row, and `["end",M,count]`, then the `_TeacherGrades` join table, then a `["footer",…]`
+with every count. Restore refuses a file with no footer, a count mismatch, tables out of insert
+order, or a missing table.
+
+Restore (Super Admin only, typed `RESTORE`, safety snapshot first, all unchanged) reads the file
+twice. The first pass validates it end to end, holding one line at a time, before anything is
+deleted. The second pass streams it inside the single restore transaction (timeout 240 s),
+inserting 1,000 rows per `createMany`. Any problem in the second pass throws and rolls back.
+**v1 files** (`*.json.gz`, one JSON document) are still listed, downloaded and restored. The
+format is detected from content, not the file name. A v1 file is parsed whole, which is the old
+format's memory cost, and nothing writes v1 any more. Downloads stream the blob straight through.
+
+`AuditLog` stays out of snapshots (`inSnapshot: false`). Streaming would now fit it. It stays out
+because a restore that rewrote the audit trail would erase the record of the restore itself.
+
+#### Retention
+
+`runDailyRetention` (`src/lib/retention/purge.ts`) runs on the daily cron, after the `ErrorEvent`
+purge. It applies three rules in this order: read notifications past
+`NOTIFICATION_READ_RETENTION_DAYS`, any notification past `NOTIFICATION_RETENTION_DAYS`, and
+audit rows past `AUDIT_LOG_RETENTION_DAYS`. Each rule deletes in statements of at most 5,000 rows
+(`DELETE … WHERE id IN (SELECT id … LIMIT 5000)`), with at most 20 statements per rule per run.
+A larger backlog drains over the following nights and shows `"capped": true`. Each rule reports
+`ran` / `disabled` / `failed` and its deleted count in the cron's JSON response, and in a
+`[cron/backup] retention` line in Workers Logs. Counts only, never row content. A failing rule
+does not stop the others or the backup.
+
+Purged audit rows are **not recoverable from these backups** (AuditLog is not in them); only
+Supabase PITR predates a purge. That is why `AUDIT_LOG_RETENTION_DAYS` has a 90-day floor.
 
 Verify after a deploy: `npx wrangler tail --format pretty` and wait for a scheduled run, or trigger
 one against the deployed Worker with `curl -H "Authorization: Bearer $CRON_SECRET"
@@ -106,20 +165,22 @@ Carried over from the Vercel cutover and not yet closed:
   the login throttle bounds far less than it appears to. See `docs/runbook.md`.
 - **Backups still live in Vercel Blob** (`src/lib/db/backup-store.ts`), which keeps the Vercel
   account load-bearing after the move. R2 is the obvious replacement.
-- **Scheduled backups fail: the snapshot does not fit in a Worker.** `createSnapshot`
-  materialises every table in one isolate. Production is ~111 MB across 166k rows and an
-  isolate has 128 MB, so a run ends in Cloudflare error 1102 with
-  `"outcome": "exceededMemory"` in Workers Logs. Raising `limits.cpu_ms` does not help —
-  it is memory, not CPU — and excluding `AuditLog` (47% of the data) was not enough either.
-  The fix is to stream: page rows per table, emit NDJSON through `CompressionStream('gzip')`,
-  and hand that stream to the blob store, with the restore path reading it back the same way
-  and inserting per chunk inside the existing single transaction. Until then Supabase's own
-  PITR is the only disaster recovery, which is what this module's header always said it was.
-  The daily `ErrorEvent` purge now runs before the snapshot, so retention is unaffected.
+- **Streaming backups are unproven in production.** Backups used to fail with error 1102
+  (`exceededMemory`) because `createSnapshot` built all ~111 MB in one isolate. They now stream
+  (see "How a backup is written"), but no run has completed on Workers yet. On the first
+  scheduled run, check Workers Logs for `[cron] run ok`, and check `/admin/database` for a
+  `.ndjson.gz` file. Things that could still bite:
+  - the multipart Blob API has not been exercised from a Worker, and `@vercel/blob` imports
+    `undici`;
+  - each page query is a new Hyperdrive connection (`maxUses: 1`), roughly 100 per run, and
+    those count against the Worker's subrequest limit;
+  - a restore streams the file inside a 240 s transaction.
+
+  Supabase PITR remains the real disaster recovery.
 - **Heavy report paths are unverified on Workers.** `pdfkit` is bundled into the Worker rather than
   left external (see the comment in `next.config.mjs`), and `exceljs` exports are large jobs in
   an isolate that is capped at 128 MB. `maxDuration` means nothing here; Workers enforce CPU and
-  memory limits instead — and the backup above shows memory is the one that bites first.
+  memory limits instead, and the old backup showed that memory is the one that bites first.
 - **No `routes` in `wrangler.jsonc`.** If a custom domain serves the app, it is attached from the
   dashboard, and nothing in the repository records that.
 

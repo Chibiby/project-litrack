@@ -7,6 +7,7 @@ import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
+import { action } from "@/lib/errors/action";
 import {
   GLOBAL_SEARCH_MIN_CHARS,
   type GlobalSearchHit,
@@ -42,144 +43,144 @@ import {
 /** Per-group cap. Small on purpose: this is a jump-to box, not a report. */
 const PER_GROUP_TAKE = 5;
 
-type SearchResult =
-  | { ok: true; data: GlobalSearchHit[] }
-  | { ok: false; error: string };
+export const globalSearch = action(
+  "globalSearch",
+  async (input: { q: string }): Promise<{ ok: true; data: GlobalSearchHit[] }> => {
+    const user = await requireUser();
 
-export async function globalSearch(input: { q: string }): Promise<SearchResult> {
-  const user = await requireUser();
+    const q = (input?.q ?? "").trim();
+    if (q.length < GLOBAL_SEARCH_MIN_CHARS) return { ok: true, data: [] };
 
-  const q = (input?.q ?? "").trim();
-  if (q.length < GLOBAL_SEARCH_MIN_CHARS) return { ok: true, data: [] };
+    if (user.role === "DISTRICT_ADMIN") {
+      return { ok: true, data: await districtAdminSearch(q) };
+    }
 
-  if (user.role === "DISTRICT_ADMIN") {
-    return { ok: true, data: await districtAdminSearch(q) };
-  }
+    const isAdmin = user.role === "SUPER_ADMIN";
+    const isTeacher = user.role === "TEACHER" && !isAdmin;
 
-  const isAdmin = user.role === "SUPER_ADMIN";
-  const isTeacher = user.role === "TEACHER" && !isAdmin;
+    // A non-admin with no school can match nothing. Returning empty is not a
+    // formality: without it, `schoolId: undefined` would drop the predicate from
+    // the `where` entirely and search every tenant.
+    if (!isAdmin && !user.schoolId) return { ok: true, data: [] };
+    const schoolScope = isAdmin ? {} : { schoolId: user.schoolId as string };
 
-  // A non-admin with no school can match nothing. Returning empty is not a
-  // formality: without it, `schoolId: undefined` would drop the predicate from
-  // the `where` entirely and search every tenant.
-  if (!isAdmin && !user.schoolId) return { ok: true, data: [] };
-  const schoolScope = isAdmin ? {} : { schoolId: user.schoolId as string };
+    const contains = { contains: q, mode: "insensitive" as const };
+    const hits: GlobalSearchHit[] = [];
 
-  const contains = { contains: q, mode: "insensitive" as const };
-  const hits: GlobalSearchHit[] = [];
-
-  const learners = await prisma.learner.findMany({
-    where: {
-      ...schoolScope,
-      deletedAt: null,
-      archivedAt: null,
-      fullName: contains,
-      ...(isTeacher ? teacherLearnerScope(user.id) : {}),
-    },
-    select: {
-      id: true,
-      fullName: true,
-      gradeLevelId: true,
-      gradeLevel: { select: { type: true } },
-      section: { select: { name: true } },
-    },
-    orderBy: { fullName: "asc" },
-    take: PER_GROUP_TAKE,
-  });
-
-  for (const l of learners) {
-    const grade = GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type;
-    hits.push({
-      id: l.id,
-      kind: "learner",
-      title: l.fullName,
-      subtitle: l.section ? `${grade} · ${l.section.name}` : grade,
-      // The learner profile lives under the grade for a teacher and under the
-      // school-head roster otherwise; both routes already exist.
-      href: isTeacher
-        ? `/teacher/grade/${l.gradeLevelId}/learners/${l.id}`
-        : `/school-head/learners?q=${encodeURIComponent(l.fullName)}`,
+    const learners = await prisma.learner.findMany({
+      where: {
+        ...schoolScope,
+        deletedAt: null,
+        archivedAt: null,
+        fullName: contains,
+        ...(isTeacher ? teacherLearnerScope(user.id) : {}),
+      },
+      select: {
+        id: true,
+        fullName: true,
+        gradeLevelId: true,
+        gradeLevel: { select: { type: true } },
+        section: { select: { name: true } },
+      },
+      orderBy: { fullName: "asc" },
+      take: PER_GROUP_TAKE,
     });
-  }
 
-  // A teacher stops here. Staff and structure are not theirs to browse.
-  if (isTeacher) return { ok: true, data: hits };
+    for (const l of learners) {
+      const grade = GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type;
+      hits.push({
+        id: l.id,
+        kind: "learner",
+        title: l.fullName,
+        subtitle: l.section ? `${grade} · ${l.section.name}` : grade,
+        // The learner profile lives under the grade for a teacher and under the
+        // school-head roster otherwise; both routes already exist.
+        href: isTeacher
+          ? `/teacher/grade/${l.gradeLevelId}/learners/${l.id}`
+          : `/school-head/learners?q=${encodeURIComponent(l.fullName)}`,
+      });
+    }
 
-  const teachers = await prisma.user.findMany({
-    where: {
-      ...schoolScope,
-      role: "TEACHER",
-      deletedAt: null,
-      fullName: contains,
-    },
-    select: {
-      id: true,
-      fullName: true,
-      advisorySections: { where: { deletedAt: null }, select: { name: true } },
-    },
-    orderBy: { fullName: "asc" },
-    take: PER_GROUP_TAKE,
-  });
+    // A teacher stops here. Staff and structure are not theirs to browse.
+    if (isTeacher) return { ok: true, data: hits };
 
-  for (const t of teachers) {
-    hits.push({
-      id: t.id,
-      kind: "teacher",
-      title: t.fullName,
-      // Archived sections are excluded by the select. All live ones are listed:
-      // a result naming one of three classes would read as the whole answer.
-      subtitle:
-        t.advisorySections.length > 0
-          ? `Adviser · ${t.advisorySections.map((s) => s.name).join(", ")}`
-          : "Teacher",
-      href: `/school-head/teachers?q=${encodeURIComponent(t.fullName)}`,
+    const teachers = await prisma.user.findMany({
+      where: {
+        ...schoolScope,
+        role: "TEACHER",
+        deletedAt: null,
+        fullName: contains,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        advisorySections: { where: { deletedAt: null }, select: { name: true } },
+      },
+      orderBy: { fullName: "asc" },
+      take: PER_GROUP_TAKE,
     });
-  }
 
-  const sections = await prisma.section.findMany({
-    where: { ...schoolScope, deletedAt: null, name: contains },
-    select: {
-      id: true,
-      name: true,
-      gradeLevel: { select: { type: true } },
-    },
-    orderBy: { name: "asc" },
-    take: PER_GROUP_TAKE,
-  });
+    for (const t of teachers) {
+      hits.push({
+        id: t.id,
+        kind: "teacher",
+        title: t.fullName,
+        // Archived sections are excluded by the select. All live ones are listed:
+        // a result naming one of three classes would read as the whole answer.
+        subtitle:
+          t.advisorySections.length > 0
+            ? `Adviser · ${t.advisorySections.map((s) => s.name).join(", ")}`
+            : "Teacher",
+        href: `/school-head/teachers?q=${encodeURIComponent(t.fullName)}`,
+      });
+    }
 
-  for (const s of sections) {
-    hits.push({
-      id: s.id,
-      kind: "section",
-      title: s.name,
-      subtitle: GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type,
-      href: `/school-head/school`,
-    });
-  }
-
-  // Schools are a Super Admin concept; a School Head has exactly one and does
-  // not need to search for it.
-  if (isAdmin) {
-    const schools = await prisma.school.findMany({
-      where: { deletedAt: null, name: contains },
-      select: { id: true, name: true, division: true, district: true },
+    const sections = await prisma.section.findMany({
+      where: { ...schoolScope, deletedAt: null, name: contains },
+      select: {
+        id: true,
+        name: true,
+        gradeLevel: { select: { type: true } },
+      },
       orderBy: { name: "asc" },
       take: PER_GROUP_TAKE,
     });
 
-    for (const s of schools) {
+    for (const s of sections) {
       hits.push({
         id: s.id,
-        kind: "school",
+        kind: "section",
         title: s.name,
-        subtitle: [s.division, s.district].filter(Boolean).join(" · ") || null,
-        href: `/admin/schools?q=${encodeURIComponent(s.name)}`,
+        subtitle: GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type,
+        href: `/school-head/school`,
       });
     }
-  }
 
-  return { ok: true, data: hits };
-}
+    // Schools are a Super Admin concept; a School Head has exactly one and does
+    // not need to search for it.
+    if (isAdmin) {
+      const schools = await prisma.school.findMany({
+        where: { deletedAt: null, name: contains },
+        select: { id: true, name: true, division: true, district: true },
+        orderBy: { name: "asc" },
+        take: PER_GROUP_TAKE,
+      });
+
+      for (const s of schools) {
+        hits.push({
+          id: s.id,
+          kind: "school",
+          title: s.name,
+          subtitle: [s.division, s.district].filter(Boolean).join(" · ") || null,
+          href: `/admin/schools?q=${encodeURIComponent(s.name)}`,
+        });
+      }
+    }
+
+    return { ok: true, data: hits };
+  },
+  { verb: "search" }
+);
 
 /**
  * A district admin's header search: schools in their own districts only.

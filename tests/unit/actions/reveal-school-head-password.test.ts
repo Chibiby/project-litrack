@@ -24,6 +24,9 @@ const prismaMock = {
   user: {
     findFirst: vi.fn(async (_args: unknown) => headRow),
     update: vi.fn(async (_args: unknown) => ({})),
+    updateMany: vi.fn(
+      async (_args: { where: Record<string, unknown>; data: Record<string, unknown> }) => ({ count: 1 })
+    ),
   },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -208,6 +211,69 @@ describe("revealSchoolHeadPassword", () => {
     const res = await revealSchoolHeadPassword(form("not-a-uuid"));
     expect(res).toEqual({ ok: false, error: "Invalid account" });
     expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("re-seals under the current key after a legacy-key open, without failing the reveal", async () => {
+    const { resetPasswordVaultKeyCache } = await import("@/lib/auth/password-vault");
+    const oldKeyHex = Buffer.alloc(32, 4).toString("hex");
+
+    // Seal under what is now the "old" key, then switch to the current key
+    // plus that one as a legacy key — the shape a project move leaves behind.
+    process.env.PASSWORD_VAULT_KEY = oldKeyHex;
+    resetPasswordVaultKeyCache();
+    const legacySealed = sealPassword("Migrated!2026");
+
+    process.env.PASSWORD_VAULT_KEY = VAULT_KEY;
+    process.env.PASSWORD_VAULT_LEGACY_KEYS = oldKeyHex;
+    resetPasswordVaultKeyCache();
+
+    headRow = head({ passwordVaultCipher: legacySealed });
+    const res = await revealSchoolHeadPassword(form());
+    expect(res).toEqual({
+      ok: true,
+      data: { password: "Migrated!2026", setAt: SEALED_AT.toISOString(), isSchoolId: false },
+    });
+
+    expect(prismaMock.user.updateMany).toHaveBeenCalledTimes(1);
+    const updateArgs = prismaMock.user.updateMany.mock.calls[0][0];
+    expect(updateArgs.where).toEqual({ id: "head-1", passwordVaultCipher: legacySealed });
+    const resealed = updateArgs.data.passwordVaultCipher as string;
+    expect(resealed).not.toBe(legacySealed);
+
+    // Re-sealed under the current key: opens without the legacy key present.
+    delete process.env.PASSWORD_VAULT_LEGACY_KEYS;
+    resetPasswordVaultKeyCache();
+    const { openPassword } = await import("@/lib/auth/password-vault");
+    expect(openPassword(resealed)).toBe("Migrated!2026");
+
+    process.env.PASSWORD_VAULT_KEY = VAULT_KEY;
+    resetPasswordVaultKeyCache();
+  });
+
+  it("still returns the password when the best-effort re-seal write fails", async () => {
+    const { resetPasswordVaultKeyCache } = await import("@/lib/auth/password-vault");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const oldKeyHex = Buffer.alloc(32, 4).toString("hex");
+
+    process.env.PASSWORD_VAULT_KEY = oldKeyHex;
+    resetPasswordVaultKeyCache();
+    const legacySealed = sealPassword("Migrated!2026");
+
+    process.env.PASSWORD_VAULT_KEY = VAULT_KEY;
+    process.env.PASSWORD_VAULT_LEGACY_KEYS = oldKeyHex;
+    resetPasswordVaultKeyCache();
+
+    prismaMock.user.updateMany.mockRejectedValueOnce(new Error("connection reset"));
+    headRow = head({ passwordVaultCipher: legacySealed });
+    const res = await revealSchoolHeadPassword(form());
+    expect(res).toEqual({
+      ok: true,
+      data: { password: "Migrated!2026", setAt: SEALED_AT.toISOString(), isSchoolId: false },
+    });
+
+    delete process.env.PASSWORD_VAULT_LEGACY_KEYS;
+    process.env.PASSWORD_VAULT_KEY = VAULT_KEY;
+    resetPasswordVaultKeyCache();
   });
 
   it("reports a missing account instead of throwing", async () => {

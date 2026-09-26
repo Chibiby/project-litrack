@@ -1,0 +1,38 @@
+-- Index-only. Serves the daily retention purge (src/lib/retention/purge.ts):
+--
+--   purgeExpiredNotifications  WHERE "createdAt" < $cutoff
+--   purgeReadNotifications     WHERE "readAt" IS NOT NULL AND "createdAt" < $cutoff
+--
+-- Neither existing Notification index leads with "createdAt" —
+-- [recipientId, readAt, createdAt] needs recipientId first,
+-- [schoolId, createdAt] needs schoolId first — so both purge queries were
+-- doing a full sequential scan. This index range-scans straight to the
+-- cutoff for both; the read-only variant's extra "readAt IS NOT NULL" is
+-- then a cheap filter over that already-narrowed range.
+--
+-- ADDITIVE ONLY. No DROP, no ALTER, no column/constraint change.
+--
+-- TWO APPLY PATHS — read this before running anything:
+--
+--   * Every environment EXCEPT the existing production database (CI, fresh
+--     clones, local dev, any new Supabase project) takes this file the
+--     normal way, via `npx prisma migrate deploy`. Nothing special to do.
+--
+--   * The EXISTING PRODUCTION database takes `prisma/concurrent-indexes.sql`
+--     (batch 4) instead, then
+--       npx prisma migrate resolve --applied 20260926000001_notification_created_at_index
+--     to record this migration as applied without re-running the DDL.
+--
+--     Why: plain `CREATE INDEX` takes an ACCESS EXCLUSIVE lock for the whole
+--     build, blocking every read and write on "Notification" for the
+--     duration. `CREATE INDEX CONCURRENTLY` avoids that but cannot run
+--     inside a transaction block, and `prisma migrate deploy` wraps every
+--     migration file in one. See docs/migrate-checklist.md section (b1) and
+--     docs/migrations.md "Concurrent index builds".
+--
+-- IF NOT EXISTS makes this file idempotent so the two paths are safe to mix,
+-- as long as the index NAME stays byte-identical between this file and
+-- prisma/concurrent-indexes.sql.
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Notification_createdAt_idx" ON "Notification"("createdAt");

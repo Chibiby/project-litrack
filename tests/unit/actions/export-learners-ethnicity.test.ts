@@ -232,7 +232,7 @@ describe("learners export — ethnicity", () => {
     const bad = await exportSchoolHeadLearnersExcel({
       purpose: "POSTER" as unknown as "PRINT",
     });
-    expect(bad).toEqual({ ok: false, error: "Choose Print or Records" });
+    expect(bad).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: "Choose Print or Records" });
   });
 
   it("emits a specify column beside each ethnicity column", async () => {

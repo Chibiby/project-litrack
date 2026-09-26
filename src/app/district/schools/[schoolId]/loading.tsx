@@ -11,7 +11,7 @@ export default function DistrictSchoolLoading() {
             <Skeleton className="h-7 w-64 max-w-full" />
             <Skeleton className="h-4 w-40" />
           </div>
-          <Skeleton className="h-11 w-full sm:h-10 sm:w-32 lg:h-9" />
+          <Skeleton className="h-11 w-full sm:w-32 lg:h-9" />
         </div>
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <ListCardSkeleton items={4} className="rounded-2xl" />

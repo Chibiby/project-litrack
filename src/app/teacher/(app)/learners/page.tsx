@@ -486,7 +486,7 @@ export default async function TeacherLearnersPage({
         topRight={
           <Suspense
             fallback={
-              <Skeleton className="h-9 w-32 rounded-xl sm:h-10 sm:w-44 lg:h-11 lg:w-56" />
+              <Skeleton className="h-11 w-32 rounded-xl sm:w-44 lg:w-56" />
             }
           >
             <LearnersHeroAdvisory

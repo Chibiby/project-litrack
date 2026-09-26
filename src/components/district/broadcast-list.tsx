@@ -71,7 +71,7 @@ export function BroadcastList({ broadcasts }: { broadcasts: BroadcastListItem[] 
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full shrink-0 sm:h-10 sm:w-auto lg:h-9"
+                  className="w-full shrink-0 sm:w-auto lg:h-9"
                   loading={retracting === item.broadcastId}
                   loadingText="Retracting…"
                 >

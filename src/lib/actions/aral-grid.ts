@@ -16,8 +16,8 @@ import {
 } from "@/lib/aral/reading-level-progress";
 import { getMonday } from "@/lib/utils";
 import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+import { action } from "@/lib/errors/action";
+import { fieldError, resourceNotFound } from "@/lib/errors/app-error";
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -26,20 +26,23 @@ function parseDateKey(value: unknown): Date | null {
   return parseLocalDateKey(value);
 }
 
+/**
+ * Authorization: `requireUser("TEACHER")` (Super Admin impersonates every
+ * role, so the branch below is keyed on `role === "SUPER_ADMIN"` explicitly).
+ * Tenancy: a real teacher's grade lookup is scoped by their own `schoolId`
+ * plus `teacherGradeScope` (advises the grade, or tracks an ARAL learner in
+ * it); the returned learner `where` is further narrowed by `aralLearnerScope`.
+ */
 async function resolveGradeLearnerWhere(input: {
   gradeId: string;
   section?: string;
   gender?: string;
   schoolId?: string;
-}): Promise<
-  | {
-      ok: true;
-      learnerWhere: Prisma.LearnerWhereInput;
-      /** Raw `GradeLevelType` of the one grade in scope — reading-policy grade context. */
-      gradeType: string;
-    }
-  | { ok: false; error: string }
-> {
+}): Promise<{
+  learnerWhere: Prisma.LearnerWhereInput;
+  /** Raw `GradeLevelType` of the one grade in scope — reading-policy grade context. */
+  gradeType: string;
+}> {
   const user = await requireUser("TEACHER");
   const isSuperAdmin = user.role === "SUPER_ADMIN";
 
@@ -59,12 +62,11 @@ async function resolveGradeLearnerWhere(input: {
     where: gradeFilter,
     select: { id: true, type: true },
   });
-  if (!grade) return { ok: false, error: "Grade not found" };
+  if (!grade) throw resourceNotFound("Grade level");
 
   const list = parseLearnerListParams({ section: input.section, gender: input.gender });
 
   return {
-    ok: true,
     gradeType: grade.type,
     learnerWhere: {
       gradeLevelId: grade.id,
@@ -86,58 +88,66 @@ export type AralWeeklyAttendanceRecord = {
   notes: string | null;
 };
 
-/** Fetch a grade's attendance for one Monday-keyed week, plus its holidays. */
-export async function fetchAralAttendanceForWeek(input: {
-  gradeId: string;
-  weekKey: string;
-  section?: string;
-  schoolId?: string;
-}): Promise<
-  ActionResult<{
-    records: AralWeeklyAttendanceRecord[];
-    /** Days in this week flagged as a grade-level holiday, as `YYYY-MM-DD`. */
-    holidayKeys: string[];
-  }>
-> {
-  const parsed = parseDateKey(input.weekKey);
-  if (!parsed) return { ok: false, error: "Invalid week" };
-  const weekStart = getMonday(parsed);
-  const nextWeekStart = addDays(weekStart, 7);
-
-  const resolved = await resolveGradeLearnerWhere(input);
-  if (!resolved.ok) return resolved;
-
-  const [rows, holidays] = await Promise.all([
-    prisma.attendance.findMany({
-      where: {
-        date: { gte: weekStart, lt: nextWeekStart },
-        learner: resolved.learnerWhere,
-      },
-      select: { learnerId: true, date: true, status: true, notes: true },
-    }),
-    prisma.attendanceDayMeta.findMany({
-      where: {
-        gradeLevelId: input.gradeId,
-        date: { gte: weekStart, lt: nextWeekStart },
-        isHoliday: true,
-      },
-      select: { date: true },
-    }),
-  ]);
-
-  return {
-    ok: true,
+/**
+ * Fetch a grade's attendance for one Monday-keyed week, plus its holidays.
+ *
+ * Read-only. Authorization and tenancy are `resolveGradeLearnerWhere`'s.
+ */
+export const fetchAralAttendanceForWeek = action(
+  "fetchAralAttendanceForWeek",
+  async (input: {
+    gradeId: string;
+    weekKey: string;
+    section?: string;
+    schoolId?: string;
+  }): Promise<{
+    ok: true;
     data: {
-      records: rows.map((r) => ({
-        learnerId: r.learnerId,
-        dateKey: formatLocalDateKey(r.date),
-        status: r.status,
-        notes: r.notes,
-      })),
-      holidayKeys: holidays.map((h) => formatLocalDateKey(h.date)),
-    },
-  };
-}
+      records: AralWeeklyAttendanceRecord[];
+      /** Days in this week flagged as a grade-level holiday, as `YYYY-MM-DD`. */
+      holidayKeys: string[];
+    };
+  }> => {
+    const parsed = parseDateKey(input.weekKey);
+    if (!parsed) throw fieldError("weekKey", "Invalid week");
+    const weekStart = getMonday(parsed);
+    const nextWeekStart = addDays(weekStart, 7);
+
+    const { learnerWhere } = await resolveGradeLearnerWhere(input);
+
+    const [rows, holidays] = await Promise.all([
+      prisma.attendance.findMany({
+        where: {
+          date: { gte: weekStart, lt: nextWeekStart },
+          learner: learnerWhere,
+        },
+        select: { learnerId: true, date: true, status: true, notes: true },
+      }),
+      prisma.attendanceDayMeta.findMany({
+        where: {
+          gradeLevelId: input.gradeId,
+          date: { gte: weekStart, lt: nextWeekStart },
+          isHoliday: true,
+        },
+        select: { date: true },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      data: {
+        records: rows.map((r) => ({
+          learnerId: r.learnerId,
+          dateKey: formatLocalDateKey(r.date),
+          status: r.status,
+          notes: r.notes,
+        })),
+        holidayKeys: holidays.map((h) => formatLocalDateKey(h.date)),
+      },
+    };
+  },
+  { verb: "load the week's attendance" }
+);
 
 export type AralReadingLevelRecord = {
   learnerId: string;
@@ -164,55 +174,61 @@ export type AralReadingLevelRecord = {
  * `records` covers every learner the filter matches, not just the page on screen,
  * because the grid keys its rows by learner id and the page slice is the server's
  * business.
+ *
+ * Read-only. Authorization and tenancy are `resolveGradeLearnerWhere`'s.
  */
-export async function fetchAralReadingLevelForMonth(input: {
-  gradeId: string;
-  monthKey: string;
-  section?: string;
-  gender?: string;
-  schoolId?: string;
-}): Promise<
-  ActionResult<{
-    records: AralReadingLevelRecord[];
-    progress: MonthlyAssessmentProgress;
-  }>
-> {
-  const parsed = parseDateKey(input.monthKey);
-  if (!parsed) return { ok: false, error: "Invalid month" };
-  const monthStart = monthStartOf(parsed);
-  const monthEnd = nextMonthStart(parsed);
+export const fetchAralReadingLevelForMonth = action(
+  "fetchAralReadingLevelForMonth",
+  async (input: {
+    gradeId: string;
+    monthKey: string;
+    section?: string;
+    gender?: string;
+    schoolId?: string;
+  }): Promise<{
+    ok: true;
+    data: {
+      records: AralReadingLevelRecord[];
+      progress: MonthlyAssessmentProgress;
+    };
+  }> => {
+    const parsed = parseDateKey(input.monthKey);
+    if (!parsed) throw fieldError("monthKey", "Invalid month");
+    const monthStart = monthStartOf(parsed);
+    const monthEnd = nextMonthStart(parsed);
 
-  const resolved = await resolveGradeLearnerWhere(input);
-  if (!resolved.ok) return resolved;
+    const { learnerWhere, gradeType } = await resolveGradeLearnerWhere(input);
 
-  const [rows, progress] = await Promise.all([
-    prisma.readingLevelRecord.findMany({
-      where: {
-        weekStart: { gte: monthStart, lt: monthEnd },
-        learner: resolved.learnerWhere,
-      },
-      // Ascending, so the last write for a learner wins the reduce below.
-      orderBy: [{ weekStart: "asc" }, { updatedAt: "asc" }],
-      select: {
-        learnerId: true,
-        englishProfile: true,
-        filipinoProfile: true,
-        wordRecognitionLevel: true,
-        readingComprehensionLevel: true,
-        writingLevel: true,
-        notes: true,
-      },
-    }),
-    countMonthlyAssessmentProgress({
-      learnerWhere: resolved.learnerWhere,
-      monthStart,
-      monthEnd,
-      grades: [{ id: input.gradeId, type: resolved.gradeType }],
-    }),
-  ]);
+    const [rows, progress] = await Promise.all([
+      prisma.readingLevelRecord.findMany({
+        where: {
+          weekStart: { gte: monthStart, lt: monthEnd },
+          learner: learnerWhere,
+        },
+        // Ascending, so the last write for a learner wins the reduce below.
+        orderBy: [{ weekStart: "asc" }, { updatedAt: "asc" }],
+        select: {
+          learnerId: true,
+          englishProfile: true,
+          filipinoProfile: true,
+          wordRecognitionLevel: true,
+          readingComprehensionLevel: true,
+          writingLevel: true,
+          notes: true,
+        },
+      }),
+      countMonthlyAssessmentProgress({
+        learnerWhere,
+        monthStart,
+        monthEnd,
+        grades: [{ id: input.gradeId, type: gradeType }],
+      }),
+    ]);
 
-  const latest = new Map<string, AralReadingLevelRecord>();
-  for (const row of rows) latest.set(row.learnerId, row);
+    const latest = new Map<string, AralReadingLevelRecord>();
+    for (const row of rows) latest.set(row.learnerId, row);
 
-  return { ok: true, data: { records: [...latest.values()], progress } };
-}
+    return { ok: true, data: { records: [...latest.values()], progress } };
+  },
+  { verb: "load the month's reading levels" }
+);

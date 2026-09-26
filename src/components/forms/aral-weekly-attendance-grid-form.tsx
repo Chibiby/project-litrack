@@ -10,7 +10,6 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Eraser } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,15 +29,35 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ABSENTEEISM_REASON_LABELS } from "@/lib/constants/enum-labels";
 import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import { cn } from "@/lib/utils";
 import { saveAralWeeklyAttendance } from "@/lib/actions/attendance";
+import { AttendanceGridRow } from "@/components/forms/aral-weekly-attendance-grid-row";
+import {
+  CELL_LETTER,
+  CELL_TONE,
+  DETAILS_MAX,
+  REASON_OPTIONS,
+  REASON_OTHER,
+  STATUS_LABEL,
+  composeNote,
+  isCellStatus,
+  statusTakesReason,
+  type CellStatus,
+  type Day,
+  type RowState,
+  type WeeklyAttendanceGridExisting,
+  type WeeklyAttendanceGridLearner,
+} from "@/components/forms/aral-weekly-attendance-grid-shared";
+
+export type {
+  WeeklyAttendanceGridExisting,
+  WeeklyAttendanceGridLearner,
+} from "@/components/forms/aral-weekly-attendance-grid-shared";
 
 /**
  * Weekday and month names are hardcoded rather than taken from `Intl`: this grid
@@ -81,116 +100,6 @@ const MONTHS_SHORT = [
   "Dec",
 ];
 
-/** `""` is No Class — no `Attendance` row at all, not an absence. */
-type CellStatus = "" | "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
-
-const CELL_LETTER: Record<CellStatus, string> = {
-  "": "—",
-  PRESENT: "P",
-  ABSENT: "A",
-  LATE: "L",
-  EXCUSED: "E",
-};
-
-const CELL_TONE: Record<CellStatus, string> = {
-  "": "border-input bg-background text-muted-foreground",
-  PRESENT:
-    "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
-  ABSENT:
-    "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
-  EXCUSED:
-    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
-  // Legacy only: nothing in the app writes LATE any more, but a stored row must
-  // still read back correctly rather than silently displaying as No Class.
-  LATE: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300",
-};
-
-/** The dot beside each option in the picker. */
-const CELL_DOT: Record<CellStatus, string> = {
-  "": "bg-muted-foreground/40 text-white",
-  PRESENT: "bg-emerald-500 text-white",
-  ABSENT: "bg-red-500 text-white",
-  EXCUSED: "bg-amber-500 text-white",
-  LATE: "bg-sky-500 text-white",
-};
-
-/** The statuses a teacher can pick. LATE is deliberately absent. */
-const PICKABLE: CellStatus[] = ["", "PRESENT", "ABSENT", "EXCUSED"];
-
-const STATUS_LABEL: Record<CellStatus, string> = {
-  "": "No Class",
-  PRESENT: "Present",
-  ABSENT: "Absent",
-  EXCUSED: "Excused",
-  LATE: "Late",
-};
-
-/**
- * Present needs no reason — that is the rule the picker states out loud, and the
- * server enforces it by storing NULL for a PRESENT cell however the client got
- * there. No Class deletes the row, so it has nowhere to keep one either.
- */
-function statusTakesReason(status: CellStatus): boolean {
-  return status === "ABSENT" || status === "EXCUSED";
-}
-
-/**
- * The per-day reason list, shared with the ARAL profile's Reasons of
- * Absenteeism so a teacher meets the same wording in both places. The LABEL is
- * what lands in `Attendance.notes`; `parseNote` matches on it, so a note
- * written under an older list reads back under "Other" with its text intact.
- */
-const REASON_OPTIONS: readonly string[] = Object.values(ABSENTEEISM_REASON_LABELS);
-
-/** The picker's free-text escape hatch; never stored as the literal label. */
-const REASON_OTHER = "Other — Please specify";
-
-const DETAILS_MAX = 200;
-
-/**
- * A stored note is one string, so the picker's two fields are packed into it and
- * unpacked again on load. A known label with details reads `Label — details`;
- * anything unrecognised is treated as free text under `REASON_OTHER`, which is
- * what makes a note written by an older build — a weekly remark, say — survive
- * being opened in the new picker instead of being silently dropped.
- */
-function composeNote(reason: string, details: string): string | null {
-  const trimmed = details.trim();
-  if (!reason || reason === REASON_OTHER) {
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  return trimmed.length > 0 ? `${reason} — ${trimmed}` : reason;
-}
-
-function parseNote(note: string): { reason: string; details: string } {
-  if (!note) return { reason: "", details: "" };
-  for (const option of REASON_OPTIONS) {
-    if (note === option) return { reason: option, details: "" };
-    if (note.startsWith(`${option} — `)) {
-      return { reason: option, details: note.slice(option.length + 3) };
-    }
-  }
-  return { reason: REASON_OTHER, details: note };
-}
-
-export type WeeklyAttendanceGridLearner = {
-  id: string;
-  /** Stored Firstname-first name. Kept for anything that speaks the name. */
-  fullName: string;
-  /** Surname-first display form ("Lastname, Firstname Middlename"), built
-   * server-side by `formatListingNameFromRecord`. This is what the Learner
-   * column shows and what the panel's "Alphabetical" sort compares. */
-  listingName: string;
-  sectionName: string | null;
-};
-
-export type WeeklyAttendanceGridExisting = {
-  learnerId: string;
-  dateKey: string;
-  status: string;
-  notes: string | null;
-};
-
 export type BulkAttendanceAction =
   | { kind: "status"; status: "PRESENT" | "ABSENT" | "EXCUSED" }
   | { kind: "clear" }
@@ -199,23 +108,6 @@ export type BulkAttendanceAction =
 export type AralWeeklyAttendanceGridFormHandle = {
   save: () => void;
   applyBulk: (action: BulkAttendanceAction) => void;
-};
-
-type RowState = {
-  /** Keyed by local `YYYY-MM-DD`. */
-  statuses: Record<string, CellStatus>;
-  /** The reason for each day, keyed the same way. `""` is no reason. */
-  notes: Record<string, string>;
-};
-
-type Day = {
-  key: string;
-  weekday: string;
-  monthDay: string;
-  aria: string;
-  /** Weekend or grade-level holiday: no mark can be stored here. */
-  locked: boolean;
-  lockReason: string;
 };
 
 type Props = {
@@ -231,15 +123,6 @@ type Props = {
   /** Lets the toolbar's Bulk Actions button show a live count. */
   onSelectionChange?: (count: number) => void;
 };
-
-function isCellStatus(value: string): value is Exclude<CellStatus, ""> {
-  return (
-    value === "PRESENT" ||
-    value === "ABSENT" ||
-    value === "LATE" ||
-    value === "EXCUSED"
-  );
-}
 
 function buildDays(weekStartKey: string, holidayKeys: string[]): Day[] {
   const holidays = new Set(holidayKeys);
@@ -343,7 +226,13 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
 ) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const days = buildDays(weekStartKey, holidayKeys);
+  // Memoized so it keeps its identity across re-renders triggered by this
+  // component's own state (rows, selected, pending) — `AttendanceGridRow` is
+  // memoized against it, and a fresh array every render would defeat that.
+  const days = useMemo(
+    () => buildDays(weekStartKey, holidayKeys),
+    [weekStartKey, holidayKeys]
+  );
   /**
    * What the week looked like when it loaded. Saves send the difference, so an
    * untouched cell is never rewritten — that is what preserves a legacy LATE row
@@ -385,30 +274,36 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     onSelectionChange?.(selectedCount);
   }, [selectedCount, onSelectionChange]);
 
-  function setCell(
-    learnerId: string,
-    dateKey: string,
-    status: CellStatus,
-    note: string
-  ) {
-    setRows((prev) => {
-      const row = prev[learnerId];
-      if (!row) return prev;
-      return {
-        ...prev,
-        [learnerId]: {
-          statuses: { ...row.statuses, [dateKey]: status },
-          // Present and No Class carry no reason, so switching to either drops
-          // whatever the previous status had recorded rather than leaving an
-          // orphaned explanation attached to the day.
-          notes: {
-            ...row.notes,
-            [dateKey]: statusTakesReason(status) ? note : "",
+  // Stable identity (closes only over the `setRows` setter) so every row's
+  // `onCellChange` prop is referentially unchanged across renders — a
+  // necessary condition for `AttendanceGridRow`'s memoization to skip
+  // unrelated rows on every cell edit.
+  const setCell = useCallback(
+    (learnerId: string, dateKey: string, status: CellStatus, note: string) => {
+      setRows((prev) => {
+        const row = prev[learnerId];
+        if (!row) return prev;
+        return {
+          ...prev,
+          [learnerId]: {
+            statuses: { ...row.statuses, [dateKey]: status },
+            // Present and No Class carry no reason, so switching to either drops
+            // whatever the previous status had recorded rather than leaving an
+            // orphaned explanation attached to the day.
+            notes: {
+              ...row.notes,
+              [dateKey]: statusTakesReason(status) ? note : "",
+            },
           },
-        },
-      };
-    });
-  }
+        };
+      });
+    },
+    []
+  );
+
+  const toggleSelect = useCallback((learnerId: string, value: boolean) => {
+    setSelected((prev) => ({ ...prev, [learnerId]: value }));
+  }, []);
 
   const clearRow = useCallback(
     (learnerId: string) => {
@@ -601,7 +496,9 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
                 />
               </TableHead>
               <TableHead className="w-10">#</TableHead>
-              <TableHead className="min-w-[180px]">Learner</TableHead>
+              <TableHead className="sticky left-0 z-20 min-w-[180px] bg-card">
+                Learner
+              </TableHead>
               {showSection && <TableHead>Section</TableHead>}
               {days.map((day) => (
                 <TableHead key={day.key} className="min-w-[68px] text-center">
@@ -615,86 +512,26 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
             </TableRow>
           </TableHeader>
           <TableBody>
-            {learners.map((learner, index) => {
-              const row = rows[learner.id];
-              return (
-                <TableRow
-                  key={learner.id}
-                  data-state={selected[learner.id] ? "selected" : undefined}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={!!selected[learner.id]}
-                      disabled={readOnly || pending}
-                      onCheckedChange={(value) =>
-                        setSelected((prev) => ({
-                          ...prev,
-                          [learner.id]: value === true,
-                        }))
-                      }
-                      aria-label={`Select ${learner.fullName}`}
-                    />
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground tabular-nums">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {learner.listingName}
-                  </TableCell>
-                  {showSection && (
-                    <TableCell className="text-sm text-muted-foreground">
-                      {learner.sectionName ?? "—"}
-                    </TableCell>
-                  )}
-                  {days.map((day) => {
-                    const status = row?.statuses[day.key] ?? "";
-                    const note = row?.notes[day.key] ?? "";
-                    if (day.locked) {
-                      return (
-                        <TableCell key={day.key} className="text-center">
-                          <span
-                            className="text-sm text-muted-foreground"
-                            title={day.lockReason}
-                          >
-                            —
-                          </span>
-                        </TableCell>
-                      );
-                    }
-                    return (
-                      <TableCell key={day.key}>
-                        <AttendanceCellPicker
-                          status={status}
-                          note={note}
-                          disabled={readOnly || pending}
-                          label={`${learner.fullName} attendance for ${day.aria}`}
-                          onChange={(nextStatus, nextNote) =>
-                            setCell(learner.id, day.key, nextStatus, nextNote)
-                          }
-                        />
-                      </TableCell>
-                    );
-                  })}
-                  <TableCell className="text-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={readOnly || pending}
-                      aria-label={`Clear ${learner.fullName}'s week`}
-                      onClick={() => clearRow(learner.id)}
-                    >
-                      <Eraser className="h-4 w-4" aria-hidden />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {learners.map((learner, index) => (
+              <AttendanceGridRow
+                key={learner.id}
+                learner={learner}
+                index={index}
+                showSection={showSection}
+                days={days}
+                rowState={rows[learner.id]}
+                selected={!!selected[learner.id]}
+                disabled={!!readOnly || pending}
+                onToggleSelect={toggleSelect}
+                onCellChange={setCell}
+                onClearRow={clearRow}
+              />
+            ))}
           </TableBody>
         </Table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 p-4 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 p-4 text-sm text-muted-foreground">
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Legend status="PRESENT" label="Present" />
           <Legend status="ABSENT" label="Absent" />
@@ -735,147 +572,6 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
 });
 
 /**
- * One day cell. A native `<select>` cannot hold a reason, so this is a popover:
- * status on top, and — only for the two statuses that take one — a reason below.
- * The trigger keeps the letter and tone the grid has always used, so a week
- * still reads at a glance without opening anything.
- */
-function AttendanceCellPicker({
-  status,
-  note,
-  disabled,
-  label,
-  onChange,
-}: {
-  status: CellStatus;
-  note: string;
-  disabled?: boolean;
-  label: string;
-  onChange: (status: CellStatus, note: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const parsed = parseNote(note);
-
-  function pick(next: CellStatus) {
-    if (!statusTakesReason(next)) {
-      onChange(next, "");
-      setOpen(false);
-      return;
-    }
-    // Keep whatever reason the day already carried when moving between the two
-    // statuses that take one, so switching Absent -> Excused does not discard
-    // the explanation the teacher already typed. The popover stays open so the
-    // reason fields below can be filled in.
-    onChange(next, note);
-  }
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          aria-label={label}
-          title={note || undefined}
-          className={cn(
-            "flex h-8 w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60",
-            CELL_TONE[status]
-          )}
-        >
-          {CELL_LETTER[status]}
-          {note && statusTakesReason(status) && (
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"
-            />
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
-        <div className="p-1">
-          <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-            Attendance
-          </p>
-          {PICKABLE.map((option) => (
-            <Button
-              key={option || "none"}
-              type="button"
-              variant="ghost"
-              onClick={() => pick(option)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
-                status === option && "bg-accent"
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  CELL_DOT[option]
-                )}
-              >
-                {CELL_LETTER[option]}
-              </span>
-              <span className="min-w-0">
-                <span className="block font-medium">
-                  {STATUS_LABEL[option]}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {statusTakesReason(option)
-                    ? "Select reason"
-                    : "No remarks required"}
-                </span>
-              </span>
-            </Button>
-          ))}
-        </div>
-
-        {statusTakesReason(status) && (
-          <div className="space-y-2 border-t border-border/60 p-3">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Reason / Remarks
-            </p>
-            <Select
-              value={parsed.reason || undefined}
-              onValueChange={(reason) =>
-                onChange(status, composeNote(reason, parsed.details) ?? "")
-              }
-            >
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Select reason" />
-              </SelectTrigger>
-              <SelectContent>
-                {REASON_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-                <SelectItem value={REASON_OTHER}>{REASON_OTHER}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Textarea
-              value={parsed.details}
-              maxLength={DETAILS_MAX}
-              placeholder="Optional details…"
-              className="min-h-[64px] text-sm"
-              aria-label="Optional details"
-              onChange={(e) =>
-                onChange(status, composeNote(parsed.reason, e.target.value) ?? "")
-              }
-            />
-            <p className="text-right text-xs tabular-nums text-muted-foreground">
-              {parsed.details.length}/{DETAILS_MAX}
-            </p>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
  * The toolbar's Bulk Actions menu. It sits beside Save rather than inside the
  * grid, so the panel owns the button while the grid owns the selection; the two
  * meet at the form's imperative handle.
@@ -913,7 +609,7 @@ export function BulkAttendanceActions({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-11 sm:h-10"
+          className="h-11 lg:h-10"
         >
           Bulk Actions
         </Button>

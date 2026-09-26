@@ -105,7 +105,7 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
           title="Schools"
           subtitle="Every registered school. Open one as its School Head, switch it off, or reset its head's password."
           topRight={
-            <Button asChild size="sm" className="sm:h-10 lg:h-9">
+            <Button asChild size="sm" className="lg:h-9">
               <Link href="/admin/schools/new" prefetch={true}>
                 <Plus aria-hidden /> <span className="max-sm:sr-only">New school</span>
               </Link>

@@ -115,7 +115,7 @@ export function LearnerListFooter({
             asChild={page > 1}
             size="icon"
             variant="outline"
-            className="h-8 w-8"
+            className="h-11 w-11 lg:h-8 lg:w-8"
             disabled={page <= 1}
             aria-label="Previous page"
           >
@@ -150,7 +150,7 @@ export function LearnerListFooter({
                 asChild
                 size="icon"
                 variant={entry === page ? "default" : "outline"}
-                className={cn("hidden h-8 w-8 tabular-nums sm:inline-flex")}
+                className={cn("hidden h-11 w-11 tabular-nums sm:inline-flex lg:h-8 lg:w-8")}
                 aria-current={entry === page ? "page" : undefined}
               >
                 <PrefetchLink
@@ -169,7 +169,7 @@ export function LearnerListFooter({
             asChild={page < totalPages}
             size="icon"
             variant="outline"
-            className="h-8 w-8"
+            className="h-11 w-11 lg:h-8 lg:w-8"
             disabled={page >= totalPages}
             aria-label="Next page"
           >
@@ -198,7 +198,7 @@ export function LearnerListFooter({
         <Select value={String(pageSize)} onValueChange={changePageSize}>
           <SelectTrigger
             id="learner-rows-per-page"
-            className="h-8 w-[4.5rem] gap-1 py-1"
+            className="h-11 w-[4.5rem] gap-1 py-1 lg:h-8"
           >
             <SelectValue />
           </SelectTrigger>

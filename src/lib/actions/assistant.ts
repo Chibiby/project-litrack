@@ -8,6 +8,9 @@ import { answerQuery } from "@/lib/help/search";
 import { askGemini, geminiConfigured } from "@/lib/assistant/gemini";
 import { buildAssistantScope } from "@/lib/assistant/scope";
 import { buildSystemInstruction } from "@/lib/assistant/prompt";
+import { action } from "@/lib/errors/action";
+import { AppError } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 
 /**
  * The assistant's answer. There is no other one.
@@ -23,8 +26,6 @@ import { buildSystemInstruction } from "@/lib/assistant/prompt";
  * fixed sentence written for a teacher, pointing at the division admin, who is
  * the real fallback now that the offline index no longer speaks.
  */
-
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
 const askSchema = z.object({
   question: z.string().trim().min(2, "Ask a question first").max(500, "Keep it shorter"),
@@ -73,39 +74,62 @@ const RATE_LIMIT = { limit: 20, windowMs: 60 * 60 * 1000 };
 /** How many links an answer carries. The panel has room for a couple. */
 const MAX_LINKS = 2;
 
-export async function askAssistant(input: unknown): Promise<ActionResult<AssistantAnswer>> {
-  const user = await requireUser();
+/**
+ * Every refusal here is a fixed, pre-written sentence rather than a code from
+ * the shared error catalog — "not configured", "no school to answer from",
+ * "over the rate limit" and "the model failed" are UX copy for a teacher, not
+ * conditions the catalog already has a matching entry for. `VALIDATION_FAILED`
+ * is the house vehicle for that: its message is the literal `{message}`
+ * placeholder, so `AppError("VALIDATION_FAILED", { params: { message } })`
+ * renders the fixed sentence verbatim and carries "user" severity, so none of
+ * these expected refusals is recorded as an ErrorEvent or earns a reference —
+ * same as the hand-rolled version did. See `term-subjects.ts` /
+ * `admin-term-windows.ts` for the same pattern elsewhere in this codebase.
+ */
+function refuse(message: string): never {
+  throw new AppError("VALIDATION_FAILED", { params: { message } });
+}
 
-  const parsed = askSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
-  const { question, pathname } = parsed.data;
+export const askAssistant = action(
+  "askAssistant",
+  async (input: unknown): Promise<{ ok: true; data: AssistantAnswer }> => {
+    const user = await requireUser();
 
-  if (!geminiConfigured()) return { ok: false, error: NOT_CONFIGURED };
+    const { question, pathname } = parseInput(askSchema, input);
 
-  // Super Admin holds no school of their own, so there is no "their learners"
-  // to describe, and this path must never carry an admin-wide or cross-school
-  // scope. They read a school's data from that school's own pages.
-  if (!user.schoolId) return { ok: false, error: NO_SCHOOL };
+    if (!geminiConfigured()) refuse(NOT_CONFIGURED);
 
-  const limit = await checkRateLimit(`assistant:${user.id}`, RATE_LIMIT);
-  if (!limit.ok) return { ok: false, error: RATE_LIMITED };
+    // Super Admin holds no school of their own, so there is no "their learners"
+    // to describe, and this path must never carry an admin-wide or cross-school
+    // scope. They read a school's data from that school's own pages.
+    if (!user.schoolId) refuse(NO_SCHOOL);
 
-  // The ranker no longer picks what the prompt contains — every topic the role
-  // can see is quoted in full now. It still orders them, and it still decides
-  // which two "Open Learners" style links sit under the answer.
-  const matches = answerQuery(question, { role: user.role, pathname }, 6);
-  const topicIds = matches.map((match) => match.topic.id);
-  const links = matches
-    .filter((match) => match.topic.action)
-    .slice(0, MAX_LINKS)
-    .map((match) => ({ label: match.topic.action!.label, href: match.topic.action!.href }));
+    const limit = await checkRateLimit(`assistant:${user.id}`, RATE_LIMIT);
+    if (!limit.ok) refuse(RATE_LIMITED);
 
-  try {
-    const scope = await buildAssistantScope({ ...user, schoolId: user.schoolId });
-    const result = await askGemini(buildSystemInstruction(scope, topicIds), question);
-    if (!result) return { ok: false, error: UNAVAILABLE };
+    // The ranker no longer picks what the prompt contains — every topic the role
+    // can see is quoted in full now. It still orders them, and it still decides
+    // which two "Open Learners" style links sit under the answer.
+    const matches = answerQuery(question, { role: user.role, pathname }, 6);
+    const topicIds = matches.map((match) => match.topic.id);
+    const links = matches
+      .filter((match) => match.topic.action)
+      .slice(0, MAX_LINKS)
+      .map((match) => ({ label: match.topic.action!.label, href: match.topic.action!.href }));
+
+    // A scope query or model call that fails must not take the panel with it,
+    // and it must not read as "our side broke" either — the fixed UNAVAILABLE
+    // sentence, not a system-severity classification with a reference, is
+    // exactly what the hand-rolled version returned for this branch.
+    let result: Awaited<ReturnType<typeof askGemini>>;
+    try {
+      const scope = await buildAssistantScope({ ...user, schoolId: user.schoolId });
+      result = await askGemini(buildSystemInstruction(scope, topicIds), question);
+    } catch (error) {
+      console.error("[assistant] scope or answer failed", error);
+      refuse(UNAVAILABLE);
+    }
+    if (!result) refuse(UNAVAILABLE);
 
     // Counts and ids only. The question can name a learner and the answer can
     // repeat it, so neither is ever written to the audit log.
@@ -122,9 +146,6 @@ export async function askAssistant(input: unknown): Promise<ActionResult<Assista
     });
 
     return { ok: true, data: { text: result.text, links } };
-  } catch (error) {
-    // A scope query that fails must not take the panel with it.
-    console.error("[assistant] scope or answer failed", error);
-    return { ok: false, error: UNAVAILABLE };
-  }
-}
+  },
+  { verb: "answer that" }
+);

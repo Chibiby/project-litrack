@@ -18,6 +18,7 @@ const vault = await import("@/lib/auth/password-vault");
 const {
   sealPassword,
   openPassword,
+  openPasswordWithSource,
   sealedPasswordMatches,
   isPasswordVaultConfigured,
   passwordChangeFields,
@@ -26,11 +27,13 @@ const {
 
 const originalEnv = { ...process.env };
 
-function setEnv(env: { vault?: string; serviceRole?: string }) {
+function setEnv(env: { vault?: string; serviceRole?: string; legacy?: string }) {
   delete process.env.PASSWORD_VAULT_KEY;
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.PASSWORD_VAULT_LEGACY_KEYS;
   if (env.vault) process.env.PASSWORD_VAULT_KEY = env.vault;
   if (env.serviceRole) process.env.SUPABASE_SERVICE_ROLE_KEY = env.serviceRole;
+  if (env.legacy) process.env.PASSWORD_VAULT_LEGACY_KEYS = env.legacy;
   resetPasswordVaultKeyCache();
 }
 
@@ -204,6 +207,71 @@ describe("passwordChangeFields", () => {
     // School ID and out of the forced-change state regardless.
     expect(fields.passwordIsSchoolId).toBe(false);
     expect(fields.mustChangePassword).toBe(false);
+  });
+});
+
+describe("legacy vault keys", () => {
+  it("opens a blob sealed under an explicit legacy hex key", () => {
+    const oldKeyHex = Buffer.alloc(32, 9).toString("hex");
+    setEnv({ vault: Buffer.alloc(32, 9).toString("base64") });
+    // Same 32 bytes as the hex form below, just sealed while it was current.
+    const sealed = sealPassword("moved-project");
+
+    setEnv({ vault: KEY_A, legacy: oldKeyHex });
+    expect(openPassword(sealed)).toBe("moved-project");
+    const withSource = openPasswordWithSource(sealed);
+    expect(withSource).toEqual({ password: "moved-project", usedLegacyKey: true });
+  });
+
+  it("opens a blob sealed under a legacy service-role key via derive:", () => {
+    setEnv({ serviceRole: "old-project-service-role-key" });
+    const sealed = sealPassword("derived-legacy");
+
+    setEnv({ vault: KEY_A, legacy: "derive:old-project-service-role-key" });
+    expect(openPassword(sealed)).toBe("derived-legacy");
+    expect(openPasswordWithSource(sealed)?.usedLegacyKey).toBe(true);
+  });
+
+  it("tries multiple legacy keys in order and returns null when none match", () => {
+    setEnv({ serviceRole: "yet-another-old-key" });
+    const sealed = sealPassword("multi-legacy");
+
+    setEnv({
+      vault: KEY_A,
+      legacy: [Buffer.alloc(32, 5).toString("hex"), "derive:yet-another-old-key"].join(","),
+    });
+    expect(openPassword(sealed)).toBe("multi-legacy");
+
+    setEnv({ vault: KEY_A, legacy: Buffer.alloc(32, 5).toString("hex") });
+    expect(openPassword(sealed)).toBeNull();
+  });
+
+  it("reports usedLegacyKey: false when the current key opens it directly", () => {
+    setEnv({ vault: KEY_A, legacy: Buffer.alloc(32, 6).toString("hex") });
+    const sealed = sealPassword("current-key-still-works");
+    expect(openPasswordWithSource(sealed)).toEqual({
+      password: "current-key-still-works",
+      usedLegacyKey: false,
+    });
+  });
+
+  it("skips a malformed legacy entry without breaking the others", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    setEnv({ serviceRole: "good-old-key" });
+    const sealed = sealPassword("survives-a-bad-neighbor");
+
+    setEnv({ vault: KEY_A, legacy: ["not-32-bytes", "derive:good-old-key"].join(",") });
+    expect(openPassword(sealed)).toBe("survives-a-bad-neighbor");
+  });
+
+  it("never uses a legacy key to seal", () => {
+    setEnv({ vault: KEY_A, legacy: Buffer.alloc(32, 8).toString("hex") });
+    const sealed = sealPassword("always-current") ?? "";
+
+    // If sealing had used the legacy key, the current key alone would fail to
+    // open it. It must not.
+    setEnv({ vault: KEY_A });
+    expect(openPassword(sealed)).toBe("always-current");
   });
 });
 

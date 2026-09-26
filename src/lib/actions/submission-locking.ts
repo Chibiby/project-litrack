@@ -5,12 +5,12 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { writeSetting } from "@/lib/settings/system-settings";
+import { action } from "@/lib/errors/action";
+import { parseInput } from "@/lib/errors/validation";
 import {
   READING_LEVEL_UNLOCK_ALL_KEY,
   SUBMISSION_LOCKING_KEY,
 } from "@/lib/unlock/constants";
-
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
 /**
  * Accepts the shapes a checkbox, a switch and a hidden input each produce —
@@ -47,42 +47,33 @@ const setMonthlyReadingLevelUnlockSchema = z.object({ enabled: enabledFlag });
  * page and the two surfaces that render lock state stop showing the old answer
  * to whoever is already looking at them.
  */
-export async function setSubmissionLocking(
-  formData: FormData
-): Promise<ActionResult> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const setSubmissionLocking = action(
+  "setSubmissionLocking",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  const parsed = setSubmissionLockingSchema.safeParse({
-    enabled: formData.get("enabled"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+    const { enabled } = parseInput(setSubmissionLockingSchema, {
+      enabled: formData.get("enabled"),
+    });
 
-  try {
-    await writeSetting(
-      SUBMISSION_LOCKING_KEY,
-      parsed.data.enabled ? "true" : "false"
-    );
-  } catch (err) {
-    console.error("[submissions] setSubmissionLocking write failed:", err);
-    return { ok: false, error: "Could not save the setting. Please try again." };
-  }
+    await writeSetting(SUBMISSION_LOCKING_KEY, enabled ? "true" : "false");
 
-  await writeAudit({
-    userId: admin.id,
-    schoolId: null,
-    action: AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
-    resource: "SystemSetting",
-    resourceId: SUBMISSION_LOCKING_KEY,
-    metadata: { enabled: parsed.data.enabled },
-  });
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
+      resource: "SystemSetting",
+      resourceId: SUBMISSION_LOCKING_KEY,
+      metadata: { enabled },
+    });
 
-  revalidatePath("/admin/submissions");
-  revalidatePath("/admin/settings/submissions");
-  revalidatePath("/teacher/aral", "layout");
-  return { ok: true };
-}
+    revalidatePath("/admin/submissions");
+    revalidatePath("/admin/settings/submissions");
+    revalidatePath("/teacher/aral", "layout");
+    return { ok: true };
+  },
+  { verb: "save the setting" }
+);
 
 /**
  * Super Admin: is the monthly reading level open to every teacher, or only
@@ -104,39 +95,30 @@ export async function setSubmissionLocking(
  * save into a closed month records no grant, so this row is the only thing that
  * ever explains why the window was open.
  */
-export async function setMonthlyReadingLevelUnlock(
-  formData: FormData
-): Promise<ActionResult> {
-  const admin = await requireUser("SUPER_ADMIN");
+export const setMonthlyReadingLevelUnlock = action(
+  "setMonthlyReadingLevelUnlock",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const admin = await requireUser("SUPER_ADMIN");
 
-  const parsed = setMonthlyReadingLevelUnlockSchema.safeParse({
-    enabled: formData.get("enabled"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+    const { enabled } = parseInput(setMonthlyReadingLevelUnlockSchema, {
+      enabled: formData.get("enabled"),
+    });
 
-  try {
-    await writeSetting(
-      READING_LEVEL_UNLOCK_ALL_KEY,
-      parsed.data.enabled ? "true" : "false"
-    );
-  } catch (err) {
-    console.error("[submissions] setMonthlyReadingLevelUnlock write failed:", err);
-    return { ok: false, error: "Could not save the setting. Please try again." };
-  }
+    await writeSetting(READING_LEVEL_UNLOCK_ALL_KEY, enabled ? "true" : "false");
 
-  await writeAudit({
-    userId: admin.id,
-    schoolId: null,
-    action: AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
-    resource: "SystemSetting",
-    resourceId: READING_LEVEL_UNLOCK_ALL_KEY,
-    metadata: { enabled: parsed.data.enabled },
-  });
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
+      resource: "SystemSetting",
+      resourceId: READING_LEVEL_UNLOCK_ALL_KEY,
+      metadata: { enabled },
+    });
 
-  revalidatePath("/admin/submissions");
-  revalidatePath("/admin/settings/submissions");
-  revalidatePath("/teacher/aral", "layout");
-  return { ok: true };
-}
+    revalidatePath("/admin/submissions");
+    revalidatePath("/admin/settings/submissions");
+    revalidatePath("/teacher/aral", "layout");
+    return { ok: true };
+  },
+  { verb: "save the setting" }
+);

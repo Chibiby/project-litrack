@@ -172,6 +172,23 @@
   }
 }
 
+/* A touch tablet is more likely to run reduced-motion (accessibility settings
+   travel with the device, not the desk). This neutralizes every animation and
+   transition globally — including tailwindcss-animate's data-[state] enter/exit
+   keyframes on dialogs, popovers, selects, etc. — rather than opting each one
+   out individually. `!important` is needed because Tailwind's own utility
+   classes (`duration-*`, `animate-in`, …) are more specific in source order. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Custom: violet section highlight (ARAL Update Data) — keep for ARAL profiling */
 .violet-section {
   background: hsl(var(--violet-soft));

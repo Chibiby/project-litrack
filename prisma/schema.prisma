@@ -1655,6 +1655,19 @@ model Notification {
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
   @@index([schoolId, createdAt])
+  /// The daily retention purge (`purgeExpiredNotifications` /
+  /// `purgeReadNotifications`, src/lib/retention/purge.ts): both delete by
+  /// `WHERE "createdAt" < $cutoff`, one of them additionally filtered on
+  /// `"readAt" IS NOT NULL`. `createdAt` leads so both get an index range
+  /// scan straight to the cutoff instead of a full-table scan; the read-only
+  /// variant's extra predicate is then a cheap filter over that narrowed
+  /// range rather than a second leading column, which a plain (non-partial)
+  /// composite couldn't use to prune the scan any further since `readAt IS
+  /// NOT NULL` isn't a single-value equality. Neither existing index leads
+  /// with `createdAt` — `[recipientId, readAt, createdAt]` needs
+  /// `recipientId` first and `[schoolId, createdAt]` needs `schoolId` first,
+  /// and the purge has neither.
+  @@index([createdAt])
   /// R6 #5. Lookup side of this FK's `SetNull` action — removing an account must
   /// find every notification it caused and null the pointer.
   @@index([actorId])

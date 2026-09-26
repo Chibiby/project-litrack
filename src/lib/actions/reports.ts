@@ -25,8 +25,9 @@ import {
   type ReportScope,
   type ReportTableWithAudit,
 } from "@/lib/reports/queries";
-
-type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+import { action } from "@/lib/errors/action";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 
 /**
  * Reports Hub actions.
@@ -57,20 +58,17 @@ const BUILDERS: Record<
  * teacher narrowing is keyed on `role === "TEACHER"` explicitly rather than on
  * "the role check passed" — the trap `CLAUDE.md` names.
  */
-async function resolveScope(): Promise<
-  { ok: true; scope: ReportScope; userId: string } | { ok: false; error: string }
-> {
+async function resolveScope(): Promise<{ scope: ReportScope; userId: string }> {
   const user = await requireUser(["TEACHER", "SCHOOL_HEAD"]);
-  if (!user.schoolId) return { ok: false, error: "No school assigned" };
+  if (!user.schoolId) throw resourceNotFound("School");
 
   const school = await prisma.school.findFirst({
     where: { id: user.schoolId, deletedAt: null },
     select: { name: true },
   });
-  if (!school) return { ok: false, error: "School not found" };
+  if (!school) throw resourceNotFound("School");
 
   return {
-    ok: true,
     userId: user.id,
     scope: {
       schoolId: user.schoolId,
@@ -111,20 +109,26 @@ async function scopeLabelFor(
   return "All Classes";
 }
 
-export async function generateReport(
-  input: unknown
-): Promise<ActionResult<{ base64: string; filename: string; reportId: string }>> {
+/**
+ * Authorization: `resolveScope` → `requireUser(["TEACHER","SCHOOL_HEAD"])`.
+ * Tenancy: every filter id (section, grade, school year) is verified against
+ * `resolved.scope.schoolId` before any builder runs, and a TEACHER's builder
+ * call is further narrowed by `scope.teacherId` inside each `BUILDERS[kind]`.
+ */
+export const generateReport = action(
+  "generateReport",
+  async (
+    input: unknown
+  ): Promise<{ ok: true; data: { base64: string; filename: string; reportId: string } }> => {
   const resolved = await resolveScope();
-  if (!resolved.ok) return { ok: false, error: resolved.error };
 
-  const parsed = reportGenerateSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = parseInput(reportGenerateSchema, input);
 
-  const { kind, format, purpose, ...filters } = parsed.data;
+  const { kind, format, purpose, ...filters } = parsed;
   if (kind === "CUSTOM") {
-    return { ok: false, error: "Custom reports are not available yet" };
+    throw new AppError("VALIDATION_FAILED", {
+      params: { message: "Custom reports are not available yet" },
+    });
   }
 
   // A real TEACHER (never a Super Admin impersonating the shell — that is
@@ -145,7 +149,9 @@ export async function generateReport(
       })
     );
     const lockMessage = locks[kind];
-    if (lockMessage) return { ok: false, error: lockMessage };
+    if (lockMessage) {
+      throw new AppError("VALIDATION_FAILED", { params: { message: lockMessage } });
+    }
   }
 
   // Every id in the filter set is verified against this tenant before it
@@ -158,32 +164,28 @@ export async function generateReport(
       where: { id: filters.sectionId, schoolId: resolved.scope.schoolId, deletedAt: null },
       select: { id: true },
     });
-    if (!ok) return { ok: false, error: "Not found" };
+    if (!ok) throw resourceNotFound("Section");
   }
   if (filters.gradeLevelId) {
     const ok = await prisma.gradeLevel.findFirst({
       where: { id: filters.gradeLevelId, schoolId: resolved.scope.schoolId, deletedAt: null },
       select: { id: true },
     });
-    if (!ok) return { ok: false, error: "Not found" };
+    if (!ok) throw resourceNotFound("Grade level");
   }
   if (filters.schoolYearId) {
     const ok = await prisma.schoolYear.findFirst({
       where: { id: filters.schoolYearId, schoolId: resolved.scope.schoolId },
       select: { id: true },
     });
-    if (!ok) return { ok: false, error: "Not found" };
+    if (!ok) throw resourceNotFound("School year");
   }
 
-  let buffer: Buffer;
-  let table: ReportTableWithAudit;
-  try {
-    table = await BUILDERS[kind](resolved.scope, filters);
-    buffer = await renderReport(table, format, { purpose, generatedOn: schoolToday() });
-  } catch (err) {
-    console.error("[generateReport] failed:", err);
-    return { ok: false, error: "Could not generate the report. Please try again." };
-  }
+  // Any builder/render failure below is classified and reported by `action()`
+  // (Prisma/system failures get a reference; a bug gets INTERNAL_ERROR) rather
+  // than swallowed into one generic message here.
+  const table: ReportTableWithAudit = await BUILDERS[kind](resolved.scope, filters);
+  const buffer = await renderReport(table, format, { purpose, generatedOn: schoolToday() });
 
   const scopeLabel = await scopeLabelFor(resolved.scope.schoolId, filters);
   // Local date key, never `toISOString()`: the school runs at UTC+8, so between
@@ -244,28 +246,33 @@ export async function generateReport(
     ok: true,
     data: { base64: buffer.toString("base64"), filename, reportId: report.id },
   };
-}
+  },
+  { verb: "generate the report" }
+);
 
-export async function deleteReport(input: unknown): Promise<ActionResult> {
+/**
+ * Authorization: `resolveScope`. Tenancy: scoped to this school AND this
+ * author — a teacher cannot remove a colleague's history row — and the
+ * generic NOT_FOUND means existence in another tenant (or another author's
+ * row) never leaks.
+ */
+export const deleteReport = action(
+  "deleteReport",
+  async (input: unknown): Promise<{ ok: true }> => {
   const resolved = await resolveScope();
-  if (!resolved.ok) return { ok: false, error: resolved.error };
 
-  const parsed = reportIdSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid input" };
+  const parsed = parseInput(reportIdSchema, input);
 
-  // Scoped to this school AND this author: a teacher cannot remove a colleague's
-  // history row, and the generic "Not found" means existence in another tenant
-  // never leaks.
   const existing = await prisma.report.findFirst({
     where: {
-      id: parsed.data.id,
+      id: parsed.id,
       schoolId: resolved.scope.schoolId,
       createdById: resolved.userId,
       deletedAt: null,
     },
     select: { id: true },
   });
-  if (!existing) return { ok: false, error: "Not found" };
+  if (!existing) throw resourceNotFound("Report");
 
   await prisma.report.update({
     where: { id: existing.id },
@@ -284,4 +291,6 @@ export async function deleteReport(input: unknown): Promise<ActionResult> {
   revalidatePath("/teacher/reports");
   revalidatePath("/school-head/reports");
   return { ok: true };
-}
+  },
+  { verb: "delete the report" }
+);

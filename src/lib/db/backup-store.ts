@@ -1,7 +1,15 @@
 import "server-only";
-import { gunzipSync, gzipSync } from "node:zlib";
-import { del, get, list, put } from "@vercel/blob";
-import type { Snapshot } from "@/lib/db/snapshot";
+import {
+  completeMultipartUpload,
+  createMultipartUpload,
+  del,
+  get,
+  list,
+  put,
+  uploadPart,
+  type Part,
+} from "@vercel/blob";
+import { PartBuffer } from "@/lib/db/snapshot-format";
 
 /**
  * Where automatic backups live, and how they rotate.
@@ -64,15 +72,29 @@ export function localDayStamp(at: Date = new Date()): string {
   }).format(at);
 }
 
+/**
+ * New backups are v2 (gzipped NDJSON, see `@/lib/db/snapshot-format`) and are
+ * named `.ndjson.gz`. `.json.gz` is the v1 name, still listed, downloadable and
+ * restorable — restore decides the format from the content, never the name.
+ */
 function pathFor(kind: BackupKind, stamp: string): string {
-  return `${ROOT}/${kind}/${stamp}.json.gz`;
+  return `${ROOT}/${kind}/${stamp}.ndjson.gz`;
 }
 
-function parsePath(pathname: string): { kind: BackupKind; stamp: string } | null {
-  const m = pathname.match(/^litrack\/backups\/(daily|weekly|safety)\/(.+)\.json\.gz$/);
+export function parseBackupPath(pathname: string): { kind: BackupKind; stamp: string } | null {
+  const m = pathname.match(/^litrack\/backups\/(daily|weekly|safety)\/([^/]+?)\.(?:nd)?json\.gz$/);
   if (!m) return null;
   return { kind: m[1] as BackupKind, stamp: m[2] };
 }
+
+const parsePath = parseBackupPath;
+
+/**
+ * Compressed bytes per multipart part. Vercel Blob requires every part but the
+ * last to be at least 5 MB; 8 MiB leaves margin. This is also the upload side's
+ * whole memory cost — one part, briefly two while it is concatenated.
+ */
+export const UPLOAD_PART_BYTES = 8 * 1024 * 1024;
 
 /** Newest first. */
 export async function listBackups(kind?: BackupKind): Promise<StoredBackup[]> {
@@ -96,41 +118,111 @@ export async function listBackups(kind?: BackupKind): Promise<StoredBackup[]> {
     .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
 }
 
+function defaultStamp(kind: BackupKind): string {
+  return kind === "safety" ? new Date().toISOString().replace(/[:.]/g, "-") : localDayStamp();
+}
+
+/** `ArrayBuffer` view of exactly these bytes, which is a type the Blob SDK accepts. */
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+    ? (bytes.buffer as ArrayBuffer)
+    : (bytes.slice().buffer as ArrayBuffer);
+}
+
 /**
- * Write a snapshot into its slot, then drop whatever falls off the end.
+ * Stream an already-compressed backup into its slot, then drop whatever falls
+ * off the end.
+ *
+ * The bytes are uploaded as they arrive, one `UPLOAD_PART_BYTES` part at a
+ * time, so however large the backup is, this holds one part. A backup that
+ * ends before the first part fills goes up in a single `put` instead — one
+ * request rather than three.
+ *
+ * The file only appears at `pathname` when `completeMultipartUpload` runs.
+ * A failure midway (the database dropping, the Worker hitting a limit) leaves
+ * the previous file in the slot untouched, which is the property that makes a
+ * same-day overwrite safe.
+ *
+ * A failure after the first part has been uploaded leaves that multipart
+ * upload's parts orphaned in the store: `@vercel/blob` 2.8 has no abort call.
+ * They are not listed, cannot be downloaded, and do not replace any file, but
+ * they are storage the store still holds.
  *
  * Pruning happens after the write, never before: losing the oldest backup to
  * make room for one that then fails to upload would spend a good backup on
  * nothing.
  */
-export async function saveBackup(
+export type SaveBackupOptions = {
+  /** Defaults to today's Manila date, or an instant for `safety`. */
+  stamp?: string;
+  /**
+   * False to keep every older file of this kind for now. Restore sets it: its
+   * safety snapshot must not prune the undo point it is about to restore
+   * from. The caller then runs `pruneKind` once it is done with that file.
+   */
+  prune?: boolean;
+};
+
+export async function saveBackupStream(
   kind: BackupKind,
-  snapshot: Snapshot,
-  stamp: string = kind === "safety" ? new Date().toISOString().replace(/[:.]/g, "-") : localDayStamp()
+  body: ReadableStream<Uint8Array>,
+  options: SaveBackupOptions = {}
 ): Promise<StoredBackup> {
+  const stamp = options.stamp ?? defaultStamp(kind);
+  const prune = options.prune ?? true;
   if (!isBackupStoreConfigured()) throw new Error(BACKUP_STORE_SETUP_MESSAGE);
 
-  const body = gzipSync(Buffer.from(JSON.stringify(snapshot), "utf8"));
   const pathname = pathFor(kind, stamp);
-
-  const result = await put(pathname, body, {
+  const blobOptions = {
     access: "private",
     // Same-day re-runs replace the day's file rather than accumulating beside
     // it — "new backups override old" applies within a slot as well as across.
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/gzip",
-  });
+  } as const;
 
-  await pruneKind(kind);
+  const buffer = new PartBuffer(UPLOAD_PART_BYTES);
+  const parts: Part[] = [];
+  let upload: { key: string; uploadId: string } | null = null;
+  let size = 0;
 
-  return {
-    kind,
-    stamp,
-    pathname: result.pathname,
-    size: body.byteLength,
-    uploadedAt: new Date(),
+  const flushPart = async () => {
+    const bytes = buffer.take();
+    upload ??= await createMultipartUpload(pathname, blobOptions);
+    // Sequential: a parallel upload would need a second part in memory, which
+    // is the read-ahead this function exists to avoid.
+    parts.push(
+      await uploadPart(pathname, asArrayBuffer(bytes), { ...blobOptions, ...upload, partNumber: parts.length + 1 })
+    );
   };
+
+  const reader = body.getReader();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      buffer.push(value);
+      if (buffer.hasFullPart()) await flushPart();
+    }
+  } catch (err) {
+    // Stop the producer — it is holding a database page and would otherwise
+    // keep reading tables for a backup that can no longer be written.
+    await reader.cancel(err).catch(() => {});
+    throw err;
+  }
+
+  if (upload) {
+    if (buffer.buffered > 0) await flushPart();
+    await completeMultipartUpload(pathname, parts, { ...blobOptions, ...(upload as { key: string; uploadId: string }) });
+  } else {
+    await put(pathname, asArrayBuffer(buffer.take()), blobOptions);
+  }
+
+  if (prune) await pruneKind(kind);
+
+  return { kind, stamp, pathname, size, uploadedAt: new Date() };
 }
 
 /** Delete everything past `RETENTION[kind]`, oldest first. */
@@ -142,12 +234,21 @@ export async function pruneKind(kind: BackupKind): Promise<string[]> {
   return doomed.map((b) => b.pathname);
 }
 
-/** Read one backup back. Returns null when the blob is gone. */
-export async function readBackup(pathname: string): Promise<Snapshot | null> {
+/**
+ * The stored bytes of one backup, as a stream. Null when the blob is gone.
+ *
+ * A stream and not a buffer: both callers (restore, and the download route)
+ * must work on a file bigger than the isolate. Each call is a fresh read, so
+ * restore can open the same backup twice — once to validate, once to write.
+ */
+export async function openBackupStream(
+  pathname: string
+): Promise<{ stream: ReadableStream<Uint8Array>; size: number | null } | null> {
   if (!isBackupStoreConfigured()) throw new Error(BACKUP_STORE_SETUP_MESSAGE);
   if (!parsePath(pathname)) {
-    // Restore takes a pathname from the client. Anything not matching the
-    // backup layout must not become a blob read against an arbitrary path.
+    // Restore and download take a pathname from the client. Anything not
+    // matching the backup layout must not become a blob read against an
+    // arbitrary path.
     throw new Error("Not a backup path");
   }
 
@@ -155,19 +256,7 @@ export async function readBackup(pathname: string): Promise<Snapshot | null> {
   // not a CDN copy of a blob that was overwritten minutes ago at the same path.
   const result = await get(pathname, { access: "private", useCache: false });
   if (!result || result.statusCode !== 200) return null;
-
-  const buf = Buffer.from(await new Response(result.stream).arrayBuffer());
-  return JSON.parse(gunzipSync(buf).toString("utf8")) as Snapshot;
-}
-
-/** Raw gzip bytes, for the authenticated download route. */
-export async function readBackupBytes(pathname: string): Promise<Buffer | null> {
-  if (!isBackupStoreConfigured()) throw new Error(BACKUP_STORE_SETUP_MESSAGE);
-  if (!parsePath(pathname)) throw new Error("Not a backup path");
-
-  const result = await get(pathname, { access: "private", useCache: false });
-  if (!result || result.statusCode !== 200) return null;
-  return Buffer.from(await new Response(result.stream).arrayBuffer());
+  return { stream: result.stream, size: result.blob.size };
 }
 
 export async function deleteBackup(pathname: string): Promise<void> {
@@ -179,13 +268,4 @@ export async function deleteBackup(pathname: string): Promise<void> {
 export async function latestSafetyBackup(): Promise<StoredBackup | null> {
   const [newest] = await listBackups("safety");
   return newest ?? null;
-}
-
-/** Parse an uploaded `.json` or `.json.gz` backup file. */
-export function parseUploadedBackup(bytes: Buffer): unknown {
-  // gzip magic number. Accepting both shapes means an admin can hand back
-  // exactly the file they downloaded, or one they unzipped to look inside.
-  const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-  const text = (isGzip ? gunzipSync(bytes) : bytes).toString("utf8");
-  return JSON.parse(text);
 }

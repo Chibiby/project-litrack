@@ -230,6 +230,38 @@ it's added in, and nothing here does). Additive, no backfill: every existing
 separate, non-Prisma, human-applied file — see its own header and
 `docs/migrate-checklist.md` section **(q)**.
 
+## `20260926000001_notification_created_at_index`
+
+Adds `Notification_createdAt_idx` (`@@index([createdAt])` on `Notification`),
+serving the daily retention purge (`src/lib/retention/purge.ts`):
+`purgeExpiredNotifications` deletes `WHERE "createdAt" < $cutoff` and
+`purgeReadNotifications` deletes `WHERE "readAt" IS NOT NULL AND "createdAt" <
+$cutoff`. Neither existing `Notification` index leads with `createdAt` —
+`[recipientId, readAt, createdAt]` needs `recipientId` first,
+`[schoolId, createdAt]` needs `schoolId` first — so both purge queries were
+doing a full sequential scan. A single plain (non-partial) index on
+`createdAt` serves both: it range-scans straight to the cutoff, and the
+read-only variant's extra `readAt IS NOT NULL` predicate is then a cheap
+filter over that already-narrowed range rather than a second leading index
+column (which wouldn't help further prune the scan anyway, since `IS NOT
+NULL` is not a single-value equality). Index-only, additive, no backfill:
+existing rows are untouched, the index simply gets populated as a background
+build.
+
+**Its one index takes the concurrent-index carve-out** (batch 4 of
+`prisma/concurrent-indexes.sql`), same treatment as batch 1: it is
+index-only, so on the existing production database it is built with
+`CREATE INDEX CONCURRENTLY` via that script, then
+`npx prisma migrate resolve --applied 20260926000001_notification_created_at_index`
+records it as applied without re-running the plain-lock DDL. Every other
+environment (CI, fresh clones, local dev, a new Supabase project) takes it
+through ordinary `npx prisma migrate deploy`.
+
+**Rollback.** `DROP INDEX CONCURRENTLY IF EXISTS "Notification_createdAt_idx"`
+(psql only, same transaction-block restriction as the build) — safe at any
+time, since nothing depends on the index for correctness, only for scan
+cost.
+
 ## Preview features
 
 `generator client` has `previewFeatures = ["relationJoins"]` (R4.2), so the engine fetches relations in one `LATERAL` join instead of one round trip per relation.
@@ -257,13 +289,14 @@ Index-only migrations have a second, hand-applied artifact. `20260823000001_add_
 
 The split is forced, not stylistic: plain `CREATE INDEX` holds an ACCESS EXCLUSIVE lock for the whole build (blocking all reads and writes on that table), while `CREATE INDEX CONCURRENTLY` takes only SHARE UPDATE EXCLUSIVE but **cannot run inside a transaction block** — and `prisma migrate deploy` wraps every migration file in one.
 
-`prisma/concurrent-indexes.sql` now holds **three batches**, 16 indexes in total:
+`prisma/concurrent-indexes.sql` now holds **four batches**, 17 indexes in total:
 
 | Batch | Indexes | Migration | Bookkeeping after running the script |
 |---|---|---|---|
 | 1 | 12 (R6 / Phase 4) | `20260823000001_add_perf_indexes` | `migrate resolve --applied` — the carve-out |
 | 2 | `User_deletedAt_idx`, `Learner_deletedAt_idx` | `20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes` | **`migrate deploy`. Never resolve.** |
 | 3 | `TermGrade_learnerId_schoolYearId_term_termSubjectId_key`, `TermGrade_termSubjectId_idx` | `20260915000001_term_subject_table` | **`migrate deploy`. Never resolve.** |
+| 4 | `Notification_createdAt_idx` | `20260926000001_notification_created_at_index` | `migrate resolve --applied` — the carve-out (index-only, like batch 1) |
 
 **The batch 2 exception matters.** The carve-out in `docs/migrate-checklist.md` (b1) is scoped, in its own words, to *index-only* migrations, and batch 2's migration is not one: alongside the two indexes it drops `NOT NULL` on nine columns and rewrites nine foreign keys from `ON DELETE RESTRICT` to `ON DELETE SET NULL`. `resolve --applied` writes the bookkeeping row and runs no SQL, so resolving it would record it as done while silently skipping all of that — the database would keep enforcing `RESTRICT` against a `schema.prisma` that promises `SET NULL`, and a teacher purge would fail with `P2003` for a reason nothing in the code explains.
 

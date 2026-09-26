@@ -121,7 +121,7 @@ export function AssistantTicketForm({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8 shrink-0"
+          className="size-11 shrink-0 lg:size-8"
           onClick={onBack}
         >
           <ArrowLeft className="size-4" aria-hidden />

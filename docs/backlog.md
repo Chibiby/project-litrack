@@ -2,7 +2,7 @@
 
 ## Architecture decisions (manager-approved)
 
-1. **Stack**: keep Next.js 14.2.28 / React 18.3.1; fix docs. No major upgrades.
+1. **Stack**: Next.js 16.3.5 / React 19.2.8 (upgraded from the original 14.2.28 / 18.3.1 decision below; see `package.json` for the authoritative version).
 2. **Auth (Supabase Auth retained)**:
    - School Head: school selection stays (DOCX W-1), but School ID stops being the password. School creation issues a one-time activation credential (strong random, shown once to Super Admin / optionally emailed). First login forces setting a private password (`mustChangePassword`). Password change + email-based recovery where a real email exists; Super Admin can regenerate activation credentials (audited).
    - Teacher onboarding: ONE flow. School Head adds a teacher (full name per DOCX, grade/section assignment, optional email) → `TeacherInvite` record with one-time activation credential + expiry; delivered on-screen and via Resend when email present. Teacher activates (sets own password), completes profiling, then works. Invite supports resend (regenerate credential) and revoke. The old unwired token-email path and the weak `createTeacherDirect` path are merged into this.

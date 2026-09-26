@@ -76,7 +76,7 @@ export function AralSectionFilter({
             Grade
             <select
               name="grade"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              className="h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground lg:h-8"
               defaultValue={grade === "all" ? "" : grade}
               onChange={(e) => {
                 // Section IDs are grade-scoped — clear when grade changes.
@@ -103,7 +103,7 @@ export function AralSectionFilter({
             Section
             <select
               name="section"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              className="h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground lg:h-8"
               defaultValue={section === "all" ? "" : section}
               onChange={(e) => e.currentTarget.form?.requestSubmit()}
               aria-label="Filter ARAL learners by section"

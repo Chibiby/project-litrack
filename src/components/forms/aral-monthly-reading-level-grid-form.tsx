@@ -545,7 +545,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-11 lg:size-8"
                 aria-label={`Actions for ${learner.fullName}`}
               >
                 <MoreVertical className="size-4" aria-hidden />
@@ -761,7 +761,7 @@ function BandSelect({
           aria-label={label}
           title={selected ? `${selected.code} — ${selected.label}` : "Not assessed"}
           className={cn(
-            "flex h-8 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
+            "flex h-11 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 lg:h-8",
             selected ? selected.tone : TONE_EMPTY
           )}
         >
@@ -849,7 +849,7 @@ function RemarksCell({
               : `Add remarks for ${learnerName}`
           }
           className={cn(
-            "mx-auto size-8",
+            "mx-auto size-11 lg:size-8",
             filled &&
               "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
           )}

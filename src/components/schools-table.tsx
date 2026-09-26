@@ -304,9 +304,10 @@ function SchoolsTableInner({
   const detailHref = (id: string) => `${basePath}/${id}`;
   const DetailIcon = caps.edit ? Pencil : Eye;
   const detailVerb = caps.edit ? "Edit" : "View";
-  // Both lists stay card lists through tablet widths, so their controls keep a
-  // 40px target there; `size="sm"` drops to 36px from `sm` up.
-  const mobileTouch = "sm:h-10";
+  // Both lists stay card lists through tablet widths (this block is
+  // `lg:hidden`), so their controls keep the full 44px touch floor all the
+  // way to `lg` rather than the 36px `size="sm"` collapses to from `sm` up.
+  const mobileTouch = "h-11";
   const navigate = useListNavigate();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -513,7 +514,7 @@ function SchoolsTableInner({
             type="button"
             variant="outline"
             size="sm"
-            className={cn("w-full sm:w-auto", isAdminColumns && "sm:h-10 lg:h-9")}
+            className={cn("w-full sm:w-auto", isAdminColumns && "lg:h-9")}
             onClick={() => pushList({ page: 1, q: searchValue.trim() })}
           >
             Search
@@ -523,7 +524,7 @@ function SchoolsTableInner({
               type="button"
               variant="ghost"
               size="sm"
-              className={cn("w-full sm:w-auto", isAdminColumns && "sm:h-10 lg:h-9")}
+              className={cn("w-full sm:w-auto", isAdminColumns && "lg:h-9")}
               onClick={() => {
                 setSearchValue("");
                 pushList({ page: 1, q: "", region: "", status: "" });
@@ -740,7 +741,7 @@ function SchoolsTableInner({
                       href={detailHref(school.id)}
                       className={cn(
                         "font-medium underline-offset-4 hover:underline",
-                        "max-lg:inline-flex max-lg:min-h-10 max-lg:items-center"
+                        "max-lg:inline-flex max-lg:min-h-11 max-lg:items-center"
                       )}
                     >
                       {school.name}
@@ -810,7 +811,7 @@ function SchoolsTableInner({
                     schoolId={school.id}
                     schoolName={school.name}
                     onCredential={setCredential}
-                    className="size-11 sm:size-10"
+                    className="size-11"
                   />
                 ) : null}
                 {caps.delete ? (
@@ -863,7 +864,7 @@ function SchoolsTableInner({
         <SchoolsPager
           list={list}
           hrefFor={(l, page) => hrefFor(l, page, basePath)}
-          buttonClassName={isAdminColumns ? "sm:h-10 lg:h-9" : undefined}
+          buttonClassName={isAdminColumns ? "lg:h-9" : undefined}
         />
       ) : null}
     </div>

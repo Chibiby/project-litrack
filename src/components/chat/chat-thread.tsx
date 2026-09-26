@@ -294,7 +294,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
             onChange={(event) => handleDraftChange(event.target.value)}
             placeholder="Write a message. Use @ to mention someone."
             aria-label="Message"
-            className="h-11 text-[13px] sm:h-9"
+            className="h-11 text-[13px] lg:h-9"
             disabled={!channel}
           />
           <Button
@@ -302,7 +302,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
             size="icon"
             aria-label="Send message"
             disabled={!draft.trim() || sending || !channel}
-            className="size-11 shrink-0 sm:size-9"
+            className="size-11 shrink-0 lg:size-9"
           >
             <Send className="size-4" aria-hidden />
           </Button>

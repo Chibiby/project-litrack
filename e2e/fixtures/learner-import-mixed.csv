@@ -1,0 +1,4 @@
+firstName,middleName,lastName,age,gender,ethnicity,ethnicityOther,secondaryEthnicity,secondaryEthnicityOther,section,englishReadingProfile,englishFrustrationSubtypes,filipinoReadingProfile,filipinoFrustrationSubtypes,governmentBenefits,parentEducation,modeOfTransportation,distanceHomeToSchool,previousTransfers,transferDetails,isAralLearner
+E2E,Mixed,Valid,9,FEMALE,BISAYA,,,,,INSTRUCTIONAL_DEVELOPING,,INDEPENDENT_GRADE_READY,,FOUR_PS,SECONDARY_GRADUATE,WALKING,LESS_THAN_1KM,NONE,,false
+E2E,Mixed,BadGender,9,NOT_A_GENDER,BISAYA,,,,,INSTRUCTIONAL_DEVELOPING,,INDEPENDENT_GRADE_READY,,FOUR_PS,SECONDARY_GRADUATE,WALKING,LESS_THAN_1KM,NONE,,false
+E2E,Mixed,NoAge,,FEMALE,BISAYA,,,,,INSTRUCTIONAL_DEVELOPING,,INDEPENDENT_GRADE_READY,,FOUR_PS,SECONDARY_GRADUATE,WALKING,LESS_THAN_1KM,NONE,,false

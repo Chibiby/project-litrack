@@ -2,7 +2,7 @@
 
 Multi-tenant school management web app for DepEd schools to identify and track learners struggling with reading (ARAL program).
 
-**Stack:** Next.js 14.2.28 (App Router), React 18.3.1, TypeScript (strict), Supabase (Auth + Postgres), Prisma 5, Tailwind CSS, shadcn/ui, React Hook Form + Zod, Resend (email), Recharts, papaparse + exceljs, Vitest + Playwright.
+**Stack:** Next.js 16.3.5 (App Router), React 19.2.8, TypeScript (strict), Supabase (Auth + Postgres), Prisma 6, Tailwind CSS, shadcn/ui, React Hook Form + Zod, Resend (email), Recharts, papaparse + exceljs, Vitest + Playwright.
 
 ---
 

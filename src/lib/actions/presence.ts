@@ -17,6 +17,16 @@ export type PresenceActionResult =
  * The payload deliberately contains no identity or timestamp. The session and
  * server clock own both, and the atomic predicate keeps a replayed client from
  * turning activity tracking into an unbounded write loop.
+ *
+ * Deliberately NOT wrapped in `action()`. This fires on a 60s heartbeat from
+ * every active teacher session (`TeacherPresenceHeartbeat`), so a transient
+ * pool hiccup here is routine, not noteworthy — running it through `action()`
+ * would classify every one of those hiccups as a `system`-severity failure,
+ * writing an `ErrorEvent` row (and eligible for an alert email) for something
+ * that is expected to happen occasionally at this call volume and that the
+ * caller already treats as fire-and-forget (`.catch(() => undefined)`). The
+ * hand-rolled try/catch below keeps doing what it always did: swallow the
+ * failure and let the next heartbeat retry.
  */
 export async function recordTeacherPresence(): Promise<PresenceActionResult> {
   const user = await requireUser("TEACHER", false);

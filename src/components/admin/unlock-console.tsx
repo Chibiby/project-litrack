@@ -465,7 +465,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
                         confirmLabel="Confirm revoke"
                         variant="destructive"
                         trigger={
-                          <Button variant="outline" size="sm" className="sm:h-10 lg:h-9">
+                          <Button variant="outline" size="sm" className="lg:h-9">
                             Revoke
                           </Button>
                         }

@@ -130,7 +130,7 @@ function DangerAction({
             type="button"
             variant="outline"
             size="sm"
-           className="sm:h-10 lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+           className="lg:h-9 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => setOpen(true)}
           >
             {label}
@@ -168,7 +168,7 @@ function DangerAction({
               type="button"
               variant="destructive"
               size="sm"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               disabled={!ready}
               loading={pending}
               loadingText="Running…"
@@ -187,7 +187,7 @@ function DangerAction({
               type="button"
               variant="ghost"
               size="sm"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               disabled={pending}
               onClick={() => {
                 setTyped("");
@@ -309,7 +309,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               <Button
                 type="button"
                 size="sm"
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
                 disabled={disabled}
                 loading={backingUp}
                 loadingText="Backing up…"
@@ -379,7 +379,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                       <TableCell className="text-sm tabular-nums">{formatBytes(b.size)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap justify-end gap-1">
-                          <Button asChild variant="ghost" size="sm" className="sm:h-10 lg:h-9">
+                          <Button asChild variant="ghost" size="sm" className="lg:h-9">
                             <a
                               href={`/api/admin/backups/download?path=${encodeURIComponent(b.pathname)}`}
                               aria-label={`Download the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
@@ -392,7 +392,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="sm:h-10 lg:h-9"
+                            className="lg:h-9"
                             disabled={disabled || restoring}
                             onClick={() => {
                               const typed = window.prompt(
@@ -418,7 +418,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                               type="button"
                               variant="ghost"
                               size="sm"
-                             className="sm:h-10 lg:h-9 text-destructive hover:text-destructive"
+                             className="lg:h-9 text-destructive hover:text-destructive"
                               disabled={disabled}
                               aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
                               onClick={() => {

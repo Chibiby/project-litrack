@@ -107,7 +107,7 @@ export async function AdminIpAdvisorySection() {
   const kinds = collapseKindsToOthers(data?.ipKinds ?? [], 5);
 
   const viewAll = (
-    <Button asChild size="sm" variant="outline" className="sm:h-10 lg:h-9">
+    <Button asChild size="sm" variant="outline" className="lg:h-9">
       <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
     </Button>
   );
@@ -230,7 +230,7 @@ export async function AdminRecentSchoolsSection() {
             The newest schools. Your first view of each is audited, once per 8 hours.
           </p>
         </div>
-        <Button asChild size="sm" variant="outline" className="sm:h-10 lg:h-9">
+        <Button asChild size="sm" variant="outline" className="lg:h-9">
           <PrefetchLink href="/admin/schools">All schools</PrefetchLink>
         </Button>
       </SurfaceHeader>

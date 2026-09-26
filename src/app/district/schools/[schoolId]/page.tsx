@@ -104,7 +104,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
       role={user.role}
       userName={user.fullName || user.email}
       actions={
-        <Button asChild variant="outline" size="sm" className="sm:h-10 lg:h-9">
+        <Button asChild variant="outline" size="sm" className="lg:h-9">
           <Link href={DISTRICT_ROUTES.schools}>
             <ChevronLeft aria-hidden />
             All schools
@@ -150,7 +150,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
                 schoolId={school.id}
                 isActive={school.isActive}
                 schoolName={school.name}
-                className="sm:h-10 lg:h-9"
+                className="lg:h-9"
               />
             </div>
           </Surface>

@@ -69,7 +69,7 @@ export function ResetAllSchoolsTermSubjectsButton() {
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline" className="sm:h-10 lg:h-9">
+        <Button type="button" size="sm" variant="outline" className="lg:h-9">
           <RotateCcw className="h-4 w-4" aria-hidden />
           Reset all schools to default
         </Button>

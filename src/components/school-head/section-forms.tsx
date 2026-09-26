@@ -127,7 +127,7 @@ export function SectionRowActions({
         <Input
           name="name"
           defaultValue={name}
-          className="w-36 max-lg:w-full max-lg:flex-1 max-lg:min-w-0 max-sm:h-11 sm:h-10 lg:h-10"
+          className="w-36 max-lg:w-full max-lg:flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
           maxLength={100}
           autoCapitalize="words"
           disabled={isPending}
@@ -139,7 +139,7 @@ export function SectionRowActions({
           variant="outline"
           loading={isPending}
           loadingText="Saving…"
-          className="sm:h-10 lg:h-9"
+          className="lg:h-9"
         >
           Save
         </Button>
@@ -155,7 +155,7 @@ export function SectionRowActions({
             type="button"
             size="sm"
             variant="ghost"
-            className="text-destructive sm:h-10 lg:h-9"
+            className="text-destructive lg:h-9"
             disabled={isPending}
           >
             Delete
@@ -295,7 +295,7 @@ export function GradeSectionsPanel({
                 maxLength={100}
                 autoCapitalize="words"
                 disabled={pending}
-                className="max-sm:h-11 sm:h-10 lg:h-10"
+                className="max-sm:h-11 lg:h-10"
               />
             </div>
             <Button
@@ -304,7 +304,7 @@ export function GradeSectionsPanel({
               variant="outline"
               loading={pending}
               loadingText="Saving…"
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
             >
               Add
             </Button>
@@ -327,7 +327,7 @@ export function GradeSectionsPanel({
               type="submit"
               size="sm"
               disabled={pending || !nextLetter}
-              className="sm:h-10 lg:h-9"
+              className="lg:h-9"
               title={
                 nextLetter
                   ? `Quick-add section ${nextLetter}`

@@ -6,9 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LITRACK — multi-tenant school management app for DepEd schools tracking learners in the ARAL reading program. Three roles: `SUPER_ADMIN`, `SCHOOL_HEAD`, `TEACHER`. `School` is the tenant root; nearly every table carries `schoolId`.
 
-**Stack (authoritative source is `package.json`):** Next.js 16.3 App Router · React 19 · TypeScript strict · Prisma 5 → Supabase Postgres · Supabase Auth (`@supabase/ssr`) · Zod · Tailwind + shadcn/ui · Recharts · papaparse + exceljs · Resend · Vitest + Playwright.
-
-> `README.md`, `DOCUMENTATION.md`, and `docs/backlog.md` still claim Next 14.2.28 / React 18.3.1. That is stale — the repo is on Next 16 / React 19. Trust `package.json`.
+**Stack (authoritative source is `package.json`):** Next.js 16.3 App Router · React 19 · TypeScript strict · Prisma 6 → Supabase Postgres · Supabase Auth (`@supabase/ssr`) · Zod · Tailwind + shadcn/ui · Recharts · papaparse + exceljs · Resend · Vitest + Playwright.
 
 ## Commands
 

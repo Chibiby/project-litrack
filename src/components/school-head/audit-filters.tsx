@@ -115,7 +115,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
         type="button"
         size="sm"
         variant="outline"
-        className="sm:h-10 lg:h-9"
+        className="lg:h-9"
         onClick={() => push({ q, from: from || null, to: to || null })}
       >
         Apply
@@ -125,7 +125,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           type="button"
           size="sm"
           variant="ghost"
-          className="sm:h-10 lg:h-9"
+          className="lg:h-9"
           onClick={() => {
             setQ("");
             setFrom("");

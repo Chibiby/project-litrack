@@ -387,7 +387,7 @@ export function AralWeeklyAttendancePanel({
                   <SelectTrigger
                     id="aral-attendance-sort"
                     aria-label="Sort by"
-                    className="h-11 w-full gap-1.5 max-sm:col-span-2 sm:h-9 sm:w-56"
+                    className="h-11 w-full gap-1.5 max-sm:col-span-2 sm:w-56 lg:h-9"
                   >
                     <span className="text-muted-foreground">Sort by</span>
                     <SelectValue />
@@ -418,7 +418,7 @@ export function AralWeeklyAttendancePanel({
                     disabled={actionsLocked}
                     loading={savePending}
                     loadingText="Saving…"
-                    className="h-11 sm:h-9"
+                    className="h-11 lg:h-9"
                   >
                     <Save className="h-4 w-4" aria-hidden />
                     Save

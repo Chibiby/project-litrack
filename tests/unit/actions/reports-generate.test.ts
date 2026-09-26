@@ -174,7 +174,7 @@ describe("generateReport — locked report kinds", () => {
 
     const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
 
-    expect(res).toEqual({ ok: false, error: VOLUNTEER_MESSAGE });
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: VOLUNTEER_MESSAGE });
     expect(reportCreate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
@@ -184,7 +184,7 @@ describe("generateReport — locked report kinds", () => {
 
     const res = await generateReport({ kind: "TERM_GRADES", format: "EXCEL" });
 
-    expect(res).toEqual({ ok: false, error: FLOATING_MESSAGE });
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: FLOATING_MESSAGE });
     expect(reportCreate).not.toHaveBeenCalled();
   });
 
@@ -249,7 +249,7 @@ describe("generateReport — tenancy", () => {
       sectionId: "section-foreign",
     });
 
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(attendanceFindMany).not.toHaveBeenCalled();
     expect(reportCreate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
@@ -270,7 +270,7 @@ describe("generateReport — tenancy", () => {
       gradeLevelId: "grade-foreign",
     });
 
-    expect(res).toEqual({ ok: false, error: "Not found" });
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(attendanceFindMany).not.toHaveBeenCalled();
   });
 });
@@ -341,7 +341,7 @@ describe("generateReport — history and audit", () => {
   it("refuses an unknown purpose before any query", async () => {
     const res = await generateReport({ kind: "ATTENDANCE", format: "EXCEL", purpose: "POSTER" });
 
-    expect(res).toEqual({ ok: false, error: "Choose Print or Records" });
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: "Choose Print or Records" });
     expect(attendanceFindMany).not.toHaveBeenCalled();
   });
 

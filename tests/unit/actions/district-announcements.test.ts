@@ -366,7 +366,7 @@ describe("I13 — a School Head cannot edit or delete a broadcast", () => {
       deletedAt: null,
       broadcastId: null,
     });
-    expect(result).toEqual({ ok: false, error: "Announcement not found" });
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(announcementUpdate).not.toHaveBeenCalled();
   });
 
@@ -383,6 +383,6 @@ describe("I13 — a School Head cannot edit or delete a broadcast", () => {
       deletedAt: null,
       broadcastId: null,
     });
-    expect(result).toEqual({ ok: false, error: "Announcement not found" });
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 });

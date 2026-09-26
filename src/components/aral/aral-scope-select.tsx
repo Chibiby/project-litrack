@@ -134,7 +134,7 @@ export function AralSectionSelect({
     >
       <SelectTrigger
         aria-label="Section"
-        className={cn("h-11 sm:h-9", className)}
+        className={cn("h-11 lg:h-9", className)}
       >
         <SelectValue placeholder="All sections" />
       </SelectTrigger>

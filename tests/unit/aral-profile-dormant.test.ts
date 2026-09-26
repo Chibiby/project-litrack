@@ -60,7 +60,7 @@ describe("ARAL Profile — preserved, not deleted", () => {
 
   it("keeps saveAralProfile with its guards intact", () => {
     const source = read("src/lib/actions/aral.ts");
-    expect(source).toContain("export async function saveAralProfile");
+    expect(source).toMatch(/export (async function|const) saveAralProfile\b/);
     expect(source).toContain("aralProfileSchema");
     // Dormant must not mean unguarded: a typed URL still hits the real action.
     expect(source).toContain("writeAudit");

@@ -90,10 +90,10 @@ function PageTitleBlock({
         ) : null}
       </div>
       {actions != null && (
-        // Stacked full-width on a phone. Left to wrap, buttons of unequal
-        // natural width break into a ragged staircase — and labels like "End of
-        // terms reports" have no half-row to fit into.
-        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+        // Stacked full-width below `lg` (phone and tablet). Left to wrap, buttons
+        // of unequal natural width break into a ragged staircase — and labels
+        // like "End of terms reports" have no half-row to fit into.
+        <div className="flex w-full flex-col items-stretch gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center">
           {actions}
         </div>
       )}

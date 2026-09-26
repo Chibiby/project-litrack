@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { readBackupBytes, isBackupStoreConfigured } from "@/lib/db/backup-store";
+import { openBackupStream, isBackupStoreConfigured } from "@/lib/db/backup-store";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { route } from "@/lib/errors/route";
 import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
@@ -46,30 +46,32 @@ export const GET = route("GET /api/admin/backups/download", async (request: Next
   if (!pathname) throw fieldError("path", "Which backup? The link is missing its file name.");
 
   {
-    // `readBackupBytes` rejects anything outside the backup layout, so a
+    // `openBackupStream` rejects anything outside the backup layout, so a
     // crafted `path` cannot turn this into a read of an arbitrary blob.
-    const bytes = await readBackupBytes(pathname);
-    if (!bytes) throw resourceNotFound("Backup");
+    const opened = await openBackupStream(pathname);
+    if (!opened) throw resourceNotFound("Backup");
 
     await writeAudit({
       userId: user.id,
       action: AUDIT_ACTIONS.DB_BACKUP_DOWNLOAD,
       resource: "Database",
       resourceId: pathname,
-      metadata: { bytes: bytes.byteLength },
+      metadata: { bytes: opened.size },
     });
 
     const filename = `litrack-${pathname.split("/").slice(-2).join("-")}`;
 
-    return new NextResponse(new Uint8Array(bytes), {
-      headers: {
-        "Content-Type": "application/gzip",
-        "Content-Length": String(bytes.byteLength),
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        // A backup is a point-in-time secret. Nothing between here and the
-        // admin's disk should keep a copy.
-        "Cache-Control": "no-store, max-age=0",
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": "application/gzip",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      // A backup is a point-in-time secret. Nothing between here and the
+      // admin's disk should keep a copy.
+      "Cache-Control": "no-store, max-age=0",
+    };
+    if (opened.size !== null) headers["Content-Length"] = String(opened.size);
+
+    // Piped straight through rather than buffered: the file can be larger
+    // than a Worker isolate's memory, which is why backups stream at all.
+    return new NextResponse(opened.stream, { headers });
   }
 });

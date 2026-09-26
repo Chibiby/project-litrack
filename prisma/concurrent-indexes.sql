@@ -1,5 +1,5 @@
 -- PROJECT LITRACK — concurrent index builds for the EXISTING production database
--- 16 indexes across 10 tables, in three batches:
+-- 17 indexes across 10 tables, in four batches:
 --
 --   BATCH 1 (12 indexes) — R6 / Phase 4, for migration
 --     20260823000001_add_perf_indexes.
@@ -8,6 +8,9 @@
 --   BATCH 3 (2 indexes)  — the term-subjects ON CONFLICT target and its FK
 --     lookup side on "TermGrade", for migration
 --     20260915000001_term_subject_table.
+--   BATCH 4 (1 index)    — the Notification retention purge's "createdAt"
+--     range scan, for migration
+--     20260926000001_notification_created_at_index.
 --
 -- THE BATCHES HAVE DIFFERENT BOOKKEEPING. Batch 1's migration is index-only, so
 -- it takes the `migrate resolve --applied` carve-out. Batch 2's migration also
@@ -15,9 +18,11 @@
 -- be resolved. Batch 3's migration also creates "TermSubject", adds
 -- "TermGrade"."termSubjectId" and its FK, and backfills every existing row — also
 -- not index-only, so it too MUST go through `migrate deploy` and must NEVER be
--- resolved. Step 5 below spells this out; getting it wrong silently skips the
--- non-index half of whichever batch it is applied to. Running this file is safe
--- and idempotent regardless of which batches a given database has already taken.
+-- resolved. Batch 4's migration is index-only again, like batch 1, so it takes
+-- the `migrate resolve --applied` carve-out too. Step 5 below spells this out;
+-- getting it wrong silently skips the non-index half of whichever batch it is
+-- applied to. Running this file is safe and idempotent regardless of which
+-- batches a given database has already taken.
 --
 -- Run this with psql on DIRECT_URL (port 5432 / session mode) BEFORE the
 -- bookkeeping / deploy step. Sibling in spirit to prisma/rls-policies.sql: an
@@ -108,7 +113,7 @@
 --      error was. Conversely, a zero exit with no table in front of you means
 --      you are not looking at the end of the output, not that the query is missing.
 --
---   5. Bookkeeping — DIFFERENT PER BATCH. Read all three bullets.
+--   5. Bookkeeping — DIFFERENT PER BATCH. Read all four bullets.
 --
 --      BATCH 1 — record the migration as applied WITHOUT re-running its SQL:
 --        npx prisma migrate resolve --applied 20260823000001_add_perf_indexes
@@ -147,6 +152,14 @@
 --      for the app to read — a P2021/P2022 outage the moment the term-subjects
 --      code deploys. Running this file first only pre-builds the two indexes;
 --      `prisma migrate deploy` still applies the rest of that migration.
+--
+--      BATCH 4 — record the migration as applied WITHOUT re-running its SQL,
+--      same as batch 1:
+--        npx prisma migrate resolve --applied 20260926000001_notification_created_at_index
+--
+--      20260926000001_notification_created_at_index is index-only — one
+--      `CREATE INDEX` on "Notification", nothing else. Skipping this step
+--      leaves the migration pending forever, same consequence as batch 1.
 --
 --   6. `npx prisma migrate status` again — expect no pending migrations.
 --
@@ -188,9 +201,17 @@
 -- batch 2 in prisma/migrations/
 -- 20260912000001_archive_purge_recorder_setnull_and_deleted_at_indexes/
 -- migration.sql, batch 3 in
--- prisma/migrations/20260915000001_term_subject_table/migration.sql — and all
--- were taken from `prisma migrate diff --script` output generated from
--- prisma/schema.prisma. That is what makes each migration's IF NOT EXISTS a
+-- prisma/migrations/20260915000001_term_subject_table/migration.sql, batch 4
+-- in prisma/migrations/20260926000001_notification_created_at_index/
+-- migration.sql. Batches 1-3's names were taken from `prisma migrate diff
+-- --script` output generated from prisma/schema.prisma. Batch 4's could not
+-- be generated the same way — `prisma migrate diff` needs a reachable shadow
+-- database, which this offline authoring step does not have — so it instead
+-- follows the same `<Model>_<field>_idx` convention as the sibling
+-- single-column indexes above (e.g. "Notification_actorId_idx",
+-- "AuditLog_timestamp_idx"). Whoever applies this should confirm the name
+-- with a real `prisma migrate diff --script` run before running this file.
+-- That naming discipline is what makes each migration's IF NOT EXISTS a
 -- real safety net rather than decoration: after this file runs, the matching
 -- statements in the migration become no-ops on this database. Rename an index
 -- in one file and you must rename it in the other and in schema.prisma (via
@@ -289,6 +310,28 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_learnerId_schoolYearId
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_termSubjectId_idx" ON "TermGrade"("termSubjectId");
 
 -- ============================================================================
+-- BATCH 4 — Notification retention purge (migration
+-- 20260926000001_notification_created_at_index)
+--
+-- This is the reason to run this file again on a database that already took
+-- batches 1-3. Their statements above skip harmlessly.
+--
+-- REMINDER: after this file, batch 4 needs
+-- `migrate resolve --applied 20260926000001_notification_created_at_index`,
+-- same as batch 1 — this migration is index-only.
+-- ============================================================================
+
+-- The daily retention purge (src/lib/retention/purge.ts): both
+-- purgeExpiredNotifications (`WHERE "createdAt" < $cutoff`) and
+-- purgeReadNotifications (`WHERE "readAt" IS NOT NULL AND "createdAt" <
+-- $cutoff`) need an index leading with "createdAt". Neither existing
+-- Notification index qualifies — [recipientId, readAt, createdAt] and
+-- [schoolId, createdAt] both need a different column first — so both purge
+-- queries were doing a full sequential scan of a table every notification
+-- ever sent writes into.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "Notification_createdAt_idx" ON "Notification"("createdAt");
+
+-- ============================================================================
 -- VERIFY — runs automatically as part of this file, BEFORE `migrate resolve`
 -- ============================================================================
 --
@@ -303,13 +346,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_termSubjectId_idx" ON "TermGr
 --
 -- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
---   Expect exactly 16 rows, every one with valid = t.
+--   Expect exactly 17 rows, every one with valid = t.
 --
---   Fewer than 16 rows => that index was never built. Re-run this whole file
+--   Fewer than 17 rows => that index was never built. Re-run this whole file
 --                         (every statement is IF NOT EXISTS-guarded). Exactly 12
---                         rows (batch 1 only) or 14 rows (batches 1-2) is the
---                         expected state of a database that last ran an earlier
---                         version of this file — the same remedy applies.
+--                         rows (batch 1 only), 14 rows (batches 1-2), or 16 rows
+--                         (batches 1-3) is the expected state of a database
+--                         that last ran an earlier version of this file — the
+--                         same remedy applies.
 --   valid = f          => that build FAILED. Drop it with
 --                         DROP INDEX CONCURRENTLY (see "IF A BUILD FAILS" above,
 --                         and note it needs psql for the same transaction
@@ -354,6 +398,7 @@ WHERE c.relname IN (
   'User_deletedAt_idx',
   'Learner_deletedAt_idx',
   'TermGrade_learnerId_schoolYearId_term_termSubjectId_key',
-  'TermGrade_termSubjectId_idx'
+  'TermGrade_termSubjectId_idx',
+  'Notification_createdAt_idx'
 )
 ORDER BY c.relname;

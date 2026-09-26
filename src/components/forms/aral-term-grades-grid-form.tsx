@@ -676,7 +676,7 @@ function NextSubjectsButton({ onClick, windows }: { onClick: () => void; windows
       type="button"
       variant="ghost"
       size="icon"
-      className="size-8 justify-self-end text-muted-foreground"
+      className="size-11 justify-self-end text-muted-foreground lg:size-8"
       onClick={onClick}
       disabled={windows <= 1}
       aria-label="Next subjects"

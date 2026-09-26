@@ -59,7 +59,7 @@ export default async function SchoolDetailPage({ params, searchParams }: PagePro
             .filter((part): part is string => Boolean(part?.trim()))
             .join(" · ") || undefined}
           topRight={
-            <Button asChild variant="ghost" size="sm" className="sm:h-10 lg:h-9">
+            <Button asChild variant="ghost" size="sm" className="lg:h-9">
               <Link href="/admin/schools">
                 <ChevronLeft aria-hidden />
                 <span className="max-sm:sr-only">All schools</span>

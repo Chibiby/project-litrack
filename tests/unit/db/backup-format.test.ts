@@ -7,12 +7,18 @@ beforeAll(() => {
   process.env.BLOB_READ_WRITE_TOKEN = "test-token";
 });
 
+// Loaded once at collection rather than inside the first test: the snapshot
+// module pulls in Prisma and the Blob SDK, and on a busy machine that first
+// load alone could exceed a test's 5s timeout.
+const storeModule = await import("@/lib/db/backup-store");
+const snapshotModule = await import("@/lib/db/snapshot");
+
 async function store() {
-  return import("@/lib/db/backup-store");
+  return storeModule;
 }
 
 async function snapshotMod() {
-  return import("@/lib/db/snapshot");
+  return snapshotModule;
 }
 
 /** A structurally valid snapshot: every model present, even if empty. */
@@ -74,25 +80,77 @@ describe("snapshot validation", () => {
   });
 });
 
-describe("uploaded file parsing", () => {
-  it("reads a gzipped backup, which is what Download produces", async () => {
-    const { parseUploadedBackup } = await store();
-    const original = validSnapshotObject();
-    const bytes = gzipSync(Buffer.from(JSON.stringify(original), "utf8"));
+/** An opener over fixed bytes, re-openable like a stored blob or an uploaded File. */
+function opener(bytes: Uint8Array | string) {
+  const data = typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+  return async () =>
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(data);
+        c.close();
+      },
+    });
+}
 
-    expect(parseUploadedBackup(bytes)).toEqual(original);
+/**
+ * v1 files predate streaming but are still in storage and on admins' disks,
+ * so restore must keep reading them — gzipped (what Download produced) or
+ * plain (unzipped to look inside). The format is decided from content.
+ */
+describe("legacy v1 backups", () => {
+  it("reads a gzipped v1 backup", async () => {
+    const { inspectBackup } = await snapshotMod();
+    const original = validSnapshotObject();
+    const result = await inspectBackup(opener(gzipSync(Buffer.from(JSON.stringify(original), "utf8"))));
+
+    expect(result).toMatchObject({ ok: true, format: 1, takenAt: original.meta.takenAt });
   });
 
-  it("reads a plain JSON backup, for an admin who unzipped it to look inside", async () => {
-    const { parseUploadedBackup } = await store();
-    const original = validSnapshotObject();
-
-    expect(parseUploadedBackup(Buffer.from(JSON.stringify(original), "utf8"))).toEqual(original);
+  it("reads a plain JSON v1 backup", async () => {
+    const { inspectBackup } = await snapshotMod();
+    const result = await inspectBackup(opener(JSON.stringify(validSnapshotObject())));
+    expect(result).toMatchObject({ ok: true, format: 1 });
   });
 
-  it("throws on a file that is neither", async () => {
-    const { parseUploadedBackup } = await store();
-    expect(() => parseUploadedBackup(Buffer.from("not json at all", "utf8"))).toThrow();
+  it("refuses a file that is neither, with a message it is safe to show", async () => {
+    const { inspectBackup } = await snapshotMod();
+    const result = await inspectBackup(opener("not json at all"));
+    expect(result).toEqual({ ok: false, error: "That file is not a LITRACK backup." });
+  });
+
+  it("refuses a v1 backup missing a table before anything is deleted", async () => {
+    const { inspectBackup } = await snapshotMod();
+    const snapshot = validSnapshotObject();
+    delete (snapshot.data as Record<string, unknown>).Learner;
+    const result = await inspectBackup(opener(JSON.stringify(snapshot)));
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("returns null when the backup is not in storage", async () => {
+    const { inspectBackup } = await snapshotMod();
+    await expect(inspectBackup(async () => null)).resolves.toBeNull();
+  });
+});
+
+describe("backup paths", () => {
+  it("accepts the v2 and the v1 file names, and nothing outside the layout", async () => {
+    const { parseBackupPath } = await store();
+    expect(parseBackupPath("litrack/backups/daily/2026-09-26.ndjson.gz")).toEqual({
+      kind: "daily",
+      stamp: "2026-09-26",
+    });
+    expect(parseBackupPath("litrack/backups/weekly/2026-09-20.json.gz")).toEqual({
+      kind: "weekly",
+      stamp: "2026-09-20",
+    });
+    for (const bad of [
+      "litrack/backups/daily/../../secrets.json.gz",
+      "litrack/backups/monthly/2026-09-26.ndjson.gz",
+      "other/2026-09-26.ndjson.gz",
+      "litrack/backups/daily/2026-09-26.ndjson",
+    ]) {
+      expect(parseBackupPath(bad), bad).toBeNull();
+    }
   });
 });
 
