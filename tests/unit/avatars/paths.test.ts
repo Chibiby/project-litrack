@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   avatarPublicUrl,
   buildAvatarPaths,
@@ -71,8 +71,16 @@ describe("avatarPublicUrl", () => {
   const path = `${USER_ID}/${UUID}.webp`;
 
   it("returns null when base is missing", () => {
-    expect(avatarPublicUrl(path, "full", "")).toBeNull();
-    expect(avatarPublicUrl(path, "full", undefined)).toBeNull();
+    // `undefined` falls through to the NEXT_PUBLIC_SUPABASE_URL default, which a
+    // deploy build (Cloudflare Workers Builds) sets for real. Clear it so this
+    // case tests the missing base, not the build machine.
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    try {
+      expect(avatarPublicUrl(path, "full", "")).toBeNull();
+      expect(avatarPublicUrl(path, "full", undefined)).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("returns null when the path is invalid", () => {
