@@ -10,7 +10,6 @@ import {
   CircleX,
   GraduationCap,
   KeyRound,
-  Search,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -24,8 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   ListNavigationProvider,
   LinkStatusPulse,
@@ -338,23 +337,17 @@ function AccountsTableInner({
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor="accounts-q" className="text-xs font-medium">
-                Search accounts
-              </Label>
-              <div className="relative w-full">
-                <Search
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  id="accounts-q"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Name, email, or school..."
-                  className="h-11 pl-9 lg:h-10"
-                  disabled={pending}
-                />
-              </div>
+              <SearchInput
+                id="accounts-q"
+                value={query}
+                onValueChange={setQuery}
+                onClear={() => apply({ q: null })}
+                resultCount={list.totalCount}
+                label="Search accounts"
+                labelVisible
+                placeholder="Name, email, or school..."
+                disabled={pending}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="accounts-role" className="text-xs font-medium">

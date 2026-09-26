@@ -4,7 +4,7 @@ import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { cn } from "@/lib/utils";
 
@@ -181,16 +181,17 @@ export function AralTutorCombobox({
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <div className="border-b p-2">
-          <Input
+          <SearchInput
+            escapeClears={false}
             autoFocus
+            label="Search teachers"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onValueChange={setQuery}
             onKeyDown={onSearchKeyDown}
             placeholder="Search teachers…"
-            aria-label="Search teachers"
             aria-controls={listId}
             aria-activedescendant={rows.length > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
-            className="h-11 lg:h-9"
+            inputClassName="lg:h-10"
           />
         </div>
         <div

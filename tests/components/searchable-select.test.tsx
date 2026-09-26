@@ -37,7 +37,7 @@ describe("SearchableSelect", () => {
   it("filters as the user types", () => {
     render(<SearchableSelect options={OPTIONS} value="" onValueChange={() => {}} />);
     open();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "glan" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "glan" } });
     expect(screen.getAllByRole("option")).toHaveLength(1);
     expect(screen.getByRole("option").textContent).toContain("Glan Central ES");
   });
@@ -45,7 +45,7 @@ describe("SearchableSelect", () => {
   it("tracks the active option with aria-activedescendant rather than DOM focus", () => {
     render(<SearchableSelect options={OPTIONS} value="" onValueChange={() => {}} id="school" />);
     open();
-    const search = screen.getByRole("textbox");
+    const search = screen.getByRole("searchbox");
     expect(search.getAttribute("aria-activedescendant")).toBe("school-opt-0");
     fireEvent.keyDown(search, { key: "ArrowDown" });
     expect(search.getAttribute("aria-activedescendant")).toBe("school-opt-1");
@@ -55,7 +55,7 @@ describe("SearchableSelect", () => {
   it("does not move past the last option", () => {
     render(<SearchableSelect options={OPTIONS} value="" onValueChange={() => {}} id="school" />);
     open();
-    const search = screen.getByRole("textbox");
+    const search = screen.getByRole("searchbox");
     for (let i = 0; i < 8; i++) fireEvent.keyDown(search, { key: "ArrowDown" });
     expect(search.getAttribute("aria-activedescendant")).toBe("school-opt-2");
     fireEvent.keyDown(search, { key: "Home" });
@@ -66,7 +66,7 @@ describe("SearchableSelect", () => {
     const onValueChange = vi.fn();
     render(<SearchableSelect options={OPTIONS} value="" onValueChange={onValueChange} />);
     open();
-    const search = screen.getByRole("textbox");
+    const search = screen.getByRole("searchbox");
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(onValueChange).toHaveBeenCalledWith("b");
@@ -83,7 +83,7 @@ describe("SearchableSelect", () => {
   it("shows the empty message when nothing matches", () => {
     render(<SearchableSelect options={OPTIONS} value="" onValueChange={() => {}} emptyMessage="No schools found." />);
     open();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "zzzz" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
     expect(screen.getByText("No schools found.")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
@@ -94,5 +94,14 @@ describe("SearchableSelect", () => {
     const options = screen.getAllByRole("option");
     expect(options[0].getAttribute("aria-selected")).toBe("true");
     expect(options[1].getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("closes on Escape even while a query is typed, instead of only clearing it", () => {
+    render(<SearchableSelect options={OPTIONS} value="" onValueChange={() => {}} />);
+    open();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "glan" } });
+    fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("combobox").getAttribute("aria-expanded")).toBe("false");
   });
 });

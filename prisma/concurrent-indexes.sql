@@ -1,5 +1,5 @@
 -- PROJECT LITRACK — concurrent index builds for the EXISTING production database
--- 17 indexes across 10 tables, in four batches:
+-- 17 indexes across 10 tables built, and 2 indexes dropped, in five batches:
 --
 --   BATCH 1 (12 indexes) — R6 / Phase 4, for migration
 --     20260823000001_add_perf_indexes.
@@ -11,6 +11,8 @@
 --   BATCH 4 (1 index)    — the Notification retention purge's "createdAt"
 --     range scan, for migration
 --     20260926000001_notification_created_at_index.
+--   BATCH 5 (2 DROPS)    — unused-index cleanup (Supabase free-tier size),
+--     for migration 20260927000001_drop_unused_indexes.
 --
 -- THE BATCHES HAVE DIFFERENT BOOKKEEPING. Batch 1's migration is index-only, so
 -- it takes the `migrate resolve --applied` carve-out. Batch 2's migration also
@@ -160,6 +162,17 @@
 --      20260926000001_notification_created_at_index is index-only — one
 --      `CREATE INDEX` on "Notification", nothing else. Skipping this step
 --      leaves the migration pending forever, same consequence as batch 1.
+--
+--      BATCH 5 — record the migration as applied WITHOUT re-running its SQL,
+--      same as batch 1:
+--        npx prisma migrate resolve --applied 20260927000001_drop_unused_indexes
+--
+--      20260927000001_drop_unused_indexes is index-only — two `DROP INDEX`
+--      statements, nothing else. Skipping this step leaves the migration
+--      pending forever, same consequence as batch 1: the next `migrate
+--      deploy` re-runs its (harmless, IF EXISTS-guarded) DROP INDEX
+--      statements — no locking concern there, but the point of running this
+--      file first is to drop them CONCURRENTLY instead.
 --
 --   6. `npx prisma migrate status` again — expect no pending migrations.
 --
@@ -332,6 +345,26 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "TermGrade_termSubjectId_idx" ON "TermGr
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "Notification_createdAt_idx" ON "Notification"("createdAt");
 
 -- ============================================================================
+-- BATCH 5 — unused-index cleanup (migration 20260927000001_drop_unused_indexes)
+--
+-- Two DROPs, zero scans over the September 2026 stats window, no consumer in
+-- `src/` for either — see that migration's header for the full evidence.
+-- REMINDER: after this file, batch 5 needs
+-- `migrate resolve --applied 20260927000001_drop_unused_indexes`, same as
+-- batch 1 and batch 4 — this migration is index-only (drops, not creates).
+-- ============================================================================
+
+-- No reader filters "AuditLog" by resource/resourceId; every appearance of
+-- those columns in src/ is a writeAudit call supplying them, never a `where`.
+DROP INDEX CONCURRENTLY IF EXISTS "AuditLog_resource_resourceId_idx";
+
+-- No query filters "Enrollment" by gradeLevelId (alone or with sectionId);
+-- sectionId's own FK-lookup need is already served by the separate
+-- "Enrollment_sectionId_idx" (batch 1, R6 #4), which does not lead with
+-- gradeLevelId and so is unaffected by this drop.
+DROP INDEX CONCURRENTLY IF EXISTS "Enrollment_gradeLevelId_sectionId_idx";
+
+-- ============================================================================
 -- VERIFY — runs automatically as part of this file, BEFORE `migrate resolve`
 -- ============================================================================
 --
@@ -346,7 +379,9 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Notification_createdAt_idx" ON "Notific
 --
 -- READ THE OUTPUT. Do not proceed to `migrate resolve` on a green exit code alone.
 --
---   Expect exactly 17 rows, every one with valid = t.
+--   Expect exactly 17 rows, every one with valid = t. (Batch 5 drops two
+--   OTHER indexes and is verified separately, right after this SELECT — see
+--   below.)
 --
 --   Fewer than 17 rows => that index was never built. Re-run this whole file
 --                         (every statement is IF NOT EXISTS-guarded). Exactly 12
@@ -402,3 +437,17 @@ WHERE c.relname IN (
   'Notification_createdAt_idx'
 )
 ORDER BY c.relname;
+
+-- BATCH 5 VERIFY — the two names must come back with ZERO rows. Any row here
+-- means the DROP did not take (most likely: this file has not been re-run
+-- since batch 5 was added, or a DROP CONCURRENTLY failed silently — that
+-- statement does not leave an invalid index behind the way a failed CREATE
+-- does, it just leaves the index exactly as it was). Re-run this whole file
+-- if you see a row.
+SELECT c.relname AS still_present
+FROM pg_class c
+JOIN pg_index i ON i.indexrelid = c.oid
+WHERE c.relname IN (
+  'AuditLog_resource_resourceId_idx',
+  'Enrollment_gradeLevelId_sectionId_idx'
+);

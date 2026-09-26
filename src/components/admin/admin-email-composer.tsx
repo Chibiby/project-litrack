@@ -7,6 +7,7 @@ import type { AdminEmailRecipientOption } from "@/lib/admin-email/queries";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Textarea } from "@/components/ui/textarea";
 
 export function AdminEmailComposer({ recipients, configured }: { recipients: AdminEmailRecipientOption[]; configured: boolean }) {
@@ -69,8 +70,8 @@ export function AdminEmailComposer({ recipients, configured }: { recipients: Adm
       {!configured && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Outbound email is not configured. Add the Resend API key and support sender in deployment settings.</p>}
       <div className="space-y-4">
         <div className="relative">
-          <label htmlFor="email-recipient-search" className="mb-1.5 block text-sm font-medium">Recipients</label>
-          <Input id="email-recipient-search" aria-label="Search teachers and school heads" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search teachers and school heads" />
+          <p className="mb-1.5 text-sm font-medium">Recipients</p>
+          <SearchInput id="email-recipient-search" label="Search teachers and school heads" value={query} onValueChange={setQuery} placeholder="Search teachers and school heads" />
           {matches.length > 0 && <div className="absolute z-10 mt-1 w-full rounded-lg border bg-background p-1 shadow-lg">{matches.map((person) => <Button key={person.id} type="button" variant="ghost" className="h-auto w-full justify-start py-2 text-left" onClick={() => add(person.email, person.name)}>{person.name} · {person.role} · {person.schoolName}</Button>)}</div>}
           <div className="mt-2 flex flex-wrap gap-2">{[...selected].map(([email, label]) => <span key={email} className="inline-flex items-center gap-1 rounded-full bg-violet-soft py-1 pl-3 pr-1 text-xs text-violet-soft-foreground">{label}<Button type="button" variant="ghost" size="icon" className="size-5 rounded-full" aria-label={`Remove ${email}`} onClick={() => setSelected((current) => { const next = new Map(current); next.delete(email); return next; })}><X className="size-3" /></Button></span>)}</div>
         </div>

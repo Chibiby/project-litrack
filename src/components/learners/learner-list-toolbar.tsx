@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, ClipboardList, Search, SlidersHorizontal, Users } from "lucide-react";
+import { Archive, ClipboardList, SlidersHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Popover,
   PopoverContent,
@@ -215,6 +215,8 @@ type ToolbarProps = {
   searchValue: string;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;
+  /** Total matching rows, for the search field's screen-reader status text. */
+  resultCount?: number;
   onNavigate: (href: string) => void;
   /** The bulk action menu, owned by the list so it can see the selection. */
   bulkActions?: React.ReactNode;
@@ -328,28 +330,20 @@ function SortAndSize({
 }
 
 export function LearnerListToolbar(props: ToolbarProps) {
-  const { searchValue, onSearchChange, onSearchSubmit, bulkActions } = props;
+  const { searchValue, onSearchChange, onSearchSubmit, resultCount, bulkActions } =
+    props;
 
   const search = (
-    <div className="relative min-w-[12rem] flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm">
-      <Search
-        className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden
-      />
-      <Input
-        value={searchValue}
-        onChange={(e) => onSearchChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSearchSubmit();
-          }
-        }}
-        placeholder="Search by name or keyword…"
-        className="h-11 rounded-xl pl-10"
-        aria-label="Search learners by name"
-      />
-    </div>
+    <SearchInput
+      value={searchValue}
+      onValueChange={onSearchChange}
+      onSubmit={onSearchSubmit}
+      resultCount={resultCount}
+      label="Search learners by name"
+      placeholder="Search by name or keyword…"
+      className="min-w-[12rem] flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm"
+      inputClassName="h-11 rounded-xl lg:h-11"
+    />
   );
 
   return (

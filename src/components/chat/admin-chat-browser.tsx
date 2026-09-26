@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   Bell,
   ChevronLeft,
@@ -9,7 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChatThread } from "@/components/chat/chat-thread";
@@ -61,6 +61,13 @@ export function AdminChatBrowser({
   const [query, setQuery] = useState("");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageQuery, setMessageQuery] = useState("");
+  const messageSearchId = useId();
+  const messageSearchToggleRef = useRef<HTMLButtonElement>(null);
+
+  function closeMessageSearch() {
+    setMessageSearchOpen(false);
+    messageSearchToggleRef.current?.focus();
+  }
 
   function selectConversation(conversation: Conversation) {
     const member =
@@ -161,16 +168,13 @@ export function AdminChatBrowser({
             <div className="mb-3 flex items-center justify-between px-1">
               <h2 className="text-base font-semibold tracking-tight">Conversations</h2>
             </div>
-            <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search conversations..."
-                aria-label="Search conversations"
-                className="h-11 bg-background pl-9 text-sm lg:h-9"
-              />
-            </label>
+            <SearchInput
+              label="Search conversations"
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Search conversations..."
+              inputClassName="bg-background text-sm lg:h-9"
+            />
             <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
               {([
                 ["all", "All"],
@@ -251,6 +255,7 @@ export function AdminChatBrowser({
                   )}
                 </div>
                 <Button
+                  ref={messageSearchToggleRef}
                   type="button"
                   variant="ghost"
                   size="icon"
@@ -258,16 +263,25 @@ export function AdminChatBrowser({
                   className="rounded-lg text-muted-foreground hover:bg-accent"
                   aria-label="Search messages"
                   aria-pressed={messageSearchOpen}
+                  aria-expanded={messageSearchOpen}
+                  aria-controls={messageSearchId}
                 >
                   <Search className="size-4" aria-hidden />
                 </Button>
                 {messageSearchOpen && (
-                  <Input
+                  <SearchInput
+                    id={messageSearchId}
+                    label="Search messages"
                     value={messageQuery}
-                    onChange={(event) => setMessageQuery(event.target.value)}
+                    onValueChange={setMessageQuery}
                     placeholder="Search messages"
-                    aria-label="Search messages"
-                    className="absolute right-14 top-16 z-10 w-56 bg-background shadow-md"
+                    className="absolute right-14 top-16 z-10 w-56 shadow-md"
+                    inputClassName="bg-background"
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape" && !messageQuery) {
+                        closeMessageSearch();
+                      }
+                    }}
                   />
                 )}
               </header>

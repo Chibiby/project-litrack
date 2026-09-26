@@ -3,9 +3,9 @@
 import { createRef, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Save, Search } from "lucide-react";
+import { Download, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { SelectItem } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
 import { FacetSelect } from "@/components/ui/facet-select";
@@ -221,25 +221,16 @@ export function TermsReportPanel({
   const termCaption = `${termLabel} - ${completionPct}%`;
 
   const searchBox = (
-    <div className="relative min-w-0 flex-1 xl:w-72 xl:flex-none">
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden
-      />
-      <Input
-        value={searchValue}
-        onChange={(e) => handleSearchChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            pushSearch(searchValue);
-          }
-        }}
-        placeholder="Search learner by name..."
-        className="h-11 rounded-xl pl-9 text-sm lg:h-10 xl:h-11"
-        aria-label="Search learners by name"
-      />
-    </div>
+    <SearchInput
+      value={searchValue}
+      onValueChange={handleSearchChange}
+      onSubmit={() => pushSearch(searchValue)}
+      resultCount={totalCount}
+      label="Search learners by name"
+      placeholder="Search learner by name..."
+      className="min-w-0 flex-1 xl:w-72 xl:flex-none"
+      inputClassName="h-11 rounded-xl text-sm lg:h-10 xl:h-11"
+    />
   );
 
   // Rendered twice (the phone panel and the desktop toolbar, one hidden by

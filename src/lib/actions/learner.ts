@@ -230,9 +230,8 @@ export async function createLearner(
     action: AUDIT_ACTIONS.LEARNER_CREATE,
     resource: "Learner",
     resourceId: learner.id,
+    // schoolId and learnerId are already the row's own columns.
     metadata: {
-      schoolId: user.schoolId,
-      learnerId: learner.id,
       gradeLevelId: learner.gradeLevelId,
       sectionId: learner.sectionId,
       enrollmentCreated: Boolean(activeYear),
@@ -859,9 +858,8 @@ export async function enrollLearnersToAral(
     action: AUDIT_ACTIONS.LEARNER_ENROLL_ARAL,
     resource: "Learner",
     resourceId: grade.id,
+    // schoolId and the grade id are already the row's own columns.
     metadata: {
-      schoolId: user.schoolId,
-      gradeLevelId: grade.id,
       learnerIds: toEnroll,
       enrolled: toEnroll.length,
       redesignated: toRedesignate.length,

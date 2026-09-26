@@ -1098,7 +1098,16 @@ model Enrollment {
   @@index([learnerId, status])
   @@index([schoolId, schoolYearId])
   @@index([teacherId])
-  @@index([gradeLevelId, sectionId])
+  /// DROPPED 2026-09-27 (`20260927000001_drop_unused_indexes`): no query in
+  /// `src/` filters `Enrollment` by `gradeLevelId` (alone or paired with
+  /// `sectionId`) — every `enrollment.findMany`/`updateMany`/raw-SQL site keys
+  /// on `learnerId`, `sectionId`, `teacherId` or `schoolId`+`schoolYearId`.
+  /// `gradeLevel` is a required, unrestricted-default (`Restrict`) relation,
+  /// so this was also the FK-restrict lookup side for a hard `GradeLevel`
+  /// delete — but `GradeLevel` rows are only ever soft-deleted (`deletedAt`)
+  /// in this codebase, so that path never fires either. 0 scans in the
+  /// measured window agrees. See the migration for the SQL a human applies.
+  /// @@index([gradeLevelId, sectionId])
   /// R6 #4. `deleteSection` runs `enrollment.updateMany({ where: { sectionId } })`;
   /// `[gradeLevelId, sectionId]` cannot serve it because `sectionId` is not leading.
   /// It is also the lookup side of this FK's `SetNull` action, though that is a
@@ -1692,9 +1701,19 @@ model AuditLog {
   userAgent  String?
   timestamp  DateTime @default(now())
 
+  /// Consumer: `getAccountProfile`'s recent-activity panel
+  /// (`src/lib/actions/accounts.ts`, `auditLog.findMany({ where: { userId },
+  /// orderBy: { timestamp: "desc" } })`). Zero scans in the September 2026
+  /// stats window just means that panel was not opened, not that the query is
+  /// gone — keep.
   @@index([userId, timestamp])
   @@index([schoolId, timestamp])
-  @@index([resource, resourceId])
+  /// DROPPED 2026-09-27 (`20260927000001_drop_unused_indexes`): no reader
+  /// filters `AuditLog` by `resource`/`resourceId` — every appearance of those
+  /// two columns in `src/` is a `writeAudit` call supplying them, never a
+  /// `where`. 0 scans in the measured window agrees. See the migration for
+  /// the SQL a human applies.
+  /// @@index([resource, resourceId])
   /// R6 #1. The Super Admin audit view is a deliberately cross-tenant top-N
   /// (`orderBy timestamp desc, take 150`, no `where`), and the dashboard's
   /// `timestamp >= $1` range scan uses the same index. Neither is served by the

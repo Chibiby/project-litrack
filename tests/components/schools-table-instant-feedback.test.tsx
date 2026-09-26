@@ -130,6 +130,22 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
     expect(nextLink.hasAttribute("disabled")).toBe(false);
   });
 
+  it("clearing the search field re-runs the search with q removed", async () => {
+    render(<SchoolsTable schools={[SCHOOL]} list={{ ...LIST, q: "Naidas" }} />);
+
+    const input = screen.getByRole("searchbox", { name: "Search schools" }) as HTMLInputElement;
+    expect(input.value).toBe("Naidas");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(String((push.mock.calls[0] as unknown[])[0])).not.toContain("q=");
+
+    await act(async () => {
+      resolvePush?.();
+    });
+  });
+
   it("keeps a genuinely unavailable boundary control (Previous on page 1) as disabled, not merely aria-disabled", () => {
     render(
       <SchoolsTable

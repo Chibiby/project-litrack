@@ -7,11 +7,10 @@ import {
   GraduationCap,
   LayoutGrid,
   School,
-  Search,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
 import { globalSearch } from "@/lib/actions/global-search";
 import {
@@ -156,22 +155,6 @@ export function HeaderSearch({
     setActive(0);
   }
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      // A window "keydown" listener receives anything dispatched under that
-      // type, including a bare `new Event("keydown")` from a browser extension
-      // or dev tooling, which carries no `key` at all. TypeScript types `key`
-      // as string, so nothing but this guard stops that from throwing.
-      if (typeof event.key !== "string") return;
-      if (event.key.toLowerCase() !== "k") return;
-      if (!event.metaKey && !event.ctrlKey) return;
-      event.preventDefault();
-      inputRef.current?.focus();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   function go(row: Row) {
     setOpen(false);
     setQuery("");
@@ -204,26 +187,23 @@ export function HeaderSearch({
       }}
       className={cn("relative", className)}
     >
-      <Search
-        aria-hidden
-        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <Input
+      <SearchInput
+            escapeClears={false}
         ref={inputRef}
-        type="search"
         value={query}
-        aria-label={placeholder}
+        onValueChange={(next) => {
+          setQuery(next);
+          setOpen(true);
+        }}
+        label={placeholder}
         placeholder={placeholder}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}
         aria-autocomplete="list"
-        autoComplete="off"
+        disableBrowserAutocomplete
+        focusShortcut={{ key: "k", metaOrCtrl: true }}
         onFocus={() => setOpen(true)}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setOpen(true);
-        }}
         onBlur={() => {
           // Deferred so a click on a result lands before the list unmounts.
           window.setTimeout(() => setOpen(false), 120);
@@ -243,7 +223,7 @@ export function HeaderSearch({
             setActive((i) => (i - 1 + rows.length) % rows.length);
           }
         }}
-        className="h-9 rounded-lg border-transparent bg-muted pl-9 pr-3 text-sm focus-visible:border-input focus-visible:bg-background md:max-lg:h-11"
+        inputClassName="h-11 rounded-lg border-transparent bg-muted text-sm focus-visible:border-input focus-visible:bg-background lg:h-9"
       />
 
       {showList && (

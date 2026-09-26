@@ -3,11 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -198,19 +199,7 @@ export function BroadcastComposer({
 
         {target.kind === "schools" ? (
           <div className="space-y-2">
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                value={schoolQuery}
-                onChange={(event) => setSchoolQuery(event.target.value)}
-                placeholder="Find a school…"
-                aria-label="Find a school"
-                className="pl-9"
-              />
-            </div>
+            <SearchInput label="Find a school" value={schoolQuery} onValueChange={setSchoolQuery} placeholder="Find a school…" />
             <ul
               className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-lg border border-border/80"
               aria-label="Schools"

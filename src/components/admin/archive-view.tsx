@@ -7,8 +7,8 @@ import { Archive as ArchiveIcon, ChevronLeft, ChevronRight, GraduationCap, Users
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -262,11 +262,14 @@ export function ArchiveView({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archive-q">Search name</Label>
-              <Input
+              <SearchInput
                 id="archive-q"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onValueChange={setQuery}
+                onClear={() => apply({ q: null })}
+                resultCount={data.teachers.total + data.learners.total}
+                label="Search name"
+                labelVisible
                 placeholder="Learner or teacher name"
                 className="w-full sm:w-56"
                 disabled={pending}

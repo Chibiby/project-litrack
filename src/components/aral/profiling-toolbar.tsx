@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
 import { useListNavigate } from "@/components/nav/list-navigation";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -92,25 +91,15 @@ export function ProfilingToolbar({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-      <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          value={inputValue}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              pushSearch(inputValue);
-            }
-          }}
-          placeholder="Search learner name…"
-          className="h-11 rounded-xl pl-9 lg:h-9"
-          aria-label="Search learners by name"
-        />
-      </div>
+      <SearchInput
+        value={inputValue}
+        onValueChange={handleSearchChange}
+        onSubmit={() => pushSearch(inputValue)}
+        label="Search learners by name"
+        placeholder="Search learner name…"
+        className="min-w-[12rem] flex-1 sm:max-w-xs"
+        inputClassName="rounded-xl lg:h-9"
+      />
 
       <Select
         value={section === "all" ? "all" : section}

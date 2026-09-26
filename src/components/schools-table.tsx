@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Search, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
+import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
@@ -439,22 +439,16 @@ function SchoolsTableInner({
           isAdminColumns ? "xl:flex-row xl:items-center" : "sm:flex-row sm:items-center"
         )}
       >
-        <div className={cn("relative w-full", isAdminColumns ? "xl:w-72" : "sm:w-72")}>
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search schools…"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                pushList({ page: 1, q: searchValue.trim() });
-              }
-            }}
-            className="pl-9"
-            aria-label="Search schools"
-          />
-        </div>
+        <SearchInput
+          value={searchValue}
+          onValueChange={setSearchValue}
+          onSubmit={() => pushList({ page: 1, q: searchValue.trim() })}
+          onClear={() => pushList({ page: 1, q: "" })}
+          resultCount={list.totalCount}
+          label="Search schools"
+          placeholder="Search schools…"
+          className={cn("w-full", isAdminColumns ? "xl:w-72" : "sm:w-72")}
+        />
 
         <div
           className={cn(

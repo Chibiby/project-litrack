@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Check, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
 
 export type SearchableOption = { value: string; label: string; hint?: string };
@@ -166,7 +166,7 @@ export function SearchableSelect({
           aria-controls={listId}
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+            "flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background lg:h-10",
             "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",
@@ -186,16 +186,17 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <div className="border-b p-2">
-          <Input
+          <SearchInput
+            escapeClears={false}
             autoFocus
+            label={searchPlaceholder}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onValueChange={setQuery}
             onKeyDown={onSearchKeyDown}
             placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
             aria-controls={listId}
             aria-activedescendant={visible.length > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
-            className="h-11 lg:h-9"
+            inputClassName="lg:h-9"
           />
         </div>
         <div ref={listRef} id={listId} role="listbox" className="max-h-64 overflow-y-auto p-1">

@@ -2,8 +2,8 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import { searchActiveLearners } from "@/lib/actions/search-learners";
 import {
   LEARNER_SEARCH_MIN_CHARS,
@@ -101,51 +101,54 @@ export function LearnerSearchSelect({
 
   return (
     <div className="space-y-2" ref={wrapRef}>
-      <Label htmlFor={inputId}>{label}</Label>
       {value ? (
-        <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm">
-          <span className="min-w-0 flex-1 truncate">
-            {value.fullName}{" "}
-            <span className="text-muted-foreground">({value.gradeLabel})</span>
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto shrink-0 p-0 text-muted-foreground"
-            disabled={disabled}
-            onClick={() => {
-              onChange(null);
-              setQuery("");
-              setHits([]);
-              setOpen(false);
-            }}
-          >
-            Change
-          </Button>
-        </div>
+        <>
+          <Label htmlFor={inputId}>{label}</Label>
+          <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm">
+            <span className="min-w-0 flex-1 truncate">
+              {value.fullName}{" "}
+              <span className="text-muted-foreground">({value.gradeLabel})</span>
+            </span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto shrink-0 p-0 text-muted-foreground"
+              disabled={disabled}
+              onClick={() => {
+                onChange(null);
+                setQuery("");
+                setHits([]);
+                setOpen(false);
+              }}
+            >
+              Change
+            </Button>
+          </div>
+        </>
       ) : (
         <div className="relative">
-          <Input
+          <SearchInput
             id={inputId}
+            label={label}
+            labelVisible
             role="combobox"
             aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"
             value={query}
+            onValueChange={(next) => {
+              setQuery(next);
+              runSearch(next);
+            }}
             disabled={disabled || !schoolId}
             placeholder={
               !schoolId ? "Select a school first" : placeholder
             }
-            onChange={(e) => {
-              const next = e.target.value;
-              setQuery(next);
-              runSearch(next);
-            }}
             onFocus={() => {
               if (hits.length > 0 || error) setOpen(true);
             }}
-            autoComplete="off"
+            disableBrowserAutocomplete
           />
           {open ? (
             <ul

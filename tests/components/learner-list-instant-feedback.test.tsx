@@ -141,7 +141,7 @@ describe("LearnerListClient — instant feedback", () => {
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region?.getAttribute("aria-busy")).toBeNull();
 
-    const input = screen.getByRole("textbox", { name: "Search learners by name" });
+    const input = screen.getByRole("searchbox", { name: "Search learners by name" });
     fireEvent.change(input, { target: { value: "Ben" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -165,7 +165,7 @@ describe("LearnerListClient — instant feedback", () => {
     expect(screen.getAllByText("Santos, Ana").length).toBeGreaterThan(0);
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeNull();
 
-    const input = screen.getByRole("textbox", { name: "Search learners by name" });
+    const input = screen.getByRole("searchbox", { name: "Search learners by name" });
     fireEvent.change(input, { target: { value: "Ben" } });
 
     // Skeleton appears immediately — no navigation has started yet.
@@ -177,7 +177,7 @@ describe("LearnerListClient — instant feedback", () => {
   it("still waits the full 500ms before issuing the query", () => {
     vi.useFakeTimers();
     renderRoster();
-    const input = screen.getByRole("textbox", { name: "Search learners by name" });
+    const input = screen.getByRole("searchbox", { name: "Search learners by name" });
     fireEvent.change(input, { target: { value: "Ben" } });
 
     act(() => {

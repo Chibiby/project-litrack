@@ -113,7 +113,7 @@ export function CrossSchoolTransferForm({
               }}
               required
               disabled={pending}
-              className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+              className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
             >
               <option value="">Select school</option>
               {schools.map((s) => (
@@ -136,7 +136,7 @@ export function CrossSchoolTransferForm({
               }}
               required
               disabled={pending}
-              className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+              className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
             >
               <option value="">Select school</option>
               {schools
@@ -171,7 +171,7 @@ export function CrossSchoolTransferForm({
             }}
             required
             disabled={pending || !toSchoolId}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
           >
             <option value="">
               {!toSchoolId ? "Select target school first" : "Select grade"}
@@ -191,7 +191,7 @@ export function CrossSchoolTransferForm({
             value={sectionId}
             onChange={(e) => setSectionId(e.target.value)}
             disabled={pending || !gradeId}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
           >
             <option value={SECTION_CLEAR}>No section</option>
             {filteredSections.map((s) => (
@@ -210,7 +210,7 @@ export function CrossSchoolTransferForm({
             onChange={(e) => setTeacherId(e.target.value)}
             required
             disabled={pending || !gradeId}
-            className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
           >
             <option value="">Select teacher</option>
             {filteredTeachers.map((t) => (

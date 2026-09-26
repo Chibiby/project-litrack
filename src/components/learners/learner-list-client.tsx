@@ -513,6 +513,7 @@ function LearnerListPanel({
           searchValue={inputValue}
           onSearchChange={handleSearchChange}
           onSearchSubmit={handleSearchSubmit}
+          resultCount={totalCount}
           onNavigate={navigate}
           bulkActions={
             selectable ? (

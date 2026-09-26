@@ -61,7 +61,7 @@ describe("AralTutorCombobox", () => {
       />
     );
     open();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "banas" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "banas" } });
     const options = screen.getAllByRole("option");
     expect(options).toHaveLength(2);
     expect(options[0].textContent).toContain("Myself");
@@ -78,7 +78,7 @@ describe("AralTutorCombobox", () => {
       />
     );
     open();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "narra" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "narra" } });
     const options = screen.getAllByRole("option");
     expect(options).toHaveLength(2);
     expect(options[1].textContent).toContain("Maria Bañas");
@@ -94,7 +94,7 @@ describe("AralTutorCombobox", () => {
       />
     );
     open();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "zzzz" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
     expect(screen.getByText("No tutor found")).toBeTruthy();
     const options = screen.getAllByRole("option");
     expect(options).toHaveLength(1);
@@ -127,7 +127,7 @@ describe("AralTutorCombobox", () => {
       />
     );
     open();
-    const search = screen.getByRole("textbox");
+    const search = screen.getByRole("searchbox");
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(onValueChange).toHaveBeenCalledWith("t1");

@@ -1,0 +1,48 @@
+-- Index-only. Drops two indexes with zero scans over the production stats
+-- window (since 2026-08-25) that no query in `src/` serves:
+--
+--   AuditLog_resource_resourceId_idx     — every appearance of `resource`/
+--     `resourceId` in `src/` is a `writeAudit`/`writeAuditMany` call
+--     SUPPLYING them; no reader (`/admin/audit`, `/school-head/audit`, the
+--     account "recent activity" panel, the admin dashboard series) filters
+--     `AuditLog` by either column.
+--
+--   Enrollment_gradeLevelId_sectionId_idx — no `enrollment.findMany` /
+--     `updateMany` / raw-SQL site in `src/` filters on `gradeLevelId`, alone
+--     or paired with `sectionId`. `gradeLevelId`'s FK to `GradeLevel` is an
+--     (implicit) RESTRICT relation, so this was also the lookup side for a
+--     hard `GradeLevel` delete — but `GradeLevel` rows are only ever
+--     soft-deleted (`deletedAt`) in this codebase, so that path never fires
+--     either. `sectionId`'s own FK-lookup need is already served by the
+--     separate `Enrollment_sectionId_idx` (R6 #4), which this index does not
+--     duplicate (that index does not lead with `gradeLevelId`).
+--
+-- Confirmed against `prisma/schema.prisma` HEAD~ via
+--   npx prisma migrate diff --from-schema-datamodel <pre-change schema> \
+--     --to-schema-datamodel prisma/schema.prisma --script
+-- which reproduces exactly these two DROP INDEX statements.
+--
+-- DESTRUCTIVE IN THE SENSE THAT PRISMA CLASSIFIES ANY DROP AS DESTRUCTIVE,
+-- but there is no data loss here: dropping an index never touches a row.
+-- Still author-only per project policy — a human applies this.
+--
+-- ADDITIVE-SIZE, NOT ADDITIVE-SHAPE: this migration only removes index
+-- storage (estimated ~9.2 MB combined; see the audit report for the
+-- per-index breakdown). It changes no table, column, or constraint.
+--
+-- IF EXISTS makes this file idempotent. See prisma/concurrent-indexes.sql
+-- (BATCH 5) for the production apply path — DROP INDEX (even non-concurrent)
+-- takes a brief ACCESS EXCLUSIVE lock, which is usually fine for a DROP
+-- (unlike CREATE INDEX's full-table build) but this project's convention
+-- for the existing, populated production database is CONCURRENTLY for any
+-- index DDL; batch 5 follows that convention for symmetry with batches 1-4.
+--
+-- ON A FRESH DATABASE (CI, new clone, new Supabase project): just
+-- `npx prisma migrate deploy`, same as ever. This file is index-only and
+-- instant on an empty or small table.
+
+-- DropIndex
+DROP INDEX IF EXISTS "AuditLog_resource_resourceId_idx";
+
+-- DropIndex
+DROP INDEX IF EXISTS "Enrollment_gradeLevelId_sectionId_idx";
