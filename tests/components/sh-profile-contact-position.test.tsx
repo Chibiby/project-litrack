@@ -117,14 +117,25 @@ describe("School Head profile — contact email", () => {
   it("refuses a malformed address without sending it", async () => {
     render(<SchoolHeadProfileForm presentation="edit" defaultValues={COMPLETE} />);
 
-    fireEvent.change(screen.getByLabelText("Email address"), {
-      target: { value: "not-an-email" },
-    });
+    const field = screen.getByLabelText("Email address") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "not-an-email" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
+    // The inline field error: found via aria-describedby rather than by text,
+    // because the same message also appears in the top-of-form error summary
+    // (showErrorSummary) and getByText would ambiguously match both.
     await waitFor(() => {
-      expect(screen.getByText("Enter a valid email address")).toBeTruthy();
+      const describedBy = field.getAttribute("aria-describedby") ?? "";
+      const messageId = describedBy.split(" ").find((id) => id.endsWith("-form-item-message"));
+      expect(messageId).toBeTruthy();
+      expect(document.getElementById(messageId!)?.textContent).toBe(
+        "Enter a valid email address"
+      );
     });
+
+    // The summary surfaces the same message too — both places must show it.
+    expect(screen.getAllByText("Enter a valid email address").length).toBeGreaterThanOrEqual(2);
+
     expect(saveSchoolHeadProfile).not.toHaveBeenCalled();
   });
 

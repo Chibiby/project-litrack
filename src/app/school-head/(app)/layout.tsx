@@ -35,27 +35,38 @@ export default async function SchoolHeadAppLayout({
   const userName = user.fullName || `${user.firstName} ${user.lastName}`;
 
   let schoolName: string | undefined;
+  let pendingTeacherCount: number | undefined;
+
+  // Run concurrently — each independently try/caught below via
+  // `Promise.allSettled`, so one failing (a transient pool error must not
+  // tear down RoleShell for the whole /school-head tree) does not hold back
+  // or take down the other.
+  const [schoolNameResult, metricCountsResult] = await Promise.allSettled([
+    user.schoolId ? getSchoolName(user.schoolId) : Promise.resolve(undefined),
+    // Real School Heads only: a layout has no searchParams, so it cannot learn
+    // which school a Super Admin has drilled into via `?schoolId=`, and this
+    // account's own `schoolId` (if any) is not that school. Showing no badge
+    // beats guessing one, or showing one school's count on another's page.
+    user.role === "SCHOOL_HEAD" && user.schoolId
+      ? getSchoolHeadMetricCounts(user.schoolId)
+      : Promise.resolve(undefined),
+  ]);
+
   // Shell chrome must not throw on transient pool errors — that tears down
   // RoleShell for the whole /school-head tree. Degrade to a nameless sidebar.
   if (user.schoolId) {
-    try {
-      schoolName = (await getSchoolName(user.schoolId)) ?? undefined;
-    } catch (err) {
-      console.error("[school-head/layout] school name failed:", err);
+    if (schoolNameResult.status === "fulfilled") {
+      schoolName = schoolNameResult.value ?? undefined;
+    } else {
+      console.error("[school-head/layout] school name failed:", schoolNameResult.reason);
     }
   }
 
-  let pendingTeacherCount: number | undefined;
-  // Real School Heads only: a layout has no searchParams, so it cannot learn
-  // which school a Super Admin has drilled into via `?schoolId=`, and this
-  // account's own `schoolId` (if any) is not that school. Showing no badge
-  // beats guessing one, or showing one school's count on another's page.
   if (user.role === "SCHOOL_HEAD" && user.schoolId) {
-    try {
-      const counts = await getSchoolHeadMetricCounts(user.schoolId);
-      pendingTeacherCount = counts.pendingTeacherCount;
-    } catch (err) {
-      console.error("[school-head/layout] pending teacher count failed:", err);
+    if (metricCountsResult.status === "fulfilled") {
+      pendingTeacherCount = metricCountsResult.value?.pendingTeacherCount;
+    } else {
+      console.error("[school-head/layout] pending teacher count failed:", metricCountsResult.reason);
     }
   }
 

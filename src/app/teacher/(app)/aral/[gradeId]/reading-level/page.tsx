@@ -228,42 +228,62 @@ async function AralMonthlyReadingLevelGrid({
   // leads, everything independent of it rides alongside rather than waiting
   // behind it, and the progress helper is handed the count instead of
   // repeating it.
-  const [totalCount, gradeSections, records, shellGrades] = await Promise.all([
-    prisma.learner.count({ where: learnerWhere }),
-    getGradeSections({
-      schoolId: grade.schoolId,
-      gradeLevelIds: [grade.id],
-    }),
-    // Every matching learner's records, not just this page's: the grid keys its
-    // rows by learner id, so the wider set costs one small query and no client
-    // work. Narrowing it to the visible page would mean waiting for the clamp
-    // and then for the roster query to name its ids, turning a query that runs
-    // alongside the others into a third wave.
-    prisma.readingLevelRecord.findMany({
-      where: {
-        weekStart: { gte: monthStart, lt: monthEnd },
-        learner: learnerWhere,
-      },
-      // Ascending, so the last row for a learner wins the reduce below.
-      orderBy: [{ weekStart: "asc" }, { updatedAt: "asc" }],
-      select: {
-        learnerId: true,
-        englishProfile: true,
-        filipinoProfile: true,
-        wordRecognitionLevel: true,
-        readingComprehensionLevel: true,
-        writingLevel: true,
-        notes: true,
-      },
-    }),
-    schoolIdForGrades
-      ? getTeacherShellGrades({
-          schoolId: schoolIdForGrades,
-          teacherId: user.id,
-          isSuperAdmin,
-        })
-      : Promise.resolve([]),
-  ]);
+  const [totalCount, gradeSections, records, shellGrades, lockState] =
+    await Promise.all([
+      prisma.learner.count({ where: learnerWhere }),
+      getGradeSections({
+        schoolId: grade.schoolId,
+        gradeLevelIds: [grade.id],
+      }),
+      // Every matching learner's records, not just this page's: the grid keys its
+      // rows by learner id, so the wider set costs one small query and no client
+      // work. Narrowing it to the visible page would mean waiting for the clamp
+      // and then for the roster query to name its ids, turning a query that runs
+      // alongside the others into a third wave.
+      prisma.readingLevelRecord.findMany({
+        where: {
+          weekStart: { gte: monthStart, lt: monthEnd },
+          learner: learnerWhere,
+        },
+        // Ascending, so the last row for a learner wins the reduce below.
+        orderBy: [{ weekStart: "asc" }, { updatedAt: "asc" }],
+        select: {
+          learnerId: true,
+          englishProfile: true,
+          filipinoProfile: true,
+          wordRecognitionLevel: true,
+          readingComprehensionLevel: true,
+          writingLevel: true,
+          notes: true,
+        },
+      }),
+      schoolIdForGrades
+        ? getTeacherShellGrades({
+            schoolId: schoolIdForGrades,
+            teacherId: user.id,
+            isSuperAdmin,
+          })
+        : Promise.resolve([]),
+      // The panel is a client component, so the lock state has to travel as
+      // props — it renders the banner and gates the grid itself with the same
+      // rules `bulkRecordMonthlyReadingLevel` enforces, or a locked month
+      // could still look editable. Super Admin already renders the whole
+      // panel `readOnly`, so the lock state itself is never consulted for
+      // them and the query is skipped.
+      //
+      // Only depends on user.id/user.schoolId/isSuperAdmin, so it rides this
+      // first wave instead of waiting on the pager clamp below.
+      isSuperAdmin
+        ? Promise.resolve({
+            lockingEnabled: true,
+            programUnlockAll: true,
+            unlockedMonths: [] as string[],
+          })
+        : readMonthlyReadingLevelLockState({
+            userId: user.id,
+            schoolId: user.schoolId,
+          }),
+    ]);
 
   // The pager is sized before the roster query runs, because `?page=` is
   // user-supplied and the filtered set shrinks whenever learners are archived or
@@ -334,18 +354,6 @@ async function AralMonthlyReadingLevelGrid({
     fullName: l.fullName,
     listingName: formatListingNameFromRecord(l),
   }));
-
-  // The panel is a client component, so the lock state has to travel as props
-  // — it renders the banner and gates the grid itself with the same rules
-  // `bulkRecordMonthlyReadingLevel` enforces, or a locked month could still look
-  // editable. Super Admin already renders the whole panel `readOnly`, so the
-  // lock state itself is never consulted for them and the query is skipped.
-  const lockState = isSuperAdmin
-    ? { lockingEnabled: true, programUnlockAll: true, unlockedMonths: [] as string[] }
-    : await readMonthlyReadingLevelLockState({
-        userId: user.id,
-        schoolId: user.schoolId,
-      });
 
   return (
     <AralMonthlyReadingLevelPanel

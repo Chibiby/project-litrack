@@ -233,12 +233,12 @@ function AdvisoryPicker({
               type="button"
               variant="ghost"
               size="icon"
-              className="relative size-7 shrink-0 rounded-full p-0 text-muted-foreground hover:text-destructive sm:size-7 lg:size-5 max-lg:after:absolute max-lg:after:-inset-x-2 max-lg:after:-inset-y-[3px] max-lg:after:content-['']"
+              className="relative size-7 shrink-0 rounded-full p-0 text-muted-foreground hover:text-destructive sm:size-7 lg:size-6 max-lg:after:absolute max-lg:after:-inset-x-2 max-lg:after:-inset-y-[3px] max-lg:after:content-['']"
               disabled={disabled}
               aria-label={`Remove ${labelById.get(sectionId) ?? "section"} from ${row.fullName}`}
               onClick={() => onChange(row, sectionId, "remove")}
             >
-              <X className="size-3.5 lg:size-3" aria-hidden />
+              <X className="size-3.5" aria-hidden />
             </Button>
           </span>
         ))}

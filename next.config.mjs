@@ -26,6 +26,21 @@ const nextConfig = {
         : "local",
   },
   /**
+   * Cloudflare only: `wrangler.jsonc` defines no `IMAGES` binding, so
+   * OpenNext's `/_next/image` handler (`@opennextjs/cloudflare/dist/cli/
+   * templates/images.js`) falls into its `env.IMAGES === undefined` branch —
+   * it still fetches the original file through `env.ASSETS.fetch` (a Worker
+   * invocation) and returns it byte-for-byte, with none of the Cache-Control
+   * handling that direct static-asset requests get. Every `next/image` request
+   * was therefore a full Worker invocation serving the uncompressed original,
+   * uncacheable by the browser. `unoptimized: true` makes next/image render a
+   * plain `<img src>` with no `srcSet`/`sizes` (see `generateImgAttrs` in
+   * `next/dist/shared/lib/get-img-props.js`), so the request goes straight to
+   * Workers Static Assets and bypasses the Worker entirely. Local dev and
+   * Vercel keep the real optimizer.
+   */
+  images: isCloudflareWorkersBuild ? { unoptimized: true } : undefined,
+  /**
    * Defaults to `.next`. Override with `NEXT_BUILD_DIST_DIR=.next-verify` to run
    * a verification `next build` while `next dev` is running — otherwise the two
    * fight over `.next` (EPERM on Windows) and the build clobbers the dev cache.

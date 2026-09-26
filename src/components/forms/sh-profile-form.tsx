@@ -871,6 +871,7 @@ export function SchoolHeadProfileForm({
           void (isEdit ? handleSave() : handleContinue());
         }}
         className="space-y-6"
+        showErrorSummary
       >
       {dryRun ? <DryRunNotice /> : null}
       {isEdit ? (

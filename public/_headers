@@ -1,0 +1,16 @@
+# Cloudflare Workers Static Assets headers file.
+#
+# `.open-next/assets` is `public/*` copied verbatim by
+# `createStaticAssets` in `@opennextjs/aws/dist/build/createAssets.js`, and
+# `wrangler.jsonc`'s `assets.directory` points at that same folder, so this
+# file ships as-is to the Workers static-asset layer. It is parsed by
+# Workers and never served as a request path itself
+# (https://developers.cloudflare.com/workers/static-assets/headers/).
+#
+# These filenames are NOT content-hashed (unlike `/_next/static/*`, which
+# Workers Static Assets already serves `immutable`), so no `immutable` here —
+# a future edit to e.g. logo.webp must still be visible within a day.
+# `stale-while-revalidate` lets a repeat visit use the cached copy instantly
+# while it revalidates in the background.
+/*.webp
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

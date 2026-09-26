@@ -81,17 +81,20 @@ describe("AralTermGradesGridForm — Grade 1 letter marks", () => {
     expect(within(table).queryByText("Average")).toBeNull();
   });
 
-  it("G3: still renders number inputs and the General Average column (letter path did not leak)", () => {
+  it("G3: still renders numeric text inputs and the General Average column (letter path did not leak)", () => {
     renderGrid({
       gradeType: "G3",
       subjects: [{ id: "g3-eng", name: "English" }],
     });
     const table = screen.getByRole("table");
 
-    expect(within(table).getAllByRole("spinbutton")).toHaveLength(1);
-    expect(
-      within(table).getByRole("spinbutton", { name: "Ana Cruz — English grade" })
-    ).toBeTruthy();
+    // Score cells are `type="text" inputMode="numeric"` (not `type="number"`,
+    // which lacks `selectionStart`/`selectionEnd` for the grid's keyboard
+    // navigation), so their accessible role is `textbox`, not `spinbutton`.
+    expect(within(table).getAllByRole("textbox")).toHaveLength(1);
+    const cell = within(table).getByRole("textbox", { name: "Ana Cruz — English grade" });
+    expect(cell.getAttribute("inputmode")).toBe("numeric");
+    expect(within(table).queryAllByRole("spinbutton")).toHaveLength(0);
     expect(within(table).queryAllByRole("combobox")).toHaveLength(0);
     expect(within(table).getByText("General")).toBeTruthy();
     expect(within(table).getByText("Average")).toBeTruthy();

@@ -211,7 +211,7 @@ async function AralWeeklyAttendanceGrid({
   const schoolIdForGrades =
     (isSuperAdmin ? sp.schoolId : user.schoolId) ?? grade.schoolId;
 
-  const [gradeSections, learners, attendances, holidays, shellGrades] =
+  const [gradeSections, learners, attendances, holidays, shellGrades, unlock] =
     await Promise.all([
       getGradeSections({
         schoolId: grade.schoolId,
@@ -259,6 +259,28 @@ async function AralWeeklyAttendanceGrid({
             isSuperAdmin,
           })
         : Promise.resolve([]),
+      // The panel is a client component, so the grant set has to travel as
+      // props — the panel computes the lock itself with `lockInfo`, and it
+      // must see the same set the server consults or a granted week renders
+      // read-only.
+      //
+      // `lockingEnabled` travels too. Unlike terms, a week key cannot be
+      // enumerated, so "everything is open" is not expressible as a set of
+      // unlocked weeks — the panel has to be told the deadline is not being
+      // enforced at all.
+      //
+      // Only depends on user.id/user.schoolId/isSuperAdmin, so it runs
+      // alongside the rest of this wave instead of after it.
+      isSuperAdmin
+        ? Promise.resolve({
+            lockingEnabled: true,
+            unlockedKeys: new Set<string>(),
+          })
+        : readUnlockState({
+            userId: user.id,
+            schoolId: user.schoolId,
+            scope: "ARAL_WEEKLY_ATTENDANCE",
+          }),
     ]);
 
   const showSection = gradeSections.length > 0;
@@ -299,20 +321,6 @@ async function AralWeeklyAttendanceGrid({
     notes: a.notes,
   }));
 
-  // The panel is a client component, so the grant set has to travel as props —
-  // the panel computes the lock itself with `lockInfo`, and it must see the
-  // same set the server consults or a granted week renders read-only.
-  //
-  // `lockingEnabled` travels too. Unlike terms, a week key cannot be enumerated,
-  // so "everything is open" is not expressible as a set of unlocked weeks — the
-  // panel has to be told the deadline is not being enforced at all.
-  const unlock = isSuperAdmin
-    ? { lockingEnabled: true, unlockedKeys: new Set<string>() }
-    : await readUnlockState({
-        userId: user.id,
-        schoolId: user.schoolId,
-        scope: "ARAL_WEEKLY_ATTENDANCE",
-      });
   const unlockedWeeks = [...unlock.unlockedKeys];
 
   return (

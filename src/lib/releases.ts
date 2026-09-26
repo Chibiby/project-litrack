@@ -135,6 +135,21 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.16.0",
+    date: "2026-09-26",
+    title: "Faster pages and easier-to-read buttons",
+    announce: true,
+    fixes: [
+      "In Term Grades, press Enter or the arrow keys to move to the next score box, so you can type a whole class without reaching for the mouse.",
+      "Weekly Attendance and Monthly Reading Level open a little faster.",
+      "The logo and pictures load once and are then kept on your device, so pages use less mobile data.",
+      "Text boxes have a clearer outline, so they are easier to see outdoors or on a dim screen.",
+      "Delete and archive buttons, and the amber buttons in dark mode, are easier to read.",
+      "In your profile, a list at the top shows every box that still needs fixing.",
+      "Opening Settings no longer flashes the dashboard before your settings appear.",
+    ],
+  },
+  {
     version: "2.15.0",
     date: "2026-09-26",
     title: "ARAL learners and tutors in the summaries",

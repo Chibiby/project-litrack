@@ -65,8 +65,8 @@ function LoginBrand() {
         <Image
           src="/partner-logos.webp"
           alt="Partner organizations: DepEd, Bagong Pilipinas, and Division of Sarangani"
-          width={1024}
-          height={312}
+          width={704}
+          height={216}
           priority
           sizes="(min-width: 1024px) 352px, 220px"
           className="h-auto w-[13rem] sm:w-[16rem] lg:w-[22rem]"

@@ -1,6 +1,12 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +36,7 @@ import {
 import type { TermMark } from "@prisma/client";
 import type { TermGradesSaveInput } from "@/lib/validators/term-grade.schema";
 import { cn } from "@/lib/utils";
+import { nextGridCell } from "@/components/forms/grid-keyboard-nav";
 
 /**
  * 60 is the input floor, not 75. 75 is DepEd's passing mark, so it only tints a
@@ -232,6 +239,56 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       }));
     }
 
+    /**
+     * Reads its bounds off the input's own `data-grid-*` attributes rather
+     * than closing over `learners`/`subjects`, so the callback identity never
+     * changes and every score cell can share one handler. Desktop and phone
+     * are separate `data-grid-container`s (the phone grid only renders its
+     * current subject window), so the lookup is scoped to the nearest one.
+     */
+    const handleGridKeyDown = useCallback((e: ReactKeyboardEvent<HTMLInputElement>) => {
+      const input = e.currentTarget;
+      const row = Number(input.dataset.gridRow);
+      const col = Number(input.dataset.gridCol);
+      const rows = Number(input.dataset.gridRows);
+      const cols = Number(input.dataset.gridCols);
+      if ([row, col, rows, cols].some((n) => Number.isNaN(n))) return;
+      // An IME's confirm-Enter belongs to the composition, not to the grid.
+      if (e.nativeEvent.isComposing) return;
+
+      // Enter must never fall through to a form submit, whether or not it
+      // also moves focus.
+      if (e.key === "Enter") e.preventDefault();
+
+      if (e.key === "ArrowLeft") {
+        const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+        if (!atStart) return;
+      }
+      if (e.key === "ArrowRight") {
+        const atEnd =
+          input.selectionStart === input.value.length &&
+          input.selectionEnd === input.value.length;
+        if (!atEnd) return;
+      }
+
+      const target = nextGridCell(e.key, e.shiftKey, { row, col }, { rows, cols });
+      if (!target) return;
+
+      // Grid navigation wins over any native ArrowUp/ArrowDown behaviour —
+      // score cells are `type="text"` precisely so there is no spinner to
+      // fight with, but this also stops native caret movement for the arrow
+      // keys once a move is actually happening.
+      e.preventDefault();
+
+      const container = input.closest<HTMLElement>("[data-grid-container]");
+      const nextInput = container?.querySelector<HTMLInputElement>(
+        `[data-grid-row="${target.row}"][data-grid-col="${target.col}"]`
+      );
+      if (!nextInput || nextInput.disabled) return;
+      nextInput.focus();
+      nextInput.select();
+    }, []);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -369,6 +426,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       learner: TermGradesGridLearner,
       subject: TermGradesGridSubject,
       className: string,
+      gridPos: { row: number; col: number; cols: number },
       placeholder?: string
     ) {
       if (scale === "LETTER") return letterMarkSelect(learner, subject, className);
@@ -378,20 +436,27 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       const failing = valid && Number(trimmed) < PASSING_SCORE;
       return (
         <Input
-          type="number"
+          // Plain text, not `type="number"`: a number input doesn't expose
+          // `selectionStart`/`selectionEnd`, which ArrowLeft/ArrowRight need
+          // to tell "caret at the edge of the cell" from "still editing the
+          // value". `isValidScore` parses the string either way, so the
+          // 60-100 whole-number validation is unaffected.
+          type="text"
           inputMode="numeric"
-          min={SCORE_MIN}
-          max={SCORE_MAX}
-          step={1}
           value={raw}
           placeholder={placeholder}
           disabled={disabled}
           onChange={(e) => setScore(learner.id, subject.id, e.target.value)}
+          onKeyDown={handleGridKeyDown}
+          data-grid-row={gridPos.row}
+          data-grid-col={gridPos.col}
+          data-grid-rows={learners.length}
+          data-grid-cols={gridPos.cols}
           aria-label={`${learner.fullName} — ${subject.name} grade`}
           aria-invalid={trimmed !== "" && !valid}
           title={failing ? `Below the passing mark of ${PASSING_SCORE}` : undefined}
           className={cn(
-            "rounded-lg px-1 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            "rounded-lg px-1 text-center tabular-nums",
             className,
             failing && TONE_FAILING
           )}
@@ -421,7 +486,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
         {heading}
 
         {/* Desktop (xl): the full sheet, every visible subject in one row. */}
-        <div className="hidden overflow-x-auto xl:block">
+        <div className="hidden overflow-x-auto xl:block" data-grid-container>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -485,7 +550,11 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                         key={subject.id}
                         className={cn("px-2", subjectIndex === 0 && "border-l border-border/60")}
                       >
-                        {scoreInput(learner, subject, "h-9 w-full min-w-[4.5rem]")}
+                        {scoreInput(learner, subject, "h-9 w-full min-w-[4.5rem]", {
+                          row: index,
+                          col: subjectIndex,
+                          cols: shown.length,
+                        })}
                       </TableCell>
                     ))}
                     {showGeneralAverage && (
@@ -501,7 +570,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
         </div>
 
         {/* Phones and tablets: five subjects at a time; both chevrons step on. */}
-        <div className="xl:hidden">
+        <div className="xl:hidden" data-grid-container>
           <div className={cn(PHONE_ROW, "text-xs text-muted-foreground sm:text-sm")}>
             <span className="text-center">#</span>
             <span className="min-w-0 leading-tight">
@@ -529,7 +598,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                   className={cn(PHONE_SUBJECTS, "grid gap-1")}
                   style={{ gridTemplateColumns: `repeat(${Math.max(1, phoneSubjects.length)}, minmax(0, 1fr))` }}
                 >
-                  {phoneSubjects.map((subject) => {
+                  {phoneSubjects.map((subject, subjectIndex) => {
                     const abbreviation = (
                       <span
                         className="whitespace-nowrap text-[11px] font-medium uppercase tracking-tighter text-muted-foreground"
@@ -542,6 +611,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                       learner,
                       subject,
                       "h-9 w-full min-w-0 px-0 text-[13px] sm:text-sm",
+                      { row: index, col: subjectIndex, cols: phoneSubjects.length },
                       "—"
                     );
                     // A `label` only forwards a tap to a *labelable* element. The
