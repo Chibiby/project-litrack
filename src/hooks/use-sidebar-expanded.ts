@@ -13,13 +13,15 @@ export const SIDEBAR_EXPANDED_KEY = "litrack.sidebar.expanded";
 const TABLET_LANDSCAPE_QUERY = "(min-width: 1024px) and (max-width: 1279px)";
 
 /**
- * Reset desktop sidebar preference to expanded.
- * Call on successful login so a new session always starts expanded;
- * within the session, toggle still persists via localStorage across refresh.
+ * Clear any persisted desktop sidebar preference.
+ * Call on successful login so a new session starts from the width-based
+ * default (expanded on desktop, folded in the tablet-landscape band) instead
+ * of inheriting a previous session's stored value; within the session,
+ * toggle still persists via localStorage across refresh.
  */
 export function resetSidebarExpandedPreference() {
   try {
-    localStorage.setItem(SIDEBAR_EXPANDED_KEY, "true");
+    localStorage.removeItem(SIDEBAR_EXPANDED_KEY);
   } catch {
     // Private mode / blocked storage — ignore.
   }

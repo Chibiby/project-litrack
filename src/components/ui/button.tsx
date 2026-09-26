@@ -26,8 +26,11 @@ const buttonVariants = cva(
       // has to match that breakpoint, not `sm`. Putting the floor here rather
       // than per component keeps one rule in one place.
       //
-      // A component that sets its own `h-*` still wins: `cn` merges className
-      // last, so an explicitly sized button is unaffected.
+      // `cn` merges className last, so a caller's own unprefixed `h-*` (e.g.
+      // `h-8`) overrides both the floor and the `lg:` override, applying
+      // across the whole 640–1023px tablet band, not just desktop. Callers
+      // that need a shorter control on tablet must repeat the floor
+      // themselves, e.g. `h-11 lg:h-8` — see the attendance cell trigger.
       size: {
         default: "h-11 px-4 py-2 lg:h-10",
         sm: "h-11 rounded-lg px-3 lg:h-9",

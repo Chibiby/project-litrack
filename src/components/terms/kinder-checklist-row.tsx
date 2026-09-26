@@ -104,7 +104,7 @@ function TermRatingSelect({
       onValueChange={(v) => onChange(parseRatingSelectValue(v))}
       disabled={disabled}
     >
-      <SelectTrigger aria-label={ariaLabel} className="h-9 w-full min-w-[4.5rem] text-sm">
+      <SelectTrigger aria-label={ariaLabel} className="h-11 w-full min-w-[4.5rem] text-sm lg:h-9">
         <SelectValue>
           {value ? KINDER_COMPETENCY_RATING_SHORT_LABELS[value] : "Not specified"}
         </SelectValue>
@@ -173,7 +173,7 @@ export function KinderChecklistRow({
           placeholder="Remarks (optional)"
           aria-label={`Remarks for ${competencyText}`}
           maxLength={500}
-          className="h-9 text-sm"
+          className="h-11 text-sm lg:h-9"
         />
       </TableCell>
     </TableRow>
@@ -217,7 +217,7 @@ export function KinderChecklistCard({
         placeholder="Remarks (optional)"
         aria-label={`Remarks for ${competencyText}`}
         maxLength={500}
-        className="h-9 text-sm"
+        className="h-11 text-sm lg:h-9"
       />
     </Surface>
   );

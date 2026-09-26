@@ -351,7 +351,7 @@ function AccountsTableInner({
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Name, email, or school..."
-                  className="h-10 pl-9"
+                  className="h-11 pl-9 lg:h-10"
                   disabled={pending}
                 />
               </div>
@@ -365,7 +365,7 @@ function AccountsTableInner({
                 onValueChange={(value) => apply({ role: value })}
                 disabled={pending}
               >
-                <SelectTrigger id="accounts-role" className="h-10 w-full">
+                <SelectTrigger id="accounts-role" className="h-11 w-full lg:h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -397,7 +397,7 @@ function AccountsTableInner({
             <div className="flex gap-2">
               <Button
                 type="submit"
-                className="h-10 flex-1 xl:flex-none"
+                className="h-11 flex-1 lg:h-10 xl:flex-none"
                 loading={pending}
                 loadingText="Searching…"
               >
@@ -407,7 +407,7 @@ function AccountsTableInner({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 flex-1 xl:flex-none"
+                  className="h-11 flex-1 lg:h-10 xl:flex-none"
                   disabled={pending}
                   onClick={() => {
                     setQuery("");

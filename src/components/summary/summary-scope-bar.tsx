@@ -116,7 +116,7 @@ export function SummaryScopeBar({
                   if (!active && !disabled) go({ level: item.id === "overall" ? null : item.id });
                 }}
                 className={cn(
-                  "h-10 px-2 text-sm sm:px-3 lg:h-9",
+                  "h-11 px-2 text-sm sm:px-3 lg:h-9",
                   active
                     ? "bg-card text-foreground shadow-sm hover:bg-card"
                     : "text-muted-foreground",

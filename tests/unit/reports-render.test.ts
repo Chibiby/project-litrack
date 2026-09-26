@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { CellValue, Workbook, Worksheet } from "exceljs";
 import type { ReportTable } from "@/lib/reports/render";
 
@@ -74,6 +74,16 @@ function rowStarting(ws: Worksheet, text: string): number {
 }
 
 describe("renderPdf", () => {
+  beforeAll(async () => {
+    // `renderPdf`'s first call pays for a cold `await import("pdfkit")` —
+    // pdfkit plus fontkit, then AFM font metrics and the seal/logo PNGs read
+    // from disk. Left inside the test below, that cost rode on the default
+    // 5000ms per-test budget and timed out under CI's shared CPU load, then
+    // passed on a lone rerun. Pay it once here instead, with margin, so the
+    // module is warm before any test's own (still generous) timeout starts.
+    await renderPdf(TABLE);
+  }, 20_000);
+
   it("produces a real PDF", async () => {
     const buf = await renderPdf(TABLE);
 
@@ -81,7 +91,7 @@ describe("renderPdf", () => {
     // many bytes came back.
     expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(buf.length).toBeGreaterThan(500);
-  });
+  }, 10_000);
 
   it("survives a report with no rows", async () => {
     // The empty case draws an italic note instead of a table body, and takes a

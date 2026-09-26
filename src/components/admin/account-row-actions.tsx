@@ -92,7 +92,7 @@ export function PasswordCell({ row }: { row: AccountRow }) {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-10 gap-1.5 px-2 text-xs lg:h-7"
+          className="h-11 gap-1.5 px-2 text-xs lg:h-7"
           disabled={isNonSignInHead}
           aria-describedby={isNonSignInHead ? reasonId : undefined}
           onClick={() => setRevealed(password.value)}
@@ -111,7 +111,7 @@ export function PasswordCell({ row }: { row: AccountRow }) {
         type="button"
         variant="ghost"
         size="sm"
-        className="h-10 gap-1.5 px-2 text-xs lg:h-7"
+        className="h-11 gap-1.5 px-2 text-xs lg:h-7"
         loading={pending}
         loadingText="Revealing…"
         disabled={isNonSignInHead}

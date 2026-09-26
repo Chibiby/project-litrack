@@ -169,7 +169,7 @@ export function AralTutorCombobox({
           aria-controls={listId}
           disabled={disabled}
           className={cn(
-            "h-10 w-full justify-between rounded-md border-input bg-background px-3 py-2 text-sm font-normal ring-offset-background",
+            "h-11 w-full justify-between rounded-md border-input bg-background px-3 py-2 text-sm font-normal ring-offset-background lg:h-10",
             "hover:bg-background hover:text-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50"
@@ -190,7 +190,7 @@ export function AralTutorCombobox({
             aria-label="Search teachers"
             aria-controls={listId}
             aria-activedescendant={rows.length > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
-            className="h-9"
+            className="h-11 lg:h-9"
           />
         </div>
         <div

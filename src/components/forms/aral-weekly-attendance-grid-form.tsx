@@ -644,7 +644,7 @@ export function BulkAttendanceActions({
         {remarkOpen && (
           <div className="space-y-2 border-t border-border/60 p-3">
             <Select value={reason} onValueChange={setReason}>
-              <SelectTrigger className="h-8 text-sm">
+              <SelectTrigger className="h-11 text-sm lg:h-8">
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
               <SelectContent>

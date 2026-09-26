@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.17.1",
+    date: "2026-09-27",
+    title: "Tablet fixes",
+    announce: true,
+    fixes: [
+      "On a tablet held sideways, the side menu now really does start folded after you sign in.",
+      "On a tablet, search boxes, dropdowns and small buttons are full touch size again instead of shrinking.",
+      "In Weekly Attendance, you can type spaces in a day's Optional details box again.",
+      "If your device is set to reduce motion, the saving spinner keeps turning so you can tell it is still working.",
+    ],
+  },
+  {
     version: "2.17.0",
     date: "2026-09-26",
     title: "Easier to use on tablets, and safer backups",

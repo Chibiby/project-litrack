@@ -785,7 +785,7 @@ function DateRangeFilter({
         <Button
           type="button"
           variant="outline"
-          className="flex h-10 w-full items-center justify-start gap-2 rounded-lg border-input bg-background px-3 text-left text-sm font-normal"
+          className="flex h-11 w-full items-center justify-start gap-2 rounded-lg border-input bg-background px-3 text-left text-sm font-normal lg:h-10"
         >
           <CalendarDays
             aria-hidden

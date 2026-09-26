@@ -236,7 +236,7 @@ export function TermsReportPanel({
           }
         }}
         placeholder="Search learner by name..."
-        className="h-10 rounded-xl pl-9 text-sm xl:h-11"
+        className="h-11 rounded-xl pl-9 text-sm lg:h-10 xl:h-11"
         aria-label="Search learners by name"
       />
     </div>
@@ -291,7 +291,7 @@ export function TermsReportPanel({
       onClick={handleExport}
       loading={exportPending}
       loadingText="Preparing Excel…"
-      className="h-10 shrink-0 rounded-xl px-3 xl:h-11 xl:px-5"
+      className="h-11 shrink-0 rounded-xl px-3 lg:h-10 xl:h-11 xl:px-5"
       aria-label="Export to Excel"
     >
       <Download className="size-5" aria-hidden />
@@ -305,7 +305,7 @@ export function TermsReportPanel({
       onClick={handleSave}
       loading={savePending}
       loadingText="Saving…"
-      className="h-10 shrink-0 rounded-xl bg-violet-600 px-4 text-white hover:bg-violet-700 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
+      className="h-11 shrink-0 rounded-xl bg-violet-600 px-4 text-white hover:bg-violet-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
     >
       <Save className="size-5" aria-hidden />
       <span className="xl:hidden">Save</span>

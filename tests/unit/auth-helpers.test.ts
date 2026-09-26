@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   generateActivationCredential,
   generateReadableCredential,
@@ -208,6 +208,34 @@ describe("roles + middleware gate", () => {
 });
 
 describe("requireUser while signed out (T15)", () => {
+  // `landing()` reaches `@/lib/auth/session` with a dynamic `import()` — the
+  // only place in this file that does, since every other describe above
+  // tests pure helpers that never touch it. That module pulls in
+  // `@opentelemetry/api`, `@/lib/supabase/jwks`, `@/lib/auth/session-end`,
+  // etc.; a cold first `import()` of that whole graph can outrun the default
+  // 5000ms test timeout on a loaded CI machine. When it did, the *test*
+  // failed, but the in-flight `requireUser(...)` promise kept running in the
+  // background (a timeout aborts the assertion, not the promise) and could
+  // still call the mocked `redirect` — after this test had already moved on —
+  // corrupting `redirect.mock.calls` for whichever test ran next. That is the
+  // "expected '/admin/login' to be '/login'" cascade: a stray call from the
+  // PREVIOUS test's roles landed in the array `redirect.mock.calls[0]` read
+  // for the NEXT one.
+  //
+  // Warming the import here (its own generous timeout) means the module is
+  // already loaded before either real test's timer starts, so neither should
+  // ever need to fall back on the per-test margin below — but both still
+  // carry it, and `afterEach` clears the mock unconditionally, so a slow CI
+  // box degrades to "these two tests take longer" rather than "a later test
+  // reads another test's redirect".
+  beforeAll(async () => {
+    await import("@/lib/auth/session");
+  }, 15_000);
+
+  afterEach(() => {
+    redirect.mockClear();
+  });
+
   async function landing(roles: Parameters<typeof import("@/lib/auth/session").requireUser>[0]) {
     const { requireUser } = await import("@/lib/auth/session");
     redirect.mockClear();
@@ -219,14 +247,14 @@ describe("requireUser while signed out (T15)", () => {
     expect(await landing(["DISTRICT_ADMIN"])).toBe("/admin/login");
     expect(await landing("DISTRICT_ADMIN")).toBe("/admin/login");
     expect(await landing(["SUPER_ADMIN", "DISTRICT_ADMIN"])).toBe("/admin/login");
-  });
+  }, 10_000);
 
   it("still sends Super Admin pages to the admin login and school pages to /login", async () => {
     expect(await landing("SUPER_ADMIN")).toBe("/admin/login");
     expect(await landing("SCHOOL_HEAD")).toBe("/login");
     expect(await landing(["TEACHER"])).toBe("/login");
     expect(await landing(undefined)).toBe("/login");
-  });
+  }, 10_000);
 });
 
 describe("teacher registration helpers", () => {

@@ -442,7 +442,7 @@ function LearnerListPanel({
             type="button"
             size="icon"
             variant="outline"
-            className="size-9 shrink-0 rounded-xl"
+            className="size-11 shrink-0 rounded-xl lg:size-9"
             disabled={pending}
             aria-label={`More actions for ${l.fullName}`}
           >
@@ -659,7 +659,7 @@ function LearnerListPanel({
                                 type="button"
                                 size="icon"
                                 variant="outline"
-                                className="size-9 rounded-xl"
+                                className="size-11 rounded-xl lg:size-9"
                                 onClick={() => setProfileLearnerId(l.id)}
                               >
                                 <Eye className="size-4" aria-hidden />

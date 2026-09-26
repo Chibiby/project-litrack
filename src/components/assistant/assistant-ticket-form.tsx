@@ -143,7 +143,7 @@ export function AssistantTicketForm({
           value={category}
           onValueChange={(value) => setCategory(value as SupportTicketCategory)}
         >
-          <SelectTrigger id="assistant-category" className="h-9 text-sm">
+          <SelectTrigger id="assistant-category" className="h-11 text-sm lg:h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -166,7 +166,7 @@ export function AssistantTicketForm({
               value={scope}
               onValueChange={(value) => setScope(value as UnlockScope)}
             >
-              <SelectTrigger id="assistant-scope" className="h-9 text-sm">
+              <SelectTrigger id="assistant-scope" className="h-11 text-sm lg:h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -189,7 +189,7 @@ export function AssistantTicketForm({
                 type="date"
                 value={weekKey}
                 onChange={(event) => pickWeek(event.target.value)}
-                className="h-9 text-sm"
+                className="h-11 text-sm lg:h-9"
               />
               <p className="text-[11px] text-muted-foreground">
                 {weekKey
@@ -206,7 +206,7 @@ export function AssistantTicketForm({
                 value={term}
                 onValueChange={(value) => setTerm(value as TermPeriodValue)}
               >
-                <SelectTrigger id="assistant-term" className="h-9 text-sm">
+                <SelectTrigger id="assistant-term" className="h-11 text-sm lg:h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -232,7 +232,7 @@ export function AssistantTicketForm({
           onChange={(event) => setSubject(event.target.value)}
           maxLength={120}
           placeholder="In a few words"
-          className="h-9 text-sm"
+          className="h-11 text-sm lg:h-9"
         />
       </div>
 

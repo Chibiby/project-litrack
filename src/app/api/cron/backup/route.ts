@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { backUpDatabase } from "@/lib/db/snapshot";
 import { isBackupStoreConfigured, type BackupKind } from "@/lib/db/backup-store";
@@ -28,7 +29,17 @@ function isAuthorized(request: NextRequest): boolean {
   // Fail closed. An unset secret must not mean "allow everyone" — that is the
   // difference between a misconfiguration and an open endpoint.
   if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
+
+  const header = request.headers.get("authorization");
+  if (!header) return false;
+
+  // Constant-time compare. SHA-256 both sides first so the two buffers
+  // handed to timingSafeEqual are always 32 bytes each — that sidesteps the
+  // length check `timingSafeEqual` would otherwise need (and the throw on
+  // mismatched lengths that check exists to avoid).
+  const expectedDigest = createHash("sha256").update(`Bearer ${secret}`).digest();
+  const receivedDigest = createHash("sha256").update(header).digest();
+  return timingSafeEqual(expectedDigest, receivedDigest);
 }
 
 export const GET = route("GET /api/cron/backup", async (request: NextRequest) => {

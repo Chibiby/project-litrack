@@ -152,7 +152,7 @@ function RegenButton({
   schoolId,
   schoolName,
   onCredential,
-  className = "h-9 w-10",
+  className = "h-11 w-11 lg:h-9 lg:w-10",
 }: {
   schoolId: string;
   schoolName: string;
@@ -167,7 +167,8 @@ function RegenButton({
       variant="ghost"
       // An icon button that happened to be drawn at `sm`'s box. `size="icon"` is
       // what makes the shared spinner *replace* the key glyph instead of sitting
-      // beside it; h-9/w-10 keeps the exact footprint `size="sm"` gave it, so the
+      // beside it; the default className keeps the exact `size="sm"` footprint
+      // (h-9/w-10) from `lg` up, with the 44px touch floor below it, so the
       // row of actions is unchanged when idle.
       size="icon"
       className={className}

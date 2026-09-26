@@ -610,7 +610,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                     const control = scoreInput(
                       learner,
                       subject,
-                      "h-9 w-full min-w-0 px-0 text-[13px] sm:text-sm",
+                      "h-11 w-full min-w-0 px-0 text-[13px] sm:text-sm lg:h-9",
                       { row: index, col: subjectIndex, cols: phoneSubjects.length },
                       "—"
                     );

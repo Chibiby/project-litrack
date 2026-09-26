@@ -386,7 +386,7 @@ function AnswerDialog({
                     max={MAX_UNLOCK_DAYS}
                     value={days}
                     onChange={(event) => setDays(event.target.value)}
-                    className="h-10 w-24 text-sm"
+                    className="h-11 w-24 text-sm lg:h-10"
                   />
                   <p className="text-xs text-muted-foreground">
                     Access ends by itself after this. Up to {MAX_UNLOCK_DAYS} days.

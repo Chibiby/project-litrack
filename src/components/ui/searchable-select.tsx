@@ -195,7 +195,7 @@ export function SearchableSelect({
             aria-label={searchPlaceholder}
             aria-controls={listId}
             aria-activedescendant={visible.length > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
-            className="h-9"
+            className="h-11 lg:h-9"
           />
         </div>
         <div ref={listRef} id={listId} role="listbox" className="max-h-64 overflow-y-auto p-1">

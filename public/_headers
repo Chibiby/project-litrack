@@ -14,3 +14,6 @@
 # while it revalidates in the background.
 /*.webp
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/favicon.ico
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

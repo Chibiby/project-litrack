@@ -255,6 +255,27 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+beforeAll(async () => {
+  // The very first open Dialog render pays for Radix Dialog/Tabs/Portal JIT
+  // under jsdom, on top of React's own first-mount cost — enough on a loaded
+  // CI machine to blow the first assertion test's default 5000ms budget, which
+  // then also left `getLearnerProfile`'s call count and the dialog's DOM
+  // mounted for the next test to trip over. Pay that cost here, with margin,
+  // using a throwaway render this describe block's `beforeEach` hasn't set up
+  // yet, and leave nothing behind: unmount, then clear every mock and module
+  // state a real test relies on being empty at test start.
+  getLearnerProfile.mockResolvedValue({ ok: true, data: makeLearner() });
+  listAralTutorOptions.mockResolvedValue({
+    ok: true,
+    data: { tutors: [], selfId: null },
+  });
+  renderModal();
+  await awaitLoaded();
+  cleanup();
+  vi.clearAllMocks();
+  formProps = null;
+}, 15_000);
+
 describe("LearnerProfileModal — shell", () => {
   it("stays closed when no learner is selected", () => {
     renderModal({ learnerId: null });
@@ -268,7 +289,10 @@ describe("LearnerProfileModal — shell", () => {
     expect(getLearnerProfile).toHaveBeenCalledWith("learner-1");
     expect(screen.getByRole("dialog")).not.toBeNull();
     expect(screen.getByText("Student Profile")).not.toBeNull();
-  });
+    // Sized with margin beyond the default 5000ms: this is normally the first
+    // test in the file to actually open the Dialog, which under CI's shared
+    // CPU load can outrun the default alone even with the module warmed above.
+  }, 10_000);
 
   it("offers all five tabs from the comp", async () => {
     renderModal();

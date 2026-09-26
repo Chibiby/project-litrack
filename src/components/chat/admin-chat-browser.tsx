@@ -168,7 +168,7 @@ export function AdminChatBrowser({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search conversations..."
                 aria-label="Search conversations"
-                className="h-9 bg-background pl-9 text-sm"
+                className="h-11 bg-background pl-9 text-sm lg:h-9"
               />
             </label>
             <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
@@ -186,7 +186,7 @@ export function AdminChatBrowser({
                   aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
                   className={cn(
-                    "h-10 whitespace-nowrap rounded-full px-3 text-xs font-medium lg:h-7",
+                    "h-11 whitespace-nowrap rounded-full px-3 text-xs font-medium lg:h-7",
                     filter === value
                       ? "bg-violet-soft text-violet-soft-foreground hover:bg-violet-soft"
                       : "bg-muted text-muted-foreground hover:bg-accent"

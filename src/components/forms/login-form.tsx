@@ -501,7 +501,7 @@ export function LoginForm({
           <Button
             asChild
             variant="outline"
-            className="mt-3 h-10 w-full rounded-xl border-violet-100 bg-violet-50 text-sm font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 2xl:h-11 2xl:text-base [&_svg]:size-4 [&_svg]:text-violet-600"
+            className="mt-3 h-11 w-full rounded-xl border-violet-100 bg-violet-50 text-sm font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 lg:h-10 2xl:h-11 2xl:text-base [&_svg]:size-4 [&_svg]:text-violet-600"
           >
             <Link href="/admin/login">
               <ShieldCheck aria-hidden />
