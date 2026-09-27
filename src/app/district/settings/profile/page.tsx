@@ -1,5 +1,4 @@
 import { requireAdminScope } from "@/lib/auth/district-scope";
-import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { AppShell } from "@/components/app-shell";
 import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
@@ -15,7 +14,7 @@ export default async function DistrictSettingsProfilePage() {
 
   return (
     <AppShell title="Profile" role={user.role} userName={user.fullName || user.email} hideTitle>
-      <DistrictSettingsShell active="profile" bannerSrc={teacherBannerSrc(null)}>
+      <DistrictSettingsShell active="profile">
         <ProfilePhotoCard name={name} avatarPath={user.avatarPath} />
         <Surface as="section" aria-labelledby="district-account-title" className="min-w-0 rounded-2xl">
           <SurfaceHeader className="px-4 sm:px-5">

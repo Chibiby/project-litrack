@@ -35,6 +35,7 @@ export default async function DistrictSupportPage() {
           title="Support"
           subtitle="Help requests from teachers and School Heads in your schools."
           meta={describeScope(scope)}
+          variant="compact"
         />
       </div>
       {hasNoDistricts(scope) ? (

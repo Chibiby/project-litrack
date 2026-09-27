@@ -37,6 +37,7 @@ export default async function DistrictUnlocksPage() {
           title="Revision access"
           subtitle="Reopen a locked record so a school or a teacher can correct it."
           meta={describeScope(scope)}
+          variant="compact"
         />
       </div>
       {hasNoDistricts(scope) ? (

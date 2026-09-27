@@ -23,7 +23,7 @@ import { StatCard, StatCardRow } from "@/components/dashboard/teacher/stat-cards
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { formatCount, formatPct } from "@/components/summary/summary-format";
 import { NoDistrictsState } from "@/components/district/no-districts-state";
-import { DistrictsPanel, type DistrictCard } from "@/components/district/districts-panel";
+import { DistrictsPanel, shouldShowDistrictsPanel, type DistrictCard } from "@/components/district/districts-panel";
 import { buildDistrictAttention } from "@/components/district/overview-attention";
 import {
   DistrictAttentionSkeleton,
@@ -246,11 +246,13 @@ export default async function DistrictOverviewPage() {
                 </StatCardRow>
               </section>
 
-              <DistrictsPanel
-                title={scope.kind === "districts" ? "Your districts" : "Districts"}
-                districts={districtCards}
-                totalSchools={schools.length}
-              />
+              {shouldShowDistrictsPanel(districtCards.length, scope.kind) ? (
+                <DistrictsPanel
+                  title={scope.kind === "districts" ? "Your districts" : "Districts"}
+                  districts={districtCards}
+                  totalSchools={schools.length}
+                />
+              ) : null}
             </div>
 
             <aside

@@ -45,6 +45,13 @@ async function DistrictSchoolsBody({
     );
   }
 
+  // From the admin's whole scope, not the search/status-filtered or paged
+  // rows below — a search that happens to narrow to one district must not
+  // hide the column for a scope that actually spans several.
+  // A division-wide scope keeps the column: its header never names a district.
+  const singleDistrict =
+    scope.kind === "districts" && new Set(schools.map((school) => school.district ?? null)).size === 1;
+
   const list = parseSchoolsListParams(searchParams);
   const q = list.q.toLowerCase();
   const filtered = schools.filter((school) => {
@@ -91,6 +98,7 @@ async function DistrictSchoolsBody({
           delete: false,
           openAsSchoolHead: false,
           columns: "district",
+          singleDistrict,
           basePath: DISTRICT_ROUTES.schools,
           emptyMessage: "No school matches your search.",
         }}
@@ -118,6 +126,7 @@ export default async function DistrictSchoolsPage({ searchParams }: PageProps) {
           title="Schools"
           subtitle="Open a school to edit its details, switch it on or off, or reset its School Head sign-in."
           meta={describeScope(scope)}
+          variant="compact"
         />
       </div>
       {hasNoDistricts(scope) ? (

@@ -127,6 +127,7 @@ export default async function DistrictTransfersPage({ searchParams }: PageProps)
           title="Learner transfers"
           subtitle="Move a learner from one of your schools to another, with their records."
           meta={describeScope(scope)}
+          variant="compact"
         />
       </div>
       {hasNoDistricts(scope) ? (

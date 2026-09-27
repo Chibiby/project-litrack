@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -114,6 +115,53 @@ export function PageHero({
           </div>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * The un-illustrated page header: eyebrow (optional) + H1 + one-line
+ * description, ~100px tall. Tool pages that are opened often and read once —
+ * the district admin's Schools, Announcements, Transfers, Revision access,
+ * Support and Settings — use this instead of `PageHero`'s ~270px banded art,
+ * which `PageHero` keeps reserved for a role's Overview/dashboard.
+ */
+export function CompactPageHeader({
+  eyebrow,
+  eyebrowIcon: EyebrowIcon,
+  title,
+  subtitle,
+  meta,
+  topRight,
+}: {
+  eyebrow?: string;
+  eyebrowIcon?: LucideIcon;
+  title: string;
+  /** One line; callers should keep this short, there is no room for wrapping to matter. */
+  subtitle: string;
+  /** Appended to the subtitle after a separator, e.g. the admin's scope. */
+  meta?: string;
+  /** A control placed beside the title — page actions, pickers. */
+  topRight?: React.ReactNode;
+}) {
+  return (
+    <section className="mt-2 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
+      <div className="min-w-0">
+        {eyebrow ? (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:text-sm">
+            {EyebrowIcon ? <EyebrowIcon className="size-3.5 shrink-0 sm:size-4" aria-hidden /> : null}
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-2xl">
+          {title}
+        </h1>
+        <p className="mt-1 text-sm leading-snug text-muted-foreground">
+          {subtitle}
+          {meta ? ` · ${meta}` : ""}
+        </p>
+      </div>
+      {topRight ? <div className="shrink-0">{topRight}</div> : null}
     </section>
   );
 }

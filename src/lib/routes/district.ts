@@ -38,12 +38,12 @@ export const DISTRICT_ROUTES = {
  */
 export const DISTRICT_SUMMARY_FACETS = [
   { id: "learners", label: "Learners" },
-  { id: "reading-behavior", label: "Reading behavior" },
+  { id: "reading-behavior", label: "Reading behaviour" },
   { id: "end-of-term", label: "End of term" },
-  { id: "attendance", label: "Attendance" },
+  { id: "attendance", label: "Weekly attendance" },
   { id: "reading-levels", label: "Monthly reading level" },
-  { id: "compliance", label: "Compliance" },
-  { id: "profiling", label: "Teacher & head profiling" },
+  { id: "compliance", label: "Non-compliance" },
+  { id: "profiling", label: "Teacher and School Head profiling" },
   { id: "aral", label: "ARAL learners and tutors" },
 ] as const;
 

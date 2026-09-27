@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.18.1",
+    date: "2026-09-27",
+    title: "District pages are easier to find your way around",
+    announce: true,
+    fixes: [
+      "For district admins: the side menu now lists Schools, Announcements, Transfers, Revision access and Support first, so you no longer scroll past the summaries to reach them.",
+      "For district admins: menu names now match the page they open: Unlocks is Revision access, Compliance is Non-compliance, and Attendance is Weekly attendance.",
+      "For district admins: the Schools, Announcements, Transfers, Revision access, Support and Settings pages open with a short header, so the page's work starts near the top.",
+      "For district admins: with one district, the Overview no longer repeats it in a half-empty card, and the Schools list drops its District column.",
+    ],
+  },
+  {
     version: "2.18.0",
     date: "2026-09-27",
     title: "Search boxes that work the same everywhere",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, KeyRound, UserCircle, type LucideIcon } from "lucide-react";
-import { PageHero } from "@/components/shell/page-hero";
+import { CompactPageHeader } from "@/components/shell/page-hero";
 import { Surface } from "@/components/ui/surface";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { cn } from "@/lib/utils";
@@ -63,28 +63,17 @@ function SettingsNavCard({ active }: { active: DistrictSettingsSection }) {
  */
 export function DistrictSettingsShell({
   active,
-  bannerSrc,
   children,
 }: {
   active: DistrictSettingsSection;
-  bannerSrc: string;
   children: React.ReactNode;
 }) {
   return (
     <>
-      <PageHero
-        bannerSrc={bannerSrc}
-        artClassName="right-[calc(18%-272px)] sm:right-[calc(23%-272px)]"
-        phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_67%,black_72%)]"
-        contentClassName="lg:min-h-[15rem]"
-      >
-        <h1 className="max-w-[11rem] text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">
-          Settings
-        </h1>
-        <p className="mt-2 max-w-[11rem] text-sm leading-snug text-slate-600 dark:text-slate-300 sm:max-w-sm sm:text-base lg:max-w-md lg:text-lg lg:text-slate-800">
-          {active === "security" ? "Change your password." : "Update your name and photo."}
-        </p>
-      </PageHero>
+      <CompactPageHeader
+        title="Settings"
+        subtitle={active === "security" ? "Change your password." : "Update your name and photo."}
+      />
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:mt-6 lg:grid-cols-[19rem_minmax(0,1fr)] lg:items-start lg:gap-6">
         <SettingsNavCard active={active} />

@@ -331,15 +331,6 @@ export function getNavGroups(
           ],
         },
         {
-          label: "Summary",
-          items: DISTRICT_SUMMARY_FACETS.map((facet) => ({
-            id: `district-summary-${facet.id}`,
-            label: facet.label,
-            href: DISTRICT_ROUTES.summary(facet.id),
-            icon: BarChart3,
-          })),
-        },
-        {
           label: "Schools",
           items: [
             { id: "district-schools", label: "Schools", href: DISTRICT_ROUTES.schools, icon: School },
@@ -348,11 +339,20 @@ export function getNavGroups(
         {
           label: "Operations",
           items: [
-            { id: "district-support", label: "Support", href: DISTRICT_ROUTES.support, icon: LifeBuoy },
             { id: "district-announcements", label: "Announcements", href: DISTRICT_ROUTES.announcements, icon: Megaphone },
             { id: "district-transfers", label: "Transfers", href: DISTRICT_ROUTES.transfers, icon: ArrowRightLeft },
-            { id: "district-unlocks", label: "Unlocks", href: DISTRICT_ROUTES.unlocks, icon: Unlock },
+            { id: "district-unlocks", label: "Revision access", href: DISTRICT_ROUTES.unlocks, icon: Unlock },
+            { id: "district-support", label: "Support", href: DISTRICT_ROUTES.support, icon: LifeBuoy },
           ],
+        },
+        {
+          label: "Summaries",
+          items: DISTRICT_SUMMARY_FACETS.map((facet) => ({
+            id: `district-summary-${facet.id}`,
+            label: facet.label,
+            href: DISTRICT_ROUTES.summary(facet.id),
+            icon: BarChart3,
+          })),
         },
         {
           label: "Settings",

@@ -89,6 +89,14 @@ export type SchoolsTableCapabilities = {
   openAsSchoolHead: boolean;
   /** Region filter and the Region/Division/Users/Learners columns. */
   columns: "admin" | "district";
+  /**
+   * The caller's whole scope is one district, computed server-side from the
+   * admin's assignment — never inferred from the rows on the current page,
+   * which a search or a filter can thin to one district by accident. Only
+   * meaningful with `columns: "district"`; hides the District column, which
+   * would otherwise repeat the same value down every row.
+   */
+  singleDistrict?: boolean;
   basePath: string;
   emptyMessage: string;
 };
@@ -302,6 +310,7 @@ function SchoolsTableInner({
   const caps: SchoolsTableCapabilities = { ...ADMIN_SCHOOLS_TABLE_CAPABILITIES, ...capabilities };
   const { basePath } = caps;
   const isAdminColumns = caps.columns === "admin";
+  const showDistrictColumn = !isAdminColumns && !caps.singleDistrict;
   const detailHref = (id: string) => `${basePath}/${id}`;
   const DetailIcon = caps.edit ? Pencil : Eye;
   const detailVerb = caps.edit ? "Edit" : "View";
@@ -556,9 +565,9 @@ function SchoolsTableInner({
                   <TableHead>Users</TableHead>
                   <TableHead>Learners</TableHead>
                 </>
-              ) : (
+              ) : showDistrictColumn ? (
                 <TableHead>District</TableHead>
-              )}
+              ) : null}
               <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
@@ -567,7 +576,7 @@ function SchoolsTableInner({
             {optimisticSchools.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={isAdminColumns ? 8 : 5}
+                  colSpan={isAdminColumns ? 8 : showDistrictColumn ? 5 : 4}
                   className="py-10 text-center text-muted-foreground"
                 >
                   {caps.emptyMessage}
@@ -628,13 +637,13 @@ function SchoolsTableInner({
                         <Badge variant="outline">{school.learners}</Badge>
                       </TableCell>
                     </>
-                  ) : (
+                  ) : showDistrictColumn ? (
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
                         {school.district || "—"}
                       </span>
                     </TableCell>
-                  )}
+                  ) : null}
                   <TableCell>
                     {school.isActive ? (
                       <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
@@ -776,14 +785,14 @@ function SchoolsTableInner({
                     <dd className="mt-1"><Badge variant="outline">{school.learners}</Badge></dd>
                   </div>
                 </dl>
-              ) : (
+              ) : showDistrictColumn ? (
                 <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
                   <div>
                     <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">District</dt>
                     <dd className="mt-1 text-muted-foreground">{school.district || "—"}</dd>
                   </div>
                 </dl>
-              )}
+              ) : null}
               <div className="mt-4 flex flex-wrap items-center gap-1 border-t pt-3">
                 <Button asChild variant="ghost" size="sm" className={mobileTouch} aria-label={`${detailVerb} ${school.name}`}>
                   <PrefetchLink href={detailHref(school.id)}>

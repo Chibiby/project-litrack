@@ -36,6 +36,7 @@ export default async function DistrictAnnouncementsPage() {
           title="Announcements"
           subtitle="Send a notice to your schools. It shows on each school's Announcements page."
           meta={describeScope(scope)}
+          variant="compact"
         />
       </div>
       {hasNoDistricts(scope) ? (

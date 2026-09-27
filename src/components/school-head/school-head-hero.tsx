@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { PageHero } from "@/components/shell/page-hero";
+import { CompactPageHeader, PageHero } from "@/components/shell/page-hero";
 
 /**
  * The School Head hero: thin wrapper over `PageHero`, the same relationship
@@ -22,6 +22,7 @@ export function SchoolHeadHero({
   bannerSrc = "/brand/banner-learner.webp",
   topRight,
   stats,
+  variant = "illustrated",
 }: {
   eyebrow: string;
   eyebrowIcon: LucideIcon;
@@ -35,7 +36,27 @@ export function SchoolHeadHero({
   topRight?: React.ReactNode;
   /** Two or three compact StatCards inside the band, as KinderChecklistHero does. */
   stats?: React.ReactNode;
+  /**
+   * `"illustrated"` (default): the banded art hero every existing caller
+   * keeps. `"compact"`: `CompactPageHeader` instead — eyebrow + H1 + one line,
+   * no art, ~100px. `stats` is ignored in this variant: a tool page dense
+   * enough to need stat tiles belongs in the illustrated hero, not this one.
+   */
+  variant?: "illustrated" | "compact";
 }) {
+  if (variant === "compact") {
+    return (
+      <CompactPageHeader
+        eyebrow={eyebrow}
+        eyebrowIcon={EyebrowIcon}
+        title={title}
+        subtitle={subtitle}
+        meta={meta}
+        topRight={topRight}
+      />
+    );
+  }
+
   return (
     <PageHero
       bannerSrc={bannerSrc}

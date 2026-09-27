@@ -12,7 +12,7 @@ vi.mock("@/components/nav/prefetch-link", () => ({
 }));
 
 import { buildDistrictAttention, previewSchools } from "@/components/district/overview-attention";
-import { DistrictsPanel, districtQuickLinks } from "@/components/district/districts-panel";
+import { DistrictsPanel, districtQuickLinks, shouldShowDistrictsPanel } from "@/components/district/districts-panel";
 
 afterEach(cleanup);
 
@@ -91,7 +91,7 @@ describe("DistrictsPanel", () => {
   it("gives each named district summary links and none to the no-district bucket", () => {
     expect(districtQuickLinks(null)).toEqual([]);
     const links = districtQuickLinks("Alabel 1");
-    expect(links.map((l) => l.label)).toEqual(["Learners", "Attendance", "Compliance", "Schools"]);
+    expect(links.map((l) => l.label)).toEqual(["Learners", "Weekly attendance", "Non-compliance", "Schools"]);
     expect(links[0]!.href).toBe("/district/summary/learners?district=Alabel%201");
     expect(links[3]!.href).toBe("/district/schools?q=Alabel%201");
   });
@@ -120,5 +120,23 @@ describe("DistrictsPanel", () => {
   it("says so when the scope has no schools", () => {
     render(<DistrictsPanel title="Districts" totalSchools={0} districts={[]} />);
     expect(screen.getByText("No schools are recorded in your scope yet.")).toBeTruthy();
+  });
+});
+
+describe("shouldShowDistrictsPanel", () => {
+  it("hides the panel for exactly one district", () => {
+    // A single-district admin's hero already reads "Maitum 2 · 17 schools";
+    // the panel would only duplicate it at half width.
+    expect(shouldShowDistrictsPanel(1, "districts")).toBe(false);
+  });
+
+  it("keeps the panel for zero or several districts", () => {
+    expect(shouldShowDistrictsPanel(0, "districts")).toBe(true);
+    expect(shouldShowDistrictsPanel(2, "districts")).toBe(true);
+    expect(shouldShowDistrictsPanel(5, "districts")).toBe(true);
+  });
+
+  it("keeps the panel for a division-wide scope even with one district, since its hero names no district", () => {
+    expect(shouldShowDistrictsPanel(1, "division")).toBe(true);
   });
 });

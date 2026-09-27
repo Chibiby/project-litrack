@@ -13,12 +13,28 @@ export type DistrictCard = {
 
 const QUICK_LINKS: { facet: DistrictSummaryFacetId; label: string }[] = [
   { facet: "learners", label: "Learners" },
-  { facet: "attendance", label: "Attendance" },
-  { facet: "compliance", label: "Compliance" },
+  { facet: "attendance", label: "Weekly attendance" },
+  { facet: "compliance", label: "Non-compliance" },
 ];
 
 function schoolCountLabel(count: number): string {
   return count === 1 ? "1 school" : `${count.toLocaleString("en-PH")} schools`;
+}
+
+/**
+ * With exactly one district, `DistrictsPanel` would take a full row of the
+ * overview but its content sits at half its width, duplicating the hero's
+ * "<district> · N schools" line and the stat cards' quick links. Hide it in
+ * that one case; keep it for zero (no schools recorded yet) and for two or
+ * more, where the tile grid actually uses the row's width. A division-wide
+ * scope keeps it: that hero reads "Whole division", so the panel is the only
+ * place the district's name appears.
+ */
+export function shouldShowDistrictsPanel(
+  districtCount: number,
+  scopeKind: "districts" | "division",
+): boolean {
+  return scopeKind !== "districts" || districtCount !== 1;
 }
 
 /** Quick links for one district; none for the "No district" bucket, which no summary filter can select. */
