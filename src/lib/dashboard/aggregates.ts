@@ -10,7 +10,7 @@ import {
 import { IP_ETHNICITIES } from "@/lib/ip/ethnicity";
 import { shapeAdminIpMetrics, shapeSchoolIpMetrics } from "@/lib/dashboard/ip-metrics";
 import { cachedQuery } from "@/lib/cache/unstable";
-import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { addDays, formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { addMonths } from "@/lib/month-range";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import { teacherRosterScope, TEACHER_ROSTER_STATE } from "@/lib/teachers/roster";
@@ -114,39 +114,51 @@ export async function getAdminMetricCounts() {
   );
 }
 
+/**
+ * School status split plus a seven-day attendance series for the Super Admin
+ * dashboard.
+ *
+ * The series used to count every `AuditLog` row per day. Since 2026-09-27 the
+ * log keeps security records only (`SECURITY_AUDIT_ACTIONS`), so that count
+ * stopped meaning "platform activity". It now counts `Attendance` rows per
+ * attendance day — learners marked, which is the day-to-day work the platform
+ * exists for — served by `@@index([date])`. Demo schools are excluded the same
+ * way `getAdminMetricCounts` excludes them.
+ *
+ * Attendance saves do not bust `adminDashboard`; the series refreshes at the
+ * `aggregate` profile's TTL, which is fine for a day-bucketed trend.
+ */
 export async function getAdminActivitySeries() {
   const demoVisible = await isDemoVisible();
   const schoolScope = demoSchoolFilter(demoVisible);
+  const viaLearnerSchool = demoVisible
+    ? {}
+    : ({ learner: { school: { isDemo: false } } } as const);
   return cachedQuery(
     async () => {
-      const since7 = daysAgo(6);
-      const [auditByDay, schoolsActive, schoolsInactive] = await Promise.all([
-        prisma.$queryRaw<Array<{ day: Date; value: number }>>`
-          SELECT (("timestamp" AT TIME ZONE 'UTC')::date) AS day,
-                 COUNT(*)::int AS value
-          FROM "AuditLog"
-          WHERE "timestamp" >= ${since7}
-          GROUP BY 1
-          ORDER BY 1 ASC
-        `,
+      const today = schoolToday();
+      const since7 = addDays(today, -6);
+      const [attendanceByDay, schoolsActive, schoolsInactive] = await Promise.all([
+        prisma.attendance.groupBy({
+          by: ["date"],
+          where: { date: { gte: since7 }, ...viaLearnerSchool },
+          _count: { _all: true },
+        }),
         prisma.school.count({ where: { deletedAt: null, isActive: true, ...schoolScope } }),
         prisma.school.count({ where: { deletedAt: null, isActive: false, ...schoolScope } }),
       ]);
 
+      // `date` is `@db.Date`, which Prisma hands back as UTC midnight, so its
+      // ISO prefix is the stored calendar day regardless of the process TZ.
       const countByKey = new Map(
-        auditByDay.map((r) => {
-          const key =
-            r.day instanceof Date
-              ? r.day.toISOString().slice(0, 10)
-              : String(r.day).slice(0, 10);
-          return [key, Number(r.value)] as const;
-        })
+        attendanceByDay.map(
+          (r) => [new Date(r.date).toISOString().slice(0, 10), r._count._all] as const
+        )
       );
 
       const activityByDay: DayCount[] = [];
       for (let i = 6; i >= 0; i--) {
-        const day = daysAgo(i);
-        const key = day.toISOString().slice(0, 10);
+        const key = formatLocalDateKey(addDays(today, -i));
         activityByDay.push({ date: key.slice(5), value: countByKey.get(key) ?? 0 });
       }
 
@@ -163,12 +175,13 @@ export async function getAdminActivitySeries() {
     },
     {
       keyParts: [
-        "admin-activity-series-v2",
+        "admin-activity-series-v3",
         `demo:${demoVisible}`,
-        // The 7-day window above is `daysAgo(6)`; this is derived from the same
-        // helper, so the key can never name a different day than the window it
-        // caches. Admin-scoped read — no tenant discriminator exists to carry.
-        formatLocalDateKey(daysAgo(0)),
+        // The 7-day window above ends at `schoolToday()`; the key is derived
+        // from the same call, so it can never name a different day than the
+        // window it caches. Admin-scoped read — no tenant discriminator exists
+        // to carry.
+        formatLocalDateKey(schoolToday()),
       ],
       tags: [adminDashboard],
       profile: "aggregate",
@@ -600,65 +613,40 @@ export async function getSchoolHeadAttendanceMix(schoolId: string) {
 }
 
 /**
- * The School Head dashboard's activity rail: announcements, the audit tail, and
- * the count of ARAL learners still missing a profile.
- *
- * Two of the three slices are cached and one deliberately is not, so the two
- * `Promise.all`s below are not redundant: the outer one keeps the uncached read
- * running beside the cached pair instead of behind it, and the inner one is what
- * the cache entry actually holds.
+ * The School Head dashboard's recent-notices card: the five newest
+ * announcements.
  *
  * `announcements` changes only through actions that call
  * `revalidateSchoolDashboard`, so `schoolDashboard(schoolId)` is a complete
- * invalidation path for it.
+ * invalidation path for it. `createdAt` is a JSON string out of the cache; the
+ * consumer passes it through `toDateKey`, which is typed `Date | string`.
  *
- * `recentAudit` is read outside the cache because it has no invalidation path at
- * all. `writeAudit` inserts the row and never revalidates a tag, and some of those
- * inserts are deferred with `after()` — they land *after* the response, so even a
- * `revalidateTag` at the mutation site could not cover them. Cached, this rail
- * would show a School Head their own just-taken action as absent for the whole
- * TTL, on the one surface whose entire job is to say what just happened. Left
- * uncached it is also the cheapest of the three: eight rows off the
- * `(schoolId, timestamp)` order, no joins, no aggregation.
- *
- * `timestamp` therefore stays a real `Date` here, while `announcements[].createdAt`
- * is a JSON string out of the cache. Both consumers pass through `toDateKey`,
- * which is typed `Date | string` for exactly this reason.
+ * The uncached audit tail (`recentAudit`) that used to ride along was removed on
+ * 2026-09-27, when `AuditLog` became security-records-only
+ * (`SECURITY_AUDIT_ACTIONS`): a school's tail would be near-empty, and the full
+ * log is still one click away at `/school-head/audit`.
  */
 export async function getSchoolHeadRecentActivity(schoolId: string) {
-  const [cached, recentAudit] = await Promise.all([
-    cachedQuery(
-      async () => {
-        const announcements = await prisma.announcement.findMany({
-          where: { schoolId, deletedAt: null },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          select: { id: true, title: true, createdAt: true },
-        });
+  return cachedQuery(
+    async () => {
+      const announcements = await prisma.announcement.findMany({
+        where: { schoolId, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, title: true, createdAt: true },
+      });
 
-        return { announcements };
-      },
-      {
-        // `-v3`: the cached value lost `pendingAralProfiles` when the ARAL
-        // Profile went dormant. The key parts are otherwise unchanged, so nothing
-        // would evict the old two-field entry on its own.
-        keyParts: ["school-head-recent-activity-v3", schoolId],
-        tags: [schoolDashboard(schoolId)],
-        profile: "aggregate",
-      }
-    ),
-    prisma.auditLog.findMany({
-      where: { schoolId },
-      orderBy: { timestamp: "desc" },
-      take: 8,
-      select: { id: true, action: true, resource: true, timestamp: true },
-    }),
-  ]);
-
-  return {
-    announcements: cached.announcements,
-    recentAudit,
-  };
+      return { announcements };
+    },
+    {
+      // `-v3`: the cached value lost `pendingAralProfiles` when the ARAL
+      // Profile went dormant. The key parts are otherwise unchanged, so nothing
+      // would evict the old two-field entry on its own.
+      keyParts: ["school-head-recent-activity-v3", schoolId],
+      tags: [schoolDashboard(schoolId)],
+      profile: "aggregate",
+    }
+  );
 }
 
 

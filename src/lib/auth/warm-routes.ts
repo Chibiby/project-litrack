@@ -107,15 +107,8 @@ export async function warmSchoolHeadRoutes(schoolId: string): Promise<void> {
   await warmAll([
     () => getSchoolHeadMetricCounts(schoolId),
     () => getSchoolHeadCharts(schoolId),
-    // Only half of this one warms anything. `getSchoolHeadRecentActivity` now
-    // runs its `auditLog.findMany` outside `cachedQuery` — deliberately, because
-    // that rail has no invalidation path — so the warm performs one read whose
-    // result is discarded, and only the announcements / pending-ARAL-profile half
-    // reaches the Data Cache. Accepted rather than restructured: the discarded
-    // read is eight rows straight off `@@index([schoolId, timestamp])` with no
-    // joins, it is already inside the `WARM_TIMEOUT_MS` budget, and warming the
-    // cached half alone would mean exporting it separately and giving this
-    // aggregate a second entry point to keep in step.
+    // Recent notices only since 2026-09-27 — the uncached audit tail it used to
+    // read is gone, so the whole result now lands in the Data Cache.
     () => getSchoolHeadRecentActivity(schoolId),
   ]);
 }

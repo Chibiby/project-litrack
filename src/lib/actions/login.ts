@@ -27,7 +27,7 @@ import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
  *               runs every pre-flight gate (school active, account exists, not
  *               deactivated or declined) before a password is ever sent.
  *   `finish*` — re-reads the session from cookies, re-checks role and tenancy
- *               against Prisma, and only then writes the LOGIN_SUCCESS row and
+ *               against Prisma, and only then stamps `User.lastLoginAt` and
  *               warms routes. The browser cannot talk its way past this: it
  *               proves nothing, it just holds a session the server verifies.
  *
@@ -40,6 +40,7 @@ import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { recordLastLogin } from "@/lib/auth/last-login";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { warmSchoolHeadRoutes, warmTeacherRoutes } from "@/lib/auth/warm-routes";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -169,6 +170,7 @@ export const finishSchoolHeadLogin = action(
       resourceId: admitted.id,
       metadata: { role: "SCHOOL_HEAD", schoolId: admitted.schoolId, method: "browser_password" },
     });
+    await recordLastLogin(admitted.id);
 
     await warmSchoolHeadRoutes(admitted.schoolId!);
 
@@ -295,6 +297,7 @@ export const finishTeacherLogin = action(
       resourceId: admitted.id,
       metadata: { role: "TEACHER", schoolId: admitted.schoolId, method: "browser_password" },
     });
+    await recordLastLogin(admitted.id);
 
     const pending = admitted.approvalStatus === "PENDING";
     if (!pending) {

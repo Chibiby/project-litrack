@@ -7,6 +7,7 @@ import {
 } from "@/lib/names";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { recordLastLogin } from "@/lib/auth/last-login";
 import {
   revalidateAdminDashboard,
   revalidateSchoolDashboard,
@@ -262,6 +263,7 @@ export async function completeTeacherAuthAfterVerify(
     resourceId: linked.id,
     metadata: { role: "TEACHER", schoolId, method: intent },
   });
+  await recordLastLogin(linked.id);
 
   return redirectOutcome(linked);
 }

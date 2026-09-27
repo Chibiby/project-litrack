@@ -30,7 +30,7 @@ import { schoolHeadHref, type SchoolHeadView } from "@/components/school-head/sc
 
 /**
  * The three sections of the School Head dashboard that still fetch and render
- * on their own: charts, IP metrics, and recent activity. Steps 1–5 of
+ * on their own: charts, IP metrics, and recent notices. Steps 1–5 of
  * `docs/school-head-ui-rework.md` section 3.2 (hero, stat row, coverage
  * panels, attention rail, quick actions) live in
  * `src/components/dashboard/school-head/dashboard-body.tsx` instead, built off
@@ -258,8 +258,11 @@ export async function SchoolHeadRecentActivitySection({
   const view: SchoolHeadView = { schoolId, schoolName: null, isSuperAdminView };
   const sh = (path: string) => schoolHeadHref(view, path);
 
+  // The "Recent activity" audit card that sat beside this one was removed on
+  // 2026-09-27: `AuditLog` now keeps security records only, so a school's tail
+  // would be near-empty. The full log is still at `/school-head/audit`.
   return (
-    <div className="mb-6 grid gap-4 md:max-lg:grid-cols-2 lg:grid-cols-2">
+    <div className="mb-6">
       <Surface as="section" className="rounded-2xl">
         <SurfaceHeader>
           <h2 className="text-base font-semibold text-foreground">Recent notices</h2>
@@ -284,39 +287,6 @@ export async function SchoolHeadRecentActivitySection({
                   <span className="font-medium">{a.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {toDateKey(a.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SurfaceBody>
-      </Surface>
-      <Surface as="section" className="rounded-2xl">
-        <SurfaceHeader>
-          <h2 className="text-base font-semibold text-foreground">Recent activity</h2>
-        </SurfaceHeader>
-        <SurfaceBody>
-          {(activity?.recentAudit.length ?? 0) === 0 ? (
-            <EmptyState
-              title="Nothing audited yet"
-              description="Audited school actions will appear here."
-              actionHref={sh(SCHOOL_HEAD_ROUTES.audit)}
-              actionLabel="Audit log"
-              className="border-0 bg-transparent py-6"
-            />
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {activity!.recentAudit.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex justify-between gap-2 border-b border-border/60 py-2"
-                >
-                  <span>
-                    <span className="font-medium">{a.action}</span>{" "}
-                    <span className="text-muted-foreground">{a.resource}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {toDateKey(a.timestamp)}
                   </span>
                 </li>
               ))}

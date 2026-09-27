@@ -94,8 +94,12 @@ const prismaMock = {
   },
   auditLog: {
     groupBy: vi.fn(async (_args: unknown) => []),
+    findFirst: vi.fn(async (_args: unknown): Promise<unknown> => null),
     findMany: vi.fn(async (_args: unknown) => []),
   },
+  $queryRaw: vi.fn(async (..._args: unknown[]): Promise<unknown[]> => [
+    { attendanceAt: null, readingLevelAt: null, termGradesAt: null },
+  ]),
   learner: {
     groupBy: vi.fn(async (_args: unknown) => []),
     count: vi.fn(async (_args: unknown) => 0),
@@ -937,11 +941,111 @@ describe("getAccountProfile", () => {
     expect(res.data.aral).toBeNull();
 
     // 1 findFirst (user) + learner.groupBy skipped (no sections) + learner.count
-    // skipped (not a teacher) + auditLog.groupBy + auditLog.findMany.
+    // skipped (not a teacher) + auditLog.findFirst (last denied) + one
+    // $queryRaw (submission maxima) + auditLog.findMany (security activity).
     expect(prismaMock.user.findFirst).toHaveBeenCalledTimes(1);
     expect(prismaMock.learner.groupBy).not.toHaveBeenCalled();
     expect(prismaMock.learner.count).not.toHaveBeenCalled();
-    expect(prismaMock.auditLog.groupBy).toHaveBeenCalledTimes(1);
+    expect(prismaMock.auditLog.groupBy).not.toHaveBeenCalled();
+    expect(prismaMock.auditLog.findFirst).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads last sign-in from User.lastLoginAt and submissions from the domain tables", async () => {
+    prismaMock.user.findFirst.mockResolvedValueOnce({
+      id: TARGET_ID,
+      role: "TEACHER",
+      fullName: "Teacher Person",
+      firstName: "Teacher",
+      lastName: "Person",
+      email: "teacher@school.local",
+      username: null,
+      schoolId: SCHOOL_ID,
+      isActive: true,
+      mustChangePassword: false,
+      profileCompleted: true,
+      approvalStatus: "APPROVED",
+      approvedAt: null,
+      rejectedAt: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      lastSeenReleaseVersion: null,
+      lastLoginAt: new Date("2026-09-26T08:30:00.000Z"),
+      school: { id: SCHOOL_ID, name: "Sample ES", schoolIdCode: "111111" },
+      teacherProfile: null,
+      advisorySections: [],
+    });
+    prismaMock.auditLog.findFirst.mockResolvedValueOnce({
+      timestamp: new Date("2026-09-25T00:00:00.000Z"),
+    });
+    prismaMock.$queryRaw.mockResolvedValueOnce([
+      {
+        attendanceAt: new Date("2026-09-24T01:00:00.000Z"),
+        readingLevelAt: null,
+        termGradesAt: new Date("2026-09-20T02:00:00.000Z"),
+      },
+    ]);
+
+    const res = await getAccountProfile(TARGET_ID);
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("expected ok");
+
+    expect(res.data.lastSignInAt).toBe("2026-09-26T08:30:00.000Z");
+    expect(res.data.lastSignInDeniedAt).toBe("2026-09-25T00:00:00.000Z");
+    expect(res.data.submissions).toEqual({
+      lastAttendanceWeekSaveAt: "2026-09-24T01:00:00.000Z",
+      lastReadingLevelRecordAt: null,
+      lastTermGradesSaveAt: "2026-09-20T02:00:00.000Z",
+    });
+
+    // The profile select must ask for the column it reads.
+    const userArgs = prismaMock.user.findFirst.mock.calls[0][0] as {
+      select: Record<string, unknown>;
+    };
+    expect(userArgs.select.lastLoginAt).toBe(true);
+
+    // The submission query is keyed on this account's recorder id.
+    const rawValues = prismaMock.$queryRaw.mock.calls[0].slice(1);
+    expect(rawValues).toEqual([TARGET_ID, TARGET_ID, TARGET_ID]);
+
+    // Recent activity is restricted to security actions, so leftover routine
+    // rows never appear under the security heading.
+    const findManyArgs = prismaMock.auditLog.findMany.mock.calls[0][0] as {
+      where: { userId: string; action: { in: string[] } };
+    };
+    expect(findManyArgs.where.userId).toBe(TARGET_ID);
+    expect(findManyArgs.where.action.in).toContain("LOGIN_DENIED");
+    expect(findManyArgs.where.action.in).not.toContain("LOGIN_SUCCESS");
+    expect(findManyArgs.where.action.in).not.toContain("ATTENDANCE_WEEK_SAVE");
+  });
+
+  it("reports no recorded sign-in when lastLoginAt is null", async () => {
+    prismaMock.user.findFirst.mockResolvedValueOnce({
+      id: TARGET_ID,
+      role: "SCHOOL_HEAD",
+      fullName: "Head Person",
+      firstName: "Head",
+      lastName: "Person",
+      email: "head@school.local",
+      username: null,
+      schoolId: SCHOOL_ID,
+      isActive: true,
+      mustChangePassword: false,
+      profileCompleted: true,
+      approvalStatus: null,
+      approvedAt: null,
+      rejectedAt: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      lastSeenReleaseVersion: null,
+      lastLoginAt: null,
+      school: { id: SCHOOL_ID, name: "Sample ES", schoolIdCode: "111111" },
+      teacherProfile: null,
+      advisorySections: [],
+    });
+
+    const res = await getAccountProfile(TARGET_ID);
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.data.lastSignInAt).toBeNull();
+    expect(res.data.lastSignInDeniedAt).toBeNull();
   });
 });

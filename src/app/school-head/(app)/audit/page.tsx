@@ -147,7 +147,7 @@ async function SchoolAuditTable({
               description={
                 hasFilters
                   ? "Try a different search term or widen the date range."
-                  : "Changes made in this school will be recorded here."
+                  : "Security events in this school will be recorded here."
               }
               icon={ScrollText}
             />
@@ -246,7 +246,7 @@ export default async function SchoolAuditPage({ searchParams }: PageProps) {
   return (
     <SchoolHeadPage
       title="Audit history"
-      description="The most recent audited actions in your school."
+      description="The most recent audited actions in your school. Only security events are recorded: sign-in failures, password changes, account approvals and removals, exports and deletions."
       view={view}
     >
       <Suspense

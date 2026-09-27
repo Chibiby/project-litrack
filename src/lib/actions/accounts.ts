@@ -16,6 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { SECURITY_AUDIT_ACTIONS } from "@/lib/audit-actions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { revalidateSchoolsList } from "@/lib/cache/revalidate";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
@@ -1063,14 +1064,18 @@ export type AccountProfile = {
   school: { id: string; name: string; schoolIdCode: string } | null;
   signIn: AccountSignIn;
   /**
-   * Newest `LOGIN_SUCCESS` / `LOGIN_DENIED` rows. Null means "no recorded
-   * sign-in", which is NOT the same as "never signed in" — see section 7.3 of
-   * the spec. `AuditLog` is never purged, so in practice it is the whole
-   * history of the account.
+   * `User.lastLoginAt` (backfilled from the old `LOGIN_SUCCESS` audit rows).
+   * Null means "no recorded sign-in", which is NOT the same as "never signed
+   * in" — see section 7.3 of the spec.
    */
   lastSignInAt: string | null;
+  /** Newest `LOGIN_DENIED` audit row — still recorded, it is a security event. */
   lastSignInDeniedAt: string | null;
-  /** Newest save per submission surface, for "have they submitted recently". */
+  /**
+   * Newest save per submission surface, for "have they submitted recently".
+   * Read from the domain tables themselves (`recordedById` + `updatedAt`), not
+   * from `AuditLog`, which no longer records routine saves.
+   */
   submissions: {
     lastAttendanceWeekSaveAt: string | null;
     lastReadingLevelRecordAt: string | null;
@@ -1087,34 +1092,26 @@ export type AccountProfile = {
     learnerCount: number;
   } | null;
   /**
-   * The newest `RECENT_ACTIVITY_LIMIT` audit rows for this account, newest
-   * first. Raw action / resource strings — the dialog renders them through the
-   * labels `/admin/audit` already has, rather than inventing a second
-   * vocabulary.
+   * The newest `RECENT_ACTIVITY_LIMIT` security audit rows this account
+   * performed, newest first. Filtered to `SECURITY_AUDIT_ACTIONS` so rows left
+   * over from before the 2026-09-27 security-only decision do not show under a
+   * "security activity" heading. Raw action / resource strings — the dialog
+   * renders them through the labels `/admin/audit` already has, rather than
+   * inventing a second vocabulary.
    */
   recentActivity: AccountProfileActivity[];
 };
 
 export type GetAccountProfileResult = { ok: true; data: AccountProfile };
 
-/**
- * The six audit actions the profile summarises with one `groupBy`.
- *
- * Two sign-in outcomes and four submission surfaces, answered together by a
- * single statement served by the existing `@@index([userId, timestamp])`. Kept
- * as a plain module constant rather than exported: a `"use server"` module may
- * export nothing but async functions.
- */
-const PROFILE_TIMELINE_ACTIONS: readonly string[] = [
-  AUDIT_ACTIONS.LOGIN_SUCCESS,
-  AUDIT_ACTIONS.LOGIN_DENIED,
-  AUDIT_ACTIONS.ATTENDANCE_WEEK_SAVE,
-  AUDIT_ACTIONS.READING_LEVEL_RECORD,
-  AUDIT_ACTIONS.READING_LEVEL_BULK_RECORD,
-  AUDIT_ACTIONS.TERM_GRADES_BULK_SAVE,
-];
-
 const RECENT_ACTIVITY_LIMIT = 20;
+
+/** Newest save by one user on each submission surface; one statement. */
+type SubmissionMaxRow = {
+  attendanceAt: Date | null;
+  readingLevelAt: Date | null;
+  termGradesAt: Date | null;
+};
 
 /** Mirrors `accountSignIn` in `@/lib/admin/accounts`, which does not export it. */
 function profileSignIn(user: {
@@ -1146,12 +1143,17 @@ function profileSignIn(user: {
  *     sections, never one count per section, and skipped entirely when there
  *     are none;
  *  3. `learner.count` for ARAL learners;
- *  4. `auditLog.groupBy` for sign-in and submission timestamps;
- *  5. `auditLog.findMany` for recent activity.
+ *  4. `auditLog.findFirst` for the newest failed sign-in;
+ *  5. one `$queryRaw` for the newest attendance / reading level / term grade
+ *     save by this user (three `MAX("updatedAt")` subselects, each served by
+ *     that table's `recordedById` index);
+ *  6. `auditLog.findMany` for recent security activity.
  *
- * Five calls for a teacher with advisory sections, four without, three for a
+ * "Last signed in" is `User.lastLoginAt`, read by call 1.
+ *
+ * Six calls for a teacher with advisory sections, five without, four for a
  * School Head or Super Admin (2 and 3 are skipped by the role branch). Calls
- * 2–5 share one `Promise.all`. Nothing here scales with row count.
+ * 2–6 share one `Promise.all`. Nothing here scales with row count.
  *
  * Writes no audit row, by decision recorded in spec section 9: it exposes no
  * credential and no learner PII — counts, and the staff member's own
@@ -1194,6 +1196,7 @@ export const getAccountProfile = action(
         rejectedAt: true,
         createdAt: true,
         lastSeenReleaseVersion: true,
+        lastLoginAt: true,
         school: { select: { id: true, name: true, schoolIdCode: true } },
         teacherProfile: {
           select: { designation: true, employmentType: true, advisoryMode: true },
@@ -1210,7 +1213,7 @@ export const getAccountProfile = action(
     const isTeacher = user.role === "TEACHER";
     const sectionIds = isTeacher ? user.advisorySections.map((s) => s.id) : [];
 
-    const [sectionCounts, aralLearnerCount, timeline, recentActivity] = await Promise.all([
+    const [sectionCounts, aralLearnerCount, lastDenied, submissionRows, recentActivity] = await Promise.all([
       sectionIds.length > 0
         ? prisma.learner.groupBy({
             by: ["sectionId"],
@@ -1232,13 +1235,21 @@ export const getAccountProfile = action(
             },
           })
         : Promise.resolve(0),
-      prisma.auditLog.groupBy({
-        by: ["action"],
-        where: { userId: user.id, action: { in: [...PROFILE_TIMELINE_ACTIONS] } },
-        _max: { timestamp: true },
+      prisma.auditLog.findFirst({
+        where: { userId: user.id, action: AUDIT_ACTIONS.LOGIN_DENIED },
+        orderBy: { timestamp: "desc" },
+        select: { timestamp: true },
       }),
+      // Not tenant-scoped by `schoolId` on purpose: this is a Super Admin-only
+      // read of one account's own writes, keyed on `recordedById`.
+      prisma.$queryRaw<SubmissionMaxRow[]>`
+        SELECT
+          (SELECT MAX("updatedAt") FROM "Attendance" WHERE "recordedById" = ${user.id}) AS "attendanceAt",
+          (SELECT MAX("updatedAt") FROM "ReadingLevelRecord" WHERE "recordedById" = ${user.id}) AS "readingLevelAt",
+          (SELECT MAX("updatedAt") FROM "TermGrade" WHERE "recordedById" = ${user.id}) AS "termGradesAt"
+      `,
       prisma.auditLog.findMany({
-        where: { userId: user.id },
+        where: { userId: user.id, action: { in: [...SECURITY_AUDIT_ACTIONS] } },
         orderBy: { timestamp: "desc" },
         take: RECENT_ACTIVITY_LIMIT,
         select: {
@@ -1261,20 +1272,9 @@ export const getAccountProfile = action(
       learnerCount: countBySection.get(section.id) ?? 0,
     }));
 
-    const latest = new Map(
-      timeline.map((row) => [row.action, row._max.timestamp?.toISOString() ?? null] as const)
-    );
-    const at = (auditAction: string): string | null => latest.get(auditAction) ?? null;
-
-    // The monthly grid and the one-off record are the same fact to a person
-    // asking "has this teacher entered reading levels", so the newer wins.
-    const readingLevelAt = [
-      at(AUDIT_ACTIONS.READING_LEVEL_RECORD),
-      at(AUDIT_ACTIONS.READING_LEVEL_BULK_RECORD),
-    ]
-      .filter((value): value is string => value !== null)
-      .sort()
-      .pop();
+    const submissionMax = submissionRows[0];
+    const iso = (value: Date | null | undefined): string | null =>
+      value ? new Date(value).toISOString() : null;
 
     return {
       ok: true,
@@ -1292,12 +1292,12 @@ export const getAccountProfile = action(
         lastSeenReleaseVersion: user.lastSeenReleaseVersion,
         school: user.school,
         signIn: profileSignIn(user),
-        lastSignInAt: at(AUDIT_ACTIONS.LOGIN_SUCCESS),
-        lastSignInDeniedAt: at(AUDIT_ACTIONS.LOGIN_DENIED),
+        lastSignInAt: iso(user.lastLoginAt),
+        lastSignInDeniedAt: iso(lastDenied?.timestamp),
         submissions: {
-          lastAttendanceWeekSaveAt: at(AUDIT_ACTIONS.ATTENDANCE_WEEK_SAVE),
-          lastReadingLevelRecordAt: readingLevelAt ?? null,
-          lastTermGradesSaveAt: at(AUDIT_ACTIONS.TERM_GRADES_BULK_SAVE),
+          lastAttendanceWeekSaveAt: iso(submissionMax?.attendanceAt),
+          lastReadingLevelRecordAt: iso(submissionMax?.readingLevelAt),
+          lastTermGradesSaveAt: iso(submissionMax?.termGradesAt),
         },
         advisory: isTeacher
           ? {

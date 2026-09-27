@@ -135,6 +135,22 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.18.0",
+    date: "2026-09-27",
+    title: "Search boxes that work the same everywhere",
+    announce: true,
+    fixes: [
+      "Every search box now has a clear (×) button, and pressing Escape empties it.",
+      "Search boxes and dropdown pickers are full touch size on phones, including the search at the top of the page.",
+      "On a phone, the keyboard shows a Search key when you type in a search box.",
+      "In dropdown pickers, Escape closes the list even after you have typed a filter.",
+      "The School Head dashboard no longer shows a Recent activity card; Recent notices now use the full width.",
+      { text: "The audit log now keeps security events only (failed sign-ins, password and account changes, exports, restores, school views), so the database stays within its storage limit. Last sign-in is still shown on each account.", roles: ["SUPER_ADMIN"] },
+      { text: "The Audit Log page now lists security events only, such as exports and account changes.", roles: ["SCHOOL_HEAD"] },
+      { text: "The admin dashboard activity chart now shows attendance recorded over the last 7 days.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.17.1",
     date: "2026-09-27",
     title: "Tablet fixes",

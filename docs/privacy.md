@@ -18,6 +18,39 @@ LITRACK stores **learner personal data** (names, age, gender, reading profiles, 
 - When a school is deactivated, restrict logins (`isActive`) and review whether data must be retained for DepEd reporting.
 - Audit logs retain action metadata (IDs, counts) — avoid putting names/PII into audit `metadata`.
 
+## What the audit log records
+
+Since 2026-09-27 (project owner's decision, driven by free-tier database size)
+`AuditLog` keeps **security events only**. The allow-list is
+`SECURITY_AUDIT_ACTIONS` in `src/lib/audit-actions.ts`; `writeAudit` drops
+every other action before it reaches the database. The categories are:
+
+- **Sign-in and credentials:** failed sign-ins, password changes and reset
+  requests, email changes, School Head / teacher / district admin credential
+  resets and reveals.
+- **Access to someone else's account or school:** impersonation start/end,
+  Super Admin school views and staff-room chat views.
+- **Account and tenant lifecycle:** school create/delete/activate, teacher
+  invite/approve/reject/deactivate/reactivate/remove, restoring a removed
+  teacher account, district admin creation,
+  Super Admin retirement, admin email sends.
+- **Data entering or leaving the system:** learner imports and every export
+  (learner Excel, printable reports, term grades, Kindergarten checklist,
+  division/district summaries).
+- **Deletes and cross-tenant moves:** learner delete, cross-school transfer,
+  permanent archive purges, moderated photo removal.
+- **Database console:** backup create/delete/download, restore, rollback and
+  resets, including the demo reset.
+- **Opening closed editing windows:** unlock grants (personal and school-wide),
+  submission-locking and reading-level unlock-all switches, term window
+  overrides, the all-schools term-subject reset.
+
+Routine work — attendance, reading levels, grades, learner edits, successful
+sign-ins, chat messages, assistant queries — is no longer written to the audit
+log. The domain tables already record who saved what (`recordedById`,
+`updatedAt`), and "last signed in" is `User.lastLoginAt`. Rows written before
+the change stay until the general `AUDIT_LOG_RETENTION_DAYS` rule ages them out.
+
 ## Export & import controls
 
 - Exports (Excel / printable) are authorized + audited. Do not share download files outside authorized school staff.
@@ -62,8 +95,9 @@ the `AssistantScope` type has no field capable of carrying any of it. Tests in
 
 **What is retained:** Google's API terms govern retention on their side; assume
 prompts may be retained and do not treat this channel as confidential. LITRACK
-itself logs an `ASSISTANT_AI_QUERY` audit row carrying token counts only — never
-the question and never the answer, because both can name a learner.
+itself stores neither the question nor the answer, because both can name a
+learner. (It used to log an `ASSISTANT_AI_QUERY` audit row with token counts
+only; since the audit log became security-only on 2026-09-27 it logs nothing.)
 
 **Disclosure:** the panel states, before anyone types, that answers come from
 Google Gemini and that a summary of their own class is sent to produce them.

@@ -28,7 +28,7 @@ import {
   School,
   Users,
   ChevronRight,
-  ScrollText,
+  CalendarCheck,
   GraduationCap,
 } from "lucide-react";
 
@@ -71,17 +71,15 @@ export async function AdminChartsSection() {
         )}
       </ChartCard>
       <ChartCard
-        title="Platform activity (7 days)"
-        description="Audit events per day"
+        title="Attendance recorded (7 days)"
+        description="Learners marked per day, all schools"
         className="min-w-0 rounded-2xl"
       >
         {!hasActivity ? (
           <EmptyState
-            title="No data yet"
-            description="Activity trends appear once audited actions are recorded."
-            actionHref="/admin/audit"
-            actionLabel="View audit"
-            icon={ScrollText}
+            title="No attendance this week"
+            description="The trend appears once teachers record attendance."
+            icon={CalendarCheck}
           />
         ) : (
           <DashboardLineChart

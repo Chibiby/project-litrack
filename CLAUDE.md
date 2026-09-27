@@ -124,7 +124,7 @@ Other invariants: soft delete via `deletedAt` (filter `deletedAt: null` on reads
 
 ### Audit
 
-`writeAudit()` (`src/lib/audit.ts`) inserts an `AuditLog` row and **never throws** — failures are logged only. Actions come from the `AUDIT_ACTIONS` constant map; add new ones there rather than passing raw strings. Never put passwords, tokens, invite secrets, or activation credentials in `metadata` — log resource IDs and counts (the CSV import logs counts, not row PII). Viewers: `/admin/audit`, `/school-head/audit`.
+`writeAudit()` (`src/lib/audit.ts`) inserts an `AuditLog` row and **never throws** — failures are logged only. Actions come from the `AUDIT_ACTIONS` constant map; add new ones there rather than passing raw strings. Never put passwords, tokens, invite secrets, or activation credentials in `metadata` — log resource IDs and counts (the CSV import logs counts, not row PII). Viewers: `/admin/audit`, `/school-head/audit`. **Security records only** (owner decision 2026-09-27, free-tier database size): `writeAudit` silently drops any action not in `SECURITY_AUDIT_ACTIONS` (`src/lib/audit-actions.ts`), so logging a new kind of event means adding it to that list. Last sign-in lives in `User.lastLoginAt`, not in audit rows.
 
 ### Caching
 

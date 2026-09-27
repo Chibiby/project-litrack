@@ -21,6 +21,7 @@ import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { passwordChangeFields } from "@/lib/auth/password-vault";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { recordLastLogin } from "@/lib/auth/last-login";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
 import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
@@ -149,6 +150,7 @@ export const loginSchoolHead = action(
       resourceId: shUser.id,
       metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
     });
+    await recordLastLogin(shUser.id);
 
     await warmSchoolHeadRoutes(school.id);
 
@@ -234,6 +236,7 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
     resourceId: teacher.id,
     metadata: { role: "TEACHER", schoolId, method: "password" },
   });
+  await recordLastLogin(teacher.id);
 
   // REJECTED / deactivated already returned above.
   const pending = teacher.approvalStatus === "PENDING";
@@ -572,6 +575,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       resourceId: user.id,
       metadata: { role: user.role },
     });
+    await recordLastLogin(user.id);
 
     if (user.role === "SUPER_ADMIN") {
       await warmAdminRoutes();

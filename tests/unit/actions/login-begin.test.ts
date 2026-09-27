@@ -71,6 +71,12 @@ vi.mock("@/lib/auth/warm-routes", () => ({
   warmSchoolHeadRoutes: vi.fn(),
   warmTeacherRoutes: vi.fn(),
 }));
+const recordLastLogin = vi.fn();
+vi.mock("@/lib/auth/last-login", () => ({
+  get recordLastLogin() {
+    return recordLastLogin;
+  },
+}));
 vi.mock("@/lib/auth/synthetic-email", () => ({
   isSyntheticEmail: (email: string) => email.startsWith("sh@"),
 }));
@@ -220,6 +226,10 @@ describe("finishTeacherLogin", () => {
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "LOGIN_SUCCESS" })
     );
+    // "Last signed in" lives on User.lastLoginAt now that LOGIN_SUCCESS is no
+    // longer written to AuditLog.
+    expect(recordLastLogin).toHaveBeenCalledTimes(1);
+    expect(recordLastLogin).toHaveBeenCalledWith("teacher-1");
   });
 
   it("sends a pending teacher to the waiting page", async () => {
@@ -241,6 +251,7 @@ describe("finishTeacherLogin", () => {
     const res = await finishTeacherLogin("school-1");
     expect(res).toMatchObject({ ok: false, code: "AUTH_TEACHER_NOT_FOUND" });
     expect(signOut).toHaveBeenCalled();
+    expect(recordLastLogin).not.toHaveBeenCalled();
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -274,6 +285,7 @@ describe("finishSchoolHeadLogin", () => {
       ok: true,
       redirectTo: "/school-head",
     });
+    expect(recordLastLogin).toHaveBeenCalledWith("head-1");
   });
 
   it("refuses and signs out a deactivated head", async () => {
@@ -290,6 +302,7 @@ describe("finishSchoolHeadLogin", () => {
       code: "AUTH_ACCOUNT_DISABLED",
     });
     expect(signOut).toHaveBeenCalled();
+    expect(recordLastLogin).not.toHaveBeenCalled();
   });
 });
 

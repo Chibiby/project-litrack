@@ -7,7 +7,7 @@
  *
  * Severity decides where an error is recorded, not how it reads:
  *   user     — an expected mistake the person can fix. Not recorded as an error
- *              (sign-in outcomes still go to AuditLog).
+ *              (failed sign-ins still go to AuditLog).
  *   security — someone was refused: access, a rate limit, another school's row.
  *              Recorded in ErrorEvent.
  *   system   — something on our side failed. Recorded, eligible for an alert

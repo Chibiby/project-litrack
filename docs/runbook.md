@@ -261,13 +261,12 @@ change) and adding grade levels. The **School Head** button needs only a selecte
 - **Retention.** The daily cron logs `[cron/backup] retention {…}` with per-rule `status`,
   `deleted` and `capped`. `capped: true` means more than 100k rows were due, and the rest go on
   the following nights. To stop a rule, set its variable to `0`: `NOTIFICATION_READ_RETENTION_DAYS`,
-  `NOTIFICATION_RETENTION_DAYS`, `AUDIT_LOG_RETENTION_DAYS` or `AUDIT_LOG_AUTH_NOISE_RETENTION_DAYS`.
-  A value that does not parse also switches it off. **Purged `AuditLog` rows are not in any in-app
-  backup.** Only Supabase PITR can bring them back, which is why `AUDIT_LOG_RETENTION_DAYS` cannot
-  go below 90 days. `AUDIT_LOG_AUTH_NOISE_RETENTION_DAYS` (default 180, floor 30) is a separate,
-  shorter rule that only ever touches `LOGIN_SUCCESS`/`LOGOUT` rows — the highest-volume, lowest
-  forensic-value audit actions; `LOGIN_DENIED` and everything else still ages out on the 730-day
-  rule above.
+  `NOTIFICATION_RETENTION_DAYS` or `AUDIT_LOG_RETENTION_DAYS`. A value that does not parse also
+  switches it off. **Purged `AuditLog` rows are not in any in-app backup.** Only Supabase PITR can
+  bring them back, which is why that setting cannot go below 90 days. Since 2026-09-27 the app
+  writes only security actions to `AuditLog` (`SECURITY_AUDIT_ACTIONS` in
+  `src/lib/audit-actions.ts`), so there is no separate short rule for sign-in rows any more;
+  `LOGIN_SUCCESS`/`LOGOUT` are no longer written, and "last signed in" is `User.lastLoginAt`.
 
 ## A user quotes a reference E-XXXXXXXX
 

@@ -379,3 +379,103 @@ export const AUDIT_ACTIONS = {
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
+
+/**
+ * The only actions `AuditLog` still records.
+ *
+ * Project owner's decision, 2026-09-27: `AuditLog` keeps security records only.
+ * On the Supabase free tier the table had become the largest thing in the
+ * database, and most of it was routine work (every attendance save, every
+ * learner edit, every sign-in) that the domain tables already record through
+ * their own `recordedById` / `updatedAt` columns. What stays is what an
+ * investigation actually needs: failed sign-ins, credential and email changes,
+ * impersonation and admin viewing, account lifecycle (create, approve,
+ * deactivate, remove), data leaving the system (imports, exports, downloads),
+ * permanent deletes, the database console, and anything that opens a closed
+ * editing window.
+ *
+ * `writeAudit` / `writeAuditMany` in `./audit.ts` silently drop every action
+ * NOT in this list, so the ~44 call sites stay as they are and simply become
+ * no-ops for non-security actions. Consequence: **adding an action to the log
+ * now means adding it here too** — a new `AUDIT_ACTIONS` entry alone writes
+ * nothing. `LOGIN_SUCCESS` is deliberately absent; "last signed in" lives on
+ * `User.lastLoginAt` instead.
+ *
+ * Keys in `AUDIT_ACTIONS` that are not listed here are kept, not deleted:
+ * older rows still carry those strings and the `/audit` viewers render them.
+ */
+export const SECURITY_AUDIT_ACTIONS = [
+  // Sign-in and credentials
+  AUDIT_ACTIONS.LOGIN_DENIED,
+  AUDIT_ACTIONS.PASSWORD_CHANGE,
+  AUDIT_ACTIONS.PASSWORD_RESET_REQUEST,
+  AUDIT_ACTIONS.EMAIL_CHANGE,
+  AUDIT_ACTIONS.SCHOOL_HEAD_CREDENTIAL_REGENERATED,
+  AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_RESET_DEFAULT,
+  AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_VIEWED,
+  AUDIT_ACTIONS.TEACHER_PASSWORD_RESET,
+  AUDIT_ACTIONS.DISTRICT_ADMIN_PASSWORD_RESET,
+  // Acting as, or looking into, someone else's account or school
+  AUDIT_ACTIONS.IMPERSONATION_START,
+  AUDIT_ACTIONS.IMPERSONATION_END,
+  AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
+  AUDIT_ACTIONS.CHAT_ADMIN_VIEW,
+  // Tenant and account lifecycle
+  AUDIT_ACTIONS.SCHOOL_CREATE,
+  AUDIT_ACTIONS.SCHOOL_DELETE,
+  AUDIT_ACTIONS.SCHOOL_SET_ACTIVE,
+  AUDIT_ACTIONS.TEACHER_APPROVE,
+  AUDIT_ACTIONS.TEACHER_REJECT,
+  AUDIT_ACTIONS.TEACHER_DEACTIVATE,
+  AUDIT_ACTIONS.TEACHER_REACTIVATE,
+  AUDIT_ACTIONS.ARCHIVE_TEACHER_RESTORE,
+  AUDIT_ACTIONS.TEACHER_REMOVE,
+  AUDIT_ACTIONS.TEACHER_INVITE,
+  AUDIT_ACTIONS.TEACHER_INVITE_REVOKE,
+  AUDIT_ACTIONS.DISTRICT_ADMIN_CREATE,
+  AUDIT_ACTIONS.DISTRICT_ASSIGNMENT_ADD,
+  AUDIT_ACTIONS.SUPER_ADMIN_RETIRE,
+  AUDIT_ACTIONS.ADMIN_EMAIL_SEND,
+  // Data entering or leaving the system
+  AUDIT_ACTIONS.IMPORT_LEARNERS,
+  AUDIT_ACTIONS.EXPORT_LEARNERS_EXCEL,
+  AUDIT_ACTIONS.EXPORT_PRINTABLE_REPORT,
+  AUDIT_ACTIONS.TERM_GRADES_EXPORT,
+  AUDIT_ACTIONS.KINDER_COMPETENCY_EXPORT,
+  AUDIT_ACTIONS.SUMMARY_EXPORT,
+  // Deletes and cross-tenant moves
+  AUDIT_ACTIONS.LEARNER_DELETE,
+  AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,
+  AUDIT_ACTIONS.ARCHIVE_LEARNER_PURGE,
+  AUDIT_ACTIONS.ARCHIVE_TEACHER_PURGE,
+  AUDIT_ACTIONS.DEMO_RESET,
+  AUDIT_ACTIONS.USER_AVATAR_MODERATE_REMOVE,
+  // Database console
+  AUDIT_ACTIONS.DB_BACKUP_CREATE,
+  AUDIT_ACTIONS.DB_BACKUP_DELETE,
+  AUDIT_ACTIONS.DB_BACKUP_DOWNLOAD,
+  AUDIT_ACTIONS.DB_RESTORE,
+  AUDIT_ACTIONS.DB_RESTORE_UPLOAD,
+  AUDIT_ACTIONS.DB_ROLLBACK,
+  AUDIT_ACTIONS.DB_RESET_OPERATIONAL,
+  AUDIT_ACTIONS.DB_RESET_SCHOOL_ACCOUNTS,
+  AUDIT_ACTIONS.DB_REMOVE_TEACHER_ACCOUNTS,
+  // Opening closed editing windows and programme-wide switches
+  AUDIT_ACTIONS.UNLOCK_GRANT_ISSUE,
+  AUDIT_ACTIONS.UNLOCK_GRANT_REVOKE,
+  AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_ISSUE,
+  AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_REVOKE,
+  AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
+  AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
+  AUDIT_ACTIONS.TERM_WINDOW_OVERRIDE_SET,
+  AUDIT_ACTIONS.TERM_SUBJECT_RESET_ALL_SCHOOLS,
+] as const satisfies readonly AuditAction[];
+
+export type SecurityAuditAction = (typeof SECURITY_AUDIT_ACTIONS)[number];
+
+const SECURITY_AUDIT_ACTION_SET: ReadonlySet<string> = new Set(SECURITY_AUDIT_ACTIONS);
+
+/** Whether `action` is one `AuditLog` still records. */
+export function isSecurityAuditAction(action: string): action is SecurityAuditAction {
+  return SECURITY_AUDIT_ACTION_SET.has(action);
+}

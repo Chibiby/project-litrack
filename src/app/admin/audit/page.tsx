@@ -49,7 +49,7 @@ async function AdminAuditTable() {
         <SurfaceBody>
           <EmptyState
             title="No audit events yet"
-            description="Sensitive platform actions will appear here."
+            description="Security events across the platform will appear here."
             icon={ScrollText}
           />
         </SurfaceBody>
@@ -116,7 +116,7 @@ export default async function AdminAuditPage() {
   return (
     <AdminPage
       title="Platform audit"
-      description="Recent audited actions across all schools."
+      description="Recent audited actions across all schools. Only security events are recorded: sign-in failures, credential changes, account access, exports and deletions."
       role={user.role}
       userName={user.fullName || user.email}
     >

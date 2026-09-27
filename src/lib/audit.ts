@@ -2,8 +2,12 @@ import "server-only";
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { AUDIT_ACTIONS } from "@/lib/audit-actions";
-import type { AuditAction } from "@/lib/audit-actions";
+import {
+  AUDIT_ACTIONS,
+  SECURITY_AUDIT_ACTIONS,
+  isSecurityAuditAction,
+} from "@/lib/audit-actions";
+import type { AuditAction, SecurityAuditAction } from "@/lib/audit-actions";
 
 /**
  * Audit logging helper.
@@ -17,8 +21,8 @@ import type { AuditAction } from "@/lib/audit-actions";
  * action names without pulling in this file's `server-only` guard.
  */
 
-export { AUDIT_ACTIONS };
-export type { AuditAction };
+export { AUDIT_ACTIONS, SECURITY_AUDIT_ACTIONS, isSecurityAuditAction };
+export type { AuditAction, SecurityAuditAction };
 
 export type AuditEntry = {
   userId?: string | null;
@@ -38,27 +42,20 @@ export type AuditEntry = {
  * site keeps its existing shape and its ordering relative to the rest of the
  * action; only the write moves.
  *
- * Known consequence of that move, bounded and self-healing, and now narrowed to
- * one reader. `AuditLog` has exactly one cached reader:
- * `getAdminActivitySeries` in `src/lib/dashboard/aggregates.ts`, on
- * `profile: "aggregate"` and tagged `adminDashboard`. Grep for both access styles
- * before trusting that count — it reaches the table through `$queryRaw` with
- * `"AuditLog"` in a SQL string, so a `prisma.auditLog` grep does not find it. For
- * that tag: a mutating action busts it *during* the request while the row lands
- * *after* the response, so a render landing between the two can cache a result
- * short by that row for the profile's TTL. No row is lost and no tenancy boundary
- * moves; it clears on the next tag bust or at TTL expiry. It is tolerable there
- * because the value is a seven-day, day-bucketed count series on a bar chart.
+ * `AuditLog` has no cached reader any more — the admin activity series and the
+ * School Head dashboard's audit tail both stopped reading it on 2026-09-27 — so
+ * the deferral cannot leave a stale cache entry behind. Grep for both access
+ * styles (`prisma.auditLog` and `"AuditLog"` inside `$queryRaw`) before adding
+ * one. The two `/audit` viewer pages and the account profile are uncached.
  *
- * `getSchoolHeadRecentActivity` used to be the second such reader and no longer
- * is: its audit slice was deliberately moved outside `cachedQuery` (see the
- * comment on that function), because a rail whose job is to say what just happened
- * is the one place this skew is visible.
- *
- * The two `/audit` viewer pages are `force-dynamic` and uncached, so they are
- * unaffected.
+ * Security records only: an entry whose `action` is not in
+ * `SECURITY_AUDIT_ACTIONS` (`./audit-actions.ts`) is dropped before any DB work.
  */
 export async function writeAudit(entry: AuditEntry): Promise<void> {
+  // Security records only (owner decision 2026-09-27) — see
+  // `SECURITY_AUDIT_ACTIONS` in `./audit-actions.ts`. Anything else is dropped
+  // here, before any DB work, so call sites for routine actions stay no-ops.
+  if (!isSecurityAuditAction(entry.action)) return;
   await deferOrRun(() => insertOneRow(entry));
 }
 
@@ -75,8 +72,9 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
  * trips into one.
  */
 export async function writeAuditMany(entries: AuditEntry[]): Promise<void> {
-  if (entries.length === 0) return;
-  await deferOrRun(() => insertManyRows(entries));
+  const kept = entries.filter((entry) => isSecurityAuditAction(entry.action));
+  if (kept.length === 0) return;
+  await deferOrRun(() => insertManyRows(kept));
 }
 
 /** AuditLog has no relations, so one row shape serves `create` and `createMany`. */

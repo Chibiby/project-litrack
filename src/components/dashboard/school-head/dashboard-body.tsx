@@ -43,7 +43,7 @@ import {
   SchoolHeadIpSection,
   SchoolHeadRecentActivitySection,
 } from "@/components/dashboard/school-head-dashboard-sections";
-import { ChartSectionSkeleton, DualListCardSkeleton } from "@/components/loading";
+import { ChartSectionSkeleton, ListCardSkeleton } from "@/components/loading";
 
 /** Active school year, grade count and section count, the way the hero meta chip reads it. */
 function buildMetaLabel(data: { activeYear: { label: string } | null; gradeCount: number; sectionCount: number }): string {
@@ -66,7 +66,7 @@ function buildMetaLabel(data: { activeYear: { label: string } | null; gradeCount
  * (`src/app/school-head/(app)/terms-reports/kinder/page.tsx`) share one read
  * between their own `hero`/`body` pair.
  *
- * The three restyled sections (charts, IP, recent activity) keep their own
+ * The three restyled sections (charts, IP, recent notices) keep their own
  * independent `<Suspense>` boundaries in `body` — they already stream
  * separately and already have skeletons, so losing the *outer* in-page
  * Suspense that used to wrap the whole body is an accepted trade: the route's
@@ -295,7 +295,7 @@ export async function loadSchoolHeadDashboard({
         <SchoolHeadIpSection schoolId={view.schoolId} isSuperAdminView={view.isSuperAdminView} />
       </Suspense>
 
-      <Suspense fallback={<DualListCardSkeleton className="md:max-lg:grid-cols-2" />}>
+      <Suspense fallback={<ListCardSkeleton items={5} className="mb-6 rounded-2xl" />}>
         <SchoolHeadRecentActivitySection
           schoolId={view.schoolId}
           isSuperAdminView={view.isSuperAdminView}

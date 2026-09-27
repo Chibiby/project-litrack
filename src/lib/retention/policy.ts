@@ -54,26 +54,6 @@ export const AUDIT_LOG_RETENTION: RetentionSetting = {
 };
 
 /**
- * A narrower, SHORTER rule for the two highest-volume, lowest-value actions:
- * `LOGIN_SUCCESS` and `LOGOUT`. Every other action — including `LOGIN_DENIED`,
- * which is the one login row worth keeping at the long horizon for abuse
- * investigation — stays on `AUDIT_LOG_RETENTION` above and is untouched by
- * this rule. `purgeExpiredAuthNoiseAuditLogs` (`./purge.ts`) is the only
- * caller and is the one place the action list is spelled out; keep the two in
- * sync.
- *
- * Deliberately a separate rule rather than a lower floor on the general one:
- * `AUDIT_LOG_RETENTION`'s 730-day default/90-day floor is a Data Privacy Act
- * trail requirement for every OTHER action, and this rule must never be read
- * as loosening that.
- */
-export const AUDIT_LOG_AUTH_NOISE_RETENTION: RetentionSetting = {
-  env: "AUDIT_LOG_AUTH_NOISE_RETENTION_DAYS",
-  defaultDays: 180,
-  minDays: 30,
-};
-
-/**
  * Days to keep, or null when the rule is switched off.
  *
  *  - unset or blank → the default

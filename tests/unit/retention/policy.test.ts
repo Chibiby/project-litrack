@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  AUDIT_LOG_AUTH_NOISE_RETENTION,
   AUDIT_LOG_RETENTION,
   deleteInBatches,
   NOTIFICATION_READ_RETENTION,
@@ -21,16 +20,6 @@ describe("retention days from env", () => {
     expect(retentionDays(NOTIFICATION_READ_RETENTION, undefined)).toBe(90);
     expect(retentionDays(NOTIFICATION_RETENTION, "")).toBe(180);
     expect(retentionDays(AUDIT_LOG_RETENTION, "  ")).toBe(730);
-    expect(retentionDays(AUDIT_LOG_AUTH_NOISE_RETENTION, undefined)).toBe(180);
-  });
-
-  it("keeps the auth-noise rule shorter than the general AuditLog rule by default", () => {
-    expect(AUDIT_LOG_AUTH_NOISE_RETENTION.defaultDays).toBeLessThan(AUDIT_LOG_RETENTION.defaultDays);
-  });
-
-  it("floors an auth-noise override below its own minimum, separately from the AuditLog floor", () => {
-    expect(retentionDays(AUDIT_LOG_AUTH_NOISE_RETENTION, "5")).toBe(30);
-    expect(retentionDays(AUDIT_LOG_AUTH_NOISE_RETENTION, "0")).toBeNull();
   });
 
   it("honours a sane override, flooring fractions", () => {
@@ -55,7 +44,6 @@ describe("retention days from env", () => {
     expect(NOTIFICATION_READ_RETENTION.env).toBe("NOTIFICATION_READ_RETENTION_DAYS");
     expect(NOTIFICATION_RETENTION.env).toBe("NOTIFICATION_RETENTION_DAYS");
     expect(AUDIT_LOG_RETENTION.env).toBe("AUDIT_LOG_RETENTION_DAYS");
-    expect(AUDIT_LOG_AUTH_NOISE_RETENTION.env).toBe("AUDIT_LOG_AUTH_NOISE_RETENTION_DAYS");
   });
 });
 

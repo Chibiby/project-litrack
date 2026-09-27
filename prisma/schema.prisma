@@ -785,6 +785,11 @@ model User {
   /// Null means presence has never been recorded. Super Admin impersonation is
   /// explicitly excluded by the write action.
   lastOnlineAt              DateTime?
+  /// Set on successful sign-in. Backfilled once from the latest `AuditLog`
+  /// LOGIN_SUCCESS row per user (`20260927000002_user_last_login_at`) so the
+  /// account profile's "last signed in" display survives the AuditLog
+  /// retention prune instead of depending on rows that may since be gone.
+  lastLoginAt               DateTime?
   /// Object key in the public Supabase Storage bucket `avatars`, NOT a URL —
   /// `src/lib/avatars/paths.ts` builds the public URL from this at read time.
   /// Key shape: `<userId>/<uuid>.<webp|jpg|png>`. The 128px thumbnail sibling

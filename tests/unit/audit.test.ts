@@ -136,15 +136,15 @@ describe("writeAudit — deferred path", () => {
   });
 
   it("defaults the optional columns to null and omits absent metadata", async () => {
-    await writeAudit({ action: AUDIT_ACTIONS.LOGOUT, resource: "Session" });
+    await writeAudit({ action: AUDIT_ACTIONS.LOGIN_DENIED, resource: "User" });
     await flushAfterTasks();
 
     expect(auditLogCreate).toHaveBeenCalledWith({
       data: {
         userId: null,
         schoolId: null,
-        action: "LOGOUT",
-        resource: "Session",
+        action: "LOGIN_DENIED",
+        resource: "User",
         resourceId: null,
         metadata: undefined,
       },
@@ -159,6 +159,47 @@ describe("writeAudit — deferred path", () => {
     await expect(flushAfterTasks()).resolves.toBeUndefined();
 
     expect(consoleError).toHaveBeenCalledWith("[audit] write failed:", expect.any(Error));
+  });
+});
+
+describe("writeAudit — security records only", () => {
+  it.each([
+    AUDIT_ACTIONS.LOGIN_SUCCESS,
+    AUDIT_ACTIONS.LOGOUT,
+    AUDIT_ACTIONS.ATTENDANCE_WEEK_SAVE,
+    AUDIT_ACTIONS.LEARNER_UPDATE,
+    AUDIT_ACTIONS.ASSISTANT_AI_QUERY,
+  ])("skips %s without queuing or inserting anything", async (action) => {
+    await writeAudit({ ...ENTRY, action });
+    await flushAfterTasks();
+
+    expect(afterTasks).toHaveLength(0);
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("skips a non-security action on the inline fallback path too", async () => {
+    afterRefusal = E468;
+    await writeAudit({ ...ENTRY, action: AUDIT_ACTIONS.SECTION_CREATE });
+
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("writes a security action", async () => {
+    await writeAudit({ ...ENTRY, action: AUDIT_ACTIONS.PASSWORD_CHANGE, resource: "User" });
+    await flushAfterTasks();
+
+    expect(auditLogCreate).toHaveBeenCalledTimes(1);
+    expect(auditLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: "PASSWORD_CHANGE" }),
+    });
+  });
+
+  it("allow-lists only names that exist in AUDIT_ACTIONS, and not LOGIN_SUCCESS", async () => {
+    const { SECURITY_AUDIT_ACTIONS } = await import("@/lib/audit-actions");
+    const known = new Set<string>(Object.values(AUDIT_ACTIONS));
+    for (const action of SECURITY_AUDIT_ACTIONS) expect(known.has(action)).toBe(true);
+    expect(SECURITY_AUDIT_ACTIONS).not.toContain("LOGIN_SUCCESS");
+    expect(SECURITY_AUDIT_ACTIONS).toContain("LOGIN_DENIED");
   });
 });
 
@@ -201,18 +242,18 @@ describe("writeAuditMany", () => {
     {
       userId: "user-1",
       schoolId: "school-1",
-      action: AUDIT_ACTIONS.GRADE_LEVEL_CREATE,
-      resource: "GradeLevel",
-      resourceId: "grade-1",
-      metadata: { schoolId: "school-1", gradeLevelId: "grade-1" },
+      action: AUDIT_ACTIONS.TEACHER_APPROVE,
+      resource: "User",
+      resourceId: "teacher-1",
+      metadata: { schoolId: "school-1", teacherId: "teacher-1" },
     },
     {
       userId: "user-1",
       schoolId: "school-1",
-      action: AUDIT_ACTIONS.SECTION_CREATE,
-      resource: "Section",
-      resourceId: "section-1",
-      metadata: { schoolId: "school-1", sectionId: "section-1" },
+      action: AUDIT_ACTIONS.TEACHER_REJECT,
+      resource: "User",
+      resourceId: "teacher-2",
+      metadata: { schoolId: "school-1", teacherId: "teacher-2" },
     },
   ];
 
@@ -230,21 +271,49 @@ describe("writeAuditMany", () => {
         {
           userId: "user-1",
           schoolId: "school-1",
-          action: "GRADE_LEVEL_CREATE",
-          resource: "GradeLevel",
-          resourceId: "grade-1",
-          metadata: { schoolId: "school-1", gradeLevelId: "grade-1" },
+          action: "TEACHER_APPROVE",
+          resource: "User",
+          resourceId: "teacher-1",
+          metadata: { schoolId: "school-1", teacherId: "teacher-1" },
         },
         {
           userId: "user-1",
           schoolId: "school-1",
-          action: "SECTION_CREATE",
-          resource: "Section",
-          resourceId: "section-1",
-          metadata: { schoolId: "school-1", sectionId: "section-1" },
+          action: "TEACHER_REJECT",
+          resource: "User",
+          resourceId: "teacher-2",
+          metadata: { schoolId: "school-1", teacherId: "teacher-2" },
         },
       ],
     });
+  });
+
+  it("drops non-security entries and inserts only the security ones", async () => {
+    await writeAuditMany([
+      ...entries,
+      {
+        userId: "user-1",
+        schoolId: "school-1",
+        action: AUDIT_ACTIONS.SECTION_CREATE,
+        resource: "Section",
+        resourceId: "section-1",
+      },
+    ]);
+    await flushAfterTasks();
+
+    expect(auditLogCreateMany).toHaveBeenCalledTimes(1);
+    const { data } = auditLogCreateMany.mock.calls[0][0] as { data: Array<{ action: string }> };
+    expect(data.map((row) => row.action)).toEqual(["TEACHER_APPROVE", "TEACHER_REJECT"]);
+  });
+
+  it("does nothing when every entry is a non-security action", async () => {
+    await writeAuditMany([
+      { action: AUDIT_ACTIONS.GRADE_LEVEL_CREATE, resource: "GradeLevel" },
+      { action: AUDIT_ACTIONS.SECTION_CREATE, resource: "Section" },
+    ]);
+
+    expect(afterTasks).toHaveLength(0);
+    expect(auditLogCreateMany).not.toHaveBeenCalled();
   });
 
   it("falls back to one inline createMany when after() refuses", async () => {

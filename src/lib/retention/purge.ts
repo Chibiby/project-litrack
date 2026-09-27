@@ -1,7 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import {
-  AUDIT_LOG_AUTH_NOISE_RETENTION,
   AUDIT_LOG_RETENTION,
   deleteInBatches,
   NOTIFICATION_READ_RETENTION,
@@ -34,25 +33,7 @@ export type RetentionReport = {
   notificationsRead: RulePurge;
   notifications: RulePurge;
   auditLogs: RulePurge;
-  auditLogsAuthNoise: RulePurge;
 };
-
-/**
- * The two audit actions `purgeExpiredAuthNoiseAuditLogs` purges early. Login
- * success/logout are the highest-volume, lowest-forensic-value audit rows;
- * `LOGIN_DENIED` and every other action are deliberately excluded and stay on
- * `AUDIT_LOG_RETENTION`'s longer horizon — see the policy comment.
- *
- * Kept in sync with the literal `IN (...)` list in
- * `purgeExpiredAuthNoiseAuditLogs` by hand: the values are Postgres string
- * literals inside a raw `DELETE`, not bound parameters, so this constant
- * cannot be spliced into that template without building the SQL fragment
- * itself (`Prisma.join`) — deliberately avoided here, because it would make
- * the query built from two different sql-tag compositions and complicate the
- * unit test's `$executeRaw` mock for no behavioural gain over two hard-coded
- * literals.
- */
-export const AUTH_NOISE_AUDIT_ACTIONS = ["LOGIN_SUCCESS", "LOGOUT"] as const;
 
 async function runRule(
   name: string,
@@ -114,40 +95,15 @@ export function purgeExpiredAuditLogs(now: Date = new Date()): Promise<RulePurge
 }
 
 /**
- * `LOGIN_SUCCESS`/`LOGOUT` rows past `AUDIT_LOG_AUTH_NOISE_RETENTION_DAYS` —
- * shorter than the general `AUDIT_LOG_RETENTION_DAYS` horizon. Runs BEFORE
- * `purgeExpiredAuditLogs` for the same reason the read-notification rule runs
- * before the general notification one: the broader rule would eventually
- * catch these rows anyway, but purging the narrow set first keeps its own
- * count meaningful in the log. `action IN (...)` is not covered by an index
- * today; acceptable because each batch is LIMITed and this runs once a day,
- * same tradeoff already accepted for the unindexed `readAt` filter on
- * `Notification` above.
- */
-export function purgeExpiredAuthNoiseAuditLogs(now: Date = new Date()): Promise<RulePurge> {
-  return runRule("AuditLog (auth noise)", AUDIT_LOG_AUTH_NOISE_RETENTION, now, (cutoff, limit) =>
-    prisma.$executeRaw`
-      DELETE FROM "AuditLog"
-      WHERE "id" IN (
-        SELECT "id" FROM "AuditLog"
-        WHERE "action" IN ('LOGIN_SUCCESS', 'LOGOUT') AND "timestamp" < ${cutoff}
-        LIMIT ${limit}
-      )`
-  );
-}
-
-/**
- * All four, one after another. Never throws: each rule reports `failed`
+ * All three, one after another. Never throws: each rule reports `failed`
  * instead, because retention is housekeeping and must not fail the backup it
  * runs beside.
  */
 export async function runDailyRetention(now: Date = new Date()): Promise<RetentionReport> {
   // Read notifications first: the broader rule would delete them anyway, but
-  // doing the narrow one first keeps its count meaningful in the log. Same
-  // reasoning for auth-noise audit rows before the general AuditLog rule.
+  // doing the narrow one first keeps its count meaningful in the log.
   const notificationsRead = await purgeReadNotifications(now);
   const notifications = await purgeExpiredNotifications(now);
-  const auditLogsAuthNoise = await purgeExpiredAuthNoiseAuditLogs(now);
   const auditLogs = await purgeExpiredAuditLogs(now);
-  return { notificationsRead, notifications, auditLogs, auditLogsAuthNoise };
+  return { notificationsRead, notifications, auditLogs };
 }

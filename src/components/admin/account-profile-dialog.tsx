@@ -282,9 +282,9 @@ export function AccountProfileDialog({
 
             <Separator />
             <section className="space-y-2">
-              <h3 className="font-semibold text-foreground">Recent activity</h3>
+              <h3 className="font-semibold text-foreground">Recent security activity</h3>
               {profile.recentActivity.length === 0 ? (
-                <p className="text-muted-foreground">No recorded activity.</p>
+                <p className="text-muted-foreground">No recorded security events.</p>
               ) : (
                 <ul className="max-h-48 space-y-1 overflow-y-auto text-muted-foreground">
                   {profile.recentActivity.map((entry) => (
