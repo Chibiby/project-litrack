@@ -17,6 +17,7 @@ import { summaryExportSchema } from "@/lib/validators/summary.schema";
 import { SUMMARY_FACETS } from "@/lib/summary/facets";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { frameForScope } from "@/lib/summary/export";
+import { complianceFlagSlug, filterComplianceResultForExport } from "@/lib/summary/shape/compliance";
 
 /** Deliberate work, not a hammer: 20 exports per 10 minutes per admin (spec 3.6). */
 const EXPORT_RATE = { limit: 20, windowMs: 10 * 60 * 1000 } as const;
@@ -76,7 +77,8 @@ export const exportSummary = action(
           )
         : frameForScope(summaryScope, schools, { schoolYearLabel, preparedBy: user.fullName });
 
-    const table = facet.toReportTable(result, frame);
+    const flag = req.facet === "compliance" ? (req.flag ?? null) : null;
+    const table = facet.toReportTable(filterComplianceResultForExport(result, flag), frame);
     const generatedOn = schoolToday();
     const buffer = await renderReport(table, req.format, { purpose: req.purpose, generatedOn });
 
@@ -96,12 +98,14 @@ export const exportSummary = action(
         schoolCount: result.schoolCount,
         format: req.format,
         purpose: req.purpose,
+        flag,
       },
     });
 
     // Local date key, never `toISOString()` (UTC+8 would name yesterday).
     const today = formatLocalDateKey(generatedOn);
-    const filename = `litrack-${req.facet}-summary-${today}.${REPORT_FORMAT_EXTENSION[req.format]}`;
+    const flagPart = flag ? `-${complianceFlagSlug(flag)}` : "";
+    const filename = `litrack-${req.facet}${flagPart}-summary-${today}.${REPORT_FORMAT_EXTENSION[req.format]}`;
     return { ok: true, data: { base64: buffer.toString("base64"), filename } };
   },
   { verb: "export the summary" }

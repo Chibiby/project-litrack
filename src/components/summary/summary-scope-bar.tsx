@@ -42,6 +42,10 @@ export type SummaryScopeBarProps = {
    * rather than navigating straight to the scope that times out.
    */
   requireDistrictForSchool?: boolean;
+  /** Compliance facet only: pick one flag's list instead of all of them. */
+  flag?: string | null;
+  /** Present only for the compliance facet; renders the Flag select when set. */
+  flagOptions?: readonly { id: string; label: string }[];
 };
 
 const LEVELS: { id: SummaryLevel; label: string }[] = [
@@ -69,6 +73,8 @@ export function SummaryScopeBar({
   schools,
   allDistrictsLabel,
   requireDistrictForSchool = false,
+  flag = null,
+  flagOptions,
 }: SummaryScopeBarProps) {
   const navigate = useListNavigate();
   const pending = useListPending();
@@ -130,7 +136,12 @@ export function SummaryScopeBar({
         </div>
       </div>
 
-      <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+      <div
+        className={cn(
+          "grid min-w-0 flex-1 grid-cols-1 gap-3",
+          flagOptions ? "sm:grid-cols-3" : "sm:grid-cols-2"
+        )}
+      >
         <div className="min-w-0">
           <Label htmlFor="summary-district" className="mb-1.5 block text-xs font-medium text-muted-foreground">
             District
@@ -172,6 +183,30 @@ export function SummaryScopeBar({
             chevron="down"
           />
         </div>
+
+        {flagOptions ? (
+          <div className="min-w-0">
+            <Label htmlFor="summary-flag" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Flag
+            </Label>
+            <Select
+              value={flag ?? ALL}
+              onValueChange={(value) => go({ flag: value === ALL ? null : value })}
+            >
+              <SelectTrigger id="summary-flag">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All flags</SelectItem>
+                {flagOptions.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
     </div>
   );

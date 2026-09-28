@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reportPurposeSchema } from "./report.schema";
 import { SUMMARY_FACET_IDS, SUMMARY_LEVELS } from "@/lib/summary/types";
+import { COMPLIANCE_FLAG_FILTER_IDS } from "@/lib/summary/shape/compliance";
 
 /**
  * Summary facet params and the export request (docs/specs/district-admin.md 3.6).
@@ -74,6 +75,14 @@ export const endOfTermParamsSchema = z.object({
   term: optional(z.enum(["FIRST", "SECOND", "THIRD"], { message: "Choose a term" })),
 });
 
+/**
+ * `compliance` only: pick one flag's list instead of all of them. An unknown
+ * value is rejected here (the export action is a strict boundary); a page's
+ * hand-edited URL falls back to "all flags" through
+ * `parseComplianceFlagParam` instead of this schema.
+ */
+export const complianceFlagSchema = optional(z.enum(COMPLIANCE_FLAG_FILTER_IDS));
+
 export type LevelOnlyParams = z.infer<typeof levelOnlyParamsSchema>;
 export type MonthParams = z.infer<typeof monthParamsSchema>;
 export type MonthRangeParams = z.infer<typeof monthRangeParamsSchema>;
@@ -97,6 +106,8 @@ export const summaryExportSchema = z.object({
   to: optional(z.string()),
   schoolYearLabel: optional(z.string()),
   term: optional(z.string()),
+  /** `compliance` only; ignored by every other facet. */
+  flag: complianceFlagSchema,
 });
 
 export type SummaryExportInput = z.infer<typeof summaryExportSchema>;

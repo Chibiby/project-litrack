@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyCompliance,
+  complianceFlagSlug,
+  filterComplianceResult,
+  filterComplianceResultForExport,
+  isComplianceFlagFilter,
+  parseComplianceFlagParam,
   recentAttendanceFloorKey,
   type SchoolComplianceFacts,
 } from "@/lib/summary/shape/compliance";
+import type { FacetResult } from "@/lib/summary/types";
 
 /**
  * T16: one case per non-compliance definition in spec 4.6 (Q8 default), so a
@@ -117,5 +123,100 @@ describe("classifyCompliance", () => {
       TODAY
     );
     expect(r.flags).toEqual(["PENDING", "INCOMPLETE", "DISCREPANCIES"]);
+  });
+});
+
+/** T: the Flag filter (`?flag=`) on the compliance summary page and export. */
+describe("isComplianceFlagFilter / parseComplianceFlagParam", () => {
+  it("accepts every flag id and the no-district-admin list", () => {
+    for (const id of ["NO_ENCODED_DATA", "PENDING", "NOT_UPDATED", "INCOMPLETE", "DISCREPANCIES", "noDistrictAdmin"]) {
+      expect(isComplianceFlagFilter(id)).toBe(true);
+    }
+  });
+
+  it("rejects anything else, including case variants and empty string", () => {
+    for (const id of ["COMPLIANT", "no_encoded_data", "", undefined, null, 1]) {
+      expect(isComplianceFlagFilter(id)).toBe(false);
+    }
+  });
+
+  it("parses a known ?flag= value", () => {
+    expect(parseComplianceFlagParam("NO_ENCODED_DATA")).toBe("NO_ENCODED_DATA");
+  });
+
+  it("treats an unknown, absent or repeated ?flag= as All flags (null)", () => {
+    expect(parseComplianceFlagParam("BOGUS")).toBeNull();
+    expect(parseComplianceFlagParam(undefined)).toBeNull();
+    expect(parseComplianceFlagParam(["NO_ENCODED_DATA", "PENDING"])).toBe("NO_ENCODED_DATA");
+  });
+});
+
+describe("complianceFlagSlug", () => {
+  it("kebab-cases every filter id for the export filename", () => {
+    expect(complianceFlagSlug("NO_ENCODED_DATA")).toBe("no-encoded-data");
+    expect(complianceFlagSlug("PENDING")).toBe("pending");
+    expect(complianceFlagSlug("noDistrictAdmin")).toBe("no-district-admin");
+  });
+});
+
+describe("filterComplianceResult / filterComplianceResultForExport", () => {
+  const result: FacetResult = {
+    facetId: "compliance",
+    title: "Non-compliance",
+    subtitle: "Active schools",
+    level: "overall",
+    params: { level: "overall" },
+    schoolCount: 2,
+    notes: [],
+    gaps: [],
+    sections: [
+      {
+        id: "flags",
+        title: "Schools flagged",
+        kind: "multi",
+        byGrade: false,
+        buckets: [],
+        baseLabel: "% of active schools",
+        table: { groups: [] },
+      },
+    ],
+    lists: [
+      { id: "NO_ENCODED_DATA", title: "No encoded data", columns: ["School"], rows: [["A"]] },
+      { id: "PENDING", title: "Pending", columns: ["School"], rows: [] },
+      { id: "noDistrictAdmin", title: "Schools with no district admin", columns: ["School"], rows: [] },
+    ],
+    computedAt: "2026-09-28T00:00:00.000Z",
+  };
+
+  it("is a no-op with no flag chosen", () => {
+    expect(filterComplianceResult(result, null)).toBe(result);
+    expect(filterComplianceResultForExport(result, null)).toBe(result);
+  });
+
+  it("narrows the page view to the chosen list, keeping the overview section", () => {
+    const filtered = filterComplianceResult(result, "NO_ENCODED_DATA");
+    expect(filtered.lists).toEqual([result.lists[0]]);
+    expect(filtered.sections).toBe(result.sections);
+  });
+
+  it("narrows the export to only that list's rows, dropping the overview section", () => {
+    const filtered = filterComplianceResultForExport(result, "NO_ENCODED_DATA");
+    expect(filtered.lists).toEqual([result.lists[0]]);
+    expect(filtered.sections).toEqual([]);
+  });
+
+  it("describes only the chosen list in the export summary", () => {
+    const filtered = filterComplianceResultForExport(
+      { ...result, schoolCount: 333, notes: ["A school can carry more than one flag"] },
+      "NO_ENCODED_DATA"
+    );
+    expect(filtered.schoolCount).toBe(1);
+    expect(filtered.notes.join(" ")).toContain("No encoded data: The school has no learners encoded.");
+    expect(filtered.notes.join(" ")).not.toContain("more than one flag");
+  });
+
+  it("returns an empty list rather than throwing when the flag matches nothing", () => {
+    const filtered = filterComplianceResult(result, "DISCREPANCIES");
+    expect(filtered.lists).toEqual([]);
   });
 });

@@ -31,6 +31,8 @@ export type SummaryExportRequest = {
   to?: string;
   schoolYearLabel?: string;
   term?: string;
+  /** `compliance` only. */
+  flag?: string;
 };
 
 function triggerDownload(base64: string, filename: string) {

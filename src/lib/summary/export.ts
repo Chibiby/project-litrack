@@ -111,7 +111,10 @@ export function summaryReportTable(result: FacetResult, frame: ReportFrame): Rep
   return {
     title: `${result.title} summary`,
     summary: [
-      `${result.schoolCount} ${result.schoolCount === 1 ? "school" : "schools"}. Percentages are rounded to one decimal; a blank % means there was nothing to count.`,
+      // No sections means no % columns, so the rounding note would describe nothing.
+      result.sections.length > 0
+        ? `${result.schoolCount} ${result.schoolCount === 1 ? "school" : "schools"}. Percentages are rounded to one decimal; a blank % means there was nothing to count.`
+        : `${result.schoolCount} ${result.schoolCount === 1 ? "school" : "schools"}.`,
       ...result.notes,
       ...result.gaps.map((g) => `Not available: ${g}`),
     ],

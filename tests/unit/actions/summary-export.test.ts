@@ -69,7 +69,7 @@ vi.mock("@/lib/cache/unstable", () => ({
 
 vi.mock("@/lib/demo/session", () => ({ isDemoVisible: async () => false }));
 
-const renderReport = vi.fn(async () => Buffer.from("file"));
+const renderReport = vi.fn(async (..._args: unknown[]) => Buffer.from("file"));
 vi.mock("@/lib/reports/render", () => ({
   renderReport: (...args: unknown[]) => renderReport(...(args as [])),
 }));
@@ -214,6 +214,113 @@ describe("exportSummary scope (T9)", () => {
     const res = await exportSummary({ facet: "salaries", format: "EXCEL" });
     expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
     expectNothingRead();
+  });
+
+  it("filters a compliance export to one flag's list and names the file for it", async () => {
+    queryRaw.mockResolvedValueOnce([
+      {
+        school_id: "s-alabel-ces",
+        live: 0,
+        non_archived: 0,
+        pending: 0,
+        grades_no_adviser: 0,
+        aral: 0,
+        incomplete: 0,
+        enrollments: 0,
+        drift: 0,
+        last_attendance: null,
+        reading: 0,
+        last_week: 0,
+        has_admin: true,
+      },
+      {
+        school_id: "s-bagacay",
+        live: 5,
+        non_archived: 5,
+        pending: 0,
+        grades_no_adviser: 0,
+        aral: 0,
+        incomplete: 0,
+        enrollments: 5,
+        drift: 0,
+        last_attendance: null,
+        reading: 0,
+        last_week: 0,
+        has_admin: true,
+      },
+    ]);
+
+    const res = await exportSummary({ facet: "compliance", format: "EXCEL", flag: "NO_ENCODED_DATA" });
+
+    expect(res).toMatchObject({
+      ok: true,
+      data: { filename: expect.stringMatching(/^litrack-compliance-no-encoded-data-summary-\d{4}-\d{2}-\d{2}\.xlsx$/) },
+    });
+
+    const table = renderReport.mock.calls[0]![0] as {
+      blocks: { heading: string; rows: (string | number | null)[][] }[];
+    };
+    expect(table.blocks).toHaveLength(1);
+    expect(table.blocks[0]!.heading).toBe("No encoded data");
+    expect(table.blocks[0]!.rows).toHaveLength(1);
+    expect(table.blocks[0]!.rows[0]![0]).toBe("Alabel Central Elementary School");
+
+    expect(writeAudit.mock.calls[0]![0].metadata).toMatchObject({
+      facet: "compliance",
+      flag: "NO_ENCODED_DATA",
+    });
+  });
+
+  it("rejects an unknown flag before reading anything", async () => {
+    const res = await exportSummary({ facet: "compliance", format: "EXCEL", flag: "BOGUS" });
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expectNothingRead();
+  });
+
+  it("leaves a compliance export unchanged when no flag is chosen", async () => {
+    queryRaw.mockResolvedValueOnce([
+      {
+        school_id: "s-alabel-ces",
+        live: 0,
+        non_archived: 0,
+        pending: 0,
+        grades_no_adviser: 0,
+        aral: 0,
+        incomplete: 0,
+        enrollments: 0,
+        drift: 0,
+        last_attendance: null,
+        reading: 0,
+        last_week: 0,
+        has_admin: true,
+      },
+      {
+        school_id: "s-bagacay",
+        live: 5,
+        non_archived: 5,
+        pending: 0,
+        grades_no_adviser: 0,
+        aral: 0,
+        incomplete: 0,
+        enrollments: 5,
+        drift: 0,
+        last_attendance: null,
+        reading: 0,
+        last_week: 0,
+        has_admin: true,
+      },
+    ]);
+
+    const res = await exportSummary({ facet: "compliance", format: "EXCEL" });
+
+    expect(res).toMatchObject({
+      ok: true,
+      data: { filename: expect.stringMatching(/^litrack-compliance-summary-\d{4}-\d{2}-\d{2}\.xlsx$/) },
+    });
+    const table = renderReport.mock.calls[0]![0] as { blocks: unknown[] };
+    // The overview section plus every flag's list (5) plus "no district admin".
+    expect(table.blocks.length).toBeGreaterThan(1);
+    expect(writeAudit.mock.calls[0]![0].metadata).toMatchObject({ flag: null });
   });
 
   it("lets a Super Admin export any district", async () => {

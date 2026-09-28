@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.0",
+    date: "2026-09-28",
+    title: "Export one kind of non-compliance",
+    announce: true,
+    fixes: [
+      "The Non-compliance summary has a Flag filter. Pick one kind, such as No encoded data, to see only those schools.",
+      "Export follows the Flag filter: the file lists only the schools with that flag, and its name says which flag it is.",
+    ],
+  },
+  {
     version: "2.19.0",
     date: "2026-09-28",
     title: "Password reset links that keep working",

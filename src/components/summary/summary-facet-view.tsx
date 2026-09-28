@@ -6,6 +6,12 @@ import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { facetParamsFromSearch, getSummaryFacet } from "@/lib/summary/facets";
 import { SUMMARY_FACET_META } from "@/lib/summary/facet-meta";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
+import {
+  COMPLIANCE_FLAG_FILTER_IDS,
+  COMPLIANCE_FLAG_FILTER_LABELS,
+  filterComplianceResult,
+  parseComplianceFlagParam,
+} from "@/lib/summary/shape/compliance";
 import { monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
 import type { FacetResult, SummaryFacetId, SummaryLevel } from "@/lib/summary/types";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -141,6 +147,12 @@ export async function SummaryFacetView({
               }))}
               allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
               requireDistrictForSchool={adminScope.kind === "division"}
+              flag={facetId === "compliance" ? parseComplianceFlagParam(flat.flag) : undefined}
+              flagOptions={
+                facetId === "compliance"
+                  ? COMPLIANCE_FLAG_FILTER_IDS.map((id) => ({ id, label: COMPLIANCE_FLAG_FILTER_LABELS[id] }))
+                  : undefined
+              }
             />
           </div>
           {needsDistrictPick ? null : (
@@ -183,6 +195,10 @@ function exportRequest(result: FacetResult, flat: FlatSearchParams): SummaryExpo
   if (p.to) req.to = p.to;
   if (p.schoolYearLabel) req.schoolYearLabel = p.schoolYearLabel;
   if (p.term) req.term = p.term;
+  if (result.facetId === "compliance") {
+    const flagFilter = parseComplianceFlagParam(flat.flag);
+    if (flagFilter) req.flag = flagFilter;
+  }
   return req;
 }
 
@@ -248,8 +264,12 @@ async function SummaryFacetResults({
   scope: SummaryScope;
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const result = await loadFacetResult(facetId, scope, searchParams);
-  if (!result) return null;
+  const loaded = await loadFacetResult(facetId, scope, searchParams);
+  if (!loaded) return null;
+  const result =
+    facetId === "compliance"
+      ? filterComplianceResult(loaded, parseComplianceFlagParam(flattenSearchParams(searchParams).flag))
+      : loaded;
 
   return (
     <div className="min-w-0 space-y-4">

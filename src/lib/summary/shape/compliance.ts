@@ -1,4 +1,5 @@
 import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import type { FacetResult } from "@/lib/summary/types";
 
 /**
  * Every non-compliance definition, in one pure function (spec 4.6, Q8 default).
@@ -169,6 +170,42 @@ export const COMPLIANCE_REASON_FLAG: Record<ComplianceReason, ComplianceFlag> = 
   reading_roster_mismatch: "DISCREPANCIES",
 };
 
+/**
+ * Every list the compliance page/export can show, in the order the page
+ * lists them: each flag, then "Schools with no district admin". Drives the
+ * Flag filter (`?flag=`) on both the Super Admin and District Admin pages,
+ * and the same param on export — the id doubles as `SummaryList.id` in
+ * `shapeCompliance` below, so filtering a `FacetResult` is just an id match.
+ */
+export const COMPLIANCE_FLAG_FILTER_IDS = [
+  "NO_ENCODED_DATA",
+  "PENDING",
+  "NOT_UPDATED",
+  "INCOMPLETE",
+  "DISCREPANCIES",
+  "noDistrictAdmin",
+] as const;
+
+export type ComplianceFlagFilter = (typeof COMPLIANCE_FLAG_FILTER_IDS)[number];
+
+export const COMPLIANCE_FLAG_FILTER_LABELS: Record<ComplianceFlagFilter, string> = {
+  ...COMPLIANCE_FLAG_LABELS,
+  noDistrictAdmin: "Schools with no district admin",
+};
+
+export function isComplianceFlagFilter(value: unknown): value is ComplianceFlagFilter {
+  return (
+    typeof value === "string" &&
+    (COMPLIANCE_FLAG_FILTER_IDS as readonly string[]).includes(value)
+  );
+}
+
+/** A raw `?flag=` value, or null when absent or unknown (shows "All flags"). */
+export function parseComplianceFlagParam(raw: string | string[] | undefined | null): ComplianceFlagFilter | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return isComplianceFlagFilter(value) ? value : null;
+}
+
 export const COMPLIANCE_REASON_LABELS: Record<ComplianceReason, string> = {
   no_learners: "No learners encoded",
   pending_teachers: "Teacher awaiting approval",
@@ -181,3 +218,51 @@ export const COMPLIANCE_REASON_LABELS: Record<ComplianceReason, string> = {
   attendance_roster_mismatch: "Last week's attendance does not cover the ARAL roster",
   reading_roster_mismatch: "This month's reading records do not cover the ARAL roster",
 };
+
+/**
+ * Narrow a compliance `FacetResult` to one flag's list, for the page's Flag
+ * filter. The "Schools flagged" overview section is left as-is — only the
+ * lists narrow — so `null` (All flags) is a no-op.
+ */
+export function filterComplianceResult(
+  result: FacetResult,
+  flag: ComplianceFlagFilter | null
+): FacetResult {
+  if (!flag) return result;
+  const list = result.lists.find((l) => l.id === flag);
+  return { ...result, lists: list ? [list] : [] };
+}
+
+/**
+ * Same narrowing, for export: the file holds only the chosen list, so the
+ * overview section is dropped too (spec: "the report table contains only
+ * that list's rows").
+ */
+export function filterComplianceResultForExport(
+  result: FacetResult,
+  flag: ComplianceFlagFilter | null
+): FacetResult {
+  if (!flag) return result;
+  const filtered = filterComplianceResult(result, flag);
+  // The file stands alone, so its summary must describe only this list: the
+  // count is the listed schools, and the only note is this flag's rule — not
+  // the whole-report notes about percentages and overlapping flags.
+  const definition =
+    flag === "noDistrictAdmin"
+      ? "No district admin is assigned to the school's district, or the school has no district."
+      : COMPLIANCE_FLAG_DEFINITIONS[flag];
+  return {
+    ...filtered,
+    sections: [],
+    schoolCount: filtered.lists[0]?.rows.length ?? 0,
+    notes: [`${COMPLIANCE_FLAG_FILTER_LABELS[flag]}: ${definition}`, "Inactive schools are not included."],
+  };
+}
+
+/** `NO_ENCODED_DATA` -> `no-encoded-data`, `noDistrictAdmin` -> `no-district-admin` (export filename). */
+export function complianceFlagSlug(flag: ComplianceFlagFilter): string {
+  return flag
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/_/g, "-")
+    .toLowerCase();
+}
