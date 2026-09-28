@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,17 +20,43 @@ import { toFormData } from "@/lib/forms/to-form-data";
 import { z } from "zod";
 
 const SUCCESS_MESSAGE =
-  "If an account exists for that email, a reset link has been sent.";
+  "We sent a reset link. Check your inbox and spam folder, and use the newest email — each new request cancels the previous link.";
+
+// Supabase keeps one live recovery token per user, so resending sooner than
+// this only trades the still-good earlier email for an identical new one.
+// Same UI for everyone, whether or not the account actually exists.
+const RESEND_COOLDOWN_SECONDS = 120;
 
 type ForgotValues = z.infer<typeof forgotPasswordSchema>;
 
 export function ForgotPasswordForm() {
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const emailRef = useRef("");
   const form = useAppForm<ForgotValues>({
     schema: forgotPasswordSchema,
     defaultValues: { email: "" },
   });
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => {
+      setCooldown((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const resend = useCallback(() => {
+    startTransition(async () => {
+      const res = await requestPasswordReset(toFormData({ email: emailRef.current }));
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+    });
+  }, [startTransition]);
 
   if (done) {
     return (
@@ -38,6 +64,15 @@ export function ForgotPasswordForm() {
         <CardContent className="space-y-4 pt-6">
           <h2 className="text-lg font-semibold">Check your email</h2>
           <p className="text-sm text-muted-foreground">{SUCCESS_MESSAGE}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={pending || cooldown > 0}
+            onClick={resend}
+          >
+            {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend"}
+          </Button>
           <Button asChild variant="outline" className="w-full">
             <Link href="/login">Back to sign in</Link>
           </Button>
@@ -59,6 +94,7 @@ export function ForgotPasswordForm() {
           form={form}
           className="space-y-4"
           onSubmit={(values) => {
+            emailRef.current = values.email;
             startTransition(async () => {
               const res = await requestPasswordReset(toFormData(values));
               if (!res.ok) {
@@ -66,6 +102,7 @@ export function ForgotPasswordForm() {
                 return;
               }
               setDone(true);
+              setCooldown(RESEND_COOLDOWN_SECONDS);
             });
           }}
         >

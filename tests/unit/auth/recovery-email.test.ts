@@ -11,11 +11,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `action_link`) fails loudly.
  */
 
-const { generateLink, sendEmail } = vi.hoisted(() => ({ generateLink: vi.fn(), sendEmail: vi.fn() }));
+const { generateLink, sendEmail, queryRaw } = vi.hoisted(() => ({
+  generateLink: vi.fn(),
+  sendEmail: vi.fn(),
+  queryRaw: vi.fn(),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => ({ auth: { admin: { generateLink } } }) }));
 vi.mock("@/lib/email", () => ({ sendEmail }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    $queryRaw: (...args: unknown[]) => queryRaw(...args),
+  },
+}));
 
-import { sendPasswordRecoveryEmail } from "@/lib/auth/recovery-email";
+import { sendPasswordRecoveryEmail, hasRecentRecoveryToken } from "@/lib/auth/recovery-email";
 
 beforeEach(() => {
   generateLink.mockReset().mockResolvedValue({
@@ -79,5 +88,43 @@ describe("sendPasswordRecoveryEmail", () => {
       sendPasswordRecoveryEmail("teacher@example.com", "https://arallitrack.com")
     ).rejects.toThrow("Recovery link generation failed");
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("warns that a resend cancels the previous link, without claiming a specific expiry", async () => {
+    await sendPasswordRecoveryEmail("teacher@example.com", "https://arallitrack.com");
+
+    const [sent] = sendEmail.mock.calls[0];
+    expect(sent.text).toContain(
+      "This link works once and expires soon. If you asked more than once, only the newest email works."
+    );
+    // No repo source confirms Supabase's configured OTP expiry, so the copy
+    // must not assert a number that might not be true for this project.
+    expect(sent.text).not.toMatch(/\b1\s*hour\b/i);
+  });
+});
+
+describe("hasRecentRecoveryToken", () => {
+  const AUTH_ID = "11111111-1111-1111-1111-111111111111";
+
+  beforeEach(() => {
+    queryRaw.mockReset();
+  });
+
+  it("returns true when a recovery token exists inside the window", async () => {
+    queryRaw.mockResolvedValue([{ exists: true }]);
+
+    await expect(hasRecentRecoveryToken(AUTH_ID, 2 * 60 * 1000)).resolves.toBe(true);
+  });
+
+  it("returns false when no recent recovery token exists", async () => {
+    queryRaw.mockResolvedValue([{ exists: false }]);
+
+    await expect(hasRecentRecoveryToken(AUTH_ID, 2 * 60 * 1000)).resolves.toBe(false);
+  });
+
+  it("is best-effort: a query failure resolves to false instead of throwing", async () => {
+    queryRaw.mockRejectedValue(new Error("relation \"auth.one_time_tokens\" does not exist"));
+
+    await expect(hasRecentRecoveryToken(AUTH_ID, 2 * 60 * 1000)).resolves.toBe(false);
   });
 });

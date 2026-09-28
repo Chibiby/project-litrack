@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.19.0",
+    date: "2026-09-28",
+    title: "Password reset links that keep working",
+    announce: true,
+    fixes: [
+      "Password reset links no longer show \"expired\" because your email app checked the link first. The link now opens a page with a Continue button.",
+      "If you open a reset link a second time, you go straight to setting your new password instead of seeing an error.",
+      "After you ask for a reset link, the page asks you to wait 2 minutes before asking again and reminds you that only the newest email works.",
+      "Search boxes with a label above them now show the magnifier inside the box again.",
+      { text: "On User Accounts you can filter by District admin and see how many there are, then view, sign in as, or reset any of them.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.18.1",
     date: "2026-09-27",
     title: "District pages are easier to find your way around",

@@ -140,3 +140,25 @@ describe("AccountsTable — Sort by", () => {
     expect(href).not.toContain("page=");
   });
 });
+
+describe("AccountsTable — district admins", () => {
+  it("shows a District admins count card from the summary", () => {
+    render(
+      <AccountsTable
+        rows={[ROW]}
+        list={{ page: 1, pageSize: 20, totalPages: 1, totalCount: 1, role: "", schoolId: "", q: "" }}
+        summary={{
+          totalCount: 10,
+          activeCount: 9,
+          inactiveCount: 1,
+          schoolHeadCount: 2,
+          teacherCount: 5,
+          districtAdminCount: 14,
+        }}
+      />
+    );
+    const overview = screen.getByRole("region", { name: "Account overview" });
+    expect(within(overview).getAllByText("District admins").length).toBeGreaterThan(0);
+    expect(within(overview).getAllByText("14").length).toBeGreaterThan(0);
+  });
+});

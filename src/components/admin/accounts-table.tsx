@@ -10,6 +10,7 @@ import {
   CircleX,
   GraduationCap,
   KeyRound,
+  MapPinned,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -60,6 +61,7 @@ import type { UserRole } from "@prisma/client";
 const ANY_ROLE = "any";
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "SUPER_ADMIN", label: USER_ROLE_LABELS.SUPER_ADMIN },
+  { value: "DISTRICT_ADMIN", label: USER_ROLE_LABELS.DISTRICT_ADMIN },
   { value: "SCHOOL_HEAD", label: USER_ROLE_LABELS.SCHOOL_HEAD },
   { value: "TEACHER", label: USER_ROLE_LABELS.TEACHER },
 ];
@@ -219,7 +221,7 @@ function AccountOverview({ summary }: { summary?: AccountSummary }) {
   return (
     <section
       aria-label="Account overview"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 2xl:grid-cols-6"
     >
       <StatCard
         title="Total accounts"
@@ -254,6 +256,15 @@ function AccountOverview({ summary }: { summary?: AccountSummary }) {
         hint="One per school"
         icon={ShieldCheck}
         tone="amber"
+        inlineOnPhone
+        denseOnPhone
+      />
+      <StatCard
+        title="District admins"
+        value={summary.districtAdminCount.toLocaleString()}
+        hint="Oversee their districts"
+        icon={MapPinned}
+        tone="emerald"
         inlineOnPhone
         denseOnPhone
       />

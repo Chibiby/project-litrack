@@ -1,23 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `requestPasswordReset`'s recovery link used to be built from
- * `NEXT_PUBLIC_APP_URL`, which defaults to `http://localhost:3000` — so on
- * any deploy where that env var isn't set, the emailed link pointed at
- * localhost no matter what site the person was actually using.
- *
- * It now resolves the site origin from the request's own `Origin` header
- * first (Next validates a Server Action POST's `Origin` against `Host`
- * before the action body runs, so it's trustworthy), falling back to
- * `NEXT_PUBLIC_APP_URL` only when that header is absent, and to localhost
- * only as a last resort. Pinned here so a revert to the env-var-only
- * resolution fails loudly.
+ * Supabase keeps exactly one live recovery token per user — each new
+ * `generateLink` invalidates the previous email's link. Production data
+ * showed most resends land within minutes of the last one (median gap 3.3
+ * min), so `requestPasswordReset` skips sending again when the user's
+ * current token is younger than the cooldown. The check is best-effort: a
+ * query failure must never block sending, and the caller must see the exact
+ * same `{ ok: true }` result whether the email was actually sent or skipped
+ * — anything else would be an account-enumeration / behavior oracle.
  */
 
 const userFindUnique = vi.fn();
 const writeAudit = vi.fn();
 const checkRateLimit = vi.fn();
 const sendPasswordRecoveryEmail = vi.fn();
+const hasRecentRecoveryToken = vi.fn();
 const headersMock = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
@@ -84,7 +82,9 @@ vi.mock("@/lib/auth/recovery-email", () => ({
   get sendPasswordRecoveryEmail() {
     return sendPasswordRecoveryEmail;
   },
-  hasRecentRecoveryToken: vi.fn(async () => false),
+  get hasRecentRecoveryToken() {
+    return hasRecentRecoveryToken;
+  },
 }));
 
 vi.mock("next/headers", () => ({
@@ -98,7 +98,7 @@ vi.mock("next/navigation", () => ({
   unstable_rethrow: () => {},
 }));
 
-vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-ORIGIN") }));
+vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-COOLDOWN") }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -114,6 +114,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   sendPasswordRecoveryEmail.mockResolvedValue(undefined);
+  headersMock.mockResolvedValue(new Headers({ origin: "https://litrack.example.org" }));
   userFindUnique.mockResolvedValue({
     id: "user-1",
     authId: "11111111-1111-1111-1111-111111111111",
@@ -123,52 +124,40 @@ beforeEach(() => {
   });
 });
 
-describe("requestPasswordReset — origin resolution", () => {
-  it("prefers the request's Origin header over NEXT_PUBLIC_APP_URL", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://from-env.example";
-    headersMock.mockResolvedValue(new Headers({ origin: "https://from-request.example" }));
+describe("requestPasswordReset — resend cooldown", () => {
+  it("skips generating/sending when the current token is younger than the cooldown", async () => {
+    hasRecentRecoveryToken.mockResolvedValue(true);
 
     const result = await requestPasswordReset(form("teacher@example.com"));
 
+    expect(hasRecentRecoveryToken).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      expect.any(Number)
+    );
+    expect(sendPasswordRecoveryEmail).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
-    expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
-      "teacher@example.com",
-      "https://from-request.example"
-    );
   });
 
-  it("falls back to NEXT_PUBLIC_APP_URL when there is no Origin header", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://from-env.example";
-    headersMock.mockResolvedValue(new Headers());
+  it("sends when the token is older than the cooldown", async () => {
+    hasRecentRecoveryToken.mockResolvedValue(false);
 
-    await requestPasswordReset(form("teacher@example.com"));
+    const result = await requestPasswordReset(form("teacher@example.com"));
 
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://from-env.example"
+      "https://litrack.example.org"
     );
+    expect(result).toEqual({ ok: true });
   });
 
-  it("falls back to localhost only when neither Origin nor NEXT_PUBLIC_APP_URL is set", async () => {
-    delete process.env.NEXT_PUBLIC_APP_URL;
-    headersMock.mockResolvedValue(new Headers());
+  it("returns the identical result whether skipped or sent — no oracle for account existence or cooldown state", async () => {
+    hasRecentRecoveryToken.mockResolvedValue(true);
+    const skipped = await requestPasswordReset(form("teacher@example.com"));
 
-    await requestPasswordReset(form("teacher@example.com"));
+    hasRecentRecoveryToken.mockResolvedValue(false);
+    const sent = await requestPasswordReset(form("teacher@example.com"));
 
-    expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
-      "teacher@example.com",
-      "http://localhost:3000"
-    );
-  });
-
-  it("strips a trailing slash from the resolved origin", async () => {
-    headersMock.mockResolvedValue(new Headers({ origin: "https://from-request.example/" }));
-
-    await requestPasswordReset(form("teacher@example.com"));
-
-    expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
-      "teacher@example.com",
-      "https://from-request.example"
-    );
+    expect(skipped).toEqual(sent);
+    expect(skipped).toEqual({ ok: true });
   });
 });

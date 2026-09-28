@@ -271,17 +271,21 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
     inputProps.value = current;
 
     return (
-      <div className={cn("relative", className)}>
-        <SearchFieldIcon />
-        <Label htmlFor={inputId} className={labelVisible ? undefined : "sr-only"}>
+      <div className={className}>
+        <Label htmlFor={inputId} className={labelVisible ? "mb-1.5 block" : "sr-only"}>
           {label}
         </Label>
-        <Input
-          {...inputProps}
-          ref={setRefs}
-          className={cn("h-11 pl-9 pr-10 lg:h-10", inputClassName)}
-        />
-        {current && <SearchClearButton label="search" onClick={handleClear} />}
+        {/* Icon and clear button are centred on this box, not on the whole
+            wrapper — a visible label above would otherwise pull them up. */}
+        <div className="relative">
+          <SearchFieldIcon />
+          <Input
+            {...inputProps}
+            ref={setRefs}
+            className={cn("h-11 pl-9 pr-10 lg:h-10", inputClassName)}
+          />
+          {current && <SearchClearButton label="search" onClick={handleClear} />}
+        </div>
         {resultCount !== undefined && (
           <span role="status" aria-live="polite" className="sr-only">
             {(resultCountLabel ?? defaultResultCountLabel)(resultCount)}

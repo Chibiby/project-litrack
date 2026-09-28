@@ -41,7 +41,7 @@ import {
 } from "@/lib/auth/impersonation";
 import { clearDemoSessionCookie } from "@/lib/demo/session";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
-import { sendPasswordRecoveryEmail } from "@/lib/auth/recovery-email";
+import { sendPasswordRecoveryEmail, hasRecentRecoveryToken } from "@/lib/auth/recovery-email";
 import {
   warmAdminRoutes,
   warmDistrictRoutes,
@@ -69,6 +69,9 @@ const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+// Supabase keeps one live recovery token per user; resending sooner than
+// this only burns the still-good earlier email for an identical new one.
+const RECOVERY_TOKEN_COOLDOWN_MS = 2 * 60 * 1000;
 
 /**
  * Site origin for links that must work wherever this deploy is reached from,
@@ -977,28 +980,34 @@ export const requestPasswordReset = action(
     if (!isSyntheticEmail(email)) {
       const existing = await prisma.user.findUnique({
         where: { email },
-        select: { id: true, schoolId: true, isActive: true, deletedAt: true },
+        select: { id: true, authId: true, schoolId: true, isActive: true, deletedAt: true },
       });
       if (existing && existing.isActive && !existing.deletedAt) {
-        try {
-          await sendPasswordRecoveryEmail(email, await resolveRequestOrigin());
-        } catch (error) {
-          // The person must still see "sent" — telling them it failed would
-          // tell a stranger the account exists. But a mail sender that has
-          // stopped working is otherwise invisible to everyone, which is how
-          // you get a week of "I never got the email" with nothing logged.
-          reportError(
-            new AppError("AUTH_EMAIL_SEND_FAILED", {
-              cause: error,
-              detail: "Password recovery email delivery failed",
-              context: { reason: "reset_email_failed", schoolId: existing.schoolId },
-            }),
-            {
-              route: "requestPasswordReset",
-              userId: existing.id,
-              schoolId: existing.schoolId,
-            }
-          );
+        const withinCooldown = await hasRecentRecoveryToken(
+          existing.authId,
+          RECOVERY_TOKEN_COOLDOWN_MS
+        );
+        if (!withinCooldown) {
+          try {
+            await sendPasswordRecoveryEmail(email, await resolveRequestOrigin());
+          } catch (error) {
+            // The person must still see "sent" — telling them it failed would
+            // tell a stranger the account exists. But a mail sender that has
+            // stopped working is otherwise invisible to everyone, which is how
+            // you get a week of "I never got the email" with nothing logged.
+            reportError(
+              new AppError("AUTH_EMAIL_SEND_FAILED", {
+                cause: error,
+                detail: "Password recovery email delivery failed",
+                context: { reason: "reset_email_failed", schoolId: existing.schoolId },
+              }),
+              {
+                route: "requestPasswordReset",
+                userId: existing.id,
+                schoolId: existing.schoolId,
+              }
+            );
+          }
         }
         await writeAudit({
           userId: existing.id,
