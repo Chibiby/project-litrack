@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarRange,
+  ClipboardCheck,
   ClipboardList,
   Database,
   FileBarChart,
@@ -120,6 +121,9 @@ export interface NavOptions {
 
 /** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
 export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
+
+/** The MOSY Report list: middle-of-year level and ARAL decision for every learner a teacher tutors. */
+export const ARAL_MOSY_HREF = "/teacher/aral/mosy";
 
 /**
  * Where the "End of Terms Reports" row points: always `/teacher/terms-reports`.
@@ -313,6 +317,12 @@ export function getNavGroups(
               label: "ARAL Profiling",
               href: ARAL_PROFILING_HREF,
               icon: ClipboardList,
+            },
+            {
+              id: "teacher-aral-mosy",
+              label: "MOSY Report",
+              href: ARAL_MOSY_HREF,
+              icon: ClipboardCheck,
             },
           ],
         },

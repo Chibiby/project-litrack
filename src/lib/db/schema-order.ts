@@ -151,6 +151,8 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
     operational: true,
     schoolScope: byLearner,
   },
+  // After School, SchoolYear, User and Learner, which it points at.
+  { model: "AralMosyDecision", delegate: "aralMosyDecision", operational: true, schoolScope: bySchoolId },
   { model: "Announcement", delegate: "announcement", operational: true, schoolScope: bySchoolId },
   { model: "Report", delegate: "report", operational: true, schoolScope: bySchoolId },
   { model: "SupportTicket", delegate: "supportTicket", operational: true, schoolScope: bySchoolId },

@@ -16,6 +16,8 @@ const ARAL_FILES = [
   "lib/actions/aral-grid.ts",
   "lib/actions/attendance.ts",
   "lib/actions/reading-level.ts",
+  "lib/actions/aral-mosy.ts",
+  "lib/aral/mosy-queries.ts",
 ];
 
 /** The wide predicates. Correct almost everywhere; wrong on an ARAL page. */

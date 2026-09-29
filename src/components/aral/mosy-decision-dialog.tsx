@@ -1,0 +1,365 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { AppForm, useAppForm } from "@/components/forms/app-form";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { saveMosyDecision } from "@/lib/actions/aral-mosy";
+import { ARAL_MOSY_OUTCOME_CHOICE_LABELS } from "@/lib/constants/enum-labels";
+import { aralMosyDecisionSchema, MOSY_REMARKS_MAX } from "@/lib/validators/aral-mosy.schema";
+import type { MosyRow } from "@/lib/aral/mosy-queries";
+import type { MosyTransition } from "@/lib/aral/mosy";
+import { cn } from "@/lib/utils";
+
+export type MosyDialogState = {
+  row: MosyRow;
+  /** The level the tutor picked in the table, or the saved one when opened from Update. */
+  draftLevel: string;
+  /** True when opened from Update: the dialog then carries its own level select. */
+  editLevel: boolean;
+};
+
+type MosyFormValues = {
+  learnerId: string;
+  mosyLevel: string;
+  decision: "" | "MOVE_OUT" | "STAY";
+  reason: string;
+  remarks: string;
+};
+
+const TRANSITION_TOAST: Record<MosyTransition, string> = {
+  NONE: "MOSY level saved",
+  MOVED_OUT: "Moved out of ARAL",
+  RETAGGED: "Back in ARAL",
+};
+
+const CHOICE_CARD =
+  "flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[[data-state=checked]]:border-violet has-[[data-state=checked]]:bg-violet-soft";
+
+function MosyDecisionForm({
+  state,
+  onClose,
+  onPendingChange,
+}: {
+  state: MosyDialogState;
+  onClose: () => void;
+  onPendingChange: (pending: boolean) => void;
+}) {
+  const { row, draftLevel, editLevel } = state;
+  const [pending, startTransition] = useTransition();
+  const intent = useRef<"save" | "later">("save");
+
+  useEffect(() => {
+    onPendingChange(pending);
+    return () => onPendingChange(false);
+  }, [pending, onPendingChange]);
+
+  // A tagged learner's saved MOVE_OUT must not be pre-chosen: Save would untag them.
+  const initialDecision: MosyFormValues["decision"] = row.isAralLearner
+    ? row.decision === "STAY"
+      ? "STAY"
+      : ""
+    : (row.decision ?? "MOVE_OUT");
+
+  const form = useAppForm<MosyFormValues>({
+    schema: aralMosyDecisionSchema,
+    defaultValues: {
+      learnerId: row.id,
+      mosyLevel: draftLevel,
+      decision: initialDecision,
+      reason: initialDecision === "MOVE_OUT" ? (row.reason ?? "") : "",
+      remarks: row.remarks ?? "",
+    },
+  });
+
+  const decision = form.watch("decision");
+  const remarksLength = form.watch("remarks").length;
+  const level = form.watch("mosyLevel");
+  const levelLabel = row.levelOptions.find((o) => o.value === level)?.label ?? null;
+  const canDecideLater = row.isAralLearner && row.decision === null;
+  const gradeSection = row.sectionName ? `${row.gradeLabel} - ${row.sectionName}` : row.gradeLabel;
+
+  function send(values: MosyFormValues) {
+    const fd = new FormData();
+    fd.set("learnerId", values.learnerId);
+    fd.set("mosyLevel", values.mosyLevel);
+    fd.set("decision", values.decision);
+    fd.set("reason", values.decision === "MOVE_OUT" ? values.reason : "");
+    fd.set("remarks", values.remarks);
+
+    startTransition(async () => {
+      const res = await saveMosyDecision(fd);
+      if (!res.ok) {
+        if (res.fieldErrors) {
+          for (const [field, message] of Object.entries(res.fieldErrors)) {
+            if (field in values) {
+              form.setError(field as keyof MosyFormValues, { message });
+            }
+          }
+        }
+        toast.error(res.error);
+        return;
+      }
+      toast.success(TRANSITION_TOAST[res.data.transition]);
+      onClose();
+    });
+  }
+
+  function onValid() {
+    const values = form.getValues();
+    if (intent.current === "save" && !values.decision) {
+      form.setError("decision", { message: "Choose whether the learner moves out or stays in ARAL" });
+      return;
+    }
+    send(values);
+  }
+
+  return (
+    <AppForm form={form} onSubmit={onValid} className="grid gap-4">
+      <DialogHeader className="pr-8">
+        <DialogTitle>Move out from ARAL?</DialogTitle>
+        <DialogDescription asChild>
+          <div className="space-y-2">
+            <p>
+              <span className="font-semibold text-foreground">{row.fullName}</span>
+              <span className="text-muted-foreground"> · {gradeSection}</span>
+            </p>
+            {!editLevel && levelLabel ? (
+              <p className="flex flex-wrap items-center gap-2">
+                <span>Updated MOSY level</span>
+                <Badge
+                  variant="outline"
+                  className="border-violet-200 bg-violet-soft text-violet dark:border-violet-900/60"
+                >
+                  {levelLabel}
+                </Badge>
+              </p>
+            ) : null}
+          </div>
+        </DialogDescription>
+      </DialogHeader>
+
+      <FormField
+        control={form.control}
+        name="mosyLevel"
+        render={({ field }) =>
+          editLevel ? (
+            <FormItem>
+              <FormLabel required>MOSY reading level</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select level" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {row.levelOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          ) : (
+            <FormItem>
+              <FormMessage />
+            </FormItem>
+          )
+        }
+      />
+
+      <FormField
+        control={form.control}
+        name="decision"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel id="mosy-decision-label">Decision</FormLabel>
+            <FormControl>
+              <RadioGroup
+                value={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  if (value !== "MOVE_OUT") form.setValue("reason", "");
+                  form.clearErrors(["decision", "reason"]);
+                }}
+                aria-labelledby="mosy-decision-label"
+                disabled={pending}
+                className="gap-2"
+              >
+                {(["MOVE_OUT", "STAY"] as const).map((value) => (
+                  <Label
+                    key={value}
+                    htmlFor={`mosy-decision-${value}`}
+                    className={cn(CHOICE_CARD, "font-normal")}
+                  >
+                    <RadioGroupItem
+                      id={`mosy-decision-${value}`}
+                      value={value}
+                      className="mt-0.5 shrink-0 border-violet text-violet"
+                    />
+                    <span className="min-w-0 space-y-0.5">
+                      <span className="block text-sm font-medium text-foreground">
+                        {value === "MOVE_OUT"
+                          ? "Move out learner from ARAL"
+                          : ARAL_MOSY_OUTCOME_CHOICE_LABELS.STAY}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {value === "MOVE_OUT"
+                          ? "This removes the learner from ARAL. They stay on this page for the rest of the school year."
+                          : "The learner keeps their place in the ARAL program."}
+                      </span>
+                    </span>
+                  </Label>
+                ))}
+              </RadioGroup>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {decision === "MOVE_OUT" ? (
+        <FormField
+          control={form.control}
+          name="reason"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel required>Select reason</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reason" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {row.reasonOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : null}
+
+      <FormField
+        control={form.control}
+        name="remarks"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Remarks (optional)</FormLabel>
+            <FormControl>
+              <Textarea
+                {...field}
+                maxLength={MOSY_REMARKS_MAX}
+                rows={3}
+                disabled={pending}
+                placeholder="Add a short note"
+              />
+            </FormControl>
+            <div className="flex items-start justify-between gap-2">
+              <FormMessage />
+              <p
+                className="ml-auto text-xs tabular-nums text-muted-foreground"
+                aria-live="polite"
+              >
+                {remarksLength}/{MOSY_REMARKS_MAX}
+              </p>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      <DialogFooter className="sm:items-center">
+        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          Cancel
+        </Button>
+        {canDecideLater ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              form.setValue("decision", "");
+              form.setValue("reason", "");
+              intent.current = "later";
+              void form.handleSubmit(onValid)();
+            }}
+          >
+            Decide later
+          </Button>
+        ) : null}
+        <Button type="submit" disabled={pending} onClick={() => (intent.current = "save")}>
+          {pending ? "Saving…" : "Save MOSY Decision"}
+        </Button>
+      </DialogFooter>
+    </AppForm>
+  );
+}
+
+/**
+ * "Move out from ARAL?" — the only place a MOSY level or decision is saved.
+ * Closing it any way (Cancel, Escape, the X) discards the draft; the table
+ * derives its level select from saved data, so nothing was ever written.
+ */
+export function MosyDecisionDialog({
+  state,
+  onClose,
+}: {
+  state: MosyDialogState | null;
+  onClose: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Dialog
+      open={state !== null}
+      onOpenChange={(open) => (open || pending ? undefined : onClose())}
+    >
+      <DialogContent
+        showClose={!pending}
+        className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto p-4 sm:p-6"
+      >
+        {state ? (
+          <MosyDecisionForm
+            key={`${state.row.id}:${state.draftLevel}:${state.editLevel}`}
+            state={state}
+            onClose={onClose}
+            onPendingChange={setPending}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}

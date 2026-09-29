@@ -552,6 +552,7 @@ model School {
   chatChannels        ChatChannel[]
   termWindowOverrides TermWindowOverride[]
   termSubjects        TermSubject[]
+  aralMosyDecisions   AralMosyDecision[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -632,6 +633,7 @@ model SchoolYear {
   termGrades              TermGrade[]
   termWindowOverrides     TermWindowOverride[]
   kinderCompetencyRecords KinderCompetencyRecord[]
+  aralMosyDecisions       AralMosyDecision[]
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
@@ -842,6 +844,7 @@ model User {
   /// The districts this user supervises, when `role = DISTRICT_ADMIN`. Empty
   /// for every other role — see `DistrictAdminAssignment`.
   districtAssignments        DistrictAdminAssignment[] @relation("DistrictAdminAssignments")
+  aralMosyDecisionsTutored   AralMosyDecision[]        @relation("AralMosyTutor")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1206,6 +1209,7 @@ model Learner {
   section                 Section?                 @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   enrollments             Enrollment[]
   aralProfile             AralProfile?
+  mosyDecisions           AralMosyDecision[]
   attendances             Attendance[]
   readingLevels           ReadingLevelRecord[]
   termGrades              TermGrade[]
@@ -1341,6 +1345,53 @@ model AralProfile {
   updatedAt DateTime @updatedAt
 
   learner Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+enum AralMosyOutcome {
+  MOVE_OUT
+  STAY
+}
+
+enum AralMosyMoveOutReason {
+  IMPROVED_EARLY_GRADES // K–G3: "Improved to Developing / Transitioning / Grade Ready"
+  IMPROVED_UPPER_GRADES // G4+:  "Improved to Instructional / Independent Reader"
+  DIAGNOSED_LSEN
+  RECOMMENDED_LSEN_ASSESSMENT
+}
+
+/// One MOSY (middle of school year) decision per learner per school year.
+/// See docs/superpowers/specs/2026-09-29-mosy-report-page-design.md.
+/// SQL-only CHECKs (Prisma cannot express them) — PRESERVE when editing:
+///   AralMosyDecision_reason_iff_move_out, AralMosyDecision_remarks_length.
+model AralMosyDecision {
+  id                  String                 @id @default(uuid())
+  /// Denormalised from learner.schoolId for direct tenant scoping (TermWindowOverride precedent).
+  schoolId            String
+  schoolYearId        String
+  learnerId           String
+  mosyLevel           ReadingProfile
+  /// NULL = level saved, decision deferred ("For MOSY decision").
+  decision            AralMosyOutcome?
+  /// Non-null iff decision = MOVE_OUT (SQL CHECK).
+  reason              AralMosyMoveOutReason?
+  remarks             String?
+  /// Tutor who last saved this row. Scope anchor for moved-out learners, whose
+  /// Learner.aralTeacherId is cleared. SetNull: see Attendance.recordedById.
+  tutorId             String?
+  /// Learner.aralEnrolledAt captured at Move out, restored on re-tag.
+  priorAralEnrolledAt DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolYear SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  tutor      User?      @relation("AralMosyTutor", fields: [tutorId], references: [id], onDelete: SetNull)
+
+  @@unique([learnerId, schoolYearId]) // upsert conflict target
+  @@index([schoolYearId, tutorId]) // page scope branch 2 + SchoolYear cascade
+  @@index([tutorId]) // User SetNull FK side
+  @@index([schoolId]) // School cascade + bySchoolId snapshot/clear
 }
 
 model Attendance {

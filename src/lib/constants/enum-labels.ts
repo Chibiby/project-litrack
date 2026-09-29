@@ -206,6 +206,25 @@ export const READING_PROFILE_LABELS_G4_PLUS = {
   INDEPENDENT_GRADE_READY: "Independent",
 } as const;
 
+/** MOSY decision chips and stat cards. */
+export const ARAL_MOSY_OUTCOME_LABELS = {
+  MOVE_OUT: "Moved out",
+  STAY: "Stay in ARAL",
+} as const;
+
+/** MOSY decision dialog radios. */
+export const ARAL_MOSY_OUTCOME_CHOICE_LABELS = {
+  MOVE_OUT: "Move out",
+  STAY: "Stay as ARAL learner",
+} as const;
+
+export const ARAL_MOSY_MOVE_OUT_REASON_LABELS = {
+  IMPROVED_EARLY_GRADES: "Improved to Developing / Transitioning / Grade Ready",
+  IMPROVED_UPPER_GRADES: "Improved to Instructional / Independent Reader",
+  DIAGNOSED_LSEN: "Diagnosed as Learner with Special Educational Needs (LSEN)",
+  RECOMMENDED_LSEN_ASSESSMENT: "Recommended for LSEN assessment",
+} as const;
+
 const EARLY_GRADE_TYPES = new Set(["KINDER", "G1", "G2", "G3"]);
 
 export function isEarlyGradeReadingBand(type: string): boolean {

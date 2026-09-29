@@ -135,6 +135,30 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.21.0",
+    date: "2026-09-29",
+    title: "MOSY Report for ARAL tutors",
+    announce: true,
+    fixes: [
+      {
+        text: "There is a new MOSY Report page under ARAL Program, below ARAL Profiling. It lists every ARAL learner you tutor, across all your grades, with their latest monthly reading level.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Set each learner's middle-of-year reading level, then choose whether they move out of ARAL or stay. Changing the level alone never removes a learner from ARAL.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Moving a learner out asks for a reason and lets you add a short remark. Learners you move out stay on the page for the rest of the school year, so you can still change your decision.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "ARAL tutors can now record each learner's middle-of-year (MOSY) reading level and whether the learner moves out of ARAL or stays, with the reason. A learner moved out no longer counts as an ARAL learner.",
+        roles: ["SCHOOL_HEAD", "SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.20.0",
     date: "2026-09-28",
     title: "Export one kind of non-compliance",

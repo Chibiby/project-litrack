@@ -212,6 +212,7 @@ if this table and the code ever disagree, trust the code.
 | `AUTH_EMAIL_SEND_FAILED` | 503 | system | We couldn't send the email right now. Try again in a few minutes. |
 | `AUTH_EMAIL_PARTIAL_UPDATE` | 500 | system | Your sign-in email changed but LITRACK couldn't save it. Don't try again yet — contact your administrator. |
 | `ADMIN_IMPERSONATE_INACTIVE` | 409 | user | This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it. |
+| `SCHOOL_YEAR_NOT_ACTIVE` | 409 | user | Your school has no active school year yet, so this can't be saved. Ask your School Head to set the school year first. |
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |

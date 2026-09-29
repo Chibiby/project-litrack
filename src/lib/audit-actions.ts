@@ -125,6 +125,16 @@ export const AUDIT_ACTIONS = {
   LEARNER_ENROLL_ARAL: "LEARNER_ENROLL_ARAL",
   LEARNER_SET_ARAL_TEACHER: "LEARNER_SET_ARAL_TEACHER",
   ARAL_PROFILE_SAVE: "ARAL_PROFILE_SAVE",
+  /**
+   * MOSY Report saves (one row per save). Metadata holds IDs and codes only
+   * (schoolId, learnerId, schoolYearId, mosyLevel, decision, reason) — never
+   * `remarks`, which is free text and can carry learner PII.
+   */
+  ARAL_MOSY_SAVE: "ARAL_MOSY_SAVE",
+  /** MOSY decision moved the learner out of ARAL (untag committed with the row). */
+  ARAL_MOSY_MOVE_OUT: "ARAL_MOSY_MOVE_OUT",
+  /** MOSY decision put a moved-out learner back into ARAL. */
+  ARAL_MOSY_RETAG: "ARAL_MOSY_RETAG",
   ATTENDANCE_MARK: "ATTENDANCE_MARK",
   /**
    * Retired with the daily grid it served. Kept because rows already written

@@ -79,6 +79,58 @@ export function aralLearnerScope(teacherId: string): Prisma.LearnerWhereInput {
 }
 
 /**
+ * `where` fragment for the MOSY Report: "ARAL learners this teacher tutors, plus
+ * learners this teacher moved out of ARAL through MOSY this school year".
+ *
+ * A moved-out learner is untagged and has no `aralTeacherId`, so the decision row's
+ * `tutorId` is what keeps them on the tutor's page. Tutor scope, like
+ * `aralLearnerScope` — an adviser who is not the tutor never matches.
+ *
+ * `teacherId = null` is the Super Admin whole-school, read-only view: both tutor
+ * filters drop, nothing else does.
+ *
+ * Owns the `OR` key: callers combine it through `AND: [mosyLearnerScope(...)]`.
+ * Keep in step with `teacherOwnsMosyRow` (parity test).
+ */
+export function mosyLearnerScope(
+  teacherId: string | null,
+  schoolYearId: string
+): Prisma.LearnerWhereInput {
+  return {
+    OR: [
+      { isAralLearner: true, ...(teacherId ? { aralTeacherId: teacherId } : {}) },
+      {
+        isAralLearner: false,
+        mosyDecisions: {
+          some: {
+            schoolYearId,
+            decision: "MOVE_OUT",
+            ...(teacherId ? { tutorId: teacherId } : {}),
+          },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * In-memory version of `mosyLearnerScope` for the save path: the designated tutor
+ * of a tagged learner, or whoever recorded the learner's MOSY Move out.
+ */
+export function teacherOwnsMosyRow(
+  learner: { isAralLearner: boolean; aralTeacherId: string | null },
+  existing: { decision: "MOVE_OUT" | "STAY" | null; tutorId: string | null } | null,
+  teacherId: string
+): boolean {
+  return (
+    (learner.isAralLearner && learner.aralTeacherId === teacherId) ||
+    (!learner.isAralLearner &&
+      existing?.decision === "MOVE_OUT" &&
+      existing.tutorId === teacherId)
+  );
+}
+
+/**
  * `where` fragment for "grade levels this teacher advises in".
  *
  * The grade is derived from the sections they advise — `Section.adviserId` is the

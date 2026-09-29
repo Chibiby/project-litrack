@@ -84,6 +84,7 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "t-dashboard", role: "TEACHER", group: "Dashboard", label: "Dashboard", href: "/teacher" },
     { id: "t-aral", role: "TEACHER", group: "ARAL", label: "ARAL", href: "/teacher/aral" },
     { id: "t-aral-profiling", role: "TEACHER", group: "ARAL", label: "ARAL profiling", href: "/teacher/aral/profiling" },
+    { id: "t-aral-mosy", role: "TEACHER", group: "ARAL", label: "MOSY report", href: "/teacher/aral/mosy" },
     { id: "t-aral-attendance", role: "TEACHER", group: "ARAL", label: "ARAL weekly attendance", href: `/teacher/aral/${gradeId}/attendance` },
     { id: "t-aral-reading-level", role: "TEACHER", group: "ARAL", label: "ARAL reading level", href: `/teacher/aral/${gradeId}/reading-level` },
     { id: "t-aral-terms-reports", role: "TEACHER", group: "ARAL", label: "ARAL term reports", href: `/teacher/aral/${gradeId}/terms-reports` },

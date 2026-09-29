@@ -202,6 +202,15 @@ export const ERRORS = {
     message: "The test account isn't ready yet. Prepare test data on the Test Lab page, then try again.",
   },
 
+  // ── School year ──────────────────────────────────────────────────────────
+  /** A write that is keyed to the active school year, in a school that has none. */
+  SCHOOL_YEAR_NOT_ACTIVE: {
+    status: 409,
+    severity: "user",
+    message:
+      "Your school has no active school year yet, so this can't be saved. Ask your School Head to set the school year first.",
+  },
+
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
     status: 422,

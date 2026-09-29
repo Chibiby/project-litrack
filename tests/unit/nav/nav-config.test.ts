@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARAL_MOSY_HREF,
   flattenNavGroups,
   getNavGroups,
   resolveActiveHref,
@@ -31,8 +32,23 @@ describe("getNavGroups — teacher", () => {
       "Weekly Attendance",
       "Monthly Reading Level",
       "ARAL Profiling",
+      "MOSY Report",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
+  });
+
+  it("has one MOSY Report row directly after ARAL Profiling, never grade-scoped", () => {
+    for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
+      const groups = getNavGroups("TEACHER", grades);
+      const ids = groups[1].items.map((item) => item.id);
+      expect(ids.indexOf("teacher-aral-mosy")).toBe(ids.indexOf("teacher-aral-profiling") + 1);
+      const row = groups[1].items.find((item) => item.id === "teacher-aral-mosy");
+      expect(row?.label).toBe("MOSY Report");
+      expect(row?.href).toBe(ARAL_MOSY_HREF);
+      expect(ARAL_MOSY_HREF).toBe("/teacher/aral/mosy");
+      const items = flattenNavGroups(groups);
+      expect(resolveActiveItemId(ARAL_MOSY_HREF, items)).toBe("teacher-aral-mosy");
+    }
   });
 
   it("has one ARAL Profiling row under ARAL Program, never grade-scoped", () => {
@@ -215,6 +231,7 @@ describe("getNavGroups — ARAL volunteer", () => {
       "Weekly Attendance",
       "Monthly Reading Level",
       "ARAL Profiling",
+      "MOSY Report",
     ]);
     expect(groups[1].items[0].href).toBe("/teacher/aral/g1/attendance");
     expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
@@ -337,6 +354,7 @@ describe("getNavGroups — the term report's href", () => {
         "/teacher/aral",
         "/teacher/aral",
         "/teacher/aral/profiling",
+        ARAL_MOSY_HREF,
       ]);
       expect(termsRow(grades)?.href).toBe("/teacher/terms-reports");
       expect(termsRow(grades)?.href).not.toBe("/teacher/aral");
