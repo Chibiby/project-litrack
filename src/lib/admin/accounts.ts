@@ -1,5 +1,10 @@
 import "server-only";
-import type { Prisma, TeacherApprovalStatus, UserRole } from "@prisma/client";
+import type {
+  GradeLevelType,
+  Prisma,
+  TeacherApprovalStatus,
+  UserRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
@@ -142,6 +147,8 @@ export type AccountsParams = {
   q: string;
   role?: UserRole;
   schoolId?: string;
+  /** Teachers who advise a section of this grade; only ever set with role TEACHER. */
+  grade?: GradeLevelType;
   sort: AccountListSort;
 };
 
@@ -166,8 +173,36 @@ function isUserRole(value: string | undefined): value is UserRole {
   return value !== undefined && (ROLE_VALUES as readonly string[]).includes(value);
 }
 
+/** FLOATING is an advisory mode, not a grade a section belongs to. */
+const ACCOUNT_GRADE_VALUES: readonly GradeLevelType[] = [
+  "KINDER",
+  "G1",
+  "G2",
+  "G3",
+  "G4",
+  "G5",
+  "G6",
+  "G7",
+  "G8",
+  "G9",
+  "G10",
+  "G11",
+  "G12",
+];
+
+function isAccountGrade(value: string | undefined): value is GradeLevelType {
+  return value !== undefined && (ACCOUNT_GRADE_VALUES as readonly string[]).includes(value);
+}
+
 export function parseAccountsParams(
-  searchParams: { page?: string; q?: string; role?: string; schoolId?: string; sort?: string },
+  searchParams: {
+    page?: string;
+    q?: string;
+    role?: string;
+    schoolId?: string;
+    grade?: string;
+    sort?: string;
+  },
   pageSize: number = ACCOUNTS_PAGE_SIZE
 ): AccountsParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
@@ -176,6 +211,8 @@ export function parseAccountsParams(
   const size = pageSize > 0 ? pageSize : ACCOUNTS_PAGE_SIZE;
   const role = isUserRole(searchParams.role) ? searchParams.role : undefined;
   const schoolId = searchParams.schoolId?.trim() || undefined;
+  const grade =
+    role === "TEACHER" && isAccountGrade(searchParams.grade) ? searchParams.grade : undefined;
   const sort = ACCOUNT_LIST_SORTS.parse(searchParams.sort);
   return {
     page,
@@ -185,6 +222,7 @@ export function parseAccountsParams(
     q,
     role,
     schoolId,
+    grade,
     sort,
   };
 }
@@ -242,6 +280,7 @@ export function accountsWhere(params: {
   role?: UserRole;
   schoolId?: string;
   q?: string;
+  grade?: GradeLevelType;
 }): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {
     deletedAt: null,
@@ -249,6 +288,11 @@ export function accountsWhere(params: {
   };
   if (params.role) where.role = params.role;
   if (params.schoolId) where.schoolId = params.schoolId;
+  if (params.grade) {
+    where.advisorySections = {
+      some: { deletedAt: null, gradeLevel: { type: params.grade, deletedAt: null } },
+    };
+  }
   const q = params.q?.trim();
   if (q) {
     where.OR = [

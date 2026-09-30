@@ -135,8 +135,8 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
-    version: "2.21.0",
-    date: "2026-09-29",
+    version: "2.24.0",
+    date: "2026-09-30",
     title: "MOSY Report for ARAL tutors",
     announce: true,
     fixes: [
@@ -160,6 +160,45 @@ export const RELEASES: readonly Release[] = [
         text: "ARAL tutors can now record each learner's middle-of-year (MOSY) reading level and whether the learner moves out of ARAL or stays, with the reason. A learner moved out no longer counts as an ARAL learner.",
         roles: ["SCHOOL_HEAD", "SUPER_ADMIN"],
       },
+    ],
+  },
+  {
+    version: "2.23.1",
+    date: "2026-09-30",
+    title: "Teachers search box moves to the left",
+    announce: true,
+    fixes: [
+      "On the Teachers page the search box now comes first, on the left, at a fixed smaller width, with the filters and Sort by after it.",
+    ],
+  },
+  {
+    version: "2.23.0",
+    date: "2026-09-30",
+    title: "Search as you type, and find teachers by grade and section",
+    announce: true,
+    fixes: [
+      "The Teachers page puts Filter teachers, Grade, Section, Sort by and the search box in one row. Pick a grade, then a section, to see who advises it.",
+      "Search boxes across LITRACK now search as you type, after a short pause. There is no Search button to press; Enter still searches right away.",
+      "Every search box has a magnifying glass and an × button that clears it.",
+    ],
+  },
+  {
+    version: "2.22.1",
+    date: "2026-09-30",
+    title: "Kinder reads in Filipino only, and DepEd tutors are counted",
+    announce: true,
+    fixes: [
+      "Kinder learners now get a Filipino reading level only. The English reading level is no longer asked for Kinder, the same as Grade 1 and Grade 2.",
+      "Teachers serving as ARAL tutors now counts DepEd teachers correctly. Tutors with a DepEd designation were shown as Not answered before.",
+    ],
+  },
+  {
+    version: "2.22.0",
+    date: "2026-09-30",
+    title: "Find teachers by the grade they advise",
+    announce: true,
+    fixes: [
+      "User Accounts has a Grade filter. Set Role to Teacher, then pick a grade to see only the teachers who advise a section of that grade.",
     ],
   },
   {

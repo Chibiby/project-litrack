@@ -1,6 +1,6 @@
 {
   "name": "litrack",
-  "version": "2.21.0",
+  "version": "2.24.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

@@ -28,7 +28,7 @@ export async function countMonthlyAssessmentProgress(args: {
   monthEnd: Date;
   /**
    * Grades in scope for this progress count. `completeAssessmentWhereForGrades`
-   * partitions these by `languagesForGrade`, so a Grade 1/Grade 2 learner's
+   * partitions these by `languagesForGrade`, so a Kinder/Grade 1/Grade 2 learner's
    * "assessed" no longer requires an English value that grade never collects
    * (docs/reading-policy-spec.md section 4b).
    */

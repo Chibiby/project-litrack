@@ -8,6 +8,8 @@ import { resolveSchoolHeadView, type SchoolHeadView } from "@/lib/school-head/vi
 import {
   TEACHER_LIST_SORTS,
   parseTeachersListParams,
+  resolveAdvisoryFacet,
+  teacherAdvisoryFacetWhere,
   teacherListOrderBy,
   teachersTotalPages,
 } from "@/lib/teachers/pagination";
@@ -44,9 +46,17 @@ import { listKey } from "@/lib/nav/list-params";
  * Only the params that change which active-teacher rows are shown. `schoolId`
  * (Super Admin's view context) deliberately stays out — switching schools
  * already re-navigates to a fresh URL, and including it here would just
- * re-suspend the boundary for a param that isn't a list facet.
+ * re-suspend the boundary for a param that isn't a list facet. `q` is left
+ * out: search runs as you type, and a remount on each search would drop the
+ * search box's focus.
  */
-export const ACTIVE_TEACHERS_LIST_KEYS = ["page", "sort", "q", "filter"] as const;
+export const ACTIVE_TEACHERS_LIST_KEYS = [
+  "page",
+  "sort",
+  "filter",
+  "grade",
+  "section",
+] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +67,8 @@ interface TeachersPageProps {
     q?: string;
     filter?: string;
     sort?: string;
+    grade?: string;
+    section?: string;
   }>;
 }
 
@@ -72,6 +84,33 @@ async function ActiveTeachersBody({
 }) {
   const { schoolId, isSuperAdminView } = view;
 
+  // Serves several jobs at once, which is why it replaced a pair of counts: it
+  // fills the School Head's advisory picker and the Grade/Section facets, and
+  // its shape answers both capacity questions below (any grade at all? any
+  // adviser-free section?). Read first because the facets are validated
+  // against it before the roster query runs.
+  const gradeSections = await prismaFresh.gradeLevel.findMany({
+    where: { schoolId, deletedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      type: true,
+      sections: {
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          adviser: { select: { id: true, fullName: true } },
+        },
+      },
+    },
+  });
+
+  const gradesWithSections = gradeSections.filter((g) => g.sections.length > 0);
+  const facet = resolveAdvisoryFacet(gradesWithSections, list.grade, list.section);
+  const facetWhere = teacherAdvisoryFacetWhere(schoolId, facet);
+
   const filterWhere =
     list.filter === "all"
       ? {}
@@ -83,6 +122,7 @@ async function ActiveTeachersBody({
     ...teacherRosterScope(schoolId),
     ...TEACHER_ROSTER_STATE.active,
     ...filterWhere,
+    ...(facetWhere ? { AND: [facetWhere] } : {}),
     ...(list.q
       ? {
           OR: [
@@ -93,7 +133,7 @@ async function ActiveTeachersBody({
       : {}),
   };
 
-  const [activeTeachers, gradeSections, searchCount] = await Promise.all([
+  const [activeTeachers, searchCount] = await Promise.all([
     prismaFresh.user.findMany({
       where: activeWhere,
       select: managedTeacherSelect,
@@ -101,34 +141,20 @@ async function ActiveTeachersBody({
       skip: list.skip,
       take: list.take,
     }),
-    // Serves two jobs at once, which is why it replaced a pair of counts: it
-    // fills the School Head's advisory picker, and its shape answers both
-    // capacity questions below (any grade at all? any adviser-free section?).
-    prismaFresh.gradeLevel.findMany({
-      where: { schoolId, deletedAt: null },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        type: true,
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { name: "asc" },
-          select: {
-            id: true,
-            name: true,
-            adviser: { select: { id: true, fullName: true } },
-          },
-        },
-      },
-    }),
-    // The tab badge is unfiltered. Count again whenever search or a roster
-    // filter narrows the rows shown on this page.
-    list.q || list.filter !== "all"
+    // The tab badge is unfiltered. Count again whenever search, a roster
+    // filter or a grade/section facet narrows the rows shown on this page.
+    list.q || list.filter !== "all" || facetWhere
       ? prismaFresh.user.count({ where: activeWhere })
       : null,
   ]);
 
   const activeCount = searchCount ?? unfilteredCount;
+
+  const gradeFacetOptions = gradesWithSections.map((g) => ({
+    id: g.id,
+    label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+    sections: g.sections.map((s) => ({ id: s.id, name: s.name })),
+  }));
 
   const advisoryOptions: AdvisoryGradeOption[] = gradeSections
     // A grade with no sections would render an empty <optgroup>.
@@ -222,6 +248,9 @@ async function ActiveTeachersBody({
           totalCount: activeCount,
           q: list.q,
           filter: list.filter,
+          grade: facet.gradeId ?? "",
+          section: facet.sectionId ?? "",
+          gradeOptions: gradeFacetOptions,
           basePath: SCHOOL_HEAD_ROUTES.teachers,
           sort: list.sort,
           sortOptions: TEACHER_LIST_SORTS.options,
@@ -229,6 +258,8 @@ async function ActiveTeachersBody({
             schoolId: isSuperAdminView ? schoolId : undefined,
             q: list.q || undefined,
             filter: list.filter === "all" ? undefined : list.filter,
+            grade: facet.gradeId ?? undefined,
+            section: facet.sectionId ?? undefined,
             // Default sort stays out of the URL (clean links); every other
             // sort must survive paging, filtering and search — see
             // pushListQuery/LearnerPagination below, which both rebuild the

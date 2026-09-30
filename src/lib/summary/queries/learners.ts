@@ -194,7 +194,7 @@ export function shapeLearners(args: {
         baseLabel: "% of learners in the grade",
         note:
           lang === "english"
-            ? "Grades 1 and 2 do not record an English reading profile. Kinder uses the letter and word rubric (Levels 0–3), shown in its own columns."
+            ? "Kinder, Grade 1 and Grade 2 do not record an English reading profile. Kinder uses the letter and word rubric (Levels 0–3), shown in its own columns."
             : "Kinder uses the letter and word rubric (Levels 0–3), shown in its own columns.",
       }),
       buildSection({

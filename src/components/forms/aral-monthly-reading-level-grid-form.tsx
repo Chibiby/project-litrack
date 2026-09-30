@@ -241,7 +241,7 @@ const EMPTY_ROW: RowState = {
 /**
  * Grade-aware completeness, delegated to the shared policy module
  * (`isReadingRecordComplete`, docs/reading-policy-spec.md section 3) instead
- * of a hardcoded four-field check — Grade 1/Grade 2 no longer collect English,
+ * of a hardcoded four-field check — Kinder/Grade 1/Grade 2 no longer collect English,
  * so their rows are complete without it.
  */
 function isRowComplete(row: RowState | undefined, gradeType: string): boolean {

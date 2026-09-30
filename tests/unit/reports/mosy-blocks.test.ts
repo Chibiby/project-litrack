@@ -139,7 +139,8 @@ describe("buildMosyBlocks — Kinder rubric bands", () => {
       ],
     };
     const blocks = buildMosyBlocks(input);
-    const english = findBlock(blocks, "Reading Level Profile per Grade Level (English)");
+    // Kinder is Filipino-only, so its rubric bands live in the Filipino block.
+    const english = findBlock(blocks, "Reading Level Profile per Grade Level (Filipino)");
     const headers = english.columns.map((c) => c.header);
     const kinderRow = english.rows[0]!;
 
@@ -488,8 +489,11 @@ describe("buildMosyBlocks — reconciliation across a mixed two-grade fixture", 
     const kinderDetailCount = detail.rows.filter((r) => r[2] === KINDER.label).length;
     const g3DetailCount = detail.rows.filter((r) => r[2] === G3.label).length;
 
-    expect(english.rows[0]![1]).toBe(kinderDetailCount); // Kinder Learners
+    // Kinder collects no English: its row is null-filled there.
+    expect(english.rows[0]![1]).toBeNull();
     expect(english.rows[1]![1]).toBe(g3DetailCount); // Grade 3 Learners
+    const filipino = findBlock(blocks, "Reading Level Profile per Grade Level (Filipino)");
+    expect(filipino.rows[0]![1]).toBe(kinderDetailCount); // Kinder Learners
 
     const kinderAralDetailCount = detail.rows.filter(
       (r) => r[2] === KINDER.label && r[4] === "Yes"

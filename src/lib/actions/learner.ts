@@ -118,8 +118,8 @@ export async function createLearner(
     return { ok: false, error: "You are not assigned to this grade level" };
   }
 
-  // English is only collected for grades whose policy includes it (Kinder, G3+);
-  // Grade 1/Grade 2 never collect it. Reject rather than silently drop or ignore,
+  // English is only collected for grades whose policy includes it (G3+);
+  // Kinder/Grade 1/Grade 2 never collect it. Reject rather than silently drop or ignore,
   // so a stale client's mismatched payload is visible instead of quietly wrong.
   const collectsEnglish = languagesForGrade(advisory.gradeType).includes("ENGLISH");
   if (collectsEnglish && !parsed.data.englishReadingProfile) {
@@ -334,8 +334,8 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
         gender: parsed.data.gender,
         nutritionalStatus: parsed.data.nutritionalStatus,
         // Omitted (not set to null) when the grade doesn't collect English — this
-        // is what keeps a Grade 1/Grade 2 edit from ever touching a value that may
-        // have carried over from Kinder, or from clobbering what a previous edit
+        // is what keeps a Kinder/Grade 1/Grade 2 edit from ever touching a value that may
+        // have been stored earlier (e.g. when Kinder still collected it), or from clobbering what a previous edit
         // already left alone (docs/reading-policy-spec.md section 4a).
         ...(collectsEnglish
           ? { englishReadingProfile: parsed.data.englishReadingProfile }

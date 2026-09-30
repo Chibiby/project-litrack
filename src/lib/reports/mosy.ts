@@ -298,9 +298,9 @@ const PHIL_IRI_BAND_LABELS: Record<string, string> = {
 
 /**
  * The profile a grade is banded on: English when the grade collects it
- * (`languagesForGrade`), Filipino otherwise (Grade 1/Grade 2, which are
- * Filipino-only per the reading policy) — Phil-IRI English is the required
- * Grades 4+ submission, but a G1/G2 CRLA row has no English profile to read
+ * (`languagesForGrade`), Filipino otherwise (Kinder/Grade 1/Grade 2, which
+ * are Filipino-only per the reading policy) — Phil-IRI English is the required
+ * Grades 4+ submission, but a Kinder/G1/G2 CRLA row has no English profile to read
  * at all, so it falls back to the language the grade actually collects.
  */
 function primaryBandValue(learner: MosyLearner): string | null {

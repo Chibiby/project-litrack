@@ -5,6 +5,7 @@ import { useListNavigate } from "@/components/nav/list-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 
 export type AuditFiltersState = {
   q: string;
@@ -24,13 +25,12 @@ export type AuditFiltersState = {
  * filtered.
  */
 export function AuditFilters(props: AuditFiltersProps) {
-  // Remounted whenever the URL changes, which is what re-seeds the three
-  // inputs from the new query string. A prop→state effect would do the same
-  // job and is what this used to be, but it costs a second render pass on
-  // every navigation and the compiler lint rejects it; a key is the pattern
-  // the rest of this codebase already resets child state with.
+  // Remounted whenever the applied dates change, which re-seeds the date
+  // inputs from the new query string. The search text is left out of the key on
+  // purpose: a remount when a search lands would drop focus and any letters
+  // typed while it loaded, so the form adopts a changed `q` itself.
   const { state } = props;
-  return <AuditFiltersForm key={`${state.q}|${state.from ?? ""}|${state.to ?? ""}`} {...props} />;
+  return <AuditFiltersForm key={`${state.from ?? ""}|${state.to ?? ""}`} {...props} />;
 }
 
 type AuditFiltersProps = {
@@ -43,6 +43,18 @@ type AuditFiltersProps = {
 function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
   const listNavigate = useListNavigate();
   const [q, setQ] = useState(state.q);
+  const [prevStateQ, setPrevStateQ] = useState(state.q);
+  // The last term the box sent to the URL. When that same term comes back it is
+  // our own search landing, and adopting it would erase characters typed while
+  // the request was in flight.
+  const [pushedQ, setPushedQ] = useState(state.q);
+  if (state.q !== prevStateQ) {
+    setPrevStateQ(state.q);
+    if (state.q !== pushedQ) {
+      setQ(state.q);
+      setPushedQ(state.q);
+    }
+  }
   const [from, setFrom] = useState(state.from ?? "");
   const [to, setTo] = useState(state.to ?? "");
 
@@ -63,24 +75,27 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
     listNavigate(qs ? `${basePath}?${qs}` : basePath);
   };
 
+  // Searching by text keeps the dates that are already applied, not whatever
+  // is half-typed in the date boxes, which still wait for Apply.
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    push({ q: term, from: state.from, to: state.to });
+  };
+
   const hasFilters = Boolean(state.q || state.from || state.to);
 
   return (
     <div className="flex flex-wrap items-end gap-2">
       <div className="min-w-[12rem] max-lg:basis-full flex-1 space-y-1">
-        <Label htmlFor="audit-search" className="text-xs text-muted-foreground">
-          Search actor or action
-        </Label>
-        <Input
+        <SearchInput
           id="audit-search"
+          label="Search actor or action"
+          labelVisible
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              push({ q });
-            }
-          }}
+          onValueChange={setQ}
+          onDebouncedChange={searchNow}
           placeholder="Name or action…"
           className="max-w-sm max-lg:max-w-none"
         />
@@ -116,7 +131,10 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
         size="sm"
         variant="outline"
         className="lg:h-9"
-        onClick={() => push({ q, from: from || null, to: to || null })}
+        onClick={() => {
+          setPushedQ(q.trim());
+          push({ q, from: from || null, to: to || null });
+        }}
       >
         Apply
       </Button>
@@ -128,6 +146,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           className="lg:h-9"
           onClick={() => {
             setQ("");
+            setPushedQ("");
             setFrom("");
             setTo("");
             push({ q: "", from: null, to: null });

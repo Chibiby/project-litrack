@@ -230,7 +230,7 @@ export function shapeReadingLevels(args: {
       "One record per learner for each month: the latest one saved in that month.",
       "Improved means a higher level than the month before in the same language; no improvement means the same level. A lower level is shown separately as declined.",
       "A level that is not on the grade's scale (for example a learner promoted from Kinder who still has a letter-rubric level) is not comparable.",
-      "Grades 1 and 2 do not record English.",
+      "Kinder, Grade 1 and Grade 2 do not record English.",
     ],
     gaps: ["Monthly reading levels are recorded only for ARAL learners."],
     sections,

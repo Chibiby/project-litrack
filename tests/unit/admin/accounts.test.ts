@@ -114,6 +114,18 @@ describe("accountsWhere", () => {
     ]);
   });
 
+  it("filters by advisory-section grade when given", () => {
+    expect(accountsWhere({ role: "TEACHER", grade: "G3" })).toMatchObject({
+      advisorySections: {
+        some: { deletedAt: null, gradeLevel: { type: "G3", deletedAt: null } },
+      },
+    });
+  });
+
+  it("omits the advisorySections clause without a grade", () => {
+    expect(accountsWhere({ role: "TEACHER" })).not.toHaveProperty("advisorySections");
+  });
+
   it("omits OR entirely for a blank/whitespace search", () => {
     expect(accountsWhere({ q: "   " })).not.toHaveProperty("OR");
     expect(accountsWhere({})).not.toHaveProperty("OR");
@@ -269,5 +281,17 @@ describe("parseAccountsParams / accountsTotalPages", () => {
     expect(params.page).toBe(1);
     expect(params.pageSize).toBe(ACCOUNTS_PAGE_SIZE);
     expect(params.skip).toBe(0);
+  });
+
+  it("parses grade only together with role=TEACHER", () => {
+    expect(parseAccountsParams({ role: "TEACHER", grade: "G3" }).grade).toBe("G3");
+    expect(parseAccountsParams({ grade: "G3" }).grade).toBeUndefined();
+    expect(parseAccountsParams({ role: "SCHOOL_HEAD", grade: "G3" }).grade).toBeUndefined();
+  });
+
+  it("ignores an invalid or FLOATING grade", () => {
+    expect(parseAccountsParams({ role: "TEACHER", grade: "G99" }).grade).toBeUndefined();
+    expect(parseAccountsParams({ role: "TEACHER", grade: "FLOATING" }).grade).toBeUndefined();
+    expect(parseAccountsParams({ role: "TEACHER", grade: "" }).grade).toBeUndefined();
   });
 });

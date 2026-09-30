@@ -141,7 +141,7 @@ const sectionAFields = {
   // Both ethnicity slots at once. The rules live in ./ethnicity because the
   // CSV import and the teacher profile ask the same question the same way.
   ...ethnicityFields,
-  // Structurally optional: Grade 1/Grade 2 stop collecting English (see
+  // Structurally optional: Kinder/Grade 1/Grade 2 stop collecting English (see
   // docs/reading-policy-spec.md section 4a). Whether it is required for a
   // given grade is an action-level invariant, not a Zod one — see
   // `src/lib/actions/learner.ts`.

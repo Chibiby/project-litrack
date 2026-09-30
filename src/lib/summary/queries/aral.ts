@@ -45,9 +45,12 @@ export const ARAL_TUTOR_NON_DEPED = "NON_DEPED";
  * The DepEd / Non-DepEd / Not answered rule, built on `isAralVolunteerDesignation`
  * so it can never drift from the one place that decides what a volunteer
  * designation is: `employmentType` set to `DEPED_PLANTILLA` or `NON_DEPED` wins
- * outright (even over a volunteer-looking designation); otherwise a volunteer
- * designation with no `employmentType` reads as Non-DepEd; everything else,
- * including no profile at all, is Not answered.
+ * outright (even over a volunteer-looking designation). No form writes
+ * `employmentType`, so it is null for almost everyone and the designation
+ * decides, the same way the rest of the app tells a volunteer from a DepEd
+ * teacher: the volunteer designation reads as Non-DepEd, any other designation
+ * as DepEd. Only a blank designation, including no profile at all, is Not
+ * answered.
  */
 export function classifyAralTutor(
   employmentType: string | null,
@@ -55,7 +58,8 @@ export function classifyAralTutor(
 ): typeof ARAL_TUTOR_DEPED | typeof ARAL_TUTOR_NON_DEPED | typeof NOT_ANSWERED {
   if (employmentType === "DEPED_PLANTILLA") return ARAL_TUTOR_DEPED;
   if (employmentType === "NON_DEPED") return ARAL_TUTOR_NON_DEPED;
-  if (employmentType === null && isAralVolunteerDesignation(designation)) return ARAL_TUTOR_NON_DEPED;
+  if (isAralVolunteerDesignation(designation)) return ARAL_TUTOR_NON_DEPED;
+  if (designation != null && designation.trim() !== "") return ARAL_TUTOR_DEPED;
   return NOT_ANSWERED;
 }
 
