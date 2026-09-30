@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useListNavigate } from "@/components/nav/list-navigation";
 import { SearchInput } from "@/components/ui/search-input";
@@ -14,9 +14,6 @@ import {
 import { ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 import type { LearnerListSectionFilter } from "@/lib/learners/pagination";
 import { PROFILING_STATUS_LABELS, type ProfilingStatusFilter } from "@/lib/aral/profiling-stats";
-
-/** Debounce pause before applying typed search (ms). Same value as the roster. */
-export const PROFILING_SEARCH_DEBOUNCE_MS = 500;
 
 export type ProfilingSectionOption = { id: string; name: string };
 
@@ -46,23 +43,20 @@ export function ProfilingToolbar({
   const listNavigate = useListNavigate();
   const searchParams = useSearchParams();
   const [inputValue, setInputValue] = useState(q);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
-  // React docs "adjusting state when a prop changes" pattern.
+  // React docs "adjusting state when a prop changes" pattern. A `q` this box
+  // itself sent is skipped: adopting it would erase characters typed while the
+  // request was in flight.
   const [prevQ, setPrevQ] = useState(q);
+  const [pushedQ, setPushedQ] = useState(q);
   if (q !== prevQ) {
     setPrevQ(q);
-    setInputValue(q);
-  }
-
-  const clearDebounce = () => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
+    if (q !== pushedQ) {
+      setInputValue(q);
+      setPushedQ(q);
     }
-  };
-  useEffect(() => () => clearDebounce(), []);
+  }
 
   function navigate(next: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -76,25 +70,18 @@ export function ProfilingToolbar({
   }
 
   const pushSearch = (raw: string) => {
-    clearDebounce();
-    navigate({ q: raw.trim() || undefined });
-  };
-
-  const handleSearchChange = (value: string) => {
-    setInputValue(value);
-    clearDebounce();
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      pushSearch(value);
-    }, PROFILING_SEARCH_DEBOUNCE_MS);
+    const term = raw.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    navigate({ q: term || undefined });
   };
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
       <SearchInput
         value={inputValue}
-        onValueChange={handleSearchChange}
-        onSubmit={() => pushSearch(inputValue)}
+        onValueChange={setInputValue}
+        onDebouncedChange={pushSearch}
         label="Search learners by name"
         placeholder="Search learner name…"
         className="min-w-[12rem] flex-1 sm:max-w-xs"

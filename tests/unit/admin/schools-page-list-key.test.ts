@@ -54,10 +54,10 @@ beforeEach(() => {
 
 describe("SchoolsListPage — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(SCHOOLS_LIST_KEYS).toEqual(["page", "sort", "q", "region", "status"]);
+    expect(SCHOOLS_LIST_KEYS).toEqual(["page", "sort", "region", "status"]);
   });
 
-  it("changes when a list-affecting param (q) changes", async () => {
+  it("does not change when the search text (q) changes, so the search box is not remounted", async () => {
     const before = suspenseElementOf(
       await SchoolsListPage({ searchParams: Promise.resolve({ q: "naidas" }) })
     );
@@ -65,9 +65,8 @@ describe("SchoolsListPage — Suspense boundary key", () => {
       await SchoolsListPage({ searchParams: Promise.resolve({ q: "opong" }) })
     );
 
-    expect(before.key).not.toBe(after.key);
-    expect(before.key).toBe(listKey({ q: "naidas" }, SCHOOLS_LIST_KEYS));
-    expect(after.key).toBe(listKey({ q: "opong" }, SCHOOLS_LIST_KEYS));
+    expect(before.key).toBe(after.key);
+    expect(SCHOOLS_LIST_KEYS).not.toContain("q");
   });
 
   it("changes when page, sort, region, or status change", async () => {

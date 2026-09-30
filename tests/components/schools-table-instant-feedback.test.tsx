@@ -95,6 +95,13 @@ afterEach(async () => {
   cleanup();
 });
 
+/** Type a term and press Enter, which applies the search without waiting out the pause. */
+function searchFor(term: string) {
+  const input = screen.getByRole("searchbox", { name: "Search schools" });
+  fireEvent.change(input, { target: { value: term } });
+  fireEvent.keyDown(input, { key: "Enter" });
+}
+
 describe("SchoolsTable — instant feedback while a list navigation is pending", () => {
   it("sets aria-busy on the rows region and swaps to the skeleton once search is applied", async () => {
     render(<SchoolsTable schools={[SCHOOL]} list={LIST} />);
@@ -103,7 +110,7 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
     expect(region?.getAttribute("aria-busy")).toBeNull();
     expect(screen.getAllByText("Naidas T. Opong ES").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    searchFor("Naidas");
 
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeTruthy();
@@ -124,10 +131,30 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
     expect(nextLink.getAttribute("aria-disabled")).toBe("false");
     expect(nextLink.hasAttribute("disabled")).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    searchFor("Naidas");
 
     expect(nextLink.getAttribute("aria-disabled")).toBe("true");
     expect(nextLink.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("searches by itself once typing pauses, with no Search button", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<SchoolsTable schools={[SCHOOL]} list={LIST} />);
+      expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+
+      const input = screen.getByRole("searchbox", { name: "Search schools" });
+      fireEvent.change(input, { target: { value: "Naidas" } });
+      expect(push).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(push).toHaveBeenCalledTimes(1);
+      expect(String((push.mock.calls[0] as unknown[])[0])).toContain("q=Naidas");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("clearing the search field re-runs the search with q removed", async () => {

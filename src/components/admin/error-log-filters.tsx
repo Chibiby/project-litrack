@@ -3,8 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -45,23 +45,30 @@ export function ErrorLogFilters({
     startTransition(() => router.push(`/admin/errors?${next.toString()}`));
   };
 
+  const [pushedRef, setPushedRef] = useState<string | null>(initialRef);
+  const searchNow = (value: string) => {
+    const term = value.trim() || null;
+    if (term === pushedRef) return;
+    setPushedRef(term);
+    apply({ ref: term });
+  };
+
   return (
     <form
       className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
-      onSubmit={(event) => {
-        event.preventDefault();
-        apply({ ref: refValue.trim() || null });
-      }}
+      onSubmit={(event) => event.preventDefault()}
     >
       <div className="space-y-2">
-        <Label htmlFor="error-ref">Reference</Label>
-        <Input
+        <SearchInput
           id="error-ref"
+          label="Reference"
+          labelVisible
           value={refValue}
-          onChange={(event) => setRefValue(event.target.value)}
+          onValueChange={setRefValue}
+          onDebouncedChange={searchNow}
           placeholder="E-7K2P9QXM"
-          className="w-full font-mono sm:w-48"
-          disabled={pending}
+          className="w-full sm:w-48"
+          inputClassName="font-mono"
         />
       </div>
 
@@ -103,9 +110,6 @@ export function ErrorLogFilters({
         </Select>
       </div>
 
-      <Button type="submit" loading={pending} loadingText="Searching…">
-        Search
-      </Button>
       {initialRef || code || severity ? (
         <Button
           type="button"
@@ -113,6 +117,7 @@ export function ErrorLogFilters({
           disabled={pending}
           onClick={() => {
             setRefValue("");
+            setPushedRef(null);
             apply({ ref: null, code: null, severity: null, schoolId: null });
           }}
         >

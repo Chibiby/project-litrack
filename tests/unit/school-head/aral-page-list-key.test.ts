@@ -40,10 +40,10 @@ function suspenseElementOf(pageElement: ReactElement): ReactElement {
 
 describe("School Head ARAL page — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(ARAL_LEARNERS_LIST_KEYS).toEqual(["page", "sort", "q"]);
+    expect(ARAL_LEARNERS_LIST_KEYS).toEqual(["page", "sort"]);
   });
 
-  it("changes when a list-affecting param (q) changes", async () => {
+  it("does not change when the search text (q) changes, so the search box is not remounted", async () => {
     const before = suspenseElementOf(
       await SchoolHeadAralPage({ searchParams: Promise.resolve({ q: "cruz" }) })
     );
@@ -51,8 +51,8 @@ describe("School Head ARAL page — Suspense boundary key", () => {
       await SchoolHeadAralPage({ searchParams: Promise.resolve({ q: "santos" }) })
     );
 
-    expect(before.key).not.toBe(after.key);
-    expect(before.key).toBe(listKey({ q: "cruz" }, ARAL_LEARNERS_LIST_KEYS));
+    expect(before.key).toBe(after.key);
+    expect(ARAL_LEARNERS_LIST_KEYS).not.toContain("q");
   });
 
   it("changes when page changes", async () => {

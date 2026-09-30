@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.23.0",
+    date: "2026-09-30",
+    title: "Search as you type, and find teachers by grade and section",
+    announce: true,
+    fixes: [
+      "The Teachers page puts Filter teachers, Grade, Section, Sort by and the search box in one row. Pick a grade, then a section, to see who advises it.",
+      "Search boxes across LITRACK now search as you type, after a short pause. There is no Search button to press; Enter still searches right away.",
+      "Every search box has a magnifying glass and an × button that clears it.",
+    ],
+  },
+  {
     version: "2.22.1",
     date: "2026-09-30",
     title: "Kinder reads in Filipino only, and DepEd tutors are counted",

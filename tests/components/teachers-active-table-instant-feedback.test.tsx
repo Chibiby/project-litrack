@@ -119,7 +119,9 @@ describe("TeachersActiveTable — instant feedback while a list navigation is pe
       within(screen.getByRole("table")).getByText("Cruz, Marivic Santos")
     ).not.toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const search = screen.getByLabelText("Search active teachers");
+    fireEvent.change(search, { target: { value: "cruz" } });
+    fireEvent.keyDown(search, { key: "Enter" });
 
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeTruthy();
@@ -134,13 +136,12 @@ describe("TeachersActiveTable — instant feedback while a list navigation is pe
     expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
-  it("also goes busy when the advisory filter changes", () => {
+  it("also goes busy when the advisory filter changes", async () => {
     render(<TeachersActiveTable rows={[ROW]} list={LIST} />);
     const region = document.querySelector('[data-slot="list-busy-region"]');
 
-    fireEvent.change(screen.getByLabelText("Filter teachers"), {
-      target: { value: "teacher" },
-    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter teachers" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Floating" }));
 
     expect(region?.getAttribute("aria-busy")).toBe("true");
   });

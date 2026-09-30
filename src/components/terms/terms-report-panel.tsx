@@ -1,6 +1,6 @@
 "use client";
 
-import { createRef, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createRef, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Download, Save } from "lucide-react";
@@ -22,9 +22,6 @@ import type { TermGradesExportInput } from "@/lib/validators/term-grade.schema";
 import type { SheetGroup } from "@/lib/terms/sheet-data";
 import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
 import { ExportPurposeToggle, useExportPurpose } from "@/components/reports/export-purpose-toggle";
-
-/** Debounce pause before a typed search reaches the URL (ms). */
-const SEARCH_DEBOUNCE_MS = 500;
 
 /** Same shape as the learner export: base64 in, synthetic anchor click out. */
 function downloadBase64Xlsx(base64: string, filename: string) {
@@ -90,7 +87,6 @@ export function TermsReportPanel({
   const [searchValue, setSearchValue] = useState(state.q);
   const [subjectName, setSubjectName] = useState("all");
   const [subjectStep, setSubjectStep] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const gridRefs = useMemo(
     () => new Map(groups.map((g) => [g.key, createRef<AralTermGradesGridFormHandle>()])),
@@ -99,32 +95,26 @@ export function TermsReportPanel({
 
   // Adjusted during render (React docs "adjusting state when a prop changes"
   // pattern) rather than an effect.
+  // A `q` this box itself sent is skipped: adopting it would erase characters
+  // typed while the request was in flight.
   const [prevQ, setPrevQ] = useState(state.q);
+  const [pushedQ, setPushedQ] = useState(state.q);
   if (state.q !== prevQ) {
     setPrevQ(state.q);
-    setSearchValue(state.q);
+    if (state.q !== pushedQ) {
+      setSearchValue(state.q);
+      setPushedQ(state.q);
+    }
   }
-  useEffect(
-    () => () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    },
-    []
-  );
 
   const go = (next: SheetUrlState) =>
     startNav(() => router.push(sheetHref(basePath, next), { scroll: false }));
 
   function pushSearch(raw: string) {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = null;
+    if (raw === pushedQ) return;
+    setPushedQ(raw);
     // The page index is dropped: narrowing the roster invalidates it.
     go({ ...state, q: raw });
-  }
-
-  function handleSearchChange(value: string) {
-    setSearchValue(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => pushSearch(value), SEARCH_DEBOUNCE_MS);
   }
 
   // Subjects are named per grade, so the filter matches by name across groups.
@@ -223,8 +213,8 @@ export function TermsReportPanel({
   const searchBox = (
     <SearchInput
       value={searchValue}
-      onValueChange={handleSearchChange}
-      onSubmit={() => pushSearch(searchValue)}
+      onValueChange={setSearchValue}
+      onDebouncedChange={pushSearch}
       resultCount={totalCount}
       label="Search learners by name"
       placeholder="Search learner by name..."

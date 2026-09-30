@@ -16,8 +16,12 @@ import {
   type AccountRow,
 } from "@/lib/admin/accounts";
 
-/** Params that change which rows the accounts list shows — see `listKey`. */
-export const ACCOUNTS_LIST_KEYS = ["page", "sort", "q", "role", "schoolId", "grade"] as const;
+/**
+ * Params that change which rows the accounts list shows — see `listKey`.
+ * `q` is left out: search runs as you type, and a remount on each search would
+ * drop the search box's focus.
+ */
+export const ACCOUNTS_LIST_KEYS = ["page", "sort", "role", "schoolId", "grade"] as const;
 
 export const dynamic = "force-dynamic";
 

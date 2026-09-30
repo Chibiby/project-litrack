@@ -320,9 +320,16 @@ function AccountsTableInner({
   const pending = useListPending();
   const [query, setQuery] = useState(list.q);
   const [prevListQ, setPrevListQ] = useState(list.q);
+  // The last term this box sent to the URL. When that same term comes back it
+  // is our own search landing, and adopting it would erase characters typed
+  // while the request was in flight.
+  const [pushedQ, setPushedQ] = useState(list.q);
   if (list.q !== prevListQ) {
     setPrevListQ(list.q);
-    setQuery(list.q);
+    if (list.q !== pushedQ) {
+      setQuery(list.q);
+      setPushedQ(list.q);
+    }
   }
 
   const apply = (changes: Record<string, string | null>) => {
@@ -333,6 +340,13 @@ function AccountsTableInner({
     }
     next.delete("page");
     navigate(`/admin/accounts?${next.toString()}`);
+  };
+
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    apply({ q: term || null });
   };
 
   const hrefFor = (page: number) => {
@@ -355,22 +369,18 @@ function AccountsTableInner({
                 ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_minmax(10rem,0.8fr)_auto]"
                 : "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
             }
-            onSubmit={(event) => {
-              event.preventDefault();
-              apply({ q: query.trim() || null });
-            }}
+            onSubmit={(event) => event.preventDefault()}
           >
             <div className="space-y-1.5">
               <SearchInput
                 id="accounts-q"
                 value={query}
                 onValueChange={setQuery}
-                onClear={() => apply({ q: null })}
+                onDebouncedChange={searchNow}
                 resultCount={list.totalCount}
                 label="Search accounts"
                 labelVisible
                 placeholder="Name, email, or school..."
-                disabled={pending}
               />
             </div>
             <div className="space-y-1.5">
@@ -436,16 +446,8 @@ function AccountsTableInner({
                 />
               </div>
             ) : null}
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                className="h-11 flex-1 lg:h-10 xl:flex-none"
-                loading={pending}
-                loadingText="Searching…"
-              >
-                Search
-              </Button>
-              {list.role || list.q || list.schoolId || activeGrade ? (
+            {list.role || list.q || list.schoolId || activeGrade ? (
+              <div className="flex gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -453,13 +455,14 @@ function AccountsTableInner({
                   disabled={pending}
                   onClick={() => {
                     setQuery("");
+                    setPushedQ("");
                     navigate("/admin/accounts");
                   }}
                 >
                   Clear filters
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </form>
       </Surface>
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
