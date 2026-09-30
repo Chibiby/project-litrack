@@ -1,6 +1,8 @@
-"use server";export async function resetDemoData(formData: FormData): Promise<
+"use server";
+
+export const resetDemoData = action("resetDemoData", async (formData: FormData): Promise<
   ActionResult<{ count: number; initialPassword: string }>
-> {
+> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = resetDemoSchema.safeParse({ confirm: formData.get("confirm") });
@@ -13,13 +15,7 @@
     select: { id: true },
   });
 
-  let result;
-  try {
-    result = await resetDemoTenant(admin.id);
-  } catch (err) {
-    console.error("[demo] reset failed:", err);
-    return { ok: false, error: "Could not reset the demo data. Check the server logs." };
-  }
+  const result = await resetDemoTenant(admin.id);
   if (!result.ok) return result;
 
   await writeAudit({
@@ -39,7 +35,7 @@
     ok: true,
     data: { count: result.schools.length, initialPassword: result.initialPassword },
   };
-}
+}, { verb: "reset the demo data" });
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -92,18 +88,11 @@ function revalidateDemoSurfaces() {
  * browser (`logoutAction` clears the cookie), when the browser closes, or at
  * the signed expiry — whichever comes first.
  */
-export async function startDemoSession(): Promise<ActionResult<{ expiresAt: number }>> {
+export const startDemoSession = action("startDemoSession", async (): Promise<ActionResult<{ expiresAt: number }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
-  let session;
-  try {
-    session = await setDemoSessionCookie(admin.id);
-  } catch (err) {
-    // The only failure here is a missing SUPABASE_SERVICE_ROLE_KEY, which is a
-    // deployment problem the admin cannot fix from this page.
-    console.error("[demo] could not open a demo session:", err);
-    return { ok: false, error: "Could not open a demo session. Check the server configuration." };
-  }
+  // A missing service-role key surfaces as CONFIG_MISSING from action().
+  const session = await setDemoSessionCookie(admin.id);
 
   await writeAudit({
     userId: admin.id,
@@ -116,7 +105,7 @@ export async function startDemoSession(): Promise<ActionResult<{ expiresAt: numb
 
   revalidateDemoSurfaces();
   return { ok: true, data: { expiresAt: session.expiresAt } };
-}
+}, { verb: "open a demo session" });
 
 /**
  * End the demo session in this browser.
@@ -126,11 +115,11 @@ export async function startDemoSession(): Promise<ActionResult<{ expiresAt: numb
  * which is exactly the state this button exists to get out of. Requiring the
  * admin role would strand them in the demo until the cookie expired.
  */
-export async function endDemoSession(): Promise<ActionResult> {
+export const endDemoSession = action("endDemoSession", async (): Promise<ActionResult> => {
   await clearDemoSessionCookie();
   revalidateDemoSurfaces();
   return { ok: true };
-}
+}, { verb: "end the demo session" });
 
 /**
  * Super Admin: create the demo district, school (ID 123456) and School Head.
@@ -140,18 +129,12 @@ export async function endDemoSession(): Promise<ActionResult> {
  * is returned once, for the admin to read on camera; it is never stored in
  * Prisma, exactly as with `createSchool`.
  */
-export async function createDemoData(): Promise<
+export const createDemoData = action("createDemoData", async (): Promise<
   ActionResult<{ count: number; initialPassword: string }>
-> {
+> => {
   const admin = await requireUser("SUPER_ADMIN");
 
-  let result;
-  try {
-    result = await provisionDemoTenant(admin.id);
-  } catch (err) {
-    console.error("[demo] provision failed:", err);
-    return { ok: false, error: "Could not create the demo data. Check the server logs." };
-  }
+  const result = await provisionDemoTenant(admin.id);
   if (!result.ok) return result;
 
   await writeAudit({
@@ -171,7 +154,7 @@ export async function createDemoData(): Promise<
     ok: true,
     data: { count: result.schools.length, initialPassword: result.initialPassword },
   };
-}
+}, { verb: "create the demo data" });
 
 export type PrepareTestLabResult = { ok: true; fixtures: TestLabFixtures };
 

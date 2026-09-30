@@ -23,7 +23,7 @@ import {
   revalidateSchoolHeadTeachers,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
-import { describeDbFailure } from "@/lib/db-errors";
+import { action } from "@/lib/errors/action";
 import {
   setTeacherAdvisory,
   isAdvisorySectionConflict,
@@ -140,7 +140,7 @@ function buildTeacherProfileWrite(
  * legacy `TeacherSection` and `taughtGrades` mirrors can never diverge
  * depending on who did the assigning.
  */
-export async function saveTeacherProfile(formData: FormData): Promise<ActionResult> {
+export const saveTeacherProfile = action("saveTeacherProfile", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
 
   // Teacher once, then School Head only. Read before parsing so we can use the right schema.
@@ -210,7 +210,6 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
       }
     });
   } catch (err) {
-    console.error("[saveTeacherProfile] failed:", err);
     if (err instanceof AdvisoryCapError) {
       return { ok: false, error: err.message };
     }
@@ -223,11 +222,10 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
     ) {
       return { ok: false, error: "Invalid section selected." };
     }
-    // Never surface raw Prisma/Postgres text to the client — but do say which
-    // kind of failure this was, because "try again" is the wrong advice for
-    // half of them. A database behind the committed migrations rejects the
-    // same write forever, and looping the teacher through retries hides that.
-    return { ok: false, error: describeDbFailure(err, { action: "save your profile" }) };
+    // Anything else is unexpected: action() classifies it (a database behind
+    // the committed migrations reads differently from a busy pool), records it,
+    // and answers with a safe message and a reference.
+    throw err;
   }
 
   await writeAudit({
@@ -254,7 +252,7 @@ export async function saveTeacherProfile(formData: FormData): Promise<ActionResu
   // counts sectioned/advised teachers) rides along with revalidateSchoolHeadTeachers above.
   revalidateTeacherCaches(user.id);
   return { ok: true };
-}
+}, { verb: "save your profile" });
 
 const setAdvisorySectionSchema = z.object({
   teacherId: z.string().uuid("Invalid teacher"),
@@ -297,9 +295,9 @@ const setAdvisorySectionSchema = z.object({
  * inside the transaction rather than here, so two School Heads adding at once
  * cannot both pass a check and land a fourth between them.
  */
-export async function setTeacherAdvisorySection(
+export const setTeacherAdvisorySection = action("setTeacherAdvisorySection", async (
   formData: FormData
-): Promise<ActionResult> {
+): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = setAdvisorySectionSchema.safeParse({
@@ -376,7 +374,6 @@ export async function setTeacherAdvisorySection(
       });
     });
   } catch (err) {
-    console.error("[setTeacherAdvisorySection] failed:", err);
     // The cap is checked inside the transaction, against the rows as they are
     // there, so this is the only place it can be reported from.
     if (err instanceof AdvisoryCapError) {
@@ -394,8 +391,7 @@ export async function setTeacherAdvisorySection(
     ) {
       return { ok: false, error: "Invalid section selected." };
     }
-    // Never surface raw Prisma/Postgres text to the client.
-    return { ok: false, error: "Failed to update the advisory. Please try again." };
+    throw err;
   }
 
   await writeAudit({
@@ -423,14 +419,16 @@ export async function setTeacherAdvisorySection(
   revalidatePath("/teacher/settings/profile");
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
+}, { verb: "update the advisory" });
 
 export type AdvisorySettingResult =
   | { ok: true }
   | { ok: false; error: string }
   | {
       ok: false;
-      error: "confirm_release";
+      error: string;
+      /** Machine flag: the action stopped to ask. `error` is the readable sentence. */
+      needs: "confirm_release";
       releases: { id: string; label: string }[];
       /**
        * Present when the new setting still allows some advisories (multi-advisory
@@ -478,7 +476,7 @@ const advisorySettingSchema = z
  * so the legacy `TeacherSection` / `taughtGrades` mirrors never diverge from
  * who is dropped here.
  */
-export async function setTeacherAdvisorySetting(formData: FormData): Promise<AdvisorySettingResult> {
+export const setTeacherAdvisorySetting = action("setTeacherAdvisorySetting", async (formData: FormData): Promise<AdvisorySettingResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = advisorySettingSchema.safeParse({
@@ -600,8 +598,7 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
       } as const;
     })) as TxOutcome;
   } catch (err) {
-    console.error("[setTeacherAdvisorySetting] failed:", err);
-    return { ok: false, error: describeDbFailure(err, { action: "update this teacher's advisory setting" }) };
+    throw err;
   }
 
   if (outcome.kind === "not-found") return { ok: false, error: "Teacher not found" };
@@ -614,7 +611,8 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
   if (outcome.kind === "needs-confirm") {
     return {
       ok: false,
-      error: "confirm_release",
+      error: "Changing this setting frees the sections listed below. Confirm to continue.",
+      needs: "confirm_release",
       releases: outcome.releases,
       ...(outcome.choose ? { choose: outcome.choose } : {}),
     };
@@ -643,4 +641,4 @@ export async function setTeacherAdvisorySetting(formData: FormData): Promise<Adv
   revalidatePath("/teacher/settings/profile");
   revalidateTeacherCaches(outcome.teacherId);
   return { ok: true };
-}
+}, { verb: "update this teacher's advisory setting" });

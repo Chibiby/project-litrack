@@ -545,10 +545,10 @@ describe("setTeacherAdvisorySection", () => {
     const result = await setTeacherAdvisorySection(
       buildFormData(TEACHER_ID, SECTION_ID)
     );
-    expect(result).toEqual({
-      ok: false,
-      error: "Failed to update the advisory. Please try again.",
-    });
+    // Classified by `action()`: a generic conflict, with a real reference.
+    expect(result).toMatchObject({ ok: false, code: "DB_CONFLICT" });
+    expect(JSON.stringify(result)).not.toContain("User_email_key");
+    expect((result as { error: string }).error).toMatch(/Reference: E-[0-9A-Z]{8}/);
   });
 
   it("never leaks raw database error text to the client", async () => {
@@ -559,11 +559,10 @@ describe("setTeacherAdvisorySection", () => {
     const result = await setTeacherAdvisorySection(
       buildFormData(TEACHER_ID, SECTION_ID)
     );
-    expect(result).toEqual({
-      ok: false,
-      error: "Failed to update the advisory. Please try again.",
-    });
+    expect(result).toMatchObject({ ok: false });
+    expect((result as { error: string }).error).toMatch(/Reference: E-[0-9A-Z]{8}/);
     expect(JSON.stringify(result)).not.toContain("prepared statement");
+    expect(JSON.stringify(result)).not.toContain("deadbeef");
   });
 
   it("rejects a malformed teacher id before touching the database", async () => {

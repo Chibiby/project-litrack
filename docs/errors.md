@@ -90,7 +90,39 @@ short phrase like `"save the section"`.
 `ActionFailure` (`src/lib/errors/result.ts`) keeps the field name `error` for
 the safe message, on purpose: dozens of components already do
 `toast.error(res.error)`, and this keeps them working without an edit.
-`fieldErrors` (field path → message) is present only for `VALIDATION_FAILED`.
+`fieldErrors` (field path → message) is present whenever the thrown `AppError`
+carries it: always for `VALIDATION_FAILED`, and for any throw made with the
+`fieldError` helper or an explicit `fieldErrors` option (`toFailure` in
+`result.ts` copies it across).
+
+### Field errors on sign-in codes
+
+Some sign-in failures name the input they belong to, so the form can highlight
+it (`errorOnFields` in `src/lib/actions/auth.ts`; `teacherNotFound` in
+`src/lib/actions/login.ts`):
+
+| Code | `fieldErrors` key(s) |
+|---|---|
+| `AUTH_TEACHER_NOT_FOUND` | `email` |
+| `AUTH_INCORRECT_PASSWORD` (School Head and teacher sign-in) | `password` |
+| `AUTH_INCORRECT_CREDENTIALS` (Super Admin and district admin sign-in) | `username` and `password`, both carrying the same single message, so the form never reveals whether the username exists |
+| `AUTH_CURRENT_PASSWORD_INCORRECT` (change password / change email) | `currentPassword` |
+
+### The `needs` field
+
+A result that stopped to ask for a follow-up decision, rather than failing,
+carries a machine flag `needs` next to the readable `error` sentence. The form
+reads `needs`, asks, and resubmits. Two exist today:
+
+- `possible_duplicate` — `createLearner` (`src/lib/actions/learner.ts`), when a
+  learner with the same name and age may already exist; the result also carries
+  `data`.
+- `confirm_release` — `setTeacherAdvisorySetting`
+  (`src/lib/actions/teacher.ts`), when a change would release advisory sections;
+  the result also carries `releases`.
+
+These are typed on the action's own result (`learner.ts`, `AdvisorySettingResult`),
+not on `ActionFailure`.
 
 `logoutAction` (`src/lib/actions/auth.ts`) is deliberately **not** wrapped —
 it's passed straight to `<form action={logoutAction}>`, which requires
@@ -98,12 +130,21 @@ it's passed straight to `<form action={logoutAction}>`, which requires
 Anything that escapes it is still caught by the page-crash handler
 (`onRequestError`, see below).
 
-**About 30 legacy action modules still use the old hand-rolled
-`{ ok: false, error }` shape and their own try/catch** — they weren't
-migrated in this slice. Unexpected errors from them are still caught and
-recorded through `onRequestError`; only their *expected* error paths (a bad
-password, a taken name, and so on) don't yet go through `action()`. They'll
-move onto the pattern in later slices.
+Every exported server action in `src/lib/actions/*.ts` is wrapped by
+`action()` except these, each unwrapped on purpose:
+
+| Export | File | Why |
+|---|---|---|
+| `logoutAction` | `auth.ts` | `<form action>` target, must return `Promise<void>` (above). |
+| `recordTeacherPresence` | `presence.ts` | 60-second heartbeat; a transient database hiccup is routine there, and wrapping would file an `ErrorEvent` (and possibly an alert email) for each. It swallows failures and lets the next heartbeat retry. |
+| `fetchAralAssignmentAlerts`, `fetchUnlockAlerts` | `notifications.ts` | The client uses the resolved value as the alert array itself; a failed read degrades to "no alert" by design. |
+| `listMyBroadcasts` | `district-announcements.ts` | A read helper called from a server component (`src/app/district/announcements/page.tsx`), not from the client. |
+| `listSchoolsPublic` | `school.ts` | A read helper called from a route handler (`src/app/api/schools/list/route.ts`). |
+| `listSchoolsWithTeacherStatus` | `school.ts` | A read helper called from a server component (`src/app/login/page.tsx`). |
+
+The source comments state the reason for `logoutAction`, `recordTeacherPresence`
+and the two `notifications.ts` reads. For the last three, the reason above is
+inferred from their callers, not written down at the definition.
 
 ## What must never reach `ErrorEvent` or an alert email
 
@@ -140,17 +181,147 @@ To look it up:
   that one event and shows its code, severity, route, school, admin message,
   stack (if any), and user id inside an expandable **Details** section.
 - If nothing matches (the row was purged, or the migration wasn't applied
-  when the event fired), search the Vercel runtime logs for the reference —
-  every recorded event is also written as one JSON line tagged
-  `"tag": "litrack.error"` (see `logLine` in `report.ts`), and that line is
-  written *before* the database insert, so it survives even a database
+  when the event fired), search the platform logs (Workers Logs in production)
+  for the reference — every recorded event is also written as one JSON line
+  tagged `"tag": "litrack.error"` (see `logLine` in `report.ts`), and that line
+  is written *before* the database insert, so it survives even a database
   outage or a missing table.
 
 A page crash (one that reaches Next's `error.tsx`) uses **Next's own digest
 string as the reference** — the same value `error.tsx` displays — rather than
 generating a separate one, via `onRequestError`
-(`src/lib/errors/request-error.ts`, wired in `src/instrumentation.ts`). Both
-kinds of reference resolve the same way on `/admin/errors`.
+(`src/lib/errors/request-error.ts`, wired in `src/instrumentation.ts`). On
+Node (local, Vercel) that reference resolves on `/admin/errors` like any other.
+**On Cloudflare it does not**: `onRequestError` in `src/instrumentation.ts`
+returns after a `console.error("[request-error]", …)` when
+`LITRACK_DEPLOY_TARGET === "cloudflare"`, so a page-crash reference is found in
+Workers Logs, not in `/admin/errors`. Errors caught by `action()` and `route()`
+are still recorded to `ErrorEvent` on every target.
+
+## The client side
+
+Some failures never produce a result from the server: the device is offline, a
+deploy outdated the page, the connection dropped, an action crashed. The
+browser-side pieces turn those into the same `ActionFailure` shape, so a
+component has one branch to handle.
+
+- **`classifyClientFailure(err, opts?)`** (`src/lib/errors/client.ts`) — turns
+  anything thrown by a request into a safe `ActionFailure`. Isomorphic, no
+  React. Order: offline (`navigator.onLine === false`) → `NETWORK_OFFLINE`;
+  unrecognized-action error, `ChunkLoadError` or a chunk-load message →
+  `APP_UPDATED`; a `TypeError` with a fetch-failure message →
+  `SERVER_UNREACHABLE`; an error with a `digest` → `DB_UNAVAILABLE` for a
+  `DBU-` prefix, `DB_SCHEMA_OUT_OF_DATE` for `DBS-`, `REQUEST_TOO_LARGE` for a
+  digest ending `@E394` (best effort), otherwise `INTERNAL_ERROR` with the
+  digest as `ref`; Next's "An unexpected response was received from the
+  server." → `SERVER_UNREACHABLE`; anything else → `INTERNAL_ERROR`. Raw error
+  text is never passed through.
+  - `trustDigestWhenOffline: true` skips the offline shortcut when the error
+    carries a digest, because a digest proves the server answered. `RouteError`
+    passes it, since it renders an error already received.
+- **`isNextControlFlow(err)`** — true for `redirect()` (`NEXT_REDIRECT;replace|push`)
+  and 401/403/404 `NEXT_HTTP_ERROR_FALLBACK` digests. A `redirect()` inside an
+  action rejects the client promise after the router already navigated, so
+  check this first and rethrow or ignore; never classify or toast it.
+- **`isActionFailure(value)`** — `{ ok: false, error: string }`; `code` is
+  optional so old-shape results still match.
+- **`callAction(run)`** (`src/lib/ui/call-action.ts`) — runs a server action
+  and never rejects, except for Next control flow, which it rethrows. When the
+  browser reports offline it answers `NETWORK_OFFLINE` without sending the
+  request. It does not toast; the caller toasts `res.error`.
+- **`toastFailure(failure, opts?)`, `ToastedError`, `failureForRejection(err)`**
+  (`src/lib/ui/toast-failure.ts`) — `toastFailure` shows the error toast;
+  `NETWORK_OFFLINE`, `SERVER_UNREACHABLE`, `APP_UPDATED` and `DB_UNAVAILABLE`
+  use the code as the toast id so repeated attempts replace one toast, and
+  `APP_UPDATED` adds a "Reload page" action. `ToastedError` is thrown after the
+  person has already been told. `failureForRejection` returns `null` for a
+  `ToastedError` or control flow (show nothing) and a classified failure for
+  everything else, including a plain `Error`.
+- **`runOptimistic` / `settleActionResult`** (`src/lib/ui/optimistic.ts`) —
+  `runOptimistic` runs the work in a transition; a rejection other than control
+  flow or `ToastedError` is toasted once and rethrown as `ToastedError`.
+  `settleActionResult` toasts a failed result and throws `ToastedError`, or
+  toasts the success message.
+- **`ConfirmAction`** (`src/components/confirm-action.tsx`) — if `onConfirm`
+  resolves to an `ActionFailure` it toasts it and keeps the dialog open. A
+  rejection is also toasted (unless `ToastedError` or control flow) and keeps
+  the dialog open; success closes it.
+- **`OfflineBanner`** (`src/components/errors/offline-banner.tsx`) — a
+  persistent bottom notice while `navigator.onLine` is false, and a "You're
+  back online." toast when it returns. Mounted in `src/app/layout.tsx`.
+- **`ClientErrorListener`** (`src/components/errors/client-error-listener.tsx`)
+  — a `window` `unhandledrejection` safety net, also mounted in the root layout.
+  It toasts only offline, unreachable, app-updated, database, and too-large
+  failures, or anything carrying a digest, and skips control flow,
+  `ToastedError` and `AbortError`. Call sites should not rely on it.
+- **`RouteError`** (`src/components/errors/route-error.tsx`) — the body of
+  every route `error.tsx`. It classifies the error and picks a variant:
+  offline (no button; retries by itself when the browser fires `online`),
+  unreachable, app updated ("Reload page"), too large, database unavailable and
+  schema out of date (both show the digest as the reference), or the generic
+  "This page couldn't load". Only variants with `showReference` display the
+  reference. An `AbortError` (a cancelled soft navigation) calls `reset()` and
+  renders nothing.
+  - `retry` re-fetches from the server and re-renders (Next 16.3's stable prop).
+    `reset` only clears the boundary state and re-renders the same failed
+    payload, so it cannot recover a server failure. `RouteError` uses `retry`
+    for its buttons and `reset` only for the abort case.
+
+**Rule for new client code:** call server actions through `callAction`, or go
+through `runOptimistic` / `ConfirmAction`, so the failure paths above are
+handled. If you show a toast yourself and then need to abort an outer handler,
+throw `ToastedError` so nothing toasts twice.
+
+## Database failures and page digests
+
+`src/lib/db-errors.ts` decides what a caught database error means.
+`classifyDbFailure(err)` returns one of:
+
+| Kind | Meaning | Becomes (in `classifyError`) |
+|---|---|---|
+| `UNAVAILABLE` | Connection refused/closed, socket timeout, too many connections, statement timeout, admin shutdown, pool checkout timeout, transaction start/expiry timeout (P2028) | `DB_UNAVAILABLE` |
+| `SCHEMA_OUT_OF_DATE` | A table, column or enum value the code expects is missing (P2021, P2022, P2011, SQLSTATE 42P01/42703/42704/23502, "invalid input value for enum") | `DB_SCHEMA_OUT_OF_DATE` |
+| `CONFIG` | Bad credentials, missing database, access denied (P1000, P1003, P1010, 28xxx, 3D000, Supavisor "tenant or user not found") | `CONFIG_MISSING` |
+| `UNKNOWN` | Anything else | `DB_ERROR` |
+
+`classifyError` (`src/lib/errors/classify.ts`) handles P2025 (`NOT_FOUND`) and
+P2002 (`DB_CONFLICT`) before consulting the kind.
+
+What the Prisma 6 client engine with `@prisma/adapter-pg` actually surfaces
+(from the comments in `db-errors.ts`): the adapter wraps pg failures in a
+`DriverAdapterError` whose `cause` has a `kind` and, for Postgres errors, the
+SQLSTATE as `originalCode`. Some kinds map to P-codes and keep the adapter
+error at `meta.driverAdapterError`; a "postgres" kind with no dedicated code
+reaches the caller as the raw `DriverAdapterError`; `$queryRaw` failures always
+become P2010; and a pg error the adapter does not recognize ("Connection
+terminated unexpectedly", "timeout exceeded when trying to connect", Workers'
+"Network connection lost.") is rethrown as a plain `Error`. P2024 is in the
+unavailable list only for safety; the code comment says the client engine does
+not raise it. The classifier therefore reads `kind`, SQLSTATE and message
+signatures, and reads message text only to classify, never to return.
+
+**`markDbError` and the digest.** `src/lib/prisma.ts` wraps the client in
+`withDbErrorMarking`, a query extension (`$allOperations`) that passes every
+failure through `markDbError`; `$transaction` is wrapped separately
+(`markTransactionFailures`), and an error thrown by an interactive transaction's
+own callback is rethrown unmarked. `markDbError` does two things:
+
+1. Stamps a non-enumerable provenance mark, so later layers know the error came
+   from a query (needed to tell a pg-pool timeout from a Supabase or `fetch`
+   failure that reads the same).
+2. For an outage or stale schema, sets `digest` to `DBU-XXXXXXXX` or
+   `DBS-XXXXXXXX` (8 characters, the same body as an `E-` reference), unless the
+   error already has a digest. It never puts error text in it.
+
+Next keeps a digest already on a thrown error, so a page render that dies on it
+reaches the browser with that string instead of an opaque hash.
+`classifyClientFailure` reads the prefix, so `RouteError` can say "The database
+isn't responding" or "LITRACK needs a database update" and show the digest as
+the reference; `onRequestError` files the `ErrorEvent` under the same string
+(subject to the Cloudflare limitation above).
+
+`loadUserByAuthId` in `src/lib/auth/session.ts` retries once, after 75 ms, when
+`classifyDbFailure` says `UNAVAILABLE`.
 
 ## Retention
 
@@ -176,7 +347,7 @@ one alert email is sent per error code per 15 minutes
 (`ALERT_WINDOW` in `alert.ts`), so a sustained outage producing hundreds of
 identical events sends one email, not hundreds.
 
-## The full code table (40 codes)
+## The full code table (52 codes)
 
 Generated from `src/lib/errors/codes.ts` — that file is the source of truth;
 if this table and the code ever disagree, trust the code.
@@ -184,7 +355,7 @@ if this table and the code ever disagree, trust the code.
 | Code | HTTP | Severity | User message |
 |---|---|---|---|
 | `AUTH_INCORRECT_PASSWORD` | 401 | user | Incorrect password. Check it and try again. |
-| `AUTH_INCORRECT_CREDENTIALS` | 401 | user | Incorrect username or password. *(Super Admin only)* |
+| `AUTH_INCORRECT_CREDENTIALS` | 401 | user | Incorrect username or password. *(admin sign-in: Super Admin and district admins)* |
 | `AUTH_TEACHER_NOT_FOUND` | 404 | user | No teacher account uses this email at the selected school. Check the email and school, or create an account. |
 | `AUTH_NO_SCHOOL_HEAD_ACCOUNT` | 404 | security | This school doesn't have a School Head account yet. Contact your division office to set one up. |
 | `AUTH_SCHOOL_INACTIVE` | 403 | user | This school's LITRACK access is turned off. Contact your division office. |
@@ -212,10 +383,15 @@ if this table and the code ever disagree, trust the code.
 | `AUTH_EMAIL_SEND_FAILED` | 503 | system | We couldn't send the email right now. Try again in a few minutes. |
 | `AUTH_EMAIL_PARTIAL_UPDATE` | 500 | system | Your sign-in email changed but LITRACK couldn't save it. Don't try again yet — contact your administrator. |
 | `ADMIN_IMPERSONATE_INACTIVE` | 409 | user | This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it. |
-| `SCHOOL_YEAR_NOT_ACTIVE` | 409 | user | Your school has no active school year yet, so this can't be saved. Ask your School Head to set the school year first. |
+| `TEST_LAB_NOT_PREPARED` | 409 | user | The test account isn't ready yet. Prepare test data on the Test Lab page, then try again. |
+| `SCHOOL_YEAR_NOT_ACTIVE` | 409 | user | Your school has no active school year yet. Ask your School Head to set the school year first. |
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |
+| `NETWORK_OFFLINE` | 503 | user | No internet connection. Check your Wi-Fi or mobile data, then try again. If you were saving something, it may not have gone through. *(made in the browser)* |
+| `SERVER_UNREACHABLE` | 503 | user | Couldn't reach LITRACK. Your internet seems to be working, so LITRACK may be busy. Wait a moment and try again. If you were saving something, it may not have gone through. *(made in the browser)* |
+| `APP_UPDATED` | 409 | user | LITRACK was just updated. Reload the page to continue — anything you haven't saved on this page will need to be entered again. *(made in the browser)* |
+| `REQUEST_TOO_LARGE` | 413 | user | That's too much to send at once. Use a smaller file (under 5 MB) or split it into parts, then try again. *(made in the browser)* |
 | `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION` | 409 | user | This account can't be permanently deleted yet — a pending database update hasn't been applied. The account stays safely removed in the meantime; ask your division admin or developer to apply the update, then try again. |
 | `AVATAR_SOURCE_TOO_LARGE` | 413 | user | That picture file is too large. Pick one smaller than 5 MB. |
 | `AVATAR_FILE_INVALID` | 422 | user | That photo couldn't be used. Pick a JPG, PNG or WebP picture and try again. |
@@ -225,6 +401,7 @@ if this table and the code ever disagree, trust the code.
 | `DB_CONFLICT` | 409 | system | This conflicts with a record that already exists. Refresh the page and check before trying again. |
 | `DB_SCHEMA_OUT_OF_DATE` | 503 | system | Couldn't {verb}: the database is missing an update this version of LITRACK needs. Trying again won't help — ask your administrator to finish the pending update. |
 | `DB_UNAVAILABLE` | 503 | system | Couldn't {verb}: the database didn't respond in time. Wait a few seconds and try again. |
+| `IMPORT_TIMED_OUT` | 503 | system | The import took too long to save. Split the file into smaller parts (for example one grade or section at a time) and import each part. |
 | `DB_ERROR` | 500 | system | Couldn't {verb}: the database rejected the change. Try again, and if it keeps failing, contact your administrator. |
 | `SERVICE_UNAVAILABLE` | 503 | system | {service} isn't responding right now. Try again in a few minutes. |
 | `CONFIG_MISSING` | 503 | system | This part of LITRACK isn't set up on the server yet. Contact your administrator. |
@@ -236,9 +413,9 @@ supply a value: `{verb}` = "finish that", `{resource}` = "Record", `{wait}` =
 "a few minutes", `{what}` = "this", `{service}` = "A connected service",
 `{message}` = "Check the highlighted field and try again."
 
-An earlier draft of this catalog listed a 39th code, `NETWORK_UNREACHABLE`;
-that code was unused and was removed, before `ARCHIVE_TEACHER_PURGE_PENDING_MIGRATION`
-(below) brought the count back to 39. The five `AVATAR_*` codes take it to 44.
+The four codes marked *(made in the browser)* are produced by
+`classifyClientFailure` (see "The client side" below), for requests that never
+came back as a normal result, so the server could not have said them.
 
 ### The `AVATAR_*` codes
 

@@ -10,6 +10,7 @@ import {
   setMonthlyReadingLevelUnlock,
   setSubmissionLocking,
 } from "@/lib/actions/submission-locking";
+import { callAction } from "@/lib/ui/call-action";
 import { READING_LEVEL_EDIT_GRACE_DAYS } from "@/lib/month-range";
 
 /**
@@ -35,7 +36,7 @@ export function SubmissionLockingSettings({ enabled }: { enabled: boolean }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("enabled", next ? "true" : "false");
-      const res = await setSubmissionLocking(fd);
+      const res = await callAction(() => setSubmissionLocking(fd));
       if (!res.ok) {
         setOn(!next);
         setError(res.error);
@@ -119,7 +120,7 @@ export function ReadingLevelUnlockSettings({ enabled }: { enabled: boolean }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("enabled", next ? "true" : "false");
-      const res = await setMonthlyReadingLevelUnlock(fd);
+      const res = await callAction(() => setMonthlyReadingLevelUnlock(fd));
       if (!res.ok) {
         setOn(!next);
         setError(res.error);

@@ -39,10 +39,19 @@ import {
 import { isEligibleAralTutor } from "@/lib/teachers/aral-tutor";
 import { notifyAralAssigned } from "@/lib/notifications";
 import { languagesForGrade, allowedReadingValuesForGrade } from "@/lib/reading/policy";
+import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
-  | { ok: false; error: string; data?: T };
+  | {
+      ok: false;
+      error: string;
+      data?: T;
+      /** A non-error follow-up the form handles itself (confirm, then resubmit). */
+      needs?: "possible_duplicate";
+    };
 
 /** Normalize optional Section B for Prisma (clear transferDetails unless MULTIPLE). */
 function sectionBData(data: {
@@ -81,18 +90,15 @@ function formToObj(formData: FormData): Record<string, unknown> {
 
 // buildFullName now lives in @/lib/names alongside the casing rules that produce its parts.
 
-export async function createLearner(
+export const createLearner = action("createLearner", async (
   formData: FormData
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string }>> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const raw = formToObj(formData);
 
-  const parsed = learnerCreateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(learnerCreateSchema, raw) };
 
   // Placement is DERIVED from the section this teacher advises, never submitted.
   // The dropdowns that used to send it were built from the ARAL-inclusive grade
@@ -164,7 +170,9 @@ export async function createLearner(
     if (duplicates.length > 0) {
       return {
         ok: false,
-        error: "possible_duplicate",
+        needs: "possible_duplicate",
+        error:
+          "A learner with this name and age may already exist. Check the list, then save again to add them anyway.",
         data: {
           id: duplicates[0].id,
         },
@@ -246,30 +254,21 @@ export async function createLearner(
     adminDashboard: true,
   });
   return { ok: true, data: { id: learner.id } };
-}
+}, { verb: "add the learner" });
 
-export async function updateLearner(formData: FormData): Promise<ActionResult> {
+export const updateLearner = action("updateLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
   const raw = formToObj(formData);
-  const parsed = learnerUpdateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(learnerUpdateSchema, raw) };
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.id, deletedAt: null },
     include: { gradeLevel: { select: { type: true } } },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-  if (!teacherCanAccessLearner(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+  if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
 
   // Grade comes from the learner's real, current, DB-stored grade — never the
   // edit form's own state, which never carries a gradeLevelId in the first place.
@@ -377,26 +376,21 @@ export async function updateLearner(formData: FormData): Promise<ActionResult> {
     aralTeacherId: learner.aralTeacherId,
   });
   return { ok: true };
-}
+}, { verb: "save the learner" });
 
-export async function archiveLearner(formData: FormData): Promise<ActionResult> {
+export const archiveLearner = action("archiveLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
-  const parsed = learnerIdSchema.safeParse({ id: formData.get("id") ?? formData.get("learnerId") });
-  if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  const parsed = {
+    data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }),
+  };
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.id, deletedAt: null },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-  if (!teacherCanAccessLearner(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+  if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
   if (learner.archivedAt) return { ok: false, error: "Learner is already archived" };
 
   await prisma.$transaction(async (tx) => {
@@ -437,12 +431,13 @@ export async function archiveLearner(formData: FormData): Promise<ActionResult> 
     teacherShell: learner.isAralLearner,
   });
   return { ok: true };
-}
+}, { verb: "archive the learner" });
 
-export async function restoreLearner(formData: FormData): Promise<ActionResult> {
+export const restoreLearner = action("restoreLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
-  const parsed = learnerIdSchema.safeParse({ id: formData.get("id") ?? formData.get("learnerId") });
-  if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  const parsed = {
+    data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }),
+  };
 
   const learner = await prisma.learner.findFirst({
     where: {
@@ -450,16 +445,10 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
       OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
     },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-  if (!teacherCanAccessLearner(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+  if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
@@ -492,22 +481,18 @@ export async function restoreLearner(formData: FormData): Promise<ActionResult> 
     teacherShell: learner.isAralLearner,
   });
   return { ok: true };
-}
+}, { verb: "restore the learner" });
 
 /** Archive a teacher's selected learners without deleting their records. */
-export async function archiveLearners(
+export const archiveLearners = action("archiveLearners", async (
   formData: FormData
-): Promise<ActionResult<{ archived: number }>> {
+): Promise<ActionResult<{ archived: number }>> => {
   const user = await requireSchoolUser("TEACHER");
-  const parsed = deleteLearnersSchema.safeParse({
-    learnerIds: formData.getAll("learnerIds").map(String),
-  });
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.errors[0]?.message ?? "Invalid input",
-    };
-  }
+  const parsed = {
+    data: parseInput(deleteLearnersSchema, {
+      learnerIds: formData.getAll("learnerIds").map(String),
+    }),
+  };
 
   const ids = Array.from(new Set(parsed.data.learnerIds));
   const learners = await prisma.learner.findMany({
@@ -522,17 +507,13 @@ export async function archiveLearners(
     },
   });
 
-  if (learners.length !== ids.length) {
-    return { ok: false, error: "Some selected learners were not found" };
-  }
+  // Checked before the count so a cross-tenant id is still recorded as security
+  // severity; a missing id and another school's id read identically to the user.
   for (const learner of learners) {
-    if (
-      learner.schoolId !== user.schoolId ||
-      !teacherCanAccessLearner(learner, user.id)
-    ) {
-      return { ok: false, error: "Not found" };
-    }
+    assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+    if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
   }
+  if (learners.length !== ids.length) throw resourceNotFound("Learner");
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
@@ -573,7 +554,7 @@ export async function archiveLearners(
   }
 
   return { ok: true, data: { archived: learners.length } };
-}
+}, { verb: "archive the learners" });
 
 /**
  * Bulk soft-delete from the roster selection bar.
@@ -588,19 +569,15 @@ export async function archiveLearners(
  * school or care, nothing is deleted. A partial success here would silently
  * misreport what the teacher just did.
  */
-export async function deleteLearners(
+export const deleteLearners = action("deleteLearners", async (
   formData: FormData
-): Promise<ActionResult<{ deleted: number }>> {
+): Promise<ActionResult<{ deleted: number }>> => {
   const user = await requireSchoolUser("TEACHER");
-  const parsed = deleteLearnersSchema.safeParse({
-    learnerIds: formData.getAll("learnerIds").map(String),
-  });
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.errors[0]?.message ?? "Invalid input",
-    };
-  }
+  const parsed = {
+    data: parseInput(deleteLearnersSchema, {
+      learnerIds: formData.getAll("learnerIds").map(String),
+    }),
+  };
 
   const ids = Array.from(new Set(parsed.data.learnerIds));
   const learners = await prisma.learner.findMany({
@@ -615,17 +592,13 @@ export async function deleteLearners(
     },
   });
 
-  if (learners.length !== ids.length) {
-    return { ok: false, error: "Some selected learners were not found" };
-  }
+  // Checked before the count so a cross-tenant id is still recorded as security
+  // severity; a missing id and another school's id read identically to the user.
   for (const learner of learners) {
-    if (learner.schoolId !== user.schoolId) {
-      return { ok: false, error: "Not found" };
-    }
-    if (!teacherCanAccessLearner(learner, user.id)) {
-      return { ok: false, error: "Not found" };
-    }
+    assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+    if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
   }
+  if (learners.length !== ids.length) throw resourceNotFound("Learner");
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
@@ -669,9 +642,9 @@ export async function deleteLearners(
   }
 
   return { ok: true, data: { deleted: learners.length } };
-}
+}, { verb: "remove the learners" });
 
-export async function toggleAralLearner(formData: FormData): Promise<ActionResult> {
+export const toggleAralLearner = action("toggleAralLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
   const learnerId = String(formData.get("learnerId") ?? "");
   if (!learnerId) return { ok: false, error: "Missing id" };
@@ -679,16 +652,10 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
   const learner = await prisma.learner.findFirst({
     where: { id: learnerId, deletedAt: null },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-  if (!teacherCanAccessLearner(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
+  if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
 
   const becoming = !learner.isAralLearner;
   // Keep the ARAL designation consistent with the flag. Enrolling honours an
@@ -747,22 +714,19 @@ export async function toggleAralLearner(formData: FormData): Promise<ActionResul
     teacherShell: true,
   });
   return { ok: true };
-}
+}, { verb: "change the ARAL enrollment" });
 
 /**
  * Enroll already-rostered learners into ARAL for a grade.
  * Sets `isAralLearner` + `aralEnrolledAt` (idempotent for already-enrolled).
  */
-export async function enrollLearnersToAral(
+export const enrollLearnersToAral = action("enrollLearnersToAral", async (
   input: unknown
-): Promise<ActionResult<{ enrolled: number; redesignated: number }>> {
+): Promise<ActionResult<{ enrolled: number; redesignated: number }>> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
-  const parsed = enrollLearnersToAralSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(enrollLearnersToAralSchema, input) };
 
   // Adviser-scoped on purpose: ARAL enrollment picks from the adviser's own
   // roster, so an ARAL-only teacher has nothing to enroll here.
@@ -893,7 +857,7 @@ export async function enrollLearnersToAral(
     ok: true,
     data: { enrolled: toEnroll.length, redesignated: toRedesignate.length },
   };
-}
+}, { verb: "enroll the learners in ARAL" });
 
 /**
  * Enroll learners picked on the teacher roster into ARAL, and/or hand
@@ -910,16 +874,13 @@ export async function enrollLearnersToAral(
  * Head's call (`setLearnerAralTeacher`), because the designation is what grants an
  * ARAL-only teacher their access, and revoking it is not a roster operation.
  */
-export async function enrollRosterLearnersToAral(
+export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", async (
   input: unknown
-): Promise<ActionResult<{ enrolled: number; redesignated: number }>> {
+): Promise<ActionResult<{ enrolled: number; redesignated: number }>> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
-  const parsed = enrollRosterLearnersToAralSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(enrollRosterLearnersToAralSchema, input) };
 
   const uniqueIds = [...new Set(parsed.data.learnerIds)];
 
@@ -1078,7 +1039,7 @@ export async function enrollRosterLearnersToAral(
     ok: true,
     data: { enrolled: toEnroll.length, redesignated: toRedesignate.length },
   };
-}
+}, { verb: "enroll the learners in ARAL" });
 
 const setLearnerAralTeacherSchema = z.object({
   learnerId: z.string().uuid("Invalid learner"),
@@ -1092,18 +1053,17 @@ const setLearnerAralTeacherSchema = z.object({
  * section work on ARAL learners, so a teacher must not be able to grant it to
  * themselves. `aralTeacherId: ""` clears the designation.
  */
-export async function setLearnerAralTeacher(
+export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
   formData: FormData
-): Promise<ActionResult> {
+): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
-  const parsed = setLearnerAralTeacherSchema.safeParse({
-    learnerId: formData.get("learnerId"),
-    aralTeacherId: formData.get("aralTeacherId") ?? "",
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = {
+    data: parseInput(setLearnerAralTeacherSchema, {
+      learnerId: formData.get("learnerId"),
+      aralTeacherId: formData.get("aralTeacherId") ?? "",
+    }),
+  };
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.learnerId, schoolId: user.schoolId, deletedAt: null },
@@ -1116,7 +1076,7 @@ export async function setLearnerAralTeacher(
       isAralLearner: true,
     },
   });
-  if (!learner) return { ok: false, error: "Not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
   const nextAralTeacherId =
     parsed.data.aralTeacherId === "" ? null : parsed.data.aralTeacherId;
@@ -1184,4 +1144,4 @@ export async function setLearnerAralTeacher(
     teacherShell: true,
   });
   return { ok: true };
-}
+}, { verb: "assign the ARAL teacher" });

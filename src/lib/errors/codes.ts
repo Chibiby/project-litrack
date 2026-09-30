@@ -203,12 +203,12 @@ export const ERRORS = {
   },
 
   // ── School year ──────────────────────────────────────────────────────────
-  /** A write that is keyed to the active school year, in a school that has none. */
+  /** A read or write that is keyed to the active school year, in a school that has none. */
   SCHOOL_YEAR_NOT_ACTIVE: {
     status: 409,
     severity: "user",
     message:
-      "Your school has no active school year yet, so this can't be saved. Ask your School Head to set the school year first.",
+      "Your school has no active school year yet. Ask your School Head to set the school year first.",
   },
 
   // ── Requests ─────────────────────────────────────────────────────────────
@@ -226,6 +226,42 @@ export const ERRORS = {
     status: 429,
     severity: "security",
     message: "Too many requests. Try again in {wait}.",
+  },
+
+  // ── Connection ───────────────────────────────────────────────────────────
+  // Produced in the browser by classifyClientFailure (./client) when a request
+  // never came back as a normal result, so the server could not have said it.
+  /** The browser reports no network at all. Checked before anything else. */
+  NETWORK_OFFLINE: {
+    status: 503,
+    severity: "user",
+    message:
+      "No internet connection. Check your Wi-Fi or mobile data, then try again. If you were saving something, it may not have gone through.",
+  },
+  /** The network looks fine but the request got no answer. Usually a busy or restarting server. */
+  SERVER_UNREACHABLE: {
+    status: 503,
+    severity: "user",
+    message:
+      "Couldn't reach LITRACK. Your internet seems to be working, so LITRACK may be busy. Wait a moment and try again. If you were saving something, it may not have gone through.",
+  },
+  /**
+   * The page was loaded before a new version went out, so its code no longer
+   * matches the server. Reloading is the only fix and it drops unsaved input,
+   * which the message says rather than hiding.
+   */
+  APP_UPDATED: {
+    status: 409,
+    severity: "user",
+    message:
+      "LITRACK was just updated. Reload the page to continue — anything you haven't saved on this page will need to be entered again.",
+  },
+  /** The request body was over the server's size limit, so it was refused unread. */
+  REQUEST_TOO_LARGE: {
+    status: 413,
+    severity: "user",
+    message:
+      "That's too much to send at once. Use a smaller file (under 5 MB) or split it into parts, then try again.",
   },
 
   // ── Archive ──────────────────────────────────────────────────────────────
@@ -296,6 +332,19 @@ export const ERRORS = {
     status: 503,
     severity: "system",
     message: "Couldn't {verb}: the database didn't respond in time. Wait a few seconds and try again.",
+  },
+  /**
+   * A learner import whose single transaction outlived its time budget (Prisma
+   * P2028), which a large file causes. Nothing was committed. Distinct from
+   * DB_UNAVAILABLE, whose "wait and try again" advice is wrong here: the same
+   * file will time out again, so the fix is a smaller file. System severity
+   * because the limit is ours, so the person gets a reference to quote.
+   */
+  IMPORT_TIMED_OUT: {
+    status: 503,
+    severity: "system",
+    message:
+      "The import took too long to save. Split the file into smaller parts (for example one grade or section at a time) and import each part.",
   },
   DB_ERROR: {
     status: 500,

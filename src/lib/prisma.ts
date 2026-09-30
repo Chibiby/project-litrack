@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
 import { currentReadMode } from "@/lib/db/read-mode";
+import { markDbError } from "@/lib/db-errors";
 import {
   pickHyperdriveUrl,
   resolvePgDriverUrl,
@@ -89,17 +90,98 @@ export function createPrismaClient(
     maxUses: 1,
   });
 
-  return new PrismaClient({
-    adapter,
-    // Skip "query" in normal `next dev` — it floods the terminal on every
-    // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
-    log:
-      process.env.NODE_ENV === "development"
-        ? process.env.PRISMA_LOG_QUERIES === "1"
-          ? ["query", "error", "warn"]
-          : ["error", "warn"]
-        : ["error"],
+  return withDbErrorMarking(
+    new PrismaClient({
+      adapter,
+      // Skip "query" in normal `next dev` — it floods the terminal on every
+      // navigation/report load. Opt in with PRISMA_LOG_QUERIES=1 when debugging SQL.
+      log:
+        process.env.NODE_ENV === "development"
+          ? process.env.PRISMA_LOG_QUERIES === "1"
+            ? ["query", "error", "warn"]
+            : ["error", "warn"]
+          : ["error"],
+    }),
+  );
+}
+
+type TransactionRunner = (arg: unknown, options?: unknown) => Promise<unknown>;
+
+/**
+ * `$transaction` failures that never pass through a query: the engine failing
+ * to open the transaction (no connection, pool exhausted) or to commit it.
+ *
+ * An error the interactive callback itself threw is rethrown untouched — it may
+ * be an AppError, a redirect, or our own bug, and marking it would make the
+ * classifier read it as a database failure. Queries inside the callback are
+ * already marked by the `$allOperations` extension, because the `tx` client is
+ * derived from the extended client. Every failure of the array form comes from
+ * the engine, so all of them are marked.
+ */
+export function markTransactionFailures(run: TransactionRunner): TransactionRunner {
+  return (arg, options) => {
+    if (typeof arg !== "function") {
+      return Promise.resolve(run(arg, options)).catch((err: unknown) => {
+        throw markDbError(err);
+      });
+    }
+    const callback = arg as (tx: unknown) => unknown;
+    let fromCallback = false;
+    let callbackError: unknown;
+    const wrapped = async (tx: unknown) => {
+      try {
+        return await callback(tx);
+      } catch (err) {
+        fromCallback = true;
+        callbackError = err;
+        throw err;
+      }
+    };
+    return Promise.resolve(run(wrapped, options)).catch((err: unknown) => {
+      if (fromCallback && err === callbackError) throw err;
+      throw markDbError(err);
+    });
+  };
+}
+
+/**
+ * Every query failure leaves this client marked as a database error, with a
+ * `DBU-` / `DBS-` digest when it is an outage or a stale schema (see
+ * `markDbError`), so a page render that dies on it still tells the browser
+ * what happened after production strips the message.
+ *
+ * The top-level `$allOperations` hook runs for model operations AND raw ones
+ * (`$queryRaw`, `$executeRaw`, … dispatch with model "$none"), and for queries
+ * on an interactive transaction's `tx` client. `$transaction` itself is not an
+ * operation, so the proxy wraps it (`markTransactionFailures`).
+ *
+ * Pure wrapping: no I/O and no connection, so it keeps `createPrismaClient`
+ * safe to call lazily per request on Cloudflare. The cast keeps the exported
+ * type `PrismaClient`; the extension adds no API.
+ */
+export function withDbErrorMarking(client: PrismaClient): PrismaClient {
+  const extended = client.$extends({
+    name: "litrack-db-error-marking",
+    query: {
+      async $allOperations({ args, query }) {
+        try {
+          return await query(args);
+        } catch (err) {
+          throw markDbError(err);
+        }
+      },
+    },
   });
+  const transaction = markTransactionFailures(
+    extended.$transaction.bind(extended) as unknown as TransactionRunner,
+  );
+  return new Proxy(extended, {
+    get(target, property) {
+      if (property === "$transaction") return transaction;
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as unknown as PrismaClient;
 }
 
 export function createPrismaProxy(getClient: () => PrismaClient): PrismaClient {

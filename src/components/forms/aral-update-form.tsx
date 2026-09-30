@@ -23,6 +23,8 @@ import {
   toOptions,
 } from "@/lib/constants/enum-labels";
 import { saveAralProfile } from "@/lib/actions/aral";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 type Defaults = Partial<{
   letterRecognition: string;
@@ -53,18 +55,20 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
 
   return (
     <form
-      action={(fd) => {
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
         fd.set("learnerId", learnerId);
         if (!showLsen) fd.delete("lsenObservations");
         if (!showFurtherOther) fd.delete("furtherAssessmentOther");
         startTransition(async () => {
           const toastId = toast.loading("Saving ARAL profile…");
-          const res = await saveAralProfile(fd);
+          const res = await callAction(() => saveAralProfile(fd));
           if (res.ok) {
             toast.success("ARAL profile saved", { id: toastId });
             router.back();
           } else {
-            toast.error(res.error, { id: toastId });
+            toastFailure(res, { id: toastId });
           }
         });
       }}

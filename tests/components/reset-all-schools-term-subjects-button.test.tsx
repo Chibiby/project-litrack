@@ -118,7 +118,7 @@ describe("ResetAllSchoolsTermSubjectsButton — typed guard", () => {
     fireEvent.change(within(dialog).getByLabelText(/Type/), { target: { value: "RESET" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Reset all schools" }));
 
-    await waitFor(() => expect(toastFn.error).toHaveBeenCalledWith("Invalid input"));
+    await waitFor(() => expect(toastFn.error).toHaveBeenCalledWith("Invalid input", undefined));
     expect(toastFn.success).not.toHaveBeenCalled();
   });
 });

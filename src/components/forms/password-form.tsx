@@ -13,7 +13,8 @@ import {
   FormDescription,
   FormMessage,
 } from "@/components/ui/form";
-import { AppForm, useAppForm, markFormClean } from "@/components/forms/app-form";
+import { AppForm, applyFieldErrors, useAppForm, markFormClean } from "@/components/forms/app-form";
+import { callAction } from "@/lib/ui/call-action";
 import {
   setPasswordSchema,
   changePasswordSchema,
@@ -37,6 +38,15 @@ type Mode = "set" | "change" | "reset";
 const PASSWORD_DRY_RUN_DESCRIPTION = "The password meets the rules. Nothing was changed.";
 
 const PASSWORD_HINT = "Use at least 8 characters with a letter and a number.";
+
+function FormAlert({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="text-sm font-medium text-destructive">
+      {message}
+    </p>
+  );
+}
 
 type ChangeValues = ChangePasswordInput;
 type SetValues = SetPasswordInput;
@@ -101,6 +111,7 @@ function PasswordFormChange({
   dryRun: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const form = useAppForm<ChangeValues>({
     schema: changePasswordSchema,
     defaultValues: {
@@ -118,10 +129,11 @@ function PasswordFormChange({
           form={form}
           className="space-y-4"
           onSubmit={(values) => {
+            setFormError(null);
             startTransition(async () => {
-              const res = await changePasswordAction(toFormData(values));
+              const res = await callAction(() => changePasswordAction(toFormData(values)));
               if (res && !res.ok) {
-                toast.error(res.error);
+                if (!applyFieldErrors(form, res)) setFormError(res.error);
                 return;
               }
               markFormClean(form, {
@@ -191,6 +203,7 @@ function PasswordFormChange({
               </FormItem>
             )}
           />
+          <FormAlert message={formError} />
           <Button
             type="submit"
             className="w-full"
@@ -226,6 +239,7 @@ function PasswordFormSetOrReset({
   dryRun: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const form = useAppForm<SetValues>({
     schema: setPasswordSchema,
     defaultValues: {
@@ -244,10 +258,11 @@ function PasswordFormSetOrReset({
           form={form}
           className="space-y-4"
           onSubmit={(values) => {
+            setFormError(null);
             startTransition(async () => {
-              const res = await action(toFormData(values));
+              const res = await callAction(() => action(toFormData(values)));
               if (res && !res.ok) {
-                toast.error(res.error);
+                if (!applyFieldErrors(form, res)) setFormError(res.error);
                 return;
               }
               markFormClean(form, { password: "", confirmPassword: "" });
@@ -296,6 +311,7 @@ function PasswordFormSetOrReset({
               </FormItem>
             )}
           />
+          <FormAlert message={formError} />
           <Button
             type="submit"
             className="w-full"
@@ -349,7 +365,7 @@ function SkipForNowButton({
         loadingText="Skipping…"
         onClick={() => {
           startSkip(async () => {
-            const res = await skipPasswordChange();
+            const res = await callAction(() => skipPasswordChange());
             // Outside Test Lab, success redirects and only a failure ever
             // returns here. In a dry-run session it returns normally instead.
             if (!res) return;

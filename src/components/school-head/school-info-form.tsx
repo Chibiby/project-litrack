@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateSchoolInfo } from "@/lib/actions/school-management";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 type SchoolInfo = {
   name: string;
@@ -22,13 +24,15 @@ export function SchoolInfoForm({ school }: { school: SchoolInfo }) {
   return (
     <form
       className="space-y-4"
-      action={(fd) =>
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
         startTransition(async () => {
-          const res = await updateSchoolInfo(fd);
-          if (!res.ok) toast.error(res.error);
+          const res = await callAction(() => updateSchoolInfo(fd));
+          if (!res.ok) toastFailure(res);
           else toast.success("School information updated");
-        })
-      }
+        });
+      }}
     >
       <div className="space-y-2">
         <Label htmlFor="schoolIdCode">School ID</Label>

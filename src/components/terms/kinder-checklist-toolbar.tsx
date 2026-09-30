@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Download, Printer } from "lucide-react";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -68,9 +70,9 @@ export function KinderChecklistExportControls({
     setBusy("excel");
     startTransition(async () => {
       try {
-        const res = await onExport(purpose);
+        const res = await callAction(() => onExport(purpose));
         if (!res.ok) {
-          toast.error(res.error);
+          toastFailure(res);
           return;
         }
         downloadBase64Xlsx(res.data.base64, res.data.filename);

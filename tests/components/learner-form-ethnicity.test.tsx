@@ -84,7 +84,7 @@ describe("LearnerForm ethnicity", () => {
 
   it("still submits the chosen ethnicity on the Create anyway resubmit", async () => {
     createLearner
-      .mockResolvedValueOnce({ ok: false, error: "possible_duplicate", data: { id: "x" } })
+      .mockResolvedValueOnce({ ok: false, error: "Possible duplicate.", needs: "possible_duplicate" })
       .mockResolvedValueOnce({ ok: true, data: { id: "l1" } });
     const { container } = render(<LearnerForm gradeLevelId="g1" gradeType="G4" />);
 

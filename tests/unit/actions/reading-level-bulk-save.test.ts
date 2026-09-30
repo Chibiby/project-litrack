@@ -353,14 +353,13 @@ describe("bulkRecordMonthlyReadingLevel — the RETURNING count guard", () => {
 
     const res = await post([entry("learner-a"), entry("learner-b")]);
 
-    expect(res).toEqual({
-      ok: false,
-      error: "Could not save the reading levels. Please try again.",
-    });
+    // Classified by `action()` now: an unexpected failure carries a code and an
+    // admin reference instead of a per-action string.
+    expect(res).toMatchObject({ ok: false, code: "INTERNAL_ERROR" });
     // Refused, not partially committed: the throw is inside the transaction.
     expect(writeAudit).not.toHaveBeenCalled();
     // And the row count is not leaked to the client.
-    expect((res as { error: string }).error).not.toMatch(/\d/);
+    expect((res as { error: string }).error).not.toMatch(/touched|\d+ of \d+/);
   });
 });
 

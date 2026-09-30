@@ -18,6 +18,8 @@ import {
   useExportPurpose,
 } from "@/components/reports/export-purpose-toggle";
 import { exportSummary } from "@/lib/actions/summary-export";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import type { SummaryFacetId, SummaryLevel } from "@/lib/summary/types";
 
 type Format = "EXCEL" | "PDF";
@@ -67,15 +69,17 @@ export function SummaryExportMenu({
 
   function run() {
     startTransition(async () => {
-      const res = await exportSummary({
-        ...request,
-        facet: facetId,
-        format,
-        // PDF is always the print layout.
-        purpose: format === "PDF" ? "PRINT" : purpose,
-      });
+      const res = await callAction(() =>
+        exportSummary({
+          ...request,
+          facet: facetId,
+          format,
+          // PDF is always the print layout.
+          purpose: format === "PDF" ? "PRINT" : purpose,
+        })
+      );
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       if (!res.data) return;

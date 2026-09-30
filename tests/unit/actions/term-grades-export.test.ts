@@ -1268,7 +1268,7 @@ describe("exportTermGrades — refusal: no advisory placement", () => {
 
     const res = await post();
 
-    expect(errorOf(res)).toBe("Not found");
+    expect(errorOf(res)).toMatch(/^School not found/);
     expect(teacherProfileFindFirst).not.toHaveBeenCalled();
     expectRefusedBeforeReading();
   });
@@ -1278,7 +1278,7 @@ describe("exportTermGrades — refusal: no advisory placement", () => {
 
     const res = await post();
 
-    expect(errorOf(res)).toContain("No school year is active");
+    expect(errorOf(res)).toContain("no active school year");
     expectRefusedBeforeReading();
   });
 
@@ -1295,7 +1295,7 @@ describe("exportTermGrades — refusal: no advisory placement", () => {
 
     const res = await post();
 
-    expect(errorOf(res)).toContain("No school year is active");
+    expect(errorOf(res)).toContain("no active school year");
     expect(JSON.stringify(res)).not.toContain("sy-other-school");
     expectRefusedBeforeReading();
   });
@@ -1424,7 +1424,7 @@ describe("exportTermGrades — the Super Admin branch", () => {
     grades = [{ id: GRADE_ID, schoolId: SCHOOL_ID, deletedAt: new Date(2026, 5, 1) }];
 
     const softDeleted = await post();
-    expect(errorOf(softDeleted)).toBe("Not found");
+    expect(errorOf(softDeleted)).toMatch(/^Grade level not found/);
     expectRefusedBeforeReading();
 
     vi.clearAllMocks();
@@ -1487,7 +1487,7 @@ describe("exportTermGrades — the Super Admin branch", () => {
 
     const res = await post();
 
-    expect(errorOf(res)).toContain("No school year is active");
+    expect(errorOf(res)).toContain("no active school year");
     expectRefusedBeforeReading();
   });
 });

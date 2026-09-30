@@ -164,7 +164,7 @@ export function MosyTable({
                         >
                           <SelectTrigger
                             aria-label={`MOSY reading level for ${r.fullName}`}
-                            className="h-9 lg:h-9"
+                            className="h-11 lg:h-9"
                           >
                             <SelectValue placeholder="Select level" />
                           </SelectTrigger>

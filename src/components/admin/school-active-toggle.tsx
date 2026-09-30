@@ -1,6 +1,7 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
+import { ConfirmAction } from "@/components/confirm-action";
 import { Button } from "@/components/ui/button";
 import { setSchoolActive } from "@/lib/actions/school-management";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
@@ -45,32 +46,38 @@ export function SchoolActiveToggle({
       );
     });
 
+  const next = !shownActive;
+
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className={className}
-      loading={pending}
-      loadingText={
-        busyNext === null
-          ? undefined
-          : busyNext
-            ? "Activating…"
-            : "Deactivating…"
+    <ConfirmAction
+      variant={next ? "default" : "destructive"}
+      title={next ? `Activate ${schoolName}?` : `Deactivate ${schoolName}?`}
+      description={
+        next
+          ? `The School Head and teachers at ${schoolName} will be able to sign in again.`
+          : `Everyone at ${schoolName} (School Head and teachers) will be blocked from signing in until the school is reactivated. No data is changed.`
       }
-      title={shownActive ? "Deactivate school" : "Activate school"}
-      onClick={() => {
-        const next = !shownActive;
-        if (
-          !window.confirm(
-            next
-              ? `Activate ${schoolName}?`
-              : `Deactivate ${schoolName}? Login for this school will be blocked while inactive.`
-          )
-        ) {
-          return;
-        }
+      confirmLabel={next ? "Activate school" : "Deactivate school"}
+      trigger={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={className}
+          loading={pending}
+          loadingText={
+            busyNext === null
+              ? undefined
+              : busyNext
+                ? "Activating…"
+                : "Deactivating…"
+          }
+          title={shownActive ? "Deactivate school" : "Activate school"}
+        >
+          {shownActive ? "Deactivate" : "Activate"}
+        </Button>
+      }
+      onConfirm={() => {
         setBusyNext(next);
         const handle = onToggle
           ? () => Promise.resolve(onToggle(next))
@@ -81,8 +88,6 @@ export function SchoolActiveToggle({
           })
           .finally(() => setBusyNext(null));
       }}
-    >
-      {shownActive ? "Deactivate" : "Activate"}
-    </Button>
+    />
   );
 }

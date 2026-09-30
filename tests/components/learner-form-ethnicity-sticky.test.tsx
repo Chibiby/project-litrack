@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, getByRole, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -134,7 +134,11 @@ describe("LearnerForm ethnicity stays on screen", () => {
   });
 
   it("keeps the chosen ethnicity while a duplicate warning is pending", async () => {
-    createLearner.mockResolvedValue({ ok: false, error: "possible_duplicate" });
+    createLearner.mockResolvedValue({
+      ok: false,
+      error: "A learner with the same name and age already exists in this school.",
+      needs: "possible_duplicate",
+    });
     const { container } = renderAddForm();
 
     fillRequired(container);
@@ -142,6 +146,8 @@ describe("LearnerForm ethnicity stays on screen", () => {
     await submit(container);
 
     await waitFor(() => expect(createLearner).toHaveBeenCalled());
+    await waitFor(() => expect(getByRole(container, "alert")).toBeTruthy());
+    expect(getByRole(container, "alert").textContent).toContain("already exists in this school");
     expect(ethnicitySelect(container).value).toBe("TAGALOG");
   });
 

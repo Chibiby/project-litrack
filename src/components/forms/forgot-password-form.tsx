@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,9 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { AppForm, useAppForm } from "@/components/forms/app-form";
+import { AppForm, applyFieldErrors, useAppForm } from "@/components/forms/app-form";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { forgotPasswordSchema } from "@/lib/validators/auth.schema";
 import { requestPasswordReset } from "@/lib/actions/auth";
 import { toFormData } from "@/lib/forms/to-form-data";
@@ -33,6 +34,7 @@ export function ForgotPasswordForm() {
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
   const emailRef = useRef("");
   const form = useAppForm<ForgotValues>({
     schema: forgotPasswordSchema,
@@ -49,9 +51,11 @@ export function ForgotPasswordForm() {
 
   const resend = useCallback(() => {
     startTransition(async () => {
-      const res = await requestPasswordReset(toFormData({ email: emailRef.current }));
+      const res = await callAction(() =>
+        requestPasswordReset(toFormData({ email: emailRef.current }))
+      );
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -95,10 +99,11 @@ export function ForgotPasswordForm() {
           className="space-y-4"
           onSubmit={(values) => {
             emailRef.current = values.email;
+            setFormError(null);
             startTransition(async () => {
-              const res = await requestPasswordReset(toFormData(values));
+              const res = await callAction(() => requestPasswordReset(toFormData(values)));
               if (!res.ok) {
-                toast.error(res.error);
+                if (!applyFieldErrors(form, res)) setFormError(res.error);
                 return;
               }
               setDone(true);
@@ -125,6 +130,11 @@ export function ForgotPasswordForm() {
               </FormItem>
             )}
           />
+          {formError ? (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {formError}
+            </p>
+          ) : null}
           <Button
             type="submit"
             className="w-full"
@@ -135,7 +145,10 @@ export function ForgotPasswordForm() {
           </Button>
         </AppForm>
         <p className="text-center text-xs text-muted-foreground">
-          <Link href="/login" className="underline hover:text-foreground">
+          <Link
+            href="/login"
+            className="inline-flex min-h-11 items-center text-sm underline hover:text-foreground"
+          >
             Back to sign in
           </Link>
         </p>

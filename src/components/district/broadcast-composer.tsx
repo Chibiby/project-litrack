@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/form";
 import { AppForm, useAppForm } from "@/components/forms/app-form";
 import { broadcastAnnouncement } from "@/lib/actions/district-announcements";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   broadcastAnnouncementSchema,
   type BroadcastAnnouncementInput,
@@ -105,9 +107,9 @@ export function BroadcastComposer({
       className="space-y-5"
       onSubmit={(values) => {
         startTransition(async () => {
-          const res = await broadcastAnnouncement(values);
+          const res = await callAction(() => broadcastAnnouncement(values));
           if (!res.ok) {
-            toast.error(res.error);
+            toastFailure(res);
             return;
           }
           const count = res.data.schoolCount;

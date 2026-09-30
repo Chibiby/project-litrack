@@ -116,7 +116,7 @@ describe("monthly reading-level panel — lock state", () => {
     });
 
     expect(screen.getByText("Locked")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save reading levels" })).toBeNull();
     expect(screen.getByText("Editing closed on July 7, 2026.")).toBeTruthy();
   });
 
@@ -129,7 +129,7 @@ describe("monthly reading-level panel — lock state", () => {
     });
 
     expect(screen.getByText("Reopened")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save reading levels" })).toBeTruthy();
     expect(screen.queryByText("Locked")).toBeNull();
   });
 
@@ -141,7 +141,7 @@ describe("monthly reading-level panel — lock state", () => {
       unlockedMonths: [],
     });
 
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save reading levels" })).toBeTruthy();
     expect(screen.queryByText("Locked")).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe("monthly reading-level panel — lock state", () => {
       unlockedMonths: [],
     });
 
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save reading levels" })).toBeTruthy();
     expect(screen.queryByText("Locked")).toBeNull();
   });
 
@@ -165,7 +165,7 @@ describe("monthly reading-level panel — lock state", () => {
       unlockedMonths: [],
     });
 
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save reading levels" })).toBeTruthy();
     expect(screen.queryByText("Locked")).toBeNull();
   });
 });

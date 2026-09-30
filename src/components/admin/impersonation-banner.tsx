@@ -2,7 +2,8 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { endImpersonation } from "@/lib/actions/accounts";
@@ -34,10 +35,10 @@ export function ImpersonationBanner({
 
   function backToAdmin() {
     startTransition(async () => {
-      const res = await endImpersonation();
+      const res = await callAction(() => endImpersonation());
       // Success redirects (to Test Lab or the accounts console), so only a
       // failure returns here.
-      if (res && !res.ok) toast.error(res.error);
+      if (res && !res.ok) toastFailure(res);
     });
   }
 

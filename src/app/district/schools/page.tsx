@@ -38,7 +38,7 @@ async function DistrictSchoolsBody({
   if (schools.length === 0) {
     return (
       <EmptyState
-        title="No schools in your districts yet"
+        title="No schools are assigned to your district yet"
         description="Schools appear here once the division office registers them under your districts."
         icon={School}
       />
@@ -100,7 +100,7 @@ async function DistrictSchoolsBody({
           columns: "district",
           singleDistrict,
           basePath: DISTRICT_ROUTES.schools,
-          emptyMessage: "No school matches your search.",
+          emptyMessage: "No schools are assigned to your district yet.",
         }}
       />
     </Surface>

@@ -110,6 +110,30 @@ describe("ForgotPasswordForm — resend cooldown", () => {
     expect(screen.getByText("Resend in 120s")).toBeTruthy();
   });
 
+  it("a failed resend goes through toastFailure, so a connection code gets its stable toast id", async () => {
+    requestPasswordReset.mockResolvedValueOnce({ ok: true });
+    render(<ForgotPasswordForm />);
+    await submitEmail("teacher@example.com");
+    act(() => {
+      vi.advanceTimersByTime(120_000);
+    });
+
+    requestPasswordReset.mockResolvedValueOnce({
+      ok: false,
+      code: "NETWORK_OFFLINE",
+      error: "You're offline.",
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Resend" }));
+    });
+    await flush();
+
+    expect(toastError).toHaveBeenCalledWith(
+      "You're offline.",
+      expect.objectContaining({ id: "NETWORK_OFFLINE" })
+    );
+  });
+
   it("applies the same cooldown UI whether or not the account exists — requestPasswordReset never distinguishes it", async () => {
     // The action always returns { ok: true } for both an existing and a
     // non-existing account (no enumeration); the form has no other signal to

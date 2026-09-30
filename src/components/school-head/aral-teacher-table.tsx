@@ -20,6 +20,8 @@ import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
 import { setLearnerAralTeacher } from "@/lib/actions/learner";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   ListNavigationProvider,
   useListNavigate,
@@ -181,11 +183,11 @@ function AralTeacherTablePanel({
       // `finally` rather than a plain call after the await: a thrown action
       // would otherwise leave this row locked and reading "Saving…" forever.
       try {
-        const res = await setLearnerAralTeacher(fd);
+        const res = await callAction(() => setLearnerAralTeacher(fd));
         if (!res.ok) {
           // Roll the select back so it never shows an assignment that did not stick.
           setOverrides((prev) => ({ ...prev, [row.id]: previous }));
-          toast.error(res.error);
+          toastFailure(res);
           return;
         }
         toast.success(

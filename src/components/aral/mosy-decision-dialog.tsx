@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { saveMosyDecision } from "@/lib/actions/aral-mosy";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { ARAL_MOSY_OUTCOME_CHOICE_LABELS } from "@/lib/constants/enum-labels";
 import { aralMosyDecisionSchema, MOSY_REMARKS_MAX } from "@/lib/validators/aral-mosy.schema";
 import type { MosyRow } from "@/lib/aral/mosy-queries";
@@ -114,7 +116,7 @@ function MosyDecisionForm({
     fd.set("remarks", values.remarks);
 
     startTransition(async () => {
-      const res = await saveMosyDecision(fd);
+      const res = await callAction(() => saveMosyDecision(fd));
       if (!res.ok) {
         if (res.fieldErrors) {
           for (const [field, message] of Object.entries(res.fieldErrors)) {
@@ -123,7 +125,7 @@ function MosyDecisionForm({
             }
           }
         }
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success(TRANSITION_TOAST[res.data.transition]);

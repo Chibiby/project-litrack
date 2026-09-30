@@ -12,6 +12,7 @@ import {
   type DemoSchoolSpec,
 } from "@/lib/demo/constants";
 import { deleteSchoolCompletely } from "@/lib/demo/teardown";
+import { AppError } from "@/lib/errors/app-error";
 
 export type DemoSchoolStatus = {
   name: string;
@@ -144,7 +145,12 @@ async function provisionOne(
       password: DEMO_SCHOOL_ID_CODE,
       app_metadata: { role: "SCHOOL_HEAD" },
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      throw new AppError("AUTH_PROVIDER_ERROR", {
+        cause: error,
+        detail: `demo provision: updating the School Head auth user failed: ${error.message}`,
+      });
+    }
   } else {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: syntheticEmail,
@@ -154,7 +160,10 @@ async function provisionOne(
       user_metadata: { role: "SCHOOL_HEAD" },
     });
     if (error || !data.user) {
-      return { ok: false, error: error?.message ?? "Auth bootstrap failed" };
+      throw new AppError("AUTH_PROVIDER_ERROR", {
+        cause: error ?? undefined,
+        detail: `demo provision: creating the School Head auth user failed: ${error?.message ?? "no user returned"}`,
+      });
     }
     authId = data.user.id;
   }

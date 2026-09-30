@@ -195,7 +195,9 @@ describe("chat — a school-less non-admin gets empty or forbidden", () => {
 
     const result = await readChannel({ channelId });
 
-    expect(result).toEqual({ ok: false, error: "Not found" });
+    // Same sentence as a missing channel, so another school's channel never leaks.
+    expect(result).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(result).not.toHaveProperty("ref");
   });
 });
 

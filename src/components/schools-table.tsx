@@ -23,10 +23,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
+import { copyText } from "@/lib/ui/copy-text";
 import { cn } from "@/lib/utils";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
 import { SchoolActiveToggle } from "@/components/admin/school-active-toggle";
 import { ConfirmAction } from "@/components/confirm-action";
+import { callAction } from "@/lib/ui/call-action";
+import { isActionFailure } from "@/lib/errors/client";
 import { setSchoolActive } from "@/lib/actions/school-management";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { SortSelect } from "@/components/ui/sort-select";
@@ -167,47 +170,37 @@ function RegenButton({
   onCredential: (value: string) => void;
   className?: string;
 }) {
-  const [pending, startTransition] = useTransition();
-
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      // An icon button that happened to be drawn at `sm`'s box. `size="icon"` is
-      // what makes the shared spinner *replace* the key glyph instead of sitting
-      // beside it; the default className keeps the exact `size="sm"` footprint
-      // (h-9/w-10) from `lg` up, with the 44px touch floor below it, so the
-      // row of actions is unchanged when idle.
-      size="icon"
-      className={className}
-      loading={pending}
-      loadingText="Resetting password…"
-      title="Reset School Head password to the School ID"
-      aria-label={`Reset School Head password to the School ID for ${schoolName}`}
-      onClick={() => {
-        if (
-          !window.confirm(
-            `Reset the School Head password for ${schoolName} back to its School ID? Any password the School Head chose will stop working.`
-          )
-        ) {
-          return;
-        }
+    <ConfirmAction
+      title={`Reset password for ${schoolName}'s School Head?`}
+      description="The password goes back to the School ID, and any password the School Head chose will stop working. The new password is shown on this page after the reset, until you dismiss it."
+      confirmLabel="Reset password"
+      variant="destructive"
+      trigger={
+        <Button
+          type="button"
+          variant="ghost"
+          // An icon button that happened to be drawn at `sm`'s box. The default
+          // className keeps the exact `size="sm"` footprint (h-9/w-10) from `lg`
+          // up, with the 44px touch floor below it.
+          size="icon"
+          className={className}
+          title="Reset School Head password to the School ID"
+          aria-label={`Reset School Head password to the School ID for ${schoolName}`}
+        >
+          <KeyRound className="h-4 w-4" aria-hidden />
+        </Button>
+      }
+      onConfirm={async () => {
         const fd = new FormData();
         fd.set("schoolId", schoolId);
-        startTransition(async () => {
-          const res = await regenerateSchoolHeadCredential(fd);
-          if (!res.ok) {
-            toast.error(res.error);
-            return;
-          }
-          if (res.data?.password) {
-            onCredential(res.data.password);
-          }
-        });
+        const res = await callAction(() => regenerateSchoolHeadCredential(fd));
+        if (!res.ok) return res;
+        if (res.data?.password) {
+          onCredential(res.data.password);
+        }
       }}
-    >
-      <KeyRound className="h-4 w-4" aria-hidden />
-    </Button>
+    />
   );
 }
 
@@ -377,6 +370,21 @@ function SchoolsTableInner({
     }).finally(() => setActingId(null));
   };
 
+  const hasActiveFilters = Boolean(list.q || list.region || list.status);
+  const emptyContent = hasActiveFilters ? (
+    <>
+      No schools match your search or filters.{" "}
+      <Link
+        href={list.sort ? `${basePath}?sort=${list.sort}` : basePath}
+        className="font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Clear filters
+      </Link>
+    </>
+  ) : (
+    caps.emptyMessage
+  );
+
   const from =
     list.totalCount > 0 ? (list.page - 1) * list.pageSize + 1 : 0;
   const to = Math.min(list.page * list.pageSize, list.totalCount);
@@ -384,28 +392,13 @@ function SchoolsTableInner({
   return (
     <div className="space-y-4">
       {credential ? (
-        <Card
-          className={cn(
-            "border-amber-200 bg-amber-50",
-            isAdminColumns && "dark:border-amber-900/60 dark:bg-amber-950/40"
-          )}
-        >
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40">
           <CardContent className="space-y-3 pt-4">
-            <div
-              className={cn(
-                "flex items-start gap-2 text-amber-950",
-                isAdminColumns && "dark:text-amber-100"
-              )}
-            >
+            <div className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <p className="font-semibold">Password reset to the School ID</p>
-                <p
-                  className={cn(
-                    "text-sm text-amber-900/90",
-                    isAdminColumns && "dark:text-amber-100/90"
-                  )}
-                >
+                <p className="text-sm text-amber-900/90 dark:text-amber-100/90">
                   The School Head can sign in now with their School ID below, and choose a private
                   password afterwards.
                 </p>
@@ -420,7 +413,7 @@ function SchoolsTableInner({
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(credential);
+                  if (!(await copyText(credential))) return;
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
@@ -579,7 +572,7 @@ function SchoolsTableInner({
                   colSpan={isAdminColumns ? 8 : showDistrictColumn ? 5 : 4}
                   className="py-10 text-center text-muted-foreground"
                 >
-                  {caps.emptyMessage}
+                  {emptyContent}
                 </TableCell>
               </TableRow>
             ) : (
@@ -701,17 +694,9 @@ function SchoolsTableInner({
                           onConfirm={async () => {
                             const fd = new FormData();
                             fd.set("id", school.id);
-                            try {
-                              await deleteSchool(fd);
-                              toast.success("School removed");
-                            } catch (err) {
-                              toast.error(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Could not remove school"
-                              );
-                              throw err;
-                            }
+                            const res = await callAction(() => deleteSchool(fd));
+                            if (isActionFailure(res)) return res;
+                            toast.success("School removed");
                           }}
                         />
                       ) : null}
@@ -727,7 +712,7 @@ function SchoolsTableInner({
       <div className={cn("lg:hidden", isAdminColumns ? "grid grid-cols-1 gap-3 md:grid-cols-2" : "space-y-3")}>
         {optimisticSchools.length === 0 ? (
           <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2">
-            {caps.emptyMessage}
+            {emptyContent}
           </div>
         ) : (
           optimisticSchools.map((school) => (
@@ -838,13 +823,9 @@ function SchoolsTableInner({
                     onConfirm={async () => {
                       const fd = new FormData();
                       fd.set("id", school.id);
-                      try {
-                        await deleteSchool(fd);
-                        toast.success("School removed");
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Could not remove school");
-                        throw err;
-                      }
+                      const res = await callAction(() => deleteSchool(fd));
+                      if (isActionFailure(res)) return res;
+                      toast.success("School removed");
                     }}
                   />
                 ) : null}

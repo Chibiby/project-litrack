@@ -8,7 +8,7 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
  *
  * The behaviour worth pinning here is the release confirmation: lowering the
  * cap below what a teacher currently holds must not silently strip sections.
- * The action instead returns `confirm_release` naming exactly which sections
+ * The action instead returns `needs: "confirm_release"` (with a readable `error` sentence) naming exactly which sections
  * would be freed, and only writes once the School Head calls back with
  * `confirmRelease: "true"`. Releases route through the real
  * `setTeacherAdvisory`, so the legacy `TeacherSection` / `taughtGrades`
@@ -247,7 +247,8 @@ describe("setTeacherAdvisorySetting", () => {
     expect(requireSchoolUser).toHaveBeenCalledWith("SCHOOL_HEAD");
     expect(result).toEqual({
       ok: false,
-      error: "confirm_release",
+      error: expect.stringMatching(/Confirm to continue/),
+      needs: "confirm_release",
       releases: [
         { id: "77777777-7777-4777-8777-777777777777", label: "Grade 3 · Section 1" },
         { id: "88888888-8888-4888-8888-888888888888", label: "Grade 3 · Section 2" },
@@ -282,7 +283,12 @@ describe("setTeacherAdvisorySetting", () => {
       })
     );
 
-    expect(result).toMatchObject({ ok: false, error: "confirm_release", choose: { keepLimit: 1 } });
+    expect(result).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/Confirm to continue/),
+      needs: "confirm_release",
+      choose: { keepLimit: 1 },
+    });
     expect(calls.teacherProfileUpdate).toHaveLength(0);
     expect(calls.sectionUpdateMany).toHaveLength(0);
   });
@@ -399,7 +405,8 @@ describe("setTeacherAdvisorySetting", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "confirm_release",
+      error: expect.stringMatching(/Confirm to continue/),
+      needs: "confirm_release",
       releases: [{ id: "66666666-6666-4666-8666-666666666666", label: "Grade 3 · Section 0" }],
     });
     expect(transaction).toHaveBeenCalledTimes(1);
@@ -524,7 +531,8 @@ describe("setTeacherAdvisorySetting", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "confirm_release",
+      error: expect.stringMatching(/Confirm to continue/),
+      needs: "confirm_release",
       releases: [{ id: "66666666-6666-4666-8666-666666666666", label: "Grade 3 · Section 0" }],
     });
     expect(transaction).toHaveBeenCalledTimes(1);

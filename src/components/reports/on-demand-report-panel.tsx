@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   ExportControls,
@@ -13,6 +12,8 @@ import {
   fetchPrintableReport,
   type PrintableReportData,
 } from "@/lib/actions/export-learners";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { FileText } from "lucide-react";
 
 type Props = {
@@ -58,15 +59,17 @@ export function OnDemandReportPanel({
     const key = filtersKey(filters);
     if (report && loadedKey === key) return true;
 
-    const res = await fetchPrintableReport({
-      scope: role,
-      schoolId,
-      gradeLevelId: filters.gradeLevelId,
-      sectionId: filters.sectionId,
-      aralOnly: filters.aralOnly,
-    });
+    const res = await callAction(() =>
+      fetchPrintableReport({
+        scope: role,
+        schoolId,
+        gradeLevelId: filters.gradeLevelId,
+        sectionId: filters.sectionId,
+        aralOnly: filters.aralOnly,
+      })
+    );
     if (!res.ok) {
-      toast.error(res.error);
+      toastFailure(res);
       return false;
     }
     setReport(res.data);

@@ -84,6 +84,20 @@ describe("error catalog", () => {
     expect(formatWait(4 * 60_000)).toBe("4 minutes");
   });
 
+  it("defines the client-side connection codes in plain language", () => {
+    const connection = ["NETWORK_OFFLINE", "SERVER_UNREACHABLE", "APP_UPDATED", "REQUEST_TOO_LARGE"] as const;
+    for (const code of connection) {
+      expect(ERRORS[code].severity, code).toBe("user");
+      expect(ERRORS[code].message, code).not.toMatch(
+        /fetch|server action|rsc|cloudflare|prisma|supabase/i
+      );
+    }
+    expect(ERRORS.NETWORK_OFFLINE.status).toBe(503);
+    expect(ERRORS.SERVER_UNREACHABLE.status).toBe(503);
+    expect(ERRORS.APP_UPDATED.status).toBe(409);
+    expect(ERRORS.REQUEST_TOO_LARGE.status).toBe(413);
+  });
+
   it("recognizes only real codes", () => {
     expect(isErrorCode("NOT_FOUND")).toBe(true);
     expect(isErrorCode("toString")).toBe(false);

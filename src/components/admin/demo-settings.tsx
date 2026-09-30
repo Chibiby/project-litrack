@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore, useTransition } from "react";
+import { copyText } from "@/lib/ui/copy-text";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -21,6 +22,7 @@ import {
   resetDemoData,
   startDemoSession,
 } from "@/lib/actions/demo";
+import { callAction } from "@/lib/ui/call-action";
 import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 
 export type DemoSettingsData = {
@@ -52,8 +54,8 @@ function Field({ label, value }: { label: string; value: string }) {
         size="sm"
         className="lg:h-9"
         aria-label={`Copy ${label}`}
-        onClick={() => {
-          void navigator.clipboard.writeText(value);
+        onClick={async () => {
+          if (!(await copyText(value))) return;
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1500);
         }}
@@ -115,7 +117,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await startDemoSession();
+      const res = await callAction(() => startDemoSession());
       if (!res.ok) {
         setError(res.error);
         return;
@@ -134,7 +136,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await endDemoSession();
+      const res = await callAction(() => endDemoSession());
       if (!res.ok) {
         setError(res.error);
         return;
@@ -148,7 +150,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await createDemoData();
+      const res = await callAction(() => createDemoData());
       if (!res.ok) {
         setError(res.error);
         return;
@@ -166,7 +168,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("confirm", confirm);
-      const res = await resetDemoData(fd);
+      const res = await callAction(() => resetDemoData(fd));
       if (!res.ok) {
         setError(res.error);
         return;

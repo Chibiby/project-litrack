@@ -266,7 +266,11 @@ describe("deleteSection — teacher cache fan-out", () => {
     );
 
     const result = await deleteSection(buildFormData(SECTION_ID));
-    expect(result).toEqual({ ok: false, error: "Section not found" });
+    expect(result).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+      error: expect.stringMatching(/^Section not found/),
+    });
     expect(JSON.stringify(result)).not.toContain("school-2");
     expect(transaction).not.toHaveBeenCalled();
     expect(revalidateTeacherCaches).not.toHaveBeenCalled();

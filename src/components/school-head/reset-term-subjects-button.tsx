@@ -6,6 +6,8 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import { resetSchoolTermSubjects } from "@/lib/actions/term-subjects";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 
 /**
  * School-wide "Reset to default" for the End of Terms subject lists.
@@ -30,10 +32,10 @@ export function ResetTermSubjectsButton({
   const searchParams = useSearchParams();
 
   async function handleConfirm() {
-    const res = await resetSchoolTermSubjects({ schoolId });
+    const res = await callAction(() => resetSchoolTermSubjects({ schoolId }));
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
 
     const { grades, created, restored, archived } = res.data;

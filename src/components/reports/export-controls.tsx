@@ -9,6 +9,9 @@ import {
   exportSchoolHeadLearnersExcel,
   exportTeacherLearnersExcel,
 } from "@/lib/actions/export-learners";
+import { callAction } from "@/lib/ui/call-action";
+import { isToasted, toastFailure } from "@/lib/ui/toast-failure";
+import { classifyClientFailure, isNextControlFlow } from "@/lib/errors/client";
 import { Download, Printer } from "lucide-react";
 import { ExportPurposeToggle, useExportPurpose } from "@/components/reports/export-purpose-toggle";
 
@@ -101,12 +104,13 @@ export function ExportControls({
     startTransition(async () => {
       try {
         const filter = currentFilters();
-        const res =
+        const res = await callAction(() =>
           role === "TEACHER"
-            ? await exportTeacherLearnersExcel(filter)
-            : await exportSchoolHeadLearnersExcel(filter);
+            ? exportTeacherLearnersExcel(filter)
+            : exportSchoolHeadLearnersExcel(filter)
+        );
         if (!res.ok) {
-          toast.error(res.error);
+          toastFailure(res);
           return;
         }
         downloadBase64Xlsx(res.data.base64, res.data.filename);
@@ -126,6 +130,9 @@ export function ExportControls({
     startTransition(async () => {
       try {
         await onPrint(currentFilters());
+      } catch (err) {
+        if (isNextControlFlow(err)) throw err;
+        if (!isToasted(err)) toastFailure(classifyClientFailure(err));
       } finally {
         setBusy(null);
       }

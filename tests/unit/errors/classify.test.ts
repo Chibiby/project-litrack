@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthApiError } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors/app-error";
 import { classifyError } from "@/lib/errors/classify";
+import { markDbError } from "@/lib/db-errors";
 
 /**
  * The classifier is what stands between a raw Prisma or Supabase failure and
@@ -76,6 +77,70 @@ describe("classifyError", () => {
         new AuthApiError("New password should be different from the old password.", 422, "same_password")
       ).code
     ).toBe("AUTH_PASSWORD_SAME");
+  });
+
+  describe("database failures Prisma 6's client engine surfaces", () => {
+    /** Shape of `@prisma/driver-adapter-utils`' DriverAdapterError: no `.code`, details on `.cause`. */
+    function driverAdapterError(cause: Record<string, unknown>, message = "db error") {
+      return Object.assign(new Error(message), { name: "DriverAdapterError", cause });
+    }
+
+    it("reads P2037 (too many connections) as unavailable, not a generic DB error", () => {
+      const out = classifyError(prismaKnown("P2037"), { verb: "load the roster" });
+      expect(out.code).toBe("DB_UNAVAILABLE");
+      expect(out.message).toMatch(/^Couldn't load the roster: the database didn't respond/);
+    });
+
+    it("reads a raw DriverAdapterError for an admin shutdown (57P01) as unavailable", () => {
+      const err = driverAdapterError(
+        {
+          kind: "postgres",
+          code: "57P01",
+          originalCode: "57P01",
+          originalMessage: "terminating connection due to administrator command",
+        },
+        "terminating connection due to administrator command"
+      );
+      const out = classifyError(err);
+      expect(out.code).toBe("DB_UNAVAILABLE");
+      expect(out.context.prismaError).toBe("DriverAdapterError");
+      expect(out.context.prismaCode).toBe("57P01");
+      expect(out.cause).toBe(err);
+    });
+
+    it("reads a raw query (P2010) whose adapter cause is DatabaseNotReachable as unavailable", () => {
+      const err = Object.assign(prismaKnown("P2010", "Raw query failed. Code: `N/A`. Message: `Can't reach`"), {
+        meta: { driverAdapterError: driverAdapterError({ kind: "DatabaseNotReachable", host: "db", port: 6543 }) },
+      });
+      const out = classifyError(err);
+      expect(out.code).toBe("DB_UNAVAILABLE");
+      expect(out.context.prismaCode).toBe("P2010");
+    });
+
+    it("reads a query-marked plain pg error as unavailable", () => {
+      const err = markDbError(new Error("Connection terminated unexpectedly"));
+      const out = classifyError(err);
+      expect(out.code).toBe("DB_UNAVAILABLE");
+      expect(out.context.prismaError).toBe("DatabaseError");
+    });
+
+    it("does not read the same text on an unmarked error as a database outage", () => {
+      expect(classifyError(new Error("Connection terminated unexpectedly")).code).toBe("INTERNAL_ERROR");
+    });
+
+    it("reads a DriverAdapterError for a missing enum value (22P02) as a stale schema", () => {
+      const err = driverAdapterError({
+        kind: "postgres",
+        code: "22P02",
+        originalCode: "22P02",
+        originalMessage: 'invalid input value for enum "Specialization": "NA"',
+      });
+      expect(classifyError(err).code).toBe("DB_SCHEMA_OUT_OF_DATE");
+    });
+
+    it("reads failed database credentials as configuration, not an outage to retry", () => {
+      expect(classifyError(prismaKnown("P1000")).code).toBe("CONFIG_MISSING");
+    });
   });
 
   it("calls anything else an internal error and keeps the cause", () => {

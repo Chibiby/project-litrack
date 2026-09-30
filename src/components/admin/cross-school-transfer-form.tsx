@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ConfirmAction } from "@/components/confirm-action";
 import { LearnerSearchSelect } from "@/components/learners/learner-search-select";
 import { transferLearnerCrossSchool } from "@/lib/actions/enrollment";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import type { LearnerSearchHit } from "@/lib/learners/search";
 import { SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
@@ -244,10 +246,10 @@ export function CrossSchoolTransferForm({
             fd.set("targetGradeLevelId", gradeId);
             fd.set("targetSectionId", sectionId || SECTION_CLEAR);
             fd.set("targetTeacherId", teacherId);
-            const res = await transferLearnerCrossSchool(fd);
+            const res = await callAction(() => transferLearnerCrossSchool(fd));
             if (!res.ok) {
-              toast.error(res.error);
-              throw new Error(res.error);
+              toastFailure(res);
+              throw new ToastedError(res.error);
             }
             toast.success("Learner transferred to target school");
             setLearner(null);

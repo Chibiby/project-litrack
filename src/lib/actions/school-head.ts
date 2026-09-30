@@ -1,6 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { action } from "@/lib/errors/action";
+import { AppError, fieldError } from "@/lib/errors/app-error";
+import { classifyError } from "@/lib/errors/classify";
+import { withReference } from "@/lib/errors/codes";
+import { reportError } from "@/lib/errors/report";
 import { z } from "zod";
 import type { GradeLevelType } from "@prisma/client";
 import { prisma, prismaFresh } from "@/lib/prisma";
@@ -37,6 +42,35 @@ import {
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
+
+/**
+ * A write that half-finished (the login is gone, the row is not; the profile is
+ * saved, the structure is not). The sentence says exactly that, which no catalog
+ * code can, so it is kept — but the underlying error is still recorded for
+ * admins and the person gets a reference to quote, instead of a silent log line.
+ */
+function partialFailure(err: unknown, route: string, message: string): { ok: false; error: string } {
+  const ref = reportError(classifyError(err), { route, routeType: "action" });
+  return { ok: false, error: withReference(message, ref) };
+}
+
+/**
+ * `deleteAuthUser` returns a plain string that can be raw Supabase text or the
+ * service-role setup instructions. Neither is for the browser: the text goes to
+ * the admin `detail` only, and the person gets a catalog message.
+ */
+function authDeleteError(rawError: string): AppError {
+  if (/SUPABASE_SERVICE_ROLE_KEY|isn't set up on the server/i.test(rawError)) {
+    return new AppError("CONFIG_MISSING", {
+      detail: rawError,
+      context: { reason: "service_role_key" },
+    });
+  }
+  return new AppError("AUTH_PROVIDER_ERROR", {
+    detail: rawError,
+    context: { service: "supabase_auth" },
+  });
+}
 
 /** Preview shown in a Test Lab dry run instead of the real write. */
 export type SchoolHeadProfileDryRunPreview = {
@@ -235,7 +269,7 @@ function buildSchoolHeadProfileWrite(parsed: z.infer<typeof schoolHeadProfileSch
   return { firstName, middleName, lastName, fullName, contactEmail, gender, profileData };
 }
 
-export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionResult> {
+export const saveSchoolHeadProfile = action("saveSchoolHeadProfile", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireUser("SCHOOL_HEAD");
   if (!user.schoolId) return { ok: false, error: "User has no school" };
 
@@ -303,33 +337,19 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   // Save profile first (short pooled queries), then bootstrap grades/sections
   // outside any interactive transaction. PgBouncer transaction-mode pooler
   // drops long interactive txns mid-flight ("Transaction not found").
-  try {
-    // Profile row first, account flag second. `profileCompleted: true` is what
-    // the `(app)` layout's first-run gate checks, so writing it before the
-    // upsert means a failed upsert strands the head inside the app with no
-    // profile row and no way back to the wizard to retry.
-    await prisma.schoolHeadProfile.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, ...profileData, contactEmail, gender },
-      update: { ...profileData, contactEmail, gender },
-    });
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { firstName, middleName, lastName, fullName, profileCompleted: true },
-    });
-  } catch (err) {
-    console.error("[saveSchoolHeadProfile] profile save failed:", err);
-    // Deliberately generic: this is the only thing the user sees, and `err`
-    // here is a raw Prisma/Postgres message (CLAUDE.md — client-facing errors
-    // must be safe). It also matters during a deploy-before-migrate window,
-    // where a column this code writes may not exist yet and the driver's text
-    // would otherwise name the table and column back to the browser. The full
-    // error still goes to the server log above.
-    return {
-      ok: false,
-      error: "Failed to save profile. Please try again, or contact your administrator if this keeps happening.",
-    };
-  }
+  // Profile row first, account flag second. `profileCompleted: true` is what
+  // the `(app)` layout's first-run gate checks, so writing it before the
+  // upsert means a failed upsert strands the head inside the app with no
+  // profile row and no way back to the wizard to retry.
+  await prisma.schoolHeadProfile.upsert({
+    where: { userId: user.id },
+    create: { userId: user.id, ...profileData, contactEmail, gender },
+    update: { ...profileData, contactEmail, gender },
+  });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { firstName, middleName, lastName, fullName, profileCompleted: true },
+  });
 
   let bootstrap: { createdGradeIds: string[]; createdSectionIds: string[] } = {
     createdGradeIds: [],
@@ -343,14 +363,11 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
         sectionsPerGrade,
       });
     } catch (err) {
-      console.error("[saveSchoolHeadProfile] bootstrap failed:", err);
-      return {
-        ok: false,
-        error:
-          err instanceof Error
-            ? `Profile saved, but school structure setup failed: ${err.message}. You can retry.`
-            : "Profile saved, but school structure setup failed. You can retry.",
-      };
+      return partialFailure(
+        err,
+        "saveSchoolHeadProfile",
+        "Profile saved, but school structure setup failed. You can retry."
+      );
     }
   }
 
@@ -400,15 +417,15 @@ export async function saveSchoolHeadProfile(formData: FormData): Promise<ActionR
   // Login "teachers open" depends on a profiled School Head + grade levels.
   revalidateSchoolsList();
   return { ok: true };
-}
+}, { verb: "save your profile" });
 
-export async function createGradeLevel(formData: FormData): Promise<void> {
+export const createGradeLevel = action("createGradeLevel", async (formData: FormData): Promise<void> => {
   const user = await requireUser("SCHOOL_HEAD");
   if (!user.schoolId || !user.profileCompleted) {
-    throw new Error("Complete your profile first");
+    throw fieldError("profile", "Complete your profile first");
   }
   const parsed = createGradeLevelSchema.safeParse({ type: formData.get("type") });
-  if (!parsed.success) throw new Error("Invalid grade level");
+  if (!parsed.success) throw fieldError("type", "Invalid grade level");
 
   const grade = await prisma.gradeLevel.upsert({
     where: { schoolId_type: { schoolId: user.schoolId, type: parsed.data.type } },
@@ -429,7 +446,7 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
   revalidateSchoolDashboard(user.schoolId);
   // Login "teachers open" depends on at least one grade level.
   revalidateSchoolsList();
-}
+}, { verb: "add the grade level" });
 
 /**
  * Deactivate a grade that was set up by mistake.
@@ -456,7 +473,7 @@ export async function createGradeLevel(formData: FormData): Promise<void> {
  * otherwise hold an advisory slot on a section nobody can see. That is
  * deliberate and one-way — restore does not re-attach them.
  */
-export async function archiveGradeLevel(formData: FormData): Promise<ActionResult> {
+export const archiveGradeLevel = action("archiveGradeLevel", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = gradeLevelIdSchema.safeParse({
@@ -488,106 +505,101 @@ export async function archiveGradeLevel(formData: FormData): Promise<ActionResul
     };
   }
 
-  try {
-    const affectedTeacherIds = await prisma.$transaction(async (tx) => {
-      // One timestamp for the grade and every section going down with it. Two
-      // `new Date()` calls would differ by milliseconds and break the pairing
-      // restore depends on.
-      const archivedAt = new Date();
+  const affectedTeacherIds = await prisma.$transaction(async (tx) => {
+    // One timestamp for the grade and every section going down with it. Two
+    // `new Date()` calls would differ by milliseconds and break the pairing
+    // restore depends on.
+    const archivedAt = new Date();
 
-      const sections = await tx.section.findMany({
-        where: { gradeLevelId: grade.id, deletedAt: null },
-        select: { id: true },
-      });
-      const sectionIds = sections.map((s) => s.id);
+    const sections = await tx.section.findMany({
+      where: { gradeLevelId: grade.id, deletedAt: null },
+      select: { id: true },
+    });
+    const sectionIds = sections.map((s) => s.id);
 
-      await tx.gradeLevel.update({
-        where: { id: grade.id },
+    await tx.gradeLevel.update({
+      where: { id: grade.id },
+      data: { deletedAt: archivedAt },
+    });
+
+    if (sectionIds.length > 0) {
+      await tx.section.updateMany({
+        where: { id: { in: sectionIds } },
         data: { deletedAt: archivedAt },
       });
-
-      if (sectionIds.length > 0) {
-        await tx.section.updateMany({
-          where: { id: { in: sectionIds } },
-          data: { deletedAt: archivedAt },
-        });
-      }
-
-      // Read the advisers before nulling the pointer — afterwards there is no
-      // way back to who they were, and their caches have to be busted below.
-      const advisers = sectionIds.length
-        ? await tx.user.findMany({
-            where: { advisorySectionId: { in: sectionIds } },
-            select: { id: true },
-          })
-        : [];
-      if (sectionIds.length > 0) {
-        await tx.user.updateMany({
-          where: { advisorySectionId: { in: sectionIds } },
-          data: { advisorySectionId: null },
-        });
-      }
-
-      const assigned = sectionIds.length
-        ? await tx.teacherSection.findMany({
-            where: { sectionId: { in: sectionIds } },
-            select: { teacherId: true },
-          })
-        : [];
-      if (sectionIds.length > 0) {
-        await tx.teacherSection.deleteMany({ where: { sectionId: { in: sectionIds } } });
-      }
-
-      // The legacy `taughtGrades` mirror. Nothing reads it for access any more
-      // (see `teacherGradeScope`), but leaving a link to a deactivated grade
-      // would make it disagree with the grade itself.
-      const linked = await tx.user.findMany({
-        where: { taughtGrades: { some: { id: grade.id } } },
-        select: { id: true },
-      });
-      for (const t of linked) {
-        await tx.user.update({
-          where: { id: t.id },
-          data: { taughtGrades: { disconnect: { id: grade.id } } },
-        });
-      }
-
-      return [
-        ...new Set([
-          ...advisers.map((a) => a.id),
-          ...assigned.map((a) => a.teacherId),
-          ...linked.map((t) => t.id),
-        ]),
-      ];
-    });
-
-    await writeAudit({
-      userId: user.id,
-      schoolId: user.schoolId,
-      action: AUDIT_ACTIONS.GRADE_LEVEL_ARCHIVE,
-      resource: "GradeLevel",
-      resourceId: grade.id,
-      metadata: {
-        schoolId: user.schoolId,
-        gradeLevelId: grade.id,
-        type: grade.type,
-        freedTeachers: affectedTeacherIds.length,
-      },
-    });
-
-    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
-    revalidateSchoolHeadTeachers(user.schoolId);
-    // Login "teachers open" depends on at least one grade level, same as create.
-    revalidateSchoolsList();
-    for (const teacherId of affectedTeacherIds) {
-      revalidateTeacherCaches(teacherId);
     }
-    return { ok: true };
-  } catch (err) {
-    console.error("[archiveGradeLevel]", err);
-    return { ok: false, error: "Failed to deactivate grade level" };
+
+    // Read the advisers before nulling the pointer — afterwards there is no
+    // way back to who they were, and their caches have to be busted below.
+    const advisers = sectionIds.length
+      ? await tx.user.findMany({
+          where: { advisorySectionId: { in: sectionIds } },
+          select: { id: true },
+        })
+      : [];
+    if (sectionIds.length > 0) {
+      await tx.user.updateMany({
+        where: { advisorySectionId: { in: sectionIds } },
+        data: { advisorySectionId: null },
+      });
+    }
+
+    const assigned = sectionIds.length
+      ? await tx.teacherSection.findMany({
+          where: { sectionId: { in: sectionIds } },
+          select: { teacherId: true },
+        })
+      : [];
+    if (sectionIds.length > 0) {
+      await tx.teacherSection.deleteMany({ where: { sectionId: { in: sectionIds } } });
+    }
+
+    // The legacy `taughtGrades` mirror. Nothing reads it for access any more
+    // (see `teacherGradeScope`), but leaving a link to a deactivated grade
+    // would make it disagree with the grade itself.
+    const linked = await tx.user.findMany({
+      where: { taughtGrades: { some: { id: grade.id } } },
+      select: { id: true },
+    });
+    for (const t of linked) {
+      await tx.user.update({
+        where: { id: t.id },
+        data: { taughtGrades: { disconnect: { id: grade.id } } },
+      });
+    }
+
+    return [
+      ...new Set([
+        ...advisers.map((a) => a.id),
+        ...assigned.map((a) => a.teacherId),
+        ...linked.map((t) => t.id),
+      ]),
+    ];
+  });
+
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.GRADE_LEVEL_ARCHIVE,
+    resource: "GradeLevel",
+    resourceId: grade.id,
+    metadata: {
+      schoolId: user.schoolId,
+      gradeLevelId: grade.id,
+      type: grade.type,
+      freedTeachers: affectedTeacherIds.length,
+    },
+  });
+
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+  revalidateSchoolHeadTeachers(user.schoolId);
+  // Login "teachers open" depends on at least one grade level, same as create.
+  revalidateSchoolsList();
+  for (const teacherId of affectedTeacherIds) {
+    revalidateTeacherCaches(teacherId);
   }
-}
+  return { ok: true };
+}, { verb: "deactivate the grade level" });
 
 /**
  * Bring back a deactivated grade, and with it the sections deactivated in the
@@ -602,7 +614,7 @@ export async function archiveGradeLevel(formData: FormData): Promise<ActionResul
  * section by now; `Section.adviserId` is unique, so re-attaching could collide
  * with a live assignment. A head reassigns from the teachers table.
  */
-export async function restoreGradeLevel(formData: FormData): Promise<ActionResult> {
+export const restoreGradeLevel = action("restoreGradeLevel", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = gradeLevelIdSchema.safeParse({
@@ -625,42 +637,37 @@ export async function restoreGradeLevel(formData: FormData): Promise<ActionResul
   });
   if (!grade?.deletedAt) return { ok: false, error: "Grade level not found" };
 
-  try {
-    const restoredSections = await prisma.$transaction(async (tx) => {
-      const { count } = await tx.section.updateMany({
-        where: { gradeLevelId: grade.id, deletedAt: grade.deletedAt },
-        data: { deletedAt: null },
-      });
-      await tx.gradeLevel.update({
-        where: { id: grade.id },
-        data: { deletedAt: null },
-      });
-      return count;
+  const restoredSections = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.section.updateMany({
+      where: { gradeLevelId: grade.id, deletedAt: grade.deletedAt },
+      data: { deletedAt: null },
     });
+    await tx.gradeLevel.update({
+      where: { id: grade.id },
+      data: { deletedAt: null },
+    });
+    return count;
+  });
 
-    await writeAudit({
-      userId: user.id,
+  await writeAudit({
+    userId: user.id,
+    schoolId: user.schoolId,
+    action: AUDIT_ACTIONS.GRADE_LEVEL_RESTORE,
+    resource: "GradeLevel",
+    resourceId: grade.id,
+    metadata: {
       schoolId: user.schoolId,
-      action: AUDIT_ACTIONS.GRADE_LEVEL_RESTORE,
-      resource: "GradeLevel",
-      resourceId: grade.id,
-      metadata: {
-        schoolId: user.schoolId,
-        gradeLevelId: grade.id,
-        type: grade.type,
-        restoredSections,
-      },
-    });
+      gradeLevelId: grade.id,
+      type: grade.type,
+      restoredSections,
+    },
+  });
 
-    revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
-    revalidateSchoolDashboard(user.schoolId);
-    revalidateSchoolsList();
-    return { ok: true };
-  } catch (err) {
-    console.error("[restoreGradeLevel]", err);
-    return { ok: false, error: "Failed to restore grade level" };
-  }
-}
+  revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
+  revalidateSchoolDashboard(user.schoolId);
+  revalidateSchoolsList();
+  return { ok: true };
+}, { verb: "restore the grade level" });
 
 /**
  * Approve a pending teacher self-registration.
@@ -670,7 +677,7 @@ export async function restoreGradeLevel(formData: FormData): Promise<ActionResul
  * (`saveTeacherProfile`), which is now the sole writer of
  * `User.advisorySectionId`.
  */
-export async function approveTeacher(formData: FormData): Promise<ActionResult> {
+export const approveTeacher = action("approveTeacher", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = approveTeacherSchema.safeParse({ userId: formData.get("userId") });
@@ -697,8 +704,8 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
     app_metadata: { role: "TEACHER", schoolId: user.schoolId },
   });
   if (metaErr) {
-    console.error("[approveTeacher] app_metadata update failed:", metaErr);
-    return { ok: false, error: metaErr.message || "Failed to update auth metadata" };
+    // Raw Supabase text stays out of the response; classify maps the AuthError.
+    throw metaErr;
   }
 
   const now = new Date();
@@ -728,12 +735,12 @@ export async function approveTeacher(formData: FormData): Promise<ActionResult> 
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
+}, { verb: "approve the teacher" });
 
 /**
  * Reject a pending teacher self-registration.
  */
-export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
+export const rejectTeacher = action("rejectTeacher", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = teacherUserIdSchema.safeParse({ userId: formData.get("userId") });
@@ -774,13 +781,13 @@ export async function rejectTeacher(formData: FormData): Promise<ActionResult> {
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
+}, { verb: "reject the teacher" });
 
 /**
  * Hard-delete a rejected (never-profiled) teacher so they can register again.
  * Deletes Supabase auth first to avoid an orphaned login that would block the email.
  */
-export async function clearRejectedTeacher(formData: FormData): Promise<ActionResult> {
+export const clearRejectedTeacher = action("clearRejectedTeacher", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = teacherUserIdSchema.safeParse({ userId: formData.get("userId") });
@@ -802,19 +809,17 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
 
   const authDelete = await deleteAuthUser(teacher.authId);
   if (!authDelete.ok) {
-    console.error("[clearRejectedTeacher] auth delete failed:", authDelete.error);
-    return { ok: false, error: authDelete.error };
+    throw authDeleteError(authDelete.error);
   }
 
   try {
     await prismaFresh.user.delete({ where: { id: teacher.id } });
   } catch (err) {
-    console.error("[clearRejectedTeacher] prisma delete failed after auth delete:", err);
-    return {
-      ok: false,
-      error:
-        "Auth account was removed but the teacher record could not be deleted. Contact support before asking them to re-register.",
-    };
+    return partialFailure(
+      err,
+      "clearRejectedTeacher",
+      "Auth account was removed but the teacher record could not be deleted. Contact support before asking them to re-register."
+    );
   }
 
   await writeAudit({
@@ -828,7 +833,7 @@ export async function clearRejectedTeacher(formData: FormData): Promise<ActionRe
 
   revalidateSchoolHeadTeachers(user.schoolId);
   return { ok: true };
-}
+}, { verb: "clear the rejected teacher" });
 
 const setTeacherActiveSchema = z.object({
   userId: z.string().uuid("Invalid teacher"),
@@ -841,7 +846,7 @@ const setTeacherActiveSchema = z.object({
  * Deactivate or reactivate an approved teacher at this school.
  * Deactivated teachers cannot sign in; historical learner links are kept.
  */
-export async function setTeacherActive(formData: FormData): Promise<ActionResult> {
+export const setTeacherActive = action("setTeacherActive", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = setTeacherActiveSchema.safeParse({
@@ -895,7 +900,7 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
+}, { verb: "update the teacher" });
 
 /**
  * Soft-remove an approved teacher: blocks sign-in, frees the email for re-register,
@@ -909,7 +914,7 @@ export async function setTeacherActive(formData: FormData): Promise<ActionResult
  * Still refuses while they are someone's designated ARAL teacher — that is a
  * separate assignment the School Head must hand over deliberately.
  */
-export async function removeTeacher(formData: FormData): Promise<ActionResult> {
+export const removeTeacher = action("removeTeacher", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = teacherUserIdSchema.safeParse({ userId: formData.get("userId") });
@@ -947,8 +952,7 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
 
   const authDelete = await deleteAuthUser(teacher.authId);
   if (!authDelete.ok) {
-    console.error("[removeTeacher] auth delete failed:", authDelete.error);
-    return { ok: false, error: authDelete.error };
+    throw authDeleteError(authDelete.error);
   }
 
   // Read back by `originalTeacherEmail` on the Removed tab — keep the two in step.
@@ -974,12 +978,11 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
       return result;
     });
   } catch (err) {
-    console.error("[removeTeacher] prisma soft-delete failed after auth delete:", err);
-    return {
-      ok: false,
-      error:
-        "Auth account was removed but the teacher record could not be updated. Contact support before asking them to re-register.",
-    };
+    return partialFailure(
+      err,
+      "removeTeacher",
+      "Auth account was removed but the teacher record could not be updated. Contact support before asking them to re-register."
+    );
   }
 
   await writeAudit({
@@ -1003,4 +1006,4 @@ export async function removeTeacher(formData: FormData): Promise<ActionResult> {
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
   return { ok: true };
-}
+}, { verb: "remove the teacher" });

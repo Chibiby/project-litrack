@@ -94,7 +94,7 @@ async function resolveTransferSection(params: {
 /**
  * Same-school transfer: grade and/or section and/or teacher.
  */
-export async function transferLearner(formData: FormData): Promise<ActionResult> {
+export const transferLearner = action("transferLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const rawSection = formData.get("targetSectionId");
@@ -116,11 +116,9 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
   });
   if (!learner) return { ok: false, error: "Learner not found" };
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
+  // Throws NOT_FOUND (recorded as a refusal when the row is another school's);
+  // the person sees the same sentence either way.
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
 
   // Floating means "no grade and no section". The FLOATING `GradeLevel` row that
   // backs it is created on demand, so the form sends the GRADE_FLOATING sentinel
@@ -284,7 +282,7 @@ export async function transferLearner(formData: FormData): Promise<ActionResult>
   // an ARAL-only tutor has no other path into these caches.
   if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
   return { ok: true };
-}
+}, { verb: "transfer the learner" });
 
 /**
  * Super Admin, or a district admin whose scope covers BOTH schools: move a

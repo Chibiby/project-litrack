@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyDbFailure, describeDbFailure } from "@/lib/db-errors";
+import {
+  classifyDbFailure,
+  describeDbFailure,
+  isMarkedDbError,
+  markDbError,
+} from "@/lib/db-errors";
+import { classifyError } from "@/lib/errors/classify";
 
 /**
  * What is under contract here is the *advice*, not the wording.
@@ -69,6 +75,160 @@ describe("classifyDbFailure", () => {
     expect(classifyDbFailure(undefined)).toBe("UNKNOWN");
     expect(classifyDbFailure("a bare string")).toBe("UNKNOWN");
     expect(classifyDbFailure({ code: 42 })).toBe("UNKNOWN");
+  });
+});
+
+/** `@prisma/driver-adapter-utils`' DriverAdapterError shape: no `.code`, details on `.cause`. */
+function driverAdapterError(cause: Record<string, unknown>, message = "db error") {
+  return Object.assign(new Error(message), { name: "DriverAdapterError", cause });
+}
+
+describe("classifyDbFailure — what the client engine actually surfaces", () => {
+  it("reads the P-codes Prisma maps adapter outages to as temporary", () => {
+    for (const code of ["P2037", "P1011"]) {
+      expect(classifyDbFailure(prismaError(code))).toBe("UNAVAILABLE");
+    }
+  });
+
+  it("reads a transaction timeout as temporary but a misused transaction as unknown", () => {
+    expect(
+      classifyDbFailure(prismaError("P2028", "Transaction API error: Unable to start a transaction in the given time.")),
+    ).toBe("UNAVAILABLE");
+    expect(
+      classifyDbFailure(
+        prismaError("P2028", "Transaction API error: A query cannot be executed on an expired transaction."),
+      ),
+    ).toBe("UNAVAILABLE");
+    expect(
+      classifyDbFailure(prismaError("P2028", "Transaction API error: Transaction not found.")),
+    ).toBe("UNKNOWN");
+  });
+
+  it("reads credential and target problems as configuration", () => {
+    for (const code of ["P1000", "P1003", "P1010"]) {
+      expect(classifyDbFailure(prismaError(code))).toBe("CONFIG");
+    }
+    expect(classifyDbFailure(driverAdapterError({ kind: "AuthenticationFailed" }))).toBe("CONFIG");
+  });
+
+  it("reads adapter kinds and SQLSTATEs on a raw DriverAdapterError", () => {
+    for (const kind of ["DatabaseNotReachable", "ConnectionClosed", "SocketTimeout", "TooManyConnections", "TlsConnectionError"]) {
+      expect(classifyDbFailure(driverAdapterError({ kind }))).toBe("UNAVAILABLE");
+    }
+    for (const sqlState of ["08006", "53300", "57P01", "57P02", "57P03", "57014"]) {
+      expect(
+        classifyDbFailure(driverAdapterError({ kind: "postgres", code: sqlState, originalCode: sqlState })),
+      ).toBe("UNAVAILABLE");
+    }
+    for (const kind of ["TableDoesNotExist", "ColumnNotFound"]) {
+      expect(classifyDbFailure(driverAdapterError({ kind }))).toBe("SCHEMA_OUT_OF_DATE");
+    }
+  });
+
+  it("reads 22P02 as a stale schema only for an enum value, never for a bad uuid", () => {
+    expect(
+      classifyDbFailure(
+        driverAdapterError({
+          kind: "postgres",
+          originalCode: "22P02",
+          originalMessage: 'invalid input value for enum "Role": "X"',
+        }),
+      ),
+    ).toBe("SCHEMA_OUT_OF_DATE");
+    expect(
+      classifyDbFailure(
+        driverAdapterError({
+          kind: "postgres",
+          originalCode: "22P02",
+          originalMessage: 'invalid input syntax for type uuid: "abc"',
+        }),
+      ),
+    ).toBe("UNKNOWN");
+  });
+
+  it("does not let a uuid value that spells 'does not exist' pass as schema drift", () => {
+    const text = 'invalid input syntax for type uuid: "does not exist"';
+    const err = driverAdapterError(
+      { kind: "postgres", originalCode: "22P02", originalMessage: text },
+      text,
+    );
+    expect(classifyDbFailure(err)).toBe("UNKNOWN");
+    expect(classifyError(err).code).not.toBe("DB_SCHEMA_OUT_OF_DATE");
+    expect((markDbError(err) as { digest?: string }).digest).toBeUndefined();
+  });
+
+  it("reads the real cause of a failed raw query (P2010) from meta", () => {
+    const rawFailure = Object.assign(prismaError("P2010", "Raw query failed. Code: `53300`."), {
+      meta: {
+        driverAdapterError: driverAdapterError({ kind: "TooManyConnections", cause: "sorry" }),
+      },
+    });
+    expect(classifyDbFailure(rawFailure)).toBe("UNAVAILABLE");
+  });
+
+  it("reads pooler (XX000) overload text on a database error as temporary", () => {
+    expect(
+      classifyDbFailure(
+        driverAdapterError(
+          { kind: "postgres", originalCode: "XX000", originalMessage: "Max client connections reached" },
+          "Max client connections reached",
+        ),
+      ),
+    ).toBe("UNAVAILABLE");
+  });
+
+  it("matches outage text only on errors known to come from the database", () => {
+    for (const text of [
+      "Connection terminated unexpectedly",
+      "timeout exceeded when trying to connect",
+      "Network connection lost.",
+    ]) {
+      expect(classifyDbFailure(new Error(text))).toBe("UNKNOWN");
+      expect(classifyDbFailure(markDbError(new Error(text)))).toBe("UNAVAILABLE");
+    }
+  });
+});
+
+describe("markDbError", () => {
+  it("gives an outage a DBU- digest and a stale schema a DBS- digest", () => {
+    const outage = markDbError(prismaError("P1017", "Server has closed the connection."));
+    const schema = markDbError(prismaError("P2022", 'column "employmentType" does not exist'));
+
+    expect((outage as { digest?: string }).digest).toMatch(/^DBU-[0-9A-HJKMNP-TV-Z]{8}$/);
+    expect((schema as { digest?: string }).digest).toMatch(/^DBS-[0-9A-HJKMNP-TV-Z]{8}$/);
+    expect(isMarkedDbError(outage)).toBe(true);
+  });
+
+  it("stamps the digest once and never overwrites one already there", () => {
+    const err = markDbError(prismaError("P1001", "Can't reach database server"));
+    const first = (err as { digest?: string }).digest;
+    markDbError(err);
+    expect((err as { digest?: string }).digest).toBe(first);
+
+    const nextOwned = Object.assign(prismaError("P1001"), { digest: "NEXT_REDIRECT;replace;/login;307;" });
+    markDbError(nextOwned);
+    expect(nextOwned.digest).toBe("NEXT_REDIRECT;replace;/login;307;");
+  });
+
+  it("marks but gives no digest to a failure that is neither an outage nor a stale schema", () => {
+    const unique = markDbError(prismaError("P2002", "Unique constraint failed on the fields: (`email`)"));
+    expect("digest" in unique).toBe(false);
+    expect(isMarkedDbError(unique)).toBe(true);
+  });
+
+  it("keeps the mark non-enumerable and puts no error text in the digest", () => {
+    const err = markDbError(
+      new Error('Connection terminated unexpectedly while reading "Learner" deadbeef'),
+    ) as Error & { digest?: string };
+    expect(Object.keys(err)).toEqual(["digest"]);
+    expect(err.digest).not.toMatch(/Learner|deadbeef|terminated/i);
+  });
+
+  it("returns the same object, and passes non-objects through", () => {
+    const err = new Error("x");
+    expect(markDbError(err)).toBe(err);
+    expect(markDbError("text")).toBe("text");
+    expect(markDbError(undefined)).toBeUndefined();
   });
 });
 

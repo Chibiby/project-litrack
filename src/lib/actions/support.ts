@@ -14,6 +14,7 @@ import { requireAdminScope } from "@/lib/auth/district-scope";
 import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { revalidateSupportTicket } from "@/lib/cache/revalidate";
 import { prisma } from "@/lib/prisma";
+import { action } from "@/lib/errors/action";
 import { listMyTickets } from "@/lib/support/queries";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -85,7 +86,7 @@ const REQUESTER_ROLES: UserRole[] = ["TEACHER", "SCHOOL_HEAD"];
  * to belong to. That also means a Super Admin cannot file one — see the note in
  * the module comment.
  */
-export async function submitTicket(input: unknown): Promise<ActionResult<{ id: string }>> {
+export const submitTicket = action("submitTicket", async (input: unknown): Promise<ActionResult<{ id: string }>> => {
   const user = await requireSchoolUser(REQUESTER_ROLES);
 
   const parsed = submitTicketSchema.safeParse(input);
@@ -157,7 +158,7 @@ export async function submitTicket(input: unknown): Promise<ActionResult<{ id: s
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true, data: { id: ticket.id } };
-}
+}, { verb: "send your request" });
 
 /**
  * Resolve a ticket, optionally by issuing the unlock it asked for.
@@ -167,7 +168,7 @@ export async function submitTicket(input: unknown): Promise<ActionResult<{ id: s
  * and a ticket closed as "granted" with no grant is worse — the teacher is told
  * they have access they do not have.
  */
-export async function resolveTicket(input: unknown): Promise<ActionResult> {
+export const resolveTicket = action("resolveTicket", async (input: unknown): Promise<ActionResult> => {
   const { user: admin, scope } = await requireAdminScope();
 
   const parsed = resolveTicketSchema.safeParse(input);
@@ -315,10 +316,10 @@ export async function resolveTicket(input: unknown): Promise<ActionResult> {
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true };
-}
+}, { verb: "resolve the request" });
 
 /** Close a ticket without granting anything. The note is required — see the schema. */
-export async function declineTicket(input: unknown): Promise<ActionResult> {
+export const declineTicket = action("declineTicket", async (input: unknown): Promise<ActionResult> => {
   const { user: admin, scope } = await requireAdminScope();
 
   const parsed = declineTicketSchema.safeParse(input);
@@ -366,7 +367,7 @@ export async function declineTicket(input: unknown): Promise<ActionResult> {
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true };
-}
+}, { verb: "decline the request" });
 
 /**
  * End a grant before it expires.
@@ -375,7 +376,7 @@ export async function declineTicket(input: unknown): Promise<ActionResult> {
  * could write into that closed week, and until when" has to stay answerable
  * after the fact.
  */
-export async function revokeUnlockGrant(input: unknown): Promise<ActionResult> {
+export const revokeUnlockGrant = action("revokeUnlockGrant", async (input: unknown): Promise<ActionResult> => {
   const admin = await requireUser(["SUPER_ADMIN"]);
 
   const parsed = revokeGrantSchema.safeParse(input);
@@ -395,7 +396,7 @@ export async function revokeUnlockGrant(input: unknown): Promise<ActionResult> {
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true };
-}
+}, { verb: "end the access" });
 
 /**
  * Grant access directly, without a ticket.
@@ -404,12 +405,12 @@ export async function revokeUnlockGrant(input: unknown): Promise<ActionResult> {
  * no requester to check the scope against, so the caller states the user, the
  * scope and the target outright and the tenancy check is explicit.
  */
-export async function grantUnlockDirect(input: {
+export const grantUnlockDirect = action("grantUnlockDirect", async (input: {
   userId: string;
   scope: UnlockScope;
   targetKey: string;
   days: number;
-}): Promise<ActionResult<{ id: string }>> {
+}): Promise<ActionResult<{ id: string }>> => {
   const admin = await requireUser(["SUPER_ADMIN"]);
 
   // The teacher row is what establishes the school this grant belongs to. The
@@ -430,7 +431,7 @@ export async function grantUnlockDirect(input: {
   revalidatePath(SUPPORT_ROUTE);
 
   return { ok: true, data: { id: issued.id } };
-}
+}, { verb: "grant the access" });
 
 /**
  * Tell the requester their ticket was answered.
@@ -473,7 +474,7 @@ async function notifyRequester(
  * story here: a ticket belongs to the person who wrote it, and nobody but a
  * Super Admin reading the inbox ever sees somebody else's.
  */
-export async function fetchMyTickets(): Promise<ActionResult<MySupportTicket[]>> {
+export const fetchMyTickets = action("fetchMyTickets", async (): Promise<ActionResult<MySupportTicket[]>> => {
   const user = await requireUser();
 
   const tickets = await listMyTickets(user.id, 6);
@@ -492,4 +493,4 @@ export async function fetchMyTickets(): Promise<ActionResult<MySupportTicket[]>>
       grantExpiresAt: ticket.activeGrant?.expiresAt ?? null,
     })),
   };
-}
+}, { verb: "load your requests" });

@@ -26,6 +26,16 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
+import { ConfirmAction } from "@/components/confirm-action";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
 import {
   createBackupNow,
@@ -37,6 +47,8 @@ import {
   restoreFromUpload,
   undoLastOperation,
 } from "@/lib/actions/database";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 export type BackupRow = {
   kind: "daily" | "weekly" | "safety";
@@ -79,6 +91,10 @@ function formatWhen(iso: string): string {
   });
 }
 
+function backupKindLabel(kind: BackupRow["kind"]): string {
+  return kind === "safety" ? "undo point" : kind;
+}
+
 /**
  * A destructive button that will not fire until its exact phrase is typed.
  *
@@ -106,7 +122,7 @@ function DangerAction({
   description: string;
   icon: React.ReactNode;
   noBackup?: boolean;
-  onRun: (confirm: string, ackNoBackup: boolean) => Promise<void>;
+  onRun: (confirm: string, ackNoBackup: boolean) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -174,7 +190,8 @@ function DangerAction({
               loadingText="Running…"
               onClick={() => {
                 startTransition(async () => {
-                  await onRun(typed.trim(), acked);
+                  const ok = await onRun(typed.trim(), acked);
+                  if (!ok) return;
                   setTyped("");
                   setAcked(false);
                   setOpen(false);
@@ -209,6 +226,12 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   const [undoing, startUndo] = useTransition();
   const [restoring, startRestore] = useTransition();
   const [uploadConfirm, setUploadConfirm] = useState("");
+  const [restoreTarget, setRestoreTarget] = useState<BackupRow | null>(null);
+  const [restoreTyped, setRestoreTyped] = useState("");
+  const [restorePending, setRestorePending] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<BackupRow | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const rowBusy = restoring || restorePending || deletePending;
   const fileRef = useRef<HTMLInputElement>(null);
 
   /** "" is every school — the Danger zone's original and still-default reach. */
@@ -239,13 +262,14 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   const settle = async (
     run: () => Promise<{ ok: true; data?: unknown } | { ok: false; error: string }>,
     success: (payload: unknown) => string
-  ) => {
-    const res = await run();
+  ): Promise<boolean> => {
+    const res = await callAction(run);
     if (!res.ok) {
-      toast.error(res.error);
-      return;
+      toastFailure(res);
+      return false;
     }
     toast.success(success(res.data));
+    return true;
   };
 
   return (
@@ -393,21 +417,10 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                             variant="ghost"
                             size="sm"
                             className="lg:h-9"
-                            disabled={disabled || restoring}
+                            disabled={disabled || rowBusy}
                             onClick={() => {
-                              const typed = window.prompt(
-                                `Restore the ${b.kind} backup from ${formatWhen(b.uploadedAt)}?\n\nThis replaces ALL current data in every school. A safety point is saved first so you can undo it.\n\nType ${CONFIRM_PHRASES.restore} to confirm.`
-                              );
-                              if (typed?.trim() !== CONFIRM_PHRASES.restore) return;
-                              startRestore(async () => {
-                                const fd = new FormData();
-                                fd.set("pathname", b.pathname);
-                                fd.set("confirm", CONFIRM_PHRASES.restore);
-                                await settle(
-                                  () => restoreFromBackup(fd),
-                                  () => "Database restored"
-                                );
-                              });
+                              setRestoreTyped("");
+                              setRestoreTarget(b);
                             }}
                           >
                             <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
@@ -419,19 +432,9 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                               variant="ghost"
                               size="sm"
                              className="lg:h-9 text-destructive hover:text-destructive"
-                              disabled={disabled}
+                              disabled={disabled || rowBusy}
                               aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
-                              onClick={() => {
-                                if (!window.confirm("Delete this backup permanently?")) return;
-                                startRestore(async () => {
-                                  const fd = new FormData();
-                                  fd.set("pathname", b.pathname);
-                                  await settle(
-                                    () => removeBackup(fd),
-                                    () => "Backup deleted"
-                                  );
-                                });
-                              }}
+                              onClick={() => setDeleteTarget(b)}
                             >
                               <Trash2 className="h-4 w-4" aria-hidden />
                             </Button>
@@ -445,6 +448,95 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             </Table>
           </div>
         </Surface>
+
+      <AlertDialog
+        open={restoreTarget !== null}
+        onOpenChange={(next) => {
+          if (!next && !restorePending) setRestoreTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {restoreTarget
+                ? `Restore the ${backupKindLabel(restoreTarget.kind)} backup from ${formatWhen(restoreTarget.uploadedAt)}?`
+                : "Restore this backup?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This replaces ALL current data in every school with this backup. A safety point is
+              saved first, so “Undo last operation” can put everything back.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium" htmlFor="restore-backup-confirm">
+              Type <code className="rounded bg-muted px-1 font-mono">{CONFIRM_PHRASES.restore}</code>{" "}
+              to confirm
+            </label>
+            <Input
+              id="restore-backup-confirm"
+              value={restoreTyped}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setRestoreTyped(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={restorePending}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={restoreTyped.trim() !== CONFIRM_PHRASES.restore || rowBusy}
+              loading={restorePending}
+              loadingText="Restoring…"
+              onClick={async () => {
+                if (!restoreTarget) return;
+                setRestorePending(true);
+                const fd = new FormData();
+                fd.set("pathname", restoreTarget.pathname);
+                fd.set("confirm", CONFIRM_PHRASES.restore);
+                const ok = await settle(
+                  () => restoreFromBackup(fd),
+                  () => "Database restored"
+                );
+                setRestorePending(false);
+                if (ok) {
+                  setRestoreTarget(null);
+                  setRestoreTyped("");
+                }
+              }}
+            >
+              Restore this backup
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ConfirmAction
+        open={deleteTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setDeleteTarget(null);
+        }}
+        title={
+          deleteTarget
+            ? `Delete the ${backupKindLabel(deleteTarget.kind)} backup from ${formatWhen(deleteTarget.uploadedAt)}?`
+            : "Delete this backup?"
+        }
+        description="The backup file is deleted permanently and cannot be recovered. Undo points saved earlier are separate files and are not affected."
+        confirmLabel="Delete backup"
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          const fd = new FormData();
+          fd.set("pathname", deleteTarget.pathname);
+          setDeletePending(true);
+          try {
+            const res = await callAction(() => removeBackup(fd));
+            if (!res.ok) return res;
+            toast.success("Backup deleted");
+          } finally {
+            setDeletePending(false);
+          }
+        }}
+      />
 
       {/* Restore from file */}
       <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
@@ -491,10 +583,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                   const fd = new FormData();
                   fd.set("file", file);
                   fd.set("confirm", CONFIRM_PHRASES.restore);
-                  await settle(
+                  const ok = await settle(
                     () => restoreFromUpload(fd),
                     () => "Database restored from file"
                   );
+                  if (!ok) return;
                   setUploadConfirm("");
                   if (fileRef.current) fileRef.current.value = "";
                 });
@@ -559,7 +652,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               fd.set("confirm", confirm);
               if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
-              await settle(
+              return settle(
                 () => resetOperationalData(fd),
                 (payload) => {
                   const d = payload as { removed?: Record<string, number> } | undefined;
@@ -587,7 +680,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               fd.set("confirm", confirm);
               if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
-              await settle(
+              return settle(
                 () => resetAllSchoolAccounts(fd),
                 (payload) => {
                   const d = payload as { processed?: number; failed?: number } | undefined;
@@ -614,7 +707,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
               fd.set("confirm", confirm);
               if (targetSchoolId) fd.set("schoolId", targetSchoolId);
               if (ackNoBackup) fd.set("ackNoBackup", CONFIRM_PHRASES.noBackupAck);
-              await settle(
+              return settle(
                 () => removeAllTeachers(fd),
                 (payload) => {
                   const d = payload as { processed?: number; failed?: number } | undefined;

@@ -15,6 +15,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { setTeacherAdvisorySetting } from "@/lib/actions/teacher";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import { ADVISORY_MODE_LABELS } from "@/lib/constants/enum-labels";
 import type { ActiveTeacherRow } from "@/components/teachers-active-table";
@@ -135,7 +137,7 @@ export function TeacherRoleDialog({
         if (choose) for (const id of keepIds) fd.append("keepSectionIds", id);
       }
 
-      const res = await setTeacherAdvisorySetting(fd);
+      const res = await callAction(() => setTeacherAdvisorySetting(fd));
       if (!res.ok) {
         if ("releases" in res) {
           setReleases(res.releases);
@@ -143,7 +145,7 @@ export function TeacherRoleDialog({
           setKeepIds([]);
           return;
         }
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success(`Saved ${row.fullName}'s role`);
@@ -321,7 +323,7 @@ export function TeacherRoleDialog({
 
             <DialogFooter>
               <Button type="submit" loading={pending} loadingText="Saving…">
-                Save
+                Save role
               </Button>
             </DialogFooter>
           </form>

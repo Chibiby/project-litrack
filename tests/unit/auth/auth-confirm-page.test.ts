@@ -23,6 +23,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const { default: AuthConfirmPage } = await import("@/app/auth/confirm/page");
+const { ConfirmForm } = await import("@/app/auth/confirm/confirm-form");
+const { renderToStaticMarkup } = await import("react-dom/server");
 
 function collect(
   node: ReactNode,
@@ -66,21 +68,19 @@ describe("AuthConfirmPage", () => {
       searchParams: Promise.resolve({ token_hash: "abc123", type: "recovery" }),
     });
 
-    const [form] = collect(tree, (el) => el.type === "form");
-    expect(form).toBeTruthy();
-    const formProps = form.props as { method?: string; action?: string };
-    expect(formProps.method).toBe("POST");
-    expect(formProps.action).toBe("/auth/confirm/verify");
+    // The form is a small client component (it locks the button on submit),
+    // so the page hands it the params and the form is rendered separately.
+    const [formEl] = collect(tree, (el) => el.type === ConfirmForm);
+    expect(formEl).toBeTruthy();
+    expect(formEl.props).toEqual({ tokenHash: "abc123", type: "recovery" });
 
-    const inputs = collect(tree, (el) => el.type === "input");
-    const inputProps = (el: ReactElement) => el.props as { name?: string; value?: string };
-    const tokenInput = inputs.find((el) => inputProps(el).name === "token_hash");
-    const typeInput = inputs.find((el) => inputProps(el).name === "type");
-    expect(tokenInput && inputProps(tokenInput).value).toBe("abc123");
-    expect(typeInput && inputProps(typeInput).value).toBe("recovery");
-
-    const [button] = collect(tree, (el) => el.type === "button" || (el.props as { type?: string })?.type === "submit");
-    expect(button).toBeTruthy();
+    const html = renderToStaticMarkup(formEl);
+    const formTag = html.match(/<form[^>]*>/)?.[0] ?? "";
+    expect(formTag).toContain('method="POST"');
+    expect(formTag).toContain('action="/auth/confirm/verify"');
+    expect(html).toContain('name="token_hash" value="abc123"');
+    expect(html).toContain('name="type" value="recovery"');
+    expect(html).toMatch(/<button[^>]*type="submit"/);
   });
 
   it("shows the invalid-link message and no form when type is not recovery, without calling verifyOtp", async () => {

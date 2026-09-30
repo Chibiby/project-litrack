@@ -6,6 +6,9 @@ import { AlertTriangle, CheckCircle2, Copy, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import { regenerateSchoolHeadCredential } from "@/lib/actions/school";
+import { callAction } from "@/lib/ui/call-action";
+import { copyText } from "@/lib/ui/copy-text";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 
 /**
  * Puts the School Head's password back to the School ID
@@ -28,10 +31,10 @@ export function SchoolHeadReset({
       const fd = new FormData();
       fd.set("schoolId", schoolId);
       startTransition(async () => {
-        const res = await regenerateSchoolHeadCredential(fd);
+        const res = await callAction(() => regenerateSchoolHeadCredential(fd));
         if (!res.ok) {
-          toast.error(res.error);
-          reject(new Error(res.error));
+          toastFailure(res);
+          reject(new ToastedError(res.error));
           return;
         }
         setCredential(res.data.password);
@@ -63,7 +66,7 @@ export function SchoolHeadReset({
               size="sm"
               className="lg:h-9"
               onClick={async () => {
-                await navigator.clipboard.writeText(credential);
+                if (!(await copyText(credential))) return;
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}

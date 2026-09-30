@@ -27,6 +27,7 @@ const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
 const signInWithPassword = vi.fn();
 const signOut = vi.fn();
+const getUserMock = vi.fn();
 const writeAudit = vi.fn();
 const checkRateLimit = vi.fn();
 const redirect = vi.fn();
@@ -57,7 +58,7 @@ vi.mock("@/lib/supabase/server", () => ({
       get signOut() {
         return signOut;
       },
-      getUser: vi.fn(),
+      getUser: (...args: unknown[]) => getUserMock(...args),
     },
   }),
 }));
@@ -140,7 +141,12 @@ vi.mock("next/headers", async (importOriginal) => ({
   cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
 }));
 
-import { loginAdmin, skipPasswordChange } from "@/lib/actions/auth";
+import {
+  changePasswordAction,
+  completePasswordReset,
+  loginAdmin,
+  skipPasswordChange,
+} from "@/lib/actions/auth";
 
 const ADMIN_ROW = {
   id: "user-1",
@@ -228,6 +234,25 @@ describe("loginAdmin", () => {
       ok: false,
       code: "AUTH_INCORRECT_CREDENTIALS",
       error: "Incorrect username or password.",
+      fieldErrors: {
+        username: "Incorrect username or password.",
+        password: "Incorrect username or password.",
+      },
+    });
+  });
+
+  it("puts the wrong-password message on both inputs, identical to an unknown handle", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+    expect(await run(form("admin", "wrong"))).toMatchObject({
+      code: "AUTH_INCORRECT_CREDENTIALS",
+      fieldErrors: {
+        username: "Incorrect username or password.",
+        password: "Incorrect username or password.",
+      },
     });
   });
 
@@ -357,7 +382,7 @@ describe("loginAdmin — district admins", () => {
     const result = await run(form("maria.cruz", "s3cret"));
 
     expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       code: "AUTH_INCORRECT_CREDENTIALS",
       error: "Incorrect username or password.",
@@ -405,6 +430,65 @@ describe("loginAdmin — district admins", () => {
         metadata: expect.objectContaining({ role: "DISTRICT_ADMIN" }),
       })
     );
+  });
+});
+
+describe("loginAdmin — database failure", () => {
+  it("says what it was doing when the database does not answer", async () => {
+    userFindFirst.mockRejectedValue(Object.assign(new Error("pool"), { code: "P2024" }));
+    const result = await run(form("admin", "s3cret"));
+    expect(result).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
+    expect((result as { error: string }).error).toMatch(/Couldn't sign you in/);
+  });
+});
+
+describe("password actions", () => {
+  const USER = { id: "u-1", email: "u@x.edu", role: "TEACHER", schoolId: "s-1", authId: "a-1" };
+  const pwForm = () => {
+    const fd = new FormData();
+    fd.set("currentPassword", "old-pass-1");
+    fd.set("password", "New-pass-123");
+    fd.set("confirmPassword", "New-pass-123");
+    return fd;
+  };
+
+  it("puts a wrong current password on the currentPassword field", async () => {
+    requireUser.mockResolvedValue(USER);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+    const result = await changePasswordAction(pwForm());
+    expect(result).toMatchObject({
+      ok: false,
+      code: "AUTH_CURRENT_PASSWORD_INCORRECT",
+      fieldErrors: { currentPassword: "Your current password is incorrect." },
+    });
+  });
+
+  it("reports an auth outage, not an expired link, when the reset session cannot be read", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: null },
+      error: { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" },
+    });
+    const result = await completePasswordReset(pwForm());
+    expect(result).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR" });
+  });
+
+  it("still calls a missing recovery session an expired link", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: null },
+      error: { name: "AuthSessionMissingError", status: 400, message: "Auth session missing!" },
+    });
+    expect(await completePasswordReset(pwForm())).toMatchObject({
+      ok: false,
+      code: "AUTH_RESET_LINK_EXPIRED",
+    });
+    getUserMock.mockResolvedValue({ data: { user: null }, error: null });
+    expect(await completePasswordReset(pwForm())).toMatchObject({
+      ok: false,
+      code: "AUTH_RESET_LINK_EXPIRED",
+    });
   });
 });
 

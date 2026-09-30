@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
 import { globalSearch } from "@/lib/actions/global-search";
+import { callAction } from "@/lib/ui/call-action";
 import {
   GLOBAL_SEARCH_MIN_CHARS,
   type GlobalSearchHit,
@@ -106,6 +107,7 @@ export function HeaderSearch({
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [active, setActive] = useState(0);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [, startTransition] = useTransition();
 
   const trimmed = query.trim();
@@ -118,6 +120,7 @@ export function HeaderSearch({
   if (trimmed !== prevTrimmed) {
     setPrevTrimmed(trimmed);
     setRows(matchPages(pages, trimmed));
+    setSearchFailed(false);
   }
 
   useEffect(() => {
@@ -136,9 +139,13 @@ export function HeaderSearch({
     let cancelled = false;
     const timer = setTimeout(() => {
       startTransition(async () => {
-        const res = await globalSearch({ q: trimmed });
+        const res = await callAction(() => globalSearch({ q: trimmed }));
         if (cancelled) return;
-        if (!res.ok) return;
+        if (!res.ok) {
+          setSearchFailed(true);
+          return;
+        }
+        setSearchFailed(false);
         setRows([...pageHits, ...(res.data as GlobalSearchHit[] as Row[])]);
       });
     }, 180);
@@ -235,7 +242,9 @@ export function HeaderSearch({
         >
           {rows.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No matches for “{trimmed}”.
+              {searchFailed
+                ? "Search isn't available right now."
+                : `No matches for “${trimmed}”.`}
               <br />
               <span className="text-xs">
                 Press Enter to search the full list.
@@ -287,6 +296,11 @@ export function HeaderSearch({
               );
             })
           )}
+          {searchFailed && rows.length > 0 ? (
+            <p className="px-3 py-2 text-center text-xs text-muted-foreground">
+              Search isn&apos;t available right now. Showing pages only.
+            </p>
+          ) : null}
         </div>
       )}
     </form>

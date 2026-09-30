@@ -70,7 +70,8 @@ describe("TeacherRoleDialog — confirm-release round trip", () => {
   it("shows the named releases and 'Unassign and save', then resubmits with confirmRelease=true", async () => {
     setTeacherAdvisorySetting.mockResolvedValueOnce({
       ok: false,
-      error: "confirm_release",
+      error: "Saving this will unassign the sections below. Confirm to continue.",
+      needs: "confirm_release",
       releases: [
         { id: "sec-1", label: "Grade 4 · Sampaguita" },
         { id: "sec-2", label: "Grade 4 · Rosal" },
@@ -83,7 +84,7 @@ describe("TeacherRoleDialog — confirm-release round trip", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
 
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save role" }));
 
     await screen.findByRole("button", { name: "Unassign and save" });
     expect(screen.getByText("Grade 4 · Sampaguita")).toBeTruthy();
@@ -116,7 +117,8 @@ describe("TeacherRoleDialog — choosing the advisory to keep", () => {
     ];
     setTeacherAdvisorySetting.mockResolvedValueOnce({
       ok: false,
-      error: "confirm_release",
+      error: "Saving this will unassign sections. Choose which one they keep.",
+      needs: "confirm_release",
       releases: held.slice(1),
       choose: { keepLimit: 1, held },
     });
@@ -126,7 +128,7 @@ describe("TeacherRoleDialog — choosing the advisory to keep", () => {
     render(<TeacherRoleDialog row={{ ...ROW, advisoryMode: "MULTI_GRADE" }} onSaved={onSaved} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save role" }));
 
     await screen.findByText("Which advisory section do they keep?");
     const confirm = screen.getByRole("button", { name: "Unassign and save" }) as HTMLButtonElement;
@@ -173,7 +175,7 @@ describe("TeacherRoleDialog — designation and advisory setting", () => {
     fireEvent.change(within(dialog).getByRole("combobox"), {
       target: { value: "Non-DepEd ARAL Volunteer" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save role" }));
 
     await waitFor(() => expect(setTeacherAdvisorySetting).toHaveBeenCalledTimes(1));
     const sent = formValues(setTeacherAdvisorySetting.mock.calls[0][0]);

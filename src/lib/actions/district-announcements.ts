@@ -192,6 +192,9 @@ export type MyBroadcast = {
  * `AdminScope`, and only rows this caller authored (a district admin does not
  * need to see a division-wide broadcast's per-school copies to know it exists;
  * `retractBroadcast` can still act on it if given the id).
+ *
+ * Deliberately not wrapped by `action()`: its only caller is a server
+ * component, where a throw belongs to `error.tsx` and `onRequestError`.
  */
 export async function listMyBroadcasts(): Promise<MyBroadcast[]> {
   const { user: actor, scope } = await requireAdminScope();

@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { ConfirmAction } from "@/components/confirm-action";
 import { uploadOwnAvatar, removeOwnAvatar } from "@/lib/actions/avatar";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { AVATAR_SOURCE_MAX_BYTES } from "@/lib/avatars/limits";
 import type { CropDialogError } from "@/components/profile-photo/crop-dialog";
 import type { ProcessedAvatarImage } from "@/components/profile-photo/process-image";
@@ -70,9 +72,9 @@ export function ProfilePhotoCard({
       const fd = new FormData();
       fd.set("photo", result.full);
       fd.set("thumb", result.thumb);
-      const res = await uploadOwnAvatar(fd);
+      const res = await callAction(() => uploadOwnAvatar(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       // `UploadOwnAvatarResult`'s two `ok: true` shapes share no common tag
@@ -92,12 +94,12 @@ export function ProfilePhotoCard({
   }
 
   async function handleRemove() {
-    const res = await removeOwnAvatar();
+    const res = await callAction(() => removeOwnAvatar());
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
-    if (res.dryRun) {
+    if ("dryRun" in res && res.dryRun) {
       toast("Test Lab — no photo was actually removed.");
       return;
     }

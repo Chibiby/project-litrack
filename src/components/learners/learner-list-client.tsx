@@ -58,6 +58,7 @@ import {
 import { Archive, Eye, MoreVertical, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { archiveLearners, restoreLearner } from "@/lib/actions/learner";
+import { callAction } from "@/lib/ui/call-action";
 import { LearnerProfileModal } from "@/components/learners/learner-profile-modal";
 import {
   AssignAralTutorDialog,
@@ -367,7 +368,7 @@ function LearnerListPanel({
       markLeaving(ids);
       const fd = new FormData();
       for (const id of ids) fd.append("learnerIds", id);
-      const res = await archiveLearners(fd);
+      const res = await callAction(() => archiveLearners(fd));
       try {
         await settleActionResult(
           res,
@@ -387,7 +388,7 @@ function LearnerListPanel({
       markLeaving([id]);
       const fd = new FormData();
       fd.set("id", id);
-      const res = await restoreLearner(fd);
+      const res = await callAction(() => restoreLearner(fd));
       try {
         await settleActionResult(res, "Learner restored");
       } catch {

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getSupabaseServiceEnv } from "@/lib/supabase/env";
+import { AppError } from "@/lib/errors/app-error";
 
 /**
  * The demo session: who is allowed to see the training tenant, and for how long.
@@ -92,7 +93,9 @@ export function encodeDemoSession(
 ): { value: string; session: DemoSession } {
   const key = signingKey();
   if (!key) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required to open a demo session.");
+    throw new AppError("CONFIG_MISSING", {
+      detail: "SUPABASE_SERVICE_ROLE_KEY is required to open a demo session.",
+    });
   }
   const session: DemoSession = { adminUserId, expiresAt: now + DEMO_TTL_MS };
   const payload = payloadOf(session);

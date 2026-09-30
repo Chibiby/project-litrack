@@ -86,6 +86,13 @@ describe("TeachersDeclinedTable — mobile list view", () => {
       within(listItem as HTMLElement).getByRole("button", { name: "Allow re-register" })
     );
 
+    expect(clearRejectedTeacher).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/deleted permanently/i)).not.toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Delete and allow re-register" })
+    );
+
     await vi.waitFor(() => {
       expect(clearRejectedTeacher).toHaveBeenCalledTimes(1);
     });

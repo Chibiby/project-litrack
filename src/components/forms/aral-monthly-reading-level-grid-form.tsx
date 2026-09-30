@@ -46,6 +46,8 @@ import {
 import { TONE_EMPTY, TONE_NA, rampTone } from "@/lib/reading/level-tone";
 import { cn } from "@/lib/utils";
 import { bulkRecordMonthlyReadingLevel } from "@/lib/actions/reading-level";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 /**
  * Short codes for the badge face. The dropdown always carries the full label.
@@ -444,13 +446,15 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
 
     startTransition(async () => {
       const toastId = toast.loading("Saving monthly reading levels…");
-      const res = await bulkRecordMonthlyReadingLevel({
-        monthStart: monthStartKey,
-        entries,
-        clears,
-      });
+      const res = await callAction(() =>
+        bulkRecordMonthlyReadingLevel({
+          monthStart: monthStartKey,
+          entries,
+          clears,
+        })
+      );
       if (!res.ok) {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
         return;
       }
       const savedCount = res.data?.upserted ?? entries.length;

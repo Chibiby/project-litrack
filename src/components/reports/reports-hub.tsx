@@ -9,7 +9,6 @@ import {
   ClipboardList,
   Download,
   FileText,
-  Filter,
   HelpCircle,
   LayoutGrid,
   Lightbulb,
@@ -45,6 +44,8 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { generateReport, deleteReport } from "@/lib/actions/reports";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   QUICK_ACTIONS,
   REPORT_CARDS,
@@ -232,16 +233,18 @@ export function ReportsHub({
       format === "PDF" ? "PRINT" : (purposeOverride ?? purpose);
     setBusy(key);
     startTransition(async () => {
-      const res = await generateReport({
-        kind,
-        format,
-        ...filters,
-        ...override,
-        purpose: effectivePurpose,
-      });
+      const res = await callAction(() =>
+        generateReport({
+          kind,
+          format,
+          ...filters,
+          ...override,
+          purpose: effectivePurpose,
+        })
+      );
       setBusy(null);
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       if (!res.data) return;
@@ -289,14 +292,14 @@ export function ReportsHub({
     if (busy) return;
     setBusy(`del-${row.id}`);
     startTransition(async () => {
-      const res = await deleteReport({ id: row.id });
+      const res = await callAction(() => deleteReport({ id: row.id }));
       setBusy(null);
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       setRows((prev) => prev.filter((r) => r.id !== row.id));
-      toast.success("Report removed");
+      toast.success("Removed from history");
     });
   }
 
@@ -436,13 +439,6 @@ export function ReportsHub({
             />
           </Field>
 
-          <Button
-            type="button"
-            onClick={() => toast.success("Filters applied to the cards below")}
-          >
-            <Filter className="h-4 w-4" aria-hidden />
-            Apply Filters
-          </Button>
           <Button type="button" variant="outline" onClick={reset}>
             Reset
           </Button>
@@ -485,7 +481,7 @@ export function ReportsHub({
               <ul className="mt-4 space-y-1.5 text-xs">
                 {card.bullets.map((b) => (
                   <li key={b} className="flex items-start gap-1.5">
-                    <span aria-hidden className="text-emerald-600">
+                    <span aria-hidden className="text-emerald-600 dark:text-emerald-400">
                       ✓
                     </span>
                     <span className="text-muted-foreground">{b}</span>
@@ -652,7 +648,7 @@ export function ReportsHub({
                                 title="Remove from history"
                               >
                                 <Trash2
-                                  className="h-4 w-4 text-red-600"
+                                  className="h-4 w-4 text-red-600 dark:text-red-400"
                                   aria-hidden
                                 />
                               </Button>

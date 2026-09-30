@@ -7,6 +7,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
+import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 import {
   attendanceMarkSchema,
   attendanceWeekSchema,
@@ -37,35 +40,28 @@ function normalizeDate(d: Date): Date {
   return date;
 }
 
-export async function markAttendance(formData: FormData): Promise<ActionResult> {
+export const markAttendance = action("markAttendance", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = attendanceMarkSchema.safeParse({
-    learnerId: formData.get("learnerId"),
-    date: formData.get("date"),
-    status: formData.get("status"),
-    notes: formData.get("notes"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = {
+    data: parseInput(attendanceMarkSchema, {
+      learnerId: formData.get("learnerId"),
+      date: formData.get("date"),
+      status: formData.get("status"),
+      notes: formData.get("notes"),
+    }),
+  };
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.learnerId, deletedAt: null },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
   // The designated ARAL tutor, not merely the adviser: attendance here is the
   // ARAL programme's record, and the teacher running it for this learner is the
   // one entitled to write it.
-  if (!teacherIsAralTutorFor(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  if (!teacherIsAralTutorFor(learner, user.id)) throw resourceNotFound("Learner");
   if (!learner.isAralLearner) {
     return { ok: false, error: "Attendance tracking is only for ARAL learners" };
   }
@@ -116,7 +112,7 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
     aralTeacherId: learner.aralTeacherId,
   });
   return { ok: true };
-}
+}, { verb: "save the attendance" });
 
 /**
  * Save one week of ARAL attendance for a grade, from the weekly grid.
@@ -125,18 +121,15 @@ export async function markAttendance(formData: FormData): Promise<ActionResult> 
  * untouched cell is never rewritten — that is what keeps a legacy `LATE` row
  * alive through a save that never touched it.
  */
-export async function saveAralWeeklyAttendance(input: unknown): Promise<
+export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async (input: unknown): Promise<
   ActionResult<{
     upserted: number;
     cleared: number;
   }>
-> {
+> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = attendanceWeekSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(attendanceWeekSchema, input) };
 
   const weekStart = getMonday(parseLocalDateKey(parsed.data.weekStart));
   if (formatLocalDateKey(weekStart) !== parsed.data.weekStart) {
@@ -278,106 +271,101 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   let upserted = 0;
   let cleared = 0;
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      // 1. Marks. `id` and `updatedAt` are supplied explicitly because Prisma's
-      //    `@default(uuid())` and `@updatedAt` are CLIENT-side and neither column
-      //    has a database default; `updatedAt` is bumped in DO UPDATE too, or the
-      //    column would freeze at first-insert time with nothing to fail.
-      //    `notes` is written here, in both branches. The reason belongs to this
-      //    one day, so DO UPDATE sets it unconditionally: a cell that travels is
-      //    a cell the teacher changed, and the value it carries is the reason the
-      //    day should end up with — including NULL, which is how switching a day
-      //    to Present drops the reason its Absent left behind.
-      //    Dates bind as YYYY-MM-DD TEXT and cast in SQL: `Attendance.date` and
-      //    `.weekStart` are `@db.Date`, and binding a local-midnight `Date` would
-      //    write the intended day on Vercel (TZ=UTC) and the previous one on a
-      //    UTC+8 developer machine.
-      //    Enums bind `::text::"Enum"`, never a bare `::"Enum"`: the bare form
-      //    describes the parameter AS that enum type, and it is unsettled whether
-      //    Prisma 5.22 encodes a JS string into such a parameter. Casting to text
-      //    first pins the parameter, then applies the documented text -> enum cast.
-      //    The result type is identical, so the VALUES column types and the
-      //    ON CONFLICT behaviour do not change. Every enum bind here and in
-      //    `reading-level.ts` / `term-grades.ts` is doubled for this reason.
-      for (const chunk of chunkRows(marks, BULK_CHUNK_ROWS)) {
-        const values = Prisma.join(
-          chunk.map(
-            (c) => Prisma.sql`(
-              ${randomUUID()}::text,
-              ${c.learnerId}::text,
-              ${formatLocalDateKey(c.date)}::date,
-              ${weekKey}::date,
-              ${c.status}::text::"AttendanceStatus",
-              ${c.notes}::text,
-              ${user.id}::text,
-              ${now}::timestamp(3)
-            )`
-          )
+  await prisma.$transaction(async (tx) => {
+    // 1. Marks. `id` and `updatedAt` are supplied explicitly because Prisma's
+    //    `@default(uuid())` and `@updatedAt` are CLIENT-side and neither column
+    //    has a database default; `updatedAt` is bumped in DO UPDATE too, or the
+    //    column would freeze at first-insert time with nothing to fail.
+    //    `notes` is written here, in both branches. The reason belongs to this
+    //    one day, so DO UPDATE sets it unconditionally: a cell that travels is
+    //    a cell the teacher changed, and the value it carries is the reason the
+    //    day should end up with — including NULL, which is how switching a day
+    //    to Present drops the reason its Absent left behind.
+    //    Dates bind as YYYY-MM-DD TEXT and cast in SQL: `Attendance.date` and
+    //    `.weekStart` are `@db.Date`, and binding a local-midnight `Date` would
+    //    write the intended day on Vercel (TZ=UTC) and the previous one on a
+    //    UTC+8 developer machine.
+    //    Enums bind `::text::"Enum"`, never a bare `::"Enum"`: the bare form
+    //    describes the parameter AS that enum type, and it is unsettled whether
+    //    Prisma 5.22 encodes a JS string into such a parameter. Casting to text
+    //    first pins the parameter, then applies the documented text -> enum cast.
+    //    The result type is identical, so the VALUES column types and the
+    //    ON CONFLICT behaviour do not change. Every enum bind here and in
+    //    `reading-level.ts` / `term-grades.ts` is doubled for this reason.
+    for (const chunk of chunkRows(marks, BULK_CHUNK_ROWS)) {
+      const values = Prisma.join(
+        chunk.map(
+          (c) => Prisma.sql`(
+            ${randomUUID()}::text,
+            ${c.learnerId}::text,
+            ${formatLocalDateKey(c.date)}::date,
+            ${weekKey}::date,
+            ${c.status}::text::"AttendanceStatus",
+            ${c.notes}::text,
+            ${user.id}::text,
+            ${now}::timestamp(3)
+          )`
+        )
+      );
+      const written = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "Attendance" (
+          "id", "learnerId", "date", "weekStart", "status", "notes",
+          "recordedById", "updatedAt"
+        )
+        SELECT v."id", v."learnerId", v."date", v."weekStart", v."status",
+               v."notes", v."recordedById", v."updatedAt"
+        FROM (VALUES ${values}) AS v (
+          "id", "learnerId", "date", "weekStart", "status", "notes",
+          "recordedById", "updatedAt"
+        )
+        JOIN "Learner" l
+          ON l."id" = v."learnerId"
+         AND l."schoolId" = ${user.schoolId}
+         AND l."gradeLevelId" = ${grade.id}
+         AND l."deletedAt" IS NULL
+         AND l."isAralLearner" = TRUE
+        ON CONFLICT ("learnerId", "date") DO UPDATE SET
+          "status" = EXCLUDED."status",
+          "notes" = EXCLUDED."notes",
+          "recordedById" = EXCLUDED."recordedById",
+          "updatedAt" = EXCLUDED."updatedAt"
+        RETURNING "id"
+      `;
+      if (written.length !== chunk.length) {
+        throw new Error(
+          `attendance bulk write touched ${written.length} of ${chunk.length} rows`
         );
-        const written = await tx.$queryRaw<{ id: string }[]>`
-          INSERT INTO "Attendance" (
-            "id", "learnerId", "date", "weekStart", "status", "notes",
-            "recordedById", "updatedAt"
-          )
-          SELECT v."id", v."learnerId", v."date", v."weekStart", v."status",
-                 v."notes", v."recordedById", v."updatedAt"
-          FROM (VALUES ${values}) AS v (
-            "id", "learnerId", "date", "weekStart", "status", "notes",
-            "recordedById", "updatedAt"
-          )
-          JOIN "Learner" l
-            ON l."id" = v."learnerId"
-           AND l."schoolId" = ${user.schoolId}
-           AND l."gradeLevelId" = ${grade.id}
-           AND l."deletedAt" IS NULL
-           AND l."isAralLearner" = TRUE
-          ON CONFLICT ("learnerId", "date") DO UPDATE SET
-            "status" = EXCLUDED."status",
-            "notes" = EXCLUDED."notes",
-            "recordedById" = EXCLUDED."recordedById",
-            "updatedAt" = EXCLUDED."updatedAt"
-          RETURNING "id"
-        `;
-        if (written.length !== chunk.length) {
-          throw new Error(
-            `attendance bulk write touched ${written.length} of ${chunk.length} rows`
-          );
-        }
-        upserted += written.length;
       }
+      upserted += written.length;
+    }
 
-      // 2. Clears. `cleared` was a SUM of per-statement counts, so it is the
-      //    number of rows actually deleted — not the number of cells submitted,
-      //    which differ whenever a teacher clears an already-empty cell.
-      for (const chunk of chunkRows(clears, BULK_CHUNK_ROWS)) {
-        const values = Prisma.join(
-          chunk.map(
-            (c) => Prisma.sql`(
-              ${c.learnerId}::text,
-              ${formatLocalDateKey(c.date)}::date
-            )`
-          )
-        );
-        const deleted = await tx.$queryRaw<{ id: string }[]>`
-          DELETE FROM "Attendance" a
-          USING (VALUES ${values}) AS v ("learnerId", "date"),
-                "Learner" l
-          WHERE a."learnerId" = v."learnerId"
-            AND a."date" = v."date"
-            AND l."id" = a."learnerId"
-            AND l."schoolId" = ${user.schoolId}
-            AND l."gradeLevelId" = ${grade.id}
-            AND l."deletedAt" IS NULL
-          RETURNING a."id"
-        `;
-        cleared += deleted.length;
-      }
-    }, BULK_TX_OPTIONS);
-  } catch (err) {
-    console.error("[saveAralWeeklyAttendance] transaction failed:", err);
-    return { ok: false, error: "Could not save the week. Please try again." };
-  }
+    // 2. Clears. `cleared` was a SUM of per-statement counts, so it is the
+    //    number of rows actually deleted — not the number of cells submitted,
+    //    which differ whenever a teacher clears an already-empty cell.
+    for (const chunk of chunkRows(clears, BULK_CHUNK_ROWS)) {
+      const values = Prisma.join(
+        chunk.map(
+          (c) => Prisma.sql`(
+            ${c.learnerId}::text,
+            ${formatLocalDateKey(c.date)}::date
+          )`
+        )
+      );
+      const deleted = await tx.$queryRaw<{ id: string }[]>`
+        DELETE FROM "Attendance" a
+        USING (VALUES ${values}) AS v ("learnerId", "date"),
+              "Learner" l
+        WHERE a."learnerId" = v."learnerId"
+          AND a."date" = v."date"
+          AND l."id" = a."learnerId"
+          AND l."schoolId" = ${user.schoolId}
+          AND l."gradeLevelId" = ${grade.id}
+          AND l."deletedAt" IS NULL
+        RETURNING a."id"
+      `;
+      cleared += deleted.length;
+    }
+  }, BULK_TX_OPTIONS);
 
   await writeAudit({
     userId: user.id,
@@ -443,7 +431,7 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
   }
 
   return { ok: true, data: { upserted, cleared } };
-}
+}, { verb: "save the week's attendance" });
 
 /**
  * Mark or clear a grade-level holiday for a single attendance date.
@@ -455,21 +443,21 @@ export async function saveAralWeeklyAttendance(input: unknown): Promise<
  * maintainable, and so a holiday surface can be rebuilt without re-deriving the
  * write path.
  */
-export async function setAttendanceDayHoliday(
+export const setAttendanceDayHoliday = action("setAttendanceDayHoliday", async (
   input: unknown
-): Promise<ActionResult<{ isHoliday: boolean }>> {
+): Promise<ActionResult<{ isHoliday: boolean }>> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = z
-    .object({
-      gradeId: z.string().min(1),
-      date: z.coerce.date(),
-      isHoliday: z.boolean(),
-    })
-    .safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = {
+    data: parseInput(
+      z.object({
+        gradeId: z.string().min(1),
+        date: z.coerce.date(),
+        isHoliday: z.boolean(),
+      }),
+      input
+    ),
+  };
 
   // ARAL attendance: an ARAL-only teacher (no advisory section) reaches this
   // grade through the learners designated to them.
@@ -518,4 +506,4 @@ export async function setAttendanceDayHoliday(
   revalidatePath("/teacher/aral");
 
   return { ok: true, data: { isHoliday: parsed.data.isHoliday } };
-}
+}, { verb: "save the holiday" });

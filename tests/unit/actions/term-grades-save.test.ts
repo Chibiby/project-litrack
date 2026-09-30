@@ -1063,7 +1063,7 @@ describe("saveTermGrades — refusal 4: no active school year", () => {
     const res = await post();
 
     expect(res).toMatchObject({ ok: false });
-    expect((res as { error: string }).error).toContain("No school year is active");
+    expect((res as { error: string }).error).toContain("no active school year");
     expectNoWrites();
     expect(learnerFindMany).not.toHaveBeenCalled();
   });
@@ -1329,14 +1329,13 @@ describe("saveTermGrades — the RETURNING count guard", () => {
       ],
     });
 
-    expect(res).toEqual({
-      ok: false,
-      error: "Could not save the grade sheet. Please try again.",
-    });
+    // Classified by `action()` now: an unexpected failure carries a code and an
+    // admin reference instead of a per-action string.
+    expect(res).toMatchObject({ ok: false, code: "INTERNAL_ERROR" });
     // The throw is inside the transaction, so the delete rolls back with it.
     expect(writeAudit).not.toHaveBeenCalled();
     // The row count is not leaked to the client.
-    expect((res as { error: string }).error).not.toMatch(/\d/);
+    expect((res as { error: string }).error).not.toMatch(/touched|\d+ of \d+/);
   });
 });
 

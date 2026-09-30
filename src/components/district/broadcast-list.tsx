@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import { retractBroadcast } from "@/lib/actions/district-announcements";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 
 export type BroadcastListItem = {
   broadcastId: string;
@@ -26,10 +28,10 @@ export function BroadcastList({ broadcasts }: { broadcasts: BroadcastListItem[] 
   const retract = async (broadcastId: string) => {
     setRetracting(broadcastId);
     try {
-      const res = await retractBroadcast({ broadcastId });
+      const res = await callAction(() => retractBroadcast({ broadcastId }));
       if (!res.ok) {
-        toast.error(res.error);
-        throw new Error(res.error);
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
       const count = res.data.schoolCount;
       toast.success(

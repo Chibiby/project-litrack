@@ -6,6 +6,9 @@ import { Prisma, type TermMark } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser, requireUser } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { action } from "@/lib/errors/action";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 import { classifyError } from "@/lib/errors/classify";
 import { reportError } from "@/lib/errors/report";
 import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write";
@@ -53,8 +56,6 @@ const DEPED_ONLY_MESSAGE =
 // about them, and would send them to the wrong person to fix it.
 const FLOATING_MESSAGE =
   "Floating teachers do not advise a section, so there is no end-of-term sheet. Your School Head can change this.";
-const NO_SCHOOL_YEAR_MESSAGE =
-  "No school year is active. Ask your School Head to activate one before encoding term grades.";
 const WRONG_GRADE_MESSAGE = "You are not assigned to this grade level";
 const NOT_IN_ADVISORY_MESSAGE =
   "One or more learners are not in your advisory section";
@@ -120,15 +121,12 @@ async function requireAdvisoryForTermSheet(
  * "TermGrade_score_xor_mark"), so absence of a row is the only representation
  * of "not encoded".
  */
-export async function saveTermGrades(
+export const saveTermGrades = action("saveTermGrades", async (
   input: unknown
-): Promise<ActionResult<{ saved: number; cleared: number }>> {
+): Promise<ActionResult<{ saved: number; cleared: number }>> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = termGradesSaveSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(termGradesSaveSchema, input) };
 
   // A Super Admin passes every role check by impersonation, and their view of
   // this sheet is read-only. Branch on the role explicitly rather than assuming
@@ -179,7 +177,7 @@ export async function saveTermGrades(
       },
     },
   });
-  if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
+  if (!schoolYear) throw new AppError("SCHOOL_YEAR_NOT_ACTIVE");
 
   const window = resolveTermWindow(
     getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
@@ -268,129 +266,124 @@ export async function saveTermGrades(
   const toClear = [...clearByTuple.values()];
 
   const now = new Date();
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Adopt scores the pre-TermSubject build saved after M1 (termSubjectId
-      // NULL) BEFORE touching the sheet, so the clear below can reach them and
-      // the upsert conflicts on the termSubjectId unique instead of inserting a
-      // second row. No-op after M2; removed with M3.
-      await healLegacyTermGrades(tx, {
-        schoolId: user.schoolId,
-        gradeLevelId: advisory.gradeLevelId,
-        schoolYearId: schoolYear.id,
+  await prisma.$transaction(async (tx) => {
+    // Adopt scores the pre-TermSubject build saved after M1 (termSubjectId
+    // NULL) BEFORE touching the sheet, so the clear below can reach them and
+    // the upsert conflicts on the termSubjectId unique instead of inserting a
+    // second row. No-op after M2; removed with M3.
+    await healLegacyTermGrades(tx, {
+      schoolId: user.schoolId,
+      gradeLevelId: advisory.gradeLevelId,
+      schoolYearId: schoolYear.id,
+    });
+
+    // Deletions run first so that, in the impossible-but-cheap case of a cell
+    // arriving twice, the encoded score wins over the clear. Already one
+    // set-based statement, so it is left as Prisma rather than rewritten.
+    if (toClear.length > 0) {
+      await tx.termGrade.deleteMany({
+        where: {
+          schoolYearId: schoolYear.id,
+          term: parsed.data.term,
+          OR: toClear.map((e) => ({
+            learnerId: e.learnerId,
+            termSubjectId: e.termSubjectId,
+          })),
+          // Only this grade's active subjects: a clear can never reach a score
+          // stored under another grade's subject or an archived one.
+          termSubject: { gradeLevelId: advisory.gradeLevelId, deletedAt: null },
+        },
       });
+    }
 
-      // Deletions run first so that, in the impossible-but-cheap case of a cell
-      // arriving twice, the encoded score wins over the clear. Already one
-      // set-based statement, so it is left as Prisma rather than rewritten.
-      if (toClear.length > 0) {
-        await tx.termGrade.deleteMany({
-          where: {
-            schoolYearId: schoolYear.id,
-            term: parsed.data.term,
-            OR: toClear.map((e) => ({
-              learnerId: e.learnerId,
-              termSubjectId: e.termSubjectId,
-            })),
-            // Only this grade's active subjects: a clear can never reach a score
-            // stored under another grade's subject or an archived one.
-            termSubject: { gradeLevelId: advisory.gradeLevelId, deletedAt: null },
-          },
-        });
-      }
+    for (const chunk of chunkRows(toSave, BULK_CHUNK_ROWS)) {
+      // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
+      // and `@updatedAt` are CLIENT-side and neither column has a database
+      // default. `updatedAt` is bumped in DO UPDATE as well — leaving it out
+      // there freezes the column at first-insert time with no error at all.
+      const values = Prisma.join(
+        chunk.map(
+          (e) => Prisma.sql`(
+            ${randomUUID()}::text,
+            ${e.learnerId}::text,
+            ${schoolYear.id}::text,
+            ${parsed.data.term}::text::"TermPeriod",
+            ${e.termSubjectId}::text,
+            ${e.score}::integer,
+            ${e.mark}::text::"TermMark",
+            ${user.id}::text,
+            ${now}::timestamp(3)
+          )`
+        )
+      );
 
-      for (const chunk of chunkRows(toSave, BULK_CHUNK_ROWS)) {
-        // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
-        // and `@updatedAt` are CLIENT-side and neither column has a database
-        // default. `updatedAt` is bumped in DO UPDATE as well — leaving it out
-        // there freezes the column at first-insert time with no error at all.
-        const values = Prisma.join(
-          chunk.map(
-            (e) => Prisma.sql`(
-              ${randomUUID()}::text,
-              ${e.learnerId}::text,
-              ${schoolYear.id}::text,
-              ${parsed.data.term}::text::"TermPeriod",
-              ${e.termSubjectId}::text,
-              ${e.score}::integer,
-              ${e.mark}::text::"TermMark",
-              ${user.id}::text,
-              ${now}::timestamp(3)
-            )`
-          )
+      // The tenant predicate is inside the statement. `TermGrade` carries no
+      // `schoolId` of its own, so without this join the roster `findMany` above
+      // would be the entire tenant boundary for a raw write. The `RETURNING`
+      // count check below turns any excluded row into a rollback rather than a
+      // partial commit.
+      //
+      // `subject` mirrors the TermSubject's `legacyArea` (NULL for a custom
+      // subject) so the previous build's client, which declares `subject`
+      // non-null, can still read these rows during a rollout or revert, and
+      // the old subject unique keeps meaning something until M2 drops it.
+      // It falls back to NULL only when ANOTHER row already holds this
+      // (learner, year, term, subject) under a different termSubjectId — a
+      // learner who moved grades mid-term, or a legacy row the heal had to
+      // skip — because writing the area there would violate
+      // "TermGrade_learnerId_schoolYearId_term_subject_key", which
+      // ON CONFLICT on the termSubjectId unique does not arbitrate.
+      const written = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "TermGrade" (
+          "id", "learnerId", "schoolYearId", "term", "termSubjectId", "subject",
+          "score", "mark", "recordedById", "updatedAt"
+        )
+        SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."termSubjectId",
+               CASE WHEN EXISTS (
+                 SELECT 1 FROM "TermGrade" o
+                 WHERE o."learnerId" = v."learnerId"
+                   AND o."schoolYearId" = v."schoolYearId"
+                   AND o."term" = v."term"
+                   AND o."subject" = ts."legacyArea"
+                   AND o."termSubjectId" IS DISTINCT FROM v."termSubjectId"
+               ) THEN NULL ELSE ts."legacyArea" END,
+               v."score", v."mark", v."recordedById", v."updatedAt"
+        FROM (VALUES ${values}) AS v (
+          "id", "learnerId", "schoolYearId", "term", "termSubjectId", "score",
+          "mark", "recordedById", "updatedAt"
+        )
+        JOIN "Learner" l
+          ON l."id" = v."learnerId"
+         AND l."schoolId" = ${user.schoolId}
+         AND l."gradeLevelId" = ${advisory.gradeLevelId}
+         AND l."sectionId" = ${advisory.sectionId}
+         AND l."deletedAt" IS NULL
+         AND l."archivedAt" IS NULL
+        JOIN "TermSubject" ts
+          ON ts."id" = v."termSubjectId"
+         AND ts."schoolId" = ${user.schoolId}
+         AND ts."gradeLevelId" = ${advisory.gradeLevelId}
+         AND ts."deletedAt" IS NULL
+        ON CONFLICT ("learnerId", "schoolYearId", "term", "termSubjectId") DO UPDATE SET
+          "score" = EXCLUDED."score",
+          -- Both columns always move together: saving a letter over a Grade 1
+          -- cell that still holds a legacy number sets the mark and NULLs the
+          -- score in this one statement, so the xor CHECK holds.
+          "mark" = EXCLUDED."mark",
+          -- Non-null EXCLUDED means no other row holds this area (checked
+          -- above), so taking it is safe; NULL keeps what the row had.
+          "subject" = COALESCE(EXCLUDED."subject", "TermGrade"."subject"),
+          "recordedById" = EXCLUDED."recordedById",
+          "updatedAt" = EXCLUDED."updatedAt"
+        RETURNING "id"
+      `;
+      if (written.length !== chunk.length) {
+        throw new Error(
+          `term-grades bulk write touched ${written.length} of ${chunk.length} rows`
         );
-
-        // The tenant predicate is inside the statement. `TermGrade` carries no
-        // `schoolId` of its own, so without this join the roster `findMany` above
-        // would be the entire tenant boundary for a raw write. The `RETURNING`
-        // count check below turns any excluded row into a rollback rather than a
-        // partial commit.
-        //
-        // `subject` mirrors the TermSubject's `legacyArea` (NULL for a custom
-        // subject) so the previous build's client, which declares `subject`
-        // non-null, can still read these rows during a rollout or revert, and
-        // the old subject unique keeps meaning something until M2 drops it.
-        // It falls back to NULL only when ANOTHER row already holds this
-        // (learner, year, term, subject) under a different termSubjectId — a
-        // learner who moved grades mid-term, or a legacy row the heal had to
-        // skip — because writing the area there would violate
-        // "TermGrade_learnerId_schoolYearId_term_subject_key", which
-        // ON CONFLICT on the termSubjectId unique does not arbitrate.
-        const written = await tx.$queryRaw<{ id: string }[]>`
-          INSERT INTO "TermGrade" (
-            "id", "learnerId", "schoolYearId", "term", "termSubjectId", "subject",
-            "score", "mark", "recordedById", "updatedAt"
-          )
-          SELECT v."id", v."learnerId", v."schoolYearId", v."term", v."termSubjectId",
-                 CASE WHEN EXISTS (
-                   SELECT 1 FROM "TermGrade" o
-                   WHERE o."learnerId" = v."learnerId"
-                     AND o."schoolYearId" = v."schoolYearId"
-                     AND o."term" = v."term"
-                     AND o."subject" = ts."legacyArea"
-                     AND o."termSubjectId" IS DISTINCT FROM v."termSubjectId"
-                 ) THEN NULL ELSE ts."legacyArea" END,
-                 v."score", v."mark", v."recordedById", v."updatedAt"
-          FROM (VALUES ${values}) AS v (
-            "id", "learnerId", "schoolYearId", "term", "termSubjectId", "score",
-            "mark", "recordedById", "updatedAt"
-          )
-          JOIN "Learner" l
-            ON l."id" = v."learnerId"
-           AND l."schoolId" = ${user.schoolId}
-           AND l."gradeLevelId" = ${advisory.gradeLevelId}
-           AND l."sectionId" = ${advisory.sectionId}
-           AND l."deletedAt" IS NULL
-           AND l."archivedAt" IS NULL
-          JOIN "TermSubject" ts
-            ON ts."id" = v."termSubjectId"
-           AND ts."schoolId" = ${user.schoolId}
-           AND ts."gradeLevelId" = ${advisory.gradeLevelId}
-           AND ts."deletedAt" IS NULL
-          ON CONFLICT ("learnerId", "schoolYearId", "term", "termSubjectId") DO UPDATE SET
-            "score" = EXCLUDED."score",
-            -- Both columns always move together: saving a letter over a Grade 1
-            -- cell that still holds a legacy number sets the mark and NULLs the
-            -- score in this one statement, so the xor CHECK holds.
-            "mark" = EXCLUDED."mark",
-            -- Non-null EXCLUDED means no other row holds this area (checked
-            -- above), so taking it is safe; NULL keeps what the row had.
-            "subject" = COALESCE(EXCLUDED."subject", "TermGrade"."subject"),
-            "recordedById" = EXCLUDED."recordedById",
-            "updatedAt" = EXCLUDED."updatedAt"
-          RETURNING "id"
-        `;
-        if (written.length !== chunk.length) {
-          throw new Error(
-            `term-grades bulk write touched ${written.length} of ${chunk.length} rows`
-          );
-        }
       }
-    }, BULK_TX_OPTIONS);
-  } catch (err) {
-    console.error("[saveTermGrades] transaction failed:", err);
-    return { ok: false, error: "Could not save the grade sheet. Please try again." };
-  }
+    }
+  }, BULK_TX_OPTIONS);
 
   await writeAudit({
     userId: user.id,
@@ -447,25 +440,22 @@ export async function saveTermGrades(
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
 
   return { ok: true, data: { saved: toSave.length, cleared: toClear.length } };
-}
+}, { verb: "save the grade sheet" });
 
 /**
  * Excel export of one term's sheet. Available while a term is locked and to a
  * Super Admin in a school view — viewing and exporting deliberately survive the
  * lock, only encoding stops.
  */
-export async function exportTermGrades(
+export const exportTermGrades = action("exportTermGrades", async (
   input: unknown
-): Promise<ActionResult<{ filename: string; base64: string }>> {
+): Promise<ActionResult<{ filename: string; base64: string }>> => {
   // `requireUser`, not `requireSchoolUser`: a Super Admin holds no `schoolId` and
   // would be redirected away from a page they are entitled to read.
   const user = await requireUser("TEACHER");
   const isSuperAdmin = user.role === "SUPER_ADMIN";
 
-  const parsed = termGradesExportSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(termGradesExportSchema, input) };
 
   let schoolId: string;
   /**
@@ -492,7 +482,7 @@ export async function exportTermGrades(
       where: { id: parsed.data.gradeLevelId, deletedAt: null },
       select: { id: true, schoolId: true, type: true },
     });
-    if (!grade) return { ok: false, error: "Not found" };
+    if (!grade) throw resourceNotFound("Grade level");
 
     schoolId = grade.schoolId;
     const section = parsed.data.section ?? "all";
@@ -525,7 +515,7 @@ export async function exportTermGrades(
       },
     });
   } else {
-    if (!user.schoolId) return { ok: false, error: "Not found" };
+    if (!user.schoolId) throw resourceNotFound("School");
     const teacherSchoolId = user.schoolId;
     schoolId = teacherSchoolId;
     // Without `sectionIds` this is the single sheet it always was: the gate
@@ -581,7 +571,7 @@ export async function exportTermGrades(
       },
     },
   });
-  if (!schoolYear) return { ok: false, error: NO_SCHOOL_YEAR_MESSAGE };
+  if (!schoolYear) throw new AppError("SCHOOL_YEAR_NOT_ACTIVE");
 
   const window = resolveTermWindow(
     getTermWindows(schoolYear.startDate, schoolYear.termWindowOverrides),
@@ -758,4 +748,4 @@ export async function exportTermGrades(
   });
 
   return { ok: true, data: { filename, base64: buffer.toString("base64") } };
-}
+}, { verb: "export the term grades" });

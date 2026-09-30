@@ -1,6 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
 import { requireUser } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -118,13 +120,16 @@ async function assertChannelAccess(
       school: { select: { name: true } },
     },
   });
-  if (!channel) throw new Error("Not found");
+  if (!channel) throw resourceNotFound("Conversation");
 
   if (user.role === "SUPER_ADMIN") return channel;
 
-  if (channel.schoolId !== user.schoolId) throw new Error("Not found");
+  // Same sentence to the person as a missing channel, but recorded as a refusal.
+  if (channel.schoolId !== user.schoolId) {
+    throw resourceNotFound("Conversation", { crossTenant: true });
+  }
   if (channel.kind === "ADMIN_DIRECT" && channel.memberId !== user.id) {
-    throw new Error("Not found");
+    throw resourceNotFound("Conversation", { crossTenant: true });
   }
   return channel;
 }
@@ -136,7 +141,7 @@ async function assertChannelAccess(
  * opening the staff room at once would otherwise race and produce two channels,
  * which splits the conversation permanently.
  */
-export async function openChannel(input: unknown): Promise<ActionResult<{ id: string }>> {
+export const openChannel = action("openChannel", async (input: unknown): Promise<ActionResult<{ id: string }>> => {
   const user = await requireUser();
   const parsed = openChannelSchema.safeParse(input);
   if (!parsed.success) {
@@ -177,7 +182,7 @@ export async function openChannel(input: unknown): Promise<ActionResult<{ id: st
       select: { id: true },
     });
     return { ok: true, data: { id: created.id } };
-  } catch {
+  } catch (err) {
     // Lost the race against another tab; the partial unique index refused the
     // duplicate, which is exactly what it is for. Read the winner.
     const winner = await prisma.chatChannel.findFirst({
@@ -185,61 +190,58 @@ export async function openChannel(input: unknown): Promise<ActionResult<{ id: st
       select: { id: true },
     });
     if (winner) return { ok: true, data: { id: winner.id } };
-    return { ok: false, error: "Could not open the conversation" };
+    // No winner means this was not the race: let action() classify it.
+    throw err;
   }
-}
+}, { verb: "open the conversation" });
 
 /** One channel's recent messages, newest last. */
-export async function readChannel(input: unknown): Promise<ActionResult<ChatChannelView>> {
+export const readChannel = action("readChannel", async (input: unknown): Promise<ActionResult<ChatChannelView>> => {
   const user = await requireUser();
   const parsed = readChannelSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  try {
-    const channel = await assertChannelAccess(parsed.data.channelId, user);
+  const channel = await assertChannelAccess(parsed.data.channelId, user);
 
-    const rows = await prisma.chatMessage.findMany({
-      where: { channelId: channel.id, deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        body: true,
-        createdAt: true,
-        author: { select: AUTHOR_SELECT },
-        mentions: { select: { user: { select: AUTHOR_SELECT } } },
-      },
-    });
+  const rows = await prisma.chatMessage.findMany({
+    where: { channelId: channel.id, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: PAGE_SIZE,
+    select: {
+      id: true,
+      body: true,
+      createdAt: true,
+      author: { select: AUTHOR_SELECT },
+      mentions: { select: { user: { select: AUTHOR_SELECT } } },
+    },
+  });
 
-    return {
-      ok: true,
-      data: {
-        id: channel.id,
-        kind: channel.kind,
-        schoolName: channel.school.name,
-        messages: rows.reverse().map((row) => ({
-          id: row.id,
-          body: row.body,
-          createdAt: row.createdAt,
-          author: {
-            id: row.author.id,
-            displayName: displayNameOf(row.author),
-            roleLabel: roleLabelOf(row.author.role),
-            initials: initialsOf(row.author),
-            isSelf: row.author.id === user.id,
-          },
-          mentions: row.mentions.map((m) => ({
-            id: m.user.id,
-            username: m.user.username,
-            displayName: displayNameOf(m.user),
-          })),
+  return {
+    ok: true,
+    data: {
+      id: channel.id,
+      kind: channel.kind,
+      schoolName: channel.school.name,
+      messages: rows.reverse().map((row) => ({
+        id: row.id,
+        body: row.body,
+        createdAt: row.createdAt,
+        author: {
+          id: row.author.id,
+          displayName: displayNameOf(row.author),
+          roleLabel: roleLabelOf(row.author.role),
+          initials: initialsOf(row.author),
+          isSelf: row.author.id === user.id,
+        },
+        mentions: row.mentions.map((m) => ({
+          id: m.user.id,
+          username: m.user.username,
+          displayName: displayNameOf(m.user),
         })),
-      },
-    };
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-}
+      })),
+    },
+  };
+}, { verb: "load the conversation" });
 
 /**
  * Post a message, resolve its mentions, and notify.
@@ -248,7 +250,7 @@ export async function readChannel(input: unknown): Promise<ActionResult<ChatChan
  * message that silently notified nobody, which is worse than a failed send: the
  * author believes they have asked for help and no one has been asked.
  */
-export async function sendChatMessage(input: unknown): Promise<ActionResult<{ id: string }>> {
+export const sendChatMessage = action("sendChatMessage", async (input: unknown): Promise<ActionResult<{ id: string }>> => {
   const user = await requireUser();
   const parsed = sendChatMessageSchema.safeParse(input);
   if (!parsed.success) {
@@ -259,12 +261,7 @@ export async function sendChatMessage(input: unknown): Promise<ActionResult<{ id
   const limit = await checkRateLimit(`chat:${user.id}`, SEND_LIMIT);
   if (!limit.ok) return { ok: false, error: "You are sending messages too quickly" };
 
-  let channel;
-  try {
-    channel = await assertChannelAccess(channelId, user);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
+  const channel = await assertChannelAccess(channelId, user);
 
   // Who this message may notify: the school's own members, plus every admin.
   // Resolving against this set is what stops an @mention reaching across
@@ -365,28 +362,24 @@ export async function sendChatMessage(input: unknown): Promise<ActionResult<{ id
   });
 
   return { ok: true, data: { id: message.id } };
-}
+}, { verb: "send your message" });
 
 /** Move this person's read marker to now. */
-export async function markChannelRead(input: unknown): Promise<ActionResult> {
+export const markChannelRead = action("markChannelRead", async (input: unknown): Promise<ActionResult> => {
   const user = await requireUser();
   const parsed = markChannelReadSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  try {
-    const channel = await assertChannelAccess(parsed.data.channelId, user);
-    await prisma.chatRead.upsert({
-      where: { channelId_userId: { channelId: channel.id, userId: user.id } },
-      create: { channelId: channel.id, userId: user.id },
-      update: { lastReadAt: new Date() },
-    });
-    // The bell alert exists to get somebody here. Arriving is what clears it.
-    await markChatNotificationsRead({ userId: user.id, channelId: channel.id });
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-}
+  const channel = await assertChannelAccess(parsed.data.channelId, user);
+  await prisma.chatRead.upsert({
+    where: { channelId_userId: { channelId: channel.id, userId: user.id } },
+    create: { channelId: channel.id, userId: user.id },
+    update: { lastReadAt: new Date() },
+  });
+  // The bell alert exists to get somebody here. Arriving is what clears it.
+  await markChatNotificationsRead({ userId: user.id, channelId: channel.id });
+  return { ok: true };
+}, { verb: "mark the conversation read" });
 
 /**
  * Whether this person has anything waiting, per room.
@@ -396,9 +389,9 @@ export async function markChannelRead(input: unknown): Promise<ActionResult> {
  * longer blank-shell flash on every navigation in exchange for a bell badge.
  * This runs after paint, from the widget, and costs nothing until it does.
  */
-export async function getMyChatUnread(): Promise<
+export const getMyChatUnread = action("getMyChatUnread", async (): Promise<
   ActionResult<{ school: boolean; admin: boolean }>
-> {
+> => {
   const user = await requireUser();
   if (!user.schoolId) return { ok: true, data: { school: false, admin: false } };
 
@@ -427,43 +420,39 @@ export async function getMyChatUnread(): Promise<
   }
 
   return { ok: true, data: { school, admin } };
-}
+}, { verb: "check for new messages" });
 
 /** People this channel can address, for the @mention picker. */
-export async function listMentionTargets(
+export const listMentionTargets = action("listMentionTargets", async (
   input: unknown
-): Promise<ActionResult<{ id: string; username: string; displayName: string; roleLabel: string }[]>> {
+): Promise<ActionResult<{ id: string; username: string; displayName: string; roleLabel: string }[]>> => {
   const user = await requireUser();
   const parsed = readChannelSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  try {
-    const channel = await assertChannelAccess(parsed.data.channelId, user);
-    const people = await prisma.user.findMany({
-      where: {
-        deletedAt: null,
-        isActive: true,
-        username: { not: null },
-        id: { not: user.id },
-        OR: [{ schoolId: channel.schoolId }, { role: "SUPER_ADMIN" }],
-      },
-      orderBy: [{ role: "asc" }, { lastName: "asc" }],
-      take: 100,
-      select: AUTHOR_SELECT,
-    });
+  const channel = await assertChannelAccess(parsed.data.channelId, user);
+  const people = await prisma.user.findMany({
+    where: {
+      deletedAt: null,
+      isActive: true,
+      username: { not: null },
+      id: { not: user.id },
+      OR: [{ schoolId: channel.schoolId }, { role: "SUPER_ADMIN" }],
+    },
+    orderBy: [{ role: "asc" }, { lastName: "asc" }],
+    take: 100,
+    select: AUTHOR_SELECT,
+  });
 
-    return {
-      ok: true,
-      data: people
-        .filter((p): p is typeof p & { username: string } => Boolean(p.username))
-        .map((p) => ({
-          id: p.id,
-          username: p.username,
-          displayName: displayNameOf(p),
-          roleLabel: roleLabelOf(p.role),
-        })),
-    };
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
-}
+  return {
+    ok: true,
+    data: people
+      .filter((p): p is typeof p & { username: string } => Boolean(p.username))
+      .map((p) => ({
+        id: p.id,
+        username: p.username,
+        displayName: displayNameOf(p),
+        roleLabel: roleLabelOf(p.role),
+      })),
+  };
+}, { verb: "load the people you can mention" });

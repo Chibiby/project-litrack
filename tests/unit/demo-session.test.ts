@@ -64,6 +64,19 @@ describe("demo session cookie", () => {
     expect(decodeDemoSession(value, session.expiresAt + 1)).toBeNull();
   });
 
+  it("refuses to open a session without the service role key, as CONFIG_MISSING", async () => {
+    const { encodeDemoSession } = await mod();
+    const saved = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    try {
+      expect(() => encodeDemoSession(ADMIN_ID)).toThrowError(
+        expect.objectContaining({ name: "AppError", code: "CONFIG_MISSING" })
+      );
+    } finally {
+      process.env.SUPABASE_SERVICE_ROLE_KEY = saved;
+    }
+  });
+
   it("treats a missing cookie as no session", async () => {
     const { decodeDemoSession } = await mod();
 

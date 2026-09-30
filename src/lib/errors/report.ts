@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { AppError } from "./app-error";
 import { currentErrorScope } from "./context";
 import { sendErrorAlert } from "./alert";
+import { newReference } from "./reference";
 
 /**
  * Record a failure for admins. Returns the reference synchronously; the log line
@@ -29,13 +30,8 @@ export type ReportInput = {
   userSource?: "session" | "cookie";
 };
 
-/** Crockford base32: no I, L, O or U, so a reference read aloud survives. */
-const REF_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-export function newReference(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  return `E-${Array.from(bytes, (b) => REF_ALPHABET[b % 32]).join("")}`;
-}
+// Lives in ./reference so the browser can mint one without pulling in server-only.
+export { newReference };
 
 /**
  * The only context keys ever stored. Everything else a thrower attaches is

@@ -3,6 +3,8 @@ import { Archivo, IBM_Plex_Mono, Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { SparkIntro } from "@/components/brand/spark-intro";
 import { SparkIntroScript } from "@/components/brand/spark-intro-script";
+import { ClientErrorListener } from "@/components/errors/client-error-listener";
+import { OfflineBanner } from "@/components/errors/offline-banner";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import "./globals.css";
@@ -84,6 +86,8 @@ export default function RootLayout({
           {children}
           <SparkIntro />
           <Toaster richColors position="top-right" />
+          <OfflineBanner />
+          <ClientErrorListener />
         </ThemeProvider>
       </body>
     </html>

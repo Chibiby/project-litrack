@@ -48,6 +48,8 @@ import {
 import { LEARNER_AGE_RANGE } from "@/lib/validators/common";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 /*
  * The learner form, in four collapsible sections with a completion bar.
@@ -447,20 +449,20 @@ export function LearnerForm({
 
     startTransition(async () => {
       if (isEdit) {
-        const res = await updateLearner(fd);
+        const res = await callAction(() => updateLearner(fd));
         if (res.ok) {
           toast.success("Learner updated");
           onSaved?.();
           router.refresh();
           invalidateNavWarm();
         } else {
-          toast.error(res.error);
+          toastFailure(res);
         }
         return;
       }
 
       const toastId = toast.loading("Adding learner…");
-      const res = await createLearner(fd);
+      const res = await callAction(() => createLearner(fd));
       if (res.ok) {
         // Close host / clear form immediately; list refreshes in background.
         onCreated?.();
@@ -477,14 +479,14 @@ export function LearnerForm({
         refreshValues();
         router.refresh();
         invalidateNavWarm();
-      } else if (res.error === "possible_duplicate") {
+      } else if ("needs" in res && res.needs === "possible_duplicate") {
         setDuplicatePending(true);
         toast.warning(
           "A learner with the same name and age already exists in this school",
           { id: toastId }
         );
       } else {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
       }
     });
   }
@@ -865,12 +867,12 @@ export function LearnerForm({
         {duplicatePending && !isEdit && (
           <div
             role="alert"
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
           >
             <p className="font-medium">
               A learner with the same name and age already exists in this school.
             </p>
-            <p className="mt-1 text-amber-900/80">
+            <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
               Review the list before continuing. Click &quot;Create anyway&quot; to
               confirm this is a different learner.
             </p>

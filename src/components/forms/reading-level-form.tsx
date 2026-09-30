@@ -13,6 +13,8 @@ import {
   toOptions,
 } from "@/lib/constants/enum-labels";
 import { recordReadingLevel } from "@/lib/actions/reading-level";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { formatLocalDateKey } from "@/lib/date-keys";
 import { getMonday } from "@/lib/utils";
 
@@ -33,12 +35,17 @@ export function ReadingLevelForm({
 
   return (
     <form
-      action={(fd) => {
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         fd.set("learnerId", learnerId);
         startTransition(async () => {
-          const res = await recordReadingLevel(fd);
-          if (res.ok) toast.success("Reading level saved");
-          else toast.error(res.error);
+          const res = await callAction(() => recordReadingLevel(fd));
+          if (res.ok) {
+            toast.success("Reading level saved");
+            form.reset();
+          } else toastFailure(res);
         });
       }}
       className="space-y-4"
@@ -71,7 +78,7 @@ export function ReadingLevelForm({
         loadingText="Saving…"
         className="w-full"
       >
-        Save
+        Save reading level
       </Button>
     </form>
   );

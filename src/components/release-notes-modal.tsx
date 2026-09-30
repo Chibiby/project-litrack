@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ReleaseWelcome } from "@/components/release-welcome";
 import { acknowledgeRelease } from "@/lib/actions/release";
+import { callAction } from "@/lib/ui/call-action";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
 import {
   APP_VERSION,
@@ -166,8 +167,12 @@ export function ReleaseNotesModal({
     if (saving) return;
     setSaving(true);
     setError(null);
-    const res = await acknowledgeRelease();
-    setSaving(false);
+    let res;
+    try {
+      res = await callAction(() => acknowledgeRelease());
+    } finally {
+      setSaving(false);
+    }
     if (!res.ok) {
       // Closing on failure would show this again on the next page with no
       // explanation. Staying open lets them retry.

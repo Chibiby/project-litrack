@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { recordTeacherPresence } from "@/lib/actions/presence";
+import { callAction } from "@/lib/ui/call-action";
 
 const HEARTBEAT_MS = 60_000;
 
@@ -12,13 +13,13 @@ export function TeacherPresenceHeartbeat({ disabled = false }: { disabled?: bool
   const lastAttemptAt = useRef<number | null>(null);
 
   const pulse = useCallback(() => {
-    if (disabled || document.visibilityState !== "visible") return;
+    if (disabled || document.visibilityState !== "visible" || navigator.onLine === false) return;
     const now = Date.now();
     if (lastAttemptAt.current !== null && now - lastAttemptAt.current < HEARTBEAT_MS) {
       return;
     }
     lastAttemptAt.current = now;
-    void recordTeacherPresence().catch(() => undefined);
+    void callAction(() => recordTeacherPresence()).catch(() => undefined);
   }, [disabled]);
 
   useEffect(() => {

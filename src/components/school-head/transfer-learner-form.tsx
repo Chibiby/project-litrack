@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { ConfirmAction } from "@/components/confirm-action";
 import { LearnerSearchSelect } from "@/components/learners/learner-search-select";
 import { transferLearner } from "@/lib/actions/enrollment";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import type { LearnerSearchHit } from "@/lib/learners/search";
 import { GRADE_FLOATING, SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
 
@@ -198,10 +200,10 @@ export function TransferLearnerForm({
             // Floating carries no section and no teacher — the action rejects them.
             fd.set("targetSectionId", toFloating ? SECTION_CLEAR : sectionId || SECTION_CLEAR);
             fd.set("targetTeacherId", toFloating ? "" : teacherId);
-            const res = await transferLearner(fd);
+            const res = await callAction(() => transferLearner(fd));
             if (!res.ok) {
-              toast.error(res.error);
-              throw new Error(res.error);
+              toastFailure(res);
+              throw new ToastedError(res.error);
             }
             toast.success(toFloating ? "Learner moved to Floating" : "Learner transferred");
             setLearner(null);

@@ -42,6 +42,8 @@ import type { SortOption } from "@/lib/sort/registry";
 import { RefreshCw, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   ListNavigationProvider,
   useListNavigate,
@@ -441,13 +443,18 @@ function TeacherManageButtons({
             loading={busy === "remove"}
             loadingText="Removing…"
             disabled={blockedReason !== null || rowBusy}
-            title={blockedReason ?? "Remove teacher"}
+            title="Remove teacher"
           >
             Remove
           </Button>
         }
         onConfirm={() => onRemove(row)}
       />
+      {blockedReason ? (
+        <p className="block w-full basis-full text-xs text-muted-foreground lg:text-right">
+          {blockedReason}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -610,13 +617,13 @@ function TeachersManagedTable({
     fd.set("op", op);
 
     startRowTransition(async () => {
-      const res = await setTeacherAdvisorySection(fd);
+      const res = await callAction(() => setTeacherAdvisorySection(fd));
       setSavingAdvisoryId(null);
       if (!res.ok) {
         // Roll back, so the chips never show an advisory that did not stick —
         // the cap and the occupied-section refusal both land here.
         setAdvisoryOverrides((prev) => ({ ...prev, [row.id]: previous }));
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success(
@@ -715,10 +722,10 @@ function TeachersManagedTable({
     return runOptimistic(startRowTransition, async () => {
       const fd = new FormData();
       fd.set("userId", row.id);
-      const res = await removeUserAvatar(fd);
+      const res = await callAction(() => removeUserAvatar(fd));
       if (!res.ok) {
-        toast.error(res.error);
-        throw new Error(res.error);
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
       if (res.dryRun) {
         // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
@@ -1244,34 +1251,29 @@ export function TeachersDeclinedTable({
   rows: DeclinedTeacherRow[];
   readOnly?: boolean;
 }) {
-  const [, startTransition] = useTransition();
-  /** The teacher being cleared, so only their row reads as busy. */
-  const [actingId, setActingId] = useState<string | null>(null);
-
-  const runClear = (userId: string, name: string) => {
-    if (
-      !window.confirm(
-        `Allow ${name} to register again? This deletes their declined request (and auth account) so they can sign up fresh.`
-      )
-    ) {
-      return;
-    }
-    const fd = new FormData();
-    fd.set("userId", userId);
-    setActingId(userId);
-    startTransition(async () => {
-      try {
-        const res = await clearRejectedTeacher(fd);
+  const allowReRegister = (row: DeclinedTeacherRow, className?: string) => (
+    <ConfirmAction
+      title={`Allow ${row.fullName} to register again?`}
+      description={`Their declined request and sign-in account are deleted permanently. ${row.fullName} will have to register again from the start.`}
+      confirmLabel="Delete and allow re-register"
+      variant="destructive"
+      trigger={
+        <Button size="sm" variant="outline" className={className}>
+          Allow re-register
+        </Button>
+      }
+      onConfirm={async () => {
+        const fd = new FormData();
+        fd.set("userId", row.id);
+        const res = await callAction(() => clearRejectedTeacher(fd));
         if (!res.ok) {
-          toast.error(res.error);
-          return;
+          toastFailure(res);
+          throw new ToastedError(res.error);
         }
         toast.success("They can register again");
-      } finally {
-        setActingId(null);
-      }
-    });
-  };
+      }}
+    />
+  );
 
   if (rows.length === 0) return null;
 
@@ -1299,15 +1301,7 @@ export function TeachersDeclinedTable({
                 </TableCell>
                 {!readOnly ? (
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      loading={actingId === row.id}
-                      loadingText="Allowing…"
-                      onClick={() => runClear(row.id, row.fullName)}
-                    >
-                      Allow re-register
-                    </Button>
+                    {allowReRegister(row)}
                   </TableCell>
                 ) : null}
               </TableRow>
@@ -1327,18 +1321,7 @@ export function TeachersDeclinedTable({
                   Rejected {row.rejectedAt ? formatDate(row.rejectedAt) : "—"}
                 </p>
               </div>
-              {!readOnly ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="lg:h-9"
-                  loading={actingId === row.id}
-                  loadingText="Allowing…"
-                  onClick={() => runClear(row.id, row.fullName)}
-                >
-                  Allow re-register
-                </Button>
-              ) : null}
+              {!readOnly ? allowReRegister(row, "lg:h-9") : null}
             </li>
           ))}
         </ul>

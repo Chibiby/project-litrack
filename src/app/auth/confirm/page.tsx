@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ConfirmForm } from "./confirm-form";
 
 /**
  * Landing pad for a password recovery email — a real page, not a route
@@ -55,13 +55,7 @@ export default async function AuthConfirmPage({
                   You followed a password reset link for your LITRACK account. Continue to set a
                   new password.
                 </p>
-                <form method="POST" action="/auth/confirm/verify">
-                  <input type="hidden" name="token_hash" value={tokenHash} />
-                  <input type="hidden" name="type" value={type} />
-                  <Button type="submit" className="w-full">
-                    Continue to reset password
-                  </Button>
-                </form>
+                <ConfirmForm tokenHash={tokenHash as string} type={type as string} />
               </>
             ) : (
               <>

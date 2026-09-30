@@ -13,6 +13,7 @@ import {
   type ChatChannelView,
   type ChatMessageView,
 } from "@/lib/actions/chat";
+import { callAction } from "@/lib/ui/call-action";
 import { segmentMessage } from "@/lib/chat/mentions";
 import { cn } from "@/lib/utils";
 import type { ChatChannelKind } from "@prisma/client";
@@ -30,6 +31,9 @@ import type { ChatChannelKind } from "@prisma/client";
 
 /** How often an open, visible thread asks for new messages. */
 const POLL_MS = 6000;
+
+/** Consecutive failed polls before the thread says it is stale. */
+const POLL_FAILURES_BEFORE_NOTICE = 3;
 
 type Props = {
   kind: ChatChannelKind;
@@ -86,6 +90,10 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   const [sending, setSending] = useState(false);
   const [targets, setTargets] = useState<MentionTarget[]>([]);
   const [pickerQuery, setPickerQuery] = useState<string | null>(null);
+  const [refreshNotice, setRefreshNotice] = useState(false);
+  const [pollStalled, setPollStalled] = useState(false);
+  const pollFailuresRef = useRef(0);
+  const refreshNoticeRef = useRef(false);
 
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -99,16 +107,40 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
    */
   const latestRef = useRef<string | null | undefined>(initialChannel ? initialChannel.messages.at(-1)?.id ?? null : undefined);
 
-  const refresh = useCallback(async (channelId: string, markRead: boolean) => {
-    const result = await readChannel({ channelId });
-    if (!result.ok || !result.data) return;
+  /** Set when the first load failed, so a later successful poll can clear it. */
+  const loadFailedRef = useRef(false);
 
+  /** Resolves to the failure message, or null. Pollers ignore it and keep the previous messages. */
+  const refresh = useCallback(async (channelId: string, markRead: boolean): Promise<string | null> => {
+    const result = await callAction(() => readChannel({ channelId }));
+    if (!result.ok) return result.error;
+    if (!result.data) return null;
+
+    if (pollFailuresRef.current > 0) {
+      pollFailuresRef.current = 0;
+      setPollStalled(false);
+    }
+    if (refreshNoticeRef.current) {
+      refreshNoticeRef.current = false;
+      setRefreshNotice(false);
+    }
+    if (loadFailedRef.current) {
+      loadFailedRef.current = false;
+      setError(null);
+    }
     const newest = result.data.messages.at(-1)?.id ?? null;
-    if (latestRef.current !== undefined && newest === latestRef.current) return;
+    if (latestRef.current !== undefined && newest === latestRef.current) return null;
     latestRef.current = newest;
     setChannel(result.data);
 
-    if (markRead) void markChannelRead({ channelId });
+    if (markRead) void callAction(() => markChannelRead({ channelId }));
+    return null;
+  }, []);
+
+  const reportLoadFailure = useCallback((message: string | null) => {
+    if (!message || latestRef.current !== undefined) return;
+    loadFailedRef.current = true;
+    setError(message);
   }, []);
 
   // Open the channel once, then keep it. `openChannel` creates on first use, so
@@ -117,36 +149,49 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     let cancelled = false;
     if (channelId) {
       channelIdRef.current = channelId;
-      if (!initialChannel || initialChannel.id !== channelId) void refresh(channelId, true);
-      else void markChannelRead({ channelId });
-      void listMentionTargets({ channelId }).then((people) => {
+      if (!initialChannel || initialChannel.id !== channelId) {
+        void refresh(channelId, true).then((message) => {
+          if (!cancelled) reportLoadFailure(message);
+        });
+      } else {
+        void callAction(() => markChannelRead({ channelId }));
+      }
+      void callAction(() => listMentionTargets({ channelId })).then((people) => {
         if (!cancelled && people.ok && people.data) setTargets(people.data);
       });
       return () => { cancelled = true; };
     }
-    void openChannel({ kind, schoolId, memberId }).then(async (result) => {
+    void callAction(() => openChannel({ kind, schoolId, memberId })).then(async (result) => {
       if (cancelled) return;
       if (!result.ok || !result.data) {
+        loadFailedRef.current = true;
         setError(result.ok ? "Could not open this conversation" : result.error);
         return;
       }
-      channelIdRef.current = result.data.id;
-      await refresh(result.data.id, true);
-      const people = await listMentionTargets({ channelId: result.data.id });
+      const openedId = result.data.id;
+      channelIdRef.current = openedId;
+      const message = await refresh(openedId, true);
+      if (!cancelled) reportLoadFailure(message);
+      const people = await callAction(() => listMentionTargets({ channelId: openedId }));
       if (!cancelled && people.ok && people.data) setTargets(people.data);
     });
     return () => {
       cancelled = true;
     };
-  }, [kind, channelId, initialChannel, schoolId, memberId, refresh]);
+  }, [kind, channelId, initialChannel, schoolId, memberId, refresh, reportLoadFailure]);
 
   // Poll only while the tab is visible. A backgrounded phone should not be
   // making a request every six seconds on a teacher's mobile data.
   useEffect(() => {
     function tick() {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || navigator.onLine === false) return;
       const id = channelIdRef.current;
-      if (id) void refresh(id, true);
+      if (!id) return;
+      void refresh(id, true).then((message) => {
+        if (!message) return;
+        pollFailuresRef.current += 1;
+        if (pollFailuresRef.current >= POLL_FAILURES_BEFORE_NOTICE) setPollStalled(true);
+      });
     }
     const timer = setInterval(tick, POLL_MS);
     document.addEventListener("visibilitychange", tick);
@@ -179,8 +224,12 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     if (!body || !channelId || sending) return;
 
     setSending(true);
-    const result = await sendChatMessage({ channelId, body });
-    setSending(false);
+    let result;
+    try {
+      result = await callAction(() => sendChatMessage({ channelId, body }));
+    } finally {
+      setSending(false);
+    }
 
     if (!result.ok) {
       setError(result.error);
@@ -192,7 +241,12 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     // Force the next read to render: the poll skips when the newest id is
     // unchanged, and our own message changes it.
     latestRef.current = undefined;
-    await refresh(channelId, true);
+    const refreshFailure = await refresh(channelId, true);
+    // The message is saved, so the draft stays cleared: restoring it would invite a duplicate.
+    if (refreshFailure) {
+      refreshNoticeRef.current = true;
+      setRefreshNotice(true);
+    }
   }
 
   const suggestions =
@@ -249,6 +303,18 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
       {error && (
         <p className="px-4 pb-2 text-[12px] text-destructive" role="alert">
           {error}
+        </p>
+      )}
+
+      {refreshNotice && (
+        <p className="px-4 pb-2 text-[12px] text-muted-foreground" role="status">
+          Sent — couldn&rsquo;t refresh the conversation. It will update shortly.
+        </p>
+      )}
+
+      {pollStalled && !refreshNotice && (
+        <p className="px-4 pb-2 text-[12px] text-muted-foreground" role="status">
+          Can&rsquo;t refresh right now — retrying
         </p>
       )}
 

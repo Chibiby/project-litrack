@@ -54,6 +54,8 @@ const LEVELS: { id: SummaryLevel; label: string }[] = [
   { id: "school", label: "By school" },
 ];
 
+const SCHOOL_LEVEL_HINT = "Pick a district first to see its schools.";
+
 /** Radix Select cannot hold an empty item value. */
 const ALL = "__all__";
 
@@ -117,7 +119,8 @@ export function SummaryScopeBar({
                 variant="ghost"
                 aria-pressed={active}
                 disabled={disabled}
-                title={disabled ? "Pick a district first to see its schools" : undefined}
+                aria-describedby={disabled ? "summary-level-hint" : undefined}
+                title={disabled ? SCHOOL_LEVEL_HINT : undefined}
                 onClick={() => {
                   if (!active && !disabled) go({ level: item.id === "overall" ? null : item.id });
                 }}
@@ -134,6 +137,11 @@ export function SummaryScopeBar({
             );
           })}
         </div>
+        {requireDistrictForSchool && !district ? (
+          <p id="summary-level-hint" className="mt-1.5 text-xs text-muted-foreground">
+            {SCHOOL_LEVEL_HINT}
+          </p>
+        ) : null}
       </div>
 
       <div

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,9 +57,9 @@ function ChecklistRow({
       const fd = new FormData();
       fd.set("persona", personaFor(item.role));
       fd.set("next", item.href);
-      const res = await startTestLabSession(fd);
+      const res = await callAction(() => startTestLabSession(fd));
       // Success redirects, so only a failure returns here.
-      if (res && !res.ok) toast.error(res.error);
+      if (res && !res.ok) toastFailure(res);
     });
   }
 

@@ -26,6 +26,8 @@ import {
   exportKinderChecklist,
   saveKinderCompetencies,
 } from "@/lib/actions/kinder-competencies";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 type DirtyField = "t1" | "t2" | "t3" | "remark";
 
@@ -153,13 +155,15 @@ export function KinderChecklistClient({
     }
 
     startSaving(async () => {
-      const res = await saveKinderCompetencies({
-        advisorySectionId,
-        learnerId,
-        entries,
-      });
+      const res = await callAction(() =>
+        saveKinderCompetencies({
+          advisorySectionId,
+          learnerId,
+          entries,
+        })
+      );
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success(

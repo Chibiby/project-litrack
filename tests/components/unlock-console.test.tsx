@@ -15,6 +15,7 @@ import type { UnlockTargetSchool, ActiveTeacherUnlock, ActiveSchoolUnlock } from
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
+  unstable_isUnrecognizedActionError: () => false,
 }));
 
 const issueUnlock = vi.fn(async (_input?: unknown) => ({

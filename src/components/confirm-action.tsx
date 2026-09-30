@@ -14,6 +14,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { isActionFailure } from "@/lib/errors/client";
+import type { ActionFailure } from "@/lib/errors/result";
+import { failureForRejection, toastFailure } from "@/lib/ui/toast-failure";
 import { cn } from "@/lib/utils";
 
 type ConfirmActionProps = {
@@ -29,7 +32,8 @@ type ConfirmActionProps = {
   onOpenChange?: (open: boolean) => void;
   /** Trigger element (button/link). Required when uncontrolled. */
   trigger?: React.ReactNode;
-  onConfirm: () => void | Promise<void>;
+  /** Resolving to an `ActionFailure` toasts it and keeps the dialog open. */
+  onConfirm: () => void | ActionFailure | Promise<void | ActionFailure>;
 };
 
 /**
@@ -83,14 +87,20 @@ export function ConfirmAction({
               e.preventDefault();
               setPending(true);
               try {
-                await onConfirm();
+                const result = await onConfirm();
+                if (isActionFailure(result)) {
+                  toastFailure(result);
+                  return;
+                }
                 setOpen(false);
-              } catch {
+              } catch (err) {
                 // A rejected onConfirm is how a failed action asks to stay open
-                // for a retry — settleActionResult toasts the error and then
-                // throws. Swallow it here: the user has already been told, and
-                // letting it escape an async handler only logs an unhandled
-                // rejection. Behaviour is otherwise unchanged (no setOpen).
+                // for a retry. Nothing escapes: a redirect has already moved the
+                // router, a ToastedError has already told the person, and
+                // anything else, including a plain Error, is toasted here.
+                // Callers that toast first must throw ToastedError.
+                const failure = failureForRejection(err);
+                if (failure) toastFailure(failure);
               } finally {
                 setPending(false);
               }

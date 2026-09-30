@@ -31,9 +31,23 @@ describe("mapSupabaseAuthError", () => {
     const fetchFailure = { name: "AuthRetryableFetchError", status: 0, message: "Failed to fetch" };
     expect(mapSupabaseAuthError(fetchFailure, "browser")).toBe("AUTH_SERVICE_UNREACHABLE");
     expect(mapSupabaseAuthError(fetchFailure, "server")).toBe("AUTH_PROVIDER_ERROR");
+    // A real 5xx means the browser did connect: Supabase failed, not the wifi.
     expect(mapSupabaseAuthError({ status: 503, message: "upstream" }, "browser")).toBe(
+      "AUTH_PROVIDER_ERROR"
+    );
+    expect(mapSupabaseAuthError({ status: 503, message: "upstream" }, "server")).toBe(
+      "AUTH_PROVIDER_ERROR"
+    );
+  });
+
+  it("reads a status-0 or fetch-failure response as no connection in the browser", () => {
+    expect(mapSupabaseAuthError({ status: 0, message: "x" }, "browser")).toBe(
       "AUTH_SERVICE_UNREACHABLE"
     );
+    expect(mapSupabaseAuthError({ message: "Failed to fetch" }, "browser")).toBe(
+      "AUTH_SERVICE_UNREACHABLE"
+    );
+    expect(mapSupabaseAuthError({ status: 0, message: "x" }, "server")).toBe("AUTH_PROVIDER_ERROR");
   });
 
   it("names the password-policy refusals", () => {

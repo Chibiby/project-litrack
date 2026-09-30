@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { Mail, Plus, X } from "lucide-react";
 import { sendAdminEmail } from "@/lib/actions/admin-email";
+import { callAction } from "@/lib/ui/call-action";
 import type { AdminEmailRecipientOption } from "@/lib/admin-email/queries";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,9 @@ export function AdminEmailComposer({ recipients, configured }: { recipients: Adm
   function submit() {
     setNotice(null);
     startTransition(async () => {
-      const result = await sendAdminEmail({ recipients: [...selected.keys()], subject, body });
+      const result = await callAction(() =>
+        sendAdminEmail({ recipients: [...selected.keys()], subject, body })
+      );
       if (!result.ok) {
         setNotice(result.error);
         return;

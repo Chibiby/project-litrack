@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resourceNotFound } from "@/lib/errors/app-error";
 
 /**
  * Action-level coverage for the teacher cache fan-out of `transferLearner` and
@@ -214,15 +215,16 @@ vi.mock("@/lib/auth/district-scope", () => ({
  * pass even if `assertSameSchool` were deleted from the action.
  */
 const assertSameSchool = vi.fn(
-  (userSchoolId: string, resourceSchoolId: string | null | undefined) => {
+  (userSchoolId: string, resourceSchoolId: string | null | undefined, resource?: string) => {
     if (!resourceSchoolId || resourceSchoolId !== userSchoolId) {
-      throw new Error("Not found");
+      // The real guard throws the catalog NOT_FOUND, which `action()` returns.
+      throw resourceNotFound(resource ?? "Record", { crossTenant: Boolean(resourceSchoolId) });
     }
   }
 );
 vi.mock("@/lib/auth/tenant", () => ({
   assertSameSchool: (...a: unknown[]) =>
-    assertSameSchool(...(a as [string, string | null | undefined])),
+    assertSameSchool(...(a as [string, string | null | undefined, string?])),
 }));
 
 const writeAudit = vi.fn(async () => {});
@@ -385,10 +387,12 @@ describe("transferLearner — teacher cache fan-out", () => {
 
     // `toEqual` still pins the shape and rejects any other message — a leaked
     // stack trace or "Target grade level not found" fails here.
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
-      error: expect.stringMatching(/^(?:Not found|Learner not found)$/),
+      code: "NOT_FOUND",
+      error: expect.stringMatching(/^Learner not found/),
     });
+    expect(JSON.stringify(result)).not.toContain(OTHER_SCHOOL_ID);
 
     // The result assertion above already reddens when both mechanisms are gone,
     // because the action then returns ok. This adds the case it does NOT cover:
@@ -406,7 +410,7 @@ describe("transferLearner — teacher cache fan-out", () => {
     // mechanism it must compare the caller's school against the learner's — the
     // argument contract is worth pinning, and the assertions above carry the red.
     if (guardReached) {
-      expect(assertSameSchool).toHaveBeenCalledWith(SCHOOL_ID, OTHER_SCHOOL_ID);
+      expect(assertSameSchool).toHaveBeenCalledWith(SCHOOL_ID, OTHER_SCHOOL_ID, "Learner");
     }
 
     expect(transaction).not.toHaveBeenCalled();

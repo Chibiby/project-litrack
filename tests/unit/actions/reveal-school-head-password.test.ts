@@ -56,7 +56,14 @@ vi.mock("@/lib/auth/impersonation", () => ({
   setImpersonationCookie: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  // `action()` calls this first so Next's redirect/notFound throws escape the wrapper.
+  unstable_rethrow: (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT")) throw err;
+  },
+}));
+vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-REVEAL") }));
 vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolsList: vi.fn() }));
 
 const { sealPassword } = await import("@/lib/auth/password-vault");

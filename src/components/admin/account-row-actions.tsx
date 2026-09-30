@@ -2,7 +2,6 @@
 
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { CheckCircle2, Copy, Eye, EyeOff, KeyRound, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmAction } from "@/components/confirm-action";
+import { callAction } from "@/lib/ui/call-action";
+import { copyText } from "@/lib/ui/copy-text";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { AccountProfileDialog } from "@/components/admin/account-profile-dialog";
 import {
   revealSchoolHeadPassword,
@@ -120,9 +122,9 @@ export function PasswordCell({ row }: { row: AccountRow }) {
           const fd = new FormData();
           fd.set("userId", row.id);
           startTransition(async () => {
-            const res = await revealSchoolHeadPassword(fd);
+            const res = await callAction(() => revealSchoolHeadPassword(fd));
             if (!res.ok) {
-              toast.error(res.error);
+              toastFailure(res);
               return;
             }
             if (res.data) setRevealed(res.data.password);
@@ -171,15 +173,16 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
   const runReset = async () => {
     const fd = new FormData();
     fd.set("userId", row.id);
-    const res =
+    const res = await callAction(() =>
       row.role === "SCHOOL_HEAD"
-        ? await resetSchoolHeadPasswordToDefault(fd)
+        ? resetSchoolHeadPasswordToDefault(fd)
         : isDistrictAdmin
-          ? await resetDistrictAdminPassword(fd)
-          : await resetTeacherPassword(fd);
+          ? resetDistrictAdminPassword(fd)
+          : resetTeacherPassword(fd)
+    );
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
     setCredential(res.data?.password ?? null);
     router.refresh();
@@ -188,12 +191,12 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
   const runImpersonate = async () => {
     const fd = new FormData();
     fd.set("userId", row.id);
-    const res = await impersonateUser(fd);
+    const res = await callAction(() => impersonateUser(fd));
     // Success redirects to /teacher, /school-head or /district, so only a
     // failure returns here.
     if (res && !res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
   };
 
@@ -285,7 +288,7 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
               variant="outline"
               onClick={async () => {
                 if (!credential) return;
-                await navigator.clipboard.writeText(credential);
+                if (!(await copyText(credential))) return;
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}

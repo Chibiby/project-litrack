@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { getSharedJwks } from "@/lib/supabase/jwks";
 import { prisma } from "@/lib/prisma";
+import { classifyDbFailure } from "@/lib/db-errors";
 import { primeReadMode } from "@/lib/db/read-mode";
 import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
@@ -127,17 +128,14 @@ function recordSpanError(span: Span, err: unknown): void {
 
 /** `onRetry` fires before the second attempt, so a retry that then throws is still recorded. */
 async function loadUserByAuthId(authId: string, onRetry?: () => void): Promise<User | null> {
-  // Retry once on P2024 (pool timeout). Rapid teacher soft-nav + full prefetch
-  // can briefly queue past the serverless pool wait; a short backoff clears most
-  // transient failures before they hit teacher/error.tsx.
+  // Retry once when the database was unavailable (connection refused/closed,
+  // socket timeout, too many connections, admin shutdown, …). This used to key
+  // on P2024, which Prisma's client engine never raises, so it never fired. A
+  // short backoff clears most transient failures before they hit error.tsx.
   try {
     return await prisma.user.findUnique({ where: { authId } });
   } catch (err) {
-    const code =
-      err && typeof err === "object" && "code" in err
-        ? String((err as { code: unknown }).code)
-        : "";
-    if (code !== "P2024") throw err;
+    if (classifyDbFailure(err) !== "UNAVAILABLE") throw err;
     await new Promise((r) => setTimeout(r, 75));
     onRetry?.();
     // This await must stay inside the `catch`. Moving it into the `try` above would make a second

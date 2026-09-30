@@ -21,6 +21,7 @@ import {
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getLearnerProfile } from "@/lib/actions/learner-profile";
+import { callAction } from "@/lib/ui/call-action";
 import { toggleAralLearner } from "@/lib/actions/learner";
 import type { LearnerProfileData } from "@/lib/learners/profile";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
@@ -136,7 +137,7 @@ export function LearnerProfileModal({
   const load = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
-    const res = await getLearnerProfile(id);
+    const res = await callAction(() => getLearnerProfile(id));
     if (res.ok) {
       setLearner(res.data);
     } else {
@@ -428,6 +429,7 @@ export function LearnerProfileModal({
                       type="button"
                       variant="outline"
                       disabled
+                      aria-describedby="transfer-student-disabled-reason"
                       className="w-full justify-center gap-2"
                     >
                       <ArrowLeftRight className="h-4 w-4" aria-hidden />
@@ -436,6 +438,9 @@ export function LearnerProfileModal({
                         Soon
                       </span>
                     </Button>
+                    <span id="transfer-student-disabled-reason" className="sr-only">
+                      Transfers are handled by your School Head.
+                    </span>
                   </span>
 
                   {transferTutorButton}

@@ -23,6 +23,7 @@ const YEAR_ID = "sy-2026-2027";
 
 let seq = 0;
 let failOnCreate = false;
+let failWith: Error | null = null;
 let activeYear: { id: string } | null;
 let gradeType = "G7";
 let learnerMatches: {
@@ -35,6 +36,7 @@ let learnerMatches: {
 
 const createManyAndReturn = vi.fn(
   async (args: { data: Record<string, unknown>[] }) => {
+    if (failWith) throw failWith;
     if (failOnCreate) throw new Error("P2028: transaction already closed");
     return args.data.map((row) => ({
       id: `learner-${++seq}`,
@@ -114,6 +116,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   seq = 0;
   failOnCreate = false;
+  failWith = null;
   activeYear = { id: YEAR_ID };
   gradeType = "G7";
   learnerMatches = [];
@@ -194,6 +197,32 @@ describe("commitLearnerImport — failure and refusal", () => {
     expect(writeAudit).not.toHaveBeenCalled();
     // The refusal is safe: no Prisma error code or stack reaches the client.
     expect((res as { error: string }).error).not.toContain("P2028");
+  });
+
+  it("answers a transaction timeout with 'split the file', not 'wait and retry'", async () => {
+    failWith = Object.assign(
+      new Error("Transaction API error: Unable to start a transaction in the given time."),
+      { code: "P2028" }
+    );
+
+    const res = await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: rows(10) });
+
+    expect(res).toMatchObject({ ok: false, code: "IMPORT_TIMED_OUT" });
+    const error = (res as { error: string }).error;
+    expect(error).toContain("Split the file");
+    expect(error).not.toContain("try again");
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("leaves a non-timeout P2028 to the generic classifier", async () => {
+    failWith = Object.assign(new Error("Transaction API error: Transaction not found."), {
+      code: "P2028",
+    });
+
+    const res = await commitLearnerImport({ gradeLevelId: GRADE_ID, rows: rows(10) });
+
+    expect(res.ok).toBe(false);
+    expect((res as { code?: string }).code).not.toBe("IMPORT_TIMED_OUT");
   });
 
   it("refuses more than 500 rows before opening a transaction", async () => {

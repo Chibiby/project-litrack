@@ -444,11 +444,23 @@ function AccountsTableInner({
           >
           {rows.length === 0 ? (
             <div className="px-4 pb-4">
-              <EmptyState
-                title="No accounts match"
-                description="Try clearing the search or role filter."
-                icon={KeyRound}
-              />
+              {list.role || list.q || list.schoolId ? (
+                <EmptyState
+                  title="No accounts match"
+                  description="No accounts match your search or filters."
+                  actionHref="/admin/accounts"
+                  actionLabel="Clear filters"
+                  icon={KeyRound}
+                />
+              ) : (
+                <EmptyState
+                  title="No accounts yet"
+                  description="Accounts appear here once a school is created or a teacher registers."
+                  actionHref="/admin/schools/new"
+                  actionLabel="Create a school"
+                  icon={KeyRound}
+                />
+              )}
             </div>
           ) : (
             <>

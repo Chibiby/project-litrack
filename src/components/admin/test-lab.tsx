@@ -28,6 +28,8 @@ import {
   startDemoSession,
 } from "@/lib/actions/demo";
 import { impersonateUser, startTestLabSession } from "@/lib/actions/accounts";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { RESET_DEMO_CONFIRMATION } from "@/lib/validators/demo.schema";
 import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
 import type { TestLabPersona } from "@/lib/test-lab/personas";
@@ -73,9 +75,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
 
   function prepare() {
     startTransition(async () => {
-      const res = await prepareTestLab();
+      const res = await callAction(() => prepareTestLab());
       if (res && !res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success("Test data is ready.");
@@ -87,9 +89,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("confirm", confirm);
-      const res = await resetDemoData(fd);
+      const res = await callAction(() => resetDemoData(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       setConfirm("");
@@ -112,9 +114,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
    */
   function openDemoSession() {
     startTransition(async () => {
-      const res = await startDemoSession();
+      const res = await callAction(() => startDemoSession());
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       window.open("/login", "_blank", "noopener");
@@ -125,9 +127,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
 
   function closeDemoSession() {
     startTransition(async () => {
-      const res = await endDemoSession();
+      const res = await callAction(() => endDemoSession());
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success("Demo session ended. The demo school is hidden again.");
@@ -148,9 +150,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
       fd.set("userId", districtAdminId);
       // "Return to admin" comes back here, not to the accounts console.
       fd.set("returnTo", "test-lab");
-      const res = await impersonateUser(fd);
+      const res = await callAction(() => impersonateUser(fd));
       // Success redirects away, so only a failure returns here.
-      if (res && !res.ok) toast.error(res.error);
+      if (res && !res.ok) toastFailure(res);
     });
   }
 
@@ -158,9 +160,9 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
     startStartTransition(async () => {
       const fd = new FormData();
       fd.set("persona", persona);
-      const res = await startTestLabSession(fd);
+      const res = await callAction(() => startTestLabSession(fd));
       // Success redirects away, so only a failure returns here.
-      if (res && !res.ok) toast.error(res.error);
+      if (res && !res.ok) toastFailure(res);
     });
   }
 

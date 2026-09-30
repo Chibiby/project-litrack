@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
@@ -131,16 +132,23 @@ function AttendanceGridRowImpl({
         );
       })}
       <TableCell className="text-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          aria-label={`Clear ${learner.fullName}'s week`}
-          onClick={() => onClearRow(learner.id)}
-        >
-          <Eraser className="h-4 w-4" aria-hidden />
-        </Button>
+        <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={disabled}
+              aria-label={`Clear ${learner.fullName}'s week`}
+              onClick={() => onClearRow(learner.id)}
+            >
+              <Eraser className="h-4 w-4" aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Clear week</TooltipContent>
+        </Tooltip>
+        </TooltipProvider>
       </TableCell>
     </TableRow>
   );
@@ -209,7 +217,7 @@ function AttendanceCellPicker({
           aria-label={label}
           title={note || undefined}
           className={cn(
-            "flex h-11 w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 lg:h-8",
+            "flex h-11 w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 xl:h-8",
             CELL_TONE[status]
           )}
         >

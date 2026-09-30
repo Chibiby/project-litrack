@@ -4,6 +4,9 @@ import { useState } from "react";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { ChevronDown, ChevronUp, LogOut, Settings, UserCircle } from "lucide-react";
 import { logoutAction } from "@/lib/actions/auth";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
+import { isActionFailure } from "@/lib/errors/client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -159,7 +162,13 @@ export function UserAccountMenu({
                 on select and would unmount a form before it submitted. */}
             <DropdownMenuItem
               onSelect={() => {
-                void logoutAction();
+                void callAction(() => logoutAction())
+                  .then((res) => {
+                    if (isActionFailure(res)) toastFailure(res);
+                  })
+                  .catch(() => {
+                    // Control flow: the redirect has already moved the router.
+                  });
               }}
               className="cursor-pointer text-red-700 focus:text-red-700 dark:text-red-400 dark:focus:text-red-400"
             >

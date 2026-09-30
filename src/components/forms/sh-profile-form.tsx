@@ -42,6 +42,8 @@ import {
   type SchoolHeadProfileDryRunPreview,
 } from "@/lib/actions/school-head";
 import { toFormData } from "@/lib/forms/to-form-data";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
 import {
@@ -446,19 +448,21 @@ export function SchoolHeadProfileForm({
     }
 
     startTransition(async () => {
-      const res = await saveSchoolHeadProfile(
-        toFormData({
-          ...(parsed.data as SchoolHeadProfileInput),
-          ...(opts.structure
-            ? {
-                gradeTypes: opts.structure.gradeTypes,
-                sectionsPerGrade: opts.structure.sectionsPerGrade,
-              }
-            : { skipSchoolStructure: true }),
-        })
+      const res = await callAction(() =>
+        saveSchoolHeadProfile(
+          toFormData({
+            ...(parsed.data as SchoolHeadProfileInput),
+            ...(opts.structure
+              ? {
+                  gradeTypes: opts.structure.gradeTypes,
+                  sectionsPerGrade: opts.structure.sectionsPerGrade,
+                }
+              : { skipSchoolStructure: true }),
+          })
+        )
       );
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       if (isDryRunPreview<SchoolHeadProfileDryRunPreview>(res.data)) {

@@ -1,9 +1,11 @@
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -413,11 +415,24 @@ export function ReadOnlyField({
   value: string;
   hint?: string;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium">{label}</p>
-      <Input value={value} readOnly disabled className="bg-muted" />
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        value={value}
+        readOnly
+        disabled
+        className="bg-muted"
+        aria-describedby={hint ? hintId : undefined}
+      />
+      {hint ? (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

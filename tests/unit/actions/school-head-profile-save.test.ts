@@ -300,3 +300,23 @@ describe("saveSchoolHeadProfile — gender", () => {
     expect(profileUpsert).toHaveLength(0);
   });
 });
+
+describe("saveSchoolHeadProfile — school structure setup fails after the profile saved", () => {
+  it("says the profile saved without echoing the raw error text", async () => {
+    // `prismaMock` has no `gradeLevel` delegate, so the bootstrap throws a
+    // TypeError whose message is raw internals. It used to be interpolated
+    // straight into the sentence returned to the head.
+    const result = await saveSchoolHeadProfile(
+      buildFormData({ skipSchoolStructure: "", gradeTypes: "G1", sectionsPerGrade: "2" })
+    );
+
+    expect(result.ok).toBe(false);
+    const error = (result as { error: string }).error;
+    expect(error).toContain("Profile saved, but school structure setup failed. You can retry.");
+    expect(error).not.toContain("Cannot read properties");
+    expect(error).not.toContain("gradeLevel");
+    // The profile itself did save, and no audit row claims the structure was built.
+    expect(profileUpsert).toHaveLength(1);
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+});

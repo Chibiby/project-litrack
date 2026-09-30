@@ -446,12 +446,14 @@ describe("saveTeacherProfile", () => {
       meta: { target: ["email"] },
     });
 
-    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    const result = await saveTeacherProfile(buildFormData());
+    const error = failureMessage(result);
     expect(error).not.toContain("adviser");
     expect(error).not.toContain("User_email_key");
-    // Unclassifiable, so the honest advice is "retry, and quote this if it sticks".
-    expect(error).toContain("DB-UNKNOWN");
-    expect(error).toMatch(/try again/i);
+    // Classified by `action()` as a generic conflict, with a real reference.
+    expect(result).toMatchObject({ ok: false, code: "DB_CONFLICT" });
+    expect(error).toMatch(/Reference: E-[0-9A-Z]{8}/);
+    expect(error).not.toContain("DB-UNKNOWN");
   });
 
   it("never leaks raw database error text to the client", async () => {
@@ -459,10 +461,25 @@ describe("saveTeacherProfile", () => {
       'prepared statement "s3" already exists at Section.id = deadbeef',
     );
 
-    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    const result = await saveTeacherProfile(buildFormData());
+    const error = failureMessage(result);
     expect(error).not.toContain("prepared statement");
     expect(error).not.toContain("deadbeef");
-    expect(error).toContain("DB-UNKNOWN");
+    expect(error).toMatch(/Reference: E-[0-9A-Z]{8}/);
+    expect(error).not.toContain("DB-UNKNOWN");
+  });
+
+  it("answers a P1001-shaped rejection as DB_UNAVAILABLE with a real reference, not DB-BUSY", async () => {
+    userUpdateError = Object.assign(new Error("Can't reach database server at db.example:5432"), {
+      code: "P1001",
+    });
+
+    const result = await saveTeacherProfile(buildFormData());
+    const error = failureMessage(result);
+    expect(result).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
+    expect(error).toMatch(/Reference: E-[0-9A-Z]{8}/);
+    expect(error).not.toContain("DB-BUSY");
+    expect(error).not.toContain("db.example");
   });
 
   it("says a stale schema will not fix itself rather than telling the teacher to retry", async () => {
@@ -474,9 +491,12 @@ describe("saveTeacherProfile", () => {
       code: "P2022",
     });
 
-    const error = failureMessage(await saveTeacherProfile(buildFormData()));
+    const result = await saveTeacherProfile(buildFormData());
+    const error = failureMessage(result);
     expect(error).toMatch(/won't help/i);
-    expect(error).toContain("DB-SCHEMA");
+    expect(result).toMatchObject({ ok: false, code: "DB_SCHEMA_OUT_OF_DATE" });
+    expect(error).toMatch(/Reference: E-[0-9A-Z]{8}/);
+    expect(error).not.toContain("DB-SCHEMA");
     expect(error).not.toContain("employmentType");
   });
 

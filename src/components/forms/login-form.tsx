@@ -38,6 +38,8 @@ import {
   reportLoginFailure,
 } from "@/lib/actions/login";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { callAction } from "@/lib/ui/call-action";
+import type { ActionFailure } from "@/lib/errors/result";
 import { formatMessage } from "@/lib/errors/codes";
 import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
@@ -71,6 +73,38 @@ function markPostLoginSplash() {
   } catch {
     // sessionStorage unavailable — splash simply won't show
   }
+}
+
+/**
+ * Runs a server-side sign-in. A successful one redirects, which rejects the
+ * client promise after the router has already navigated, so the splash flag is
+ * set on that path before the redirect is passed on.
+ */
+async function markSplashOnRedirect<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (isRedirectError(err)) {
+      markPostLoginSplash();
+      resetSidebarExpandedPreference();
+    }
+    throw err;
+  }
+}
+
+type FieldKey = "email" | "password" | "confirmPassword";
+type FieldErrors = Partial<Record<FieldKey, string>>;
+const FIELD_ORDER: FieldKey[] = ["email", "password", "confirmPassword"];
+
+const ERROR_TEXT = "text-sm font-medium text-destructive";
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className={ERROR_TEXT}>
+      {message}
+    </p>
+  );
 }
 
 /** The Teachers / School Head toggle: the violet pill when picked, outlined when not. */
@@ -120,10 +154,63 @@ export function LoginForm({
   const [lastName, setLastName] = useState("");
   /** Sync lock so double Enter/click cannot start two registrations before `pending` re-renders. */
   const registerLock = useRef(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  /** Input to focus once the failed attempt has finished and inputs are enabled again. */
+  const focusRequest = useRef<string | null>(null);
 
   useEffect(() => {
     if (loginError) toast.error(loginError);
   }, [loginError]);
+
+  useEffect(() => {
+    if (pending || !focusRequest.current) return;
+    document.getElementById(focusRequest.current)?.focus();
+    focusRequest.current = null;
+  }, [pending, fieldErrors, formError]);
+
+  const fieldDomId = (key: FieldKey): string => {
+    if (screen === "school-head") return "password";
+    if (teacherIntent === "login") return key === "email" ? "email" : "teacherPassword";
+    if (key === "email") return "registerEmail";
+    return key === "password" ? "registerPassword" : "confirmPassword";
+  };
+
+  const clearErrors = () => {
+    setFieldErrors({});
+    setFormError(null);
+  };
+
+  const clearFieldError = (key: FieldKey) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  /** Put a failure next to the input it is about; anything else goes above the submit button. */
+  const showFailure = (failure: Pick<ActionFailure, "code" | "error" | "fieldErrors">) => {
+    const fromServer = failure.fieldErrors ?? {};
+    const next: FieldErrors = {};
+    if (fromServer.email) next.email = fromServer.email;
+    if (fromServer.password) next.password = fromServer.password;
+    if (fromServer.confirmPassword) next.confirmPassword = fromServer.confirmPassword;
+    if (Object.keys(next).length === 0) {
+      if (failure.code === "AUTH_TEACHER_NOT_FOUND") next.email = failure.error;
+      if (failure.code === "AUTH_INCORRECT_PASSWORD") next.password = failure.error;
+    }
+    const first = FIELD_ORDER.find((key) => next[key]);
+    if (first) {
+      setFieldErrors(next);
+      setFormError(null);
+      focusRequest.current = fieldDomId(first);
+    } else {
+      setFieldErrors({});
+      setFormError(Object.values(fromServer)[0] ?? failure.error);
+    }
+  };
 
   const handleSchoolChange = (value: string) => {
     setSchoolId(value);
@@ -157,10 +244,12 @@ export function LoginForm({
 
   const goBackToSchoolSelect = () => {
     resetTeacherFlow();
+    clearErrors();
     setScreen("select-role");
   };
 
   const switchTeacherIntent = (intent: TeacherIntent) => {
+    clearErrors();
     setTeacherIntent(intent);
     setPassword("");
     setConfirmPassword("");
@@ -193,10 +282,11 @@ export function LoginForm({
   };
 
   const handleTeacherLogin = () => {
+    clearErrors();
     startTransition(async () => {
-      const begin = await beginTeacherLogin(schoolId, email);
+      const begin = await callAction(() => beginTeacherLogin(schoolId, email));
       if (!begin.ok) {
-        toast.error(begin.error);
+        showFailure(begin);
         return;
       }
       // `beginTeacherLogin` never asks for the server fallback — the teacher
@@ -216,24 +306,38 @@ export function LoginForm({
         // "the server said no" from "the request never arrived". Calling a
         // dropped connection a wrong password is what sends people off to reset
         // a password that was never the problem.
-        const code = mapSupabaseAuthError(error, "browser");
-        await reportLoginFailure({
-          schoolId,
-          role: "TEACHER",
-          email: begin.email,
-          reason: loginFailureReasonFor(code),
-        });
-        toast.error(formatMessage(code));
+        showBrowserGrantFailure(error, { role: "TEACHER", email: begin.email });
         return;
       }
 
-      const finish = await finishTeacherLogin(schoolId);
+      const finish = await callAction(() => finishTeacherLogin(schoolId));
       if (!finish.ok) {
-        toast.error(finish.error);
+        showFailure(finish);
         return;
       }
       enterApp(finish.redirectTo);
     });
+  };
+
+  /**
+   * Show the message first, then tell the server. Awaiting the report before
+   * the message meant nothing appeared while offline, and a slow or failed
+   * report would hold the message back.
+   */
+  const showBrowserGrantFailure = (
+    error: unknown,
+    report: { role: "TEACHER" | "SCHOOL_HEAD"; email?: string }
+  ) => {
+    // Offline is not a sign-in attempt worth auditing, and the report could not be sent anyway.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      showFailure({ code: "NETWORK_OFFLINE", error: formatMessage("NETWORK_OFFLINE") });
+      return;
+    }
+    const code = mapSupabaseAuthError(error, "browser");
+    showFailure({ code, error: formatMessage(code) });
+    void callAction(() =>
+      reportLoginFailure({ schoolId, ...report, reason: loginFailureReasonFor(code) })
+    );
   };
 
   /** Original server-side grant, kept as the fallback path. */
@@ -242,62 +346,51 @@ export function LoginForm({
     formData.set("schoolId", schoolId);
     formData.set("email", email.trim());
     formData.set("password", password);
-    try {
-      const res = await loginTeacher(formData);
-      if (res && !res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      markPostLoginSplash();
-      resetSidebarExpandedPreference();
-    } catch (err) {
-      if (isRedirectError(err)) {
-        markPostLoginSplash();
-        resetSidebarExpandedPreference();
-      }
-      throw err;
+    const res = await markSplashOnRedirect(() => callAction(() => loginTeacher(formData)));
+    if (res && !res.ok) {
+      showFailure(res);
+      return;
     }
+    markPostLoginSplash();
+    resetSidebarExpandedPreference();
   };
 
   const handleRegisterTeacher = () => {
     if (pending || registerLock.current) return;
+    clearErrors();
 
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+      setFieldErrors({ confirmPassword: "Passwords do not match" });
+      focusRequest.current = "confirmPassword";
       return;
     }
 
     const strength = strongPassword.safeParse(password);
     if (!strength.success) {
-      toast.error(strength.error.errors[0]?.message ?? PASSWORD_HINT);
+      setFieldErrors({ password: strength.error.errors[0]?.message ?? PASSWORD_HINT });
+      focusRequest.current = "registerPassword";
       return;
     }
 
     registerLock.current = true;
     startTransition(async () => {
-      try {
-        const res = await registerTeacher(buildRegisterFormData());
-        if (!res.ok) {
-          toast.error(res.error);
-          registerLock.current = false;
-          return;
-        }
-        // Approved accounts land in the app shell (splash); pending accounts get
-        // the "Account created" page, which is a plain page and needs no splash.
-        if (res.redirectTo !== REGISTER_PENDING_PATH) {
-          markPostLoginSplash();
-          resetSidebarExpandedPreference();
-        }
-        // Navigate here rather than redirecting inside the action: the browser
-        // applies the new session cookies first, so the destination sees the
-        // session instead of bouncing back to /login.
-        // Lock stays held — the page is navigating away.
-        router.replace(res.redirectTo);
-      } catch (err) {
-        console.error("[login-form] teacher register failed:", err);
+      const res = await callAction(() => registerTeacher(buildRegisterFormData()));
+      if (!res.ok) {
         registerLock.current = false;
-        toast.error(formatMessage("INTERNAL_ERROR"));
+        showFailure(res);
+        return;
       }
+      // Approved accounts land in the app shell (splash); pending accounts get
+      // the "Account created" page, which is a plain page and needs no splash.
+      if (res.redirectTo !== REGISTER_PENDING_PATH) {
+        markPostLoginSplash();
+        resetSidebarExpandedPreference();
+      }
+      // Navigate here rather than redirecting inside the action: the browser
+      // applies the new session cookies first, so the destination sees the
+      // session instead of bouncing back to /login.
+      // Lock stays held — the page is navigating away.
+      router.replace(res.redirectTo);
     });
   };
 
@@ -312,14 +405,17 @@ export function LoginForm({
    * the server action: the server will not hand a personal address to an
    * unauthenticated page.
    */
-  const handleSchoolHeadSubmit = (formData: FormData) => {
-    const typedPassword = String(formData.get("password") ?? "");
+  const handleSchoolHeadSubmit = () => {
+    const typedPassword = password;
+    const formData = new FormData();
     formData.set("schoolId", schoolId);
+    formData.set("password", typedPassword);
+    clearErrors();
 
     startTransition(async () => {
-      const begin = await beginSchoolHeadLogin(schoolId);
+      const begin = await callAction(() => beginSchoolHeadLogin(schoolId));
       if (!begin.ok) {
-        toast.error(begin.error);
+        showFailure(begin);
         return;
       }
       if (begin.mode === "server") {
@@ -333,19 +429,13 @@ export function LoginForm({
         password: typedPassword,
       });
       if (error) {
-        const code = mapSupabaseAuthError(error, "browser");
-        await reportLoginFailure({
-          schoolId,
-          role: "SCHOOL_HEAD",
-          reason: loginFailureReasonFor(code),
-        });
-        toast.error(formatMessage(code));
+        showBrowserGrantFailure(error, { role: "SCHOOL_HEAD" });
         return;
       }
 
-      const finish = await finishSchoolHeadLogin(schoolId);
+      const finish = await callAction(() => finishSchoolHeadLogin(schoolId));
       if (!finish.ok) {
-        toast.error(finish.error);
+        showFailure(finish);
         return;
       }
       enterApp(finish.redirectTo);
@@ -354,21 +444,13 @@ export function LoginForm({
 
   /** Original server-side grant, kept for accounts with a real email address. */
   const serverSideSchoolHeadLogin = async (formData: FormData) => {
-    try {
-      const res = await loginSchoolHead(formData);
-      if (res && !res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      markPostLoginSplash();
-      resetSidebarExpandedPreference();
-    } catch (err) {
-      if (isRedirectError(err)) {
-        markPostLoginSplash();
-        resetSidebarExpandedPreference();
-      }
-      throw err;
+    const res = await markSplashOnRedirect(() => callAction(() => loginSchoolHead(formData)));
+    if (res && !res.ok) {
+      showFailure(res);
+      return;
     }
+    markPostLoginSplash();
+    resetSidebarExpandedPreference();
   };
 
   if (screen === "select-role") {
@@ -376,13 +458,12 @@ export function LoginForm({
     const canContinue = Boolean(schoolId) && !(role === "teacher" && teachersLocked);
     const handleContinue = () => {
       if (!canContinue) return;
-      if (role === "teacher") {
-        resetTeacherFlow();
-        setScreen("teacher");
-      } else {
-        setScreen("school-head");
-      }
+      clearErrors();
+      resetTeacherFlow();
+      setScreen(role === "teacher" ? "teacher" : "school-head");
     };
+    const continueHint =
+      !schoolId && schools.length > 0 ? "Select your school to continue." : null;
 
     return (
       <AuthCard>
@@ -423,9 +504,13 @@ export function LoginForm({
               School Name
             </Label>
             {schools.length === 0 ? (
-              <p className="rounded-xl border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
-                No schools found. Contact admin.
-              </p>
+              // The notice above already says the list failed to load; "No schools
+              // found" would contradict it.
+              notice ? null : (
+                <p className="rounded-xl border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
+                  No schools found. Contact admin.
+                </p>
+              )
             ) : (
               <SearchableSelect
                 id="login-school"
@@ -475,13 +560,18 @@ export function LoginForm({
           <Button
             type="button"
             disabled={!canContinue}
-            title={!schoolId ? "Select a school first" : undefined}
+            aria-describedby={continueHint ? "login-continue-hint" : undefined}
             onClick={handleContinue}
             className={cn(AUTH_PRIMARY_BUTTON, "mt-6 2xl:mt-7")}
           >
             <ArrowRight aria-hidden />
-            Continue
+            {role === "teacher" ? "Next: enter email and password" : "Next: enter password"}
           </Button>
+          {continueHint ? (
+            <p id="login-continue-hint" className="mt-2 text-center text-sm text-slate-600">
+              {continueHint}
+            </p>
+          ) : null}
 
           <div className="mt-6 flex items-center gap-3 text-sm text-slate-500 2xl:mt-7" aria-hidden>
             <span className="h-px flex-1 bg-border" />
@@ -522,7 +612,7 @@ export function LoginForm({
           type="button"
           variant="link"
           size="sm"
-          className="mb-1 h-auto p-0 text-sm text-slate-600 hover:text-indigo-950"
+          className="mb-1 h-auto min-h-11 p-0 text-sm text-slate-600 hover:text-indigo-950"
           onClick={goBackToSchoolSelect}
         >
           ← Change school
@@ -536,7 +626,13 @@ export function LoginForm({
 
         {screen === "school-head" ? (
           <>
-            <form action={handleSchoolHeadSubmit} className="space-y-4">
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSchoolHeadSubmit();
+              }}
+            >
               <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
                 School Head sign in
               </h2>
@@ -548,11 +644,20 @@ export function LoginForm({
                   required
                   autoFocus
                   autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    clearFieldError("password");
+                  }}
+                  aria-invalid={fieldErrors.password ? true : undefined}
+                  aria-describedby={fieldErrors.password ? "password-error" : undefined}
                 />
+                <FieldError id="password-error" message={fieldErrors.password} />
                 <p className="text-xs text-muted-foreground">
                   First time signing in? Enter your School ID. You&apos;ll choose your own password next.
                 </p>
               </div>
+              <FieldError id="login-form-error" message={formError ?? undefined} />
               <Button
                 type="submit"
                 className={AUTH_PRIMARY_BUTTON}
@@ -621,10 +726,16 @@ export function LoginForm({
                     autoFocus
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      clearFieldError("email");
+                    }}
                     disabled={pending}
                     placeholder="you@school.edu"
+                    aria-invalid={fieldErrors.email ? true : undefined}
+                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
                   />
+                  <FieldError id="email-error" message={fieldErrors.email} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="teacherPassword">Password</Label>
@@ -634,10 +745,17 @@ export function LoginForm({
                     required
                     autoComplete="current-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearFieldError("password");
+                    }}
                     disabled={pending}
+                    aria-invalid={fieldErrors.password ? true : undefined}
+                    aria-describedby={fieldErrors.password ? "teacherPassword-error" : undefined}
                   />
+                  <FieldError id="teacherPassword-error" message={fieldErrors.password} />
                 </div>
+                <FieldError id="login-form-error" message={formError ?? undefined} />
                 <Button
                   type="submit"
                   className={AUTH_PRIMARY_BUTTON}
@@ -711,10 +829,16 @@ export function LoginForm({
                     required
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      clearFieldError("email");
+                    }}
                     disabled={pending}
                     placeholder="you@school.edu"
+                    aria-invalid={fieldErrors.email ? true : undefined}
+                    aria-describedby={fieldErrors.email ? "registerEmail-error" : undefined}
                   />
+                  <FieldError id="registerEmail-error" message={fieldErrors.email} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="registerPassword">Password</Label>
@@ -725,10 +849,20 @@ export function LoginForm({
                     minLength={8}
                     autoComplete="new-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearFieldError("password");
+                    }}
                     disabled={pending}
+                    aria-invalid={fieldErrors.password ? true : undefined}
+                    aria-describedby={
+                      fieldErrors.password ? "registerPassword-error" : "registerPassword-hint"
+                    }
                   />
-                  <p className="text-xs text-muted-foreground">{PASSWORD_HINT}</p>
+                  <FieldError id="registerPassword-error" message={fieldErrors.password} />
+                  <p id="registerPassword-hint" className="text-xs text-muted-foreground">
+                    {PASSWORD_HINT}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm password</Label>
@@ -739,10 +873,19 @@ export function LoginForm({
                     minLength={8}
                     autoComplete="new-password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      clearFieldError("confirmPassword");
+                    }}
                     disabled={pending}
+                    aria-invalid={fieldErrors.confirmPassword ? true : undefined}
+                    aria-describedby={
+                      fieldErrors.confirmPassword ? "confirmPassword-error" : undefined
+                    }
                   />
+                  <FieldError id="confirmPassword-error" message={fieldErrors.confirmPassword} />
                 </div>
+                <FieldError id="login-form-error" message={formError ?? undefined} />
                 <Button
                   type="submit"
                   className={AUTH_PRIMARY_BUTTON}

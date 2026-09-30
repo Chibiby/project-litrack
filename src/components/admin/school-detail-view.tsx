@@ -30,6 +30,8 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { removeSchoolLearners, removeSchoolTeachers } from "@/lib/actions/admin-school";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
 import { removeAllTeachers, resetOperationalData } from "@/lib/actions/database";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { SortSelect } from "@/components/ui/sort-select";
 import { compareNames } from "@/lib/sort/compare";
 import { defineSort, type SortOption } from "@/lib/sort/registry";
@@ -165,16 +167,16 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
       data.set("confirm", CONFIRM_PHRASES.resetOperational);
       data.set("schoolId", schoolId);
 
-      const cleared = await resetOperationalData(data);
+      const cleared = await callAction(() => resetOperationalData(data));
       if (!cleared.ok) {
-        toast.error(cleared.error);
+        toastFailure(cleared);
         return;
       }
 
       const teachers = new FormData();
       teachers.set("confirm", CONFIRM_PHRASES.removeTeachers);
       teachers.set("schoolId", schoolId);
-      const removed = await removeAllTeachers(teachers);
+      const removed = await callAction(() => removeAllTeachers(teachers));
       if (!removed.ok) {
         // The records are already gone; say so rather than implying nothing ran.
         toast.error(`Records cleared, but the teacher accounts were not: ${removed.error}`);
@@ -355,9 +357,9 @@ export function SchoolDetailView({
       fd.set("schoolId", school.id);
       for (const id of ids) fd.append("teacherIds", id);
 
-      const res = await removeSchoolTeachers(fd);
+      const res = await callAction(() => removeSchoolTeachers(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       const { removed = 0, failed = 0 } = res.data ?? {};
@@ -675,9 +677,9 @@ function SchoolLearnersPanelBody({
       fd.set("schoolId", schoolId);
       for (const id of ids) fd.append("learnerIds", id);
 
-      const res = await removeSchoolLearners(fd);
+      const res = await callAction(() => removeSchoolLearners(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       const removed = res.data?.removed ?? 0;

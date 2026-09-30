@@ -5,6 +5,7 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 export default function SchoolHeadError(props: {
   error: Error & { digest?: string };
+  retry: () => void;
   reset: () => void;
 }) {
   return (

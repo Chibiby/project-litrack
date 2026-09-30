@@ -16,6 +16,8 @@ import {
   dismissAralAssignmentAlerts,
   fetchAralAssignmentAlerts,
 } from "@/lib/actions/notifications";
+import { isActionFailure } from "@/lib/errors/client";
+import { callAction } from "@/lib/ui/call-action";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
 
 /** Shape comes from the action, so this cannot drift from what the server sends. */
@@ -62,8 +64,8 @@ export function AralAssignmentAlerts() {
 
     const load = async () => {
       if (cancelled) return;
-      const rows = await fetchAralAssignmentAlerts();
-      if (cancelled || rows.length === 0) return;
+      const rows = await callAction(() => fetchAralAssignmentAlerts());
+      if (cancelled || isActionFailure(rows) || rows.length === 0) return;
       setAlerts(rows);
       setOpen(true);
     };
@@ -121,7 +123,7 @@ export function AralAssignmentAlerts() {
       // Optimistic and silent: the teacher has read the message, and a failed
       // write only means it greets them again next time. A toast about a
       // notification they just dismissed would be the noisier failure.
-      void dismissAralAssignmentAlerts(ids).catch(() => {});
+      void callAction(() => dismissAralAssignmentAlerts(ids)).catch(() => {});
     },
     [alerts]
   );

@@ -19,6 +19,8 @@ import {
   settleActionResult,
   type ListOptimisticOp,
 } from "@/lib/ui/optimistic";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 export function CreateAnnouncementForm() {
   const [pending, startTransition] = useTransition();
@@ -26,16 +28,19 @@ export function CreateAnnouncementForm() {
   return (
     <form
       className="space-y-4"
-      action={(fd) =>
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
-          const res = await createAnnouncement(fd);
-          if (!res.ok) toast.error(res.error);
+          const res = await callAction(() => createAnnouncement(fd));
+          if (!res.ok) toastFailure(res);
           else {
             toast.success("Announcement published");
-            (document.getElementById("announcement-form") as HTMLFormElement | null)?.reset();
+            form.reset();
           }
-        })
-      }
+        });
+      }}
       id="announcement-form"
     >
       <div className="space-y-2">
@@ -99,13 +104,15 @@ export function AnnouncementActions({
     <div className="space-y-3 border-t border-border/60 pt-3">
       <form
         className="space-y-3"
-        action={(fd) =>
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
           startTransition(async () => {
-            const res = await updateAnnouncement(fd);
-            if (!res.ok) toast.error(res.error);
+            const res = await callAction(() => updateAnnouncement(fd));
+            if (!res.ok) toastFailure(res);
             else toast.success("Announcement updated");
-          })
-        }
+          });
+        }}
       >
         <input type="hidden" name="announcementId" value={announcementId} />
         <Input name="title" defaultValue={title} disabled={isPending} />
@@ -118,7 +125,7 @@ export function AnnouncementActions({
             loading={isPending}
             loadingText="Saving…"
           >
-            Save
+            Save announcement
           </Button>
           <ConfirmAction
             title="Delete this announcement?"

@@ -68,6 +68,7 @@ import {
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
 import { MAX_ADVISORY_SECTIONS } from "@/lib/teachers/advisory-limits";
 import { saveTeacherProfile, type TeacherProfileDryRunPreview } from "@/lib/actions/teacher";
+import { callAction } from "@/lib/ui/call-action";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { DryRunNotice } from "@/components/test-lab/dry-run-notice";
 import {
@@ -954,7 +955,9 @@ export function TeacherProfileForm({
       return;
     }
     startTransition(async () => {
-      const res = await saveTeacherProfile(toFormData(parsed.data as TeacherProfileInput));
+      const res = await callAction(() =>
+        saveTeacherProfile(toFormData(parsed.data as TeacherProfileInput))
+      );
       if (res.ok) {
         if (isDryRunPreview<TeacherProfileDryRunPreview>(res.data)) {
           setPreviewRows(buildTeacherPreviewRows(res.data.preview, gradeLevels));
@@ -1550,7 +1553,7 @@ export function TeacherProfileForm({
             ) : (
               <>
                 {noAssignableSections ? (
-                  <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
                     {gradeLevels.length === 0
                       ? "Your school has no grade levels set up yet. Ask your School Head to add grade levels and sections before you can finish profiling."
                       : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}

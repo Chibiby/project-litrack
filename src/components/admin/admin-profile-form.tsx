@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateAdminProfile } from "@/lib/actions/school-management";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 export function AdminProfileForm({
   firstName,
@@ -29,8 +31,8 @@ export function AdminProfileForm({
         className="space-y-4"
         action={(fd) =>
           startTransition(async () => {
-            const res = await updateAdminProfile(fd);
-            if (!res.ok) toast.error(res.error);
+            const res = await callAction(() => updateAdminProfile(fd));
+            if (!res.ok) toastFailure(res);
             else toast.success("Profile updated");
           })
         }

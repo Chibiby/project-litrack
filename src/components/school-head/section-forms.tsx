@@ -19,6 +19,8 @@ import {
   tempOptimisticId,
   type ListOptimisticOp,
 } from "@/lib/ui/optimistic";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 
 export function CreateSectionForm({
   grades,
@@ -30,13 +32,19 @@ export function CreateSectionForm({
   return (
     <form
       className="space-y-4"
-      action={(fd) =>
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
-          const res = await createSection(fd);
-          if (!res.ok) toast.error(res.error);
-          else toast.success("Section created");
-        })
-      }
+          const res = await callAction(() => createSection(fd));
+          if (!res.ok) toastFailure(res);
+          else {
+            toast.success("Section created");
+            form.reset();
+          }
+        });
+      }}
     >
       <div className="space-y-2">
         <Label htmlFor="gradeLevelId">Grade level</Label>
@@ -110,7 +118,9 @@ export function SectionRowActions({
     <div className="flex flex-wrap items-center gap-2">
       <form
         className="flex items-center gap-2 max-lg:w-full"
-        action={(fd) => {
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
           const nextName = String(fd.get("name") ?? "").trim();
           if (onRename) {
             void Promise.resolve(onRename(nextName)).catch(() => {
@@ -141,7 +151,7 @@ export function SectionRowActions({
           loadingText="Saving…"
           className="lg:h-9"
         >
-          Save
+          Rename section
         </Button>
       </form>
       <ConfirmAction
@@ -210,7 +220,7 @@ export function GradeSectionsPanel({
     runOptimistic(startTransition, async () => {
       if (!name) {
         toast.error("Section name is required");
-        throw new Error("Section name is required");
+        throw new ToastedError("Section name is required");
       }
       dispatchOptimistic({ type: "patch", id: sectionId, patch: { name } });
       const fd = new FormData();
@@ -229,7 +239,7 @@ export function GradeSectionsPanel({
       const trimmed = name.trim();
       if (!trimmed) {
         toast.error("Section name is required");
-        throw new Error("Section name is required");
+        throw new ToastedError("Section name is required");
       }
       dispatchOptimistic({
         type: "append",
@@ -275,11 +285,15 @@ export function GradeSectionsPanel({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <form
             className="flex flex-1 flex-wrap items-end gap-2"
-            action={(fd) => {
-              const name = String(fd.get("name") ?? "");
-              void appendSection(name, createSection, "Section created").catch(() => {
-                /* toast already shown */
-              });
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const name = String(new FormData(form).get("name") ?? "");
+              void appendSection(name, createSection, "Section created")
+                .then(() => form.reset())
+                .catch(() => {
+                  /* toast already shown; the typed name stays for a retry */
+                });
             }}
           >
             <input type="hidden" name="gradeLevelId" value={gradeLevelId} />

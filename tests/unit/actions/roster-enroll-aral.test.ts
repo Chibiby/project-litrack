@@ -289,7 +289,11 @@ describe("enrollRosterLearnersToAral — the selection it will act on", () => {
 
   it("rejects an empty selection before it reads anything", async () => {
     const res = await enrollRosterLearnersToAral({ learnerIds: [] });
-    expect(res).toEqual({ ok: false, error: "Select at least one learner" });
+    expect(res).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      error: "Select at least one learner",
+    });
     expect(learnerFindMany).not.toHaveBeenCalled();
     expectNoWrites();
   });
@@ -374,7 +378,11 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
       aralTeacherId: "not-a-uuid",
     });
 
-    expect(res).toEqual({ ok: false, error: "Invalid teacher" });
+    expect(res).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      error: "Invalid teacher",
+    });
     expect(isEligibleAralTutor).not.toHaveBeenCalled();
     expectNoWrites();
   });

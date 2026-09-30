@@ -27,7 +27,12 @@ import {
   normalizeLearnerCsvHeader,
   type ImportRowResult,
 } from "@/lib/learners/import-csv";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { Download, FileUp, Loader2, ArrowLeft } from "lucide-react";
+
+const UNREADABLE_FILE_MESSAGE =
+  "That file couldn't be read. Save it as .csv or .xlsx and try again.";
 
 type Step = "upload" | "preview" | "done";
 
@@ -78,9 +83,9 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     setBusy("template");
     startTransition(async () => {
       try {
-        const res = await getLearnerImportTemplate({ gradeLevelId });
+        const res = await callAction(() => getLearnerImportTemplate({ gradeLevelId }));
         if (!res.ok) {
-          toast.error(res.error);
+          toastFailure(res);
           return;
         }
         downloadBlob("litrack-learner-import-template.csv", res.data.csv, "text/csv;charset=utf-8");
@@ -99,7 +104,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
       transformHeader: (h) => normalizeLearnerCsvHeader(h),
       complete: (parsed) => {
         if (parsed.errors.length > 0 && !parsed.data.length) {
-          toast.error(parsed.errors[0]?.message ?? "Failed to parse CSV");
+          toast.error(UNREADABLE_FILE_MESSAGE);
           return;
         }
         const rows = parsed.data.filter((r) =>
@@ -113,9 +118,9 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
         setBusy("parse");
         startTransition(async () => {
           try {
-            const res = await previewLearnerImport({ gradeLevelId, rows });
+            const res = await callAction(() => previewLearnerImport({ gradeLevelId, rows }));
             if (!res.ok) {
-              toast.error(res.error);
+              toastFailure(res);
               return;
             }
             setResults(res.data.results);
@@ -126,7 +131,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
           }
         });
       },
-      error: (err) => toast.error(err.message),
+      error: () => toast.error(UNREADABLE_FILE_MESSAGE),
     });
   }
 
@@ -134,13 +139,15 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     setBusy("commit");
     startTransition(async () => {
       try {
-        const res = await commitLearnerImport({
-          gradeLevelId,
-          rows: rawRows,
-          allowDuplicates,
-        });
+        const res = await callAction(() =>
+          commitLearnerImport({
+            gradeLevelId,
+            rows: rawRows,
+            allowDuplicates,
+          })
+        );
         if (!res.ok) {
-          toast.error(res.error);
+          toastFailure(res);
           return;
         }
         setCommitStats({

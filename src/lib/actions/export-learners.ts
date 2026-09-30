@@ -189,7 +189,7 @@ async function buildLearnersWorkbook(
   gradeSection: GradeSectionLine,
   purpose: ReportPurpose
 ): Promise<Buffer> {
-  // Dynamic import keeps exceljs off the reports (`loadLearnersForReport`) cold path.
+  // Dynamic import keeps exceljs off the printable-report cold path.
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   wb.creator = "LITRACK";
@@ -497,10 +497,10 @@ export const exportSchoolHeadLearnersExcel = action(
 );
 
 /** Record printable/PDF report view (browser print). */
-export async function auditPrintableReport(input: {
+export const auditPrintableReport = action("auditPrintableReport", async (input: {
   scope: "TEACHER" | "SCHOOL_HEAD";
   schoolId: string;
-}): Promise<void> {
+}): Promise<void> => {
   const user =
     input.scope === "TEACHER"
       ? await requireSchoolUser("TEACHER")
@@ -519,7 +519,7 @@ export async function auditPrintableReport(input: {
     resource: "Report",
     metadata: { scope: input.scope },
   });
-}
+}, { verb: "record the print" });
 
 export type PrintableReportLearner = {
   id: string;
@@ -550,15 +550,13 @@ export type PrintableReportData = {
   generatedAt: string;
   /**
    * The shared DepEd-style header block, for the UI to render once the
-   * printable report gains it. Optional: `loadLearnersForReport`'s deprecated
-   * callers have no signed-in actor to put in "Prepared by", so they get no
-   * header rather than one naming nobody.
+   * printable report gains it. Optional so a report built without a signed-in
+   * actor gets no header rather than one naming nobody in "Prepared by".
    */
   header?: ReportHeaderField[];
   /**
    * The shared DepEd-style footer (Prepared by / Noted by / system-generated
-   * note), for the UI to render alongside `header`. Same optionality reason:
-   * `loadLearnersForReport`'s deprecated callers have no signed-in actor.
+   * note), for the UI to render alongside `header`. Optional for the same reason.
    */
   footer?: ReportFooter;
 };
@@ -691,30 +689,3 @@ export const fetchPrintableReport = action(
   },
   { verb: "load the report" }
 );
-
-/**
- * @deprecated Prefer `fetchPrintableReport` (on-demand + auth). Kept for
- * any server composers that already resolved schoolId.
- */
-export async function loadLearnersForReport(opts: {
-  schoolId: string;
-  teacherId?: string;
-  gradeLevelId?: string;
-  sectionId?: string;
-  aralOnly?: boolean;
-}) {
-  const school = await prisma.school.findUnique({
-    where: { id: opts.schoolId },
-    select: { name: true, schoolIdCode: true },
-  });
-
-  const learners = await fetchLearnersForReport(opts);
-  const data = buildPrintableReportData(school, learners);
-
-  return {
-    ...data,
-    generatedAt: new Date(data.generatedAt),
-    byGrade: new Map(data.byGrade.map((g) => [g.type, g.learners])),
-    byGradeSection: new Map(data.byGradeSection.map((g) => [g.type, g.rows])),
-  };
-}

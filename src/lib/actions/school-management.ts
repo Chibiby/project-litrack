@@ -294,7 +294,7 @@ export const setSchoolActive = action(
  * action never reads `scope` because it always writes `admin.id`, the
  * caller's own row, never a `schoolId` or another user's id from the client.
  */
-export async function updateAdminProfile(formData: FormData): Promise<ActionResult> {
+export const updateAdminProfile = action("updateAdminProfile", async (formData: FormData): Promise<ActionResult> => {
   const { user: admin } = await requireAdminScope();
 
   const parsed = adminProfileSchema.safeParse({
@@ -328,4 +328,4 @@ export async function updateAdminProfile(formData: FormData): Promise<ActionResu
   revalidatePath("/admin/settings/profile");
   revalidatePath(DISTRICT_ROUTES.settingsProfile);
   return { ok: true };
-}
+}, { verb: "save your profile" });

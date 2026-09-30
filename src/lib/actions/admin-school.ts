@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { action } from "@/lib/errors/action";
 import { requireUser } from "@/lib/auth/session";
 import { AUDIT_ACTIONS, writeAuditMany } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -75,9 +76,9 @@ async function liveSchool(schoolId: string): Promise<{ id: string; name: string 
  * set so any live session is signed out, login email tombstoned so the person
  * can register again. Applied to a chosen few rather than to everyone.
  */
-export async function removeSchoolTeachers(
+export const removeSchoolTeachers = action("removeSchoolTeachers", async (
   formData: FormData
-): Promise<ActionResult<{ removed: number; failed: number }>> {
+): Promise<ActionResult<{ removed: number; failed: number }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = parseRemoval(formData, "teacherIds");
@@ -120,7 +121,7 @@ export async function removeSchoolTeachers(
   revalidatePath(`/admin/schools/${schoolId}`);
 
   return { ok: true, data: { removed: result.processed, failed: result.failed.length } };
-}
+}, { verb: "remove the teachers" });
 
 /**
  * Remove learners from one school.
@@ -129,9 +130,9 @@ export async function removeSchoolTeachers(
  * active enrollment, in one transaction, so a removed learner does not keep a
  * live seat in the school year they were removed from.
  */
-export async function removeSchoolLearners(
+export const removeSchoolLearners = action("removeSchoolLearners", async (
   formData: FormData
-): Promise<ActionResult<{ removed: number }>> {
+): Promise<ActionResult<{ removed: number }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = parseRemoval(formData, "learnerIds");
@@ -193,4 +194,4 @@ export async function removeSchoolLearners(
   revalidatePath(`/admin/schools/${schoolId}`);
 
   return { ok: true, data: { removed: learners.length } };
-}
+}, { verb: "remove the learners" });

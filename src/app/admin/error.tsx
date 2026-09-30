@@ -13,6 +13,7 @@ import { RouteError } from "@/components/errors/route-error";
  */
 export default function AdminError(props: {
   error: Error & { digest?: string };
+  retry: () => void;
   reset: () => void;
 }) {
   return <RouteError {...props} scope="Admin" homeHref="/admin" homeLabel="Back to dashboard" />;

@@ -125,7 +125,7 @@ export function TeachersPendingTable({
                         </Button>
                         <ConfirmAction
                           title="Decline registration?"
-                          description={`${row.fullName} will not be able to sign in.`}
+                          description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
                           confirmLabel="Decline"
                           variant="destructive"
                           disabled={rowBusy}
@@ -185,7 +185,7 @@ export function TeachersPendingTable({
                       </Button>
                       <ConfirmAction
                         title="Decline registration?"
-                        description={`${row.fullName} will not be able to sign in.`}
+                        description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
                         confirmLabel="Decline"
                         variant="destructive"
                         disabled={rowBusy}

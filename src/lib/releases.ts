@@ -135,6 +135,29 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.22.0",
+    date: "2026-09-30",
+    title: "Clearer messages when something goes wrong",
+    announce: true,
+    fixes: [
+      "When sign-in fails, the message now appears under the field that is wrong. A wrong email shows under Email, and a wrong password shows under Password.",
+      "If your internet connection drops, LITRACK now says \"No internet connection\" instead of a general error, and a bar at the bottom of the screen tells you that changes won't save until you're back online.",
+      "If the database is slow or down, the message now says so, instead of a general \"something went wrong\".",
+      "A save that fails no longer clears the page. What you typed stays in the form so you can try again.",
+      "If LITRACK was updated while you had a page open, you're asked to reload the page instead of seeing an error.",
+      "Loading messages and buttons no longer stay stuck when a save fails.",
+      "Save buttons now say what they save, such as Save attendance or Save reading levels.",
+      {
+        text: "Confirmations for deleting a backup, restoring a backup, turning a school off, and resetting a School Head's password now say exactly what will happen and whether it can be undone.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Empty lists now tell you whether nothing exists yet or your search and filters are hiding everything, with a link to clear the filters.",
+        roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.21.0",
     date: "2026-09-29",
     title: "MOSY Report for ARAL tutors",

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Lock, Save } from "lucide-react";
-import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +30,8 @@ import {
   type WeeklyAttendanceGridLearner,
 } from "@/components/forms/aral-weekly-attendance-grid-form";
 import { fetchAralAttendanceForWeek } from "@/lib/actions/aral-grid";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   formatLocalDateKey,
   parseLocalDateKey,
@@ -192,15 +193,17 @@ export function AralWeeklyAttendancePanel({
 
     const requestId = ++requestIdRef.current;
     void (async () => {
-      const res = await fetchAralAttendanceForWeek({
-        gradeId,
-        weekKey: normalized,
-        section: section !== "all" ? section : undefined,
-        schoolId,
-      });
+      const res = await callAction(() =>
+        fetchAralAttendanceForWeek({
+          gradeId,
+          weekKey: normalized,
+          section: section !== "all" ? section : undefined,
+          schoolId,
+        })
+      );
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         setLoading(false);
         return;
       }
@@ -421,7 +424,7 @@ export function AralWeeklyAttendancePanel({
                     className="h-11 lg:h-9"
                   >
                     <Save className="h-4 w-4" aria-hidden />
-                    Save
+                    Save attendance
                   </Button>
                 </>
               ) : null}

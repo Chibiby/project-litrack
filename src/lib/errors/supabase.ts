@@ -19,16 +19,33 @@ function asAuthError(err: unknown): AuthErrorLike | null {
   return err && typeof err === "object" ? (err as AuthErrorLike) : null;
 }
 
-/** The request never got a real answer: network, DNS, or the auth server itself. */
-export function isAuthServiceUnreachable(err: unknown): boolean {
+/**
+ * The request never reached the auth server, so there is no HTTP response:
+ * network, DNS, a dropped connection. supabase-js reports this as
+ * AuthRetryableFetchError (status 0 or absent) or a fetch-failure message.
+ */
+export function isAuthNoResponse(err: unknown): boolean {
   const e = asAuthError(err);
   if (!e) return false;
   if (e.name === "AuthRetryableFetchError") return true;
-  if (typeof e.status === "number" && (e.status === 0 || e.status >= 500)) return true;
+  if (e.status === 0) return true;
   return (
     typeof e.message === "string" &&
     /failed to fetch|fetch failed|networkerror|load failed/i.test(e.message)
   );
+}
+
+/**
+ * The auth server could not answer: either no response at all
+ * ({@link isAuthNoResponse}) or a real HTTP status >= 500. Callers that only
+ * need "auth is down, not the person's fault" (the server-side `finish*` and
+ * reset checks) use this; the browser mapping below separates the two, because
+ * only "no response" is plausibly the person's own connection.
+ */
+export function isAuthServiceUnreachable(err: unknown): boolean {
+  if (isAuthNoResponse(err)) return true;
+  const e = asAuthError(err);
+  return !!e && typeof e.status === "number" && e.status >= 500;
 }
 
 const BY_CODE: Record<string, ErrorCode> = {
@@ -59,9 +76,13 @@ export function mapSupabaseAuthError(err: unknown, side: Side): ErrorCode {
   if (!e) return "AUTH_PROVIDER_ERROR";
   if (isAuthRateLimitError(err)) return "AUTH_PROVIDER_RATE_LIMITED";
   if (isAuthServiceUnreachable(err)) {
-    // From the browser it is usually the person's connection. From our server
-    // it is our infrastructure, and the connection advice would be wrong.
-    return side === "browser" ? "AUTH_SERVICE_UNREACHABLE" : "AUTH_PROVIDER_ERROR";
+    // From the browser, no response at all is usually the person's connection.
+    // A real 5xx means the browser did connect and Supabase itself failed, so
+    // "check your internet" would be wrong. From our server, both are our
+    // infrastructure.
+    return side === "browser" && isAuthNoResponse(err)
+      ? "AUTH_SERVICE_UNREACHABLE"
+      : "AUTH_PROVIDER_ERROR";
   }
   if (typeof e.code === "string" && Object.hasOwn(BY_CODE, e.code)) return BY_CODE[e.code];
   if (typeof e.message === "string") {

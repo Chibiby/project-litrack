@@ -3,17 +3,23 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { PasswordForm } from "@/components/forms/password-form";
 import { Card, CardContent } from "@/components/ui/card";
+import { resetErrorMessage } from "@/lib/auth/reset-messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function AuthResetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; error?: string; error_description?: string }>;
+  searchParams: Promise<{
+    code?: string;
+    error?: string;
+    error_code?: string;
+    error_description?: string;
+  }>;
 }) {
   const params = await searchParams;
   let sessionReady = false;
-  let errorMessage: string | null = params.error_description ?? params.error ?? null;
+  let errorMessage: string | null = resetErrorMessage(params);
 
   try {
     const supabase = await createSupabaseServerClient();

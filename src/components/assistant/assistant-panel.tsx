@@ -21,6 +21,7 @@ import { AssistantTicketForm } from "@/components/assistant/assistant-ticket-for
 import { askAssistant, type AssistantLink } from "@/lib/actions/assistant";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { getMyChatUnread } from "@/lib/actions/chat";
+import { callAction } from "@/lib/ui/call-action";
 import { fetchMyTickets, type MySupportTicket } from "@/lib/actions/support";
 import {
   SUPPORT_TICKET_STATUS_LABELS,
@@ -198,7 +199,7 @@ export function AssistantPanel({
       ]);
       setDraft("");
 
-      void askAssistant({ question: trimmed, pathname: pageUrl })
+      void callAction(() => askAssistant({ question: trimmed, pathname: pageUrl }))
         .then((result) => {
           if (result.ok && result.data) {
             settle(replyId, {
@@ -229,13 +230,13 @@ export function AssistantPanel({
     let cancelled = false;
     // A failed load means "no recent requests", never a crash — the help half of
     // this panel is static and must keep working when the query does not.
-    void fetchMyTickets()
+    void callAction(() => fetchMyTickets())
       .then((result) => {
         if (cancelled) return;
-        setRecent(result.ok ? result.data ?? [] : []);
+        setRecent((prev) => (result.ok ? result.data ?? [] : prev ?? []));
       })
       .catch(() => {
-        if (!cancelled) setRecent([]);
+        if (!cancelled) setRecent((prev) => prev ?? []);
       });
     return () => {
       cancelled = true;
@@ -247,7 +248,7 @@ export function AssistantPanel({
   useEffect(() => {
     if (!canEscalate) return;
     let cancelled = false;
-    void getMyChatUnread()
+    void callAction(() => getMyChatUnread())
       .then((result) => {
         if (!cancelled && result.ok && result.data) setUnread(result.data);
       })
@@ -400,9 +401,9 @@ export function AssistantPanel({
                 text: `Sent. The division admin has your request about "${subject}" and their answer will show up here.`,
                 links: [],
               });
-              void fetchMyTickets()
+              void callAction(() => fetchMyTickets())
                 .then((result) => {
-                  setRecent(result.ok ? result.data ?? [] : []);
+                  setRecent((prev) => (result.ok ? result.data ?? [] : prev ?? []));
                 })
                 .catch(() => {});
             }}

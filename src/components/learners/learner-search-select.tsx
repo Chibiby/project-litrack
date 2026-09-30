@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SearchInput } from "@/components/ui/search-input";
 import { searchActiveLearners } from "@/lib/actions/search-learners";
+import { callAction } from "@/lib/ui/call-action";
 import {
   LEARNER_SEARCH_MIN_CHARS,
   type LearnerSearchHit,
@@ -85,7 +86,7 @@ export function LearnerSearchSelect({
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       startTransition(async () => {
-        const res = await searchActiveLearners({ schoolId, q });
+        const res = await callAction(() => searchActiveLearners({ schoolId, q }));
         if (!res.ok) {
           setHits([]);
           setError(res.error);

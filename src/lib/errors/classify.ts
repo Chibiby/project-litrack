@@ -1,11 +1,12 @@
 /**
- * Anything thrown → AppError. Pure (no Prisma import: detection is by name and
- * code, as in `@/lib/db-errors`), so it runs in tests and on any server path.
+ * Anything thrown → AppError. Pure (no Prisma import: detection is by name,
+ * code and the query provenance mark, as in `@/lib/db-errors`), so it runs in
+ * tests and on any server path.
  */
 
 import { ZodError } from "zod";
 import { isAuthError } from "@supabase/supabase-js";
-import { classifyDbFailure } from "@/lib/db-errors";
+import { classifyDbFailure, dbFailureCode, isDatabaseError } from "@/lib/db-errors";
 import type { ErrorParams } from "./codes";
 import { AppError, type ErrorContext } from "./app-error";
 import { validationError } from "./validation";
@@ -35,6 +36,21 @@ function prismaName(err: unknown): string | null {
   return typeof code === "string" && /^P\d{4}$/.test(code) ? "PrismaClientKnownRequestError" : null;
 }
 
+/**
+ * Prisma errors by name, plus what Prisma lets through unwrapped: a raw
+ * `DriverAdapterError` (any SQLSTATE without a dedicated adapter kind), a pg
+ * server error, or a plain Error thrown from a query and marked by
+ * `markDbError`. A marked error with the generic name "Error" (or pg's
+ * lowercase "error") is labelled "DatabaseError" for admins.
+ */
+function databaseErrorName(err: unknown): string | null {
+  const prisma = prismaName(err);
+  if (prisma) return prisma;
+  if (!isDatabaseError(err)) return null;
+  const name = prop(err, "name");
+  return typeof name === "string" && name.toLowerCase() !== "error" ? name : "DatabaseError";
+}
+
 function rawMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return typeof err === "string" ? err : "";
@@ -50,11 +66,12 @@ export function classifyError(err: unknown, options: ClassifyOptions = {}): AppE
   if (err instanceof ZodError) return validationError(err);
 
   const params: ErrorParams = options.verb ? { verb: options.verb } : {};
-  const name = prismaName(err);
+  const name = databaseErrorName(err);
   if (name) {
     const code = prop(err, "code");
     const context: ErrorContext = { prismaError: name };
-    if (typeof code === "string") context.prismaCode = code;
+    const failureCode = dbFailureCode(err);
+    if (failureCode) context.prismaCode = failureCode;
     const base = { cause: err, detail: detailOf(err), context };
 
     if (name === "PrismaClientValidationError") return new AppError("INTERNAL_ERROR", base);
@@ -68,6 +85,9 @@ export function classifyError(err: unknown, options: ClassifyOptions = {}): AppE
     if (code === "P2002") return new AppError("DB_CONFLICT", base);
 
     const kind = classifyDbFailure(err);
+    // Bad credentials or a missing database: retrying can't help and the
+    // person can't fix it, so it reads as server configuration, not an outage.
+    if (kind === "CONFIG") return new AppError("CONFIG_MISSING", base);
     const appCode =
       kind === "SCHEMA_OUT_OF_DATE"
         ? "DB_SCHEMA_OUT_OF_DATE"

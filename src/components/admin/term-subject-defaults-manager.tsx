@@ -20,6 +20,7 @@ import {
   settleActionResult,
   tempOptimisticId,
 } from "@/lib/ui/optimistic";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   archiveTermSubjectDefault,
   createTermSubjectDefault,
@@ -127,11 +128,11 @@ export function TermSubjectDefaultsManager({
       const name = newName.trim();
       if (!name) {
         toast.error("Subject name is required");
-        throw new Error("Subject name is required");
+        throw new ToastedError("Subject name is required");
       }
       if (atCap) {
         toast.error(capMessage);
-        throw new Error(capMessage);
+        throw new ToastedError(capMessage);
       }
       dispatch({
         type: "create",
@@ -147,7 +148,7 @@ export function TermSubjectDefaultsManager({
       const trimmed = name.trim();
       if (!trimmed) {
         toast.error("Subject name is required");
-        throw new Error("Subject name is required");
+        throw new ToastedError("Subject name is required");
       }
       dispatch({ type: "rename", id, name: trimmed });
       const res = await renameTermSubjectDefault({ id, name: trimmed });
@@ -165,7 +166,7 @@ export function TermSubjectDefaultsManager({
     runOptimistic(startTransition, async () => {
       if (atCap) {
         toast.error(capMessage);
-        throw new Error(capMessage);
+        throw new ToastedError(capMessage);
       }
       dispatch({ type: "restore", id });
       const res = await restoreTermSubjectDefault({ id });
@@ -177,8 +178,8 @@ export function TermSubjectDefaultsManager({
       dispatch({ type: "reorder", orderedIds });
       const res = await reorderTermSubjectDefaults({ gradeLevelType, orderedIds });
       if (!res.ok) {
-        toast.error(res.error);
-        throw new Error(res.error);
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
     });
 
@@ -397,7 +398,7 @@ function TermSubjectDefaultRow({
           className="h-11 min-w-[10rem] flex-1 lg:h-8"
         />
         <Button type="submit" size="sm" className="lg:h-9" variant="outline" disabled={pending}>
-          Save
+          Save subject
         </Button>
       </form>
 

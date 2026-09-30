@@ -23,6 +23,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { issueUnlock, revokeUnlock } from "@/lib/actions/unlock-admin";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
+import type { ActionFailure } from "@/lib/errors/result";
 import type { ActiveSchoolUnlock, ActiveTeacherUnlock, UnlockTargetSchool } from "@/lib/unlock/admin-queries";
 import { UNLOCK_SCOPES, MAX_UNLOCK_DAYS, DEFAULT_UNLOCK_DAYS } from "@/lib/validators/support.schema";
 import { UNLOCK_SCOPE_LABELS, TERM_PERIOD_LABELS } from "@/lib/constants/enum-labels";
@@ -140,7 +143,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
   const targetOptions = useMemo(() => targetOptionsFor(scope), [scope]);
   const [targetKey, setTargetKey] = useState(targetOptions[0]?.value ?? "");
   const [daysInput, setDaysInput] = useState(String(DEFAULT_UNLOCK_DAYS));
-  const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [issuePending, setIssuePending] = useState(false);
   const [reason, setReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -190,51 +193,56 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
       mode === "teacher"
         ? { mode: "teacher" as const, userId, scope, targetKey, days: daysNum }
         : { mode: "school" as const, schoolId, scope, targetKey, days: daysNum };
-    try {
-      const res = await issueUnlock({ ...payload, reason: reason.trim() });
-      if (!res.ok) {
+    let answered = false;
+    const res = await callAction(async () => {
+      const r = await issueUnlock({ ...payload, reason: reason.trim() });
+      answered = true;
+      return r;
+    });
+    setIssuePending(false);
+    if (!res.ok) {
+      if (answered) {
         // Closes the confirm dialog rather than leaving it open: Radix marks
         // the rest of the page `aria-hidden` while it is open, which would
         // bury this banner from anyone — assistive tech or not — until the
-        // dialog closed anyway. The failure is never swallowed; it just
-        // surfaces on the page instead of inside the dialog it was raised in.
-        setError({ message: res.error, ref: res.ref });
+        // dialog closed anyway.
+        setError(res.error);
         setConfirmOpen(false);
-        return;
+      } else {
+        // No answer from the server: there is no banner to bury, since it
+        // lives behind the dialog, so a toast is the surface that reaches the
+        // user, and the dialog stays open for a retry.
+        toastFailure(res);
       }
-      toast.success(
-        res.data.recipients === 1
-          ? "Revision access allowed for 1 teacher."
-          : `Revision access allowed for ${res.data.recipients} teachers.`
-      );
-      router.refresh();
-      setConfirmOpen(false);
-      setReason("");
-    } catch {
-      // The dialog stays open on this path (unlike the `ok: false` branch
-      // above, which closes it): there is no banner to bury, since the error
-      // banner lives in the card behind the dialog, not inside it. A toast is
-      // the only surface that reaches the user while the dialog is still up.
-      toast.error("Something went wrong reopening access. Please try again.");
-    } finally {
-      setIssuePending(false);
+      return;
     }
+    toast.success(
+      res.data.recipients === 1
+        ? "Revision access allowed for 1 teacher."
+        : `Revision access allowed for ${res.data.recipients} teachers.`
+    );
+    router.refresh();
+    setConfirmOpen(false);
+    setReason("");
   }
 
-  async function handleRevoke(row: UnlockRow) {
+  async function handleRevoke(row: UnlockRow): Promise<ActionFailure | void> {
     setError(null);
-    try {
-      const res = await revokeUnlock({ kind: row.kind, grantId: row.id });
-      if (!res.ok) {
-        setError({ message: res.error, ref: res.ref });
+    let answered = false;
+    const res = await callAction(async () => {
+      const r = await revokeUnlock({ kind: row.kind, grantId: row.id });
+      answered = true;
+      return r;
+    });
+    if (!res.ok) {
+      if (answered) {
+        setError(res.error);
         return;
       }
-      toast.success("Revision access revoked.");
-      router.refresh();
-    } catch (err) {
-      toast.error("Something went wrong revoking this unlock. Please try again.");
-      throw err;
+      return res;
     }
+    toast.success("Revision access revoked.");
+    router.refresh();
   }
 
   return (
@@ -251,8 +259,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
       <CardContent className="space-y-6">
         {error ? (
           <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error.message}
-            {error.ref ? ` (Reference: ${error.ref})` : null}
+            {error}
           </p>
         ) : null}
 

@@ -440,13 +440,12 @@ describe("saveAralWeeklyAttendance â€” the RETURNING count guard", () => {
       ],
     });
 
-    expect(res).toEqual({
-      ok: false,
-      error: "Could not save the week. Please try again.",
-    });
+    // Classified by `action()` now, not hidden behind a per-action string: an
+    // unexpected failure carries a code and an admin reference.
+    expect(res).toMatchObject({ ok: false, code: "INTERNAL_ERROR" });
     expect(writeAudit).not.toHaveBeenCalled();
     // The row count is not leaked to the client.
-    expect((res as { error: string }).error).not.toMatch(/\d/);
+    expect((res as { error: string }).error).not.toMatch(/touched|\d+ of \d+/);
   });
 });
 

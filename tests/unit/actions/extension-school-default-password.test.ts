@@ -1,3 +1,4 @@
+import { AuthApiError } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -70,7 +71,8 @@ vi.mock("@/lib/audit", async () => {
   return { AUDIT_ACTIONS: actual.AUDIT_ACTIONS, writeAudit: vi.fn(async () => {}) };
 });
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), unstable_rethrow: () => undefined }));
+vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-SCHOOL") }));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: vi.fn(),
   revalidateSchoolsList: vi.fn(),
@@ -135,6 +137,22 @@ describe("createSchool", () => {
     // The email stays on the stored code: that is what keeps it unique.
     expect(String(createUser.mock.calls[0][0].email)).toMatch(/^sh@130554-3\./);
     expect(tx.school.create.mock.calls[0][0].data).toMatchObject({ schoolIdCode: "130554-3" });
+  });
+
+  it("does not return the provider's error text when the login cannot be created", async () => {
+    prismaMock.school.findFirst.mockResolvedValue(null);
+    createUser.mockResolvedValueOnce({
+      data: { user: null } as unknown as { user: { id: string } },
+      error: new AuthApiError("Provider rejected key sb_secret_9f3a", 500, "unexpected_failure") as unknown as { message: string },
+    });
+
+    const res = await createSchool(createForm("500648"));
+
+    expect(res).toMatchObject({ ok: false });
+    expect(typeof (res as { code?: string }).code).toBe("string");
+    expect(JSON.stringify(res)).not.toContain("sb_secret_9f3a");
+    // Nothing was written for a school whose login never existed.
+    expect(tx.school.create).not.toHaveBeenCalled();
   });
 
   it("leaves an ordinary school's password as its School ID", async () => {

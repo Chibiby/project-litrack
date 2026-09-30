@@ -26,6 +26,8 @@ import { AralTutorCombobox } from "@/components/aral/aral-tutor-combobox";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { listAralTutorOptions } from "@/lib/actions/aral-tutors";
 import { enrollRosterLearnersToAral } from "@/lib/actions/learner";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 /**
  * The one place a teacher names an ARAL tutor from the roster.
@@ -101,7 +103,7 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
     requested.current = true;
     setLoading(true);
     setLoadError(null);
-    void listAralTutorOptions().then((res) => {
+    void callAction(() => listAralTutorOptions()).then((res) => {
       if (res.ok && res.data) {
         setTutors(res.data.tutors);
         setSelfId(res.data.selfId);
@@ -111,6 +113,10 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
         requested.current = false;
         setLoadError(res.ok ? "Could not load teachers." : res.error);
       }
+      setLoading(false);
+    }, () => {
+      // Only redirects reach here; the router is already navigating.
+      requested.current = false;
       setLoading(false);
     });
   }, []);
@@ -159,12 +165,14 @@ export function AssignAralTutorDialog({ target, onClose, onDone }: Props) {
       const toastId = toast.loading(
         enrolling ? "Enrolling in ARAL…" : "Changing ARAL tutor…"
       );
-      const res = await enrollRosterLearnersToAral({
-        learnerIds: target.learnerIds,
-        aralTeacherId,
-      });
+      const res = await callAction(() =>
+        enrollRosterLearnersToAral({
+          learnerIds: target.learnerIds,
+          aralTeacherId,
+        })
+      );
       if (!res.ok) {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
         return;
       }
 

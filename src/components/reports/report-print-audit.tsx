@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { auditPrintableReport } from "@/lib/actions/export-learners";
+import { callAction } from "@/lib/ui/call-action";
 
 /** Fire-and-forget audit when the printable report page mounts. */
 export function ReportPrintAudit({
@@ -12,7 +13,7 @@ export function ReportPrintAudit({
   schoolId: string;
 }) {
   useEffect(() => {
-    void auditPrintableReport({ scope, schoolId });
+    void callAction(() => auditPrintableReport({ scope, schoolId }));
   }, [scope, schoolId]);
 
   return null;

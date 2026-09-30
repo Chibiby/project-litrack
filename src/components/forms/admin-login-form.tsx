@@ -1,10 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
+import { callAction } from "@/lib/ui/call-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -15,7 +15,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { AppForm, useAppForm } from "@/components/forms/app-form";
+import { AppForm, applyFieldErrors, useAppForm } from "@/components/forms/app-form";
 import { adminLoginSchema, type AdminLoginInput } from "@/lib/validators/auth.schema";
 import { loginAdmin } from "@/lib/actions/auth";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
@@ -28,6 +28,8 @@ import {
   AuthCard,
   AuthCardHeader,
 } from "@/components/auth/auth-card";
+
+const SHARED_ERROR_ID = "admin-login-error";
 
 /** Mark next app shell paint to show the post-login splash (survives redirect). */
 function markPostLoginSplash() {
@@ -47,10 +49,17 @@ export function AdminLoginForm({
   notice?: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
+  const [formError, setFormError] = useState<string | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
   const form = useAppForm<AdminLoginInput>({
     schema: adminLoginSchema,
     defaultValues: { username: "", password: "" },
   });
+  const { errors } = form.formState;
+  const sharedShown = sharedError && (errors.username?.type === "server" || errors.password?.type === "server")
+    ? sharedError
+    : null;
+  const sharedProps = sharedShown ? { "aria-describedby": SHARED_ERROR_ID } : {};
 
   return (
     <AuthCard>
@@ -65,23 +74,31 @@ export function AdminLoginForm({
           form={form}
           className="space-y-5"
           onSubmit={(values) => {
+            setFormError(null);
             startTransition(async () => {
+              let res;
               try {
-                const res = await loginAdmin(toFormData(values));
-                if (res && !res.ok) {
-                  toast.error(res.error);
-                  return;
-                }
-                markPostLoginSplash();
-                resetSidebarExpandedPreference();
+                res = await callAction(() => loginAdmin(toFormData(values)));
               } catch (err) {
                 if (isRedirectError(err)) {
                   markPostLoginSplash();
                   resetSidebarExpandedPreference();
-                  throw err;
                 }
                 throw err;
               }
+              if (res && !res.ok) {
+                if (res.code === "AUTH_INCORRECT_CREDENTIALS") {
+                  // One sentence for both inputs, so nothing says which half was wrong.
+                  setSharedError(res.error);
+                  form.setError("username", { type: "server" }, { shouldFocus: true });
+                  form.setError("password", { type: "server" });
+                  return;
+                }
+                if (!applyFieldErrors(form, res)) setFormError(res.error);
+                return;
+              }
+              markPostLoginSplash();
+              resetSidebarExpandedPreference();
             });
           }}
         >
@@ -105,6 +122,7 @@ export function AdminLoginForm({
                     spellCheck={false}
                     autoFocus
                     disabled={disabled || pending}
+                    {...sharedProps}
                     {...field}
                   />
                 </FormControl>
@@ -124,13 +142,24 @@ export function AdminLoginForm({
                   <PasswordInput
                     autoComplete="current-password"
                     disabled={disabled || pending}
+                    {...sharedProps}
                     {...field}
                   />
                 </FormControl>
                 <FormMessage />
+                {sharedShown ? (
+                  <p id={SHARED_ERROR_ID} role="alert" className="text-xs font-medium text-destructive">
+                    {sharedShown}
+                  </p>
+                ) : null}
               </FormItem>
             )}
           />
+          {formError ? (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {formError}
+            </p>
+          ) : null}
           <Button
             type="submit"
             className={AUTH_PRIMARY_BUTTON}

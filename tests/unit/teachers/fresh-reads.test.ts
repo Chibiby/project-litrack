@@ -44,7 +44,9 @@ describe("teachers workspace reads skip the Hyperdrive query cache", () => {
   ] as const)("%s teacher actions read through prismaFresh", (file, names) => {
     const source = readFileSync(file, "utf8");
     for (const name of names) {
-      const start = source.indexOf(`export async function ${name}(`);
+      // Actions are either plain functions or wrapped by `action()`.
+      const plain = source.indexOf(`export async function ${name}(`);
+      const start = plain > -1 ? plain : source.indexOf(`export const ${name} = action(`);
       expect(start, name).toBeGreaterThan(-1);
       const next = source.indexOf("\nexport ", start + 1);
       const body = source.slice(start, next === -1 ? undefined : next);

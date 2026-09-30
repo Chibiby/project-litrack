@@ -295,7 +295,8 @@ function GradeChartCard({
                 {totalLearners} {totalLearners === 1 ? "learner" : "learners"}
               </p>
               <p className="text-sm text-muted-foreground">
-                across <span className="font-semibold text-amber-600">{gradeCount}</span> grade level(s)
+                across <span className="font-semibold text-amber-700 dark:text-amber-300">{gradeCount}</span>{" "}
+                {gradeCount === 1 ? "grade level" : "grade levels"}
               </p>
             </div>
           </div>

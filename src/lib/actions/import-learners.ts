@@ -26,6 +26,9 @@ import {
 import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 import { teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
+import { action } from "@/lib/errors/action";
+import { AppError } from "@/lib/errors/app-error";
+import { classifyDbFailure } from "@/lib/db-errors";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -138,9 +141,9 @@ async function loadExistingLearnerMatches(
 }
 
 /** Downloadable CSV template string (headers + example row). */
-export async function getLearnerImportTemplate(input?: {
+export const getLearnerImportTemplate = action("getLearnerImportTemplate", async (input?: {
   gradeLevelId?: string;
-}): Promise<ActionResult<{ csv: string }>> {
+}): Promise<ActionResult<{ csv: string }>> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
@@ -156,13 +159,13 @@ export async function getLearnerImportTemplate(input?: {
   }
 
   return { ok: true, data: { csv: learnerCsvTemplate(gradeType) } };
-}
+}, { verb: "prepare the import template" });
 
 /**
  * Preview: validate rows client already mapped (or re-map from raw objects).
  * Does not write. Duplicate detection against school + within file.
  */
-export async function previewLearnerImport(input: {
+export const previewLearnerImport = action("previewLearnerImport", async (input: {
   gradeLevelId: string;
   rows: Record<string, unknown>[];
 }): Promise<
@@ -170,7 +173,7 @@ export async function previewLearnerImport(input: {
     results: ImportRowResult[];
     summary: { valid: number; invalid: number; duplicateWarnings: number };
   }>
-> {
+> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
@@ -211,14 +214,14 @@ export async function previewLearnerImport(input: {
     ok: true,
     data: { results, summary: summarizeImportResults(results) },
   };
-}
+}, { verb: "check the import file" });
 
 /**
  * Commit strategy: **valid rows only** (invalid rows skipped + reported).
  * Rows flagged as duplicates are skipped unless `allowDuplicates` is true.
  * No full PII dump in audit — counts only.
  */
-export async function commitLearnerImport(input: {
+export const commitLearnerImport = action("commitLearnerImport", async (input: {
   gradeLevelId: string;
   rows: Record<string, unknown>[];
   allowDuplicates?: boolean;
@@ -229,7 +232,7 @@ export async function commitLearnerImport(input: {
     skippedDuplicate: number;
     results: ImportRowResult[];
   }>
-> {
+> => {
   const user = await requireSchoolUser("TEACHER");
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
@@ -376,15 +379,22 @@ export async function commitLearnerImport(input: {
         BULK_TX_OPTIONS
       );
     } catch (err) {
-      // The wizard's `handleCommit` has `try { … } finally { … }` and no `catch`,
-      // so a thrown `P2028` used to surface as a Next.js server-action error
-      // instead of the toast it is written for. Nothing was committed — the
-      // whole import is one transaction — so reporting zero is accurate.
-      console.error("[commitLearnerImport] transaction failed:", err);
-      return {
-        ok: false,
-        error: "Could not save the import. Please try again with a smaller file.",
-      };
+      // The one known condition: the transaction outlived its time budget
+      // (`P2028`), which a large file causes. Nothing was committed — the whole
+      // import is one transaction — so point at the fix (a smaller file), not
+      // "wait and retry". Only transaction-timeout P2028s land here; anything else
+      // is classified by `action()`.
+      if (
+        (err as { code?: unknown } | null)?.code === "P2028" &&
+        classifyDbFailure(err) === "UNAVAILABLE"
+      ) {
+        throw new AppError("IMPORT_TIMED_OUT", {
+          cause: err,
+          detail: "commitLearnerImport transaction timed out (P2028)",
+          context: { prismaCode: "P2028" },
+        });
+      }
+      throw err;
     }
   }
 
@@ -428,15 +438,15 @@ export async function commitLearnerImport(input: {
       results,
     },
   };
-}
+}, { verb: "import the learners" });
 
 /** Re-export mapper for client-side preview before calling preview/commit. */
-export async function mapImportRows(
+export const mapImportRows = action("mapImportRows", async (
   rows: Record<string, unknown>[]
-): Promise<ActionResult<{ mapped: Record<string, unknown>[] }>> {
+): Promise<ActionResult<{ mapped: Record<string, unknown>[] }>> => {
   await requireSchoolUser("TEACHER");
   return {
     ok: true,
     data: { mapped: rows.map((r) => mapCsvRowToImportCandidate(r)) },
   };
-}
+}, { verb: "read the import file" });

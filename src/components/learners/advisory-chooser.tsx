@@ -117,7 +117,7 @@ export function AdvisoryChooser({
           disabled={!selectedSectionId}
           className="justify-center"
         >
-          Continue
+          Next: learner details
         </Button>
       </footer>
     </div>

@@ -58,8 +58,9 @@ describe("error pages", () => {
   });
 
   it("shows the reference a person can quote", () => {
-    // Each boundary renders RouteError, which prints error.digest — the same
-    // string onRequestError files the full record under.
+    // Each boundary renders RouteError, which prints the reference that
+    // classifyClientFailure takes from error.digest — the same string
+    // onRequestError files the full record under.
     for (const file of [
       "error.tsx",
       "global-error.tsx",
@@ -74,7 +75,26 @@ describe("error pages", () => {
         path.resolve(__dirname, "../../../src/components/errors/route-error.tsx"),
         "utf8"
       )
-    ).toMatch(/error\.digest/);
+    ).toMatch(/classifyClientFailure\(error[,)][\s\S]*failure\.ref/);
+  });
+
+  it("hands the boundary's retry (not only reset) to RouteError", () => {
+    for (const file of [
+      "error.tsx",
+      "global-error.tsx",
+      "admin/error.tsx",
+      "district/error.tsx",
+      "teacher/(app)/error.tsx",
+      "school-head/(app)/error.tsx",
+    ]) {
+      const src = read(file);
+      expect(src, file).toMatch(/retry: \(\) => void/);
+      expect(src, file).toMatch(/<RouteError[\s\S]*\{\.\.\.props\}/);
+    }
+  });
+
+  it("styles the global boundary itself, since the layout's stylesheet import is gone with it", () => {
+    expect(read("global-error.tsx")).toMatch(/import "\.\/globals\.css"/);
   });
 
   it("keeps the global boundary self-contained, since the layout it replaces may be what failed", () => {

@@ -9,6 +9,7 @@ import { PrintableKinderChecklist } from "@/components/terms/printable-kinder-ch
 import type { KinderChecklistCellState } from "@/components/terms/kinder-checklist-row";
 import type { KinderCompetencyKey } from "@/lib/terms/kinder-competencies";
 import { exportKinderChecklist } from "@/lib/actions/kinder-competencies";
+import { callAction } from "@/lib/ui/call-action";
 
 export interface SchoolHeadKinderChecklistExportProps {
   learnerId: string;
@@ -43,9 +44,12 @@ export function SchoolHeadKinderChecklistExport({
       <div className="flex justify-end print:hidden">
         <KinderChecklistExportControls
           onExport={(purpose) =>
-            exportKinderChecklist({ learnerId, purpose }) as Promise<
-              KinderChecklistActionResult<KinderChecklistExportResult>
-            >
+            callAction(
+              () =>
+                exportKinderChecklist({ learnerId, purpose }) as Promise<
+                  KinderChecklistActionResult<KinderChecklistExportResult>
+                >
+            )
           }
         />
       </div>

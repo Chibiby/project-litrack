@@ -622,9 +622,11 @@ describe("resolveTicket", () => {
       throw new Error("connection reset");
     });
 
-    await expect(
-      resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } })
-    ).rejects.toThrow("connection reset");
+    // A failed commit is now classified by `action()` rather than thrown at the
+    // caller: the person gets a safe failure, never the driver's text.
+    const failed = await resolveTicket({ ticketId: TICKET_ID, grant: { days: 3 } });
+    expect(failed).toMatchObject({ ok: false, code: "INTERNAL_ERROR" });
+    expect(JSON.stringify(failed)).not.toContain("connection reset");
 
     expect(grantUpsert).toHaveBeenCalled();
     const issueCalls = writeAudit.mock.calls.filter(

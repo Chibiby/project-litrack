@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetAllSchoolsTermSubjects } from "@/lib/actions/term-subjects";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 
 const CONFIRM_TEXT = "RESET";
 
@@ -44,9 +46,9 @@ export function ResetAllSchoolsTermSubjectsButton() {
   function handleConfirm() {
     if (!canConfirm || pending) return;
     startTransition(async () => {
-      const res = await resetAllSchoolsTermSubjects({ confirm: "RESET" });
+      const res = await callAction(() => resetAllSchoolsTermSubjects({ confirm: "RESET" }));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
 

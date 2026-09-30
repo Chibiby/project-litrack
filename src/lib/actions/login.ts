@@ -36,6 +36,7 @@ import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
  */
 
 import { headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
@@ -46,10 +47,15 @@ import { warmSchoolHeadRoutes, warmTeacherRoutes } from "@/lib/auth/warm-routes"
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { isDeactivatedTeacher } from "@/lib/auth/teacher-registration-helpers";
 import { action } from "@/lib/errors/action";
-import { AppError, fieldError, tooManyAttempts } from "@/lib/errors/app-error";
+import { AppError, fieldError, tooManyAttempts, type ErrorContext } from "@/lib/errors/app-error";
 import { reportError } from "@/lib/errors/report";
 import type { ActionFailure } from "@/lib/errors/result";
-import { LOGIN_FAILURE_REASONS, type LoginFailureReason } from "@/lib/errors/supabase";
+import { formatMessage } from "@/lib/errors/codes";
+import {
+  LOGIN_FAILURE_REASONS,
+  isAuthServiceUnreachable,
+  type LoginFailureReason,
+} from "@/lib/errors/supabase";
 import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
 import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { clientIpFrom } from "@/lib/request-ip";
@@ -69,6 +75,62 @@ export type FinishLoginResult = { ok: true; redirectTo: string } | ActionFailure
 
 /** Attempts the browser may report per address, so the audit trail cannot be flooded. */
 const REPORT_RATE = { limit: 30, windowMs: 10 * 60 * 1000 } as const;
+
+/** "No teacher account" belongs on the email input, so the form can highlight it. */
+function teacherNotFound(options: { detail?: string; context?: ErrorContext } = {}) {
+  return new AppError("AUTH_TEACHER_NOT_FOUND", {
+    ...options,
+    fieldErrors: { email: formatMessage("AUTH_TEACHER_NOT_FOUND") },
+  });
+}
+
+type ServerSupabase = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+/**
+ * Read the session the browser just established. Supabase being unreachable is
+ * a provider failure, not an expired session: telling the person to sign in
+ * again would loop them through a grant that already succeeded.
+ */
+async function readSessionUser(supabase: ServerSupabase) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error && isAuthServiceUnreachable(error)) {
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      cause: error,
+      detail: "Could not read the session after the browser grant: auth service unreachable",
+    });
+  }
+  if (error || !data.user) {
+    throw new AppError("AUTH_SESSION_EXPIRED", {
+      detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+    });
+  }
+  return data.user;
+}
+
+/**
+ * Run the post-grant work. If the database (or anything else unexpected) fails
+ * after the password grant succeeded, the person is told sign-in failed, so the
+ * live Supabase session must not survive. `AppError`s are deliberate outcomes
+ * that handle their own sign-out; redirects are re-thrown untouched.
+ */
+async function signOutOnUnexpectedFailure<T>(
+  supabase: ServerSupabase,
+  work: () => Promise<T>
+): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    unstable_rethrow(err);
+    if (!(err instanceof AppError)) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Best effort. Never let it mask the failure being reported.
+      }
+    }
+    throw err;
+  }
+}
 
 function normalizeReason(reason: string): LoginFailureReason {
   return (LOGIN_FAILURE_REASONS as readonly string[]).includes(reason)
@@ -111,7 +173,8 @@ export const beginSchoolHeadLogin = action(
 
     if (!isSyntheticEmail(head.email)) return { ok: true, mode: "server" };
     return { ok: true, mode: "browser", email: head.email };
-  }
+  },
+  { verb: "sign you in" }
 );
 
 /**
@@ -126,56 +189,54 @@ export const finishSchoolHeadLogin = action(
   "finishSchoolHeadLogin",
   async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      throw new AppError("AUTH_SESSION_EXPIRED", {
-        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+    const authUser = await readSessionUser(supabase);
+
+    return signOutOnUnexpectedFailure(supabase, async () => {
+      const user = await prisma.user.findUnique({
+        where: { authId: authUser.id },
+        select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true },
       });
-    }
 
-    const user = await prisma.user.findUnique({
-      where: { authId: data.user.id },
-      select: { id: true, role: true, schoolId: true, isActive: true, deletedAt: true },
-    });
+      const cause = schoolHeadDenial(user, schoolId);
+      if (cause) {
+        await supabase.auth.signOut();
+        await writeAudit({
+          userId: user?.id,
+          schoolId: user?.schoolId ?? schoolId,
+          action: AUDIT_ACTIONS.LOGIN_DENIED,
+          resource: "User",
+          resourceId: user?.id,
+          metadata: { role: "SCHOOL_HEAD", schoolId, reason: "not_authorized", cause },
+        });
+        throw new AppError(
+          cause === "deleted" || cause === "inactive" ? "AUTH_ACCOUNT_DISABLED" : "AUTH_FORBIDDEN",
+          {
+            params: { what: "this school" },
+            detail: `School Head sign-in refused: ${cause}`,
+            context: { schoolId, reason: cause },
+          }
+        );
+      }
 
-    const cause = schoolHeadDenial(user, schoolId);
-    if (cause) {
-      await supabase.auth.signOut();
+      // `schoolHeadDenial` returning null proves every field below is present.
+      const admitted = user!;
+
       await writeAudit({
-        userId: user?.id,
-        schoolId: user?.schoolId ?? schoolId,
-        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        userId: admitted.id,
+        schoolId: admitted.schoolId,
+        action: AUDIT_ACTIONS.LOGIN_SUCCESS,
         resource: "User",
-        resourceId: user?.id,
-        metadata: { role: "SCHOOL_HEAD", schoolId, reason: "not_authorized", cause },
+        resourceId: admitted.id,
+        metadata: { role: "SCHOOL_HEAD", schoolId: admitted.schoolId, method: "browser_password" },
       });
-      throw new AppError(
-        cause === "deleted" || cause === "inactive" ? "AUTH_ACCOUNT_DISABLED" : "AUTH_FORBIDDEN",
-        {
-          params: { what: "this school" },
-          detail: `School Head sign-in refused: ${cause}`,
-          context: { schoolId, reason: cause },
-        }
-      );
-    }
+      await recordLastLogin(admitted.id);
 
-    // `schoolHeadDenial` returning null proves every field below is present.
-    const admitted = user!;
+      await warmSchoolHeadRoutes(admitted.schoolId!);
 
-    await writeAudit({
-      userId: admitted.id,
-      schoolId: admitted.schoolId,
-      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-      resource: "User",
-      resourceId: admitted.id,
-      metadata: { role: "SCHOOL_HEAD", schoolId: admitted.schoolId, method: "browser_password" },
+      return { ok: true as const, redirectTo: SCHOOL_HEAD_ROUTES.dashboard };
     });
-    await recordLastLogin(admitted.id);
-
-    await warmSchoolHeadRoutes(admitted.schoolId!);
-
-    return { ok: true, redirectTo: SCHOOL_HEAD_ROUTES.dashboard };
-  }
+  },
+  { verb: "sign you in" }
 );
 
 /**
@@ -223,7 +284,7 @@ export const beginTeacherLogin = action(
       teacher.schoolId !== schoolId
     ) {
       await recordFailedLookup();
-      throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
+      throw teacherNotFound({ context: { schoolId } });
     }
     if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
     if (isDeactivatedTeacher(teacher)) {
@@ -239,7 +300,8 @@ export const beginTeacherLogin = action(
     }
 
     return { ok: true, mode: "browser", email };
-  }
+  },
+  { verb: "sign you in" }
 );
 
 /** Teacher counterpart to `finishSchoolHeadLogin`; see that function for the reasoning. */
@@ -247,69 +309,66 @@ export const finishTeacherLogin = action(
   "finishTeacherLogin",
   async (schoolId: string): Promise<{ ok: true; redirectTo: string }> => {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      throw new AppError("AUTH_SESSION_EXPIRED", {
-        detail: `No session after the browser grant: ${error?.message ?? "no user"}`,
+    const authUser = await readSessionUser(supabase);
+
+    return signOutOnUnexpectedFailure(supabase, async () => {
+      const user = await prisma.user.findUnique({
+        where: { authId: authUser.id },
+        select: {
+          id: true,
+          role: true,
+          schoolId: true,
+          isActive: true,
+          deletedAt: true,
+          approvalStatus: true,
+        },
       });
-    }
 
-    const user = await prisma.user.findUnique({
-      where: { authId: data.user.id },
-      select: {
-        id: true,
-        role: true,
-        schoolId: true,
-        isActive: true,
-        deletedAt: true,
-        approvalStatus: true,
-      },
-    });
+      const cause = teacherDenial(user, schoolId);
+      if (cause) {
+        await supabase.auth.signOut();
+        await writeAudit({
+          userId: user?.id,
+          schoolId: user?.schoolId ?? schoolId,
+          action: AUDIT_ACTIONS.LOGIN_DENIED,
+          resource: "User",
+          resourceId: user?.id,
+          metadata: { role: "TEACHER", schoolId, reason: "not_authorized", cause },
+        });
+        const options = {
+          detail: `Teacher sign-in refused: ${cause}`,
+          context: { schoolId, reason: cause },
+        };
+        if (cause === "declined") throw new AppError("AUTH_REGISTRATION_DECLINED", options);
+        if (cause === "deactivated") throw new AppError("AUTH_ACCOUNT_DEACTIVATED", options);
+        throw teacherNotFound(options);
+      }
 
-    const cause = teacherDenial(user, schoolId);
-    if (cause) {
-      await supabase.auth.signOut();
+      const admitted = user!;
+
       await writeAudit({
-        userId: user?.id,
-        schoolId: user?.schoolId ?? schoolId,
-        action: AUDIT_ACTIONS.LOGIN_DENIED,
+        userId: admitted.id,
+        schoolId: admitted.schoolId,
+        action: AUDIT_ACTIONS.LOGIN_SUCCESS,
         resource: "User",
-        resourceId: user?.id,
-        metadata: { role: "TEACHER", schoolId, reason: "not_authorized", cause },
+        resourceId: admitted.id,
+        metadata: { role: "TEACHER", schoolId: admitted.schoolId, method: "browser_password" },
       });
-      throw new AppError(
-        cause === "declined"
-          ? "AUTH_REGISTRATION_DECLINED"
-          : cause === "deactivated"
-            ? "AUTH_ACCOUNT_DEACTIVATED"
-            : "AUTH_TEACHER_NOT_FOUND",
-        { detail: `Teacher sign-in refused: ${cause}`, context: { schoolId, reason: cause } }
-      );
-    }
+      await recordLastLogin(admitted.id);
 
-    const admitted = user!;
+      const pending = admitted.approvalStatus === "PENDING";
+      if (!pending) {
+        await warmTeacherRoutes({
+          schoolId: admitted.schoolId!,
+          teacherId: admitted.id,
+          isSuperAdmin: false,
+        });
+      }
 
-    await writeAudit({
-      userId: admitted.id,
-      schoolId: admitted.schoolId,
-      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-      resource: "User",
-      resourceId: admitted.id,
-      metadata: { role: "TEACHER", schoolId: admitted.schoolId, method: "browser_password" },
+      return { ok: true as const, redirectTo: pending ? "/pending-approval" : "/teacher" };
     });
-    await recordLastLogin(admitted.id);
-
-    const pending = admitted.approvalStatus === "PENDING";
-    if (!pending) {
-      await warmTeacherRoutes({
-        schoolId: admitted.schoolId!,
-        teacherId: admitted.id,
-        isSuperAdmin: false,
-      });
-    }
-
-    return { ok: true, redirectTo: pending ? "/pending-approval" : "/teacher" };
-  }
+  },
+  { verb: "sign you in" }
 );
 
 /**

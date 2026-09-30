@@ -169,7 +169,11 @@ describe("updateSection — cache fan-out on a rename", () => {
 
     const result = await updateSection(buildFormData(SECTION_ID, "Rosal"));
 
-    expect(result).toEqual({ ok: false, error: "Section not found" });
+    expect(result).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+      error: expect.stringMatching(/^Section not found/),
+    });
     expect(JSON.stringify(result)).not.toContain(OTHER_SCHOOL_ID);
     expect(sectionUpdate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();

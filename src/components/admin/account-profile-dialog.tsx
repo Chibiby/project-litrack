@@ -18,6 +18,8 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { UserAvatar } from "@/components/user-avatar";
 import { getAccountProfile, type AccountProfile } from "@/lib/actions/accounts";
 import { removeUserAvatar } from "@/lib/actions/avatar";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   ADVISORY_MODE_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -74,10 +76,10 @@ export function AccountProfileDialog({
     try {
       const fd = new FormData();
       fd.set("userId", row.id);
-      const res = await removeUserAvatar(fd);
+      const res = await callAction(() => removeUserAvatar(fd));
       if (!res.ok) {
-        toast.error(res.error);
-        throw new Error(res.error);
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
       if (res.dryRun) {
         // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
@@ -99,7 +101,7 @@ export function AccountProfileDialog({
     setError(null);
     setProfile(null);
     setLoading(true);
-    getAccountProfile(row.id)
+    callAction(() => getAccountProfile(row.id))
       .then((res) => {
         if (cancelled) return;
         setLoading(false);

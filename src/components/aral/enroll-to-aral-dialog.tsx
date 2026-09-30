@@ -18,6 +18,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { enrollLearnersToAral } from "@/lib/actions/learner";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { UserPlus } from "lucide-react";
 
 export type EnrollCandidate = {
@@ -135,11 +137,13 @@ export function EnrollToAralDialog({
 
     startTransition(async () => {
       const toastId = toast.loading("Enrolling learners to ARAL…");
-      const res = await enrollLearnersToAral({
-        gradeId,
-        learnerIds,
-        aralTeacherId,
-      });
+      const res = await callAction(() =>
+        enrollLearnersToAral({
+          gradeId,
+          learnerIds,
+          aralTeacherId,
+        })
+      );
       if (res.ok) {
         const enrolled = res.data?.enrolled ?? 0;
         // Already in ARAL under somebody else, and moved across by this action.
@@ -163,7 +167,7 @@ export function EnrollToAralDialog({
         handleOpenChange(false);
         router.refresh();
       } else {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
       }
     });
   }

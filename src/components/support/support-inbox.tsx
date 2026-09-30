@@ -27,6 +27,8 @@ import {
   revokeUnlockGrant,
 } from "@/lib/actions/support";
 import { revokeUnlock } from "@/lib/actions/unlock-admin";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   DEFAULT_UNLOCK_DAYS,
   MAX_UNLOCK_DAYS,
@@ -160,11 +162,13 @@ function TicketCard({
 
   function revoke(grantId: string) {
     startRevoke(async () => {
-      const result = districtScoped
-        ? await revokeUnlock({ kind: "teacher", grantId })
-        : await revokeUnlockGrant({ grantId });
+      const result = await callAction(async () =>
+        districtScoped
+          ? await revokeUnlock({ kind: "teacher", grantId })
+          : await revokeUnlockGrant({ grantId })
+      );
       if (!result.ok) {
-        toast.error(result.error);
+        toastFailure(result);
         return;
       }
       toast.success("Access ended");
@@ -316,7 +320,7 @@ function AnswerDialog({
   async function submit() {
     setError(null);
     setPending(true);
-    const result =
+    const result = await callAction(async () =>
       mode === "decline"
         ? await declineTicket({ ticketId: ticket.id, note })
         : await resolveTicket({
@@ -325,7 +329,8 @@ function AnswerDialog({
             ...(canGrant && grantAccess
               ? { grant: { days: Number(days) } }
               : {}),
-          });
+          })
+    );
     setPending(false);
 
     if (!result.ok) {

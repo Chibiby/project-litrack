@@ -118,7 +118,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
         className="lg:h-9"
         onClick={() => push({ q, from: from || null, to: to || null })}
       >
-        Apply
+        Apply filters
       </Button>
       {hasFilters ? (
         <Button

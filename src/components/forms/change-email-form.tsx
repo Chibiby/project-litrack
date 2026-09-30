@@ -15,7 +15,9 @@ import {
   FormDescription,
   FormMessage,
 } from "@/components/ui/form";
-import { AppForm, useAppForm, markFormClean } from "@/components/forms/app-form";
+import { AppForm, applyFieldErrors, useAppForm, markFormClean } from "@/components/forms/app-form";
+import { Label } from "@/components/ui/label";
+import { callAction } from "@/lib/ui/call-action";
 import {
   changeEmailSchema,
   type ChangeEmailInput,
@@ -41,6 +43,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
   const [pending, startTransition] = useTransition();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEmail, setPreviewEmail] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const synthetic = isSynthetic ?? isSyntheticEmail(currentEmail);
 
   const form = useAppForm<ChangeEmailInput>({
@@ -57,8 +60,8 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Change email</h2>
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">Current email</p>
-          <Input value={currentEmail} readOnly disabled className="bg-muted" />
+          <Label htmlFor="current-email">Current email</Label>
+          <Input id="current-email" value={currentEmail} readOnly disabled className="bg-muted" />
           {synthetic ? (
             <p className="text-sm text-muted-foreground">
               This is your login identity. Changing it updates how you authenticate.
@@ -71,10 +74,11 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
           form={form}
           className="space-y-4"
           onSubmit={(values) => {
+            setFormError(null);
             startTransition(async () => {
-              const res = await changeEmailAction(toFormData(values));
+              const res = await callAction(() => changeEmailAction(toFormData(values)));
               if (res && !res.ok) {
-                toast.error(res.error);
+                if (!applyFieldErrors(form, res)) setFormError(res.error);
                 return;
               }
               markFormClean(form, {
@@ -149,6 +153,11 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
               </FormItem>
             )}
           />
+          {formError ? (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {formError}
+            </p>
+          ) : null}
           <Button
             type="submit"
             className="w-full"

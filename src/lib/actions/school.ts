@@ -21,7 +21,7 @@ import {
 } from "@/lib/cache/revalidate";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { action } from "@/lib/errors/action";
-import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { AppError, fieldError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { z } from "zod";
@@ -34,9 +34,9 @@ const REGEN_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
  * Super-admin only: creates a School + School Head auth user whose initial password
  * IS the School ID. Returned once for the admin to relay; never stored in Prisma.
  */
-export async function createSchool(
+export const createSchool = action("createSchool", async (
   formData: FormData
-): Promise<ActionResult<{ id: string; initialPassword: string }>> {
+): Promise<ActionResult<{ id: string; initialPassword: string }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const f = (k: string) => {
@@ -94,7 +94,11 @@ export async function createSchool(
     app_metadata: { role: "SCHOOL_HEAD" },
     user_metadata: { role: "SCHOOL_HEAD" },
   });
-  if (authErr || !created.user) return { ok: false, error: authErr?.message ?? "Auth bootstrap failed" };
+  // Raw Supabase text never reaches the browser: classify maps the AuthError.
+  if (authErr) throw authErr;
+  if (!created.user) {
+    throw new AppError("AUTH_PROVIDER_ERROR", { detail: "createUser returned no user" });
+  }
 
   const school = await prisma.$transaction(async (tx) => {
     const createdSchool = await tx.school.create({
@@ -147,7 +151,7 @@ export async function createSchool(
   revalidatePath("/admin/schools");
   revalidateSchoolsList();
   return { ok: true, data: { id: school.id, initialPassword } };
-}
+}, { verb: "create the school" });
 
 /**
  * Super Admin or district admin: put a School Head's password back to the
@@ -253,6 +257,9 @@ export const regenerateSchoolHeadCredential = action(
  * carries a demo session. This endpoint names schools to anybody who asks, and
  * a demo school listed here would reach real users through the back door after
  * the login dropdown had already been taught to hide it.
+ *
+ * Deliberately not wrapped by `action()`: an unauthenticated data loader for
+ * the login page and `/api/schools/list`, whose callers use the array.
  */
 export async function listSchoolsPublic() {
   const demoVisible = await isDemoVisible();
@@ -285,6 +292,9 @@ export async function listSchoolsPublic() {
  * real teachers does the most damage — so it is the one place the per-browser
  * rule matters most: the admin who opened the demo sees those three schools,
  * every other visitor never does.
+ *
+ * Deliberately not wrapped by `action()`, for the same reason as
+ * `listSchoolsPublic`: an unauthenticated loader for the login dropdowns.
  */
 export async function listSchoolsWithTeacherStatus() {
   const demoVisible = await isDemoVisible();
@@ -332,10 +342,10 @@ export async function listSchoolsWithTeacherStatus() {
   );
 }
 
-export async function deleteSchool(formData: FormData): Promise<void> {
+export const deleteSchool = action("deleteSchool", async (formData: FormData): Promise<void> => {
   const admin = await requireUser("SUPER_ADMIN");
   const id = String(formData.get("id") ?? "");
-  if (!id) throw new Error("Missing id");
+  if (!id) throw fieldError("id", "Missing id");
   await prisma.school.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
@@ -351,4 +361,4 @@ export async function deleteSchool(formData: FormData): Promise<void> {
   revalidatePath("/admin/schools");
   revalidateSchoolsList();
   revalidateSchoolDashboard(id);
-}
+}, { verb: "delete the school" });

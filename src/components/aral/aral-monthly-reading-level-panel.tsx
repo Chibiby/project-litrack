@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import { ArrowUpRight, BookOpen, ClipboardList, Save } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,8 @@ import { ReadingLevelStatCards } from "@/components/aral/reading-level-stat-card
 import type { StatTone } from "@/components/dashboard/teacher/stat-cards";
 import { ReadingLevelLegend } from "@/components/aral/reading-level-legend";
 import { fetchAralReadingLevelForMonth } from "@/lib/actions/aral-grid";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import type { MonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
 import {
@@ -317,17 +318,19 @@ export function AralMonthlyReadingLevelPanel({
 
     const requestId = ++requestIdRef.current;
     void (async () => {
-      const res = await fetchAralReadingLevelForMonth({
-        gradeId,
-        monthKey: normalized,
-        section: section !== "all" ? section : undefined,
-        gender: gender !== "all" ? gender : undefined,
-        schoolId,
-      });
+      const res = await callAction(() =>
+        fetchAralReadingLevelForMonth({
+          gradeId,
+          monthKey: normalized,
+          section: section !== "all" ? section : undefined,
+          gender: gender !== "all" ? gender : undefined,
+          schoolId,
+        })
+      );
       // A slower earlier request must not overwrite a faster later one.
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         setLoading(false);
         return;
       }
@@ -486,7 +489,7 @@ export function AralMonthlyReadingLevelPanel({
                 className="h-11 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400 lg:h-9"
               >
                 <Save className="h-4 w-4" aria-hidden />
-                Save
+                Save reading levels
               </Button>
             ) : null
           }

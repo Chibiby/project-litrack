@@ -181,6 +181,23 @@ describe("beginTeacherLogin", () => {
     expect(checkRateLimit).toHaveBeenCalledWith(LOOKUP_KEY, expect.any(Object));
   });
 
+  it("puts the no-account message on the email field", async () => {
+    userFindUnique.mockResolvedValue(null);
+    const res = (await beginTeacherLogin("school-1", "guess@school.edu")) as {
+      error: string;
+      fieldErrors?: Record<string, string>;
+    };
+    expect(res.fieldErrors).toEqual({ email: res.error });
+    expect(JSON.stringify(res)).not.toContain("guess@school.edu");
+  });
+
+  it("names the sign-in when the database does not answer", async () => {
+    userFindUnique.mockRejectedValue(Object.assign(new Error("pool"), { code: "P2024" }));
+    const res = (await beginTeacherLogin("school-1", "t@school.edu")) as { error: string };
+    expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
+    expect(res.error).toMatch(/Couldn't sign you in/);
+  });
+
   it("treats a teacher from another school as no account here", async () => {
     userFindUnique.mockResolvedValue({ ...TEACHER, schoolId: "school-2" });
     expect(await beginTeacherLogin("school-1", "teacher@school.edu")).toMatchObject({
@@ -269,6 +286,45 @@ describe("finishTeacherLogin", () => {
       code: "AUTH_SESSION_EXPIRED",
     });
   });
+
+  it("calls an unreachable auth service a provider error, not an expired session", async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" },
+    });
+    expect(await finishTeacherLogin("school-1")).toMatchObject({
+      ok: false,
+      code: "AUTH_PROVIDER_ERROR",
+    });
+    getUser.mockResolvedValue({ data: { user: null }, error: { status: 503, message: "x" } });
+    expect(await finishTeacherLogin("school-1")).toMatchObject({ code: "AUTH_PROVIDER_ERROR" });
+  });
+
+  it("puts the no-account message on the email field when the session is refused", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({ ...TEACHER, schoolId: "school-2" });
+    const res = (await finishTeacherLogin("school-1")) as {
+      error: string;
+      fieldErrors?: Record<string, string>;
+    };
+    expect(res.fieldErrors).toEqual({ email: res.error });
+  });
+
+  it("signs the session out when the database fails after the grant, and reports the failure", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockRejectedValue(Object.assign(new Error("pool"), { code: "P2024" }));
+    const res = (await finishTeacherLogin("school-1")) as { error: string };
+    expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
+    expect(res.error).toMatch(/Couldn't sign you in/);
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a failing sign-out mask the original failure", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockRejectedValue(Object.assign(new Error("pool"), { code: "P2024" }));
+    signOut.mockRejectedValueOnce(new Error("signout failed"));
+    expect(await finishTeacherLogin("school-1")).toMatchObject({ code: "DB_UNAVAILABLE" });
+  });
 });
 
 describe("finishSchoolHeadLogin", () => {
@@ -286,6 +342,19 @@ describe("finishSchoolHeadLogin", () => {
       redirectTo: "/school-head",
     });
     expect(recordLastLogin).toHaveBeenCalledWith("head-1");
+  });
+
+  it("calls an unreachable auth service a provider error and signs out after a database failure", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: { status: 502, message: "bad gateway" } });
+    expect(await finishSchoolHeadLogin("school-1")).toMatchObject({
+      ok: false,
+      code: "AUTH_PROVIDER_ERROR",
+    });
+
+    getUser.mockResolvedValue({ data: { user: { id: "auth-2" } }, error: null });
+    userFindUnique.mockRejectedValue(Object.assign(new Error("pool"), { code: "P2024" }));
+    expect(await finishSchoolHeadLogin("school-1")).toMatchObject({ code: "DB_UNAVAILABLE" });
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 
   it("refuses and signs out a deactivated head", async () => {

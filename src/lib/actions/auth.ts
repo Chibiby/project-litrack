@@ -24,9 +24,14 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { recordLastLogin } from "@/lib/auth/last-login";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
-import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
+import { AppError, tooManyAttempts, type AppErrorOptions } from "@/lib/errors/app-error";
+import { formatMessage, type ErrorCode } from "@/lib/errors/codes";
 import { parseInput } from "@/lib/errors/validation";
-import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
+import {
+  isAuthServiceUnreachable,
+  loginFailureReasonFor,
+  mapSupabaseAuthError,
+} from "@/lib/errors/supabase";
 import { reportError } from "@/lib/errors/report";
 import type { ActionFailure } from "@/lib/errors/result";
 import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
@@ -72,6 +77,23 @@ const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 // Supabase keeps one live recovery token per user; resending sooner than
 // this only burns the still-good earlier email for an identical new one.
 const RECOVERY_TOKEN_COOLDOWN_MS = 2 * 60 * 1000;
+
+/**
+ * An `AppError` that also names the form field(s) the message belongs to, so
+ * the form can highlight them. The message is the formatted catalog text, the
+ * same sentence the toast shows.
+ */
+function errorOnFields(
+  code: ErrorCode,
+  fields: string[],
+  options: AppErrorOptions = {}
+): AppError {
+  const message = formatMessage(code, options.params);
+  return new AppError(code, {
+    ...options,
+    fieldErrors: Object.fromEntries(fields.map((field) => [field, message])),
+  });
+}
 
 /**
  * Site origin for links that must work wherever this deploy is reached from,
@@ -142,7 +164,10 @@ export const loginSchoolHead = action(
           reason: loginFailureReasonFor(code),
         },
       });
-      throw new AppError(code, { cause: error, context: { schoolId: school.id } });
+      const options = { cause: error, context: { schoolId: school.id } };
+      throw code === "AUTH_INCORRECT_PASSWORD"
+        ? errorOnFields(code, ["password"], options)
+        : new AppError(code, options);
     }
 
     await writeAudit({
@@ -158,7 +183,8 @@ export const loginSchoolHead = action(
     await warmSchoolHeadRoutes(school.id);
 
     redirect(SCHOOL_HEAD_ROUTES.dashboard);
-  }
+  },
+  { verb: "sign you in" }
 );
 
 /**
@@ -201,7 +227,7 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
     teacher.schoolId !== schoolId
   ) {
     await recordFailedLookup();
-    throw new AppError("AUTH_TEACHER_NOT_FOUND", { context: { schoolId } });
+    throw errorOnFields("AUTH_TEACHER_NOT_FOUND", ["email"], { context: { schoolId } });
   }
   if (teacher.approvalStatus === "REJECTED") throw new AppError("AUTH_REGISTRATION_DECLINED");
   if (isDeactivatedTeacher(teacher)) {
@@ -228,7 +254,10 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
       resourceId: teacher.id,
       metadata: { role: "TEACHER", schoolId, reason: loginFailureReasonFor(code) },
     });
-    throw new AppError(code, { cause: error, context: { schoolId } });
+    const options = { cause: error, context: { schoolId } };
+    throw code === "AUTH_INCORRECT_PASSWORD"
+      ? errorOnFields(code, ["password"], options)
+      : new AppError(code, options);
   }
 
   await writeAudit({
@@ -253,7 +282,7 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
   }
 
   redirect(pending ? "/pending-approval" : "/teacher");
-});
+}, { verb: "sign you in" });
 
 type TeacherRegisterNames = {
   firstName: string;
@@ -529,7 +558,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       // generic message is deliberate: these are the highest-value accounts in
       // the system, and unlike a teacher there is no legitimate "did I type my
       // address wrong?" confusion to resolve.
-      throw new AppError("AUTH_INCORRECT_CREDENTIALS");
+      throw incorrectAdminCredentials();
     }
 
     const supabase = await createSupabaseServerClient();
@@ -548,10 +577,8 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       });
       // Collapsed to the same message as an unknown handle — but only for the
       // credential case. A rate limit or an outage still says what it is.
-      throw new AppError(
-        mapped === "AUTH_INCORRECT_PASSWORD" ? "AUTH_INCORRECT_CREDENTIALS" : mapped,
-        { cause: error ?? undefined }
-      );
+      if (mapped === "AUTH_INCORRECT_PASSWORD") throw incorrectAdminCredentials(error ?? undefined);
+      throw new AppError(mapped, { cause: error ?? undefined });
     }
 
     const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
@@ -593,7 +620,15 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
   // visitor to set DATABASE_URL on Vercel. Both configuration failures now
   // throw CONFIG_MISSING from where they happen, and the wrapper gives the
   // person a reference while the variable names go to the error record.
-});
+}, { verb: "sign you in" });
+
+/**
+ * The one message for both an unknown handle and a wrong password, attached to
+ * both inputs so neither field's highlight reveals which one was wrong.
+ */
+function incorrectAdminCredentials(cause?: unknown): AppError {
+  return errorOnFields("AUTH_INCORRECT_CREDENTIALS", ["username", "password"], { cause });
+}
 
 /**
  * Deliberately NOT wrapped by `action()`.
@@ -728,7 +763,8 @@ export const setPasswordAction = action(
     });
 
     redirect(roleHomePath(user.role));
-  }
+  },
+  { verb: "save your new password" }
 );
 
 /**
@@ -833,10 +869,12 @@ export const changePasswordAction = action(
       // A 429 here means Supabase declined to check the password at all. Saying
       // "incorrect" would send the person off to reset a password that is fine.
       const code = mapSupabaseAuthError(verifyErr, "server");
-      throw new AppError(
-        code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code,
-        { cause: verifyErr }
-      );
+      if (code === "AUTH_INCORRECT_PASSWORD") {
+        throw errorOnFields("AUTH_CURRENT_PASSWORD_INCORRECT", ["currentPassword"], {
+          cause: verifyErr,
+        });
+      }
+      throw new AppError(code, { cause: verifyErr });
     }
 
     const { error } = await supabase.auth.updateUser({ password: input.password });
@@ -857,7 +895,8 @@ export const changePasswordAction = action(
     });
 
     return { ok: true };
-  }
+  },
+  { verb: "change your password" }
 );
 
 /**
@@ -898,10 +937,12 @@ export const changeEmailAction = action(
     });
     if (verifyErr) {
       const code = mapSupabaseAuthError(verifyErr, "server");
-      throw new AppError(
-        code === "AUTH_INCORRECT_PASSWORD" ? "AUTH_CURRENT_PASSWORD_INCORRECT" : code,
-        { cause: verifyErr }
-      );
+      if (code === "AUTH_INCORRECT_PASSWORD") {
+        throw errorOnFields("AUTH_CURRENT_PASSWORD_INCORRECT", ["currentPassword"], {
+          cause: verifyErr,
+        });
+      }
+      throw new AppError(code, { cause: verifyErr });
     }
 
     const taken = await prisma.user.findFirst({
@@ -1020,7 +1061,8 @@ export const requestPasswordReset = action(
     }
 
     return { ok: true };
-  }
+  },
+  { verb: "send the reset email" }
 );
 
 /**
@@ -1039,10 +1081,21 @@ export const completePasswordReset = action(
     const supabase = await createSupabaseServerClient();
     const {
       data: { user: authUser },
+      error: userError,
     } = await supabase.auth.getUser();
-    // The link, not the password: sending them to type a new one again would
-    // fail exactly the same way.
-    if (!authUser) throw new AppError("AUTH_RESET_LINK_EXPIRED");
+    if (!authUser) {
+      // An outage is not an expired link: telling the person to request a new
+      // one would burn a good token while Supabase is down.
+      if (userError && isAuthServiceUnreachable(userError)) {
+        throw new AppError("AUTH_PROVIDER_ERROR", {
+          cause: userError,
+          detail: "Could not read the recovery session: auth service unreachable",
+        });
+      }
+      // The link, not the password: sending them to type a new one again would
+      // fail exactly the same way.
+      throw new AppError("AUTH_RESET_LINK_EXPIRED");
+    }
 
     const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
     if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
@@ -1068,5 +1121,6 @@ export const completePasswordReset = action(
     }
 
     redirect("/login");
-  }
+  },
+  { verb: "save your new password" }
 );

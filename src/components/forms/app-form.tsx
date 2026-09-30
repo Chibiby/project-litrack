@@ -19,6 +19,9 @@ import {
   setUnsavedChangesDirty,
   stableSerialize,
 } from "@/hooks/unsaved-changes-context";
+import { isNextControlFlow } from "@/lib/errors/client";
+import type { ActionFailure } from "@/lib/errors/result";
+import { failureForRejection, toastFailure } from "@/lib/ui/toast-failure";
 import { cn } from "@/lib/utils";
 
 export type AppFormMode = "onBlur" | "onSubmit" | "onTouched" | "all";
@@ -156,12 +159,27 @@ export function AppForm<TFieldValues extends FieldValues>({
     onInvalid?.();
   }, [form, onInvalid]);
 
+  // A rejected onSubmit would otherwise surface as an unhandled rejection with
+  // the form silently stuck; the typed values stay in RHF either way.
+  const safeSubmit = React.useCallback<SubmitHandler<TFieldValues>>(
+    async (values, event) => {
+      try {
+        await onSubmit(values, event);
+      } catch (err) {
+        if (isNextControlFlow(err)) throw err;
+        const failure = failureForRejection(err);
+        if (failure) toastFailure(failure);
+      }
+    },
+    [onSubmit]
+  );
+
   return (
     <Form {...form}>
       <form
         id={id}
         className={cn(className)}
-        onSubmit={form.handleSubmit(onSubmit, handleInvalid)}
+        onSubmit={form.handleSubmit(safeSubmit, handleInvalid)}
         noValidate
       >
         {showErrorSummary ? (
@@ -171,6 +189,32 @@ export function AppForm<TFieldValues extends FieldValues>({
       </form>
     </Form>
   );
+}
+
+/**
+ * Put a server `fieldErrors` map next to the matching inputs and focus the first.
+ * Returns true when at least one field took an error; false means the caller
+ * should still toast `res.error` (nothing on the form explains the failure).
+ * Keys that are not registered fields are skipped, not guessed at.
+ */
+export function applyFieldErrors<TFieldValues extends FieldValues>(
+  form: UseFormReturn<TFieldValues>,
+  res: Pick<ActionFailure, "fieldErrors">
+): boolean {
+  const entries = Object.entries(res.fieldErrors ?? {});
+  const known = new Set(Object.keys(form.control._defaultValues ?? {}));
+  let applied = 0;
+  for (const [name, message] of entries) {
+    const root = name.split(".")[0] ?? name;
+    if (!known.has(root)) continue;
+    form.setError(
+      name as Path<TFieldValues>,
+      { type: "server", message },
+      { shouldFocus: applied === 0 }
+    );
+    applied += 1;
+  }
+  return applied > 0;
 }
 
 /** Mark form clean after a successful save (resets dirty without changing values). */

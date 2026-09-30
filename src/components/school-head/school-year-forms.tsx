@@ -24,6 +24,8 @@ import {
   setActiveSchoolYear,
   updateSchoolYear,
 } from "@/lib/actions/school-year";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   listOptimisticReducer,
   runOptimistic,
@@ -168,9 +170,9 @@ export function CreateSchoolYearDialog({
       fd.set("startDate", draft.startDate);
       fd.set("endDate", draft.endDate);
       if (setActive) fd.set("setActive", "true");
-      const res = await createSchoolYear(fd);
+      const res = await callAction(() => createSchoolYear(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       toast.success("School year created");

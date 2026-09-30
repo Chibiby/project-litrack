@@ -19,6 +19,9 @@ import {
   settleActionResult,
   tempOptimisticId,
 } from "@/lib/ui/optimistic";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
+import { isActionFailure } from "@/lib/errors/client";
 import { RotateCcw } from "lucide-react";
 
 export type GradeLevelCard = {
@@ -142,15 +145,12 @@ export function GradeLevelsClient({
       });
       const fd = new FormData();
       fd.set("type", gradeType);
-      try {
-        await createGradeLevel(fd);
-        toast.success(`${label} created`);
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Could not create grade level"
-        );
-        throw err instanceof Error ? err : new Error("Could not create grade level");
+      const res = await callAction(() => createGradeLevel(fd));
+      if (isActionFailure(res)) {
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
+      toast.success(`${label} created`);
     });
 
   /**

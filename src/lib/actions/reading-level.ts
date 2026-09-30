@@ -6,6 +6,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
+import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
+import { parseInput } from "@/lib/errors/validation";
 import {
   readingLevelSchema,
   readingLevelMonthlyBulkSchema,
@@ -44,22 +47,21 @@ type RawReadingLevelRow = {
   notes: string | null;
 };
 
-export async function recordReadingLevel(formData: FormData): Promise<ActionResult> {
+export const recordReadingLevel = action("recordReadingLevel", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = readingLevelSchema.safeParse({
-    learnerId: formData.get("learnerId"),
-    weekStart: formData.get("weekStart"),
-    englishProfile: formData.get("englishProfile"),
-    filipinoProfile: formData.get("filipinoProfile"),
-    wordRecognitionLevel: formData.get("wordRecognitionLevel"),
-    readingComprehensionLevel: formData.get("readingComprehensionLevel"),
-    writingLevel: formData.get("writingLevel"),
-    notes: formData.get("notes"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = {
+    data: parseInput(readingLevelSchema, {
+      learnerId: formData.get("learnerId"),
+      weekStart: formData.get("weekStart"),
+      englishProfile: formData.get("englishProfile"),
+      filipinoProfile: formData.get("filipinoProfile"),
+      wordRecognitionLevel: formData.get("wordRecognitionLevel"),
+      readingComprehensionLevel: formData.get("readingComprehensionLevel"),
+      writingLevel: formData.get("writingLevel"),
+      notes: formData.get("notes"),
+    }),
+  };
 
   // A Monday-keyed legacy write is still ABOUT that month and must obey the
   // same lock the monthly grid does — same helper, same precedence, so the
@@ -81,18 +83,12 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.learnerId, deletedAt: null },
   });
-  if (!learner) return { ok: false, error: "Learner not found" };
+  if (!learner) throw resourceNotFound("Learner");
 
-  try {
-    assertSameSchool(user.schoolId, learner.schoolId);
-  } catch {
-    return { ok: false, error: "Not found" };
-  }
+  assertSameSchool(user.schoolId, learner.schoolId, "Learner");
   // The designated ARAL tutor, not merely the adviser — same rule as the bulk
   // path below and as `markAttendance`.
-  if (!teacherIsAralTutorFor(learner, user.id)) {
-    return { ok: false, error: "Not found" };
-  }
+  if (!teacherIsAralTutorFor(learner, user.id)) throw resourceNotFound("Learner");
   if (!learner.isAralLearner) {
     return { ok: false, error: "Reading-level tracking is only for ARAL learners" };
   }
@@ -152,7 +148,7 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
     aralTeacherId: learner.aralTeacherId,
   });
   return { ok: true };
-}
+}, { verb: "save the reading level" });
 
 /**
  * Upsert one month's reading levels for many ARAL learners.
@@ -171,15 +167,12 @@ export async function recordReadingLevel(formData: FormData): Promise<ActionResu
  * are; `fetchAralReadingLevelForMonth` reads the whole month, so they still
  * prefill the grid and saving consolidates them onto the anchor.
  */
-export async function bulkRecordMonthlyReadingLevel(
+export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLevel", async (
   input: unknown
-): Promise<ActionResult<{ upserted: number; cleared: number }>> {
+): Promise<ActionResult<{ upserted: number; cleared: number }>> => {
   const user = await requireSchoolUser("TEACHER");
 
-  const parsed = readingLevelMonthlyBulkSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
-  }
+  const parsed = { data: parseInput(readingLevelMonthlyBulkSchema, input) };
 
   const monthStart = parsed.data.monthStart;
   const monthKey = formatLocalDateKey(monthStart);
@@ -319,116 +312,111 @@ export async function bulkRecordMonthlyReadingLevel(
   const nextMonth = nextMonthStart(monthStart);
   const now = new Date();
   let cleared = 0;
-  try {
-    await prisma.$transaction(async (tx) => {
-      // 1. Upserts. Skipped entirely when the save is clears-only.
-      for (const chunk of chunkRows(rows, BULK_CHUNK_ROWS)) {
-        // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
-        // and `@updatedAt` are CLIENT-side, and neither column has a database
-        // default. `updatedAt` is bumped in DO UPDATE too — omitting it there
-        // would freeze the column at first-insert time silently, with no error.
-        //
-        // `weekStart` binds the YYYY-MM-DD TEXT from `formatLocalDateKey` and
-        // casts in SQL. Binding the `Date` would re-serialize local midnight as a
-        // UTC instant, which agrees with the intended day on Vercel (TZ=UTC) and
-        // disagrees on a UTC+8 developer machine.
-        //
-        // Enums bind `::text::"Enum"`, never a bare `::"Enum"` — see the long
-        // comment in `attendance.ts` explaining the double cast. It applies here
-        // too, and now doubly matters: `englishProfile` / `filipinoProfile` may
-        // be a bound `null`, and the cast still has to resolve to the nullable
-        // `ReadingProfile` column type rather than an untyped parameter.
-        const values = Prisma.join(
-          chunk.map(
-            (r) => Prisma.sql`(
-              ${r.id}::text,
-              ${r.learnerId}::text,
-              ${monthKey}::date,
-              ${r.englishProfile}::text::"ReadingProfile",
-              ${r.filipinoProfile}::text::"ReadingProfile",
-              ${r.wordRecognitionLevel}::text::"WeeklyWordRecognitionLevel",
-              ${r.readingComprehensionLevel}::text::"WeeklyReadingComprehensionLevel",
-              ${r.notes}::text,
-              ${user.id}::text,
-              ${now}::timestamp(3)
-            )`
-          )
+  await prisma.$transaction(async (tx) => {
+    // 1. Upserts. Skipped entirely when the save is clears-only.
+    for (const chunk of chunkRows(rows, BULK_CHUNK_ROWS)) {
+      // `id` and `updatedAt` are supplied explicitly: Prisma's `@default(uuid())`
+      // and `@updatedAt` are CLIENT-side, and neither column has a database
+      // default. `updatedAt` is bumped in DO UPDATE too — omitting it there
+      // would freeze the column at first-insert time silently, with no error.
+      //
+      // `weekStart` binds the YYYY-MM-DD TEXT from `formatLocalDateKey` and
+      // casts in SQL. Binding the `Date` would re-serialize local midnight as a
+      // UTC instant, which agrees with the intended day on Vercel (TZ=UTC) and
+      // disagrees on a UTC+8 developer machine.
+      //
+      // Enums bind `::text::"Enum"`, never a bare `::"Enum"` — see the long
+      // comment in `attendance.ts` explaining the double cast. It applies here
+      // too, and now doubly matters: `englishProfile` / `filipinoProfile` may
+      // be a bound `null`, and the cast still has to resolve to the nullable
+      // `ReadingProfile` column type rather than an untyped parameter.
+      const values = Prisma.join(
+        chunk.map(
+          (r) => Prisma.sql`(
+            ${r.id}::text,
+            ${r.learnerId}::text,
+            ${monthKey}::date,
+            ${r.englishProfile}::text::"ReadingProfile",
+            ${r.filipinoProfile}::text::"ReadingProfile",
+            ${r.wordRecognitionLevel}::text::"WeeklyWordRecognitionLevel",
+            ${r.readingComprehensionLevel}::text::"WeeklyReadingComprehensionLevel",
+            ${r.notes}::text,
+            ${user.id}::text,
+            ${now}::timestamp(3)
+          )`
+        )
+      );
+
+      // The tenant predicate lives IN the statement. The scoped `findMany` above
+      // already fails the whole batch on any foreign id, so this join can only
+      // match every row — but `ReadingLevelRecord` carries no `schoolId` of its
+      // own, and a raw INSERT with no tenant predicate would be one deleted
+      // guard away from writing across schools. The row count is checked below,
+      // so a predicate that ever excluded a row rolls the transaction back
+      // rather than committing a partial save.
+      const written = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "ReadingLevelRecord" (
+          "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
+          "wordRecognitionLevel", "readingComprehensionLevel",
+          "notes", "recordedById", "updatedAt"
+        )
+        SELECT v."id", v."learnerId", v."weekStart", v."englishProfile",
+               v."filipinoProfile", v."wordRecognitionLevel",
+               v."readingComprehensionLevel", v."notes",
+               v."recordedById", v."updatedAt"
+        FROM (VALUES ${values}) AS v (
+          "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
+          "wordRecognitionLevel", "readingComprehensionLevel",
+          "notes", "recordedById", "updatedAt"
+        )
+        JOIN "Learner" l
+          ON l."id" = v."learnerId"
+         AND l."schoolId" = ${user.schoolId}
+         AND l."deletedAt" IS NULL
+         AND l."isAralLearner" = TRUE
+        ON CONFLICT ("learnerId", "weekStart") DO UPDATE SET
+          "englishProfile" = EXCLUDED."englishProfile",
+          "filipinoProfile" = EXCLUDED."filipinoProfile",
+          "wordRecognitionLevel" = EXCLUDED."wordRecognitionLevel",
+          "readingComprehensionLevel" = EXCLUDED."readingComprehensionLevel",
+          "notes" = EXCLUDED."notes",
+          "recordedById" = EXCLUDED."recordedById",
+          "updatedAt" = EXCLUDED."updatedAt"
+        RETURNING "id"
+      `;
+      if (written.length !== chunk.length) {
+        throw new Error(
+          `reading-level bulk write touched ${written.length} of ${chunk.length} rows`
         );
-
-        // The tenant predicate lives IN the statement. The scoped `findMany` above
-        // already fails the whole batch on any foreign id, so this join can only
-        // match every row — but `ReadingLevelRecord` carries no `schoolId` of its
-        // own, and a raw INSERT with no tenant predicate would be one deleted
-        // guard away from writing across schools. The row count is checked below,
-        // so a predicate that ever excluded a row rolls the transaction back
-        // rather than committing a partial save.
-        const written = await tx.$queryRaw<{ id: string }[]>`
-          INSERT INTO "ReadingLevelRecord" (
-            "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
-            "wordRecognitionLevel", "readingComprehensionLevel",
-            "notes", "recordedById", "updatedAt"
-          )
-          SELECT v."id", v."learnerId", v."weekStart", v."englishProfile",
-                 v."filipinoProfile", v."wordRecognitionLevel",
-                 v."readingComprehensionLevel", v."notes",
-                 v."recordedById", v."updatedAt"
-          FROM (VALUES ${values}) AS v (
-            "id", "learnerId", "weekStart", "englishProfile", "filipinoProfile",
-            "wordRecognitionLevel", "readingComprehensionLevel",
-            "notes", "recordedById", "updatedAt"
-          )
-          JOIN "Learner" l
-            ON l."id" = v."learnerId"
-           AND l."schoolId" = ${user.schoolId}
-           AND l."deletedAt" IS NULL
-           AND l."isAralLearner" = TRUE
-          ON CONFLICT ("learnerId", "weekStart") DO UPDATE SET
-            "englishProfile" = EXCLUDED."englishProfile",
-            "filipinoProfile" = EXCLUDED."filipinoProfile",
-            "wordRecognitionLevel" = EXCLUDED."wordRecognitionLevel",
-            "readingComprehensionLevel" = EXCLUDED."readingComprehensionLevel",
-            "notes" = EXCLUDED."notes",
-            "recordedById" = EXCLUDED."recordedById",
-            "updatedAt" = EXCLUDED."updatedAt"
-          RETURNING "id"
-        `;
-        if (written.length !== chunk.length) {
-          throw new Error(
-            `reading-level bulk write touched ${written.length} of ${chunk.length} rows`
-          );
-        }
       }
+    }
 
-      // 2. Clears, AFTER the upserts — same ordering rule as
-      //    `saveAralWeeklyAttendance`. Deleted by MONTH RANGE, not by the
-      //    anchor: `fetchAralReadingLevelForMonth` reads the whole month
-      //    because legacy rows sit on arbitrary Mondays, so deleting only the
-      //    anchor would let an old row reappear on the next render and the
-      //    teacher would see the clear silently undo itself. `cleared` is the
-      //    returned row count, never the submitted id count — clearing an
-      //    already-empty month is not an error.
-      for (const chunk of chunkRows(clearIds, BULK_CHUNK_ROWS)) {
-        const values = Prisma.join(chunk.map((id) => Prisma.sql`(${id}::text)`));
-        const deleted = await tx.$queryRaw<{ id: string }[]>`
-          DELETE FROM "ReadingLevelRecord" r
-          USING (VALUES ${values}) AS v ("learnerId"),
-                "Learner" l
-          WHERE r."learnerId" = v."learnerId"
-            AND r."weekStart" >= ${monthKey}::date
-            AND r."weekStart" < ${formatLocalDateKey(nextMonth)}::date
-            AND l."id" = r."learnerId"
-            AND l."schoolId" = ${user.schoolId}
-            AND l."deletedAt" IS NULL
-            AND l."isAralLearner" = TRUE
-          RETURNING r."id"
-        `;
-        cleared += deleted.length;
-      }
-    }, BULK_TX_OPTIONS);
-  } catch (err) {
-    console.error("[bulkRecordMonthlyReadingLevel] transaction failed:", err);
-    return { ok: false, error: "Could not save the reading levels. Please try again." };
-  }
+    // 2. Clears, AFTER the upserts — same ordering rule as
+    //    `saveAralWeeklyAttendance`. Deleted by MONTH RANGE, not by the
+    //    anchor: `fetchAralReadingLevelForMonth` reads the whole month
+    //    because legacy rows sit on arbitrary Mondays, so deleting only the
+    //    anchor would let an old row reappear on the next render and the
+    //    teacher would see the clear silently undo itself. `cleared` is the
+    //    returned row count, never the submitted id count — clearing an
+    //    already-empty month is not an error.
+    for (const chunk of chunkRows(clearIds, BULK_CHUNK_ROWS)) {
+      const values = Prisma.join(chunk.map((id) => Prisma.sql`(${id}::text)`));
+      const deleted = await tx.$queryRaw<{ id: string }[]>`
+        DELETE FROM "ReadingLevelRecord" r
+        USING (VALUES ${values}) AS v ("learnerId"),
+              "Learner" l
+        WHERE r."learnerId" = v."learnerId"
+          AND r."weekStart" >= ${monthKey}::date
+          AND r."weekStart" < ${formatLocalDateKey(nextMonth)}::date
+          AND l."id" = r."learnerId"
+          AND l."schoolId" = ${user.schoolId}
+          AND l."deletedAt" IS NULL
+          AND l."isAralLearner" = TRUE
+        RETURNING r."id"
+      `;
+      cleared += deleted.length;
+    }
+  }, BULK_TX_OPTIONS);
 
   const upserted = rows.length;
   const gradeIds = [...new Set(learners.map((l) => l.gradeLevelId))];
@@ -498,4 +486,4 @@ export async function bulkRecordMonthlyReadingLevel(
   }
 
   return { ok: true, data: { upserted, cleared } };
-}
+}, { verb: "save the reading levels" });

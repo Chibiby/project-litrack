@@ -16,6 +16,8 @@ import {
   dismissUnlockAlerts,
   fetchUnlockAlerts,
 } from "@/lib/actions/notifications";
+import { isActionFailure } from "@/lib/errors/client";
+import { callAction } from "@/lib/ui/call-action";
 import { isPostLoginLoadingCover } from "@/lib/post-login-flag";
 
 /** Shape comes from the action, so this cannot drift from what the server sends. */
@@ -100,8 +102,8 @@ export function UnlockGrantAlerts() {
 
     const load = async () => {
       if (cancelled) return;
-      const rows = await fetchUnlockAlerts();
-      if (cancelled || rows.length === 0) return;
+      const rows = await callAction(() => fetchUnlockAlerts());
+      if (cancelled || isActionFailure(rows) || rows.length === 0) return;
       setAlerts(rows);
       whenNotStacked(() => {
         if (cancelled) return;
@@ -163,7 +165,7 @@ export function UnlockGrantAlerts() {
       // Optimistic and silent: the teacher has read the message, and a failed
       // write only means it greets them again next time. A toast about a
       // notification they just dismissed would be the noisier failure.
-      void dismissUnlockAlerts(ids).catch(() => {});
+      void callAction(() => dismissUnlockAlerts(ids)).catch(() => {});
     },
     [alerts]
   );

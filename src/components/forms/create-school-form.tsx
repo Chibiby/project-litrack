@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSchool } from "@/lib/actions/school";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { Copy, CheckCircle2, AlertTriangle } from "lucide-react";
+import { copyText } from "@/lib/ui/copy-text";
 
 export function CreateSchoolForm() {
   const router = useRouter();
@@ -18,13 +21,13 @@ export function CreateSchoolForm() {
 
   if (initialPassword) {
     return (
-      <Card className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm">
+      <Card className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-start gap-2 text-amber-950">
+          <div className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <h2 className="font-semibold">School created</h2>
-              <p className="mt-1 text-sm text-amber-900/90">
+              <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
                 The School Head signs in with this School ID as their password, then chooses
                 their own on first login.
               </p>
@@ -38,7 +41,7 @@ export function CreateSchoolForm() {
               type="button"
               variant="outline"
               onClick={async () => {
-                await navigator.clipboard.writeText(initialPassword);
+                if (!(await copyText(initialPassword))) return;
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}
@@ -61,9 +64,9 @@ export function CreateSchoolForm() {
         <form
           action={(fd) =>
             startTransition(async () => {
-              const res = await createSchool(fd);
+              const res = await callAction(() => createSchool(fd));
               if (!res.ok) {
-                toast.error(res.error);
+                toastFailure(res);
                 return;
               }
               if (res.data?.initialPassword) {

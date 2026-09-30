@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/form";
 import { AppForm, markFormClean, useAppForm } from "@/components/forms/app-form";
 import { updateSchoolAsAdmin } from "@/lib/actions/school-management";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   adminSchoolEditBasicSchema,
   adminSchoolEditFullSchema,
@@ -83,7 +85,7 @@ export function DistrictSchoolForm({
           ? values
           : { schoolId: values.schoolId, name: values.name, address: values.address };
         startTransition(async () => {
-          const res = await updateSchoolAsAdmin(toFormData(payload));
+          const res = await callAction(() => updateSchoolAsAdmin(toFormData(payload)));
           if (!res.ok) {
             if (res.fieldErrors) {
               for (const [field, message] of Object.entries(res.fieldErrors)) {
@@ -92,7 +94,7 @@ export function DistrictSchoolForm({
                 }
               }
             }
-            toast.error(res.error);
+            toastFailure(res);
             return;
           }
           markFormClean(form);

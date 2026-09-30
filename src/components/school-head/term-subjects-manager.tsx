@@ -14,6 +14,7 @@ import {
   settleActionResult,
   tempOptimisticId,
 } from "@/lib/ui/optimistic";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   archiveTermSubject,
   createTermSubject,
@@ -121,11 +122,11 @@ export function TermSubjectsManager({
       const name = newName.trim();
       if (!name) {
         toast.error("Subject name is required");
-        throw new Error("Subject name is required");
+        throw new ToastedError("Subject name is required");
       }
       if (atCap) {
         toast.error(capMessage);
-        throw new Error(capMessage);
+        throw new ToastedError(capMessage);
       }
       dispatch({
         type: "create",
@@ -141,7 +142,7 @@ export function TermSubjectsManager({
       const trimmed = name.trim();
       if (!trimmed) {
         toast.error("Subject name is required");
-        throw new Error("Subject name is required");
+        throw new ToastedError("Subject name is required");
       }
       dispatch({ type: "rename", id, name: trimmed });
       const res = await renameTermSubject({ id, name: trimmed });
@@ -159,7 +160,7 @@ export function TermSubjectsManager({
     runOptimistic(startTransition, async () => {
       if (atCap) {
         toast.error(capMessage);
-        throw new Error(capMessage);
+        throw new ToastedError(capMessage);
       }
       dispatch({ type: "restore", id });
       const res = await restoreTermSubject({ id });
@@ -171,8 +172,8 @@ export function TermSubjectsManager({
       dispatch({ type: "reorder", orderedIds });
       const res = await reorderTermSubjects({ gradeLevelId, orderedIds });
       if (!res.ok) {
-        toast.error(res.error);
-        throw new Error(res.error);
+        toastFailure(res);
+        throw new ToastedError(res.error);
       }
     });
 
@@ -391,7 +392,7 @@ function TermSubjectRow({
           className="min-w-[10rem] flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
         />
         <Button type="submit" size="sm" variant="outline" disabled={pending} className="lg:h-9">
-          Save
+          Rename subject
         </Button>
       </form>
 

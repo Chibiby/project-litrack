@@ -17,6 +17,8 @@ import {
   type AralTermGradesGridFormHandle,
 } from "@/components/forms/aral-term-grades-grid-form";
 import { exportTermGrades, saveTermGrades } from "@/lib/actions/term-grades";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { LEARNER_LIST_DEFAULT_PAGE_SIZE } from "@/lib/learners/pagination";
 import type { TermGradesExportInput } from "@/lib/validators/term-grade.schema";
 import type { SheetGroup } from "@/lib/terms/sheet-data";
@@ -133,14 +135,16 @@ export function TermsReportPanel({
   function handleExport() {
     startExport(async () => {
       const toastId = toast.loading("Preparing Excel…");
-      const res = await exportTermGrades({
-        ...exportScope,
-        term: state.term,
-        q: state.q.trim() || undefined,
-        purpose,
-      } satisfies TermGradesExportInput);
+      const res = await callAction(() =>
+        exportTermGrades({
+          ...exportScope,
+          term: state.term,
+          q: state.q.trim() || undefined,
+          purpose,
+        } satisfies TermGradesExportInput)
+      );
       if (!res.ok) {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
         return;
       }
       if (!res.data) {
@@ -187,15 +191,21 @@ export function TermsReportPanel({
     let cleared = 0;
     try {
       for (const batch of pending) {
-        const res = await saveTermGrades({
-          gradeLevelId: batch.group.gradeLevelId,
-          ...(batch.group.sectionId ? { sectionId: batch.group.sectionId } : {}),
-          term: state.term,
-          entries: batch.entries,
-        });
+        const res = await callAction(() =>
+          saveTermGrades({
+            gradeLevelId: batch.group.gradeLevelId,
+            ...(batch.group.sectionId ? { sectionId: batch.group.sectionId } : {}),
+            term: state.term,
+            entries: batch.entries,
+          })
+        );
         if (!res.ok) {
-          toast.error(
-            pending.length > 1 ? `${batch.group.label}: ${res.error}` : res.error,
+          toastFailure(
+            {
+              ...res,
+              error:
+                pending.length > 1 ? `${batch.group.label}: ${res.error}` : res.error,
+            },
             { id: toastId }
           );
           if (saved + cleared > 0) router.refresh();
@@ -299,8 +309,7 @@ export function TermsReportPanel({
       className="h-11 shrink-0 rounded-xl bg-violet-600 px-4 text-white hover:bg-violet-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
     >
       <Save className="size-5" aria-hidden />
-      <span className="xl:hidden">Save</span>
-      <span className="hidden xl:inline">Save Grades</span>
+      Save grades
     </Button>
   ) : null;
 

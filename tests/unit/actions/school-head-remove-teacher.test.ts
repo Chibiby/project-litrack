@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AuthApiError } from "@supabase/supabase-js";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
@@ -95,7 +96,15 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolsList: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
+const createSupabaseAdminClient = vi.fn();
+vi.mock("@/lib/supabase/admin", () => ({
+  createSupabaseAdminClient: (...a: unknown[]) => createSupabaseAdminClient(...a),
+}));
+
+// `action()` records non-user failures through this; the return value is the
+// reference the person is shown, and the first argument is what admins read.
+const reportError = vi.fn((..._a: unknown[]) => "E-TESTREF1");
+vi.mock("@/lib/errors/report", () => ({ reportError: (...a: unknown[]) => reportError(...a) }));
 
 const deleteAuthUser = vi.fn();
 vi.mock("@/lib/auth/delete-auth-user", () => ({
@@ -215,14 +224,34 @@ describe("removeTeacher", () => {
     expect(releaseTeacherAdvisory).not.toHaveBeenCalled();
   });
 
-  it("writes nothing when the login cannot be deleted", async () => {
-    deleteAuthUser.mockResolvedValue({ ok: false, error: "Could not delete the login." });
+  it("writes nothing when the login cannot be deleted, and never returns the provider text", async () => {
+    const raw = "AuthApiError: JWT secret sb_secret_9f3a is invalid for project abcd";
+    deleteAuthUser.mockResolvedValue({ ok: false, error: raw });
 
     const res = await removeTeacher(form());
 
-    expect(res).toEqual({ ok: false, error: "Could not delete the login." });
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR", ref: "E-TESTREF1" });
+    expect(JSON.stringify(res)).not.toContain("sb_secret_9f3a");
+    // Admins still get the raw text, in `detail`.
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "AUTH_PROVIDER_ERROR", detail: raw }),
+      expect.anything()
+    );
     expect(transaction).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("answers missing service-role config as CONFIG_MISSING, without the setup instructions", async () => {
+    const raw =
+      "SUPABASE_SERVICE_ROLE_KEY is missing or invalid. In Supabase Dashboard → Project Settings → API, copy the service_role secret (JWT) into .env.local — not the anon key.";
+    deleteAuthUser.mockResolvedValue({ ok: false, error: raw });
+
+    const res = await removeTeacher(form());
+
+    expect(res).toMatchObject({ ok: false, code: "CONFIG_MISSING", ref: "E-TESTREF1" });
+    expect(JSON.stringify(res)).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(JSON.stringify(res)).not.toContain(".env.local");
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it("reports a safe error when the release fails after the login is gone", async () => {
@@ -232,6 +261,47 @@ describe("removeTeacher", () => {
 
     expect(res.ok).toBe(false);
     expect(JSON.stringify(res)).not.toContain("Section");
+    // The specific half-finished state is still named, now with a reference.
+    expect((res as { error: string }).error).toContain("Auth account was removed");
+    expect((res as { error: string }).error).toContain("E-TESTREF1");
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("clearRejectedTeacher — provider failures stay out of the response", () => {
+  it("does not return the raw text when the login cannot be deleted", async () => {
+    const { clearRejectedTeacher } = await import("@/lib/actions/school-head");
+    const raw = "AuthApiError: JWT secret sb_secret_9f3a is invalid for project abcd";
+    deleteAuthUser.mockResolvedValue({ ok: false, error: raw });
+
+    const res = await clearRejectedTeacher(form());
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR" });
+    expect(JSON.stringify(res)).not.toContain("sb_secret_9f3a");
+  });
+});
+
+describe("approveTeacher — provider failures stay out of the response", () => {
+  it("classifies a Supabase metadata error instead of returning its message", async () => {
+    const { approveTeacher } = await import("@/lib/actions/school-head");
+    const raw = "Database error saving metadata sb_secret_9f3a";
+    createSupabaseAdminClient.mockReturnValue({
+      auth: {
+        admin: {
+          updateUserById: vi.fn(async () => ({
+            error: new AuthApiError(raw, 500, "unexpected_failure"),
+          })),
+        },
+      },
+    });
+
+    const res = await approveTeacher(form());
+
+    expect(res).toMatchObject({ ok: false });
+    expect(typeof (res as { code?: string }).code).toBe("string");
+    expect(JSON.stringify(res)).not.toContain("sb_secret_9f3a");
+    expect(txUserUpdates).toHaveLength(0);
     expect(writeAudit).not.toHaveBeenCalled();
   });
 });

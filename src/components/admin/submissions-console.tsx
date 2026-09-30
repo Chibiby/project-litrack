@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { updateAdminTermWindows } from "@/lib/actions/admin-term-windows";
+import { callAction } from "@/lib/ui/call-action";
 import { getTermWindows, validateTermWindows, type TermPeriodValue } from "@/lib/terms/windows";
 import { parseLocalDateKey } from "@/lib/date-keys";
 import { UnlockConsole } from "@/components/admin/unlock-console";
@@ -55,9 +56,11 @@ export function SubmissionsConsole({ schools, years, selected, allSelected, acti
     startTransition(async () => {
       const terms = drafts.map(({ term, startKey, endKey, deadlineKey }) => ({ term, startKey, endKey, deadlineKey }));
       const activeYears = years.filter((year) => year.isActive);
-      const result = allSelected
-        ? await updateAdminTermWindows({ schoolYearIds: (activeYears.length ? activeYears : years).map((year) => year.id), terms })
-        : await updateAdminTermWindows({ schoolYearId: selected.id, terms });
+      const result = await callAction(() =>
+        allSelected
+          ? updateAdminTermWindows({ schoolYearIds: (activeYears.length ? activeYears : years).map((year) => year.id), terms })
+          : updateAdminTermWindows({ schoolYearId: selected.id, terms })
+      );
       if (!result.ok) { setError(result.error); return; }
       toast.success("Term windows saved.");
       router.refresh();

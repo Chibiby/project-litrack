@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
+import { callAction } from "@/lib/ui/call-action";
+import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   restoreRemovedLearner,
   purgeRemovedLearner,
@@ -52,10 +54,10 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
   const restore = async () => {
     const fd = new FormData();
     fd.set("id", learner.id);
-    const res = await restoreRemovedLearner(fd);
+    const res = await callAction(() => restoreRemovedLearner(fd));
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
     toast.success(
       res.enrollmentOutcome === "no-active-year"
@@ -68,10 +70,10 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
   const purge = async () => {
     const fd = new FormData();
     fd.set("id", learner.id);
-    const res = await purgeRemovedLearner(fd);
+    const res = await callAction(() => purgeRemovedLearner(fd));
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
     toast.success(`${learner.fullName} permanently deleted.`);
     router.refresh();
@@ -132,10 +134,10 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
   const restore = async () => {
     const fd = new FormData();
     fd.set("id", teacher.id);
-    const res = await restoreRemovedTeacher(fd);
+    const res = await callAction(() => restoreRemovedTeacher(fd));
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
     toast.success(`Account restored — ${TEACHER_RESTORE_NOTICE}`);
     router.refresh();
@@ -144,10 +146,10 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
   const purge = async () => {
     const fd = new FormData();
     fd.set("id", teacher.id);
-    const res = await purgeRemovedTeacher(fd);
+    const res = await callAction(() => purgeRemovedTeacher(fd));
     if (!res.ok) {
-      toast.error(res.error);
-      throw new Error(res.error);
+      toastFailure(res);
+      throw new ToastedError(res.error);
     }
     toast.success(`${teacher.fullName}'s account permanently deleted.`);
     router.refresh();

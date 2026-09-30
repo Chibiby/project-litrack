@@ -144,9 +144,9 @@ function accountNotFound(detail: string): AppError {
  * the row already prints — and refuses when nothing is on record, which is the
  * permanent state for any password chosen before sealing existed.
  */
-export async function revealSchoolHeadPassword(
+export const revealSchoolHeadPassword = action("revealSchoolHeadPassword", async (
   formData: FormData
-): Promise<ActionResult<{ password: string; setAt: string | null; isSchoolId: boolean }>> {
+): Promise<ActionResult<{ password: string; setAt: string | null; isSchoolId: boolean }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = accountUserIdSchema.safeParse({ userId: formData.get("userId") });
@@ -249,7 +249,7 @@ export async function revealSchoolHeadPassword(
       isSchoolId: false,
     },
   };
-}
+}, { verb: "show the password" });
 
 /**
  * Put a School Head's password back to their school's School ID.
@@ -265,9 +265,9 @@ export async function revealSchoolHeadPassword(
  * writes no `isActive`. The two are deliberately different and the reasons are
  * given there.
  */
-export async function resetSchoolHeadPasswordToDefault(
+export const resetSchoolHeadPasswordToDefault = action("resetSchoolHeadPasswordToDefault", async (
   formData: FormData
-): Promise<ActionResult<{ password: string }>> {
+): Promise<ActionResult<{ password: string }>> => {
   const admin = await requireUser("SUPER_ADMIN");
 
   const parsed = accountUserIdSchema.safeParse({ userId: formData.get("userId") });
@@ -306,7 +306,13 @@ export async function resetSchoolHeadPasswordToDefault(
     password,
     app_metadata: { role: "SCHOOL_HEAD", schoolId: target.school.id },
   });
-  if (error) return { ok: false, error: "Failed to reset password" };
+  if (error) {
+    // `detail` names the account, never the credential.
+    throw new AppError(mapSupabaseAuthError(error, "server"), {
+      cause: error,
+      detail: `resetSchoolHeadPasswordToDefault: password reset failed for user ${target.id}`,
+    });
+  }
 
   await prisma.user.update({
     where: { id: target.id },
@@ -337,7 +343,7 @@ export async function resetSchoolHeadPasswordToDefault(
   // The School ID is not a secret — it is printed on the schools table and on
   // this console's own row — so returning it here reveals nothing new.
   return { ok: true, data: { password } };
-}
+}, { verb: "reset the password" });
 
 export type ResetTeacherPasswordResult = { ok: true; data: { password: string } };
 export type ResetDistrictAdminPasswordResult = { ok: true; data: { password: string } };
@@ -815,7 +821,7 @@ async function startImpersonation(
  * `mustChangePassword` account, which are exactly the accounts whose pages
  * (`/pending-approval`, `/account/set-password`) carry the banner.
  */
-export async function endImpersonation(): Promise<ActionResult> {
+export const endImpersonation = action("endImpersonation", async (): Promise<ActionResult> => {
   const ticket = await readImpersonationTicket();
   if (!ticket) return { ok: false, error: "Not impersonating" };
 
@@ -897,7 +903,7 @@ export async function endImpersonation(): Promise<ActionResult> {
       returnTo: ticket.returnTo,
     })
   );
-}
+}, { verb: "return to your account" });
 
 type AuthClient = SupabaseClient["auth"];
 

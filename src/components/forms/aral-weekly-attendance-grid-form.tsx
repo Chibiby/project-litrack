@@ -36,6 +36,8 @@ import {
 import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import { cn } from "@/lib/utils";
 import { saveAralWeeklyAttendance } from "@/lib/actions/attendance";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { AttendanceGridRow } from "@/components/forms/aral-weekly-attendance-grid-row";
 import {
   CELL_LETTER,
@@ -410,13 +412,15 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
 
     startTransition(async () => {
       const toastId = toast.loading("Saving weekly attendance…");
-      const res = await saveAralWeeklyAttendance({
-        gradeId,
-        weekStart: weekStartKey,
-        cells,
-      });
+      const res = await callAction(() =>
+        saveAralWeeklyAttendance({
+          gradeId,
+          weekStart: weekStartKey,
+          cells,
+        })
+      );
       if (!res.ok) {
-        toast.error(res.error, { id: toastId });
+        toastFailure(res, { id: toastId });
         return;
       }
 

@@ -2,9 +2,12 @@
 
 import type { TransitionStartFunction } from "react";
 import { toast } from "sonner";
-
-/** Common server-action result shape used across litrack mutations. */
-export type ActionResult = { ok: true } | { ok: false; error: string };
+import type { ErrorCode } from "@/lib/errors/codes";
+import {
+  ToastedError,
+  failureForRejection,
+  toastFailure,
+} from "@/lib/ui/toast-failure";
 
 /**
  * Run optimistic UI work inside a transition and return a Promise that settles
@@ -12,6 +15,11 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
  * while still satisfying React’s “addOptimistic only in a transition” rule.
  *
  * Call `addOptimistic` synchronously at the start of `work` (before the first await).
+ *
+ * Any rejection other than a redirect or a `ToastedError` (offline, dropped
+ * connection, crash, or a plain `Error` from a bug) is toasted once and rethrown
+ * as `ToastedError`. Code that toasts before throwing must throw `ToastedError`;
+ * redirects and `ToastedError`s are rethrown unchanged.
  */
 export function runOptimistic(
   startTransition: TransitionStartFunction,
@@ -23,29 +31,31 @@ export function runOptimistic(
         await work();
         resolve();
       } catch (err) {
-        reject(err);
+        const failure = failureForRejection(err);
+        if (!failure) {
+          reject(err);
+          return;
+        }
+        toastFailure(failure);
+        reject(new ToastedError(failure.error, { cause: err }));
       }
     });
   });
 }
 
-/** Toast success or error from an ActionResult; throws on failure for ConfirmAction. */
+/**
+ * Toast success or error from an action result; throws on failure for ConfirmAction.
+ * `code` is optional because ~30 legacy actions still return `{ ok: false, error }`.
+ */
 export async function settleActionResult(
-  res: ActionResult,
+  res: { ok: true } | { ok: false; error: string; code?: ErrorCode },
   successMessage: string
 ): Promise<void> {
   if (!res.ok) {
-    toast.error(res.error);
-    throw new Error(res.error);
+    toastFailure(res);
+    throw new ToastedError(res.error);
   }
   toast.success(successMessage);
-}
-
-/** Toast error without throwing (for non-confirm click handlers). */
-export function toastActionFailure(res: ActionResult): boolean {
-  if (res.ok) return false;
-  toast.error(res.error);
-  return true;
 }
 
 export function removeById<T extends { id: string }>(items: T[], id: string): T[] {

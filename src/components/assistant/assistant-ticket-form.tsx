@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { submitTicket } from "@/lib/actions/support";
+import { callAction } from "@/lib/ui/call-action";
 import {
   SUPPORT_TICKET_CATEGORIES,
   UNLOCK_SCOPES,
@@ -104,8 +105,12 @@ export function AssistantTicketForm({
     }
 
     setPending(true);
-    const result = await submitTicket(parsed.data);
-    setPending(false);
+    let result;
+    try {
+      result = await callAction(() => submitTicket(parsed.data));
+    } finally {
+      setPending(false);
+    }
 
     if (!result.ok) {
       setError(result.error);
