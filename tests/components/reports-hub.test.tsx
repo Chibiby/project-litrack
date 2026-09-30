@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The Reports Hub: MOSY leads the cards, and a locked kind (per
+ * The Reports Hub: MOSY has no card or quick chip (it exports from its own
+ * page; the kind stays so old history rows re-generate), and a locked kind (per
  * `reportLocksFor`) renders disabled everywhere it can be picked — the card,
  * its Quick Generate chip — with the refusal sentence attached.
  *
@@ -51,12 +52,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ReportsHub", () => {
-  it("renders MOSY as the first card", () => {
+  it("renders no MOSY card and no MOSY quick-generate button", () => {
     const { container } = renderHub();
     const titles = Array.from(
       container.querySelectorAll("p.font-semibold.leading-tight")
     ).map((el) => el.textContent);
-    expect(titles[0]).toBe("MOSY Report");
+    // Guard against a vacuous pass: the card grid did render.
+    expect(titles).toContain("Attendance Records");
+    expect(titles.some((t) => /mosy/i.test(t ?? ""))).toBe(false);
+    expect(screen.queryByText(/MOSY/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /mosy/i })).toBeNull();
+  });
+
+  it("REPORT_CARDS / QUICK_ACTIONS list no MOSY, but the validator still accepts kind MOSY", async () => {
+    const { REPORT_CARDS, QUICK_ACTIONS } = await import("@/lib/reports/kinds");
+    expect(REPORT_CARDS.some((c) => c.kind === "MOSY")).toBe(false);
+    expect(QUICK_ACTIONS.some((a) => a.kind === "MOSY")).toBe(false);
+    const { reportGenerateSchema } = await import("@/lib/validators/report.schema");
+    expect(reportGenerateSchema.safeParse({ kind: "MOSY", format: "EXCEL" }).success).toBe(true);
   });
 
   it("disables the locked card and its quick chip, showing the reason", () => {

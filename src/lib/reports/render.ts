@@ -54,6 +54,12 @@ export type ReportBlock = {
   boldRowIndices?: number[];
   /** Parallel to `rows`: `true` greys that one cell (SF2: no attendance record). */
   shadedCells?: boolean[][];
+  /**
+   * Opt-in (default false): long cells wrap onto extra lines and rows grow to
+   * fit, in the PDF and (wrapText) in Excel. Unset keeps the one-line,
+   * ellipsised rows every other report relies on.
+   */
+  wrap?: boolean;
 };
 
 export type ReportTable = {
@@ -166,6 +172,7 @@ export async function renderExcel(table: ReportTable, opts: RenderOptions = {}):
         boldRowIndices: block.boldRowIndices,
         shadedCells: block.shadedCells,
         freezeColumns: block.freezeColumns,
+        wrap: block.wrap,
       },
       purpose
     );
@@ -323,7 +330,48 @@ export async function renderPdf(table: ReportTable, opts: RenderOptions = {}): P
         doc.y = y + headerH;
       }
 
+      // Opt-in multi-line cells: each cell is measured at its column width and
+      // the row is as tall as its tallest cell plus padding.
+      const CELL_PAD = 4;
+      function drawWrappedRow(cells: (string | number | null)[], bold: boolean, shaded?: boolean[]) {
+        const font = bold ? "Helvetica-Bold" : "Helvetica";
+        const texts = cells.map((cell) => (cell === null ? "" : String(cell)));
+        doc.font(font).fontSize(fontSize);
+        const heights = texts.map((t, i) =>
+          t === "" ? 0 : doc.heightOfString(t, { width: (widths[i] ?? DEFAULT_COL_WIDTH) - 4 })
+        );
+        const h = Math.max(rowH, Math.max(0, ...heights) + CELL_PAD * 2);
+        // A tall row that does not fit starts a new page with the header again.
+        if (ensureSpace(h)) drawHeader();
+        const y = doc.y;
+        doc.rect(left, y, usable, h).fill(bold ? TOTAL_FILL : DATA_FILL);
+        let x = left;
+        texts.forEach((t, i) => {
+          const w = widths[i] ?? DEFAULT_COL_WIDTH;
+          if (!bold && shaded?.[i]) doc.rect(x, y, w, h).fill(SHADED_FILL);
+          if (t !== "") {
+            doc
+              .font(font)
+              .fontSize(fontSize)
+              .fillColor(INK)
+              .text(t, x + 2, y + (h - heights[i]!) / 2, {
+                width: w - 4,
+                align: i === primary ? "left" : "center",
+              });
+          }
+          x += w;
+        });
+        doc
+          .moveTo(left, y + h)
+          .lineTo(left + usable, y + h)
+          .lineWidth(0.5)
+          .strokeColor(DATA_RULE)
+          .stroke();
+        doc.y = y + h;
+      }
+
       function drawRow(cells: (string | number | null)[], bold: boolean, shaded?: boolean[]) {
+        if (block.wrap) return drawWrappedRow(cells, bold, shaded);
         // Page break BEFORE the row, then the header again on the new page.
         if (ensureSpace(rowH)) drawHeader();
         const y = doc.y;
@@ -409,8 +457,13 @@ export async function renderPdf(table: ReportTable, opts: RenderOptions = {}): P
     // --- Signature block, rule, bottom logos + generated lines. ---
     const LOGO_H = 40;
     const SIGNATURE_H = 78;
-    ensureSpace(SIGNATURE_H + 14 + LOGO_H + 6);
-    doc.y += 20;
+    // What the block really occupies below `doc.y`: 20 gap, the signature
+    // area up to its rule (SIGNATURE_H - 14), 6 gap, then the logos. The old
+    // reservation added the 14 back and forgot the 20, which pushed the whole
+    // block to a new page when it fit.
+    const SIGNATURE_GAP = 20;
+    ensureSpace(SIGNATURE_GAP + (SIGNATURE_H - 14) + 6 + LOGO_H);
+    doc.y += SIGNATURE_GAP;
     const sigTop = doc.y;
     const colW = usable / 3;
     const labels = ["Prepared by:", "Checked by:", "Noted by:"];

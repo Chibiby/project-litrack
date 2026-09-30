@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { AralPageHero } from "@/components/aral/aral-page-hero";
 import { MosyStatCards } from "@/components/aral/mosy-stat-cards";
+import { MosyExportButton } from "@/components/aral/mosy-export-button";
 import { MosyToolbar } from "@/components/aral/mosy-toolbar";
 import { MosyTable } from "@/components/aral/mosy-table";
 import { EmptyState } from "@/components/dashboard";
@@ -259,9 +260,12 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
             <Suspense key={key} fallback={<div className="h-10" aria-hidden />}>
               <MosyStatusTabs data={data} status={status} hrefExtra={hrefExtra} />
             </Suspense>
-            <Suspense fallback={<div className="h-11 lg:h-9" aria-hidden />}>
-              <MosyToolbarSlot data={data} q={q} grade={grade} section={sectionFilter} status={status} />
-            </Suspense>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <Suspense fallback={<div className="h-11 lg:h-9" aria-hidden />}>
+                <MosyToolbarSlot data={data} q={q} grade={grade} section={sectionFilter} status={status} />
+              </Suspense>
+              {!isSuperAdmin ? <MosyExportButton /> : null}
+            </div>
           </div>
 
           <Suspense key={key} fallback={<TableSectionSkeleton rows={8} columns={8} />}>

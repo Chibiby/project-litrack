@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { AralMosyMoveOutReason, AralMosyOutcome, ReadingProfile } from "@prisma/client";
 
+import { MOSY_STATUSES } from "@/lib/aral/mosy";
+import { reportPurposeSchema } from "@/lib/validators/report.schema";
+
 export const MOSY_REMARKS_MAX = 250;
 
 /**
@@ -57,3 +60,20 @@ export const aralMosyDecisionSchema = z
   });
 
 export type AralMosyDecisionInput = z.output<typeof aralMosyDecisionSchema>;
+
+/**
+ * MOSY page export. Carries only the page's list filters and the file choice;
+ * the school, school year and tutor scope come from the session, never from here.
+ * `grade` / `section` are ids and are only shape-checked: the loader pins them to
+ * the session's school, so a foreign id matches nothing.
+ */
+export const aralMosyExportSchema = z.object({
+  format: z.enum(["EXCEL", "PDF"], { message: "Choose Excel or PDF" }),
+  purpose: reportPurposeSchema,
+  q: z.string().trim().max(100, "Search is too long").default(""),
+  grade: z.string().trim().max(64, "Invalid grade").default("").transform((v) => v || "all"),
+  section: z.string().trim().max(64, "Invalid section").default("").transform((v) => v || "all"),
+  status: z.enum(MOSY_STATUSES, { message: "Invalid status" }).default("all"),
+});
+
+export type AralMosyExportInput = z.output<typeof aralMosyExportSchema>;

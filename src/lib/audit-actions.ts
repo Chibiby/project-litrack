@@ -135,6 +135,13 @@ export const AUDIT_ACTIONS = {
   ARAL_MOSY_MOVE_OUT: "ARAL_MOSY_MOVE_OUT",
   /** MOSY decision put a moved-out learner back into ARAL. */
   ARAL_MOSY_RETAG: "ARAL_MOSY_RETAG",
+  /**
+   * The MOSY Report page downloaded as Excel or PDF. Recorded like
+   * `TERM_GRADES_EXPORT`: the file carries learner names, reading levels and
+   * decision remarks out of the system. Metadata is counts, ids and codes only:
+   * no names, no search text, no remarks.
+   */
+  ARAL_MOSY_EXPORT: "ARAL_MOSY_EXPORT",
   ATTENDANCE_MARK: "ATTENDANCE_MARK",
   /**
    * Retired with the daily grid it served. Kept because rows already written
@@ -453,6 +460,7 @@ export const SECURITY_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.TERM_GRADES_EXPORT,
   AUDIT_ACTIONS.KINDER_COMPETENCY_EXPORT,
   AUDIT_ACTIONS.SUMMARY_EXPORT,
+  AUDIT_ACTIONS.ARAL_MOSY_EXPORT,
   // Deletes and cross-tenant moves
   AUDIT_ACTIONS.LEARNER_DELETE,
   AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,

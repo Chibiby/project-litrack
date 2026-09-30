@@ -145,7 +145,11 @@ export const RELEASES: readonly Release[] = [
         roles: ["TEACHER"],
       },
       {
-        text: "Set each learner's middle-of-year reading level, then choose whether they move out of ARAL or stay. Changing the level alone never removes a learner from ARAL.",
+        text: "Press Update on a learner to choose whether they move out of ARAL or stay, and set their middle-of-year reading level. Changing the level alone never removes a learner from ARAL.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Export the MOSY Report to Excel or PDF from its own page, in the DepEd report format with the school header and signature lines. It follows the filters you have set. The MOSY Report is no longer in the Reports page.",
         roles: ["TEACHER"],
       },
       {

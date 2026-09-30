@@ -123,6 +123,8 @@ export type TemplateSheet = {
   freezeColumns?: number;
   /** 0-based index of the name column: left-aligned, at least 28 wide. Defaults to the first column not headed "#". */
   primaryColumn?: number;
+  /** Wrap long cell text onto extra lines (row grows to fit) instead of one fixed-height line. Default false. */
+  wrap?: boolean;
 };
 
 export type TemplateContext = {
@@ -410,9 +412,19 @@ export function writePrintSheet(
   const boldRows = new Set(sheet.boldRowIndices ?? []);
   const averageCol = sheet.columns.findIndex((c) => /general average/i.test(c.header));
   const rule = { bottom: { style: "thin" as const, color: { argb: DATA_RULE } } };
+  const wrapWidths = sheet.wrap ? templateWidths(sheet, n) : [];
   sheet.rows.forEach((values, rowIdx) => {
     const row = ws.addRow(values.map((v) => (v === null ? "" : v)));
     row.height = 22;
+    if (sheet.wrap) {
+      // An explicit height stops Excel autofitting, so size the row to its
+      // longest wrapped cell.
+      const lines = values.reduce<number>(
+        (m, v, i) => Math.max(m, wrappedLines(v === null ? "" : String(v), wrapWidths[i] ?? DEFAULT_COL_WIDTH)),
+        1
+      );
+      row.height = Math.max(22, 15 * lines + 4);
+    }
     const isBold = boldRows.has(rowIdx);
     for (let c = 1; c <= n; c++) {
       const cell = row.getCell(c);
@@ -423,6 +435,7 @@ export function writePrintSheet(
       cell.alignment = {
         horizontal: c - 1 === primary ? "left" : "center",
         vertical: "middle",
+        ...(sheet.wrap ? { wrapText: true } : {}),
       };
       if (typeof cell.value === "number" && Number.isInteger(cell.value)) cell.numFmt = "0";
     }
@@ -575,6 +588,11 @@ export function writeRecordsSheet(ws: Worksheet, ctx: TemplateContext, sheet: Te
   sheet.rows.forEach((values, rowIdx) => {
     const row = ws.addRow(values.map((v) => (v === null ? "" : v)));
     if (boldRows.has(rowIdx)) row.font = { bold: true };
+    if (sheet.wrap) {
+      for (let c = 1; c <= sheet.columns.length; c++) {
+        row.getCell(c).alignment = { wrapText: true, vertical: "top" };
+      }
+    }
     sheet.shadedCells?.[rowIdx]?.forEach((shaded, c) => {
       if (shaded) row.getCell(c + 1).fill = solid(SHADED_FILL);
     });
