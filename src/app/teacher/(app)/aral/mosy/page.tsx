@@ -250,8 +250,8 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
         </Suspense>
 
         <Callout variant="aral" icon={Info}>
-          This MOSY prompt appears automatically whenever you change an ARAL learner&apos;s
-          reading level.
+          Use Update to set each ARAL learner&apos;s MOSY reading level and decide whether they
+          move out of ARAL or stay.
         </Callout>
 
         <ListNavigationProvider>

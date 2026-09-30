@@ -38,8 +38,6 @@ import { cn } from "@/lib/utils";
 
 export type MosyDialogState = {
   row: MosyRow;
-  /** The level the tutor picked in the table, or the saved one when opened from Update. */
-  draftLevel: string;
 };
 
 type MosyFormValues = {
@@ -69,7 +67,7 @@ function MosyDecisionForm({
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
-  const { row, draftLevel } = state;
+  const { row } = state;
   const [pending, startTransition] = useTransition();
   const intent = useRef<"save" | "later">("save");
 
@@ -97,7 +95,7 @@ function MosyDecisionForm({
     schema: aralMosyDecisionSchema,
     defaultValues: {
       learnerId: row.id,
-      mosyLevel: draftLevel,
+      mosyLevel: row.mosyLevel ?? "",
       decision: initialDecision,
       reason: savedChoice?.reason ?? "",
       improvedToLevel: savedChoice?.improvedToLevel ?? "",
@@ -114,8 +112,6 @@ function MosyDecisionForm({
     )?.key ?? "";
   const improvedToError = form.formState.errors.improvedToLevel?.message;
   const remarksLength = form.watch("remarks").length;
-  const level = form.watch("mosyLevel");
-  const levelLabel = row.levelOptions.find((o) => o.value === level)?.label ?? null;
   const canDecideLater = row.isAralLearner && row.decision === null;
   const gradeSection = row.sectionName ? `${row.gradeLabel} - ${row.sectionName}` : row.gradeLabel;
 
@@ -225,17 +221,30 @@ function MosyDecisionForm({
       <FormField
         control={form.control}
         name="mosyLevel"
-        render={() => (
+        render={({ field }) => (
           <FormItem>
-            <FormLabel>MOSY reading level</FormLabel>
-            <FormControl>
-              <div
-                className="flex min-h-10 items-center rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium text-foreground"
-                data-testid="mosy-level-readonly"
-              >
-                {levelLabel ?? level}
-              </div>
-            </FormControl>
+            <FormLabel required>MOSY reading level</FormLabel>
+            <Select
+              value={field.value}
+              onValueChange={(value) => {
+                field.onChange(value);
+                form.clearErrors("mosyLevel");
+              }}
+              disabled={pending}
+            >
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {row.levelOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FormMessage />
           </FormItem>
         )}
@@ -341,8 +350,8 @@ function MosyDecisionForm({
 
 /**
  * "Move out from ARAL?" — the only place a MOSY level or decision is saved.
- * Closing it any way (Cancel, Escape, the X) discards the draft; the table
- * derives its level select from saved data, so nothing was ever written.
+ * Closing it any way (Cancel, Escape, the X) discards the draft; nothing is
+ * written until Save.
  */
 export function MosyDecisionDialog({
   state,
@@ -364,7 +373,7 @@ export function MosyDecisionDialog({
       >
         {state ? (
           <MosyDecisionForm
-            key={`${state.row.id}:${state.draftLevel}`}
+            key={state.row.id}
             state={state}
             onClose={onClose}
             onPendingChange={setPending}
