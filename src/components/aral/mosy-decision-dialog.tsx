@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppForm, useAppForm } from "@/components/forms/app-form";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,7 @@ type MosyFormValues = {
 const TRANSITION_TOAST: Record<MosyTransition, string> = {
   NONE: "MOSY level saved",
   MOVED_OUT: "Moved out of ARAL",
-  RETAGGED: "Back in ARAL",
+  RETAGGED: "Back in ARAL. You are now their ARAL teacher.",
 };
 
 const CHOICE_CARD =
@@ -223,6 +224,15 @@ function MosyDecisionForm({
           </FormItem>
         )}
       />
+
+      {/* Re-tagging a moved-out learner makes the saving adviser their ARAL
+          teacher of record (resolveMosySave), so say so before they commit. */}
+      {!row.isAralLearner && decision === "STAY" ? (
+        <Callout role="status" title="You will become this learner's ARAL teacher">
+          Saving puts {row.fullName} back in ARAL with you as their ARAL teacher. They will
+          appear in your Weekly Attendance and Monthly Reading Level.
+        </Callout>
+      ) : null}
 
       <FormField
         control={form.control}

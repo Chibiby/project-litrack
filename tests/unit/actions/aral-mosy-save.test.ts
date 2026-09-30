@@ -22,12 +22,15 @@ const LEARNER_ID = "3f0c8f0e-6a55-4c1e-9d55-0d3a6a1f2b10";
 const YEAR_ID = "year-1";
 const GRADE_ID = "grade-4";
 const ADVISER_ID = "adviser-1";
+const SECTION_ID = "section-1";
+const OTHER_SECTION = "section-2";
 const ENROLLED = new Date("2026-06-10T00:00:00.000Z");
 const YEAR_START = new Date(2026, 5, 8); // local midnight, as the page derives it
 
 type LearnerRow = {
   schoolId: string;
   teacherId: string | null;
+  sectionId: string | null;
   gradeLevelId: string;
   isAralLearner: boolean;
   aralTeacherId: string | null;
@@ -111,6 +114,17 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+/** What `resolveMosyAccess` returns for the session user. */
+let access: unknown;
+vi.mock("@/lib/aral/mosy-access", () => ({
+  resolveMosyAccess: vi.fn(async () => access),
+}));
+
+let mosyLocked: boolean;
+vi.mock("@/lib/settings/system-settings", () => ({
+  isMosySubmissionLocked: vi.fn(async () => mosyLocked),
+}));
+
 const requireSchoolUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireSchoolUser: (...a: unknown[]) => requireSchoolUser(...a),
@@ -149,6 +163,7 @@ function form(fields: Record<string, string>): FormData {
 const taggedLearner = (over: Partial<LearnerRow> = {}): LearnerRow => ({
   schoolId: SCHOOL_ID,
   teacherId: ADVISER_ID,
+  sectionId: SECTION_ID,
   gradeLevelId: GRADE_ID,
   isAralLearner: true,
   aralTeacherId: USER_ID,
@@ -166,6 +181,8 @@ beforeEach(() => {
   dbPreviousFilipino = null;
   learnerRow = taggedLearner();
   existingRow = null;
+  mosyLocked = false;
+  access = { ok: true, sectionIds: [SECTION_ID] };
   requireSchoolUser.mockResolvedValue({ id: USER_ID, schoolId: SCHOOL_ID, role: "TEACHER" });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -242,14 +259,67 @@ describe("saveMosyDecision — guards", () => {
     });
   });
 
-  it("an adviser who is not the designated tutor gets NOT_FOUND", async () => {
-    learnerRow = taggedLearner({ teacherId: USER_ID, aralTeacherId: OTHER_TUTOR });
+  it("a learner outside the advisory sections is NOT_FOUND and nothing is written", async () => {
+    learnerRow = taggedLearner({ sectionId: OTHER_SECTION });
     const res = await saveMosyDecision(form({ decision: "STAY" }));
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(upsert).not.toHaveBeenCalled();
     expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it("a learner with no section is NOT_FOUND for an adviser", async () => {
+    learnerRow = taggedLearner({ sectionId: null });
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("the advisory scope is checked on the learner row read after the lock, not before", async () => {
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: true });
+    expect(readOrder.indexOf("lock")).toBeLessThan(readOrder.indexOf("learner.read"));
+    expect(learnerFindFirst.mock.calls[0][0].select.sectionId).toBe(true);
+  });
+
+  it("the adviser may save a learner tagged to a different ARAL tutor (advisory, not tutor, scope)", async () => {
+    learnerRow = taggedLearner({ aralTeacherId: OTHER_TUTOR });
+    const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" }));
+    expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+    expect(revalidateLearnerScoped).toHaveBeenCalledWith(
+      expect.objectContaining({ aralTeacherId: OTHER_TUTOR })
+    );
+  });
+
+  it("a locked MOSY refuses with MOSY_LOCKED before touching the database", async () => {
+    mosyLocked = true;
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({
+      ok: false,
+      code: "MOSY_LOCKED",
+      error: "MOSY submissions are locked right now. Your Super Admin can open them.",
+    });
+    expect(lockCall).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["volunteer", "MOSY Report is for DepEd teachers who advise a section."],
+    ["floating", "Floating teachers do not advise a section, so there is no MOSY Report."],
+    ["no_advisory", "You have no advisory section yet."],
+  ])("a %s teacher is refused with the access message and nothing is written", async (reason, message) => {
+    access = { ok: false, reason, message };
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: false, error: message });
+    expect(lockCall).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
   it("a Super Admin-like session (not the tutor) can never save, even with a forged post", async () => {
     requireSchoolUser.mockResolvedValue({ id: "sa-1", schoolId: SCHOOL_ID, role: "SUPER_ADMIN" });
     const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" }));
@@ -498,15 +568,38 @@ describe("saveMosyDecision — re-tag", () => {
     );
   });
 
-  it("another tutor's moved-out learner is NOT_FOUND", async () => {
+  it("the adviser may re-tag a learner another tutor moved out; they become the designated ARAL teacher", async () => {
     learnerRow = taggedLearner({ isAralLearner: false, aralTeacherId: null, aralEnrolledAt: null });
     existingRow = { decision: "MOVE_OUT", tutorId: OTHER_TUTOR, priorAralEnrolledAt: ENROLLED };
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toEqual({ ok: true, data: { transition: "RETAGGED" } });
+    expect(learnerUpdate).toHaveBeenCalledWith({
+      where: { id: LEARNER_ID },
+      data: { isAralLearner: true, aralTeacherId: USER_ID, aralEnrolledAt: ENROLLED },
+    });
+  });
+
+  it("an untagged learner with no MOVE_OUT this year is NOT_FOUND even inside the section", async () => {
+    learnerRow = taggedLearner({ isAralLearner: false, aralTeacherId: null, aralEnrolledAt: null });
+    existingRow = { decision: "STAY", tutorId: USER_ID, priorAralEnrolledAt: null };
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(learnerUpdate).not.toHaveBeenCalled();
+  });
+
+  it("a moved-out learner who left the advisory section is NOT_FOUND", async () => {
+    learnerRow = taggedLearner({
+      isAralLearner: false,
+      aralTeacherId: null,
+      aralEnrolledAt: null,
+      sectionId: OTHER_SECTION,
+    });
+    existingRow = { decision: "MOVE_OUT", tutorId: USER_ID, priorAralEnrolledAt: ENROLLED };
     const res = await saveMosyDecision(form({ decision: "STAY" }));
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(learnerUpdate).not.toHaveBeenCalled();
   });
 });
-
 describe("saveMosyDecision — level-only saves", () => {
   it.each([
     ["deferred (decision empty)", { decision: "" }],

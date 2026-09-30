@@ -27,7 +27,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-const { loadMosyExport, loadMosyPage, MOSY_EXPORT_MAX_ROWS } = await import("@/lib/aral/mosy-queries");
+const { loadMosyExport, loadMosyPage, buildMosyGradeOptions, MOSY_EXPORT_MAX_ROWS } = await import("@/lib/aral/mosy-queries");
 
 const SCHOOL = "school-1";
 const YEAR = { id: "year-1", startDateKey: "2026-06-08" };
@@ -35,7 +35,7 @@ const YEAR = { id: "year-1", startDateKey: "2026-06-08" };
 const base = {
   schoolId: SCHOOL,
   schoolYear: YEAR,
-  teacherId: "tutor-1" as string | null,
+  sectionIds: ["section-a", "section-b"] as string[] | null,
   q: "cruz",
   grade: "grade-4",
   section: "section-a",
@@ -97,14 +97,14 @@ describe("mosy export/page parity", () => {
   });
 
   it.each(["all", "not_updated", "for_decision", "moved_out", "stay"] as const)(
-    "same where for status %s, with and without a tutor",
+    "same where for status %s, for an adviser and for the whole school",
     async (status) => {
-      for (const teacherId of ["tutor-1", null]) {
+      for (const sectionIds of [["section-a", "section-b"], null]) {
         learnerFindMany.mockClear();
-        await loadMosyPage({ ...base, teacherId, status, page: 1 });
+        await loadMosyPage({ ...base, sectionIds, status, page: 1 });
         const p = listWhere();
         learnerFindMany.mockClear();
-        await loadMosyExport({ ...base, teacherId, status });
+        await loadMosyExport({ ...base, sectionIds, status });
         expect(listWhere()).toEqual(p);
       }
     }
@@ -159,12 +159,37 @@ describe("mosy export/page parity", () => {
     const out = await loadMosyExport(base);
     expect(gradeFindFirst.mock.calls[0]![0]).toMatchObject({ where: { id: "grade-4", schoolId: SCHOOL, deletedAt: null } });
     expect(sectionFindFirst.mock.calls[0]![0]).toMatchObject({
-      where: { id: "section-a", schoolId: SCHOOL, deletedAt: null },
+      where: { id: { equals: "section-a", in: ["section-a", "section-b"] }, schoolId: SCHOOL, deletedAt: null },
     });
     expect(out.gradeLabel).toBe("Grade 4");
     expect(out.sectionLabel).toBe("Sampaguita");
   });
 
+  it("a teacher's section label lookup is limited to their advisory sections", async () => {
+    await loadMosyExport(base);
+    expect(sectionFindFirst.mock.calls[0]![0]).toMatchObject({
+      where: { id: { equals: "section-a", in: ["section-a", "section-b"] }, schoolId: SCHOOL, deletedAt: null },
+    });
+  });
+
+  it("a section id outside the advisory sections yields no label, even in the same school", async () => {
+    // The fake honours the `in` restriction like Postgres would.
+    sectionFindFirst.mockImplementation(async ({ where }: { where: { id: unknown } }) => {
+      const id = where.id as string | { equals: string; in: string[] };
+      const allowed = typeof id === "string" ? true : id.in.includes(id.equals);
+      return allowed ? { name: "Secret" } : null;
+    });
+    const out = await loadMosyExport({ ...base, section: "section-other" });
+    expect(out.sectionLabel).toBeNull();
+    expect(JSON.stringify(out)).not.toContain("Secret");
+  });
+
+  it("the whole-school view keeps the plain id lookup", async () => {
+    await loadMosyExport({ ...base, sectionIds: null });
+    expect(sectionFindFirst.mock.calls[0]![0]).toMatchObject({
+      where: { id: "section-a", schoolId: SCHOOL, deletedAt: null },
+    });
+  });
   it("no filters: no label lookups, null labels; section 'none' is labelled without a lookup", async () => {
     const out = await loadMosyExport({ ...base, grade: "all", section: "all" });
     expect(gradeFindFirst).not.toHaveBeenCalled();
@@ -184,5 +209,66 @@ describe("mosy export/page parity", () => {
     const out = await loadMosyExport(base);
     expect(out.stats.total).toBe(10);
     expect(out.totalCount).toBe(1);
+  });
+});
+
+describe("mosy scope in the list where", () => {
+  it("an adviser's where restricts the current section to the advisory sections, inside the school", async () => {
+    await loadMosyPage({ ...base, grade: "all", section: "all", page: 1 });
+    const w = listWhere() as { schoolId: string; AND: Record<string, unknown>[] };
+    expect(w.schoolId).toBe(SCHOOL);
+    expect(w.AND[0]).toMatchObject({ sectionId: { in: ["section-a", "section-b"] } });
+    expect(JSON.stringify(w)).not.toContain("aralTeacherId");
+    expect(JSON.stringify(w)).not.toContain("tutorId");
+  });
+
+  it("the whole-school view has no section restriction", async () => {
+    await loadMosyPage({ ...base, sectionIds: null, grade: "all", section: "all", page: 1 });
+    const w = listWhere() as { AND: Record<string, unknown>[] };
+    expect(w.AND[0]).not.toHaveProperty("sectionId");
+  });
+});
+
+describe("mosy gradeOptions", () => {
+  it("a teacher's options come only from their advisory sections, ordered Kinder, G1, G2 and by section name", async () => {
+    sectionFindMany.mockResolvedValue([
+      { id: "s-g2-b", name: "Bayabas", gradeLevelId: "g2", gradeLevel: { type: "G2" } },
+      { id: "s-k", name: "Sampaguita", gradeLevelId: "k", gradeLevel: { type: "KINDER" } },
+      { id: "s-g2-a", name: "Atis", gradeLevelId: "g2", gradeLevel: { type: "G2" } },
+      { id: "s-g1", name: "Rosal", gradeLevelId: "g1", gradeLevel: { type: "G1" } },
+    ]);
+    const out = await loadMosyPage({ ...base, grade: "all", section: "all", page: 1 });
+    expect(sectionFindMany).toHaveBeenCalledTimes(1);
+    expect(sectionFindMany.mock.calls[0]![0]).toMatchObject({
+      where: { schoolId: SCHOOL, deletedAt: null, id: { in: ["section-a", "section-b"] } },
+    });
+    expect(out.gradeOptions.map((g) => g.label)).toEqual(["Kinder", "Grade 1", "Grade 2"]);
+    expect(out.gradeOptions[2]!.sections.map((s) => s.name)).toEqual(["Atis", "Bayabas"]);
+    // no learner-derived grade lookup for a teacher
+    expect(
+      learnerFindMany.mock.calls.some((c) => (c[0] as { distinct?: unknown }).distinct)
+    ).toBe(false);
+  });
+
+  it("an empty advisory list yields no options and no section query", async () => {
+    const out = await loadMosyPage({ ...base, sectionIds: [], grade: "all", section: "all", page: 1 });
+    expect(out.gradeOptions).toEqual([]);
+    expect(sectionFindMany).not.toHaveBeenCalled();
+  });
+
+  it("buildMosyGradeOptions is deterministic for any input order", () => {
+    const grades = [
+      { id: "g10", type: "G10" },
+      { id: "g2", type: "G2" },
+      { id: "k", type: "KINDER" },
+    ];
+    const sections = [
+      { id: "s2", name: "B", gradeLevelId: "g2" },
+      { id: "s1", name: "A", gradeLevelId: "g2" },
+    ];
+    const a = buildMosyGradeOptions(grades, sections);
+    const b = buildMosyGradeOptions([...grades].reverse(), [...sections].reverse());
+    expect(a).toEqual(b);
+    expect(a.map((g) => g.label)).toEqual(["Kinder", "Grade 2", "Grade 10"]);
   });
 });

@@ -19,29 +19,28 @@ const twoAral = [
 describe("getNavGroups — teacher", () => {
   it("splits nav into MENU, ARAL PROGRAM and a trailing ungrouped item", () => {
     const groups = getNavGroups("TEACHER", oneAral);
-    expect(groups.map((g) => g.label)).toEqual(["Learners", "ARAL Program", "Analytics"]);
-    // Term reports is a per-term GRADES report, so it belongs beside the roster
-    // it reports on, not under the ARAL programme.
-    // ARAL Profiling is its own page under the ARAL Program group.
-    expect(groups[0].items.map((i) => i.label)).toEqual([
-      "Dashboard",
+    expect(groups.map((g) => g.label)).toEqual([undefined, "Advisory", "ARAL Program", "Analytics"]);
+    expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
+    // Learners, the term report and MOSY are all advisory-scoped, so they share
+    // one group; MOSY sits below End of Terms Reports.
+    expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
       "End of Terms Reports",
+      "MOSY Report",
     ]);
-    expect(groups[1].items.map((i) => i.label)).toEqual([
+    expect(groups[2].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",
       "ARAL Profiling",
-      "MOSY Report",
     ]);
-    expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
+    expect(groups[3].items.map((i) => i.label)).toEqual(["Reports"]);
   });
 
-  it("has one MOSY Report row directly after ARAL Profiling, never grade-scoped", () => {
+  it("has one MOSY Report row directly after End of Terms Reports, never grade-scoped", () => {
     for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
       const groups = getNavGroups("TEACHER", grades);
       const ids = groups[1].items.map((item) => item.id);
-      expect(ids.indexOf("teacher-aral-mosy")).toBe(ids.indexOf("teacher-aral-profiling") + 1);
+      expect(ids.indexOf("teacher-aral-mosy")).toBe(ids.indexOf("teacher-terms-reports") + 1);
       const row = groups[1].items.find((item) => item.id === "teacher-aral-mosy");
       expect(row?.label).toBe("MOSY Report");
       expect(row?.href).toBe(ARAL_MOSY_HREF);
@@ -57,7 +56,7 @@ describe("getNavGroups — teacher", () => {
     // /teacher/aral picker. The old Learner Profiling row stays gone.
     for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
       const groups = getNavGroups("TEACHER", grades);
-      const row = groups[1].items.find((item) => item.id === "teacher-aral-profiling");
+      const row = groups[2].items.find((item) => item.id === "teacher-aral-profiling");
       expect(row?.href).toBe("/teacher/aral/profiling");
       const items = flattenNavGroups(groups);
       expect(items.find((item) => item.id === "teacher-learner-profiling")).toBeUndefined();
@@ -91,7 +90,7 @@ describe("getNavGroups — teacher", () => {
   });
 
   it("deep-links ARAL items to the single ARAL grade", () => {
-    const [, aral] = getNavGroups("TEACHER", oneAral);
+    const [, , aral] = getNavGroups("TEACHER", oneAral);
     expect(aral.items[0].href).toBe("/teacher/aral/g1/attendance");
     expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
   });
@@ -99,7 +98,7 @@ describe("getNavGroups — teacher", () => {
   it("deep-links ARAL items to the first ARAL grade when there are several", () => {
     // Each row must open its own page, not the ARAL Program picker; both pages
     // switch grades in place.
-    const [, aral] = getNavGroups("TEACHER", twoAral);
+    const [, , aral] = getNavGroups("TEACHER", twoAral);
     expect(aral.items[0].href).toBe("/teacher/aral/g1/attendance");
     expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
   });
@@ -112,7 +111,7 @@ describe("getNavGroups — teacher", () => {
 
   it("falls back to the grade picker only when there is no ARAL grade", () => {
     for (const grades of [[], undefined]) {
-      const [, aral] = getNavGroups("TEACHER", grades);
+      const [, , aral] = getNavGroups("TEACHER", grades);
       expect(aral.items[0].href).toBe("/teacher/aral");
       expect(aral.items[1].href).toBe("/teacher/aral");
     }
@@ -122,9 +121,9 @@ describe("getNavGroups — teacher", () => {
     // The third argument defaults, so every existing two-arg caller must keep
     // the full menu — hiding a page from an ordinary teacher would be worse
     // than showing a volunteer one extra link.
-    const [menu] = getNavGroups("TEACHER", oneAral);
+    const [, menu] = getNavGroups("TEACHER", oneAral);
     expect(menu.items.map((i) => i.id)).toContain("teacher-learners");
-    const [explicit] = getNavGroups("TEACHER", oneAral, { isAralVolunteer: false });
+    const [, explicit] = getNavGroups("TEACHER", oneAral, { isAralVolunteer: false });
     expect(explicit.items.map((i) => i.id)).toContain("teacher-learners");
   });
 
@@ -158,14 +157,14 @@ describe("getNavGroups — ARAL volunteer", () => {
     // line and leave them wondering where Learners went. Order matters as much as
     // presence: the row must sit where it always sat, otherwise a volunteer and a
     // DepEd teacher looking at the same screen see two different menus.
-    const [menu] = volunteer();
-    expect(menu.label).toBe("Learners");
+    const [, menu] = volunteer();
+    expect(menu.label).toBe("Advisory");
     expect(menu.items.map((i) => i.label)).toEqual([
-      "Dashboard",
       "Learners",
       "End of Terms Reports",
+      "MOSY Report",
     ]);
-    const [ordinaryMenu] = getNavGroups("TEACHER", oneAral);
+    const [, ordinaryMenu] = getNavGroups("TEACHER", oneAral);
     expect(menu.items.map((i) => i.id)).toEqual(ordinaryMenu.items.map((i) => i.id));
   });
 
@@ -185,6 +184,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     expect(items.filter((i) => i.unavailable).map((i) => i.id)).toEqual([
       "teacher-learners",
       "teacher-terms-reports",
+      "teacher-aral-mosy",
     ]);
   });
 
@@ -226,15 +226,14 @@ describe("getNavGroups — ARAL volunteer", () => {
 
   it("keeps the ARAL group — that is the volunteer's actual roster", () => {
     const groups = volunteer();
-    expect(groups.map((g) => g.label)).toEqual(["Learners", "ARAL Program", "Analytics"]);
-    expect(groups[1].items.map((i) => i.label)).toEqual([
+    expect(groups.map((g) => g.label)).toEqual([undefined, "Advisory", "ARAL Program", "Analytics"]);
+    expect(groups[2].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",
       "ARAL Profiling",
-      "MOSY Report",
     ]);
-    expect(groups[1].items[0].href).toBe("/teacher/aral/g1/attendance");
-    expect(groups[2].items.map((i) => i.label)).toEqual(["Reports"]);
+    expect(groups[2].items[0].href).toBe("/teacher/aral/g1/attendance");
+    expect(groups[3].items.map((i) => i.label)).toEqual(["Reports"]);
   });
 
   it("leaves no navigable item pointing at the gated roster", () => {
@@ -350,11 +349,10 @@ describe("getNavGroups — the term report's href", () => {
     // fall back here, otherwise this case could pass for the wrong reason.
     for (const grades of [[], undefined] as (NavGrade[] | undefined)[]) {
       const groups = getNavGroups("TEACHER", grades);
-      expect(groups[1].items.map((i) => i.href)).toEqual([
+      expect(groups[2].items.map((i) => i.href)).toEqual([
         "/teacher/aral",
         "/teacher/aral",
         "/teacher/aral/profiling",
-        ARAL_MOSY_HREF,
       ]);
       expect(termsRow(grades)?.href).toBe("/teacher/terms-reports");
       expect(termsRow(grades)?.href).not.toBe("/teacher/aral");
@@ -478,7 +476,7 @@ describe("getNavGroups — the term report's v2 URL", () => {
 
 describe("getNavGroups — floating teacher", () => {
   const floating = () => getNavGroups("TEACHER", oneAral, { isFloating: true });
-  it("closes Learners and End of Terms Reports with the Floating teacher pill", () => {
+  it("closes Learners, End of Terms Reports and MOSY Report with the Floating teacher pill", () => {
     const items = flattenNavGroups(floating());
     for (const id of ["teacher-learners", "teacher-terms-reports"]) {
       expect(items.find((i) => i.id === id)?.unavailable).toEqual({
@@ -489,7 +487,7 @@ describe("getNavGroups — floating teacher", () => {
   });
   it("keeps the ARAL rows open", () => {
     const items = flattenNavGroups(floating());
-    expect(items.filter((i) => i.id.startsWith("teacher-aral-")).every((i) => !i.unavailable)).toBe(true);
+    expect(items.filter((i) => i.id.startsWith("teacher-aral-") && i.id !== "teacher-aral-mosy").every((i) => !i.unavailable)).toBe(true);
   });
   it("lets the volunteer pill win when both are set", () => {
     const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { isFloating: true, isAralVolunteer: true }));

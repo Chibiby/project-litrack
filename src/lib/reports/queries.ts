@@ -60,6 +60,13 @@ export type ReportScope = {
   teacherId: string | null;
   schoolName: string;
   actorName: string;
+  /**
+   * MOSY only, set only for a real TEACHER: the advisory section ids from
+   * `resolveMosyAccess`. When present, `buildMosyTable` restricts learners to
+   * those sections instead of the wider "advised or ARAL-tutored" scope, so the
+   * hub's MOSY kind cannot show more than the MOSY Report page does.
+   */
+  mosySectionIds?: string[];
 };
 
 export function reportScope(args: ReportScope): ReportScope {
@@ -929,14 +936,28 @@ export async function buildMosyTable(
   const [grades, learners] = await Promise.all([
     prisma.gradeLevel.findMany({
       where: {
-        ...gradeWhere(scope),
+        ...(scope.mosySectionIds
+          ? {
+              schoolId: scope.schoolId,
+              deletedAt: null,
+              sections: { some: { id: { in: scope.mosySectionIds }, deletedAt: null } },
+            }
+          : gradeWhere(scope)),
         ...(filters.gradeLevelId ? { id: filters.gradeLevelId } : {}),
       },
       select: { id: true, type: true },
       orderBy: { type: "asc" },
     }),
     prisma.learner.findMany({
-      where: learnerWhere(scope, filters),
+      where: scope.mosySectionIds
+        ? {
+            // Advisory scope (same rule as the MOSY Report page): the learner's
+            // current section is one of the teacher's advisory sections. The
+            // tutor-based `teacherLearnerScope` is dropped, not added to.
+            ...learnerWhere({ ...scope, teacherId: null }, filters),
+            AND: [{ sectionId: { in: scope.mosySectionIds } }],
+          }
+        : learnerWhere(scope, filters),
       select: {
         id: true,
         firstName: true,

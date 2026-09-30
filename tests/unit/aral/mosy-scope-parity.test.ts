@@ -8,10 +8,16 @@ import { mosyLearnerScope, teacherOwnsMosyRow } from "@/lib/teachers/scope";
  * Prisma twins (`mosyLearnerScope`, `mosyStatusWhere`) in step. A tiny evaluator
  * interprets exactly the `where` operators those builders emit, over a fixture
  * matrix, so a change to one side that is not mirrored fails here.
+ *
+ * Scope is ADVISORY: the learner's current section is one of the teacher's
+ * advisory sections, and the learner is ARAL-tagged or moved out this year.
  */
 
 const YEAR = "year-1";
 const OLD_YEAR = "year-0";
+const A = "section-a";
+const B = "section-b";
+const C = "section-c";
 const T1 = "tutor-1";
 const T2 = "tutor-2";
 
@@ -24,6 +30,7 @@ type Fixture = {
   name: string;
   isAralLearner: boolean;
   aralTeacherId: string | null;
+  sectionId: string | null;
   rows: Row[];
 };
 
@@ -45,6 +52,10 @@ function evalWhere(f: Fixture, w: Where): boolean {
         return f.isAralLearner === val;
       case "aralTeacherId":
         return f.aralTeacherId === val;
+      case "sectionId": {
+        const m = val as { in: string[] };
+        return f.sectionId !== null && m.in.includes(f.sectionId);
+      }
       case "mosyDecisions": {
         const m = val as { some?: Where; none?: Where };
         if (m.some) return f.rows.some((r) => matchRow(r, m.some!));
@@ -63,52 +74,81 @@ const row = (decision: AralMosyOutcome | null, tutorId: string | null, schoolYea
   tutorId,
 });
 
+const fx = (
+  name: string,
+  isAralLearner: boolean,
+  aralTeacherId: string | null,
+  sectionId: string | null,
+  rows: Row[]
+): Fixture => ({ name, isAralLearner, aralTeacherId, sectionId, rows });
+
 const FIXTURES: Fixture[] = [
-  { name: "tagged to T1, no row", isAralLearner: true, aralTeacherId: T1, rows: [] },
-  { name: "tagged to T2, no row", isAralLearner: true, aralTeacherId: T2, rows: [] },
-  { name: "tagged no tutor, no row", isAralLearner: true, aralTeacherId: null, rows: [] },
-  { name: "tagged T1, deferred", isAralLearner: true, aralTeacherId: T1, rows: [row(null, T1)] },
-  { name: "tagged T1, STAY", isAralLearner: true, aralTeacherId: T1, rows: [row("STAY", T1)] },
-  { name: "tagged T1, MOVE_OUT (re-enrolled since)", isAralLearner: true, aralTeacherId: T1, rows: [row("MOVE_OUT", T1)] },
-  { name: "untagged, T1 moved out", isAralLearner: false, aralTeacherId: null, rows: [row("MOVE_OUT", T1)] },
-  { name: "untagged, T2 moved out", isAralLearner: false, aralTeacherId: null, rows: [row("MOVE_OUT", T2)] },
-  { name: "untagged, moved out with null tutor", isAralLearner: false, aralTeacherId: null, rows: [row("MOVE_OUT", null)] },
-  { name: "untagged, STAY row (toggled off later)", isAralLearner: false, aralTeacherId: null, rows: [row("STAY", T1)] },
-  { name: "untagged, deferred row", isAralLearner: false, aralTeacherId: null, rows: [row(null, T1)] },
-  { name: "untagged, no row", isAralLearner: false, aralTeacherId: null, rows: [] },
-  { name: "untagged, T1 MOVE_OUT last year only", isAralLearner: false, aralTeacherId: null, rows: [row("MOVE_OUT", T1, OLD_YEAR)] },
-  { name: "tagged T1, only last year's STAY", isAralLearner: true, aralTeacherId: T1, rows: [row("STAY", T1, OLD_YEAR)] },
+  fx("tagged to T1, in A, no row", true, T1, A, []),
+  fx("tagged to T2, in A, no row", true, T2, A, []),
+  fx("tagged no tutor, in A", true, null, A, []),
+  fx("tagged T1, in B, deferred", true, T1, B, [row(null, T1)]),
+  fx("tagged T1, in A, STAY", true, T1, A, [row("STAY", T1)]),
+  fx("tagged T1, in A, MOVE_OUT (re-enrolled since)", true, T1, A, [row("MOVE_OUT", T1)]),
+  fx("tagged, in C (other adviser)", true, T1, C, []),
+  fx("tagged, no section", true, T1, null, []),
+  fx("untagged in A, T1 moved out", false, null, A, [row("MOVE_OUT", T1)]),
+  fx("untagged in A, T2 moved out", false, null, A, [row("MOVE_OUT", T2)]),
+  fx("untagged in B, moved out with null tutor", false, null, B, [row("MOVE_OUT", null)]),
+  fx("untagged in C, moved out", false, null, C, [row("MOVE_OUT", T1)]),
+  fx("untagged, no section, moved out", false, null, null, [row("MOVE_OUT", T1)]),
+  fx("untagged in A, STAY row (toggled off later)", false, null, A, [row("STAY", T1)]),
+  fx("untagged in A, deferred row", false, null, A, [row(null, T1)]),
+  fx("untagged in A, no row", false, null, A, []),
+  fx("untagged in A, MOVE_OUT last year only", false, null, A, [row("MOVE_OUT", T1, OLD_YEAR)]),
+  fx("tagged in A, only last year's STAY", true, T1, A, [row("STAY", T1, OLD_YEAR)]),
 ];
 
 const existingFor = (f: Fixture) => {
   const r = f.rows.find((x) => x.schoolYearId === YEAR);
-  return r ? { decision: r.decision, tutorId: r.tutorId } : null;
+  return r ? { decision: r.decision } : null;
 };
 
+const SCOPES: [string, string[] | null][] = [
+  ["adviser of A", [A]],
+  ["adviser of A and B", [A, B]],
+  ["adviser of C", [C]],
+  ["adviser of nothing", []],
+  ["whole school", null],
+];
+
 describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
-  for (const teacher of [T1, T2, "someone-else"]) {
-    it(`agree for every fixture as ${teacher}`, () => {
+  for (const [label, sectionIds] of SCOPES) {
+    it(`agree for every fixture as ${label}`, () => {
       for (const f of FIXTURES) {
-        const inMemory = teacherOwnsMosyRow(f, existingFor(f), teacher);
-        const viaWhere = evalWhere(f, mosyLearnerScope(teacher, YEAR));
+        const inMemory = teacherOwnsMosyRow(f, existingFor(f), sectionIds);
+        const viaWhere = evalWhere(f, mosyLearnerScope(sectionIds, YEAR));
         expect(viaWhere, f.name).toBe(inMemory);
       }
     });
   }
 
-  it("matches the exact where for a tutor", () => {
-    expect(mosyLearnerScope(T1, YEAR)).toEqual({
+  it("matches the exact where for an adviser", () => {
+    expect(mosyLearnerScope([A, B], YEAR)).toEqual({
+      sectionId: { in: [A, B] },
       OR: [
-        { isAralLearner: true, aralTeacherId: T1 },
+        { isAralLearner: true },
         {
           isAralLearner: false,
-          mosyDecisions: { some: { schoolYearId: YEAR, decision: "MOVE_OUT", tutorId: T1 } },
+          mosyDecisions: { some: { schoolYearId: YEAR, decision: "MOVE_OUT" } },
         },
       ],
     });
   });
 
-  it("a null teacher (Super Admin) drops both tutor filters and nothing else", () => {
+  it("never consults the ARAL tutor: no aralTeacherId or tutorId anywhere", () => {
+    for (const [, s] of SCOPES) {
+      const json = JSON.stringify(mosyLearnerScope(s, YEAR));
+      expect(json).not.toContain("tutorId");
+      expect(json).not.toContain("aralTeacherId");
+    }
+  });
+
+  it("a null scope (Super Admin) drops the section filter and nothing else", () => {
     const where = mosyLearnerScope(null, YEAR);
     expect(where).toEqual({
       OR: [
@@ -119,33 +159,50 @@ describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
         },
       ],
     });
-    expect(JSON.stringify(where)).not.toContain("tutorId");
-    expect(JSON.stringify(where)).not.toContain("aralTeacherId");
+    expect(where).not.toHaveProperty("sectionId");
   });
 
   it("whole-school view sees every tagged learner and this year's moved-out ones only", () => {
     const seen = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope(null, YEAR))).map((f) => f.name);
-    expect(seen).toContain("tagged to T2, no row");
-    expect(seen).toContain("untagged, T2 moved out");
-    expect(seen).not.toContain("untagged, STAY row (toggled off later)");
-    expect(seen).not.toContain("untagged, T1 MOVE_OUT last year only");
-    expect(seen).not.toContain("untagged, no row");
+    expect(seen).toContain("tagged to T2, in A, no row");
+    expect(seen).toContain("untagged in A, T2 moved out");
+    expect(seen).not.toContain("untagged in A, STAY row (toggled off later)");
+    expect(seen).not.toContain("untagged in A, MOVE_OUT last year only");
+    expect(seen).not.toContain("untagged in A, no row");
   });
 
-  it("a moved-out learner is visible only to the tutor who moved them, only this year", () => {
-    const f = FIXTURES.find((x) => x.name === "untagged, T1 moved out")!;
-    expect(evalWhere(f, mosyLearnerScope(T1, YEAR))).toBe(true);
-    expect(evalWhere(f, mosyLearnerScope(T2, YEAR))).toBe(false);
-    expect(evalWhere(f, mosyLearnerScope(T1, "year-2"))).toBe(false);
+  it("an adviser sees a section's learners whoever the tutor is, tagged or moved out by anyone", () => {
+    const seen = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope([A], YEAR))).map((f) => f.name);
+    expect(seen).toContain("tagged to T1, in A, no row");
+    expect(seen).toContain("tagged to T2, in A, no row");
+    expect(seen).toContain("tagged no tutor, in A");
+    expect(seen).toContain("untagged in A, T1 moved out");
+    expect(seen).toContain("untagged in A, T2 moved out");
   });
 
-  it("an adviser who is not the tutor never matches a tagged learner", () => {
-    const f = FIXTURES.find((x) => x.name === "tagged to T2, no row")!;
-    expect(evalWhere(f, mosyLearnerScope(T1, YEAR))).toBe(false);
-    expect(teacherOwnsMosyRow(f, null, T1)).toBe(false);
+  it("learners in other sections, sectionless learners and stale rows are excluded", () => {
+    const seen = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope([A], YEAR))).map((f) => f.name);
+    expect(seen).not.toContain("tagged T1, in B, deferred");
+    expect(seen).not.toContain("tagged, in C (other adviser)");
+    expect(seen).not.toContain("tagged, no section");
+    expect(seen).not.toContain("untagged, no section, moved out");
+    expect(seen).not.toContain("untagged in A, MOVE_OUT last year only");
+    expect(seen).not.toContain("untagged in A, no row");
+  });
+
+  it("a moved-out learner is visible only in the year it happened", () => {
+    const f = FIXTURES.find((x) => x.name === "untagged in A, T1 moved out")!;
+    expect(evalWhere(f, mosyLearnerScope([A], YEAR))).toBe(true);
+    expect(evalWhere(f, mosyLearnerScope([A], "year-2"))).toBe(false);
+  });
+
+  it("an empty advisory list matches nobody, in memory and in the where", () => {
+    for (const f of FIXTURES) {
+      expect(evalWhere(f, mosyLearnerScope([], YEAR)), f.name).toBe(false);
+      expect(teacherOwnsMosyRow(f, existingFor(f), []), f.name).toBe(false);
+    }
   });
 });
-
 describe("mosyStatusWhere <-> mosyRowStatus", () => {
   it("every in-scope fixture matches its own status filter, and for_decision also takes not_updated", () => {
     const inScope = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope(null, YEAR)));

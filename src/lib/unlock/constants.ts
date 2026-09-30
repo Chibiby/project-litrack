@@ -22,3 +22,10 @@ export const SUBMISSION_LOCKING_KEY = "submissions.locking";
  * importing a `server-only` module from client-adjacent code.
  */
 export const READING_LEVEL_UNLOCK_ALL_KEY = "submissions.readingLevelUnlockAll";
+
+/**
+ * The `SystemSetting` key behind the MOSY Report submission lock. Same module
+ * reasoning as the keys above. Unlike them, the switch defaults to LOCKED: only
+ * the literal value "false" (written by a Super Admin) opens MOSY submissions.
+ */
+export const MOSY_SUBMISSION_LOCK_KEY = "submissions.mosyLocked";

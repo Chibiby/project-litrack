@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * `buildMosyTable` (`src/lib/reports/queries.ts`) â€” the Prisma half of the
@@ -220,6 +220,28 @@ describe("buildMosyTable â€” scope", () => {
     ]);
   });
 
+  it("scopes a TEACHER with advisory sections to those sections, not to advised-or-tutored learners", async () => {
+    await buildMosyTable({ ...TEACHER_SCOPE, mosySectionIds: ["sec-a", "sec-b"] }, {});
+
+    const learner = learnerWhereOf();
+    expect(learner).toMatchObject({ schoolId: "school-1", deletedAt: null, archivedAt: null });
+    expect(learner.AND).toEqual([{ sectionId: { in: ["sec-a", "sec-b"] } }]);
+    expect(learner).not.toHaveProperty("OR");
+    expect(JSON.stringify(learner)).not.toContain("aralTeacherId");
+    expect(JSON.stringify(learner)).not.toContain("teacher-1");
+    expect(gradeWhereOf()).toMatchObject({
+      schoolId: "school-1",
+      sections: { some: { id: { in: ["sec-a", "sec-b"] }, deletedAt: null } },
+    });
+    expect(gradeWhereOf()).not.toHaveProperty("OR");
+  });
+
+  it("a requested section filter still intersects with the advisory sections", async () => {
+    await buildMosyTable({ ...TEACHER_SCOPE, mosySectionIds: ["sec-a"] }, { sectionId: "sec-z" });
+    const learner = learnerWhereOf();
+    expect(learner.sectionId).toBe("sec-z");
+    expect(learner.AND).toEqual([{ sectionId: { in: ["sec-a"] } }]);
+  });
   it("does not narrow for a SUPER_ADMIN viewing a school", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 

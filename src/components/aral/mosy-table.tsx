@@ -24,6 +24,9 @@ import { MOSY_STATUS_LABELS, type MosyRowStatus, type MosyStatusFilter } from "@
 import type { MosyRow } from "@/lib/aral/mosy-queries";
 import { cn } from "@/lib/utils";
 
+const LOCKED_REASON_ID = "mosy-locked-reason";
+const LOCKED_REASON = "MOSY submissions are locked by your Super Admin.";
+
 const HEAD_CLASS =
   "whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
@@ -78,6 +81,7 @@ export function MosyTable({
   totalPages,
   status,
   canEdit,
+  locked = false,
   schoolIdParam,
   q,
   gradeParam,
@@ -90,12 +94,15 @@ export function MosyTable({
   totalPages: number;
   status: MosyStatusFilter;
   canEdit: boolean;
+  /** Super Admin has closed MOSY submissions: viewing stays, saving does not. */
+  locked?: boolean;
   schoolIdParam?: string;
   q?: string;
   gradeParam?: string;
   sectionParam?: string;
 }) {
   const [dialog, setDialog] = useState<MosyDialogState | null>(null);
+  const canUpdate = canEdit && !locked;
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
 
   return (
@@ -110,7 +117,7 @@ export function MosyTable({
               title={status === "all" ? "No ARAL learners" : "No learners match this status"}
               description={
                 status === "all"
-                  ? "ARAL learners you tutor appear here so you can record their MOSY level and decision."
+                  ? "ARAL learners in your advisory appear here so you can record their MOSY level and decision."
                   : "Change the ARAL status or clear a filter to see the other learners."
               }
             />
@@ -177,9 +184,13 @@ export function MosyTable({
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={!canEdit}
+                          disabled={!canUpdate}
                           aria-label={`Update MOSY decision for ${r.fullName}`}
-                          onClick={() => setDialog({ row: r })}
+                          aria-describedby={locked ? LOCKED_REASON_ID : undefined}
+                          title={locked ? LOCKED_REASON : undefined}
+                          onClick={() => {
+                            if (canUpdate) setDialog({ row: r });
+                          }}
                         >
                           Update
                         </Button>
@@ -206,7 +217,13 @@ export function MosyTable({
         }}
       />
 
-      <MosyDecisionDialog state={dialog} onClose={() => setDialog(null)} />
+      {locked ? (
+        <p id={LOCKED_REASON_ID} className="sr-only">
+          {LOCKED_REASON}
+        </p>
+      ) : null}
+
+      <MosyDecisionDialog state={canUpdate ? dialog : null} onClose={() => setDialog(null)} />
     </Surface>
   );
 }

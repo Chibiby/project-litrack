@@ -9,7 +9,11 @@
  * tested predicate for "this teacher advises no section". A Non-DepEd ARAL
  * Volunteer and a FLOATING DepEd teacher both have no end-of-term sheet, so the
  * grades report has nothing to cover for them. Their ARAL work (attendance,
- * reading levels, MOSY) stays open.
+ * reading levels) stays open. MOSY does NOT: it is the DepEd adviser's report,
+ * so `generateReport` refuses the MOSY kind for them through `resolveMosyAccess`
+ * (`src/lib/aral/mosy-access.ts`), which also covers a DepEd teacher with no
+ * advisory section. That check needs a database read, so it is not in this pure
+ * map and the hub cannot grey the MOSY card out from here.
  */
 
 import type { ReportKind } from "@prisma/client";

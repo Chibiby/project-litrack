@@ -154,6 +154,12 @@ vi.mock("@/lib/audit", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+let mosyAccess: unknown = { ok: true, sectionIds: ["section-1"] };
+const resolveMosyAccess = vi.fn(async (_u: unknown) => mosyAccess);
+vi.mock("@/lib/aral/mosy-access", () => ({
+  resolveMosyAccess: (u: unknown) => resolveMosyAccess(u),
+}));
+
 const { generateReport } = await import("@/lib/actions/reports");
 
 beforeEach(() => {
@@ -162,6 +168,7 @@ beforeEach(() => {
   userId = TEACHER_ID;
   createdReport = {};
   teacherProfileFixture = { designation: null, advisoryMode: "DEFAULT" };
+  mosyAccess = { ok: true, sectionIds: ["section-1"] };
 });
 
 describe("generateReport — locked report kinds", () => {
@@ -208,6 +215,37 @@ describe("generateReport — locked report kinds", () => {
 
     expect(res.ok).toBe(true);
     expect(teacherProfileFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateReport — MOSY kind uses the MOSY Report gate", () => {
+  it.each([
+    ["volunteer", "MOSY Report is for DepEd teachers who advise a section."],
+    ["floating", "Floating teachers do not advise a section, so there is no MOSY Report."],
+    ["no_advisory", "You have no advisory section yet."],
+  ])("refuses MOSY for a %s teacher before any builder query or history row", async (reason, message) => {
+    mosyAccess = { ok: false, reason, message };
+
+    const res = await generateReport({ kind: "MOSY", format: "EXCEL" });
+
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED", error: message });
+    expect(resolveMosyAccess).toHaveBeenCalledWith({
+      id: TEACHER_ID,
+      role: "TEACHER",
+      schoolId: SCHOOL_ID,
+    });
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("does not consult the MOSY gate for other kinds or for a SCHOOL_HEAD", async () => {
+    await generateReport({ kind: "ATTENDANCE", format: "EXCEL" });
+    expect(resolveMosyAccess).not.toHaveBeenCalled();
+
+    role = "SCHOOL_HEAD";
+    userId = HEAD_ID;
+    await generateReport({ kind: "MOSY", format: "EXCEL" });
+    expect(resolveMosyAccess).not.toHaveBeenCalled();
   });
 });
 

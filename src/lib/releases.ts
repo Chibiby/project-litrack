@@ -197,6 +197,42 @@ export const RELEASES: readonly Release[] = [
     ],
   },
   {
+    version: "2.26.0",
+    date: "2026-09-30",
+    title: "MOSY Report moves under Advisory",
+    announce: true,
+    fixes: [
+      {
+        text: "The sidebar has a new Advisory heading with Learners, End of Terms Reports and MOSY Report. MOSY Report is now below End of Terms Reports instead of under ARAL Program.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The MOSY Report now lists the ARAL learners in your own advisory sections, instead of the learners you tutor.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The MOSY Report is for DepEd teachers who advise a section. Non-DepEd ARAL Volunteers and floating teachers see it in the sidebar with the reason it is closed to them.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "When you choose Stay for a learner who was moved out of ARAL, the MOSY window now tells you that you will become their ARAL teacher before you save.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The grade filter on the MOSY Report now lists Kinder first, then Grade 1, Grade 2 and so on.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "MOSY submissions are locked for now. You can still view and export the MOSY Report, but Update is turned off until it is opened.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "A new Lock MOSY submissions switch on the Submissions page decides whether teachers can save MOSY updates. It starts on.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.25.0",
     date: "2026-09-30",
     title: "Clearer messages when something goes wrong",

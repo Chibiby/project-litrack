@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardCheck, Info } from "lucide-react";
+import { ClipboardCheck, Info, Lock } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 import { AralPageHero } from "@/components/aral/aral-page-hero";
@@ -20,6 +20,8 @@ import { listKey } from "@/lib/nav/list-params";
 import { ARAL_MOSY_HREF } from "@/lib/nav/nav-config";
 import { LEARNER_PAGE_SIZE, type LearnerListSectionFilter } from "@/lib/learners/pagination";
 import { loadMosyPage } from "@/lib/aral/mosy-queries";
+import { resolveMosyAccess } from "@/lib/aral/mosy-access";
+import { isMosySubmissionLocked } from "@/lib/settings/system-settings";
 import { MOSY_STATUSES, MOSY_STATUS_LABELS, parseMosyStatus, type MosyStatusFilter } from "@/lib/aral/mosy";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +133,7 @@ async function MosyRows({
   data,
   status,
   canEdit,
+  locked,
   schoolIdParam,
   q,
   gradeParam,
@@ -139,6 +142,7 @@ async function MosyRows({
   data: Promise<MosyData>;
   status: MosyStatusFilter;
   canEdit: boolean;
+  locked: boolean;
   schoolIdParam?: string;
   q: string;
   gradeParam?: string;
@@ -154,6 +158,7 @@ async function MosyRows({
       totalPages={pages}
       status={status}
       canEdit={canEdit}
+      locked={locked}
       schoolIdParam={schoolIdParam}
       q={q}
       gradeParam={gradeParam}
@@ -201,17 +206,41 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
     );
   }
 
+  // A Super Admin advises nothing and sees the whole school; a teacher sees only
+  // the sections they advise, and volunteers/floating/no-advisory are refused.
+  let sectionIds: string[] | null = null;
+  if (!isSuperAdmin) {
+    const access = await resolveMosyAccess({ id: user.id, role: user.role, schoolId });
+    if (!access.ok) {
+      return (
+        <AppShell {...shellProps}>
+          <AralPageHero
+            eyebrow={TITLE}
+            eyebrowIcon={ClipboardCheck}
+            title={TITLE}
+            subtitle={SUBTITLE}
+          />
+          <Surface as="section" className="mt-4 rounded-2xl p-4">
+            <EmptyState title="MOSY Report is not available" description={access.message} />
+          </Surface>
+        </AppShell>
+      );
+    }
+    sectionIds = access.sectionIds;
+  }
+
+  const locked = await isMosySubmissionLocked();
+
   const status = parseMosyStatus(sp.status);
   const q = (sp.q ?? "").trim();
   const grade = (sp.grade ?? "").trim();
   const sectionFilter = parseSectionFilter(sp.section);
   const rawPage = Number.parseInt(sp.page ?? "1", 10);
-  const teacherId = isSuperAdmin ? null : user.id;
 
   const data = loadMosyPage({
     schoolId,
     schoolYear: { id: schoolYear.id, startDateKey: schoolYear.startDateKey },
-    teacherId,
+    sectionIds,
     q,
     grade: grade || "all",
     section: sectionFilter,
@@ -250,9 +279,16 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
           <MosyStats data={data} />
         </Suspense>
 
+        {locked ? (
+          <Callout variant="warning" icon={Lock}>
+            MOSY submissions are locked. You can view and export, but not update, until your
+            Super Admin opens them.
+          </Callout>
+        ) : null}
+
         <Callout variant="aral" icon={Info}>
-          Use Update to set each ARAL learner&apos;s MOSY reading level and decide whether they
-          move out of ARAL or stay.
+          Use Update to set the MOSY reading level of each ARAL learner in your advisory and
+          decide whether they move out of ARAL or stay.
         </Callout>
 
         <ListNavigationProvider>
@@ -273,6 +309,7 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
               data={data}
               status={status}
               canEdit={!isSuperAdmin}
+              locked={locked}
               schoolIdParam={sp.schoolId}
               q={q}
               gradeParam={grade || undefined}

@@ -128,7 +128,11 @@ export interface NavOptions {
 /** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
 export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 
-/** The MOSY Report list: middle-of-year level and ARAL decision for every learner a teacher tutors. */
+/**
+ * The MOSY Report list: middle-of-year level and ARAL decision for the ARAL
+ * learners in the teacher's own advisory. Sits in the Advisory group, after End
+ * of Terms Reports, and is inert for volunteers and floating teachers.
+ */
 export const ARAL_MOSY_HREF = "/teacher/aral/mosy";
 
 /**
@@ -282,9 +286,11 @@ export function getNavGroups(
       };
       return [
         {
-          label: "Learners",
+          items: [{ id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard }],
+        },
+        {
+          label: "Advisory",
           items: [
-            { id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
             learners,
             // Per-term grades report, not an ARAL surface — it sits with the
             // roster it reports on, even though the sheet itself lives under
@@ -299,6 +305,15 @@ export function getNavGroups(
               label: "End of Terms Reports",
               href: termsReportsHref(),
               icon: FileText,
+              ...(classLock ? { unavailable: classLock } : {}),
+            },
+            // Lists only the ARAL learners of the teacher's own advisory, so it
+            // shares the advisory gate rather than sitting with the ARAL tools.
+            {
+              id: "teacher-aral-mosy",
+              label: "MOSY Report",
+              href: ARAL_MOSY_HREF,
+              icon: ClipboardCheck,
               ...(classLock ? { unavailable: classLock } : {}),
             },
           ],
@@ -329,12 +344,6 @@ export function getNavGroups(
               label: "ARAL Profiling",
               href: ARAL_PROFILING_HREF,
               icon: ClipboardList,
-            },
-            {
-              id: "teacher-aral-mosy",
-              label: "MOSY Report",
-              href: ARAL_MOSY_HREF,
-              icon: ClipboardCheck,
             },
           ],
         },

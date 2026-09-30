@@ -14,6 +14,7 @@ import {
 } from "@/lib/reports/kinds";
 import { reportLocksFor } from "@/lib/reports/availability";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
+import { resolveMosyAccess } from "@/lib/aral/mosy-access";
 import { renderReport, reportBlocks } from "@/lib/reports/render";
 import {
   buildAttendanceTable,
@@ -154,6 +155,22 @@ export const generateReport = action(
     }
   }
 
+  // The MOSY kind is the DepEd adviser's report, same as the MOSY Report page:
+  // it goes through the same gate and is narrowed to the advisory sections,
+  // never to the wider "advised or ARAL-tutored" learner scope.
+  let scope = resolved.scope;
+  if (kind === "MOSY" && scope.teacherId) {
+    const access = await resolveMosyAccess({
+      id: scope.teacherId,
+      role: "TEACHER",
+      schoolId: scope.schoolId,
+    });
+    if (!access.ok) {
+      throw new AppError("VALIDATION_FAILED", { params: { message: access.message } });
+    }
+    scope = { ...scope, ...(access.sectionIds ? { mosySectionIds: access.sectionIds } : {}) };
+  }
+
   // Every id in the filter set is verified against this tenant before it
   // reaches a query. Without this a crafted sectionId from another school
   // would narrow the report to rows the learner scope would then exclude —
@@ -184,7 +201,7 @@ export const generateReport = action(
   // Any builder/render failure below is classified and reported by `action()`
   // (Prisma/system failures get a reference; a bug gets INTERNAL_ERROR) rather
   // than swallowed into one generic message here.
-  const table: ReportTableWithAudit = await BUILDERS[kind](resolved.scope, filters);
+  const table: ReportTableWithAudit = await BUILDERS[kind](scope, filters);
   const buffer = await renderReport(table, format, { purpose, generatedOn: schoolToday() });
 
   const scopeLabel = await scopeLabelFor(resolved.scope.schoolId, filters);

@@ -223,6 +223,14 @@ export const ERRORS = {
     message: "Move the {learners} in {section} to another section first.",
   },
 
+  // ── MOSY ─────────────────────────────────────────────────────────────────
+  /** MOSY saves are closed by the Super Admin submission lock (the default). */
+  MOSY_LOCKED: {
+    status: 403,
+    severity: "user",
+    message: "MOSY submissions are locked right now. Your Super Admin can open them.",
+  },
+
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
     status: 422,

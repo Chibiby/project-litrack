@@ -98,13 +98,14 @@ export type MosyGradeOption = {
   sections: { id: string; name: string }[];
 };
 
-const GRADE_ORDER = Object.keys(GRADE_LEVEL_LABELS);
-
 export type LoadMosyPageArgs = {
   schoolId: string;
   schoolYear: { id: string; startDateKey: string };
-  /** Tutor's user id, or `null` for the Super Admin whole-school read-only view. */
-  teacherId: string | null;
+  /**
+   * The teacher's advisory section ids (`resolveMosyAccess`), or `null` for the
+   * Super Admin whole-school read-only view.
+   */
+  sectionIds: string[] | null;
   q: string;
   /** Grade level id, or "all"/"" for every grade. */
   grade: string;
@@ -117,7 +118,7 @@ export type LoadMosyPageArgs = {
 type MosyWhereArgs = {
   schoolId: string;
   schoolYearId: string;
-  teacherId: string | null;
+  sectionIds: string[] | null;
   q: string;
   grade: string;
   section: LearnerListSectionFilter;
@@ -145,7 +146,7 @@ function mosyListWhere(
           ...sectionIdWhere(args.section),
         }
       : {}),
-    AND: [mosyLearnerScope(args.teacherId, args.schoolYearId), mosyStatusWhere(status, args.schoolYearId)],
+    AND: [mosyLearnerScope(args.sectionIds, args.schoolYearId), mosyStatusWhere(status, args.schoolYearId)],
   };
 }
 
@@ -235,16 +236,95 @@ function toMosyRow(l: MosyLearnerRecord): MosyRow {
 }
 
 /**
+ * Grade levels in `GradeLevelType` (prisma enum) order: Kinder, Grade 1 ...
+ * Grade 12. Spelled out rather than read off an object's key order so the filter
+ * order cannot change by accident. A type not listed sorts last.
+ */
+export const MOSY_GRADE_TYPE_ORDER: readonly string[] = [
+  "KINDER", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "FLOATING",
+];
+
+function gradeRank(type: string): number {
+  const i = MOSY_GRADE_TYPE_ORDER.indexOf(type);
+  return i === -1 ? MOSY_GRADE_TYPE_ORDER.length : i;
+}
+
+/**
+ * Pure, deterministic builder for the grade/section filter options: grades in
+ * `GradeLevelType` order (ties by id), each grade's sections by name (ties by
+ * id). A section whose grade is not in `grades` is dropped.
+ */
+export function buildMosyGradeOptions(
+  grades: { id: string; type: string }[],
+  sections: { id: string; name: string; gradeLevelId: string }[]
+): MosyGradeOption[] {
+  return [...grades]
+    .sort((a, b) => gradeRank(a.type) - gradeRank(b.type) || a.id.localeCompare(b.id))
+    .map((g) => ({
+      id: g.id,
+      label: GRADE_LEVEL_LABELS[g.type] ?? g.type,
+      sections: sections
+        .filter((s) => s.gradeLevelId === g.id)
+        .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }) || a.id.localeCompare(b.id))
+        .map((s) => ({ id: s.id, name: s.name })),
+    }));
+}
+
+/**
+ * The filter options inside the MOSY scope. A teacher (`sectionIds` set) sees
+ * only their own advisory sections and those sections' grades, whether or not a
+ * section currently holds an in-scope learner. The whole-school view lists the
+ * grades that have in-scope learners, with every live section of each. Every
+ * query pins `schoolId`.
+ */
+async function loadMosyGradeOptions(
+  schoolId: string,
+  sectionIds: string[] | null,
+  baseWhere: Prisma.LearnerWhereInput
+): Promise<MosyGradeOption[]> {
+  if (sectionIds) {
+    if (sectionIds.length === 0) return [];
+    const sections = await prisma.section.findMany({
+      where: { schoolId, deletedAt: null, id: { in: sectionIds } },
+      select: { id: true, name: true, gradeLevelId: true, gradeLevel: { select: { type: true } } },
+    });
+    const grades = new Map<string, { id: string; type: string }>();
+    for (const s of sections) grades.set(s.gradeLevelId, { id: s.gradeLevelId, type: s.gradeLevel.type });
+    return buildMosyGradeOptions([...grades.values()], sections);
+  }
+
+  const gradeRows = await prisma.learner.findMany({
+    where: baseWhere,
+    select: { gradeLevelId: true, gradeLevel: { select: { type: true } } },
+    distinct: ["gradeLevelId"],
+  });
+  if (gradeRows.length === 0) return [];
+  const sections = await prisma.section.findMany({
+    where: {
+      schoolId,
+      deletedAt: null,
+      gradeLevelId: { in: gradeRows.map((g) => g.gradeLevelId) },
+    },
+    select: { id: true, name: true, gradeLevelId: true },
+  });
+  return buildMosyGradeOptions(
+    gradeRows.map((g) => ({ id: g.gradeLevelId, type: g.gradeLevel.type })),
+    sections
+  );
+}
+
+/**
  * Server-side data for the MOSY Report page. Every `where` carries `schoolId`;
- * the tutor scope is `mosyLearnerScope`. The caller is responsible for deriving
- * `schoolId` / `teacherId` from the session (Super Admin: `?schoolId=`, `null`).
+ * the advisory scope is `mosyLearnerScope`. The caller is responsible for
+ * deriving `schoolId` / `sectionIds` from the session (`resolveMosyAccess`;
+ * Super Admin: `?schoolId=`, `null`).
  */
 export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData> {
-  const { schoolId, schoolYear, teacherId, q, grade, section, status } = args;
+  const { schoolId, schoolYear, sectionIds, q, grade, section, status } = args;
   const whereArgs: MosyWhereArgs = {
     schoolId,
     schoolYearId: schoolYear.id,
-    teacherId,
+    sectionIds,
     q,
     grade,
     section,
@@ -254,17 +334,13 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
     schoolId,
     deletedAt: null,
     archivedAt: null,
-    AND: [mosyLearnerScope(teacherId, schoolYear.id)],
+    AND: [mosyLearnerScope(sectionIds, schoolYear.id)],
   };
 
-  const [counts, totalCount, gradeIdRows] = await Promise.all([
+  const [counts, totalCount, gradeOptions] = await Promise.all([
     countMosyStatuses(whereArgs),
     prisma.learner.count({ where: mosyListWhere(whereArgs, status, true) }),
-    prisma.learner.findMany({
-      where: baseWhere,
-      select: { gradeLevelId: true, gradeLevel: { select: { type: true } } },
-      distinct: ["gradeLevelId"],
-    }),
+    loadMosyGradeOptions(schoolId, sectionIds, baseWhere),
   ]);
 
   const stats = statsFromCounts(counts);
@@ -272,39 +348,14 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
   const pages = totalPages(totalCount, LEARNER_PAGE_SIZE);
   const page = Math.min(Math.max(1, Number.isFinite(args.page) ? Math.trunc(args.page) : 1), pages);
 
-  const [learners, sectionRows] = await Promise.all([
-    prisma.learner.findMany({
-      relationLoadStrategy: "join",
-      where: mosyListWhere(whereArgs, status, true),
-      select: mosyRowSelect(schoolYear),
-      orderBy: [{ fullName: "asc" }, { id: "asc" }],
-      skip: (page - 1) * LEARNER_PAGE_SIZE,
-      take: LEARNER_PAGE_SIZE,
-    }),
-    gradeIdRows.length > 0
-      ? prisma.section.findMany({
-          where: {
-            schoolId,
-            deletedAt: null,
-            gradeLevelId: { in: gradeIdRows.map((g) => g.gradeLevelId) },
-          },
-          select: { id: true, name: true, gradeLevelId: true },
-          orderBy: { name: "asc" },
-        })
-      : Promise.resolve([] as { id: string; name: string; gradeLevelId: string }[]),
-  ]);
-
-  const gradeOptions: MosyGradeOption[] = gradeIdRows
-    .map((g) => ({
-      id: g.gradeLevelId,
-      type: g.gradeLevel.type as string,
-      label: GRADE_LEVEL_LABELS[g.gradeLevel.type] ?? g.gradeLevel.type,
-      sections: sectionRows
-        .filter((s) => s.gradeLevelId === g.gradeLevelId)
-        .map((s) => ({ id: s.id, name: s.name })),
-    }))
-    .sort((a, b) => GRADE_ORDER.indexOf(a.type) - GRADE_ORDER.indexOf(b.type))
-    .map(({ id, label, sections }) => ({ id, label, sections }));
+  const learners = await prisma.learner.findMany({
+    relationLoadStrategy: "join",
+    where: mosyListWhere(whereArgs, status, true),
+    select: mosyRowSelect(schoolYear),
+    orderBy: [{ fullName: "asc" }, { id: "asc" }],
+    skip: (page - 1) * LEARNER_PAGE_SIZE,
+    take: LEARNER_PAGE_SIZE,
+  });
 
   const rows: MosyRow[] = learners.map(toMosyRow);
 
@@ -313,7 +364,7 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
 
 /**
  * Most rows one Excel/PDF export carries. Same bound `buildMosyTable` puts on
- * the Reports Hub MOSY read (5000), and far above any one tutor's ARAL list.
+ * the Reports Hub MOSY read (5000), and far above any one adviser's MOSY list.
  */
 export const MOSY_EXPORT_MAX_ROWS = 5000;
 
@@ -349,11 +400,11 @@ export type MosyExportData = {
  * label lookups, so a foreign grade or section id yields no rows and no label.
  */
 export async function loadMosyExport(args: LoadMosyExportArgs): Promise<MosyExportData> {
-  const { schoolId, schoolYear, teacherId, q, grade, section, status } = args;
+  const { schoolId, schoolYear, sectionIds, q, grade, section, status } = args;
   const whereArgs: MosyWhereArgs = {
     schoolId,
     schoolYearId: schoolYear.id,
-    teacherId,
+    sectionIds,
     q,
     grade,
     section,
@@ -384,7 +435,13 @@ export async function loadMosyExport(args: LoadMosyExportArgs): Promise<MosyExpo
       : Promise.resolve(null),
     sectionFiltered
       ? prisma.section.findFirst({
-          where: { id: section, schoolId, deletedAt: null },
+          // A teacher only gets the label of one of their own sections; another
+          // section of the same school must not have its name printed.
+          where: {
+            id: sectionIds ? { equals: section, in: sectionIds } : section,
+            schoolId,
+            deletedAt: null,
+          },
           select: { name: true },
         })
       : Promise.resolve(null),
