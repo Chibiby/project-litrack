@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppForm, useAppForm } from "@/components/forms/app-form";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,8 +40,6 @@ export type MosyDialogState = {
   row: MosyRow;
   /** The level the tutor picked in the table, or the saved one when opened from Update. */
   draftLevel: string;
-  /** True when opened from Update: the dialog then carries its own level select. */
-  editLevel: boolean;
 };
 
 type MosyFormValues = {
@@ -72,7 +69,7 @@ function MosyDecisionForm({
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
-  const { row, draftLevel, editLevel } = state;
+  const { row, draftLevel } = state;
   const [pending, startTransition] = useTransition();
   const intent = useRef<"save" | "later">("save");
 
@@ -168,51 +165,9 @@ function MosyDecisionForm({
               <span className="font-semibold text-foreground">{row.fullName}</span>
               <span className="text-muted-foreground"> · {gradeSection}</span>
             </p>
-            {!editLevel && levelLabel ? (
-              <p className="flex flex-wrap items-center gap-2">
-                <span>Updated MOSY level</span>
-                <Badge
-                  variant="outline"
-                  className="border-violet-200 bg-violet-soft text-violet dark:border-violet-900/60"
-                >
-                  {levelLabel}
-                </Badge>
-              </p>
-            ) : null}
           </div>
         </DialogDescription>
       </DialogHeader>
-
-      <FormField
-        control={form.control}
-        name="mosyLevel"
-        render={({ field }) =>
-          editLevel ? (
-            <FormItem>
-              <FormLabel required>MOSY reading level</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {row.levelOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          ) : (
-            <FormItem>
-              <FormMessage />
-            </FormItem>
-          )
-        }
-      />
 
       <FormField
         control={form.control}
@@ -261,6 +216,25 @@ function MosyDecisionForm({
                   </Label>
                 ))}
               </RadioGroup>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="mosyLevel"
+        render={() => (
+          <FormItem>
+            <FormLabel>MOSY reading level</FormLabel>
+            <FormControl>
+              <div
+                className="flex min-h-10 items-center rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium text-foreground"
+                data-testid="mosy-level-readonly"
+              >
+                {levelLabel ?? level}
+              </div>
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -390,7 +364,7 @@ export function MosyDecisionDialog({
       >
         {state ? (
           <MosyDecisionForm
-            key={`${state.row.id}:${state.draftLevel}:${state.editLevel}`}
+            key={`${state.row.id}:${state.draftLevel}`}
             state={state}
             onClose={onClose}
             onPendingChange={setPending}

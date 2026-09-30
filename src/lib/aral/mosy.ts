@@ -128,6 +128,10 @@ export function mosyRowStatus(args: {
 /**
  * Prisma version of `mosyRowStatus`. Clauses live inside `AND: [...]` so they
  * never collide with the scope's `OR`.
+ *
+ * `for_decision` is "still waiting for a move out or stay decision", so it is a
+ * superset: it also matches `not_updated` rows (no level saved yet). The tabs
+ * therefore overlap; `not_updated` stays as the narrower "no level yet" view.
  */
 export function mosyStatusWhere(
   status: MosyStatusFilter,
@@ -143,6 +147,7 @@ export function mosyStatusWhere(
         AND: [
           {
             OR: [
+              { mosyDecisions: { none: { schoolYearId } } },
               { mosyDecisions: { some: { schoolYearId, decision: null } } },
               {
                 isAralLearner: true,

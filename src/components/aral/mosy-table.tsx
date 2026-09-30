@@ -142,6 +142,7 @@ export function MosyTable({
                 {rows.map((r, i) => {
                   const inDialog = dialog?.row.id === r.id;
                   const shownLevel = inDialog ? dialog.draftLevel : (r.mosyLevel ?? "");
+                  const needsLevel = !r.mosyLevel;
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="tabular-nums text-muted-foreground">
@@ -159,7 +160,7 @@ export function MosyTable({
                           value={shownLevel}
                           disabled={!canEdit}
                           onValueChange={(value) =>
-                            setDialog({ row: r, draftLevel: value, editLevel: false })
+                            setDialog({ row: r, draftLevel: value })
                           }
                         >
                           <SelectTrigger
@@ -200,21 +201,28 @@ export function MosyTable({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canEdit}
-                          aria-label={`Update MOSY decision for ${r.fullName}`}
-                          onClick={() =>
-                            setDialog({
-                              row: r,
-                              draftLevel: r.mosyLevel ?? "",
-                              editLevel: true,
-                            })
-                          }
+                        <span
+                          className="inline-flex"
+                          title={needsLevel ? "Choose a MOSY reading level first" : undefined}
                         >
-                          Update
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!canEdit || needsLevel}
+                            aria-label={`Update MOSY decision for ${r.fullName}`}
+                            aria-describedby={needsLevel ? `mosy-hint-${r.id}` : undefined}
+                            onClick={() =>
+                              setDialog({ row: r, draftLevel: r.mosyLevel ?? "" })
+                            }
+                          >
+                            Update
+                          </Button>
+                          {needsLevel ? (
+                            <span id={`mosy-hint-${r.id}`} className="sr-only">
+                              Choose a MOSY reading level first
+                            </span>
+                          ) : null}
+                        </span>
                       </TableCell>
                     </TableRow>
                   );
