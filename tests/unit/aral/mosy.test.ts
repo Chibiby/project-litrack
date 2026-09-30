@@ -874,12 +874,12 @@ describe("formatPreviousLevel", () => {
     expect(out?.filipino).toBeTruthy();
   });
 
-  it("keeps both languages for Kinder and G3 (languagesForGrade)", () => {
+  it("drops English for Kinder (Filipino only) and keeps it for G3 (languagesForGrade)", () => {
     const kinder = formatPreviousLevel(
       { ...record, englishProfile: "LETTER_LEVEL", filipinoProfile: "LETTER_LEVEL" },
       "KINDER"
     );
-    expect(kinder?.english).toBeTruthy();
+    expect(kinder?.english).toBeNull();
     expect(kinder?.filipino).toBeTruthy();
     expect(formatPreviousLevel(record, "G3")?.english).toBeTruthy();
   });
