@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.23.1",
+    date: "2026-09-30",
+    title: "Teachers search box moves to the left",
+    announce: true,
+    fixes: [
+      "On the Teachers page the search box now comes first, on the left, at a fixed smaller width, with the filters and Sort by after it.",
+    ],
+  },
+  {
     version: "2.23.0",
     date: "2026-09-30",
     title: "Search as you type, and find teachers by grade and section",

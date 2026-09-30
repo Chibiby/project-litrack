@@ -844,6 +844,21 @@ function TeachersManagedTable({
         </div>
         {list ? (
           <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <SearchInput
+              id="teachers-search"
+              className="w-full sm:w-72 sm:flex-none"
+              inputClassName="h-12 lg:h-12"
+              label="Search active teachers"
+              placeholder="Search by name or email"
+              value={searchValue}
+              onValueChange={setSearchValue}
+              onDebouncedChange={(value) => {
+                const next = value.trim();
+                if (next === pushedQ) return;
+                setPushedQ(next);
+                pushListQuery({ page: 1, q: next });
+              }}
+            />
             <div className="sm:w-52">
               <ToolbarFacet
                 id="teachers-filter"
@@ -928,21 +943,6 @@ function TeachersManagedTable({
                 />
               </div>
             ) : null}
-            <SearchInput
-              id="teachers-search"
-              className="min-w-[14rem] sm:flex-1"
-              inputClassName="h-12 lg:h-12"
-              label="Search active teachers"
-              placeholder="Search by name or email"
-              value={searchValue}
-              onValueChange={setSearchValue}
-              onDebouncedChange={(value) => {
-                const next = value.trim();
-                if (next === pushedQ) return;
-                setPushedQ(next);
-                pushListQuery({ page: 1, q: next });
-              }}
-            />
             {list.q || list.filter !== "all" || list.grade || list.section ? (
               <Button
                 type="button"
