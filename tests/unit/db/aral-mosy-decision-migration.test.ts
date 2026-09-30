@@ -45,6 +45,29 @@ describe("aral mosy decision migration", () => {
     expect(code).not.toMatch(/ALTER\s+TYPE/i);
   });
 
+  it("pins the improvedToLevel CHECK and keeps the new migrations additive", () => {
+    const strip = (p: string) =>
+      readFileSync(join(process.cwd(), "prisma/migrations", p, "migration.sql"), "utf8")
+        .split("\n")
+        .filter((l) => !l.trim().startsWith("--"))
+        .join("\n");
+    const enumSql = strip("20260930000001_mosy_reason_improved_level_enum");
+    const colSql = strip("20260930000002_mosy_improved_to_level");
+    expect(enumSql).toContain(
+      `ALTER TYPE "AralMosyMoveOutReason" ADD VALUE 'IMPROVED_READING_LEVEL';`
+    );
+    expect(colSql).toMatch(/CONSTRAINT "AralMosyDecision_improved_level_iff_reason"/);
+    expect(colSql).toContain(
+      `CHECK ((COALESCE("reason"::text, '') = 'IMPROVED_READING_LEVEL') = ("improvedToLevel" IS NOT NULL))`
+    );
+    for (const sql of [enumSql, colSql]) {
+      expect(sql).not.toMatch(/\bDROP\b/i);
+      expect(sql).not.toMatch(/\bTRUNCATE\b/i);
+      expect(sql).not.toMatch(/\bDELETE\b/i);
+      expect(sql).not.toMatch(/\bUPDATE\b/i);
+    }
+  });
+
   it("alters no table other than AralMosyDecision", () => {
     const tables = [...code.matchAll(/ALTER TABLE\s+("[^"]+")/g)].map((m) => m[1]);
     expect(tables.length).toBeGreaterThan(0);

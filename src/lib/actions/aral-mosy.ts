@@ -11,6 +11,8 @@ import { action } from "@/lib/errors/action";
 import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { resolveMosySave, type MosySaveFailure, type MosyTransition } from "@/lib/aral/mosy";
+import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { loadPreviousFilipinoLevel } from "@/lib/aral/mosy-queries";
 import { ARAL_MOSY_HREF, ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 
 function formToObj(formData: FormData): Record<string, unknown> {
@@ -68,7 +70,7 @@ export const saveMosyDecision = action(
       // Fresh read, not the cached getActiveSchoolYear: a write must not trust a TTL.
       const schoolYear = await tx.schoolYear.findFirst({
         where: { schoolId: user.schoolId, isActive: true },
-        select: { id: true },
+        select: { id: true, startDate: true },
       });
       if (!schoolYear) throw new AppError("SCHOOL_YEAR_NOT_ACTIVE");
 
@@ -94,6 +96,15 @@ export const saveMosyDecision = action(
         select: { decision: true, tutorId: true, priorAralEnrolledAt: true },
       });
 
+      // Same lookup the page uses for "previous level" (learner already verified
+      // to belong to the session's school above).
+      const previousFilipinoLevel = await loadPreviousFilipinoLevel(
+        tx,
+        input.learnerId,
+        // Same normalisation the page applies to its startDateKey.
+        parseLocalDateKey(formatLocalDateKey(schoolYear.startDate))
+      );
+
       const resolved = resolveMosySave({
         actorId: user.id,
         now: new Date(),
@@ -108,8 +119,10 @@ export const saveMosyDecision = action(
           mosyLevel: input.mosyLevel,
           decision: input.decision,
           reason: input.reason,
+          improvedToLevel: input.improvedToLevel,
           remarks: input.remarks,
         },
+        previousFilipinoLevel,
       });
       if (!resolved.ok) {
         if (resolved.failure === "OUT_OF_SCOPE") throw resourceNotFound("Learner");
@@ -161,6 +174,7 @@ export const saveMosyDecision = action(
         mosyLevel: row.mosyLevel,
         decision: row.decision,
         reason: row.reason,
+        improvedToLevel: row.improvedToLevel,
       },
     });
 

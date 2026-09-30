@@ -1353,16 +1353,21 @@ enum AralMosyOutcome {
 }
 
 enum AralMosyMoveOutReason {
+  /// LEGACY: grouped reason, no longer offered. Rows may exist; keep the value.
   IMPROVED_EARLY_GRADES // K–G3: "Improved to Developing / Transitioning / Grade Ready"
+  /// LEGACY: grouped reason, no longer offered. Rows may exist; keep the value.
   IMPROVED_UPPER_GRADES // G4+:  "Improved to Instructional / Independent Reader"
   DIAGNOSED_LSEN
   RECOMMENDED_LSEN_ASSESSMENT
+  /// "Improved to <level>"; the level is stored in AralMosyDecision.improvedToLevel.
+  IMPROVED_READING_LEVEL
 }
 
 /// One MOSY (middle of school year) decision per learner per school year.
 /// See docs/superpowers/specs/2026-09-29-mosy-report-page-design.md.
 /// SQL-only CHECKs (Prisma cannot express them) — PRESERVE when editing:
-///   AralMosyDecision_reason_iff_move_out, AralMosyDecision_remarks_length.
+///   AralMosyDecision_reason_iff_move_out, AralMosyDecision_remarks_length,
+///   AralMosyDecision_improved_level_iff_reason.
 model AralMosyDecision {
   id                  String                 @id @default(uuid())
   /// Denormalised from learner.schoolId for direct tenant scoping (TermWindowOverride precedent).
@@ -1374,6 +1379,8 @@ model AralMosyDecision {
   decision            AralMosyOutcome?
   /// Non-null iff decision = MOVE_OUT (SQL CHECK).
   reason              AralMosyMoveOutReason?
+  /// Target level of an IMPROVED_READING_LEVEL reason; null otherwise (SQL CHECK).
+  improvedToLevel     ReadingProfile?
   remarks             String?
   /// Tutor who last saved this row. Scope anchor for moved-out learners, whose
   /// Learner.aralTeacherId is cleared. SetNull: see Attendance.recordedById.

@@ -149,7 +149,7 @@ export const RELEASES: readonly Release[] = [
         roles: ["TEACHER"],
       },
       {
-        text: "Moving a learner out asks for a reason and lets you add a short remark. Learners you move out stay on the page for the rest of the school year, so you can still change your decision.",
+        text: "Moving a learner out asks for a reason and lets you add a short remark. The reason list shows only the reading levels above the learner's last recorded level, plus the two LSEN reasons for every grade. Learners you move out stay on the page for the rest of the school year, so you can still change your decision.",
         roles: ["TEACHER"],
       },
       {

@@ -1,11 +1,7 @@
 import "server-only";
 import type { AralMosyMoveOutReason, AralMosyOutcome, Prisma, ReadingProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import {
-  ARAL_MOSY_MOVE_OUT_REASON_LABELS,
-  GRADE_LEVEL_LABELS,
-  labelReadingProfile,
-} from "@/lib/constants/enum-labels";
+import { GRADE_LEVEL_LABELS, labelReadingProfile } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import {
   LEARNER_PAGE_SIZE,
@@ -20,14 +16,45 @@ import {
   MOSY_STATUSES,
   computeMosyStats,
   formatPreviousLevel,
-  mosyMoveOutReasonsForGrade,
+  mosyReasonChoices,
+  mosyReasonLabel,
   mosyRowStatus,
   mosyStatusWhere,
+  type MosyReasonChoice,
   type MosyRowStatus,
   type MosyStats,
   type MosyStatusFilter,
   type PreviousLevel,
 } from "@/lib/aral/mosy";
+
+/**
+ * The one definition of a learner's "previous level" record: the latest reading
+ * record on or after the school year start. The page renders it and the save
+ * action validates the reason against it, so they cannot disagree.
+ */
+export function previousReadingLevelArgs(schoolYearStart: Date) {
+  return {
+    where: { weekStart: { gte: schoolYearStart } },
+    orderBy: { weekStart: "desc" },
+    take: 1,
+    select: { weekStart: true, englishProfile: true, filipinoProfile: true },
+  } as const satisfies Prisma.Learner$readingLevelsArgs;
+}
+
+/** Filipino profile of the previous-level record, or null. Caller scopes the learner to its school. */
+export async function loadPreviousFilipinoLevel(
+  tx: Prisma.TransactionClient,
+  learnerId: string,
+  schoolYearStart: Date
+): Promise<string | null> {
+  const args = previousReadingLevelArgs(schoolYearStart);
+  const record = await tx.readingLevelRecord.findFirst({
+    where: { learnerId, ...args.where },
+    orderBy: args.orderBy,
+    select: args.select,
+  });
+  return record?.filipinoProfile ?? null;
+}
 
 /** Plain, serializable row for the MOSY table. No `Date` crosses to the client. */
 export type MosyRow = {
@@ -41,12 +68,13 @@ export type MosyRow = {
   status: MosyRowStatus;
   /** Levels this learner's grade may use, in rubric order. */
   levelOptions: { value: string; label: string }[];
-  /** Move-out reasons this learner's grade may use. */
-  reasonOptions: { value: AralMosyMoveOutReason; label: string }[];
+  /** Move-out reasons offered to this learner (levels above the previous one, plus LSEN). */
+  reasonChoices: MosyReasonChoice[];
   mosyLevel: ReadingProfile | null;
   mosyLevelLabel: string | null;
   decision: AralMosyOutcome | null;
   reason: AralMosyMoveOutReason | null;
+  improvedToLevel: ReadingProfile | null;
   reasonLabel: string | null;
   remarks: string | null;
   previousLevel: PreviousLevel | null;
@@ -157,16 +185,12 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
             mosyLevel: true,
             decision: true,
             reason: true,
+            improvedToLevel: true,
             remarks: true,
             updatedAt: true,
           },
         },
-        readingLevels: {
-          where: { weekStart: { gte: parseLocalDateKey(schoolYear.startDateKey) } },
-          orderBy: { weekStart: "desc" },
-          take: 1,
-          select: { weekStart: true, englishProfile: true, filipinoProfile: true },
-        },
+        readingLevels: previousReadingLevelArgs(parseLocalDateKey(schoolYear.startDateKey)),
       },
       orderBy: [{ fullName: "asc" }, { id: "asc" }],
       skip: (page - 1) * LEARNER_PAGE_SIZE,
@@ -211,15 +235,13 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
       isAralLearner: l.isAralLearner,
       status: mosyRowStatus({ isAralLearner: l.isAralLearner, row: d }),
       levelOptions: readingProfileOptionsForGrade(gradeType),
-      reasonOptions: mosyMoveOutReasonsForGrade(gradeType).map((value) => ({
-        value,
-        label: ARAL_MOSY_MOVE_OUT_REASON_LABELS[value],
-      })),
+      reasonChoices: mosyReasonChoices(gradeType, latest?.filipinoProfile ?? null),
       mosyLevel: d?.mosyLevel ?? null,
       mosyLevelLabel: d ? labelReadingProfile(d.mosyLevel, gradeType) : null,
       decision: d?.decision ?? null,
       reason: d?.reason ?? null,
-      reasonLabel: d?.reason ? ARAL_MOSY_MOVE_OUT_REASON_LABELS[d.reason] : null,
+      improvedToLevel: d?.improvedToLevel ?? null,
+      reasonLabel: d?.reason ? mosyReasonLabel(d.reason, d.improvedToLevel, gradeType) : null,
       remarks: d?.remarks ?? null,
       previousLevel: formatPreviousLevel(
         latest

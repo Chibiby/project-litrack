@@ -17,8 +17,70 @@ describe("aralMosyDecisionSchema", () => {
       mosyLevel: "INSTRUCTIONAL_DEVELOPING",
       decision: null,
       reason: null,
+      improvedToLevel: null,
       remarks: null,
     });
+  });
+
+  it("requires improvedToLevel for IMPROVED_READING_LEVEL, reported on reason", () => {
+    const move = { ...base, decision: "MOVE_OUT", reason: "IMPROVED_READING_LEVEL" };
+    expect(issuePaths(move)).toEqual(["reason"]);
+    expect(issuePaths({ ...move, improvedToLevel: "" })).toEqual(["reason"]);
+  });
+
+  it("accepts IMPROVED_READING_LEVEL with an improvedToLevel", () => {
+    const r = aralMosyDecisionSchema.parse({
+      ...base,
+      decision: "MOVE_OUT",
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INDEPENDENT_GRADE_READY",
+    });
+    expect(r.reason).toBe("IMPROVED_READING_LEVEL");
+    expect(r.improvedToLevel).toBe("INDEPENDENT_GRADE_READY");
+  });
+
+  it("does not require improvedToLevel for LSEN reasons and nulls a stray one", () => {
+    const r = aralMosyDecisionSchema.parse({
+      ...base,
+      decision: "MOVE_OUT",
+      reason: "DIAGNOSED_LSEN",
+      improvedToLevel: "INDEPENDENT_GRADE_READY",
+    });
+    expect(r.improvedToLevel).toBeNull();
+  });
+
+  it("nulls improvedToLevel for STAY and deferred decisions", () => {
+    for (const decision of ["STAY", ""]) {
+      const r = aralMosyDecisionSchema.parse({
+        ...base,
+        decision,
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+      });
+      expect(r.reason).toBeNull();
+      expect(r.improvedToLevel).toBeNull();
+    }
+  });
+
+  it("rejects an unknown improvedToLevel value", () => {
+    expect(
+      issuePaths({
+        ...base,
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "GENIUS",
+      })
+    ).toContain("improvedToLevel");
+  });
+
+  it("still parses the legacy grouped reasons (grade rules live in resolveMosySave)", () => {
+    const r = aralMosyDecisionSchema.parse({
+      ...base,
+      decision: "MOVE_OUT",
+      reason: "IMPROVED_EARLY_GRADES",
+    });
+    expect(r.reason).toBe("IMPROVED_EARLY_GRADES");
+    expect(r.improvedToLevel).toBeNull();
   });
 
   it("treats omitted optional fields like empty strings", () => {

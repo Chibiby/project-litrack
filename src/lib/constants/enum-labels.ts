@@ -219,6 +219,8 @@ export const ARAL_MOSY_OUTCOME_CHOICE_LABELS = {
 } as const;
 
 export const ARAL_MOSY_MOVE_OUT_REASON_LABELS = {
+  IMPROVED_READING_LEVEL: "Improved reading level",
+  // Legacy: no longer offered, kept so saved rows still display.
   IMPROVED_EARLY_GRADES: "Improved to Developing / Transitioning / Grade Ready",
   IMPROVED_UPPER_GRADES: "Improved to Instructional / Independent Reader",
   DIAGNOSED_LSEN: "Diagnosed as Learner with Special Educational Needs (LSEN)",

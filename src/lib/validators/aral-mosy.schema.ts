@@ -20,6 +20,10 @@ export const aralMosyDecisionSchema = z
       .union([z.nativeEnum(AralMosyMoveOutReason), z.literal("")])
       .default("")
       .transform((v) => v || null),
+    improvedToLevel: z
+      .union([z.nativeEnum(ReadingProfile), z.literal("")])
+      .default("")
+      .transform((v) => v || null),
     remarks: z
       .string()
       .trim()
@@ -35,7 +39,21 @@ export const aralMosyDecisionSchema = z
         message: "Choose a reason for moving the learner out",
       });
     }
+    if (v.decision === "MOVE_OUT" && v.reason === "IMPROVED_READING_LEVEL" && !v.improvedToLevel) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reason"],
+        message: "Choose the reading level the learner improved to",
+      });
+    }
   })
-  .transform((v) => ({ ...v, reason: v.decision === "MOVE_OUT" ? v.reason : null }));
+  .transform((v) => {
+    const reason = v.decision === "MOVE_OUT" ? v.reason : null;
+    return {
+      ...v,
+      reason,
+      improvedToLevel: reason === "IMPROVED_READING_LEVEL" ? v.improvedToLevel : null,
+    };
+  });
 
 export type AralMosyDecisionInput = z.output<typeof aralMosyDecisionSchema>;
