@@ -21,13 +21,15 @@ import { labelReadingProfile } from "@/lib/constants/enum-labels";
  */
 
 describe("languagesForGrade", () => {
-  it("Kinder collects both languages", () => {
-    expect(languagesForGrade("KINDER")).toEqual(["ENGLISH", "FILIPINO"]);
-  });
-
-  it("Grade 1 and Grade 2 are Filipino only", () => {
+  it("Kinder, Grade 1 and Grade 2 are Filipino only", () => {
+    expect(languagesForGrade("KINDER")).toEqual(["FILIPINO"]);
     expect(languagesForGrade("G1")).toEqual(["FILIPINO"]);
     expect(languagesForGrade("G2")).toEqual(["FILIPINO"]);
+  });
+
+  it("Kinder stays Filipino only but keeps the early letter/word rubric", () => {
+    expect(languagesForGrade("KINDER")).toEqual(["FILIPINO"]);
+    expect(allowedReadingValuesForGrade("KINDER")).toEqual([...EARLY_RUBRIC_VALUES]);
   });
 
   it("Grade 3, Grade 5, Grade 10, Grade 11 and Grade 12 all keep both languages", () => {
@@ -134,12 +136,12 @@ describe("isReadingRecordComplete", () => {
 });
 
 describe("completeAssessmentWhereForGrades", () => {
-  it("builds an OR of a Filipino-only shape and a both-language shape for a mixed Kinder + Grade 1 set", () => {
-    // Kinder collects both languages; Grade 1 is Filipino-only — mixing the two
-    // in one set is exactly what forces the OR, unlike a Kinder+G5 set (both
-    // require both languages) or an all-G1/G2 set (both are Filipino-only).
+  it("builds an OR of a Filipino-only shape and a both-language shape for a mixed Grade 1 + Grade 5 set", () => {
+    // Grade 5 collects both languages; Grade 1 is Filipino-only — mixing the two
+    // in one set is exactly what forces the OR, unlike an all-K/G1/G2 set (all
+    // Filipino-only) or an all-G5 set (all both languages).
     const where = completeAssessmentWhereForGrades([
-      { id: "grade-kinder", type: "KINDER" },
+      { id: "grade-g5", type: "G5" },
       { id: "grade-g1", type: "G1" },
     ]);
     expect(where).toHaveProperty("OR");

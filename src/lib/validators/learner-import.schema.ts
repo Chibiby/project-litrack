@@ -124,7 +124,7 @@ export const learnerImportRowSchema = z
     gender: z.enum(["MALE", "FEMALE"]),
     // Both slots. A file may name one ethnicity, two, or none at all.
     ...ethnicityFields,
-    // Structurally optional: Grade 1/Grade 2 stop collecting English (see
+    // Structurally optional: Kinder/Grade 1/Grade 2 stop collecting English (see
     // docs/reading-policy-spec.md section 4a). Whether it is required for the
     // import's target grade is an action-level invariant, not a Zod one.
     englishReadingProfile: optionalEnum(READING_PROFILE),

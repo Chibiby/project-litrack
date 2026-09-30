@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.22.1",
+    date: "2026-09-30",
+    title: "Kinder reads in Filipino only, and DepEd tutors are counted",
+    announce: true,
+    fixes: [
+      "Kinder learners now get a Filipino reading level only. The English reading level is no longer asked for Kinder, the same as Grade 1 and Grade 2.",
+      "Teachers serving as ARAL tutors now counts DepEd teachers correctly. Tutors with a DepEd designation were shown as Not answered before.",
+    ],
+  },
+  {
     version: "2.22.0",
     date: "2026-09-30",
     title: "Find teachers by the grade they advise",

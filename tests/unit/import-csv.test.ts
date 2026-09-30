@@ -54,10 +54,10 @@ describe("learnerCsvTemplate", () => {
     expect(g2).toContain(READING_PROFILE_LABELS_K3.INDEPENDENT_GRADE_READY);
   });
 
-  it("drops the englishReadingProfile column for Grade 1/Grade 2 but keeps it for Kinder and Grade 3+", () => {
+  it("drops the englishReadingProfile column for Kinder/Grade 1/Grade 2 but keeps it for Grade 3+", () => {
     expect(learnerCsvTemplate("G1")).not.toContain("englishReadingProfile");
     expect(learnerCsvTemplate("G2")).not.toContain("englishReadingProfile");
-    expect(learnerCsvTemplate("KINDER")).toContain("englishReadingProfile");
+    expect(learnerCsvTemplate("KINDER")).not.toContain("englishReadingProfile");
     expect(learnerCsvTemplate("G3")).toContain("englishReadingProfile");
     expect(learnerCsvTemplate()).toContain("englishReadingProfile");
   });

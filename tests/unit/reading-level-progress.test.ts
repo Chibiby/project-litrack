@@ -257,8 +257,7 @@ describe("countMonthlyAssessmentProgress — grade-aware completeness (docs/read
 
   it("counts both grades correctly in one mixed-grade call (a teacher advising Kinder and ARAL-tutoring Grade 5)", async () => {
     records = [
-      // Complete for Kinder: no English still required there (Kinder collects
-      // both languages), so this one is NOT complete without English.
+      // Complete for Kinder: English rightly not required.
       record({ id: "r-kinder", learnerId: "l-kinder", gradeLevelId: KINDER_GRADE.id, englishProfile: null }),
       // Complete for Grade 1: English rightly not required.
       record({ id: "r-g1", learnerId: "l-g1", gradeLevelId: G1_GRADE.id, englishProfile: null }),
@@ -273,9 +272,8 @@ describe("countMonthlyAssessmentProgress — grade-aware completeness (docs/read
       grades: [KINDER_GRADE, G1_GRADE, G5_GRADE],
     });
 
-    // Kinder row excluded (missing required English), Grade 1 and Grade 5
-    // rows both count.
-    expect(result.completed).toBe(2);
+    // Kinder and Grade 1 (English not required) and Grade 5 rows all count.
+    expect(result.completed).toBe(3);
   });
 
   it("builds an OR of a Filipino-only shape and a both-language shape for a Grade 1 + Grade 5 set", async () => {
@@ -303,10 +301,7 @@ describe("countMonthlyAssessmentProgress — grade-aware completeness (docs/read
     ]);
   });
 
-  it("collapses a Kinder + Grade 5 set to a single AND, not an OR — Kinder collects both languages too", async () => {
-    // Only Grade 1/Grade 2 are Filipino-only. Kinder still requires English,
-    // so a Kinder+G5 set never needs the OR branch at all — conflating "early
-    // rubric grade" with "English-excluded grade" would break this.
+  it("builds an OR for a Kinder + Grade 5 set — Kinder is Filipino-only like Grade 1/Grade 2", async () => {
     await countMonthlyAssessmentProgress({
       learnerWhere: {},
       monthStart: MONTH_START,
@@ -315,6 +310,6 @@ describe("countMonthlyAssessmentProgress — grade-aware completeness (docs/read
     });
 
     const where = findMany.mock.calls[0][0].where as { AND: Record<string, unknown>[] };
-    expect(where.AND[0]).not.toHaveProperty("OR");
+    expect(where.AND[0]).toHaveProperty("OR");
   });
 });

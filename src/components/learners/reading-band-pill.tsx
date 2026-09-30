@@ -48,7 +48,7 @@ export function ReadingBandPill({
   gradeType,
   className,
 }: {
-  /** Null for a grade that doesn't collect this language (Grade 1/Grade 2 English). */
+  /** Null for a grade that doesn't collect this language (Kinder/Grade 1/Grade 2 English). */
   profile: string | null;
   gradeType: string | null | undefined;
   className?: string;

@@ -50,8 +50,13 @@ describe("classifyAralTutor", () => {
     expect(classifyAralTutor(null, ARAL_VOLUNTEER_DESIGNATION)).toBe(ARAL_TUTOR_NON_DEPED);
   });
 
-  it("no employmentType, some other designation -> NOT_ANSWERED", () => {
-    expect(classifyAralTutor(null, "Master Teacher I")).toBe(NOT_ANSWERED);
+  it("no employmentType, a DepEd rank designation -> DEPED", () => {
+    expect(classifyAralTutor(null, "Master Teacher I")).toBe(ARAL_TUTOR_DEPED);
+    expect(classifyAralTutor(null, "Teacher I")).toBe(ARAL_TUTOR_DEPED);
+  });
+
+  it("no employmentType, a blank designation -> NOT_ANSWERED", () => {
+    expect(classifyAralTutor(null, "  ")).toBe(NOT_ANSWERED);
   });
 
   it("no employmentType, no designation (no profile) -> NOT_ANSWERED", () => {
@@ -75,10 +80,10 @@ describe("aralFacetRows", () => {
   it("sums two raw tutor rows that map to the same (school, bucket)", () => {
     const raw: RawAralRow[] = [
       { school_id: "s1", field: "tutor", bucket: null, employment_type: null, designation: "Master Teacher I", count: 2 },
-      { school_id: "s1", field: "tutor", bucket: null, employment_type: null, designation: null, count: 3 },
+      { school_id: "s1", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 3 },
     ];
     const rows = aralFacetRows(raw);
-    expect(rows).toEqual([{ schoolId: "s1", gradeType: null, field: "tutor", bucket: NOT_ANSWERED, count: 5 }]);
+    expect(rows).toEqual([{ schoolId: "s1", gradeType: null, field: "tutor", bucket: ARAL_TUTOR_DEPED, count: 5 }]);
   });
 
   it("keeps different schools and different buckets separate", () => {
@@ -102,7 +107,7 @@ const RAW: RawAralRow[] = [
   { school_id: "s3", field: "grade", bucket: "G5", employment_type: null, designation: null, count: 3 },
   { school_id: "s1", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 2 },
   { school_id: "s1", field: "tutor", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
-  { school_id: "s2", field: "tutor", bucket: null, employment_type: null, designation: "Master Teacher I", count: 1 },
+  { school_id: "s2", field: "tutor", bucket: null, employment_type: null, designation: null, count: 1 },
 ];
 
 describe("shapeAral", () => {
