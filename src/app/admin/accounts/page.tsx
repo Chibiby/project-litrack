@@ -17,7 +17,7 @@ import {
 } from "@/lib/admin/accounts";
 
 /** Params that change which rows the accounts list shows — see `listKey`. */
-export const ACCOUNTS_LIST_KEYS = ["page", "sort", "q", "role", "schoolId"] as const;
+export const ACCOUNTS_LIST_KEYS = ["page", "sort", "q", "role", "schoolId", "grade"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,7 @@ interface PageProps {
     q?: string;
     role?: string;
     schoolId?: string;
+    grade?: string;
     sort?: string;
   }>;
 }
@@ -39,6 +40,7 @@ async function AccountsTableBody({
     q?: string;
     role?: string;
     schoolId?: string;
+    grade?: string;
     sort?: string;
   };
 }) {
@@ -87,6 +89,7 @@ async function AccountsTableBody({
           totalCount,
           role: params.role ?? "",
           schoolId: params.schoolId ?? "",
+          grade: params.grade ?? "",
           q: params.q,
           sort: params.sort,
           sortOptions: ACCOUNT_LIST_SORTS.options,

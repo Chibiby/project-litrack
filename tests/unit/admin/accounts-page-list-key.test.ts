@@ -57,7 +57,7 @@ beforeEach(() => {
 
 describe("AdminAccountsPage — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(ACCOUNTS_LIST_KEYS).toEqual(["page", "sort", "q", "role", "schoolId"]);
+    expect(ACCOUNTS_LIST_KEYS).toEqual(["page", "sort", "q", "role", "schoolId", "grade"]);
   });
 
   it("changes when a list-affecting param (q) changes", async () => {

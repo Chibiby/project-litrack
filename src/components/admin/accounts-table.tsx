@@ -55,10 +55,14 @@ import type {
   AccountRow,
   AccountSummary,
 } from "@/lib/admin/accounts";
-import { USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
+import { GRADE_LEVEL_OPTIONS, USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
 import type { UserRole } from "@prisma/client";
 
 const ANY_ROLE = "any";
+// FLOATING is an advisory mode, not a grade a section belongs to.
+const GRADE_FILTER_OPTIONS = GRADE_LEVEL_OPTIONS.filter(
+  (grade) => grade.value !== "FLOATING"
+);
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "SUPER_ADMIN", label: USER_ROLE_LABELS.SUPER_ADMIN },
   { value: "DISTRICT_ADMIN", label: USER_ROLE_LABELS.DISTRICT_ADMIN },
@@ -73,6 +77,8 @@ export type AccountsTableList = {
   totalCount: number;
   role: string;
   schoolId: string;
+  /** Advisory-section grade filter; only meaningful when `role` is TEACHER. */
+  grade?: string;
   q: string;
   /**
    * "Sort by" for this table. Optional so `list` stays a safe superset for
@@ -336,12 +342,19 @@ function AccountsTableInner({
     return `/admin/accounts?${next.toString()}`;
   };
 
+  const showGrade = list.role === "TEACHER";
+  const activeGrade = showGrade ? list.grade ?? "" : "";
+
   return (
       <div className="space-y-4">
       <AccountOverview summary={summary} />
       <Surface as="section" className="rounded-2xl p-3 sm:p-4">
           <form
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
+            className={
+              showGrade
+                ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_minmax(10rem,0.8fr)_auto]"
+                : "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
+            }
             onSubmit={(event) => {
               event.preventDefault();
               apply({ q: query.trim() || null });
@@ -366,7 +379,7 @@ function AccountsTableInner({
               </Label>
               <Select
                 value={list.role || ANY_ROLE}
-                onValueChange={(value) => apply({ role: value })}
+                onValueChange={(value) => apply({ role: value, grade: null })}
                 disabled={pending}
               >
                 <SelectTrigger id="accounts-role" className="h-11 w-full lg:h-10">
@@ -382,6 +395,30 @@ function AccountsTableInner({
                 </SelectContent>
               </Select>
             </div>
+            {showGrade ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="accounts-grade" className="text-xs font-medium">
+                  Grade
+                </Label>
+                <Select
+                  value={activeGrade || ANY_ROLE}
+                  onValueChange={(value) => apply({ grade: value })}
+                  disabled={pending}
+                >
+                  <SelectTrigger id="accounts-grade" className="h-11 w-full lg:h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY_ROLE}>All grades</SelectItem>
+                    {GRADE_FILTER_OPTIONS.map((grade) => (
+                      <SelectItem key={grade.value} value={grade.value}>
+                        {grade.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             {list.sort && list.sortOptions ? (
               <div className="space-y-1.5">
                 <SortSelect
@@ -394,6 +431,7 @@ function AccountsTableInner({
                     q: list.q || undefined,
                     role: list.role || undefined,
                     schoolId: list.schoolId || undefined,
+                    grade: activeGrade || undefined,
                   }}
                 />
               </div>
@@ -407,7 +445,7 @@ function AccountsTableInner({
               >
                 Search
               </Button>
-              {list.role || list.q || list.schoolId ? (
+              {list.role || list.q || list.schoolId || activeGrade ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -446,7 +484,11 @@ function AccountsTableInner({
             <div className="px-4 pb-4">
               <EmptyState
                 title="No accounts match"
-                description="Try clearing the search or role filter."
+                description={
+                  activeGrade
+                    ? "No teacher advises a section of this grade. Try another grade or clear the filters."
+                    : "Try clearing the search or role filter."
+                }
                 icon={KeyRound}
               />
             </div>

@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.22.0",
+    date: "2026-09-30",
+    title: "Find teachers by the grade they advise",
+    announce: true,
+    fixes: [
+      "User Accounts has a Grade filter. Set Role to Teacher, then pick a grade to see only the teachers who advise a section of that grade.",
+    ],
+  },
+  {
     version: "2.20.0",
     date: "2026-09-28",
     title: "Export one kind of non-compliance",
