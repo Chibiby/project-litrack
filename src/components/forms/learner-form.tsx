@@ -94,7 +94,7 @@ export type LearnerFormDefaults = {
   ethnicityOther?: string | null;
   secondaryEthnicity?: string | null;
   secondaryEthnicityOther?: string | null;
-  /** Null when the learner's grade doesn't collect English (Grade 1/Grade 2). */
+  /** Null when the learner's grade doesn't collect English (Kinder/Grade 1/Grade 2). */
   englishReadingProfile?: string | null;
   englishFrustrationSubtypes?: string[];
   filipinoReadingProfile?: string;
@@ -194,7 +194,7 @@ export const LEARNER_FORM_SECTIONS: readonly FormSectionDef[] = [
     key: "reading",
     title: "Reading levels",
     hint: "English and Filipino bands from the latest assessment",
-    // Grade-aware: Grade 1/Grade 2 stop collecting an English level (section
+    // Grade-aware: Kinder/Grade 1/Grade 2 stop collecting an English level (section
     // 4a), so English only counts as required when the hidden `gradeType`
     // field (set from the resolved placement, never chosen here) says the
     // grade collects it. A snapshot with no `gradeType` at all — every fixture

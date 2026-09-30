@@ -52,9 +52,10 @@ export type ReportFilters = {
 };
 
 /**
- * The six cards on the hub, in the order the design lays them out: MOSY leads
- * since it is the report ARAL work is judged on, then the rest keep their
- * existing relative order.
+ * The cards on the hub, in the order the design lays them out. MOSY has no card:
+ * it is exported from its own page (`/teacher/aral/mosy`). The `MOSY` kind, its
+ * builder and its validator entry stay so a Recent Reports row of that kind can
+ * still be re-generated.
  */
 export const REPORT_CARDS: {
   kind: ReportKind;
@@ -64,16 +65,6 @@ export const REPORT_CARDS: {
   /** Not yet built: renders inert with a "Soon" pill, as the nav does. */
   soon?: boolean;
 }[] = [
-  {
-    kind: "MOSY",
-    title: "MOSY Report",
-    blurb: "Mid-year reading level profile per grade and ARAL profiling results.",
-    bullets: [
-      "Reading level profile per grade",
-      "ARAL profiling summary",
-      "Middle of school year window",
-    ],
-  },
   {
     kind: "ATTENDANCE",
     title: "Attendance Records",
@@ -115,10 +106,6 @@ export const QUICK_ACTIONS: {
   /** Resolved against the school's local today when the chip is pressed. */
   range: "this-week" | "this-month" | "none";
 }[] = [
-  // MOSY's window comes from the school year's start date plus any term-window
-  // overrides, both server-side only — the browser has neither, so this stays
-  // "none" rather than a client-computed date range. Do not change this.
-  { id: "mosy", label: "MOSY Report", kind: "MOSY", range: "none" },
   { id: "week-attendance", label: "This Week Attendance", kind: "ATTENDANCE", range: "this-week" },
   { id: "month-attendance", label: "This Month Attendance", kind: "ATTENDANCE", range: "this-month" },
   { id: "week-reading", label: "This Week Reading Level", kind: "READING_LEVEL", range: "this-week" },

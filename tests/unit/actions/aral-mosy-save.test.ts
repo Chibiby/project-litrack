@@ -23,6 +23,7 @@ const YEAR_ID = "year-1";
 const GRADE_ID = "grade-4";
 const ADVISER_ID = "adviser-1";
 const ENROLLED = new Date("2026-06-10T00:00:00.000Z");
+const YEAR_START = new Date(2026, 5, 8); // local midnight, as the page derives it
 
 type LearnerRow = {
   schoolId: string;
@@ -37,7 +38,9 @@ type Existing = { decision: "MOVE_OUT" | "STAY" | null; tutorId: string | null; 
 
 let learnerRow: LearnerRow | null;
 let existingRow: Existing | null;
-let activeYear: { id: string } | null;
+let activeYear: { id: string; startDate: Date } | null;
+/** Filipino profile of the DB's latest reading record (null = no record). */
+let dbPreviousFilipino: string | null;
 /** Ordered log of every tx write, to prove both happen on the same transaction. */
 let txLog: { tx: number; op: string; args: unknown }[];
 let txCounter: number;
@@ -50,10 +53,20 @@ const learnerUpdate = vi.fn();
 const upsert = vi.fn();
 const findUnique = vi.fn();
 const yearFindFirst = vi.fn();
+const readingFindFirst = vi.fn();
 
 function makeTx() {
   const id = ++txCounter;
   return {
+    readingLevelRecord: {
+      findFirst: (a: unknown) => {
+        readingFindFirst(a);
+        readOrder.push("previous.read");
+        return Promise.resolve(
+          dbPreviousFilipino === null ? null : { filipinoProfile: dbPreviousFilipino }
+        );
+      },
+    },
     $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => {
       lockCall(strings.join("?"), values);
       readOrder.push("lock");
@@ -149,7 +162,8 @@ beforeEach(() => {
   txCounter = 0;
   txLog = [];
   readOrder = [];
-  activeYear = { id: YEAR_ID };
+  activeYear = { id: YEAR_ID, startDate: YEAR_START };
+  dbPreviousFilipino = null;
   learnerRow = taggedLearner();
   existingRow = null;
   requireSchoolUser.mockResolvedValue({ id: USER_ID, schoolId: SCHOOL_ID, role: "TEACHER" });
@@ -168,7 +182,7 @@ describe("saveMosyDecision — guards", () => {
     expect(res).toMatchObject({ ok: false, code: "SCHOOL_YEAR_NOT_ACTIVE" });
     expect(yearFindFirst).toHaveBeenCalledWith({
       where: { schoolId: SCHOOL_ID, isActive: true },
-      select: { id: true },
+      select: { id: true, startDate: true },
     });
     expect(upsert).not.toHaveBeenCalled();
     expect(learnerUpdate).not.toHaveBeenCalled();
@@ -204,7 +218,19 @@ describe("saveMosyDecision — guards", () => {
     expect(sql).toContain('FROM "Learner"');
     expect(sql).toContain("FOR UPDATE");
     expect(values).toEqual([LEARNER_ID, SCHOOL_ID]);
-    expect(readOrder).toEqual(["lock", "learner.read", "decision.read"]);
+    expect(readOrder).toEqual(["lock", "learner.read", "decision.read", "previous.read"]);
+  });
+
+  it("looks up the previous Filipino level after the row lock, for this learner and the year start", async () => {
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: true });
+    expect(readOrder.indexOf("lock")).toBe(0);
+    expect(readOrder.indexOf("previous.read")).toBeGreaterThan(readOrder.indexOf("lock"));
+    expect(readingFindFirst).toHaveBeenCalledTimes(1);
+    const arg = readingFindFirst.mock.calls[0][0];
+    expect(arg.where.learnerId).toBe(LEARNER_ID);
+    expect(arg.where.weekStart.gte).toEqual(YEAR_START);
+    expect(arg.orderBy).toEqual({ weekStart: "desc" });
   });
 
   it("filters deleted and archived learners in the query", async () => {
@@ -239,14 +265,127 @@ describe("saveMosyDecision — guards", () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it("a grade-mismatched reason is VALIDATION_FAILED with a reason field error, learner untouched", async () => {
+  it.each(["IMPROVED_EARLY_GRADES", "IMPROVED_UPPER_GRADES"])(
+    "legacy reason %s is VALIDATION_FAILED with a reason field error, learner untouched",
+    async (reason) => {
+      const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason }));
+      expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+      expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("reason");
+      expect(upsert).not.toHaveBeenCalled();
+      expect(learnerUpdate).not.toHaveBeenCalled();
+      expect(writeAudit).not.toHaveBeenCalled();
+    }
+  );
+
+  it("IMPROVED_READING_LEVEL without a level is VALIDATION_FAILED on reason and writes nothing", async () => {
     const res = await saveMosyDecision(
-      form({ decision: "MOVE_OUT", reason: "IMPROVED_EARLY_GRADES" })
+      form({ decision: "MOVE_OUT", reason: "IMPROVED_READING_LEVEL" })
     );
     expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
     expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("reason");
     expect(upsert).not.toHaveBeenCalled();
     expect(learnerUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["equal to", "FRUSTRATION_HIGH_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"],
+    ["below", "INSTRUCTIONAL_DEVELOPING", "FRUSTRATION_HIGH_EMERGENT"],
+  ])(
+    "a client level %s the DB previous level is VALIDATION_FAILED and nothing is written",
+    async (_n, dbPrev, clientLevel) => {
+      dbPreviousFilipino = dbPrev;
+      const res = await saveMosyDecision(
+        form({
+          decision: "MOVE_OUT",
+          reason: "IMPROVED_READING_LEVEL",
+          improvedToLevel: clientLevel,
+        })
+      );
+      expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+      expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty(
+        "reason"
+      );
+      expect(readingFindFirst).toHaveBeenCalledTimes(1);
+      expect(upsert).not.toHaveBeenCalled();
+      expect(learnerUpdate).not.toHaveBeenCalled();
+      expect(writeAudit).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    }
+  );
+
+  it("ignores a client-supplied previous level: only the DB-loaded one counts", async () => {
+    dbPreviousFilipino = "INDEPENDENT_GRADE_READY"; // top: nothing to improve to
+    const fd = form({
+      decision: "MOVE_OUT",
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INDEPENDENT_GRADE_READY",
+    });
+    fd.set("previousFilipinoLevel", "NON_DECODER_LOW_EMERGENT");
+    const res = await saveMosyDecision(fd);
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("accepts a level above the DB previous level and persists improvedToLevel", async () => {
+    dbPreviousFilipino = "FRUSTRATION_HIGH_EMERGENT";
+    const res = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+      })
+    );
+    expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+    const up = upsert.mock.calls[0][0];
+    expect(up.create).toMatchObject({
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+    });
+    expect(up.update).toMatchObject({
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+    });
+    expect(learnerUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("with no DB reading record the lowest level is rejected and the next accepted", async () => {
+    dbPreviousFilipino = null;
+    const bad = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "NON_DECODER_LOW_EMERGENT",
+      })
+    );
+    expect(bad).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(upsert).not.toHaveBeenCalled();
+    const ok = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "FRUSTRATION_HIGH_EMERGENT",
+      })
+    );
+    expect(ok).toMatchObject({ ok: true });
+  });
+
+  it("an LSEN move out stores improvedToLevel null even if the client posts one", async () => {
+    const res = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "DIAGNOSED_LSEN",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+      })
+    );
+    expect(res).toMatchObject({ ok: true });
+    expect(upsert.mock.calls[0][0].create.improvedToLevel).toBeNull();
+    expect(upsert.mock.calls[0][0].update.improvedToLevel).toBeNull();
+  });
+
+  it("STAY upsert carries improvedToLevel null", async () => {
+    await saveMosyDecision(form({ decision: "STAY" }));
+    expect(upsert.mock.calls[0][0].create.improvedToLevel).toBeNull();
+    expect(upsert.mock.calls[0][0].update.improvedToLevel).toBeNull();
   });
 
   it("takes the grade from the DB learner, not the form", async () => {
@@ -400,6 +539,15 @@ describe("saveMosyDecision — level-only saves", () => {
 describe("saveMosyDecision — audit metadata", () => {
   it.each([
     ["MOVE_OUT", { decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", remarks: "Ana Cruz has epilepsy" }],
+    [
+      "MOVE_OUT improved",
+      {
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+        remarks: "Ana Cruz has epilepsy",
+      },
+    ],
     ["STAY", { decision: "STAY", remarks: "Ana Cruz has epilepsy" }],
     ["deferred", { decision: "", remarks: "Ana Cruz has epilepsy" }],
   ])("%s carries ids and codes only, never remarks", async (_n, fields) => {
@@ -409,13 +557,40 @@ describe("saveMosyDecision — audit metadata", () => {
     expect(call.metadata).not.toHaveProperty("remarks");
     expect(JSON.stringify(call)).not.toContain("Ana Cruz");
     expect(Object.keys(call.metadata).sort()).toEqual(
-      ["decision", "learnerId", "mosyLevel", "reason", "schoolId", "schoolYearId"].sort()
+      [
+        "decision",
+        "improvedToLevel",
+        "learnerId",
+        "mosyLevel",
+        "reason",
+        "schoolId",
+        "schoolYearId",
+      ].sort()
     );
     expect(call.metadata).toMatchObject({
       schoolId: SCHOOL_ID,
       learnerId: LEARNER_ID,
       schoolYearId: YEAR_ID,
     });
+  });
+
+  it("audit metadata records improvedToLevel for an improvement and null otherwise", async () => {
+    await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+      })
+    );
+    await saveMosyDecision(form({ decision: "STAY" }));
+    const metas = writeAudit.mock.calls.map(
+      (c) => ((c as unknown[])[0] as { metadata: Record<string, unknown> }).metadata
+    );
+    expect(metas[0]).toMatchObject({
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INDEPENDENT_GRADE_READY",
+    });
+    expect(metas[1]).toMatchObject({ reason: null, improvedToLevel: null });
   });
 
   it("each transition writes its own audit action, exactly one row per save", async () => {

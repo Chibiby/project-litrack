@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -50,12 +57,66 @@ import {
 } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 
+export type TeacherGradeFacetOption = {
+  id: string;
+  label: string;
+  sections: { id: string; name: string }[];
+};
+
+const ALL_VALUE = "all";
+
+/**
+ * `FacetSelect`'s look (caption over value) plus `disabled`, which the shared
+ * one does not take. Kept local so the toolbar matches `SortSelect` beside it.
+ */
+function ToolbarFacet({
+  id,
+  label,
+  value,
+  onValueChange,
+  disabled,
+  children,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger
+        id={id}
+        aria-label={label}
+        className="h-auto w-full gap-2 rounded-xl py-1.5 [&>span]:line-clamp-none"
+      >
+        <span className="min-w-0 text-left">
+          <span className="block text-xs font-normal leading-tight text-muted-foreground">
+            {label}
+          </span>
+          <span className="block truncate text-sm font-medium leading-tight text-foreground">
+            <SelectValue />
+          </span>
+        </span>
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  );
+}
+
 export type TeachersListPagination = {
   page: number;
   totalPages: number;
   totalCount: number;
   q: string;
   filter: TeacherListFilter;
+  /** Validated GradeLevel id, "" for all grades. */
+  grade?: string;
+  /** Validated Section id, "" for all sections. */
+  section?: string;
+  /** This school's grades that have sections, for the Grade/Section facets. */
+  gradeOptions?: TeacherGradeFacetOption[];
   basePath: string;
   searchParams: Record<string, string | undefined>;
   /**
@@ -547,9 +608,16 @@ function TeachersManagedTable({
   const editableAdvisory = readOnly ? undefined : advisoryOptions;
 
   const [prevListQ, setPrevListQ] = useState(list?.q ?? "");
+  // The last term this box sent to the URL. When that same term comes back it
+  // is our own search landing, and adopting it would erase characters typed
+  // while the request was in flight.
+  const [pushedQ, setPushedQ] = useState(list?.q ?? "");
   if ((list?.q ?? "") !== prevListQ) {
     setPrevListQ(list?.q ?? "");
-    setSearchValue(list?.q ?? "");
+    if ((list?.q ?? "") !== pushedQ) {
+      setSearchValue(list?.q ?? "");
+      setPushedQ(list?.q ?? "");
+    }
   }
   const [prevListFilter, setPrevListFilter] = useState<TeacherListFilter>(
     list?.filter ?? "all"
@@ -557,6 +625,18 @@ function TeachersManagedTable({
   if ((list?.filter ?? "all") !== prevListFilter) {
     setPrevListFilter(list?.filter ?? "all");
     setFilterValue(list?.filter ?? "all");
+  }
+  const [gradeValue, setGradeValue] = useState(list?.grade ?? "");
+  const [sectionValue, setSectionValue] = useState(list?.section ?? "");
+  const [prevListGrade, setPrevListGrade] = useState(list?.grade ?? "");
+  const [prevListSection, setPrevListSection] = useState(list?.section ?? "");
+  if ((list?.grade ?? "") !== prevListGrade) {
+    setPrevListGrade(list?.grade ?? "");
+    setGradeValue(list?.grade ?? "");
+  }
+  if ((list?.section ?? "") !== prevListSection) {
+    setPrevListSection(list?.section ?? "");
+    setSectionValue(list?.section ?? "");
   }
 
   /**
@@ -651,6 +731,8 @@ function TeachersManagedTable({
     page?: number;
     q?: string;
     filter?: TeacherListFilter;
+    grade?: string;
+    section?: string;
   }) => {
     if (!list) return;
     const params = new URLSearchParams();
@@ -660,7 +742,9 @@ function TeachersManagedTable({
         v !== "" &&
         k !== "page" &&
         k !== "q" &&
-        k !== "filter"
+        k !== "filter" &&
+        k !== "grade" &&
+        k !== "section"
       ) {
         params.set(k, v);
       }
@@ -668,8 +752,13 @@ function TeachersManagedTable({
     const q = next.q !== undefined ? next.q : list.q;
     const page = next.page !== undefined ? next.page : list.page;
     const filter = next.filter !== undefined ? next.filter : list.filter;
+    const grade = next.grade !== undefined ? next.grade : (list.grade ?? "");
+    const section =
+      next.section !== undefined ? next.section : (list.section ?? "");
     if (q) params.set("q", q);
     if (filter !== "all") params.set("filter", filter);
+    if (grade) params.set("grade", grade);
+    if (grade && section) params.set("section", section);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     navigate(qs ? `${list.basePath}?${qs}` : list.basePath);
@@ -761,82 +850,128 @@ function TeachersManagedTable({
           </Button>
         </div>
         {list ? (
-          <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
-            <div className="space-y-1">
-              <Label htmlFor="teachers-filter" className="text-xs text-muted-foreground">
-                Filter teachers
-              </Label>
-              <select
+          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <SearchInput
+              id="teachers-search"
+              className="w-full sm:w-72 sm:flex-none"
+              inputClassName="h-12 lg:h-12"
+              label="Search active teachers"
+              placeholder="Search by name or email"
+              value={searchValue}
+              onValueChange={setSearchValue}
+              onDebouncedChange={(value) => {
+                const next = value.trim();
+                if (next === pushedQ) return;
+                setPushedQ(next);
+                pushListQuery({ page: 1, q: next });
+              }}
+            />
+            <div className="sm:w-52">
+              <ToolbarFacet
                 id="teachers-filter"
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                label="Filter teachers"
                 value={filterValue}
-                onChange={(e) => {
-                  const nextFilter = e.target.value as TeacherListFilter;
+                onValueChange={(v) => {
+                  const nextFilter = v as TeacherListFilter;
                   setFilterValue(nextFilter);
                   pushListQuery({ page: 1, filter: nextFilter });
                 }}
               >
-                <option value="all">All active teachers</option>
-                <option value="non-deped-aral-volunteer">
+                <SelectItem value="all">All active teachers</SelectItem>
+                <SelectItem value="non-deped-aral-volunteer">
                   Non-DepEd ARAL Volunteer
-                </option>
-                <option value="teacher">Teacher</option>
-                <option value="floating">Floating</option>
-                <option value="multi-advisory">Multi advisory</option>
-                <option value="with-advisory">With advisory</option>
-              </select>
+                </SelectItem>
+                <SelectItem value="teacher">Teacher</SelectItem>
+                <SelectItem value="floating">Floating</SelectItem>
+                <SelectItem value="multi-advisory">Multi advisory</SelectItem>
+                <SelectItem value="with-advisory">With advisory</SelectItem>
+              </ToolbarFacet>
             </div>
-            {list.sort && list.sortOptions ? (
-              <SortSelect
-                mode="link"
-                id="teachers-sort"
-                basePath={list.basePath}
-                value={list.sort}
-                options={list.sortOptions}
-                searchParams={{
-                  ...list.searchParams,
-                  q: list.q || undefined,
-                  filter: list.filter === "all" ? undefined : list.filter,
-                }}
-              />
+            {list.gradeOptions ? (
+              <>
+                <div className="sm:w-40">
+                  <ToolbarFacet
+                    id="teachers-grade"
+                    label="Grade"
+                    value={gradeValue || ALL_VALUE}
+                    onValueChange={(v) => {
+                      const nextGrade = v === ALL_VALUE ? "" : v;
+                      setGradeValue(nextGrade);
+                      setSectionValue("");
+                      pushListQuery({ page: 1, grade: nextGrade, section: "" });
+                    }}
+                  >
+                    <SelectItem value={ALL_VALUE}>All grades</SelectItem>
+                    {list.gradeOptions.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
+                  </ToolbarFacet>
+                </div>
+                <div className="sm:w-40">
+                  <ToolbarFacet
+                    id="teachers-section"
+                    label="Section"
+                    value={sectionValue || ALL_VALUE}
+                    disabled={!gradeValue}
+                    onValueChange={(v) => {
+                      const nextSection = v === ALL_VALUE ? "" : v;
+                      setSectionValue(nextSection);
+                      pushListQuery({ page: 1, section: nextSection });
+                    }}
+                  >
+                    <SelectItem value={ALL_VALUE}>All sections</SelectItem>
+                    {(
+                      list.gradeOptions.find((g) => g.id === gradeValue)
+                        ?.sections ?? []
+                    ).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </ToolbarFacet>
+                </div>
+              </>
             ) : null}
-            <div className="min-w-[12rem] flex-1 space-y-1">
-              <Label htmlFor="teachers-search" className="text-xs text-muted-foreground">
-                Search active teachers
-              </Label>
-              <Input
-                id="teachers-search"
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    pushListQuery({ page: 1, q: searchValue.trim() });
-                  }
-                }}
-                placeholder="Name or email…"
-                className="max-w-sm"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => pushListQuery({ page: 1, q: searchValue.trim() })}
-            >
-              Search
-            </Button>
-            {list.q ? (
+            {list.sort && list.sortOptions ? (
+              <div className="sm:w-48">
+                <SortSelect
+                  mode="link"
+                  id="teachers-sort"
+                  basePath={list.basePath}
+                  value={list.sort}
+                  options={list.sortOptions}
+                  searchParams={{
+                    ...list.searchParams,
+                    q: list.q || undefined,
+                    filter: list.filter === "all" ? undefined : list.filter,
+                  }}
+                />
+              </div>
+            ) : null}
+            {list.q || list.filter !== "all" || list.grade || list.section ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
+                className="sm:self-center"
                 onClick={() => {
                   setSearchValue("");
-                  pushListQuery({ page: 1, q: "" });
+                  setPushedQ("");
+                  setFilterValue("all");
+                  setGradeValue("");
+                  setSectionValue("");
+                  pushListQuery({
+                    page: 1,
+                    q: "",
+                    filter: "all",
+                    grade: "",
+                    section: "",
+                  });
                 }}
               >
-                Clear
+                Clear filters
               </Button>
             ) : null}
           </div>
@@ -1144,8 +1279,8 @@ function TeachersActiveTablePanel({
     <TeachersManagedTable
       title="Active teachers"
       emptyLabel={
-        list?.q
-          ? "No active teachers match your search."
+        list?.q || (list && list.filter !== "all") || list?.grade
+          ? "No active teachers match your search or filters."
           : "No active teachers yet."
       }
       rows={rows}

@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -137,9 +137,16 @@ function AralTeacherTablePanel({
   // Adjusted during render (React docs "adjusting state when a prop changes"
   // pattern) rather than an effect.
   const [prevListQ, setPrevListQ] = useState(list.q);
+  // The last term this box sent to the URL. When that same term comes back it
+  // is our own search landing, and adopting it would erase characters typed
+  // while the request was in flight.
+  const [pushedQ, setPushedQ] = useState(list.q);
   if (list.q !== prevListQ) {
     setPrevListQ(list.q);
-    setSearchValue(list.q);
+    if (list.q !== pushedQ) {
+      setSearchValue(list.q);
+      setPushedQ(list.q);
+    }
   }
 
   // Server data is the source of truth once it arrives; drop stale overrides.
@@ -165,6 +172,13 @@ function AralTeacherTablePanel({
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     navigate(qs ? `${list.basePath}?${qs}` : list.basePath);
+  };
+
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    pushListQuery({ page: 1, q: term });
   };
 
   const onChangeTeacher = (row: AralLearnerRow, nextId: string | null) => {
@@ -212,32 +226,16 @@ function AralTeacherTablePanel({
         </div>
 
         <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
-          <div className="min-w-[12rem] flex-1 space-y-1">
-            <Label htmlFor="aral-search" className="text-xs text-muted-foreground">
-              Search ARAL learners
-            </Label>
-            <Input
-              id="aral-search"
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  pushListQuery({ page: 1, q: searchValue.trim() });
-                }
-              }}
-              placeholder="Learner name…"
-              className="max-w-sm"
-            />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => pushListQuery({ page: 1, q: searchValue.trim() })}
-          >
-            Search
-          </Button>
+          <SearchInput
+            id="aral-search"
+            label="Search ARAL learners"
+            labelVisible
+            value={searchValue}
+            onValueChange={setSearchValue}
+            onDebouncedChange={searchNow}
+            placeholder="Learner name…"
+            className="min-w-[12rem] max-w-sm flex-1"
+          />
           {list.q ? (
             <Button
               type="button"
@@ -245,6 +243,7 @@ function AralTeacherTablePanel({
               variant="ghost"
               onClick={() => {
                 setSearchValue("");
+                setPushedQ("");
                 pushListQuery({ page: 1, q: "" });
               }}
             >

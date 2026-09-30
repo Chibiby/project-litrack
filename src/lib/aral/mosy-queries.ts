@@ -1,11 +1,7 @@
 import "server-only";
 import type { AralMosyMoveOutReason, AralMosyOutcome, Prisma, ReadingProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import {
-  ARAL_MOSY_MOVE_OUT_REASON_LABELS,
-  GRADE_LEVEL_LABELS,
-  labelReadingProfile,
-} from "@/lib/constants/enum-labels";
+import { GRADE_LEVEL_LABELS, labelReadingProfile } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import {
   LEARNER_PAGE_SIZE,
@@ -14,20 +10,52 @@ import {
   totalPages,
   type LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
+import { formatListingNameFromRecord } from "@/lib/names";
 import { readingProfileOptionsForGrade } from "@/lib/reading/policy";
 import { mosyLearnerScope } from "@/lib/teachers/scope";
 import {
   MOSY_STATUSES,
   computeMosyStats,
   formatPreviousLevel,
-  mosyMoveOutReasonsForGrade,
+  mosyReasonChoices,
+  mosyReasonLabel,
   mosyRowStatus,
   mosyStatusWhere,
+  type MosyReasonChoice,
   type MosyRowStatus,
   type MosyStats,
   type MosyStatusFilter,
   type PreviousLevel,
 } from "@/lib/aral/mosy";
+
+/**
+ * The one definition of a learner's "previous level" record: the latest reading
+ * record on or after the school year start. The page renders it and the save
+ * action validates the reason against it, so they cannot disagree.
+ */
+export function previousReadingLevelArgs(schoolYearStart: Date) {
+  return {
+    where: { weekStart: { gte: schoolYearStart } },
+    orderBy: { weekStart: "desc" },
+    take: 1,
+    select: { weekStart: true, englishProfile: true, filipinoProfile: true },
+  } as const satisfies Prisma.Learner$readingLevelsArgs;
+}
+
+/** Filipino profile of the previous-level record, or null. Caller scopes the learner to its school. */
+export async function loadPreviousFilipinoLevel(
+  tx: Prisma.TransactionClient,
+  learnerId: string,
+  schoolYearStart: Date
+): Promise<string | null> {
+  const args = previousReadingLevelArgs(schoolYearStart);
+  const record = await tx.readingLevelRecord.findFirst({
+    where: { learnerId, ...args.where },
+    orderBy: args.orderBy,
+    select: args.select,
+  });
+  return record?.filipinoProfile ?? null;
+}
 
 /** Plain, serializable row for the MOSY table. No `Date` crosses to the client. */
 export type MosyRow = {
@@ -41,12 +69,13 @@ export type MosyRow = {
   status: MosyRowStatus;
   /** Levels this learner's grade may use, in rubric order. */
   levelOptions: { value: string; label: string }[];
-  /** Move-out reasons this learner's grade may use. */
-  reasonOptions: { value: AralMosyMoveOutReason; label: string }[];
+  /** Move-out reasons offered to this learner (levels above the previous one, plus LSEN). */
+  reasonChoices: MosyReasonChoice[];
   mosyLevel: ReadingProfile | null;
   mosyLevelLabel: string | null;
   decision: AralMosyOutcome | null;
   reason: AralMosyMoveOutReason | null;
+  improvedToLevel: ReadingProfile | null;
   reasonLabel: string | null;
   remarks: string | null;
   previousLevel: PreviousLevel | null;
@@ -85,6 +114,126 @@ export type LoadMosyPageArgs = {
   page: number;
 };
 
+type MosyWhereArgs = {
+  schoolId: string;
+  schoolYearId: string;
+  teacherId: string | null;
+  q: string;
+  grade: string;
+  section: LearnerListSectionFilter;
+};
+
+/**
+ * The one definition of "which learners the MOSY list shows". The page and the
+ * Excel/PDF export both build their `where` here, so they cannot disagree.
+ * `filtered: false` drops q / grade / section (the status-tab counts and the
+ * stat cards ignore them).
+ */
+function mosyListWhere(
+  args: MosyWhereArgs,
+  status: MosyStatusFilter,
+  filtered: boolean
+): Prisma.LearnerWhereInput {
+  return {
+    schoolId: args.schoolId,
+    deletedAt: null,
+    archivedAt: null,
+    ...(filtered
+      ? {
+          ...nameSearchWhere(args.q),
+          ...(args.grade && args.grade !== "all" ? { gradeLevelId: args.grade } : {}),
+          ...sectionIdWhere(args.section),
+        }
+      : {}),
+    AND: [mosyLearnerScope(args.teacherId, args.schoolYearId), mosyStatusWhere(status, args.schoolYearId)],
+  };
+}
+
+/** Per-status learner counts over the whole MOSY scope (filters ignored). */
+async function countMosyStatuses(args: MosyWhereArgs): Promise<Record<MosyStatusFilter, number>> {
+  const statusCounts = await Promise.all(
+    MOSY_STATUSES.map((s) => prisma.learner.count({ where: mosyListWhere(args, s, false) }))
+  );
+  return Object.fromEntries(MOSY_STATUSES.map((s, i) => [s, statusCounts[i]])) as Record<
+    MosyStatusFilter,
+    number
+  >;
+}
+
+function statsFromCounts(counts: Record<MosyStatusFilter, number>): MosyStats {
+  return computeMosyStats({
+    total: counts.all,
+    notUpdated: counts.not_updated,
+    forDecision: counts.for_decision,
+    movedOut: counts.moved_out,
+    stay: counts.stay,
+  });
+}
+
+/** The learner columns both the page and the export read. */
+function mosyRowSelect(schoolYear: { id: string; startDateKey: string }) {
+  return {
+    id: true,
+    fullName: true,
+    gradeLevelId: true,
+    isAralLearner: true,
+    gradeLevel: { select: { type: true } },
+    section: { select: { name: true } },
+    mosyDecisions: {
+      where: { schoolYearId: schoolYear.id },
+      take: 1,
+      select: {
+        mosyLevel: true,
+        decision: true,
+        reason: true,
+        improvedToLevel: true,
+        remarks: true,
+        updatedAt: true,
+      },
+    },
+    readingLevels: previousReadingLevelArgs(parseLocalDateKey(schoolYear.startDateKey)),
+  } as const satisfies Prisma.LearnerSelect;
+}
+
+type MosyLearnerRecord = Prisma.LearnerGetPayload<{
+  select: ReturnType<typeof mosyRowSelect>;
+}>;
+
+function toMosyRow(l: MosyLearnerRecord): MosyRow {
+  const d = l.mosyDecisions[0] ?? null;
+  const latest = l.readingLevels[0] ?? null;
+  const gradeType = l.gradeLevel.type;
+  return {
+    id: l.id,
+    fullName: l.fullName,
+    gradeLevelId: l.gradeLevelId,
+    gradeType,
+    gradeLabel: GRADE_LEVEL_LABELS[gradeType] ?? gradeType,
+    sectionName: l.section?.name ?? null,
+    isAralLearner: l.isAralLearner,
+    status: mosyRowStatus({ isAralLearner: l.isAralLearner, row: d }),
+    levelOptions: readingProfileOptionsForGrade(gradeType),
+    reasonChoices: mosyReasonChoices(gradeType, latest?.filipinoProfile ?? null),
+    mosyLevel: d?.mosyLevel ?? null,
+    mosyLevelLabel: d ? labelReadingProfile(d.mosyLevel, gradeType) : null,
+    decision: d?.decision ?? null,
+    reason: d?.reason ?? null,
+    improvedToLevel: d?.improvedToLevel ?? null,
+    reasonLabel: d?.reason ? mosyReasonLabel(d.reason, d.improvedToLevel, gradeType) : null,
+    remarks: d?.remarks ?? null,
+    previousLevel: formatPreviousLevel(
+      latest
+        ? {
+            monthKey: formatLocalDateKey(latest.weekStart),
+            englishProfile: latest.englishProfile,
+            filipinoProfile: latest.filipinoProfile,
+          }
+        : null,
+      gradeType
+    ),
+  };
+}
+
 /**
  * Server-side data for the MOSY Report page. Every `where` carries `schoolId`;
  * the tutor scope is `mosyLearnerScope`. The caller is responsible for deriving
@@ -92,31 +241,25 @@ export type LoadMosyPageArgs = {
  */
 export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData> {
   const { schoolId, schoolYear, teacherId, q, grade, section, status } = args;
-  const scope = mosyLearnerScope(teacherId, schoolYear.id);
+  const whereArgs: MosyWhereArgs = {
+    schoolId,
+    schoolYearId: schoolYear.id,
+    teacherId,
+    q,
+    grade,
+    section,
+  };
 
   const baseWhere: Prisma.LearnerWhereInput = {
     schoolId,
     deletedAt: null,
     archivedAt: null,
-    AND: [scope],
+    AND: [mosyLearnerScope(teacherId, schoolYear.id)],
   };
-  const withStatus = (s: MosyStatusFilter, filtered: boolean): Prisma.LearnerWhereInput => ({
-    schoolId,
-    deletedAt: null,
-    archivedAt: null,
-    ...(filtered
-      ? {
-          ...nameSearchWhere(q),
-          ...(grade && grade !== "all" ? { gradeLevelId: grade } : {}),
-          ...sectionIdWhere(section),
-        }
-      : {}),
-    AND: [scope, mosyStatusWhere(s, schoolYear.id)],
-  });
 
-  const [statusCounts, totalCount, gradeIdRows] = await Promise.all([
-    Promise.all(MOSY_STATUSES.map((s) => prisma.learner.count({ where: withStatus(s, false) }))),
-    prisma.learner.count({ where: withStatus(status, true) }),
+  const [counts, totalCount, gradeIdRows] = await Promise.all([
+    countMosyStatuses(whereArgs),
+    prisma.learner.count({ where: mosyListWhere(whereArgs, status, true) }),
     prisma.learner.findMany({
       where: baseWhere,
       select: { gradeLevelId: true, gradeLevel: { select: { type: true } } },
@@ -124,17 +267,7 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
     }),
   ]);
 
-  const counts = Object.fromEntries(
-    MOSY_STATUSES.map((s, i) => [s, statusCounts[i]])
-  ) as Record<MosyStatusFilter, number>;
-
-  const stats = computeMosyStats({
-    total: counts.all,
-    notUpdated: counts.not_updated,
-    forDecision: counts.for_decision,
-    movedOut: counts.moved_out,
-    stay: counts.stay,
-  });
+  const stats = statsFromCounts(counts);
 
   const pages = totalPages(totalCount, LEARNER_PAGE_SIZE);
   const page = Math.min(Math.max(1, Number.isFinite(args.page) ? Math.trunc(args.page) : 1), pages);
@@ -142,32 +275,8 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
   const [learners, sectionRows] = await Promise.all([
     prisma.learner.findMany({
       relationLoadStrategy: "join",
-      where: withStatus(status, true),
-      select: {
-        id: true,
-        fullName: true,
-        gradeLevelId: true,
-        isAralLearner: true,
-        gradeLevel: { select: { type: true } },
-        section: { select: { name: true } },
-        mosyDecisions: {
-          where: { schoolYearId: schoolYear.id },
-          take: 1,
-          select: {
-            mosyLevel: true,
-            decision: true,
-            reason: true,
-            remarks: true,
-            updatedAt: true,
-          },
-        },
-        readingLevels: {
-          where: { weekStart: { gte: parseLocalDateKey(schoolYear.startDateKey) } },
-          orderBy: { weekStart: "desc" },
-          take: 1,
-          select: { weekStart: true, englishProfile: true, filipinoProfile: true },
-        },
-      },
+      where: mosyListWhere(whereArgs, status, true),
+      select: mosyRowSelect(schoolYear),
       orderBy: [{ fullName: "asc" }, { id: "asc" }],
       skip: (page - 1) * LEARNER_PAGE_SIZE,
       take: LEARNER_PAGE_SIZE,
@@ -197,42 +306,96 @@ export async function loadMosyPage(args: LoadMosyPageArgs): Promise<MosyPageData
     .sort((a, b) => GRADE_ORDER.indexOf(a.type) - GRADE_ORDER.indexOf(b.type))
     .map(({ id, label, sections }) => ({ id, label, sections }));
 
-  const rows: MosyRow[] = learners.map((l) => {
-    const d = l.mosyDecisions[0] ?? null;
-    const latest = l.readingLevels[0] ?? null;
-    const gradeType = l.gradeLevel.type;
-    return {
-      id: l.id,
-      fullName: l.fullName,
-      gradeLevelId: l.gradeLevelId,
-      gradeType,
-      gradeLabel: GRADE_LEVEL_LABELS[gradeType] ?? gradeType,
-      sectionName: l.section?.name ?? null,
-      isAralLearner: l.isAralLearner,
-      status: mosyRowStatus({ isAralLearner: l.isAralLearner, row: d }),
-      levelOptions: readingProfileOptionsForGrade(gradeType),
-      reasonOptions: mosyMoveOutReasonsForGrade(gradeType).map((value) => ({
-        value,
-        label: ARAL_MOSY_MOVE_OUT_REASON_LABELS[value],
-      })),
-      mosyLevel: d?.mosyLevel ?? null,
-      mosyLevelLabel: d ? labelReadingProfile(d.mosyLevel, gradeType) : null,
-      decision: d?.decision ?? null,
-      reason: d?.reason ?? null,
-      reasonLabel: d?.reason ? ARAL_MOSY_MOVE_OUT_REASON_LABELS[d.reason] : null,
-      remarks: d?.remarks ?? null,
-      previousLevel: formatPreviousLevel(
-        latest
-          ? {
-              monthKey: formatLocalDateKey(latest.weekStart),
-              englishProfile: latest.englishProfile,
-              filipinoProfile: latest.filipinoProfile,
-            }
-          : null,
-        gradeType
-      ),
-    };
-  });
+  const rows: MosyRow[] = learners.map(toMosyRow);
 
   return { stats, counts, rows, totalCount, page, pages, gradeOptions };
+}
+
+/**
+ * Most rows one Excel/PDF export carries. Same bound `buildMosyTable` puts on
+ * the Reports Hub MOSY read (5000), and far above any one tutor's ARAL list.
+ */
+export const MOSY_EXPORT_MAX_ROWS = 5000;
+
+/** A `MosyRow` plus the surname-first name DepEd lists use ("Cruz, Juan Dela"). */
+export type MosyExportRow = MosyRow & { listingName: string };
+
+export type LoadMosyExportArgs = Omit<LoadMosyPageArgs, "page">;
+
+export type MosyExportData = {
+  /** The five page stat cards: whole MOSY scope, filters ignored, exactly as the page shows them. */
+  stats: MosyStats;
+  /** Every row matching the filters, in listing order, at most `MOSY_EXPORT_MAX_ROWS`. */
+  rows: MosyExportRow[];
+  /** Rows matching the filters before the cap. `totalCount > rows.length` means the list was cut. */
+  totalCount: number;
+  truncated: boolean;
+  /** Human labels for the filters, for the report header. `null` = not filtered. */
+  gradeLabel: string | null;
+  sectionLabel: string | null;
+};
+
+/**
+ * Every row the MOSY page would show for these filters, not paginated, for the
+ * Excel/PDF export. Uses the same `mosyListWhere`, `mosyRowSelect` and
+ * `toMosyRow` as `loadMosyPage`, so the file and the screen cannot disagree.
+ * Beyond `MOSY_EXPORT_MAX_ROWS` the list is cut (`truncated: true`) and the
+ * report says so; the stats are unaffected.
+ *
+ * Ordered by surname (then given name) because the export prints surname-first
+ * names; the page orders by `fullName`.
+ *
+ * Tenancy: every `where` carries `schoolId`, including the grade and section
+ * label lookups, so a foreign grade or section id yields no rows and no label.
+ */
+export async function loadMosyExport(args: LoadMosyExportArgs): Promise<MosyExportData> {
+  const { schoolId, schoolYear, teacherId, q, grade, section, status } = args;
+  const whereArgs: MosyWhereArgs = {
+    schoolId,
+    schoolYearId: schoolYear.id,
+    teacherId,
+    q,
+    grade,
+    section,
+  };
+  const gradeFiltered = !!grade && grade !== "all";
+  const sectionFiltered = section !== "all" && section !== "none";
+
+  const [counts, totalCount, learners, gradeRow, sectionRow] = await Promise.all([
+    countMosyStatuses(whereArgs),
+    prisma.learner.count({ where: mosyListWhere(whereArgs, status, true) }),
+    prisma.learner.findMany({
+      relationLoadStrategy: "join",
+      where: mosyListWhere(whereArgs, status, true),
+      select: {
+        ...mosyRowSelect(schoolYear),
+        firstName: true,
+        middleName: true,
+        lastName: true,
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
+      take: MOSY_EXPORT_MAX_ROWS,
+    }),
+    gradeFiltered
+      ? prisma.gradeLevel.findFirst({
+          where: { id: grade, schoolId, deletedAt: null },
+          select: { type: true },
+        })
+      : Promise.resolve(null),
+    sectionFiltered
+      ? prisma.section.findFirst({
+          where: { id: section, schoolId, deletedAt: null },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    stats: statsFromCounts(counts),
+    rows: learners.map((l) => ({ ...toMosyRow(l), listingName: formatListingNameFromRecord(l) })),
+    totalCount,
+    truncated: totalCount > learners.length,
+    gradeLabel: gradeRow ? (GRADE_LEVEL_LABELS[gradeRow.type] ?? gradeRow.type) : null,
+    sectionLabel: section === "none" ? "No section" : (sectionRow?.name ?? null),
+  };
 }

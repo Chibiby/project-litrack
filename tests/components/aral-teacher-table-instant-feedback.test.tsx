@@ -110,15 +110,18 @@ describe("AralTeacherTable — instant feedback while a list navigation is pendi
     expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
-  it("issues the correct navigation when Search is clicked", () => {
+  it("issues the correct navigation when a search is entered with Enter", () => {
     // The pending WINDOW this opens is not observable with a synchronous
     // `push` mock (see file header) — the busy-region reaction itself is
     // covered by the test above via the pager link's `useLinkStatus` report.
     render(<AralTeacherTable rows={[ROW]} teachers={[]} list={LIST} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    const input = screen.getByRole("searchbox", { name: "Search ARAL learners" });
+    fireEvent.change(input, { target: { value: "Ada" } });
+    fireEvent.keyDown(input, { key: "Enter" });
 
     expect(push).toHaveBeenCalledTimes(1);
-    expect(push.mock.calls[0][0]).toBe("/school-head/aral");
+    expect(push.mock.calls[0][0]).toBe("/school-head/aral?q=Ada");
   });
 });

@@ -493,7 +493,7 @@ export async function getSchoolHeadCharts(schoolId: string) {
       const enMap = new Map<string, number>();
       const filMap = new Map<string, number>();
       for (const row of learnersWithProfiles) {
-        // `englishReadingProfile` is null for Grade 1/Grade 2 (never collected)
+        // `englishReadingProfile` is null for Kinder/Grade 1/Grade 2 (never collected)
         // and for anyone not yet assessed — neither belongs in a distribution of
         // recorded English bands.
         if (row.englishReadingProfile) {

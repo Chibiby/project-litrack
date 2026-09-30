@@ -38,9 +38,10 @@ interface PageProps {
  * `sort` is listed even though the table has no "Sort by" control yet, so the
  * boundary is already correct the day one is added — an absent param and an
  * empty-string param normalize to the same key either way (`listKey`), so
- * listing it now costs nothing.
+ * listing it now costs nothing. `q` is left out: search runs as you type, and a
+ * remount on each search would drop the search box's focus.
  */
-export const ARAL_LEARNERS_LIST_KEYS = ["page", "sort", "q"] as const;
+export const ARAL_LEARNERS_LIST_KEYS = ["page", "sort"] as const;
 
 /** Parsed inline — this page only needs page + q, not the roster filter set. */
 function parseParams(searchParams: { page?: string; q?: string }) {

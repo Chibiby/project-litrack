@@ -168,12 +168,39 @@ describe("Teachers list — sort survives URL round trips", () => {
     const list = await listPropFor({ sort: "date-added" });
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
 
-    fireEvent.change(screen.getByLabelText("Filter teachers"), {
-      target: { value: "teacher" },
-    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter teachers" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Floating" }));
 
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][0]).toContain("sort=date-added");
+    expect(push.mock.calls[0][0]).toContain("filter=floating");
+  });
+
+  it("picks a grade, then a section, keeping sort and clearing section on grade change", async () => {
+    const list = {
+      ...(await listPropFor({ sort: "date-added" })),
+      gradeOptions: [
+        { id: "g4", label: "Grade 4", sections: [{ id: "s-a", name: "Sampaguita" }] },
+        { id: "g5", label: "Grade 5", sections: [{ id: "s-b", name: "Rosal" }] },
+      ],
+    };
+    render(<TeachersActiveTable rows={[ROW]} list={list} />);
+
+    expect(
+      screen.getByRole("combobox", { name: "Section" }).hasAttribute("disabled")
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Grade" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Grade 4" }));
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const href = push.mock.calls[0][0] as string;
+    expect(href).toContain("grade=g4");
+    expect(href).toContain("sort=date-added");
+    expect(href).not.toContain("section=");
+    expect(
+      screen.getByRole("combobox", { name: "Section" }).hasAttribute("disabled")
+    ).toBe(false);
   });
 
   it("keeps the active sort when submitting the search box", async () => {

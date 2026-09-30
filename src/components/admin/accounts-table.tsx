@@ -55,10 +55,14 @@ import type {
   AccountRow,
   AccountSummary,
 } from "@/lib/admin/accounts";
-import { USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
+import { GRADE_LEVEL_OPTIONS, USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
 import type { UserRole } from "@prisma/client";
 
 const ANY_ROLE = "any";
+// FLOATING is an advisory mode, not a grade a section belongs to.
+const GRADE_FILTER_OPTIONS = GRADE_LEVEL_OPTIONS.filter(
+  (grade) => grade.value !== "FLOATING"
+);
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "SUPER_ADMIN", label: USER_ROLE_LABELS.SUPER_ADMIN },
   { value: "DISTRICT_ADMIN", label: USER_ROLE_LABELS.DISTRICT_ADMIN },
@@ -73,6 +77,8 @@ export type AccountsTableList = {
   totalCount: number;
   role: string;
   schoolId: string;
+  /** Advisory-section grade filter; only meaningful when `role` is TEACHER. */
+  grade?: string;
   q: string;
   /**
    * "Sort by" for this table. Optional so `list` stays a safe superset for
@@ -314,9 +320,16 @@ function AccountsTableInner({
   const pending = useListPending();
   const [query, setQuery] = useState(list.q);
   const [prevListQ, setPrevListQ] = useState(list.q);
+  // The last term this box sent to the URL. When that same term comes back it
+  // is our own search landing, and adopting it would erase characters typed
+  // while the request was in flight.
+  const [pushedQ, setPushedQ] = useState(list.q);
   if (list.q !== prevListQ) {
     setPrevListQ(list.q);
-    setQuery(list.q);
+    if (list.q !== pushedQ) {
+      setQuery(list.q);
+      setPushedQ(list.q);
+    }
   }
 
   const apply = (changes: Record<string, string | null>) => {
@@ -329,6 +342,13 @@ function AccountsTableInner({
     navigate(`/admin/accounts?${next.toString()}`);
   };
 
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    apply({ q: term || null });
+  };
+
   const hrefFor = (page: number) => {
     const next = new URLSearchParams(searchParams.toString());
     if (page > 1) next.set("page", String(page));
@@ -336,28 +356,31 @@ function AccountsTableInner({
     return `/admin/accounts?${next.toString()}`;
   };
 
+  const showGrade = list.role === "TEACHER";
+  const activeGrade = showGrade ? list.grade ?? "" : "";
+
   return (
       <div className="space-y-4">
       <AccountOverview summary={summary} />
       <Surface as="section" className="rounded-2xl p-3 sm:p-4">
           <form
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
-            onSubmit={(event) => {
-              event.preventDefault();
-              apply({ q: query.trim() || null });
-            }}
+            className={
+              showGrade
+                ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_minmax(10rem,0.8fr)_auto]"
+                : "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
+            }
+            onSubmit={(event) => event.preventDefault()}
           >
             <div className="space-y-1.5">
               <SearchInput
                 id="accounts-q"
                 value={query}
                 onValueChange={setQuery}
-                onClear={() => apply({ q: null })}
+                onDebouncedChange={searchNow}
                 resultCount={list.totalCount}
                 label="Search accounts"
                 labelVisible
                 placeholder="Name, email, or school..."
-                disabled={pending}
               />
             </div>
             <div className="space-y-1.5">
@@ -366,7 +389,7 @@ function AccountsTableInner({
               </Label>
               <Select
                 value={list.role || ANY_ROLE}
-                onValueChange={(value) => apply({ role: value })}
+                onValueChange={(value) => apply({ role: value, grade: null })}
                 disabled={pending}
               >
                 <SelectTrigger id="accounts-role" className="h-11 w-full lg:h-10">
@@ -382,6 +405,30 @@ function AccountsTableInner({
                 </SelectContent>
               </Select>
             </div>
+            {showGrade ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="accounts-grade" className="text-xs font-medium">
+                  Grade
+                </Label>
+                <Select
+                  value={activeGrade || ANY_ROLE}
+                  onValueChange={(value) => apply({ grade: value })}
+                  disabled={pending}
+                >
+                  <SelectTrigger id="accounts-grade" className="h-11 w-full lg:h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY_ROLE}>All grades</SelectItem>
+                    {GRADE_FILTER_OPTIONS.map((grade) => (
+                      <SelectItem key={grade.value} value={grade.value}>
+                        {grade.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             {list.sort && list.sortOptions ? (
               <div className="space-y-1.5">
                 <SortSelect
@@ -394,20 +441,13 @@ function AccountsTableInner({
                     q: list.q || undefined,
                     role: list.role || undefined,
                     schoolId: list.schoolId || undefined,
+                    grade: activeGrade || undefined,
                   }}
                 />
               </div>
             ) : null}
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                className="h-11 flex-1 lg:h-10 xl:flex-none"
-                loading={pending}
-                loadingText="Searching…"
-              >
-                Search
-              </Button>
-              {list.role || list.q || list.schoolId ? (
+            {list.role || list.q || list.schoolId || activeGrade ? (
+              <div className="flex gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -415,13 +455,14 @@ function AccountsTableInner({
                   disabled={pending}
                   onClick={() => {
                     setQuery("");
+                    setPushedQ("");
                     navigate("/admin/accounts");
                   }}
                 >
                   Clear filters
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </form>
       </Surface>
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
@@ -444,10 +485,14 @@ function AccountsTableInner({
           >
           {rows.length === 0 ? (
             <div className="px-4 pb-4">
-              {list.role || list.q || list.schoolId ? (
+              {list.role || list.q || list.schoolId || activeGrade ? (
                 <EmptyState
                   title="No accounts match"
-                  description="No accounts match your search or filters."
+                  description={
+                    activeGrade
+                      ? "No teacher advises a section of this grade. Try another grade or clear the filters."
+                      : "No accounts match your search or filters."
+                  }
                   actionHref="/admin/accounts"
                   actionLabel="Clear filters"
                   icon={KeyRound}

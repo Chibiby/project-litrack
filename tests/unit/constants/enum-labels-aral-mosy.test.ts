@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { AralMosyMoveOutReason, AralMosyOutcome } from "@prisma/client";
+import { AralMosyMoveOutReason, AralMosyOutcome, GradeLevelType } from "@prisma/client";
 import {
   ARAL_MOSY_MOVE_OUT_REASON_LABELS,
   ARAL_MOSY_OUTCOME_CHOICE_LABELS,
   ARAL_MOSY_OUTCOME_LABELS,
 } from "@/lib/constants/enum-labels";
-import { mosyMoveOutReasonsForGrade } from "@/lib/aral/mosy";
+import { mosyReasonChoices } from "@/lib/aral/mosy";
 
 describe("ARAL MOSY enum labels", () => {
   it("labels every AralMosyOutcome value in both maps, and nothing extra", () => {
@@ -30,11 +30,21 @@ describe("ARAL MOSY enum labels", () => {
     }
   });
 
-  it("every reason a grade can offer has a label", () => {
-    for (const g of ["KINDER", "G1", "G4", "G11", "FLOATING"]) {
-      for (const r of mosyMoveOutReasonsForGrade(g)) {
-        expect(ARAL_MOSY_MOVE_OUT_REASON_LABELS[r]).toBeTruthy();
+  it("every reason a grade can offer has a label, and never a legacy grouped reason", () => {
+    for (const g of Object.values(GradeLevelType)) {
+      for (const prev of [null, "NON_DECODER_LOW_EMERGENT", "INDEPENDENT_GRADE_READY"]) {
+        for (const c of mosyReasonChoices(g, prev)) {
+          expect(ARAL_MOSY_MOVE_OUT_REASON_LABELS[c.reason]).toBeTruthy();
+          expect(c.label.trim().length).toBeGreaterThan(0);
+          expect(["IMPROVED_EARLY_GRADES", "IMPROVED_UPPER_GRADES"]).not.toContain(c.reason);
+        }
       }
     }
+  });
+
+  it("keeps a display label for the legacy grouped reasons (old rows still render)", () => {
+    expect(ARAL_MOSY_MOVE_OUT_REASON_LABELS.IMPROVED_EARLY_GRADES).toBeTruthy();
+    expect(ARAL_MOSY_MOVE_OUT_REASON_LABELS.IMPROVED_UPPER_GRADES).toBeTruthy();
+    expect(ARAL_MOSY_MOVE_OUT_REASON_LABELS.IMPROVED_READING_LEVEL).toBeTruthy();
   });
 });

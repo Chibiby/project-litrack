@@ -17,8 +17,12 @@ import { Plus, School } from "lucide-react";
 import { PageTip } from "@/components/admin/page-tip";
 import { listKey } from "@/lib/nav/list-params";
 
-/** Params that change which rows the schools list shows — see `listKey`. */
-export const SCHOOLS_LIST_KEYS = ["page", "sort", "q", "region", "status"] as const;
+/**
+ * Params that change which rows the schools list shows — see `listKey`.
+ * `q` is left out: search runs as you type, and a remount on each search would
+ * drop the search box's focus.
+ */
+export const SCHOOLS_LIST_KEYS = ["page", "sort", "region", "status"] as const;
 
 export const dynamic = "force-dynamic";
 

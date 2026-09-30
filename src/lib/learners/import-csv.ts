@@ -62,7 +62,7 @@ export function normalizeLearnerCsvHeader(header: string): string {
 /**
  * CSV template. When `gradeType` is known, example profile cells use that band’s
  * human labels; otherwise enum codes (always accepted on import). Grades that
- * don't collect English (Grade 1/Grade 2) drop the `englishReadingProfile`
+ * don't collect English (Kinder/Grade 1/Grade 2) drop the `englishReadingProfile`
  * column entirely, matching what the manual form does for the same grade
  * (docs/reading-policy-spec.md section 4a).
  */

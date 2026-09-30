@@ -164,8 +164,9 @@ function Paginator({
  * include `school`/`q`), and this card has no single provider to report a
  * shared pending flag into — see the file-level note in
  * `list-navigation.tsx` on why `useListNavigate` degrades to a no-op instead
- * of throwing when a provider isn't present. The Search button's own
- * `loading` state already gives immediate feedback for this control.
+ * of throwing when a provider isn't present. The name box stays enabled while
+ * a search is in flight so typing is never interrupted; the panels' Suspense
+ * skeletons are the feedback.
  */
 export function ArchiveView({
   data,
@@ -230,15 +231,20 @@ export function ArchiveView({
     startTransition(() => router.push(`/admin/archive?${next.toString()}`));
   };
 
+  const [pushedQ, setPushedQ] = useState(filters.q);
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    apply({ q: term || null });
+  };
+
   return (
     <div className="space-y-6">
       <Surface as="section" className="rounded-2xl p-3 sm:p-4">
           <form
             className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
-            onSubmit={(event) => {
-              event.preventDefault();
-              apply({ q: query.trim() || null });
-            }}
+            onSubmit={(event) => event.preventDefault()}
           >
             <div className="space-y-2">
               <Label htmlFor="archive-school">School</Label>
@@ -266,19 +272,15 @@ export function ArchiveView({
                 id="archive-q"
                 value={query}
                 onValueChange={setQuery}
-                onClear={() => apply({ q: null })}
+                onDebouncedChange={searchNow}
                 resultCount={data.teachers.total + data.learners.total}
                 label="Search name"
                 labelVisible
                 placeholder="Learner or teacher name"
                 className="w-full sm:w-56"
-                disabled={pending}
               />
             </div>
 
-            <Button type="submit" loading={pending} loadingText="Searching…">
-              Search
-            </Button>
             {filters.school || filters.q ? (
               <Button
                 type="button"
@@ -286,6 +288,7 @@ export function ArchiveView({
                 disabled={pending}
                 onClick={() => {
                   setQuery("");
+                  setPushedQ("");
                   apply({ school: null, q: null });
                 }}
               >

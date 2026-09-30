@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppForm, useAppForm } from "@/components/forms/app-form";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,10 +40,6 @@ import { cn } from "@/lib/utils";
 
 export type MosyDialogState = {
   row: MosyRow;
-  /** The level the tutor picked in the table, or the saved one when opened from Update. */
-  draftLevel: string;
-  /** True when opened from Update: the dialog then carries its own level select. */
-  editLevel: boolean;
 };
 
 type MosyFormValues = {
@@ -52,6 +47,7 @@ type MosyFormValues = {
   mosyLevel: string;
   decision: "" | "MOVE_OUT" | "STAY";
   reason: string;
+  improvedToLevel: string;
   remarks: string;
 };
 
@@ -73,7 +69,7 @@ function MosyDecisionForm({
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
-  const { row, draftLevel, editLevel } = state;
+  const { row } = state;
   const [pending, startTransition] = useTransition();
   const intent = useRef<"save" | "later">("save");
 
@@ -89,21 +85,35 @@ function MosyDecisionForm({
       : ""
     : (row.decision ?? "MOVE_OUT");
 
+  // Only prefill when the saved choice is still offered; otherwise the teacher re-picks.
+  const savedChoice =
+    initialDecision === "MOVE_OUT"
+      ? row.reasonChoices.find(
+          (c) => c.reason === row.reason && c.improvedToLevel === (row.improvedToLevel ?? null)
+        )
+      : undefined;
+
   const form = useAppForm<MosyFormValues>({
     schema: aralMosyDecisionSchema,
     defaultValues: {
       learnerId: row.id,
-      mosyLevel: draftLevel,
+      mosyLevel: row.mosyLevel ?? "",
       decision: initialDecision,
-      reason: initialDecision === "MOVE_OUT" ? (row.reason ?? "") : "",
+      reason: savedChoice?.reason ?? "",
+      improvedToLevel: savedChoice?.improvedToLevel ?? "",
       remarks: row.remarks ?? "",
     },
   });
 
   const decision = form.watch("decision");
+  const watchedReason = form.watch("reason");
+  const watchedImprovedTo = form.watch("improvedToLevel");
+  const selectedChoiceKey =
+    row.reasonChoices.find(
+      (c) => c.reason === watchedReason && (c.improvedToLevel ?? "") === watchedImprovedTo
+    )?.key ?? "";
+  const improvedToError = form.formState.errors.improvedToLevel?.message;
   const remarksLength = form.watch("remarks").length;
-  const level = form.watch("mosyLevel");
-  const levelLabel = row.levelOptions.find((o) => o.value === level)?.label ?? null;
   const canDecideLater = row.isAralLearner && row.decision === null;
   const gradeSection = row.sectionName ? `${row.gradeLabel} - ${row.sectionName}` : row.gradeLabel;
 
@@ -113,6 +123,7 @@ function MosyDecisionForm({
     fd.set("mosyLevel", values.mosyLevel);
     fd.set("decision", values.decision);
     fd.set("reason", values.decision === "MOVE_OUT" ? values.reason : "");
+    fd.set("improvedToLevel", values.decision === "MOVE_OUT" ? values.improvedToLevel : "");
     fd.set("remarks", values.remarks);
 
     startTransition(async () => {
@@ -152,51 +163,9 @@ function MosyDecisionForm({
               <span className="font-semibold text-foreground">{row.fullName}</span>
               <span className="text-muted-foreground"> · {gradeSection}</span>
             </p>
-            {!editLevel && levelLabel ? (
-              <p className="flex flex-wrap items-center gap-2">
-                <span>Updated MOSY level</span>
-                <Badge
-                  variant="outline"
-                  className="border-violet-200 bg-violet-soft text-violet dark:border-violet-900/60"
-                >
-                  {levelLabel}
-                </Badge>
-              </p>
-            ) : null}
           </div>
         </DialogDescription>
       </DialogHeader>
-
-      <FormField
-        control={form.control}
-        name="mosyLevel"
-        render={({ field }) =>
-          editLevel ? (
-            <FormItem>
-              <FormLabel required>MOSY reading level</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {row.levelOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          ) : (
-            <FormItem>
-              <FormMessage />
-            </FormItem>
-          )
-        }
-      />
 
       <FormField
         control={form.control}
@@ -209,8 +178,11 @@ function MosyDecisionForm({
                 value={field.value}
                 onValueChange={(value) => {
                   field.onChange(value);
-                  if (value !== "MOVE_OUT") form.setValue("reason", "");
-                  form.clearErrors(["decision", "reason"]);
+                  if (value !== "MOVE_OUT") {
+                    form.setValue("reason", "");
+                    form.setValue("improvedToLevel", "");
+                  }
+                  form.clearErrors(["decision", "reason", "improvedToLevel"]);
                 }}
                 aria-labelledby="mosy-decision-label"
                 disabled={pending}
@@ -248,28 +220,75 @@ function MosyDecisionForm({
         )}
       />
 
+      <FormField
+        control={form.control}
+        name="mosyLevel"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel required>MOSY reading level</FormLabel>
+            <Select
+              value={field.value}
+              onValueChange={(value) => {
+                field.onChange(value);
+                form.clearErrors("mosyLevel");
+              }}
+              disabled={pending}
+            >
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {row.levelOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       {decision === "MOVE_OUT" ? (
         <FormField
           control={form.control}
           name="reason"
-          render={({ field }) => (
+          render={() => (
             <FormItem>
               <FormLabel required>Select reason</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
+              <Select
+                value={selectedChoiceKey}
+                onValueChange={(key) => {
+                  const choice = row.reasonChoices.find((c) => c.key === key);
+                  if (!choice) return;
+                  form.setValue("reason", choice.reason, { shouldDirty: true });
+                  form.setValue("improvedToLevel", choice.improvedToLevel ?? "", {
+                    shouldDirty: true,
+                  });
+                  form.clearErrors(["reason", "improvedToLevel"]);
+                }}
+                disabled={pending}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select reason" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {row.reasonOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
+                  {row.reasonChoices.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>
+                      {c.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <FormMessage />
+              {improvedToError ? (
+                <p className="text-sm font-medium text-destructive">{improvedToError}</p>
+              ) : null}
             </FormItem>
           )}
         />
@@ -315,6 +334,7 @@ function MosyDecisionForm({
             onClick={() => {
               form.setValue("decision", "");
               form.setValue("reason", "");
+              form.setValue("improvedToLevel", "");
               intent.current = "later";
               void form.handleSubmit(onValid)();
             }}
@@ -332,8 +352,8 @@ function MosyDecisionForm({
 
 /**
  * "Move out from ARAL?" — the only place a MOSY level or decision is saved.
- * Closing it any way (Cancel, Escape, the X) discards the draft; the table
- * derives its level select from saved data, so nothing was ever written.
+ * Closing it any way (Cancel, Escape, the X) discards the draft; nothing is
+ * written until Save.
  */
 export function MosyDecisionDialog({
   state,
@@ -355,7 +375,7 @@ export function MosyDecisionDialog({
       >
         {state ? (
           <MosyDecisionForm
-            key={`${state.row.id}:${state.draftLevel}:${state.editLevel}`}
+            key={state.row.id}
             state={state}
             onClose={onClose}
             onPendingChange={setPending}

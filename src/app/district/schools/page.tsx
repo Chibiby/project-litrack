@@ -17,7 +17,9 @@ import { describeScope, hasNoDistricts } from "@/components/district/scope-label
 
 export const dynamic = "force-dynamic";
 
-const DISTRICT_SCHOOLS_LIST_KEYS = ["page", "q", "status"] as const;
+// `q` is left out: search runs as you type, and a remount on each search would
+// drop the search box's focus.
+const DISTRICT_SCHOOLS_LIST_KEYS = ["page", "status"] as const;
 
 type SearchParams = { page?: string; q?: string; status?: string };
 

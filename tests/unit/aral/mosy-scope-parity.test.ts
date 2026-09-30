@@ -147,7 +147,7 @@ describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
 });
 
 describe("mosyStatusWhere <-> mosyRowStatus", () => {
-  it("every in-scope fixture matches exactly its own status filter and no other", () => {
+  it("every in-scope fixture matches its own status filter, and for_decision also takes not_updated", () => {
     const inScope = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope(null, YEAR)));
     expect(inScope.length).toBeGreaterThan(5);
     for (const f of inScope) {
@@ -155,18 +155,22 @@ describe("mosyStatusWhere <-> mosyRowStatus", () => {
       const expected = mosyRowStatus({ isAralLearner: f.isAralLearner, row: r });
       for (const s of MOSY_STATUSES) {
         const matches = evalWhere(f, mosyStatusWhere(s, YEAR));
-        const shouldMatch = s === "all" || s === expected;
+        // "For decision" = still waiting for a move out or stay decision, which
+        // includes learners whose MOSY level is not saved yet.
+        const shouldMatch =
+          s === "all" || s === expected || (s === "for_decision" && expected === "not_updated");
         expect(matches, `${f.name} vs ${s} (row status ${expected})`).toBe(shouldMatch);
       }
     }
   });
 
-  it("the four non-all filters partition the scope (counts add up to all)", () => {
+  it("not_updated is a subset of for_decision, which with moved_out and stay partitions the scope", () => {
     const inScope = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope(null, YEAR)));
     const count = (s: (typeof MOSY_STATUSES)[number]) =>
       inScope.filter((f) => evalWhere(f, mosyStatusWhere(s, YEAR))).length;
-    const sum = MOSY_STATUSES.filter((s) => s !== "all").reduce((n, s) => n + count(s), 0);
-    expect(sum).toBe(count("all"));
+    expect(count("not_updated")).toBeGreaterThan(0);
+    expect(count("for_decision")).toBeGreaterThan(count("not_updated"));
+    expect(count("for_decision") + count("moved_out") + count("stay")).toBe(count("all"));
     expect(count("all")).toBe(inScope.length);
   });
 

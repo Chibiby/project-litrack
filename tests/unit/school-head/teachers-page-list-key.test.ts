@@ -41,10 +41,16 @@ function suspenseElementOf(pageElement: ReactElement): ReactElement {
 
 describe("Teachers page — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(ACTIVE_TEACHERS_LIST_KEYS).toEqual(["page", "sort", "q", "filter"]);
+    expect(ACTIVE_TEACHERS_LIST_KEYS).toEqual([
+      "page",
+      "sort",
+      "filter",
+      "grade",
+      "section",
+    ]);
   });
 
-  it("changes when a list-affecting param (q) changes", async () => {
+  it("does not change when the search text (q) changes, so the search box is not remounted", async () => {
     const before = suspenseElementOf(
       await TeachersPage({ searchParams: Promise.resolve({ q: "cruz" }) })
     );
@@ -52,8 +58,8 @@ describe("Teachers page — Suspense boundary key", () => {
       await TeachersPage({ searchParams: Promise.resolve({ q: "santos" }) })
     );
 
-    expect(before.key).not.toBe(after.key);
-    expect(before.key).toBe(listKey({ q: "cruz" }, ACTIVE_TEACHERS_LIST_KEYS));
+    expect(before.key).toBe(after.key);
+    expect(ACTIVE_TEACHERS_LIST_KEYS).not.toContain("q");
   });
 
   it("changes when page, sort, or filter change", async () => {
@@ -70,9 +76,20 @@ describe("Teachers page — Suspense boundary key", () => {
       await TeachersPage({ searchParams: Promise.resolve({ filter: "teacher" }) })
     );
 
+    const byGrade = suspenseElementOf(
+      await TeachersPage({ searchParams: Promise.resolve({ grade: "g-1" }) })
+    );
+    const bySection = suspenseElementOf(
+      await TeachersPage({
+        searchParams: Promise.resolve({ grade: "g-1", section: "s-1" }),
+      })
+    );
+
     expect(byPage.key).not.toBe(base.key);
     expect(bySort.key).not.toBe(base.key);
     expect(byFilter.key).not.toBe(base.key);
+    expect(byGrade.key).not.toBe(base.key);
+    expect(bySection.key).not.toBe(byGrade.key);
   });
 
   it("does NOT change when the Super Admin view's schoolId changes", async () => {

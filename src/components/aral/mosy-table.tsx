@@ -5,13 +5,6 @@ import { Surface } from "@/components/ui/surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -73,10 +66,9 @@ function PreviousLevelCell({ row }: { row: MosyRow }) {
 }
 
 /**
- * MOSY Report table. Changing a row's level select opens the decision dialog
- * with that level as a draft; nothing is saved until the dialog is confirmed,
- * and closing it drops the draft (the select is derived from saved data, so it
- * snaps back on its own). Scrolls horizontally below the widest column set.
+ * MOSY Report table. The level column is read-only; Update opens the decision
+ * dialog, where the level and decision are edited and saved together. Scrolls
+ * horizontally below the widest column set.
  */
 export function MosyTable({
   rows,
@@ -140,8 +132,6 @@ export function MosyTable({
               </TableHeader>
               <TableBody>
                 {rows.map((r, i) => {
-                  const inDialog = dialog?.row.id === r.id;
-                  const shownLevel = inDialog ? dialog.draftLevel : (r.mosyLevel ?? "");
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="tabular-nums text-muted-foreground">
@@ -155,27 +145,11 @@ export function MosyTable({
                         <PreviousLevelCell row={r} />
                       </TableCell>
                       <TableCell className="min-w-[13rem]">
-                        <Select
-                          value={shownLevel}
-                          disabled={!canEdit}
-                          onValueChange={(value) =>
-                            setDialog({ row: r, draftLevel: value, editLevel: false })
-                          }
-                        >
-                          <SelectTrigger
-                            aria-label={`MOSY reading level for ${r.fullName}`}
-                            className="h-11 lg:h-9"
-                          >
-                            <SelectValue placeholder="Select level" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {r.levelOptions.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {r.mosyLevelLabel ? (
+                          <span className="text-sm">{r.mosyLevelLabel}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <StatusChip status={r.status} />
@@ -205,13 +179,7 @@ export function MosyTable({
                           variant="outline"
                           disabled={!canEdit}
                           aria-label={`Update MOSY decision for ${r.fullName}`}
-                          onClick={() =>
-                            setDialog({
-                              row: r,
-                              draftLevel: r.mosyLevel ?? "",
-                              editLevel: true,
-                            })
-                          }
+                          onClick={() => setDialog({ row: r })}
                         >
                           Update
                         </Button>

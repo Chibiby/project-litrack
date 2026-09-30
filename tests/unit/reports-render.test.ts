@@ -199,6 +199,157 @@ describe("renderExcel", () => {
   });
 });
 
+/**
+ * Layout guarantees, observed through pdfkit's draw calls (the PDF stream is
+ * compressed, so bytes cannot be inspected directly).
+ */
+type DrawCall = { fn: string; args: unknown[]; y: number };
+
+async function recordPdf(
+  table: ReportTable
+): Promise<{ pages: number; calls: DrawCall[]; breaks: number[] }> {
+  const PDFDocument = (await import("pdfkit")).default as unknown as {
+    prototype: Record<string, (...a: unknown[]) => unknown>;
+  };
+  const proto = PDFDocument.prototype;
+  const calls: DrawCall[] = [];
+  const breaks: number[] = [];
+  const originals: Record<string, (...a: unknown[]) => unknown> = {};
+  for (const fn of ["rect", "text", "image"]) {
+    const orig = proto[fn]!;
+    originals[fn] = orig;
+    proto[fn] = function (this: { y: number }, ...args: unknown[]) {
+      calls.push({ fn, args, y: this.y });
+      return orig.apply(this, args);
+    };
+  }
+  const origAdd = proto.addPage!;
+  let first = true;
+  proto.addPage = function (this: { y: number }, ...args: unknown[]) {
+    // The constructor's own first page is not a break.
+    if (first) first = false;
+    else breaks.push(this.y);
+    return origAdd.apply(this, args);
+  };
+  try {
+    const buf = await renderPdf(table);
+    const pages = (buf.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length;
+    return { pages, calls, breaks };
+  } finally {
+    Object.assign(proto, originals, { addPage: origAdd });
+  }
+}
+
+describe("renderPdf layout", () => {
+  const PORTRAIT_BOTTOM = 841.89 - 44;
+  // 20 gap + 64 signature area + 6 gap + 40 logos.
+  const SIGNATURE_NEEDS = 130;
+
+  it("leaves non-wrap tables on fixed 16pt one-line ellipsised rows", async () => {
+    const rows = Array.from({ length: 120 }, (_, i) => ["2026-08-25", `Learner ${i}`, "Present", "x"]);
+    const { calls } = await recordPdf({ ...TABLE, rows });
+
+    // The first full-width 16pt rect is the header info row, not a data row.
+    const rowFills = calls
+      .filter((c) => c.fn === "rect" && (c.args[3] as number) === 16 && (c.args[2] as number) > 500)
+      .slice(1);
+    expect(rowFills).toHaveLength(120);
+    for (let i = 1; i < rowFills.length; i++) {
+      const dy = (rowFills[i]!.args[1] as number) - (rowFills[i - 1]!.args[1] as number);
+      // Same page: exactly one row apart. New page: the y drops back up.
+      expect(Math.abs(dy - 16) < 1e-6 || dy < 0).toBe(true);
+    }
+    const cellTexts = calls.filter((c) => c.fn === "text" && /^Learner \d+$/.test(String(c.args[0])));
+    expect(cellTexts).toHaveLength(120);
+    for (const c of cellTexts) {
+      expect(c.args[3]).toMatchObject({ lineBreak: false, ellipsis: true });
+    }
+  });
+
+  it("wraps long cells instead of ellipsising, growing the row and repeating the header", async () => {
+    const long =
+      "Improved to Developing or higher after the remedial reading sessions this term, " +
+      "and now reads short passages fluently with expression and correct phrasing";
+    const columns = [
+      { header: "Name", width: 10 },
+      { header: "Reason", width: 12 },
+    ];
+    const rows = Array.from({ length: 60 }, (_, i) => [`L${i}`, long]);
+    const { pages, calls } = await recordPdf({
+      ...TABLE,
+      columns,
+      rows,
+      blocks: [{ columns, rows, wrap: true }],
+    });
+
+    const longCalls = calls.filter((c) => c.fn === "text" && c.args[0] === long);
+    expect(longCalls).toHaveLength(60);
+    for (const c of longCalls) {
+      const o = c.args[3] as { ellipsis?: boolean; lineBreak?: boolean };
+      expect(o.ellipsis).toBeUndefined();
+      expect(o.lineBreak).toBeUndefined();
+    }
+    const rowHeights = calls
+      .filter((c) => c.fn === "rect" && (c.args[2] as number) > 500 && (c.args[3] as number) !== 16)
+      .map((c) => c.args[3] as number);
+    expect(rowHeights.some((h) => h > 22)).toBe(true);
+    expect(pages).toBeGreaterThan(1);
+    // The header is drawn once at the top and again on every following page.
+    const headerDraws = calls.filter((c) => c.fn === "text" && c.args[0] === "Reason");
+    expect(headerDraws).toHaveLength(pages);
+  });
+
+  it("keeps the signatures on the last table page when they fit, and moves them only when they do not", async () => {
+    let sawFit = false;
+    let sawMove = false;
+    for (let n = 10; n <= 40; n++) {
+      for (const m of [0, 1, 2, 3]) {
+        const rows = Array.from({ length: n }, (_, i) => ["2026-08-25", `L${i}`, "Present", ""]);
+        const summary = Array.from({ length: m }, (_, i) => `line ${i}`);
+        const { breaks, pages } = await recordPdf({ ...TABLE, rows, summary });
+        if (breaks.length === 0) {
+          expect(pages).toBe(1);
+          sawFit = true;
+        } else {
+          // Only the signature block can have caused the break: the table
+          // alone is far shorter than a page. It must truly not fit.
+          expect(breaks).toHaveLength(1);
+          expect(breaks[0]! + SIGNATURE_NEEDS).toBeGreaterThan(PORTRAIT_BOTTOM);
+          sawMove = true;
+        }
+      }
+    }
+    expect(sawFit && sawMove).toBe(true);
+  }, 60_000);
+});
+
+describe("renderExcel wrap option", () => {
+  const cols = [
+    { header: "Name", width: 12 },
+    { header: "Reason", width: 12 },
+  ];
+  const rows = [["A", "Improved to Developing or higher after remedial sessions"]];
+
+  it("sets wrapText on data cells only when the block opts in", async () => {
+    for (const purpose of ["PRINT", "RECORDS"] as const) {
+      const on = await load(
+        await renderExcel(
+          { ...TABLE, columns: cols, rows, blocks: [{ columns: cols, rows, wrap: true }] },
+          { purpose }
+        )
+      );
+      const off = await load(await renderExcel({ ...TABLE, columns: cols, rows }, { purpose }));
+      const cellOf = (wb: Workbook) => {
+        const ws = wb.worksheets[0]!;
+        return ws.getRow(rowStarting(ws, "A")).getCell(2);
+      };
+      expect(cellOf(on).value).toBe(rows[0]![1]);
+      expect(cellOf(on).alignment?.wrapText).toBe(true);
+      expect(cellOf(off).alignment?.wrapText).toBeFalsy();
+    }
+  });
+});
+
 describe("renderReport", () => {
   it("routes each format to its own renderer", async () => {
     const pdf = await renderReport(TABLE, "PDF");
@@ -316,3 +467,4 @@ describe("multi-block reports", () => {
     expect(buf.length).toBeGreaterThan(emptyBuf.length);
   });
 });
+

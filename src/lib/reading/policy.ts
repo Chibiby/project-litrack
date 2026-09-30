@@ -45,11 +45,11 @@ export const STANDARD_VALUES = [
 ] as const;
 
 const EARLY_RUBRIC_GRADE_TYPES = new Set(["KINDER"]);
-const ENGLISH_EXCLUDED_GRADE_TYPES = new Set(["G1", "G2"]);
+const ENGLISH_EXCLUDED_GRADE_TYPES = new Set(["KINDER", "G1", "G2"]);
 const SHS_GRADE_TYPES = new Set(["G11", "G12"]);
 
 /**
- * Kinder = both languages; Grade 1/Grade 2 = Filipino only; every other grade
+ * Kinder, Grade 1 and Grade 2 = Filipino only; every other grade
  * (G3-G10, G11/G12, FLOATING) = both, unchanged.
  */
 export function languagesForGrade(gradeType: string): ReadingLanguage[] {
@@ -61,8 +61,8 @@ export function languagesForGrade(gradeType: string): ReadingLanguage[] {
 
 /**
  * Kinder -> the letter/word rubric; G11/G12 -> the restricted SHS
- * three; everything else (G1-G10, FLOATING) -> the original four. G1/G2 share
- * G3's levels and labels but stay Filipino-only (languagesForGrade).
+ * three; everything else (G1-G10, FLOATING) -> the original four. Kinder, G1
+ * and G2 are Filipino-only (languagesForGrade); G1/G2 share G3's levels.
  */
 export function allowedReadingValuesForGrade(gradeType: string): readonly string[] {
   if (EARLY_RUBRIC_GRADE_TYPES.has(gradeType)) {

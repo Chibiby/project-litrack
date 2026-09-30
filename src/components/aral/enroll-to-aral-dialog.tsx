@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { AralTutorCombobox } from "@/components/aral/aral-tutor-combobox";
@@ -209,11 +209,11 @@ export function EnrollToAralDialog({
             </p>
           </div>
 
-          <Input
+          <SearchInput
+            label="Search learners"
             placeholder="Search by name or section…"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search learners"
+            onValueChange={setQ}
           />
           {filtered.length > 0 ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

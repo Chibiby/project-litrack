@@ -323,6 +323,10 @@ function SchoolsTableInner({
   const [actingId, setActingId] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState(list.q);
   const [prevListQ, setPrevListQ] = useState(list.q);
+  // The last term this box sent to the URL. When that same term comes back it
+  // is our own search landing, and adopting it would erase characters typed
+  // while the request was in flight.
+  const [pushedQ, setPushedQ] = useState(list.q);
   const [optimisticSchools, dispatchOptimistic] = useOptimistic(
     schools,
     (state: SchoolsTableRow[], op: ListOptimisticOp<SchoolsTableRow>) =>
@@ -331,7 +335,10 @@ function SchoolsTableInner({
 
   if (list.q !== prevListQ) {
     setPrevListQ(list.q);
-    setSearchValue(list.q);
+    if (list.q !== pushedQ) {
+      setSearchValue(list.q);
+      setPushedQ(list.q);
+    }
   }
 
   const pushList = (next: { page?: number; q?: string; region?: string; status?: SchoolsTableList["status"] }) => {
@@ -347,6 +354,13 @@ function SchoolsTableInner({
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     navigate(qs ? `${basePath}?${qs}` : basePath);
+  };
+
+  const searchNow = (value: string) => {
+    const term = value.trim();
+    if (term === pushedQ) return;
+    setPushedQ(term);
+    pushList({ page: 1, q: term });
   };
 
   const toggleActive = (school: SchoolsTableRow, nextActive: boolean) => {
@@ -444,8 +458,7 @@ function SchoolsTableInner({
         <SearchInput
           value={searchValue}
           onValueChange={setSearchValue}
-          onSubmit={() => pushList({ page: 1, q: searchValue.trim() })}
-          onClear={() => pushList({ page: 1, q: "" })}
+          onDebouncedChange={searchNow}
           resultCount={list.totalCount}
           label="Search schools"
           placeholder="Search schools…"
@@ -507,15 +520,6 @@ function SchoolsTableInner({
               }}
             />
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={cn("w-full sm:w-auto", isAdminColumns && "lg:h-9")}
-            onClick={() => pushList({ page: 1, q: searchValue.trim() })}
-          >
-            Search
-          </Button>
           {list.q || list.region || list.status ? (
             <Button
               type="button"
@@ -524,6 +528,7 @@ function SchoolsTableInner({
               className={cn("w-full sm:w-auto", isAdminColumns && "lg:h-9")}
               onClick={() => {
                 setSearchValue("");
+                setPushedQ("");
                 pushList({ page: 1, q: "", region: "", status: "" });
               }}
             >

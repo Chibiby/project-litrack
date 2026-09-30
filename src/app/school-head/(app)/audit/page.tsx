@@ -36,8 +36,10 @@ const AUDIT_PAGE_SIZE = 50;
  * Every param `parseAuditListParams` reads — the complete set that changes
  * which audit rows are shown. `schoolId` (Super Admin's view context) is
  * deliberately excluded, same reasoning as the Teachers and ARAL boundaries.
+ * `q` is left out too: search runs as you type, and a remount on each search
+ * would drop the search box's focus.
  */
-export const AUDIT_LIST_KEYS = ["page", "q", "from", "to"] as const;
+export const AUDIT_LIST_KEYS = ["page", "from", "to"] as const;
 
 interface PageProps {
   searchParams: Promise<{

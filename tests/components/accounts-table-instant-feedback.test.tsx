@@ -122,15 +122,19 @@ describe("AccountsTable — instant feedback while a list navigation is pending"
     expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
-  it("issues the correct navigation when Search is clicked", () => {
+  it("issues the correct navigation when a search is entered with Enter", () => {
     // The pending WINDOW this opens is not observable with a synchronous
     // `push` mock (see file header) — the busy-region reaction itself is
     // covered by the test above via the pager link's `useLinkStatus` report.
     render(<AccountsTable rows={[ROW]} list={LIST} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    const input = screen.getByRole("searchbox", { name: "Search accounts" });
+    fireEvent.change(input, { target: { value: "Cruz" } });
+    fireEvent.keyDown(input, { key: "Enter" });
 
     expect(push).toHaveBeenCalledTimes(1);
+    expect(String((push.mock.calls[0] as unknown[])[0])).toContain("q=Cruz");
   });
 
   it("gives the pager aria-disabled (not disabled) on a non-boundary control while a pager link is in flight", () => {

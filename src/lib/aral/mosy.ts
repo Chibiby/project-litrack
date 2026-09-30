@@ -11,22 +11,83 @@ import type {
   Prisma,
   ReadingProfile,
 } from "@prisma/client";
-import { isEarlyGradeReadingBand, labelReadingProfile } from "@/lib/constants/enum-labels";
+import {
+  ARAL_MOSY_MOVE_OUT_REASON_LABELS,
+  labelReadingProfile,
+} from "@/lib/constants/enum-labels";
 import { parseLocalDateKey } from "@/lib/date-keys";
-import { isReadingValueAllowedForGrade, languagesForGrade } from "@/lib/reading/policy";
+import {
+  isReadingValueAllowedForGrade,
+  languagesForGrade,
+  readingProfileOptionsForGrade,
+} from "@/lib/reading/policy";
 import { teacherOwnsMosyRow } from "@/lib/teachers/scope";
 
+export type MosyReasonChoice = {
+  /** Stable, unique per choice; the dropdown's option value. */
+  key: string;
+  reason: AralMosyMoveOutReason;
+  improvedToLevel: ReadingProfile | null;
+  label: string;
+};
+
 /**
- * The only place that decides which move-out reasons a grade may use. The dialog
- * renders its result and `resolveMosySave` validates against it. Kinder rides with
- * G1-G3 (one reading-band family); G4+, G11/G12 and FLOATING take the upper reason.
+ * The only place that decides which move-out reasons a learner may use. The
+ * dialog renders its result and `resolveMosySave` validates against it.
+ *
+ * Improvement choices: one per level of the grade's scale, in scale order, only
+ * strictly above the previous Filipino level. No previous level, or one outside
+ * the scale, offers every level except the lowest. The two LSEN reasons are
+ * always offered.
  */
-export function mosyMoveOutReasonsForGrade(gradeType: string): AralMosyMoveOutReason[] {
+export function mosyReasonChoices(
+  gradeType: string,
+  previousFilipinoLevel: string | null
+): MosyReasonChoice[] {
+  const scale = readingProfileOptionsForGrade(gradeType);
+  const prevIndex =
+    previousFilipinoLevel === null
+      ? -1
+      : scale.findIndex((o) => o.value === previousFilipinoLevel);
+  // Unknown previous level behaves like "at the lowest": everything above index 0.
+  const from = prevIndex < 0 ? 1 : prevIndex + 1;
+  const improved: MosyReasonChoice[] = scale.slice(from).map((o) => ({
+    key: `IMPROVED_READING_LEVEL:${o.value}`,
+    reason: "IMPROVED_READING_LEVEL",
+    improvedToLevel: o.value as ReadingProfile,
+    label: `Improved to ${o.label}`,
+  }));
   return [
-    isEarlyGradeReadingBand(gradeType) ? "IMPROVED_EARLY_GRADES" : "IMPROVED_UPPER_GRADES",
-    "DIAGNOSED_LSEN",
-    "RECOMMENDED_LSEN_ASSESSMENT",
+    ...improved,
+    {
+      key: "DIAGNOSED_LSEN",
+      reason: "DIAGNOSED_LSEN",
+      improvedToLevel: null,
+      label: ARAL_MOSY_MOVE_OUT_REASON_LABELS.DIAGNOSED_LSEN,
+    },
+    {
+      key: "RECOMMENDED_LSEN_ASSESSMENT",
+      reason: "RECOMMENDED_LSEN_ASSESSMENT",
+      improvedToLevel: null,
+      label: ARAL_MOSY_MOVE_OUT_REASON_LABELS.RECOMMENDED_LSEN_ASSESSMENT,
+    },
   ];
+}
+
+/** Display label for a saved reason. Legacy reasons fall back to the enum label. */
+export function mosyReasonLabel(
+  reason: AralMosyMoveOutReason,
+  improvedToLevel: ReadingProfile | null,
+  gradeType: string
+): string {
+  if (reason === "IMPROVED_READING_LEVEL") {
+    if (!improvedToLevel) return ARAL_MOSY_MOVE_OUT_REASON_LABELS.IMPROVED_READING_LEVEL;
+    const option = readingProfileOptionsForGrade(gradeType).find(
+      (o) => o.value === improvedToLevel
+    );
+    return `Improved to ${option?.label ?? labelReadingProfile(improvedToLevel, gradeType)}`;
+  }
+  return ARAL_MOSY_MOVE_OUT_REASON_LABELS[reason];
 }
 
 export const MOSY_STATUSES = ["all", "not_updated", "for_decision", "moved_out", "stay"] as const;
@@ -67,6 +128,10 @@ export function mosyRowStatus(args: {
 /**
  * Prisma version of `mosyRowStatus`. Clauses live inside `AND: [...]` so they
  * never collide with the scope's `OR`.
+ *
+ * `for_decision` is "still waiting for a move out or stay decision", so it is a
+ * superset: it also matches `not_updated` rows (no level saved yet). The tabs
+ * therefore overlap; `not_updated` stays as the narrower "no level yet" view.
  */
 export function mosyStatusWhere(
   status: MosyStatusFilter,
@@ -82,6 +147,7 @@ export function mosyStatusWhere(
         AND: [
           {
             OR: [
+              { mosyDecisions: { none: { schoolYearId } } },
               { mosyDecisions: { some: { schoolYearId, decision: null } } },
               {
                 isAralLearner: true,
@@ -225,8 +291,11 @@ export type MosySaveInput = {
     mosyLevel: ReadingProfile;
     decision: AralMosyOutcome | null;
     reason: AralMosyMoveOutReason | null;
+    improvedToLevel: ReadingProfile | null;
     remarks: string | null;
   };
+  /** Filipino profile of the latest reading record (what the page shows as previous level). */
+  previousFilipinoLevel: string | null;
 };
 
 export type MosySaveResult =
@@ -236,6 +305,7 @@ export type MosySaveResult =
         mosyLevel: ReadingProfile;
         decision: AralMosyOutcome | null;
         reason: AralMosyMoveOutReason | null;
+        improvedToLevel: ReadingProfile | null;
         remarks: string | null;
         tutorId: string;
         priorAralEnrolledAt: Date | null;
@@ -273,18 +343,24 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
   }
 
   let reason: AralMosyMoveOutReason | null = null;
+  let improvedToLevel: ReadingProfile | null = null;
   if (decision === "MOVE_OUT") {
     if (!submitted.reason) return { ok: false, failure: "REASON_REQUIRED" };
-    if (!mosyMoveOutReasonsForGrade(learner.gradeType).includes(submitted.reason)) {
-      return { ok: false, failure: "REASON_NOT_ALLOWED" };
-    }
+    const wantedLevel =
+      submitted.reason === "IMPROVED_READING_LEVEL" ? submitted.improvedToLevel : null;
+    const allowed = mosyReasonChoices(learner.gradeType, input.previousFilipinoLevel).some(
+      (c) => c.reason === submitted.reason && c.improvedToLevel === wantedLevel
+    );
+    if (!allowed) return { ok: false, failure: "REASON_NOT_ALLOWED" };
     reason = submitted.reason;
+    improvedToLevel = wantedLevel;
   }
 
   const base = {
     mosyLevel: submitted.mosyLevel,
     decision,
     reason,
+    improvedToLevel,
     remarks: submitted.remarks,
     tutorId: actorId,
   };
