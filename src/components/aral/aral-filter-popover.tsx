@@ -100,18 +100,16 @@ export function AralFilterPopover({
     if (!path) return;
     const gradeChanged = nextGradeId !== gradeId;
 
-    listNavigate(
-      buildHref(path, {
-        schoolId,
-        ...preserveParams,
-        ...(gradeAsQueryParam
-          ? { grade: nextGradeId === "all" ? undefined : nextGradeId }
-          : {}),
-        // Section IDs are grade-scoped — drop on grade change.
-        section:
-          gradeChanged || nextSection === "all" ? undefined : nextSection,
-      })
-    );
+    const href = buildHref(path, {
+      schoolId,
+      ...preserveParams,
+      ...(gradeAsQueryParam
+        ? { grade: nextGradeId === "all" ? undefined : nextGradeId }
+        : {}),
+      // Section IDs are grade-scoped — drop on grade change.
+      section: gradeChanged || nextSection === "all" ? undefined : nextSection,
+    });
+    listNavigate(href);
   }
 
   return (

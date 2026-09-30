@@ -3,6 +3,7 @@ import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { getChatNotifications } from "@/lib/chat/notifications";
+import { isDeveloperAdmin, superAdminLabel } from "@/lib/auth/admin-tier";
 
 // Force dynamic so Next doesn't try to statically prerender these auth-gated
 // pages at build time, when Supabase/DATABASE_URL env may not be reachable.
@@ -28,6 +29,8 @@ export default async function AdminLayout({
         userId={user.id}
         userName={user.fullName || user.email}
         avatarPath={user.avatarPath}
+        roleLabel={superAdminLabel(user)}
+        isDeveloperAdmin={isDeveloperAdmin(user)}
         aiEnabled={geminiConfigured()}
         // Not awaited: streamed through RoleShell/AppHeader as a promise so the
         // sidebar and header paint before the notifications query resolves.

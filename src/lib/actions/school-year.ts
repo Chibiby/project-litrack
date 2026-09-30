@@ -243,14 +243,14 @@ export const deleteSchoolYear = action("deleteSchoolYear", async (formData: Form
   if (year.isActive) {
     return {
       ok: false,
-      error: "Set another year active before removing this one",
+      error: "Set another year active before deleting this one",
     };
   }
   if (year._count.enrollments > 0 || year._count.termGrades > 0) {
     return {
       ok: false,
       error:
-        "This year has enrolments or grades recorded against it and cannot be removed",
+        "This year has enrolments or grades recorded against it and cannot be deleted",
     };
   }
 
@@ -268,7 +268,7 @@ export const deleteSchoolYear = action("deleteSchoolYear", async (formData: Form
   if (res.count === 0) {
     return {
       ok: false,
-      error: "This year is no longer empty and cannot be removed",
+      error: "This year is no longer empty and cannot be deleted",
     };
   }
 
@@ -284,4 +284,4 @@ export const deleteSchoolYear = action("deleteSchoolYear", async (formData: Form
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolYears);
   revalidateSchoolDashboard(user.schoolId);
   return { ok: true };
-}, { verb: "remove the school year" });
+}, { verb: "delete the school year" });

@@ -117,6 +117,12 @@ export interface NavOptions {
    * empty queue renders no badge at all rather than a "0".
    */
   pendingTeacherCount?: number;
+  /**
+   * Super Admin whose tier is DEVELOPER. Adds the Developer Controls group
+   * (audit log, error log, Page Test Lab, archive, database console); a
+   * Division Admin's menu has no such group. See `isDeveloperAdmin`.
+   */
+  isDeveloperAdmin?: boolean;
 }
 
 /** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
@@ -187,18 +193,24 @@ export function getNavGroups(
           items: [
             { id: "admin-submissions", label: "Report Submissions", href: "/admin/submissions", icon: FileCheck2 },
             { id: "admin-support", label: "Support Inbox", href: "/admin/support", icon: LifeBuoy },
-            { id: "admin-audit", label: "Audit Log", href: "/admin/audit", icon: ScrollText },
-            { id: "admin-errors", label: "Error Log", href: "/admin/errors", icon: TriangleAlert },
           ],
         },
-        {
-          label: "QA & Data",
-          items: [
-            { id: "admin-test-lab", label: "Page Test Lab", href: "/admin/test-lab", icon: FlaskConical },
-            { id: "admin-archive", label: "Archived Records", href: "/admin/archive", icon: Archive, heavy: true },
-            { id: "admin-database", label: "Database Console", href: "/admin/database", icon: Database },
-          ],
-        },
+        // Developer Admin only. Dropped, not rendered inert: a Division Admin
+        // is not meant to know these exist, and the pages 404 for them too.
+        ...(options.isDeveloperAdmin
+          ? [
+              {
+                label: "Developer Controls",
+                items: [
+                  { id: "admin-audit", label: "Audit Log", href: "/admin/audit", icon: ScrollText },
+                  { id: "admin-errors", label: "Error Log", href: "/admin/errors", icon: TriangleAlert },
+                  { id: "admin-test-lab", label: "Page Test Lab", href: "/admin/test-lab", icon: FlaskConical },
+                  { id: "admin-archive", label: "Archived Records", href: "/admin/archive", icon: Archive, heavy: true as const },
+                  { id: "admin-database", label: "Database Console", href: "/admin/database", icon: Database },
+                ],
+              },
+            ]
+          : []),
       ];
     case "SCHOOL_HEAD":
       return [

@@ -3,8 +3,9 @@
 import { createRef, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Save } from "lucide-react";
+import { Download, Filter, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SelectItem } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
@@ -19,6 +20,11 @@ import {
 import { exportTermGrades, saveTermGrades } from "@/lib/actions/term-grades";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
+import {
+  UnsavedChangesBadge,
+  UnsavedGridGuard,
+} from "@/components/aral/unsaved-grid-guard";
 import { LEARNER_LIST_DEFAULT_PAGE_SIZE } from "@/lib/learners/pagination";
 import type { TermGradesExportInput } from "@/lib/validators/term-grade.schema";
 import type { SheetGroup } from "@/lib/terms/sheet-data";
@@ -95,6 +101,22 @@ export function TermsReportPanel({
     [groups]
   );
 
+  const [dirtyGroups, setDirtyGroups] = useState<Record<string, boolean>>({});
+  const dirty = Object.values(dirtyGroups).some(Boolean);
+  const dirtyHandlers = useMemo(
+    () =>
+      new Map(
+        groups.map((g) => [
+          g.key,
+          (isDirty: boolean) =>
+            setDirtyGroups((prev) =>
+              Boolean(prev[g.key]) === isDirty ? prev : { ...prev, [g.key]: isDirty }
+            ),
+        ])
+      ),
+    [groups]
+  );
+
   // Adjusted during render (React docs "adjusting state when a prop changes"
   // pattern) rather than an effect.
   // A `q` this box itself sent is skipped: adopting it would erase characters
@@ -109,14 +131,28 @@ export function TermsReportPanel({
     }
   }
 
-  const go = (next: SheetUrlState) =>
+  const navigate = (next: SheetUrlState) =>
     startNav(() => router.push(sheetHref(basePath, next), { scroll: false }));
+  // Every URL filter reseeds the grids, so each waits for the teacher's answer
+  // while grades are unsaved.
+  const go = (next: SheetUrlState) => runGuarded(() => navigate(next));
 
-  function pushSearch(raw: string) {
-    if (raw === pushedQ) return;
+  function applySearch(raw: string) {
     setPushedQ(raw);
     // The page index is dropped: narrowing the roster invalidates it.
-    go({ ...state, q: raw });
+    navigate({ ...state, q: raw });
+  }
+
+  // While grades are unsaved the debounce stays quiet: a dialog opening
+  // mid-keystroke would steal focus. The search waits for Enter instead.
+  function pushSearch(raw: string) {
+    if (raw === pushedQ || dirty) return;
+    applySearch(raw);
+  }
+
+  function submitSearch() {
+    if (!dirty || searchValue === pushedQ) return;
+    runGuarded(() => applySearch(searchValue));
   }
 
   // Subjects are named per grade, so the filter matches by name across groups.
@@ -151,8 +187,14 @@ export function TermsReportPanel({
    * advisory gate resolves exactly one placement per call. Stops at the first
    * refusal: the groups already saved stay saved and say so.
    */
-  async function handleSave() {
-    if (readOnly || savePending) return;
+  async function persist(): Promise<boolean> {
+    if (readOnly || savePending) {
+      // Refusing without trying must still say so, or "Save and continue" just
+      // closes and looks like it did nothing.
+      if (savePending) toast("Still saving. Try again in a moment.");
+      else toast.error("This term is locked, so these grades can't be saved.");
+      return false;
+    }
     const batches = groups.map((group) => ({
       group,
       ref: gridRefs.get(group.key)?.current ?? null,
@@ -166,13 +208,13 @@ export function TermsReportPanel({
       toast.error(
         `Grades must be whole numbers from ${SCORE_MIN} to ${SCORE_MAX}. Check ${names}${rest}.`
       );
-      return;
+      return false;
     }
 
     const pending = batches.filter((b) => b.entries.length > 0);
     if (pending.length === 0) {
       toast("No changes to save");
-      return;
+      return true;
     }
 
     setSavePending(true);
@@ -199,7 +241,7 @@ export function TermsReportPanel({
             { id: toastId }
           );
           if (saved + cleared > 0) router.refresh();
-          return;
+          return false;
         }
         batch.ref?.commit();
         saved += res.data?.saved ?? 0;
@@ -212,30 +254,43 @@ export function TermsReportPanel({
         { id: toastId }
       );
       router.refresh();
+      return true;
     } finally {
       setSavePending(false);
     }
+  }
+
+  function handleSave() {
+    if (readOnly || savePending) return;
+    void persist();
   }
 
   const showSave = canSave && !readOnly && groups.some((g) => g.learners.length > 0);
   const termCaption = `${termLabel} - ${completionPct}%`;
 
   const searchBox = (
-    <SearchInput
-      value={searchValue}
-      onValueChange={setSearchValue}
-      onDebouncedChange={pushSearch}
-      resultCount={totalCount}
-      label="Search learners by name"
-      placeholder="Search learner by name..."
-      className="min-w-0 flex-1 xl:w-72 xl:flex-none"
-      inputClassName="h-11 rounded-xl text-sm lg:h-10 xl:h-11"
-    />
+    <div className="min-w-0 flex-1 xl:w-72 xl:flex-none">
+      <SearchInput
+        value={searchValue}
+        onValueChange={setSearchValue}
+        onDebouncedChange={pushSearch}
+        onSubmit={submitSearch}
+        resultCount={totalCount}
+        label="Search learners by name"
+        placeholder="Search learner by name..."
+        inputClassName="h-11 rounded-xl text-sm lg:h-10 xl:h-11"
+      />
+      {dirty && searchValue !== pushedQ ? (
+        <p role="status" className="mt-1 text-xs text-muted-foreground">
+          Save or discard your changes to search. Press Enter to choose.
+        </p>
+      ) : null}
+    </div>
   );
 
   // Rendered twice (the phone panel and the desktop toolbar, one hidden by
   // CSS), so each copy gets its own ids.
-  const facets = (where: "phone" | "desktop") => (
+  const facets = (where: "phone" | "desktop" | "popover") => (
     <>
       <FacetSelect
         id={`terms-section-${where}`}
@@ -303,8 +358,20 @@ export function TermsReportPanel({
     </Button>
   ) : null;
 
+  const activeFilterCount =
+    (state.section !== "all" ? 1 : 0) + (subjectName !== "all" ? 1 : 0);
+
   return (
     <div className="flex flex-col gap-3 xl:gap-4">
+      <UnsavedGridGuard
+        dirty={dirty}
+        saving={savePending}
+        what="term grades"
+        onSave={persist}
+        onDiscard={() => {
+          for (const ref of gridRefs.values()) ref.current?.discard();
+        }}
+      />
       {/* Phones and tablets, to the mockup: search and actions. The advisory
           dropdown lives in the page hero's top-right corner instead. */}
       <Surface className="flex flex-col gap-2 rounded-2xl p-2.5 xl:hidden">
@@ -318,7 +385,33 @@ export function TermsReportPanel({
           </div>
         </div>
         <div className="hidden grid-cols-2 gap-2 md:grid">{facets("phone")}</div>
+        {/* Phones: the two facets do not fit beside each other, so they sit
+            behind one button, as on the ARAL pages. */}
+        <div className="md:hidden">
+          <Popover modal>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="relative h-11 w-full justify-center gap-2 rounded-xl"
+              >
+                <Filter className="size-4" aria-hidden />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                    <span className="sr-only"> active</span>
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 space-y-2 p-3">
+              {facets("popover")}
+            </PopoverContent>
+          </Popover>
+        </div>
         {exportPurposeToggle}
+        <UnsavedChangesBadge dirty={dirty} />
       </Surface>
 
       <Surface className="overflow-hidden rounded-2xl">
@@ -327,6 +420,7 @@ export function TermsReportPanel({
           {searchBox}
           {facets("desktop")}
           <div className="ml-auto flex items-center gap-3">
+            <UnsavedChangesBadge dirty={dirty} />
             {exportPurposeToggle}
             {exportButton}
             {saveButton}
@@ -362,6 +456,7 @@ export function TermsReportPanel({
               }
               subjectStep={subjectStep}
               onNextSubjects={() => setSubjectStep((n) => n + 1)}
+              onDirtyChange={dirtyHandlers.get(group.key)}
             />
           ))
         )}

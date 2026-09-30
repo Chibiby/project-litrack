@@ -18,7 +18,7 @@ import {
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { nextUnusedLetter } from "@/lib/section-letters";
 import { action } from "@/lib/errors/action";
-import { fieldError, resourceNotFound } from "@/lib/errors/app-error";
+import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -187,6 +187,33 @@ export const deleteSection = action("deleteSection", async (formData: FormData):
   if (!section) throw resourceNotFound("Section");
 
   const affectedTeacherIds = await prisma.$transaction(async (tx) => {
+    // A section with learners in it cannot be removed: nulling their pointers
+    // used to leave them with no section and no warning. Counted inside the
+    // transaction so a learner placed a moment ago is not missed. "Placed" is
+    // either half of the data model: the Learner pointer, or an ACTIVE
+    // Enrollment row (the two are kept in step, but a stale one must still
+    // block). Archived and soft-deleted learners are not on any roster, so they
+    // do not block, and their pointers are still cleared below as before.
+    const placed = await tx.learner.count({
+      where: {
+        schoolId: user.schoolId,
+        deletedAt: null,
+        archivedAt: null,
+        OR: [
+          { sectionId: section.id },
+          { enrollments: { some: { sectionId: section.id, status: "ACTIVE" } } },
+        ],
+      },
+    });
+    if (placed > 0) {
+      throw new AppError("SECTION_HAS_LEARNERS", {
+        params: {
+          learners: `${placed} ${placed === 1 ? "learner" : "learners"}`,
+          section: section.name,
+        },
+      });
+    }
+
     await tx.section.update({
       where: { id: section.id },
       data: { deletedAt: new Date() },
@@ -270,7 +297,7 @@ export const deleteSection = action("deleteSection", async (formData: FormData):
     revalidateTeacherCaches(teacherId);
   }
   return { ok: true };
-}, { verb: "delete the section" });
+}, { verb: "remove the section" });
 
 export const createNextLetterSection = action("createNextLetterSection", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");

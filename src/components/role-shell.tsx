@@ -55,6 +55,8 @@ interface RoleShellProps {
    * `NavOptions.pendingTeacherCount`.
    */
   pendingTeacherCount?: number;
+  /** Super Admin only — shows Developer Controls; see `NavOptions.isDeveloperAdmin`. */
+  isDeveloperAdmin?: boolean;
   /**
    * Either the resolved list (teacher/school-head, which pass nothing today —
    * `undefined` renders the menu's empty state immediately) or a promise the
@@ -100,6 +102,7 @@ export function RoleShell({
   isFloating,
   advisoryPlacements,
   pendingTeacherCount,
+  isDeveloperAdmin,
   notifications,
   aiEnabled,
   lastSeenReleaseVersion,
@@ -129,6 +132,7 @@ export function RoleShell({
             isFloating={isFloating}
             advisoryPlacements={advisoryPlacements}
             pendingTeacherCount={pendingTeacherCount}
+            isDeveloperAdmin={isDeveloperAdmin}
             expanded={expanded}
             transitionsEnabled={hydrated}
           />
@@ -154,6 +158,7 @@ export function RoleShell({
               notifications={notifications}
               isAralVolunteer={isAralVolunteer}
               isFloating={isFloating}
+              isDeveloperAdmin={isDeveloperAdmin}
               advisoryPlacements={advisoryPlacements}
               expanded={expanded}
               onToggleSidebar={toggle}

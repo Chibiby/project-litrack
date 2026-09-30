@@ -100,10 +100,10 @@ export function ProfilePhotoCard({
       throw new ToastedError(res.error);
     }
     if ("dryRun" in res && res.dryRun) {
-      toast("Test Lab — no photo was actually removed.");
+      toast("Test Lab — no photo was actually deleted.");
       return;
     }
-    toast.success("Profile photo removed");
+    toast.success("Profile photo deleted");
     router.refresh();
   }
 
@@ -140,15 +140,15 @@ export function ProfilePhotoCard({
               </Button>
               {avatarPath ? (
                 <ConfirmAction
-                  title="Remove profile photo?"
-                  description="Your current photo will be deleted. You can upload a new one any time."
-                  confirmLabel="Remove photo"
+                  title="Delete profile photo permanently?"
+                  description="Your current photo will be deleted and cannot be recovered. You can upload a new one any time."
+                  confirmLabel="Delete permanently"
                   variant="destructive"
                   disabled={uploading}
                   trigger={
                     <Button type="button" variant="ghost" size="sm" disabled={uploading}>
                       <Trash2 aria-hidden />
-                      Remove
+                      Delete
                     </Button>
                   }
                   onConfirm={handleRemove}

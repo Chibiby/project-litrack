@@ -470,9 +470,9 @@ function TeacherManageButtons({
       )}
       {row.avatarPath ? (
         <ConfirmAction
-          title="Remove profile photo?"
-          description={`${row.fullName}'s current photo will be deleted. They can upload a new one from Settings → Profile.`}
-          confirmLabel="Remove photo"
+          title="Delete profile photo permanently?"
+          description={`${row.fullName}'s current photo will be deleted and cannot be recovered. They can upload a new one from Settings → Profile.`}
+          confirmLabel="Delete permanently"
           variant="destructive"
           disabled={rowBusy}
           trigger={
@@ -481,10 +481,10 @@ function TeacherManageButtons({
               variant="outline"
               className="lg:h-9"
               loading={busy === "removePhoto"}
-              loadingText="Removing…"
+              loadingText="Deleting…"
               disabled={rowBusy}
             >
-              Remove photo
+              Delete photo
             </Button>
           }
           onConfirm={() => onRemovePhoto(row)}
@@ -819,10 +819,10 @@ function TeachersManagedTable({
       if (res.dryRun) {
         // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
         // as a toast since this is a click action, not a persistent form.
-        toast("Test Lab — no photo was actually removed.");
+        toast("Test Lab — no photo was actually deleted.");
         return;
       }
-      toast.success(`Removed ${row.fullName}'s photo`);
+      toast.success(`Deleted ${row.fullName}'s photo`);
       router.refresh();
     }).finally(() => setActingKey(null));
   };
@@ -1388,9 +1388,9 @@ export function TeachersDeclinedTable({
 }) {
   const allowReRegister = (row: DeclinedTeacherRow, className?: string) => (
     <ConfirmAction
-      title={`Allow ${row.fullName} to register again?`}
-      description={`Their declined request and sign-in account are deleted permanently. ${row.fullName} will have to register again from the start.`}
-      confirmLabel="Delete and allow re-register"
+      title={`Delete ${row.fullName}'s declined request permanently?`}
+      description={`Their declined request and sign-in account are deleted and this cannot be undone. ${row.fullName} will have to register again from the start.`}
+      confirmLabel="Delete permanently"
       variant="destructive"
       trigger={
         <Button size="sm" variant="outline" className={className}>

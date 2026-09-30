@@ -3,6 +3,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -79,6 +80,8 @@ export type TermGradesGridExisting = {
 export type AralTermGradesGridFormHandle = {
   collect: () => { entries: TermGradesSaveInput["entries"]; invalid: string[] };
   commit: () => void;
+  /** Puts every cell back to the last saved grades. */
+  discard: () => void;
 };
 
 /**
@@ -201,6 +204,8 @@ type Props = {
   /** The phone's five-subject window, shared by every group on the sheet. */
   subjectStep: number;
   onNextSubjects: () => void;
+  /** True while any cell, visible or hidden by the Subject filter, differs from the last saved grades. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, Props>(
@@ -217,6 +222,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       visibleSubjectIds = null,
       subjectStep,
       onNextSubjects,
+      onDirtyChange,
     },
     ref
   ) {
@@ -231,6 +237,19 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       toRows(learners, initialGrades, subjectIds, scale)
     );
     const [rows, setRows] = useState(initial);
+
+    const dirty = learners.some((learner) =>
+      subjects.some(
+        (subject) =>
+          cellValue(initial[learner.id], subject.id).trim() !==
+          cellValue(rows[learner.id], subject.id).trim()
+      )
+    );
+    useEffect(() => {
+      onDirtyChange?.(dirty);
+      // A grid that unmounts (new term, page or filter) no longer holds anything.
+      return () => onDirtyChange?.(false);
+    }, [dirty, onDirtyChange]);
 
     function setScore(learnerId: string, subjectId: string, value: string) {
       setRows((prev) => ({
@@ -343,6 +362,9 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
         // after this point rather than resending the whole term.
         commit() {
           setInitial(rows);
+        },
+        discard() {
+          setRows(initial);
         },
       }),
       [learners, subjects, initial, rows, scale]

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdminPage } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AdminPage } from "@/components/admin/admin-page";
 import {
@@ -111,7 +111,7 @@ async function AdminAuditTable() {
 }
 
 export default async function AdminAuditPage() {
-  const user = await requireUser("SUPER_ADMIN");
+  const user = await requireDeveloperAdminPage();
 
   return (
     <AdminPage

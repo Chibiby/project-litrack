@@ -32,6 +32,11 @@ import {
 import { fetchAralAttendanceForWeek } from "@/lib/actions/aral-grid";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
+import {
+  UnsavedChangesBadge,
+  UnsavedGridGuard,
+} from "@/components/aral/unsaved-grid-guard";
 import {
   formatLocalDateKey,
   parseLocalDateKey,
@@ -142,6 +147,7 @@ export function AralWeeklyAttendancePanel({
   const [holidayKeys, setHolidayKeys] = useState(initialHolidayKeys);
   const [loading, setLoading] = useState(false);
   const [savePending, setSavePending] = useState(false);
+  const [dirty, setDirty] = useState(false);
   /** Mirrored out of the grid so the toolbar's Bulk Actions can show a count. */
   const [selectedCount, setSelectedCount] = useState(0);
   // Sort is client-side and lives in state rather than the URL. This grid is
@@ -217,7 +223,7 @@ export function AralWeeklyAttendancePanel({
   function navigateTo(nextWeek: string) {
     const normalized = normalizeWeekKey(nextWeek);
     if (normalized === desiredWeekRef.current) return;
-    loadWeek(normalized, true);
+    runGuarded(() => loadWeek(normalized, true));
   }
 
   // Browser back/forward: adopt the URL week and fetch that week's records.
@@ -278,6 +284,13 @@ export function AralWeeklyAttendancePanel({
 
   return (
     <>
+      <UnsavedGridGuard
+        dirty={dirty}
+        saving={savePending}
+        what="attendance marks"
+        onSave={async () => (await formRef.current?.persist()) ?? false}
+        onDiscard={() => formRef.current?.discard()}
+      />
       <div className="mb-4">
         <AttendanceWeekStats stats={weekStats} />
       </div>
@@ -414,6 +427,7 @@ export function AralWeeklyAttendancePanel({
                     disabled={actionsLocked}
                     onApply={(action) => formRef.current?.applyBulk(action)}
                   />
+                  <UnsavedChangesBadge dirty={dirty} />
                   <Button
                     type="button"
                     size="sm"
@@ -452,6 +466,7 @@ export function AralWeeklyAttendancePanel({
               readOnly={readOnly || loading || gridLocked}
               onSavePendingChange={setSavePending}
               onSelectionChange={setSelectedCount}
+              onDirtyChange={setDirty}
             />
           </div>
           {loading && (

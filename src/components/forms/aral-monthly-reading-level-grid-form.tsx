@@ -214,7 +214,13 @@ export type MonthlyReadingLevelGridExisting = {
   notes: string | null;
 };
 
-export type AralMonthlyReadingLevelGridFormHandle = { save: () => void };
+export type AralMonthlyReadingLevelGridFormHandle = {
+  save: () => void;
+  /** Like `save`, but resolves true only once the server accepted the levels (or none were pending). */
+  persist: () => Promise<boolean>;
+  /** Puts every row back to the last saved levels. */
+  discard: () => void;
+};
 
 type ReadingLevelProgress = {
   /** Every field this grade requires is set — this learner is assessed for the month. */
@@ -344,7 +350,27 @@ type Props = {
   learnerHrefFor?: (learnerId: string) => string;
   readOnly?: boolean;
   onSavePendingChange?: (pending: boolean) => void;
+  /** True while any row differs from the last saved levels. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
+
+const ROW_FIELDS: (keyof RowState)[] = [
+  "englishProfile",
+  "filipinoProfile",
+  "wordRecognitionLevel",
+  "readingComprehensionLevel",
+  "notes",
+];
+
+function rowsDiffer(
+  baseline: Record<string, RowState>,
+  rows: Record<string, RowState>
+): boolean {
+  return Object.entries(rows).some(([id, row]) => {
+    const before = baseline[id] ?? EMPTY_ROW;
+    return ROW_FIELDS.some((field) => before[field] !== row[field]);
+  });
+}
 
 export const AralMonthlyReadingLevelGridForm = forwardRef<
   AralMonthlyReadingLevelGridFormHandle,
@@ -359,12 +385,20 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
     learnerHrefFor,
     readOnly,
     onSavePendingChange,
+    onDirtyChange,
   },
   ref
 ) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [rows, setRows] = useState(() => toRows(learners, existing));
+  /** The rows as last saved (or loaded); the grid is dirty while `rows` differs. */
+  const [baseline, setBaseline] = useState(() => toRows(learners, existing));
+  const [rows, setRows] = useState(baseline);
+  const dirty = useMemo(() => rowsDiffer(baseline, rows), [baseline, rows]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const profileBand = useMemo(() => profileBandFor(gradeType), [gradeType]);
   const includesEnglish = useMemo(
@@ -418,8 +452,14 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
     toast.success("Row cleared. Save to keep the change.");
   }
 
-  const handleSave = useCallback(() => {
-    if (readOnly || pending) return;
+  const persist = useCallback((): Promise<boolean> => {
+    if (readOnly || pending) {
+      // Refusing without trying must still say so, or "Save and continue" just
+      // closes and looks like it did nothing.
+      if (pending) toast("Still saving. Try again in a moment.");
+      else toast.error("This month is locked, so these levels can't be saved.");
+      return Promise.resolve(false);
+    }
 
     const entries = learners
       .filter((learner) => hasAnyValue(rows[learner.id]))
@@ -441,39 +481,63 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
 
     if (entries.length === 0 && clears.length === 0) {
       toast("Nothing to save yet.");
-      return;
+      // Nothing this grid could send, so what is on screen is as saved as it gets.
+      setBaseline(rows);
+      return Promise.resolve(true);
     }
 
-    startTransition(async () => {
-      const toastId = toast.loading("Saving monthly reading levels…");
-      const res = await callAction(() =>
-        bulkRecordMonthlyReadingLevel({
-          monthStart: monthStartKey,
-          entries,
-          clears,
-        })
-      );
-      if (!res.ok) {
-        toastFailure(res, { id: toastId });
-        return;
-      }
-      const savedCount = res.data?.upserted ?? entries.length;
-      const clearedCount = res.data?.cleared ?? clears.length;
-      const message =
-        `Saved ${savedCount} learner${savedCount === 1 ? "" : "s"}` +
-        (clearedCount > 0 ? `, cleared ${clearedCount}` : "");
-      toast.success(message, { id: toastId });
-      setHadRecord((prev) => {
-        const next = new Set(prev);
-        for (const entry of entries) next.add(entry.learnerId);
-        for (const learnerId of clears) next.delete(learnerId);
-        return next;
+    return new Promise<boolean>((resolve) => {
+      startTransition(async () => {
+        let ok = false;
+        try {
+          const toastId = toast.loading("Saving monthly reading levels…");
+          const res = await callAction(() =>
+            bulkRecordMonthlyReadingLevel({
+              monthStart: monthStartKey,
+              entries,
+              clears,
+            })
+          );
+          if (!res.ok) {
+            toastFailure(res, { id: toastId });
+            return;
+          }
+          const savedCount = res.data?.upserted ?? entries.length;
+          const clearedCount = res.data?.cleared ?? clears.length;
+          const message =
+            `Saved ${savedCount} learner${savedCount === 1 ? "" : "s"}` +
+            (clearedCount > 0 ? `, cleared ${clearedCount}` : "");
+          toast.success(message, { id: toastId });
+          setHadRecord((prev) => {
+            const next = new Set(prev);
+            for (const entry of entries) next.add(entry.learnerId);
+            for (const learnerId of clears) next.delete(learnerId);
+            return next;
+          });
+          setBaseline(rows);
+          router.refresh();
+          ok = true;
+        } finally {
+          resolve(ok);
+        }
       });
-      router.refresh();
     });
   }, [readOnly, pending, learners, rows, hadRecord, monthStartKey, router]);
 
-  useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
+  const handleSave = useCallback(() => {
+    if (readOnly || pending) return;
+    void persist();
+  }, [persist, readOnly, pending]);
+
+  const discard = useCallback(() => {
+    setRows(baseline);
+  }, [baseline]);
+
+  useImperativeHandle(
+    ref,
+    () => ({ save: handleSave, persist, discard }),
+    [handleSave, persist, discard]
+  );
 
   if (learners.length === 0) {
     return (

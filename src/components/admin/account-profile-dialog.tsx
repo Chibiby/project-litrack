@@ -84,10 +84,10 @@ export function AccountProfileDialog({
       if (res.dryRun) {
         // Test Lab: same "nothing was saved" posture as `DryRunNotice`, just
         // as a toast since this is a click action, not a persistent form.
-        toast("Test Lab — no photo was actually removed.");
+        toast("Test Lab — no photo was actually deleted.");
         return;
       }
-      toast.success(`Removed ${row.fullName}'s photo`);
+      toast.success(`Deleted ${row.fullName}'s photo`);
       router.refresh();
     } finally {
       setRemovingPhoto(false);
@@ -138,9 +138,9 @@ export function AccountProfileDialog({
               <DialogDescription>{USER_ROLE_LABELS[row.role]}</DialogDescription>
               {row.avatarPath ? (
                 <ConfirmAction
-                  title="Remove profile photo?"
-                  description={`${row.fullName}'s current photo will be deleted. They can upload a new one from their Settings → Profile page.`}
-                  confirmLabel="Remove photo"
+                  title="Delete profile photo permanently?"
+                  description={`${row.fullName}'s current photo will be deleted and cannot be recovered. They can upload a new one from their Settings → Profile page.`}
+                  confirmLabel="Delete permanently"
                   variant="destructive"
                   disabled={removingPhoto}
                   trigger={
@@ -149,10 +149,10 @@ export function AccountProfileDialog({
                       size="sm"
                       variant="outline"
                       loading={removingPhoto}
-                      loadingText="Removing…"
+                      loadingText="Deleting…"
                       disabled={removingPhoto}
                     >
-                      Remove photo
+                      Delete photo
                     </Button>
                   }
                   onConfirm={removePhoto}

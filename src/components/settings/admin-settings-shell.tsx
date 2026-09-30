@@ -17,10 +17,12 @@ import { cn } from "@/lib/utils";
 
 type Row = { label: string; href: string; icon: LucideIcon };
 
+const DEMO_HREF = "/admin/settings/demo";
+
 const ROWS: readonly Row[] = [
   { label: "Profile", href: "/admin/settings/profile", icon: UserCircle },
   { label: "Security", href: "/admin/settings/security", icon: KeyRound },
-  { label: "Demo session", href: "/admin/settings/demo", icon: MonitorPlay },
+  { label: "Demo session", href: DEMO_HREF, icon: MonitorPlay },
   { label: "Submissions", href: "/admin/submissions", icon: Lock },
 ];
 
@@ -56,10 +58,18 @@ export function activeSettingsHref(pathname: string): string | null {
  * rather than from each page. The shared `SettingsShell` stays as it is for
  * `/district`.
  */
-export function AdminSettingsShell({ children }: { children: React.ReactNode }) {
+export function AdminSettingsShell({
+  children,
+  showDemo,
+}: {
+  children: React.ReactNode;
+  /** Developer Admin only — Demo session is part of Developer Controls. */
+  showDemo: boolean;
+}) {
   const pathname = usePathname();
   const active = activeSettingsHref(pathname);
   const copy = (active && COPY[active]) || DEFAULT_COPY;
+  const rows = showDemo ? ROWS : ROWS.filter((r) => r.href !== DEMO_HREF);
 
   return (
     <main id="main-content" className="w-full p-4 lg:p-6">
@@ -85,7 +95,7 @@ export function AdminSettingsShell({ children }: { children: React.ReactNode }) 
           </p>
           <nav aria-label="Settings" className="mt-3">
             <ul className="space-y-1">
-              {ROWS.map((row) => {
+              {rows.map((row) => {
                 const Icon = row.icon;
                 const isActive = row.href === active;
                 return (

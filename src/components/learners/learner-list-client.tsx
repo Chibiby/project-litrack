@@ -65,7 +65,14 @@ import {
   type AssignAralTutorTarget,
 } from "@/components/learners/assign-aral-tutor-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
-import { settleActionResult } from "@/lib/ui/optimistic";
+import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
+import { ConfirmAction } from "@/components/confirm-action";
+import {
+  archiveConfirmDescription,
+  archiveConfirmLabel,
+  archiveConfirmTitle,
+  type ArchiveTarget,
+} from "@/components/learners/archive-confirm-copy";
 import { cn } from "@/lib/utils";
 
 /*
@@ -224,6 +231,8 @@ function LearnerListPanel({
   const [aralTarget, setAralTarget] = useState<AssignAralTutorTarget | null>(
     null
   );
+  /** Learners awaiting archive confirmation; `null` when no confirm is open. */
+  const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
 
   // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
   // React docs "adjusting state when a prop changes" pattern.
@@ -264,7 +273,9 @@ function LearnerListPanel({
   if (visibleIds !== prevVisibleIds) {
     setPrevVisibleIds(visibleIds);
     setSelected((prev) => {
-      if (prev.size === 0) return prev;
+      // Rows hidden optimistically by an in-flight archive are not a new page;
+      // pruning them here would lose the selection if the archive then fails.
+      if (prev.size === 0 || leavingKey) return prev;
       const visible = new Set(visibleIds);
       const next = new Set([...prev].filter((id) => visible.has(id)));
       return next.size === prev.size ? prev : next;
@@ -362,26 +373,35 @@ function LearnerListPanel({
     });
   };
 
-  const archive = (ids: string[]) => {
-    startTransition(async () => {
-      if (ids.length === 0) return;
+  /** Opens the confirmation; nothing is archived until it is confirmed. */
+  const requestArchive = (rows: LearnerListRow[]) => {
+    if (rows.length === 0) return;
+    setArchiveTarget({
+      ids: rows.map((l) => l.id),
+      name: rows.length === 1 ? rows[0].fullName : null,
+      aralCount: rows.filter((l) => l.isAralLearner).length,
+    });
+  };
+
+  /**
+   * Resolves on success, rejects (already toasted) on failure, so the dialog
+   * stays open for a retry with the selection intact. The rows come back as the
+   * transition ends without new props.
+   */
+  const archive = (ids: string[]) =>
+    runOptimistic(startTransition, async () => {
       markLeaving(ids);
       const fd = new FormData();
       for (const id of ids) fd.append("learnerIds", id);
       const res = await callAction(() => archiveLearners(fd));
-      try {
-        await settleActionResult(
-          res,
-          `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
-        );
-      } catch {
-        return; // Already toasted; the rows come back as the transition ends.
-      }
+      await settleActionResult(
+        res,
+        `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
+      );
       setSelected(new Set());
       invalidateNavWarm();
       router.refresh();
     });
-  };
 
   const handleRestoreOne = (id: string) => {
     startTransition(async () => {
@@ -467,7 +487,7 @@ function LearnerListPanel({
             </DropdownMenuItem>
           ) : null}
           {canArchive ? (
-            <DropdownMenuItem onSelect={() => archive([l.id])}>
+            <DropdownMenuItem onSelect={() => requestArchive([l])}>
               <Archive className="size-4" aria-hidden />
               Archive
             </DropdownMenuItem>
@@ -520,7 +540,9 @@ function LearnerListPanel({
             selectable ? (
               <LearnerBulkActions
                 selectedCount={selectedOnPage.length}
-                onArchive={() => archive(selectedOnPage)}
+                onArchive={() =>
+                  requestArchive(learners.filter((l) => selected.has(l.id)))
+                }
                 onEnrollAral={openBulkAral}
                 pending={pending}
               />
@@ -768,6 +790,20 @@ function LearnerListPanel({
         onClose={() => setAralTarget(null)}
         onDone={() => setSelected(new Set())}
       />
+
+      {archiveTarget ? (
+        <ConfirmAction
+          open
+          onOpenChange={(next) => {
+            if (!next) setArchiveTarget(null);
+          }}
+          title={archiveConfirmTitle(archiveTarget)}
+          description={archiveConfirmDescription(archiveTarget)}
+          confirmLabel={archiveConfirmLabel(archiveTarget)}
+          variant="destructive"
+          onConfirm={() => archive(archiveTarget.ids)}
+        />
+      ) : null}
     </div>
   );
 }

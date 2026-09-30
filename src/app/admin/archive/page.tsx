@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdminPage } from "@/lib/auth/session";
 import { Archive as ArchiveIcon } from "lucide-react";
 import { AdminPage } from "@/components/admin/admin-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
@@ -60,7 +60,7 @@ function schoolsFromArchive(data: Archive): { id: string; name: string }[] {
  * `ArchiveView` can compute each panel's Suspense key itself.
  */
 export default async function AdminArchivePage({ searchParams }: PageProps) {
-  const user = await requireUser("SUPER_ADMIN");
+  const user = await requireDeveloperAdminPage();
   const params = await searchParams;
   const { school, q, teachers, learners, teachersSort, learnersSort } = params;
 

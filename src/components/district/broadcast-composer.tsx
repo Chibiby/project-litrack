@@ -247,7 +247,7 @@ export function BroadcastComposer({
           {recipientCount === 1
             ? "1 school will receive this."
             : `${recipientCount} schools will receive this.`}{" "}
-          School Heads see it on their Announcements page and cannot edit or delete it.
+          School Heads see it on their Announcements page and cannot edit or remove it.
         </p>
       </fieldset>
 

@@ -136,6 +136,58 @@ function schoolsWhere(
   return where;
 }
 
+export type RemovedSchoolRow = {
+  id: string;
+  name: string;
+  schoolIdCode: string;
+  region: string | null;
+  division: string | null;
+  isDemo: boolean;
+  removedAt: Date;
+  users: number;
+  learners: number;
+};
+
+/**
+ * Schools a Super Admin removed, most recently removed first, for the "Removed
+ * schools" list. Deliberately NOT cached: the list is tiny, and a school that
+ * was just restored must leave it on the very next render. The caller is the
+ * Super Admin schools page, which has already run `requireUser("SUPER_ADMIN")`.
+ *
+ * No `demoSchoolFilter`, on purpose and matching `getSchoolsListPage`: this is
+ * the admin console, which keeps the demo tenant visible even while demo mode
+ * is off ("an admin has to be able to see and manage the school whose
+ * visibility they are switching" — see `SchoolRow.isDemo`). The filter belongs
+ * to the public and aggregate reads.
+ */
+export async function getRemovedSchools(): Promise<RemovedSchoolRow[]> {
+  const schools = await prisma.school.findMany({
+    where: { deletedAt: { not: null } },
+    orderBy: [{ deletedAt: "desc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      schoolIdCode: true,
+      region: true,
+      division: true,
+      isDemo: true,
+      deletedAt: true,
+      _count: { select: { users: true, learners: true } },
+    },
+  });
+  return schools.map((s) => ({
+    id: s.id,
+    name: s.name,
+    schoolIdCode: s.schoolIdCode,
+    region: s.region,
+    division: s.division,
+    isDemo: s.isDemo,
+    removedAt: s.deletedAt as Date,
+    users: s._count.users,
+    learners: s._count.learners,
+  }));
+}
+
 /**
  * Admin schools table page — Data Cache keyed by `schools-list` + page/q/region.
  */

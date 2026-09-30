@@ -80,6 +80,8 @@ interface AppSidebarProps {
    * `NavOptions.pendingTeacherCount`.
    */
   pendingTeacherCount?: number;
+  /** Super Admin only — shows Developer Controls; see `NavOptions.isDeveloperAdmin`. */
+  isDeveloperAdmin?: boolean;
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -257,6 +259,7 @@ export function AppSidebar({
   isFloating,
   advisoryPlacements,
   pendingTeacherCount,
+  isDeveloperAdmin,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
@@ -270,8 +273,9 @@ export function AppSidebar({
         isFloating,
         advisoryPlacements,
         pendingTeacherCount,
+        isDeveloperAdmin,
       }),
-    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, pendingTeacherCount]
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, pendingTeacherCount, isDeveloperAdmin]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   // `navPath`, not `pathname`: during a click the router has not committed yet

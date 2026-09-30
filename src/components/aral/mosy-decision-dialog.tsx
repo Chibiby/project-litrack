@@ -156,12 +156,16 @@ function MosyDecisionForm({
   return (
     <AppForm form={form} onSubmit={onValid} className="grid gap-4">
       <DialogHeader className="pr-8">
-        <DialogTitle>Move out from ARAL?</DialogTitle>
+        <DialogTitle>MOSY decision for {row.fullName}</DialogTitle>
         <DialogDescription asChild>
           <div className="space-y-2">
             <p>
               <span className="font-semibold text-foreground">{row.fullName}</span>
               <span className="text-muted-foreground"> · {gradeSection}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              You can undo a move-out: the tutor who recorded it can reopen this dialog and
+              choose Stay.
             </p>
           </div>
         </DialogDescription>
@@ -343,7 +347,13 @@ function MosyDecisionForm({
           </Button>
         ) : null}
         <Button type="submit" disabled={pending} onClick={() => (intent.current = "save")}>
-          {pending ? "Saving…" : "Save MOSY Decision"}
+          {pending
+            ? "Saving…"
+            : decision === "MOVE_OUT"
+              ? "Move out learner"
+              : decision === "STAY"
+                ? "Keep in ARAL"
+                : "Save MOSY decision"}
         </Button>
       </DialogFooter>
     </AppForm>
@@ -351,7 +361,7 @@ function MosyDecisionForm({
 }
 
 /**
- * "Move out from ARAL?" — the only place a MOSY level or decision is saved.
+ * "MOSY decision" — the only place a MOSY level or decision is saved.
  * Closing it any way (Cancel, Escape, the X) discards the draft; nothing is
  * written until Save.
  */

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdminPage } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { TestLabClient, type TestLabPageData } from "@/components/admin/test-lab";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * they prepare, reset or start a session.
  */
 export default async function AdminTestLabPage() {
-  const user = await requireUser("SUPER_ADMIN");
+  const user = await requireDeveloperAdminPage();
 
   const [demoSession, status, fixtures, districtAdmins] = await Promise.all([
     readDemoSession(),

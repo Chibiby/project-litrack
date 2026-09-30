@@ -201,7 +201,7 @@ describe("deleteSection", () => {
     const res = await deleteSection(form({ sectionId: "s-1" }));
 
     expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
-    expect((res as { error: string }).error).toContain("Couldn't delete the section");
+    expect((res as { error: string }).error).toContain("Couldn't remove the section");
     expect(writeAudit).not.toHaveBeenCalled();
   });
 });

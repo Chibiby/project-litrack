@@ -211,6 +211,18 @@ export const ERRORS = {
       "Your school has no active school year yet. Ask your School Head to set the school year first.",
   },
 
+  // ── Sections ─────────────────────────────────────────────────────────────
+  /**
+   * Removing a section that still has learners placed in it. `{learners}` is
+   * already counted and pluralised ("12 learners", "1 learner") so the message
+   * tells the School Head how many to move first.
+   */
+  SECTION_HAS_LEARNERS: {
+    status: 409,
+    severity: "user",
+    message: "Move the {learners} in {section} to another section first.",
+  },
+
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
     status: 422,

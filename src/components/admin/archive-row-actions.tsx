@@ -42,7 +42,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
   const { purgeCounts } = learner;
 
   const purgeDescription =
-    `Permanently delete ${learner.fullName}? This removes the learner and all ` +
+    `Delete ${learner.fullName} permanently? This deletes the learner and all ` +
     `${joinParts([
       pluralize(purgeCounts.attendance, "attendance record", "attendance records"),
       pluralize(purgeCounts.readingLevelRecord, "reading assessment", "reading assessments"),
@@ -102,7 +102,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
         onConfirm={restore}
       />
       <ConfirmAction
-        title="Delete permanently"
+        title={`Delete ${learner.fullName} permanently?`}
         description={purgeDescription}
         confirmLabel="Delete permanently"
         variant="destructive"
@@ -112,7 +112,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
             variant="ghost"
             size="sm"
             className="text-destructive hover:text-destructive lg:h-9"
-            aria-label={`Permanently delete ${learner.fullName}`}
+            aria-label={`Delete ${learner.fullName} permanently`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
           </Button>
@@ -127,7 +127,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
   const router = useRouter();
 
   const purgeDescription =
-    `Permanently delete ${teacher.fullName}'s account? Every attendance mark, assessment and grade ` +
+    `Delete ${teacher.fullName}'s account permanently? Every attendance mark, assessment and grade ` +
     `they recorded stays in place, but the name of who recorded it is blanked. ` +
     `The audit log keeps a record that this happened. This cannot be undone.`;
 
@@ -178,7 +178,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
         onConfirm={restore}
       />
       <ConfirmAction
-        title="Delete permanently"
+        title={`Delete ${teacher.fullName} permanently?`}
         description={purgeDescription}
         confirmLabel="Delete permanently"
         variant="destructive"
@@ -188,7 +188,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
             variant="ghost"
             size="sm"
             className="text-destructive hover:text-destructive lg:h-9"
-            aria-label={`Permanently delete ${teacher.fullName}`}
+            aria-label={`Delete ${teacher.fullName} permanently`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
           </Button>

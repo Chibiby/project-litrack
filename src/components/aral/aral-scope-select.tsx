@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
 import type { LearnerListSectionFilter } from "@/lib/learners/pagination";
 import type { SectionOption } from "@/components/learners/learner-list-toolbar";
 import type { AralGradeOption } from "@/components/aral/aral-filter-popover";
@@ -53,14 +54,13 @@ export function AralGradeSelect({
   function navigate(nextGradeId: string) {
     if (nextGradeId === gradeId) return;
     const path = pathForGrade(nextGradeId);
-    router.push(
-      buildHref(path, {
-        schoolId,
-        ...preserveParams,
-        // Section IDs are grade-scoped — drop on grade change.
-        section: undefined,
-      })
-    );
+    const href = buildHref(path, {
+      schoolId,
+      ...preserveParams,
+      // Section IDs are grade-scoped — drop on grade change.
+      section: undefined,
+    });
+    runGuarded(() => router.push(href));
   }
 
   return (
@@ -116,13 +116,12 @@ export function AralSectionSelect({
 
   function navigate(nextSection: LearnerListSectionFilter) {
     const path = pathForGrade(gradeId);
-    router.push(
-      buildHref(path, {
-        schoolId,
-        ...preserveParams,
-        section: nextSection === "all" ? undefined : nextSection,
-      })
-    );
+    const href = buildHref(path, {
+      schoolId,
+      ...preserveParams,
+      section: nextSection === "all" ? undefined : nextSection,
+    });
+    runGuarded(() => router.push(href));
   }
 
   return (

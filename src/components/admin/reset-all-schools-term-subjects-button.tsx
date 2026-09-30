@@ -29,7 +29,7 @@ const CONFIRM_TEXT = "RESET";
  * every school at once, so it is gated by a typed confirmation rather than a
  * single click-through dialog.
  */
-export function ResetAllSchoolsTermSubjectsButton() {
+export function ResetAllSchoolsTermSubjectsButton({ schoolCount }: { schoolCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
@@ -58,7 +58,7 @@ export function ResetAllSchoolsTermSubjectsButton() {
       );
       if (failedSchools > 0) {
         toast.warning(
-          `${failedSchools} school${failedSchools === 1 ? "" : "s"} could not be reset. Check the error log at /admin/errors.`
+          `${failedSchools} school${failedSchools === 1 ? "" : "s"} could not be reset. Run the reset again to retry them.`
         );
       }
 
@@ -91,8 +91,8 @@ export function ResetAllSchoolsTermSubjectsButton() {
         <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            This changes every school on the platform at once and cannot be
-            undone from this screen.
+            This changes all {schoolCount} school{schoolCount === 1 ? "" : "s"} at
+            once and cannot be undone.
           </span>
         </div>
 

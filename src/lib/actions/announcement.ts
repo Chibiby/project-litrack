@@ -143,5 +143,5 @@ export const deleteAnnouncement = action(
     revalidateSchoolDashboard(user.schoolId);
     return { ok: true };
   },
-  { verb: "delete the announcement" }
+  { verb: "remove the announcement" }
 );

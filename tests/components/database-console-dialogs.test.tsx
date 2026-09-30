@@ -74,11 +74,11 @@ describe("DatabaseConsole — backup dialogs", () => {
 
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(/Delete the daily backup from/)).not.toBeNull();
-    expect(within(dialog).getByText(/deleted permanently/)).not.toBeNull();
+    expect(within(dialog).getByText(/cannot be recovered/)).not.toBeNull();
     expect(removeBackup).not.toHaveBeenCalled();
     expect(window.confirm).not.toHaveBeenCalled();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete backup" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(removeBackup).toHaveBeenCalledTimes(1));
     const fd = removeBackup.mock.calls[0]![0] as FormData;
@@ -146,7 +146,7 @@ describe("DatabaseConsole — backup dialogs", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Delete the daily backup/ }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete backup" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(removeBackup).toHaveBeenCalledTimes(1));
     const rowRestore = screen.getByRole("button", { name: "Restore", hidden: true });

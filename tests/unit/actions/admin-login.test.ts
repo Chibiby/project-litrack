@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Super Admin sign-in by username.
@@ -30,6 +30,8 @@ const signOut = vi.fn();
 const getUserMock = vi.fn();
 const writeAudit = vi.fn();
 const checkRateLimit = vi.fn();
+const peekRateLimit = vi.fn();
+let requestHeaders: Record<string, string> = {};
 const redirect = vi.fn();
 const requireUser = vi.fn();
 const warmAdminRoutes = vi.fn();
@@ -83,7 +85,9 @@ vi.mock("@/lib/rate-limit", () => ({
   get checkRateLimit() {
     return checkRateLimit;
   },
-  peekRateLimit: vi.fn(async () => ({ ok: true, retryAfterMs: 0 })),
+  get peekRateLimit() {
+    return peekRateLimit;
+  },
 }));
 
 // The real role → home mapping: where each admin role lands is under test.
@@ -138,6 +142,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 // ticket cookie, and the real `cookies()` throws outside a request.
 vi.mock("next/headers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/headers")>()),
+  headers: async () => new Headers(requestHeaders),
   cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
 }));
 
@@ -161,19 +166,49 @@ function form(username: string, password: string): FormData {
   return fd;
 }
 
-/** Run the action, swallowing the throw that a successful redirect performs. */
+/**
+ * Run the action, swallowing the throw that a successful redirect performs.
+ *
+ * Timers are fake (see beforeEach), so the failure padding costs no real time:
+ * the loop jumps the clock to each timer the action schedules until it settles.
+ */
 async function run(fd: FormData) {
-  try {
-    return await loginAdmin(fd);
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) return { redirected: true };
-    throw err;
-  }
+  let settled = false;
+  const pending = (async () => {
+    try {
+      return await loginAdmin(fd);
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT:")) {
+        return { redirected: true };
+      }
+      throw err;
+    } finally {
+      settled = true;
+    }
+  })();
+  pending.catch(() => undefined);
+  while (!settled) await vi.advanceTimersToNextTimerAsync();
+  return pending;
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.clearAllMocks();
+  requestHeaders = { "x-forwarded-for": "198.51.100.7" };
   checkRateLimit.mockResolvedValue({ ok: true });
+  peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+  // Default: the provider rejects the credentials. An unknown handle now makes
+  // this same call, against an address that cannot exist.
+  signInWithPassword.mockReset();
+  signInWithPassword.mockResolvedValue({
+    data: { user: null },
+    error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
 });
 
 describe("loginAdmin", () => {
@@ -224,12 +259,15 @@ describe("loginAdmin", () => {
     );
   });
 
-  it("never reaches Supabase for an unknown handle", async () => {
+  it("gives an unknown handle the same Supabase round-trip, against an address that cannot exist", async () => {
     userFindFirst.mockResolvedValue(null);
 
     const result = await run(form("nobody", "s3cret"));
 
-    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(signInWithPassword).toHaveBeenCalledTimes(1);
+    const arg = signInWithPassword.mock.calls[0][0] as { email: string; password: string };
+    expect(arg.email).toMatch(/\.invalid$/);
+    expect(arg.password).toBe("s3cret");
     expect(result).toEqual({
       ok: false,
       code: "AUTH_INCORRECT_CREDENTIALS",
@@ -282,6 +320,21 @@ describe("loginAdmin", () => {
     const result = await run(form("admin", "s3cret"));
 
     expect(result).toMatchObject({ ok: false, code: "AUTH_PROVIDER_RATE_LIMITED" });
+  });
+
+  it.each([
+    [{ status: 429, message: "Request rate limit reached" }, "AUTH_PROVIDER_RATE_LIMITED"],
+    [{ status: 500, message: "Internal error" }, "AUTH_PROVIDER_ERROR"],
+  ])("surfaces the same provider failure for an unknown and a known handle (%j)", async (err, code) => {
+    signInWithPassword.mockResolvedValue({ data: { user: null }, error: err });
+
+    userFindFirst.mockResolvedValue(null);
+    const unknown = await run(form("nobody", "s3cret"));
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    const known = await run(form("admin", "s3cret"));
+
+    expect(unknown).toMatchObject({ ok: false, code });
+    expect(known).toMatchObject({ ok: false, code });
   });
 
   it("does not write the typed username into the audit row for a failed attempt", async () => {
@@ -376,12 +429,14 @@ describe("loginAdmin — district admins", () => {
     );
   });
 
-  it("never reaches Supabase for a teacher's username, and says the generic thing", async () => {
+  it("never signs a teacher's own address in, and says the generic thing", async () => {
     usersTable([{ id: "t-1", email: "t@example.com", username: "maria.cruz", role: "TEACHER" }]);
 
     const result = await run(form("maria.cruz", "s3cret"));
 
-    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(signInWithPassword).not.toHaveBeenCalledWith(
+      expect.objectContaining({ email: "t@example.com" })
+    );
     expect(result).toMatchObject({
       ok: false,
       code: "AUTH_INCORRECT_CREDENTIALS",
@@ -430,6 +485,108 @@ describe("loginAdmin — district admins", () => {
         metadata: expect.objectContaining({ role: "DISTRICT_ADMIN" }),
       })
     );
+  });
+});
+
+describe("loginAdmin — per-address failure limit", () => {
+  const WRONG_PASSWORD = {
+    data: { user: null },
+    error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+  };
+
+  it("refuses with the too-many-attempts error before touching the database", async () => {
+    peekRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 60_000 });
+
+    const result = await run(form("admin", "s3cret"));
+
+    expect(result).toMatchObject({ ok: false, code: "AUTH_TOO_MANY_ATTEMPTS" });
+    expect(peekRateLimit).toHaveBeenCalledWith("login:admin-fail:ip:198.51.100.7", {
+      limit: 20,
+      windowMs: 15 * 60 * 1000,
+    });
+    expect(userFindFirst).not.toHaveBeenCalled();
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("keys on the Cloudflare address, not a client-supplied x-forwarded-for", async () => {
+    vi.stubEnv("LITRACK_DEPLOY_TARGET", "cloudflare");
+    requestHeaders = { "cf-connecting-ip": "192.0.2.44", "x-forwarded-for": "6.6.6.6" };
+    userFindFirst.mockResolvedValue(null);
+
+    await run(form("nobody", "s3cret"));
+
+    expect(peekRateLimit).toHaveBeenCalledWith(
+      "login:admin-fail:ip:192.0.2.44",
+      expect.anything()
+    );
+  });
+
+  it("charges the address for a failure but not for a success", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue(WRONG_PASSWORD);
+    await run(form("admin", "wrong"));
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      "login:admin-fail:ip:198.51.100.7",
+      expect.anything()
+    );
+
+    checkRateLimit.mockClear();
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({
+      id: "user-1",
+      role: "SUPER_ADMIN",
+      isActive: true,
+      deletedAt: null,
+    });
+    await run(form("admin", "s3cret"));
+    expect(checkRateLimit).not.toHaveBeenCalledWith(
+      "login:admin-fail:ip:198.51.100.7",
+      expect.anything()
+    );
+  });
+});
+
+describe("loginAdmin — failure timing", () => {
+  const FLOOR_MS = 800;
+
+  async function elapsedFor(fd: FormData): Promise<number> {
+    const start = Date.now();
+    await run(fd);
+    return Date.now() - start;
+  }
+
+  it("holds an unknown handle to the minimum time", async () => {
+    userFindFirst.mockResolvedValue(null);
+    expect(await elapsedFor(form("nobody", "s3cret"))).toBeGreaterThanOrEqual(FLOOR_MS);
+  });
+
+  it("holds a wrong password to the minimum time", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({
+      data: { user: null },
+      error: { status: 400, code: "invalid_credentials", message: "Invalid login credentials" },
+    });
+    expect(await elapsedFor(form("admin", "wrong"))).toBeGreaterThanOrEqual(FLOOR_MS);
+  });
+
+  it("holds a not-authorized account to the minimum time", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-t" } }, error: null });
+    userFindUnique.mockResolvedValue({ id: "user-1", role: "TEACHER", isActive: true, deletedAt: null });
+    expect(await elapsedFor(form("admin", "s3cret"))).toBeGreaterThanOrEqual(FLOOR_MS);
+  });
+
+  it("does not delay a success, a rate-limit refusal, or a validation failure", async () => {
+    userFindFirst.mockResolvedValue(ADMIN_ROW);
+    signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
+    userFindUnique.mockResolvedValue({ id: "user-1", role: "SUPER_ADMIN", isActive: true, deletedAt: null });
+    expect(await elapsedFor(form("admin", "s3cret"))).toBeLessThan(FLOOR_MS);
+
+    peekRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 1000 });
+    expect(await elapsedFor(form("admin", "s3cret"))).toBeLessThan(FLOOR_MS);
+
+    peekRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
+    expect(await elapsedFor(form("   ", "s3cret"))).toBeLessThan(FLOOR_MS);
   });
 });
 

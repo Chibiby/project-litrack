@@ -24,7 +24,7 @@ vi.mock("@/lib/admin/archive", () => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({
-  requireUser: vi.fn(async () => ({
+  requireDeveloperAdminPage: vi.fn(async () => ({
     role: "SUPER_ADMIN",
     fullName: "Admin Person",
     email: "admin@example.test",

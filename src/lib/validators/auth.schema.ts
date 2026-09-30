@@ -45,6 +45,24 @@ export const teacherLoginSchema = z.object({
   password: nonEmpty("Password required"),
 });
 
+/** `School.id` is `@default(uuid())`: any-version 8-4-4-4-12 hex. */
+const SCHOOL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Anonymous, fire-and-forget failure report from the browser sign-in. Bounded
+ * on every field: the endpoint takes no session, so nothing here may be free
+ * text of arbitrary size. The caller drops the report on any failure instead of
+ * answering, so this is never an oracle for what a valid school looks like.
+ */
+export const reportLoginFailureSchema = z.object({
+  role: z.enum(["SCHOOL_HEAD", "TEACHER"]),
+  schoolId: z.string().regex(SCHOOL_ID_PATTERN),
+  reason: z.string().max(64),
+  // A mistyped address must not drop the whole report: the attempt still gets
+  // its audit row, just without a subject to credit it to.
+  email: z.string().trim().toLowerCase().max(254).email().optional().catch(undefined),
+});
+
 const teacherRegisterNames = {
   firstName: nonEmpty("First name is required"),
   middleName: optionalString,

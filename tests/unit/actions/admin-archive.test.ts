@@ -60,6 +60,8 @@ vi.mock("@/lib/prisma", () => ({
 const requireUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...args: unknown[]) => requireUser(...args),
+  // Tier is covered in tests/unit/auth/developer-admin-guard.test.ts.
+  requireDeveloperAdmin: () => requireUser("SUPER_ADMIN"),
 }));
 
 // ── rate limit ───────────────────────────────────────────────────────────

@@ -12,6 +12,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  UnsavedChangesDialog,
+  useUnsavedChangesPrompt,
+} from "@/components/unsaved-changes-dialog";
 import { AdvisoryChooser } from "@/components/learners/advisory-chooser";
 import type { AdvisoryPlacement } from "@/lib/teachers/advisory";
 import { Plus, UserRoundPlus } from "lucide-react";
@@ -59,6 +63,9 @@ export function AddLearnerDialog({
     initialSectionId(placements)
   );
 
+  const [dirty, setDirty] = useState(false);
+  const { guard, dialogProps } = useUnsavedChangesPrompt(dirty);
+
   const selectedPlacement = placements.find(
     (p) => p.sectionId === selectedSectionId
   );
@@ -68,12 +75,21 @@ export function AddLearnerDialog({
     setSelectedSectionId(initialSectionId(placements));
   }
 
-  function handleOpenChange(next: boolean) {
+  function setOpenNow(next: boolean) {
     setOpen(next);
     // Reset on close (cancel or ✕) so a reopen never carries a stale pick —
     // and on open, since `initialSectionId` may have changed if the teacher's
     // advisories changed between visits.
-    if (!next) resetChooser();
+    if (!next) {
+      setDirty(false);
+      resetChooser();
+    }
+  }
+
+  // X, Escape, overlay click and Cancel all land here; a dirty form asks first.
+  function handleOpenChange(next: boolean) {
+    if (next) setOpenNow(true);
+    else guard(() => setOpenNow(false));
   }
 
   return (
@@ -124,10 +140,13 @@ export function AddLearnerDialog({
               gradeLabel: selectedPlacement.gradeLabel,
               sectionName: selectedPlacement.sectionName,
             }}
-            onCreated={() => handleOpenChange(false)}
+            onCreated={() => setOpenNow(false)}
             onCancel={() => handleOpenChange(false)}
+            onDirtyChange={setDirty}
           />
         ) : null}
+
+        <UnsavedChangesDialog {...dialogProps} />
       </DialogContent>
     </Dialog>
   );

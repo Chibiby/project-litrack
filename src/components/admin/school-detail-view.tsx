@@ -29,7 +29,7 @@ import {
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { removeSchoolLearners, removeSchoolTeachers } from "@/lib/actions/admin-school";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
-import { removeAllTeachers, resetOperationalData } from "@/lib/actions/database";
+import { clearSchoolEverything } from "@/lib/actions/database";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 import { SortSelect } from "@/components/ui/sort-select";
@@ -167,21 +167,27 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
       data.set("confirm", CONFIRM_PHRASES.resetOperational);
       data.set("schoolId", schoolId);
 
-      const cleared = await callAction(() => resetOperationalData(data));
+      const cleared = await callAction(() => clearSchoolEverything(data));
       if (!cleared.ok) {
         toastFailure(cleared);
         return;
       }
 
-      const teachers = new FormData();
-      teachers.set("confirm", CONFIRM_PHRASES.removeTeachers);
-      teachers.set("schoolId", schoolId);
-      const removed = await callAction(() => removeAllTeachers(teachers));
-      if (!removed.ok) {
-        // The records are already gone; say so rather than implying nothing ran.
-        toast.error(`Records cleared, but the teacher accounts were not: ${removed.error}`);
+      const { teachersFailed = 0, reversible = false, teacherStepFailed = false } =
+        cleared.data ?? {};
+      const undoNote = reversible
+        ? ""
+        : " This cannot be undone: no backup was taken.";
+      if (teacherStepFailed) {
+        toast.warning(
+          `${schoolName}'s records were cleared, but the teacher accounts could not be removed. Run Remove teachers from the database console.${undoNote}`
+        );
+      } else if (teachersFailed > 0) {
+        toast.warning(
+          `${schoolName} cleared, but ${teachersFailed} teacher account${teachersFailed === 1 ? "" : "s"} could not be removed.${undoNote}`
+        );
       } else {
-        toast.success(`${schoolName} cleared`);
+        toast.success(`${schoolName} cleared.${undoNote}`);
       }
 
       setTyped("");
@@ -202,6 +208,10 @@ function ClearEverything({ schoolId, schoolName }: { schoolId: string; schoolNam
             Deletes every learner and record belonging to {schoolName}, then removes its teacher
             accounts. The school, its school years, grade levels and sections stay. No other school
             is touched.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Undo in the database console restores it. Undo rolls back the whole database, so it
+            also reverts changes other schools made after this clear.
           </p>
         </div>
         {!open ? (
@@ -363,9 +373,12 @@ export function SchoolDetailView({
         return;
       }
       const { removed = 0, failed = 0 } = res.data ?? {};
-      toast.success(
-        `${removed} teacher account${removed === 1 ? "" : "s"} removed${failed ? `, ${failed} failed` : ""}`
-      );
+      const removedText = `${removed} teacher account${removed === 1 ? "" : "s"} removed`;
+      if (failed > 0) {
+        toast.warning(`${removedText}, but ${failed} could not be removed`);
+      } else {
+        toast.success(removedText);
+      }
       setPickedTeachers(new Set());
       router.refresh();
     });

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form";
 import { AppForm, applyFieldErrors, useAppForm, markFormClean } from "@/components/forms/app-form";
 import { Label } from "@/components/ui/label";
+import { ConfirmAction } from "@/components/confirm-action";
 import { callAction } from "@/lib/ui/call-action";
 import {
   changeEmailSchema,
@@ -44,6 +45,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEmail, setPreviewEmail] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [pendingValues, setPendingValues] = useState<ChangeEmailInput | null>(null);
   const synthetic = isSynthetic ?? isSyntheticEmail(currentEmail);
 
   const form = useAppForm<ChangeEmailInput>({
@@ -54,6 +56,28 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
       currentPassword: "",
     },
   });
+
+  function submit(values: ChangeEmailInput) {
+    startTransition(async () => {
+      const res = await callAction(() => changeEmailAction(toFormData(values)));
+      if (res && !res.ok) {
+        if (!applyFieldErrors(form, res)) setFormError(res.error);
+        return;
+      }
+      markFormClean(form, {
+        newEmail: "",
+        confirmEmail: "",
+        currentPassword: "",
+      });
+      if (res?.data?.dryRun) {
+        setPreviewEmail(res.data.preview.newEmail);
+        setPreviewOpen(true);
+        return;
+      }
+      toast.success("Email updated");
+      router.refresh();
+    });
+  }
 
   return (
     <Card className={cn("rounded-xl border border-border/80 shadow-sm", className)}>
@@ -75,25 +99,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
           className="space-y-4"
           onSubmit={(values) => {
             setFormError(null);
-            startTransition(async () => {
-              const res = await callAction(() => changeEmailAction(toFormData(values)));
-              if (res && !res.ok) {
-                if (!applyFieldErrors(form, res)) setFormError(res.error);
-                return;
-              }
-              markFormClean(form, {
-                newEmail: "",
-                confirmEmail: "",
-                currentPassword: "",
-              });
-              if (res?.data?.dryRun) {
-                setPreviewEmail(res.data.preview.newEmail);
-                setPreviewOpen(true);
-                return;
-              }
-              toast.success("Email updated");
-              router.refresh();
-            });
+            setPendingValues(values);
           }}
         >
           {dryRun ? <DryRunNotice /> : null}
@@ -162,12 +168,25 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
             type="submit"
             className="w-full"
             loading={pending}
-            loadingText="Updating…"
+            loadingText="Changing…"
           >
-            Update email
+            Change email
           </Button>
         </AppForm>
       </CardContent>
+      <ConfirmAction
+        open={pendingValues !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingValues(null);
+        }}
+        title="Change your email?"
+        description={`${currentEmail} → ${pendingValues?.newEmail ?? ""}. You'll sign in with ${pendingValues?.newEmail ?? "the new address"} from now on. No confirmation email is sent.`}
+        confirmLabel="Change email"
+        variant="default"
+        onConfirm={() => {
+          if (pendingValues) submit(pendingValues);
+        }}
+      />
       <DryRunPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}

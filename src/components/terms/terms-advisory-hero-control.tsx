@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { AdvisorySelect } from "@/components/learners/advisory-select";
 import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
 
 /**
  * The End of Terms advisory switcher, floated in the page hero's top-right
@@ -47,12 +48,12 @@ export function TermsAdvisoryHeroControl({
           const sp = new URLSearchParams();
           if (state.schoolId) sp.set("schoolId", state.schoolId);
           sp.set("advisory", advisory);
-          router.push(`${kinderBasePath}?${sp.toString()}`, { scroll: false });
+          const kinderHref = `${kinderBasePath}?${sp.toString()}`;
+          runGuarded(() => router.push(kinderHref, { scroll: false }));
           return;
         }
-        router.push(sheetHref(basePath, { ...state, advisory, section: "all" }), {
-          scroll: false,
-        });
+        const href = sheetHref(basePath, { ...state, advisory, section: "all" });
+        runGuarded(() => router.push(href, { scroll: false }));
       }}
       showAllOption={!isMixed}
       className="h-11 w-36 gap-1.5 px-2 text-xs max-sm:[&_svg:first-child]:hidden sm:w-44 sm:gap-2 sm:px-3 sm:text-sm lg:w-56"

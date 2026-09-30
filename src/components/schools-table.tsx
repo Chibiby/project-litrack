@@ -682,7 +682,7 @@ function SchoolsTableInner({
                       {caps.delete ? (
                         <ConfirmAction
                           title="Remove this school?"
-                          description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+                          description={`${school.name} will be hidden from active lists. Its data is kept. You can restore it from the Removed tab.`}
                           confirmLabel="Remove"
                           variant="destructive"
                           trigger={
@@ -811,7 +811,7 @@ function SchoolsTableInner({
                 {caps.delete ? (
                   <ConfirmAction
                     title="Remove this school?"
-                    description={`${school.name} will be hidden from active lists. Existing data is kept and can be restored by support if needed.`}
+                    description={`${school.name} will be hidden from active lists. Its data is kept. You can restore it from the Removed tab.`}
                     confirmLabel="Remove"
                     variant="destructive"
                     trigger={

@@ -375,10 +375,12 @@ describe("finishSchoolHeadLogin", () => {
   });
 });
 
+const REPORT_SCHOOL_ID = "3f2b8c1e-5a4d-4e6f-9b7a-1c2d3e4f5a6b";
+
 describe("reportLoginFailure", () => {
   it("normalizes a reason it does not recognize", async () => {
     await reportLoginFailure({
-      schoolId: "school-1",
+      schoolId: REPORT_SCHOOL_ID,
       role: "SCHOOL_HEAD",
       reason: "whatever-the-client-says",
     });
@@ -391,7 +393,7 @@ describe("reportLoginFailure", () => {
 
   it("keeps the new reasons the browser can now tell apart", async () => {
     await reportLoginFailure({
-      schoolId: "school-1",
+      schoolId: REPORT_SCHOOL_ID,
       role: "SCHOOL_HEAD",
       reason: "service_unreachable",
     });
@@ -405,7 +407,7 @@ describe("reportLoginFailure", () => {
   it("does not credit a teacher from another school to this one", async () => {
     userFindUnique.mockResolvedValue({ id: "teacher-9", email: "t@x.edu", schoolId: "school-2" });
     await reportLoginFailure({
-      schoolId: "school-1",
+      schoolId: REPORT_SCHOOL_ID,
       role: "TEACHER",
       email: "t@x.edu",
       reason: "incorrect_credentials",
@@ -414,8 +416,43 @@ describe("reportLoginFailure", () => {
   });
 
   it("records a provider failure for admins, but never as a system alert", async () => {
-    await reportLoginFailure({ schoolId: "school-1", role: "TEACHER", reason: "provider_error" });
+    await reportLoginFailure({
+      schoolId: REPORT_SCHOOL_ID,
+      role: "TEACHER",
+      reason: "provider_error",
+    });
     expect(reportError).toHaveBeenCalledTimes(1);
     expect(reportError.mock.calls[0][0]).toMatchObject({ severity: "security" });
+  });
+
+  it.each([
+    ["a school id that is not a uuid", { schoolId: "school-1", role: "TEACHER", reason: "x" }],
+    ["a role the form never sends", { schoolId: REPORT_SCHOOL_ID, role: "SUPER_ADMIN", reason: "x" }],
+    [
+      "an oversized reason",
+      { schoolId: REPORT_SCHOOL_ID, role: "TEACHER", reason: "r".repeat(65) },
+    ],
+  ])("records nothing and answers ok for %s", async (_label, bad) => {
+    const result = await reportLoginFailure(bad as never);
+    expect(result).toEqual({ ok: true });
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(userFindUnique).not.toHaveBeenCalled();
+    expect(userFindFirst).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a malformed email", "not-an-email"],
+    ["an oversized email", `${"a".repeat(250)}@x.edu`],
+  ])("still records the attempt, with no subject, for %s", async (_label, email) => {
+    const result = await reportLoginFailure({
+      schoolId: REPORT_SCHOOL_ID,
+      role: "TEACHER",
+      reason: "x",
+      email,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(userFindUnique).not.toHaveBeenCalled();
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
   });
 });

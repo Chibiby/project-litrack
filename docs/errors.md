@@ -385,6 +385,7 @@ if this table and the code ever disagree, trust the code.
 | `ADMIN_IMPERSONATE_INACTIVE` | 409 | user | This account is switched off, so signing in as it would end your own session with no way back. Turn the account back on first, then sign in as it. |
 | `TEST_LAB_NOT_PREPARED` | 409 | user | The test account isn't ready yet. Prepare test data on the Test Lab page, then try again. |
 | `SCHOOL_YEAR_NOT_ACTIVE` | 409 | user | Your school has no active school year yet. Ask your School Head to set the school year first. |
+| `SECTION_HAS_LEARNERS` | 409 | user | Move the {learners} in {section} to another section first. *(e.g. "Move the 12 learners in Sampaguita to another section first.")* |
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |

@@ -54,8 +54,12 @@ const SESSION_ID = "55555555-5555-4555-8555-555555555555";
 
 // ── requireUser ──────────────────────────────────────────────────────────
 const requireUser = vi.fn(async () => ({ id: ADMIN_ID, authId: ADMIN_AUTH_ID, role: "SUPER_ADMIN" }));
+// Delegates to `requireUser` so its per-test refusals still apply.
+const requireDeveloperAdmin = vi.fn((..._a: unknown[]) => requireUser());
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...a: unknown[]) => requireUser(...(a as [])),
+  // Tier is covered in tests/unit/auth/developer-admin-guard.test.ts.
+  requireDeveloperAdmin: (...a: unknown[]) => requireDeveloperAdmin(...a),
 }));
 
 /**
@@ -475,7 +479,7 @@ describe("startTestLabSession", () => {
   it("refuses a non-Super-Admin caller before any read or write", async () => {
     requireUser.mockRejectedValueOnce(new Error("NEXT_REDIRECT:/login"));
     await expect(startTestLabSession(labForm())).rejects.toThrow("NEXT_REDIRECT:/login");
-    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+    expect(requireDeveloperAdmin).toHaveBeenCalledWith("Page Test Lab");
     expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.school.findFirst).not.toHaveBeenCalled();
     expect(checkRateLimit).not.toHaveBeenCalled();

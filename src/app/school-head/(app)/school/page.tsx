@@ -48,7 +48,14 @@ async function GradeLevelsGrid({
       _count: { select: { teachers: true, learners: true } },
       sections: {
         where: { deletedAt: null },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          // Learners on the roster right now (not removed, not archived), so the
+          // page can warn before Remove. `deleteSection` re-counts in its own
+          // transaction and is the authority; this number is only a warning.
+          _count: { select: { learners: { where: { deletedAt: null, archivedAt: null } } } },
+        },
         orderBy: { name: "asc" },
       },
     },
@@ -80,7 +87,11 @@ async function GradeLevelsGrid({
       // its own count and is the authority on whether a grade may be switched
       // off; this number is a label, not a gate.
       learnerCount: grade._count.learners,
-      sections: grade.sections,
+      sections: grade.sections.map((s) => ({
+        id: s.id,
+        name: s.name,
+        learnerCount: s._count.learners,
+      })),
     };
   });
 

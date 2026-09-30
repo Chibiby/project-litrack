@@ -59,6 +59,7 @@ import {
 import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
 import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { clientIpFrom } from "@/lib/request-ip";
+import { reportLoginFailureSchema } from "@/lib/validators/auth.schema";
 
 /**
  * Where the password grant should be made.
@@ -386,14 +387,18 @@ export const finishTeacherLogin = action(
  */
 export const reportLoginFailure = action(
   "reportLoginFailure",
-  async (input: {
+  async (raw: {
     schoolId: string;
     role: "SCHOOL_HEAD" | "TEACHER";
     reason: string;
     email?: string;
   }): Promise<{ ok: true }> => {
+    // Anonymous and fire-and-forget: malformed input records nothing and says
+    // nothing, so the endpoint is neither an oracle nor a source of toasts.
+    const parsed = reportLoginFailureSchema.safeParse(raw);
+    if (!parsed.success) return { ok: true };
+    const input = parsed.data;
     const reason = normalizeReason(input.reason);
-    if (!input.schoolId) return { ok: true };
 
     const gate = await checkRateLimit(`login:report:${clientIpFrom(await headers())}`, REPORT_RATE);
     if (!gate.ok) return { ok: true };

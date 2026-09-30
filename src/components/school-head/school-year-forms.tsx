@@ -393,42 +393,29 @@ export function EditSchoolYearDialog({
   );
 }
 
+/**
+ * Only asks to switch; the confirmation lives in `SchoolYearsList`, outside the
+ * row, because the optimistic swap re-renders this row and would close a
+ * dialog mounted inside it before the server has answered.
+ */
 export function SetActiveYearButton({
-  schoolYearId,
   disabled,
   pending,
-  onSetActive,
+  onRequest,
 }: {
-  schoolYearId: string;
   disabled?: boolean;
   pending?: boolean;
-  onSetActive?: () => void | Promise<void>;
+  onRequest: () => void;
 }) {
-  const [localPending, startTransition] = useTransition();
-  const isPending = pending ?? localPending;
-
-  const runStandalone = () =>
-    runOptimistic(startTransition, async () => {
-      const fd = new FormData();
-      fd.set("schoolYearId", schoolYearId);
-      const res = await setActiveSchoolYear(fd);
-      await settleActionResult(res, "Active school year updated");
-    });
-
   return (
     <Button
       type="button"
       size="sm"
       variant="outline"
       disabled={disabled}
-      loading={isPending}
+      loading={pending}
       loadingText="Setting active…"
-      onClick={() => {
-        const handle = onSetActive ?? runStandalone;
-        void Promise.resolve(handle()).catch(() => {
-          /* toast already shown */
-        });
-      }}
+      onClick={onRequest}
     >
       Set active
     </Button>
@@ -444,6 +431,11 @@ export function SchoolYearsList({
   readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [activating, setActivating] = useState<{
+    id: string;
+    label: string;
+    currentLabel: string | null;
+  } | null>(null);
   const [optimisticYears, dispatchOptimistic] = useOptimistic(
     years,
     (state: SchoolYearListItem[], op: ListOptimisticOp<SchoolYearListItem>) =>
@@ -481,10 +473,22 @@ export function SchoolYearsList({
       const fd = new FormData();
       fd.set("schoolYearId", schoolYearId);
       const res = await deleteSchoolYear(fd);
-      await settleActionResult(res, "School year removed");
+      await settleActionResult(res, "School year deleted");
     });
 
   return (
+    <>
+    <ConfirmAction
+      open={activating !== null}
+      onOpenChange={(next) => {
+        if (!next) setActivating(null);
+      }}
+      title={`Make ${activating?.label ?? ""} active?`}
+      description={`${activating?.currentLabel ? `${activating.currentLabel} stops being active. ` : ""}New enrolments go to ${activating?.label ?? ""}. You can switch back.`}
+      confirmLabel={`Make ${activating?.label ?? ""} active`}
+      variant="default"
+      onConfirm={() => (activating ? setActive(activating.id) : undefined)}
+    />
     <ul className="space-y-3">
       {optimisticYears.map((y) => {
         const recordCount = y.enrollmentCount + y.termGradeCount;
@@ -515,9 +519,14 @@ export function SchoolYearsList({
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {!y.isActive ? (
                   <SetActiveYearButton
-                    schoolYearId={y.id}
                     pending={pending}
-                    onSetActive={() => setActive(y.id)}
+                    onRequest={() =>
+                      setActivating({
+                        id: y.id,
+                        label: y.label,
+                        currentLabel: optimisticYears.find((o) => o.isActive)?.label ?? null,
+                      })
+                    }
                   />
                 ) : null}
 
@@ -528,9 +537,9 @@ export function SchoolYearsList({
 
                 {removable ? (
                   <ConfirmAction
-                    title={`Remove ${y.label}?`}
-                    description="Nothing is recorded against this year yet, so removing it loses no data. This cannot be undone."
-                    confirmLabel="Remove"
+                    title={`Delete ${y.label} permanently?`}
+                    description="Nothing is recorded against this year yet, so deleting it loses no data. This cannot be undone."
+                    confirmLabel="Delete permanently"
                     variant="destructive"
                     disabled={pending}
                     trigger={
@@ -540,7 +549,7 @@ export function SchoolYearsList({
                         variant="ghost"
                         className="text-destructive"
                         disabled={pending}
-                        aria-label={`Remove ${y.label}`}
+                        aria-label={`Delete ${y.label} permanently`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -554,5 +563,6 @@ export function SchoolYearsList({
         );
       })}
     </ul>
+    </>
   );
 }

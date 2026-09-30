@@ -56,6 +56,7 @@ export function AppHeader({
   notifications,
   isAralVolunteer,
   isFloating,
+  isDeveloperAdmin,
   advisoryPlacements,
   expanded,
   onToggleSidebar,
@@ -87,6 +88,8 @@ export function AppHeader({
    * `NavOptions.isFloating`.
    */
   isFloating?: boolean;
+  /** Super Admin only — Developer Controls pages join the search; see `NavOptions.isDeveloperAdmin`. */
+  isDeveloperAdmin?: boolean;
   /**
    * Every advisory section this teacher holds, so the search's page list
    * carries the same "End of Terms Reports" target the rail does; see
@@ -102,8 +105,9 @@ export function AppHeader({
         isAralVolunteer,
         isFloating,
         advisoryPlacements,
+        isDeveloperAdmin,
       }),
-    [role, grades, isAralVolunteer, isFloating, advisoryPlacements]
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, isDeveloperAdmin]
   );
   // The pages the header search can jump to are exactly the rows this role's nav
   // renders — derived from it rather than listed again, so a nav item that is

@@ -11,6 +11,7 @@ vi.mock("@/components/reports/trigger-download", () => ({ triggerDownload }));
 vi.mock("sonner", () => ({ toast }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("q=ana&grade=g1&section=s2&status=PENDING"),
+  unstable_isUnrecognizedActionError: () => false,
 }));
 
 import { MosyExportButton } from "@/components/aral/mosy-export-button";
@@ -94,8 +95,20 @@ describe("MosyExportButton", () => {
     render(<MosyExportButton />);
     await openPopover();
     fireEvent.click(screen.getByRole("button", { name: "Download" }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Nope"));
+    await waitFor(() => expect(toast.error.mock.calls.at(-1)?.[0]).toBe("Nope"));
     expect(screen.getByRole("button", { name: "Download" })).toBeTruthy();
     expect(triggerDownload).not.toHaveBeenCalled();
+  });
+
+  it("shows the connection message instead of a generic one when the request never lands", async () => {
+    exportMosyReport.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<MosyExportButton />);
+    await openPopover();
+    fireEvent.click(screen.getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    const message = String(toast.error.mock.calls.at(-1)?.[0]);
+    expect(message).toMatch(/reach LITRACK|internet/i);
+    expect(message).not.toMatch(/Could not export the MOSY report/);
+    expect(screen.getByRole("button", { name: "Download" })).toBeTruthy();
   });
 });

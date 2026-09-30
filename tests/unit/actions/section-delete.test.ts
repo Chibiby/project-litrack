@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { ERRORS } from "@/lib/errors/codes";
 
 /**
  * Action-level coverage for `deleteSection` — the School Head's section removal.
@@ -48,6 +49,15 @@ type SectionRow = {
 };
 type TeacherSectionRow = { teacherId: string; sectionId: string };
 
+type PlacedLearner = {
+  schoolId: string;
+  sectionId: string | null;
+  activeEnrollmentSectionId: string | null;
+  deletedAt: Date | null;
+  archivedAt: Date | null;
+};
+
+let placedLearners: PlacedLearner[];
 let users: UserRow[];
 let sectionRows: SectionRow[];
 let teacherSections: TeacherSectionRow[];
@@ -63,7 +73,21 @@ function makeTx() {
         }
       ),
     },
-    learner: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    learner: {
+      count: vi.fn(
+        async (args: {
+          where: { schoolId: string; deletedAt: null; archivedAt: null };
+        }) =>
+          placedLearners.filter(
+            (l) =>
+              l.schoolId === args.where.schoolId &&
+              l.deletedAt === null &&
+              l.archivedAt === null &&
+              (l.sectionId === SECTION_ID || l.activeEnrollmentSectionId === SECTION_ID)
+          ).length
+      ),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
     enrollment: { updateMany: vi.fn(async () => ({ count: 0 })) },
     user: {
       findMany: vi.fn(async (args: { where: { advisorySectionId: string } }) =>
@@ -208,8 +232,71 @@ beforeEach(() => {
     },
   ];
   teacherSections = [];
+  placedLearners = [];
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+function learner(over: Partial<PlacedLearner> = {}): PlacedLearner {
+  return {
+    schoolId: SCHOOL_ID,
+    sectionId: SECTION_ID,
+    activeEnrollmentSectionId: SECTION_ID,
+    deletedAt: null,
+    archivedAt: null,
+    ...over,
+  };
+}
+
+describe("deleteSection — refuses while learners are placed in the section", () => {
+  it("refuses with the count and section name, and changes nothing", async () => {
+    placedLearners = Array.from({ length: 12 }, () => learner());
+
+    const result = await deleteSection(buildFormData(SECTION_ID));
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "SECTION_HAS_LEARNERS",
+      error: "Move the 12 learners in Sampaguita to another section first.",
+    });
+    // Rolled back: the section is still live, the adviser still advises it, and
+    // nothing downstream (audit, cache busts) ran.
+    expect(sectionRows.find((s) => s.id === SECTION_ID)?.deletedAt).toBeNull();
+    expect(users.find((u) => u.id === ADVISER_ID)?.advisorySectionId).toBe(SECTION_ID);
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(revalidateTeacherCaches).not.toHaveBeenCalled();
+  });
+
+  it("uses the singular for one learner", async () => {
+    placedLearners = [learner()];
+    const result = await deleteSection(buildFormData(SECTION_ID));
+    expect(result).toMatchObject({
+      ok: false,
+      error: "Move the 1 learner in Sampaguita to another section first.",
+    });
+  });
+
+  it("also blocks on a stale ACTIVE enrollment when the learner pointer is null", async () => {
+    placedLearners = [learner({ sectionId: null })];
+    const result = await deleteSection(buildFormData(SECTION_ID));
+    expect(result).toMatchObject({ ok: false, code: "SECTION_HAS_LEARNERS" });
+  });
+
+  it("does not count removed, archived, other-school or other-section learners", async () => {
+    placedLearners = [
+      learner({ deletedAt: new Date() }),
+      learner({ archivedAt: new Date() }),
+      learner({ schoolId: "school-2" }),
+      learner({ sectionId: OTHER_SECTION_ID, activeEnrollmentSectionId: OTHER_SECTION_ID }),
+    ];
+    const result = await deleteSection(buildFormData(SECTION_ID));
+    expect(result).toEqual({ ok: true });
+    expect(sectionRows.find((s) => s.id === SECTION_ID)?.deletedAt).not.toBeNull();
+  });
+
+  it("is a user-severity code, so it is not recorded as an error", () => {
+    expect(ERRORS.SECTION_HAS_LEARNERS.severity).toBe("user");
+  });
 });
 
 describe("deleteSection — teacher cache fan-out", () => {

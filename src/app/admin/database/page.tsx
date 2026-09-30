@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdminPage } from "@/lib/auth/session";
 import { AdminPage } from "@/components/admin/admin-page";
 import { DatabaseConsole, type ConsoleData } from "@/components/admin/database-console";
 import {
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * here would be read as the result of the operation they just ran.
  */
 export default async function DatabasePage() {
-  const user = await requireUser("SUPER_ADMIN");
+  const user = await requireDeveloperAdminPage();
 
   const storeReady = isBackupStoreConfigured();
 

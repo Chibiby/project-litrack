@@ -135,6 +135,68 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.27.0",
+    date: "2026-09-30",
+    title: "Fewer ways to lose your work by accident",
+    announce: true,
+    fixes: [
+      "Buttons now say Remove when something can be brought back, and Delete permanently when it can't.",
+      {
+        text: "Super Admin accounts are now either a Developer Admin or a Division Admin. Both see the same schools, accounts and reports. Audit Log, Error Log, Page Test Lab, Archived Records, Database Console and Demo session now sit under Developer Controls, which only Developer Admins see.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "If you switch week, grade or section with unsaved marks on the weekly attendance, monthly reading level or term grades sheet, LITRACK now asks whether to save them, discard them, or stay. An \"Unsaved changes\" tag shows next to Save until you do.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Archiving learners from the learner list now asks first, and says they can be restored from Archived Learners.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Closing the Add or Edit learner window with unsaved changes now asks before throwing them away.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "On phones, the Terms report has a Filters button for section and subject.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The MOSY decision button now says what it will do (Move out learner or Keep in ARAL), and the removal message for ARAL says records are kept.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "A section can't be removed while learners are still in it. Move them to another section first; the Remove button tells you how many.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "Making a different school year active now asks first, and says new enrolments will go to that year.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      "Changing your email now shows the old and new address before it takes effect.",
+      {
+        text: "Removed schools are listed under a new Removed tab and can be restored. A restored school comes back turned off.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "\"Clear everything\" for a school can now be fully undone from the database console, including learner records.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Bulk removals that partly fail now show a warning with how many failed, instead of a success message.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "District Summary now has its own page listing every summary.",
+        roles: ["DISTRICT_ADMIN", "SUPER_ADMIN"],
+      },
+      {
+        text: "Admin sign-in is harder to guess at: repeated failures from one place are paused for a while.",
+        roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.25.0",
     date: "2026-09-30",
     title: "Clearer messages when something goes wrong",

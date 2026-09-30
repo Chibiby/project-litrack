@@ -22,7 +22,8 @@ import { passwordChangeFields } from "@/lib/auth/password-vault";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { recordLastLogin } from "@/lib/auth/last-login";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, peekRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom } from "@/lib/request-ip";
 import { action } from "@/lib/errors/action";
 import { AppError, tooManyAttempts, type AppErrorOptions } from "@/lib/errors/app-error";
 import { formatMessage, type ErrorCode } from "@/lib/errors/codes";
@@ -74,6 +75,15 @@ const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
 const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+// Failed admin sign-ins per client address: 20 per 15 minutes. Generous enough
+// for a school network behind one NAT, far below a credential-stuffing run.
+const ADMIN_FAILED_IP_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+// A failed admin sign-in is never answered sooner than this after it began.
+const ADMIN_FAILURE_MIN_MS = 800;
+// Sign-in target for an unknown admin handle, so it costs the same provider
+// round-trip as a real one. `.invalid` is reserved (RFC 2606) and never resolves
+// to an account.
+const NONEXISTENT_ADMIN_EMAIL = "no-such-admin@litrack.invalid";
 // Supabase keeps one live recovery token per user; resending sooner than
 // this only burns the still-good earlier email for an identical new one.
 const RECOVERY_TOKEN_COOLDOWN_MS = 2 * 60 * 1000;
@@ -516,12 +526,21 @@ function isAdminConsoleRole(role: string): role is AdminConsoleRole {
  * forced through `/account/set-password` by `requireUser`.
  */
 export const loginAdmin = action("loginAdmin", async (formData: FormData): Promise<never> => {
+  const startedAt = Date.now();
   assertSupabaseConfigured();
 
   const { username, password } = parseInput(adminLoginSchema, {
     username: formData.get("username"),
     password: formData.get("password"),
   });
+
+  // Per-address ceiling on FAILED attempts, checked before the database or
+  // Supabase is touched. Only failures are charged (see `failAdminLogin`), so a
+  // successful sign-in on a shared school network is refused only once that
+  // address has itself burned through the budget.
+  const ipKey = `login:admin-fail:ip:${clientIpFrom(await headers())}`;
+  const ipGate = await peekRateLimit(ipKey, ADMIN_FAILED_IP_RATE);
+  if (!ipGate.ok) throw tooManyAttempts(ipGate.retryAfterMs);
 
   const rate = await checkRateLimit(`login:admin:${username}`, LOGIN_RATE);
   if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
@@ -544,6 +563,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       },
       select: { id: true, email: true, role: true },
     });
+    const supabase = await createSupabaseServerClient();
     if (!account) {
       await writeAudit({
         action: AUDIT_ACTIONS.LOGIN_DENIED,
@@ -553,15 +573,30 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
         // role is unknown too, so the row names the console, not a role.
         metadata: { role: "ADMIN_CONSOLE", reason: "unknown_username" },
       });
+      // Do the same Supabase round-trip a real handle would, against an address
+      // that cannot exist. Otherwise an unknown handle never reaches the provider,
+      // so a provider rate-limit or outage would only ever surface for real
+      // handles (an existence oracle), and a slow provider would stretch only the
+      // known path past the timing floor.
+      const probe = await supabase.auth.signInWithPassword({
+        email: NONEXISTENT_ADMIN_EMAIL,
+        password,
+      });
+      if (probe.data?.user) await supabase.auth.signOut();
+      const probeMapped = probe.error
+        ? mapSupabaseAuthError(probe.error, "server")
+        : "AUTH_INCORRECT_PASSWORD";
+      if (probeMapped !== "AUTH_INCORRECT_PASSWORD") {
+        throw new AppError(probeMapped, { cause: probe.error ?? undefined });
+      }
       // Identical to the wrong-password message below, so the field cannot be
       // used to enumerate which handles exist. This is the one login where the
       // generic message is deliberate: these are the highest-value accounts in
       // the system, and unlike a teacher there is no legitimate "did I type my
       // address wrong?" confusion to resolve.
-      throw incorrectAdminCredentials();
+      return failAdminLogin(startedAt, ipKey, incorrectAdminCredentials());
     }
 
-    const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.auth.signInWithPassword({
       email: account.email,
       password,
@@ -577,7 +612,9 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       });
       // Collapsed to the same message as an unknown handle — but only for the
       // credential case. A rate limit or an outage still says what it is.
-      if (mapped === "AUTH_INCORRECT_PASSWORD") throw incorrectAdminCredentials(error ?? undefined);
+      if (mapped === "AUTH_INCORRECT_PASSWORD") {
+        return failAdminLogin(startedAt, ipKey, incorrectAdminCredentials(error ?? undefined));
+      }
       throw new AppError(mapped, { cause: error ?? undefined });
     }
 
@@ -591,11 +628,15 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
         resourceId: user?.id,
         metadata: { role: user?.role ?? "UNKNOWN", reason: "not_authorized" },
       });
-      throw new AppError("AUTH_FORBIDDEN", {
-        params: { what: "the admin console" },
-        detail: `Signed in, but the account is not an active admin-console account (role ${user?.role ?? "none"})`,
-        context: { reason: "not_admin_console_role" },
-      });
+      return failAdminLogin(
+        startedAt,
+        ipKey,
+        new AppError("AUTH_FORBIDDEN", {
+          params: { what: "the admin console" },
+          detail: `Signed in, but the account is not an active admin-console account (role ${user?.role ?? "none"})`,
+          context: { reason: "not_admin_console_role" },
+        })
+      );
     }
 
     await writeAudit({
@@ -621,6 +662,24 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
   // throw CONFIG_MISSING from where they happen, and the wrapper gives the
   // person a reference while the variable names go to the error record.
 }, { verb: "sign you in" });
+
+/**
+ * Charge a failed admin sign-in to its address, then hold the response until
+ * `ADMIN_FAILURE_MIN_MS` has passed since the action began. An unknown handle
+ * skips the Supabase round-trip, so without the floor it would answer
+ * measurably faster than a real account with a wrong password.
+ */
+async function failAdminLogin(startedAt: number, ipKey: string, err: AppError): Promise<never> {
+  // checkRateLimit never throws (it falls back to memory), so the pad always runs.
+  await checkRateLimit(ipKey, ADMIN_FAILED_IP_RATE);
+  const remaining = ADMIN_FAILURE_MIN_MS - (Date.now() - startedAt);
+  if (remaining > 0) await sleep(remaining);
+  throw err;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * The one message for both an unknown handle and a wrong password, attached to

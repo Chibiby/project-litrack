@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdmin } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
@@ -30,7 +30,7 @@ import {
  *
  * Greenfield: all four go through `action()` rather than the hand-rolled
  * `{ ok: false, error }` shape `admin-school.ts` still uses. Every one, in
- * order: `requireUser("SUPER_ADMIN")` -> rate limit -> `parseInput` -> load
+ * order: `requireDeveloperAdmin` -> rate limit -> `parseInput` -> load
  * the row with `deletedAt: { not: null }` in the `where` (a live row must
  * never be reachable from this page) -> `$transaction` -> `writeAudit` ->
  * revalidate. Failures are thrown as `AppError`, never returned.
@@ -71,7 +71,7 @@ export type RestoreRemovedLearnerResult = {
 export const restoreRemovedLearner = action(
   "restoreRemovedLearner",
   async (formData: FormData): Promise<RestoreRemovedLearnerResult> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("archived records");
     await rateLimitOrThrow(`admin:archive:restore-learner:${admin.id}`);
 
     const { id } = parseInput(archiveRowSchema, { id: formData.get("id") });
@@ -136,7 +136,7 @@ export type PurgeRemovedLearnerResult = { ok: true };
 export const purgeRemovedLearner = action(
   "purgeRemovedLearner",
   async (formData: FormData): Promise<PurgeRemovedLearnerResult> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("archived records");
     await rateLimitOrThrow(`admin:archive:purge-learner:${admin.id}`);
 
     const { id } = parseInput(archiveRowSchema, { id: formData.get("id") });
@@ -206,7 +206,7 @@ export type RestoreRemovedTeacherResult = {
 export const restoreRemovedTeacher = action(
   "restoreRemovedTeacher",
   async (formData: FormData): Promise<RestoreRemovedTeacherResult> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("archived records");
     await rateLimitOrThrow(`admin:archive:restore-teacher:${admin.id}`);
 
     const { id } = parseInput(archiveRowSchema, { id: formData.get("id") });
@@ -291,7 +291,7 @@ export type PurgeRemovedTeacherResult = { ok: true; authDeleted: boolean };
 export const purgeRemovedTeacher = action(
   "purgeRemovedTeacher",
   async (formData: FormData): Promise<PurgeRemovedTeacherResult> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("archived records");
     await rateLimitOrThrow(`admin:archive:purge-teacher:${admin.id}`);
 
     const { id } = parseInput(archiveRowSchema, { id: formData.get("id") });

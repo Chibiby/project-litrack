@@ -82,6 +82,8 @@ async function main() {
       email,
       username,
       role: UserRole.SUPER_ADMIN,
+      // The bootstrap admin needs Developer Controls to set everything else up.
+      adminTier: "DEVELOPER",
       firstName: "Super",
       lastName: "Admin",
       fullName: "Super Admin",

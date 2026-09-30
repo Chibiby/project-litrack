@@ -261,14 +261,22 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   /** Server actions here return a result; success messages differ, failures never redirect. */
   const settle = async (
     run: () => Promise<{ ok: true; data?: unknown } | { ok: false; error: string }>,
-    success: (payload: unknown) => string
+    success: (payload: unknown) => string,
+    failedVerb = "processed"
   ): Promise<boolean> => {
     const res = await callAction(run);
     if (!res.ok) {
       toastFailure(res);
       return false;
     }
-    toast.success(success(res.data));
+    const failed = (res.data as { failed?: number } | undefined)?.failed ?? 0;
+    if (failed > 0) {
+      toast.warning(
+        `${success(res.data)}, ${failed} couldn't be ${failedVerb} — try again or check the error log`
+      );
+    } else {
+      toast.success(success(res.data));
+    }
     return true;
   };
 
@@ -433,7 +441,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                               size="sm"
                              className="lg:h-9 text-destructive hover:text-destructive"
                               disabled={disabled || rowBusy}
-                              aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
+                              aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)} permanently`}
                               onClick={() => setDeleteTarget(b)}
                             >
                               <Trash2 className="h-4 w-4" aria-hidden />
@@ -518,11 +526,11 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
         }}
         title={
           deleteTarget
-            ? `Delete the ${backupKindLabel(deleteTarget.kind)} backup from ${formatWhen(deleteTarget.uploadedAt)}?`
-            : "Delete this backup?"
+            ? `Delete the ${backupKindLabel(deleteTarget.kind)} backup from ${formatWhen(deleteTarget.uploadedAt)} permanently?`
+            : "Delete this backup permanently?"
         }
-        description="The backup file is deleted permanently and cannot be recovered. Undo points saved earlier are separate files and are not affected."
-        confirmLabel="Delete backup"
+        description="The backup file is deleted and cannot be recovered. Undo points saved earlier are separate files and are not affected."
+        confirmLabel="Delete permanently"
         onConfirm={async () => {
           if (!deleteTarget) return;
           const fd = new FormData();
@@ -684,8 +692,9 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                 () => resetAllSchoolAccounts(fd),
                 (payload) => {
                   const d = payload as { processed?: number; failed?: number } | undefined;
-                  return `${d?.processed ?? 0} accounts reset${d?.failed ? `, ${d.failed} failed` : ""}`;
-                }
+                  return `${d?.processed ?? 0} accounts reset`;
+                },
+                "reset"
               );
             }}
           />
@@ -711,8 +720,9 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
                 () => removeAllTeachers(fd),
                 (payload) => {
                   const d = payload as { processed?: number; failed?: number } | undefined;
-                  return `${d?.processed ?? 0} teacher accounts removed${d?.failed ? `, ${d.failed} failed` : ""}`;
-                }
+                  return `${d?.processed ?? 0} teacher accounts removed`;
+                },
+                "removed"
               );
             }}
           />

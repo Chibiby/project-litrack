@@ -260,6 +260,8 @@ vi.mock("@/lib/audit", () => ({
 const requireUserMock = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...args: unknown[]) => requireUserMock(...args),
+  // Tier is covered in tests/unit/auth/developer-admin-guard.test.ts.
+  requireDeveloperAdmin: () => requireUserMock("SUPER_ADMIN"),
 }));
 
 const revalidatePathMock = vi.fn();

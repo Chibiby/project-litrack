@@ -182,8 +182,8 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
               — that stays a separate Set active decision, so a typo fix cannot
               quietly redirect where new learners are enrolled. And a year with
               enrolments or grades behind it{" "}
-              <strong className="text-foreground">cannot be removed</strong>, only
-              corrected; the remove button appears only on a year that still has no
+              <strong className="text-foreground">cannot be deleted</strong>, only
+              corrected; the delete button appears only on a year that still has no
               records, which is the duplicate you meant to undo.
             </p>
             <p>

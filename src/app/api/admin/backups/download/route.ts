@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isDeveloperAdmin } from "@/lib/auth/admin-tier";
 import { openBackupStream, isBackupStoreConfigured } from "@/lib/db/backup-store";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { route } from "@/lib/errors/route";
@@ -32,6 +33,14 @@ export const GET = route("GET /api/admin/backups/download", async (request: Next
       params: { what: "database backups" },
       detail: `Role ${user.role} requested a backup download`,
       context: { reason: "not_super_admin" },
+    });
+  }
+  // Backups belong to the database console, which is Developer Controls.
+  if (!isDeveloperAdmin(user)) {
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what: "database backups" },
+      detail: `Division Admin ${user.id} requested a backup download`,
+      context: { reason: "not_developer_admin" },
     });
   }
 

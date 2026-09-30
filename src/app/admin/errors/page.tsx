@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdminPage } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AdminPage } from "@/components/admin/admin-page";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
@@ -66,7 +66,7 @@ async function ErrorLogSection({
  * on a schedule.
  */
 export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps) {
-  const user = await requireUser("SUPER_ADMIN");
+  const user = await requireDeveloperAdminPage();
   const params = parseErrorLogParams(await searchParams);
 
   return (

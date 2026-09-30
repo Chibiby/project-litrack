@@ -292,5 +292,5 @@ export const deleteReport = action(
   revalidatePath("/school-head/reports");
   return { ok: true };
   },
-  { verb: "delete the report" }
+  { verb: "remove the report" }
 );

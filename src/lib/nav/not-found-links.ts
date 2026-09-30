@@ -27,7 +27,7 @@ export function notFoundLinksFor(role: UserRole | null): Array<{ href: string; l
       return [
         { href: "/admin", label: "Dashboard" },
         { href: "/admin/schools", label: "Schools" },
-        { href: "/admin/audit", label: "Audit" },
+        { href: "/admin/accounts", label: "Accounts" },
       ];
     case "DISTRICT_ADMIN":
       return [

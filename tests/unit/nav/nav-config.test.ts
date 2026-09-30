@@ -498,14 +498,14 @@ describe("getNavGroups — floating teacher", () => {
 });
 
 describe("getNavGroups — admin", () => {
-  it("splits admin into Overview, Schools & People, School Year Setup, Monitoring and QA & Data", () => {
-    const groups = getNavGroups("SUPER_ADMIN");
+  it("gives a Developer Admin Overview, Schools & People, School Year Setup, Monitoring and Developer Controls", () => {
+    const groups = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
     expect(groups.map((g) => g.label)).toEqual([
       "Overview",
       "Schools & People",
       "School Year Setup",
       "Monitoring",
-      "QA & Data",
+      "Developer Controls",
     ]);
     expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
     expect(groups[0].items[0].href).toBe("/admin");
@@ -522,19 +522,27 @@ describe("getNavGroups — admin", () => {
     expect(groups[3].items.map((i) => i.label)).toEqual([
       "Report Submissions",
       "Support Inbox",
-      "Audit Log",
-      "Error Log",
     ]);
     expect(groups[4].items.map((i) => i.label)).toEqual([
+      "Audit Log",
+      "Error Log",
       "Page Test Lab",
       "Archived Records",
       "Database Console",
     ]);
-    // Ids, hrefs, icons and flags are unchanged by the regroup — only labels
-    // and structure moved.
     expect(groups[1].items[1]).toMatchObject({ id: "admin-accounts", href: "/admin/accounts", heavy: true });
-    expect(groups[4].items[1]).toMatchObject({ id: "admin-archive", href: "/admin/archive", heavy: true });
-    expect(groups[4].items[0]).toMatchObject({ id: "admin-test-lab", href: "/admin/test-lab" });
+    expect(groups[4].items[3]).toMatchObject({ id: "admin-archive", href: "/admin/archive", heavy: true });
+    expect(groups[4].items[2]).toMatchObject({ id: "admin-test-lab", href: "/admin/test-lab" });
+  });
+
+  it("gives a Division Admin the same menu without Developer Controls", () => {
+    const division = getNavGroups("SUPER_ADMIN");
+    const developer = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
+    expect(division).toEqual(developer.slice(0, 4));
+    const hrefs = flattenNavGroups(division).map((i) => i.href);
+    for (const hidden of ["/admin/audit", "/admin/errors", "/admin/test-lab", "/admin/archive", "/admin/database"]) {
+      expect(hrefs).not.toContain(hidden);
+    }
   });
 });
 

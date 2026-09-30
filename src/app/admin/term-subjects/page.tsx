@@ -58,6 +58,8 @@ export default async function AdminTermSubjectDefaultsPage({ searchParams }: Pag
     ? sp.type
     : TERM_SHEET_GRADE_TYPES[0];
 
+  const schoolCount = await prisma.school.count({ where: { deletedAt: null } });
+
   const gradeTypeOptions = TERM_SHEET_GRADE_TYPES.map((type) => ({
     id: type,
     label: GRADE_LEVEL_LABELS[type],
@@ -84,7 +86,7 @@ export default async function AdminTermSubjectDefaultsPage({ searchParams }: Pag
             gradeTypes={gradeTypeOptions}
             selectedGradeType={gradeType}
           />
-          <ResetAllSchoolsTermSubjectsButton />
+          <ResetAllSchoolsTermSubjectsButton schoolCount={schoolCount} />
         </div>
         <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} />}>
           <TermSubjectDefaultsBody gradeType={gradeType} />

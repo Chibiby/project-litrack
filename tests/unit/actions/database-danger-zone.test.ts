@@ -56,8 +56,14 @@ vi.mock("@/lib/db/account-reset", () => ({
 }));
 
 const schoolFindFirst = vi.fn();
+const userCount = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: {
+      get count() {
+        return userCount;
+      },
+    },
     school: {
       get findFirst() {
         return schoolFindFirst;
@@ -69,6 +75,8 @@ vi.mock("@/lib/prisma", () => ({
 const requireUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...a: unknown[]) => requireUser(...a),
+  // Tier is covered in tests/unit/auth/developer-admin-guard.test.ts.
+  requireDeveloperAdmin: () => requireUser("SUPER_ADMIN"),
 }));
 
 const writeAudit = vi.fn();
@@ -107,6 +115,7 @@ vi.mock("@/lib/errors/report", () => ({
 
 // Imported after the mock factories above are registered.
 const {
+  clearSchoolEverything,
   removeAllTeachers,
   resetAllSchoolAccounts,
   resetOperationalData,
@@ -340,6 +349,132 @@ describe("scoping a Danger-zone action to one school", () => {
 
     expect(res.ok).toBe(false);
     expect(removeAllTeacherAccounts).not.toHaveBeenCalled();
+  });
+});
+
+describe("clearSchoolEverything — one safety snapshot for both steps", () => {
+  it("takes exactly one snapshot, before either step, then clears and removes teachers", async () => {
+    isBackupStoreConfigured.mockReturnValue(true);
+    const order: string[] = [];
+    backUpDatabase.mockImplementation(async () => {
+      order.push("snapshot");
+      return { saved: { stamp: "S1", pathname: "p", size: 1 }, takenAt: "t", totalRows: 0 };
+    });
+    clearOperationalData.mockImplementation(async () => {
+      order.push("clear");
+      return { Learner: 12 };
+    });
+    removeAllTeacherAccounts.mockImplementation(async () => {
+      order.push("teachers");
+      return { processed: 8, failed: ["x", "y"] };
+    });
+
+    const res = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    expect(res).toEqual({
+      ok: true,
+      data: {
+        removed: { Learner: 12 },
+        teachersRemoved: 8,
+        teachersFailed: 2,
+        reversible: true,
+        teacherStepFailed: false,
+      },
+    });
+    expect(order).toEqual(["snapshot", "clear", "teachers"]);
+    expect(backUpDatabase).toHaveBeenCalledTimes(1);
+    expect(clearOperationalData).toHaveBeenCalledWith(SCHOOL.id);
+    expect(removeAllTeacherAccounts).toHaveBeenCalledWith(SCHOOL.id);
+    const audits = writeAudit.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(audits.map((a) => a.action)).toEqual(["DB_RESET_OPERATIONAL", "DB_REMOVE_TEACHER_ACCOUNTS"]);
+    for (const a of audits) {
+      expect(a).toMatchObject({
+        schoolId: SCHOOL.id,
+        metadata: { safetyStamp: "S1", reversible: true, scope: "school" },
+      });
+    }
+    expect(revalidateAllCachedData).toHaveBeenCalled();
+  });
+
+  it("requires the Super Admin, the typed phrase and a school", async () => {
+    isBackupStoreConfigured.mockReturnValue(true);
+
+    await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+
+    const wrongPhrase = await clearSchoolEverything(form("clear", undefined, SCHOOL.id));
+    expect(wrongPhrase).toMatchObject({ ok: false, error: `Type ${CONFIRM_PHRASES.resetOperational} to confirm.` });
+
+    clearOperationalData.mockClear();
+    const noSchool = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational));
+    expect(noSchool).toMatchObject({ ok: false, error: "Choose the school to clear." });
+    expect(clearOperationalData).not.toHaveBeenCalled();
+  });
+
+  it("changes nothing when the safety snapshot cannot be written", async () => {
+    isBackupStoreConfigured.mockReturnValue(true);
+    backUpDatabase.mockRejectedValue(new Error("blob write failed"));
+
+    const res = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    expect(res.ok).toBe(false);
+    expect(clearOperationalData).not.toHaveBeenCalled();
+    expect(removeAllTeacherAccounts).not.toHaveBeenCalled();
+  });
+
+  it("with no backup store, refuses without the acknowledgement and runs irreversibly with it", async () => {
+    isBackupStoreConfigured.mockReturnValue(false);
+
+    const refused = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+    expect(refused.ok).toBe(false);
+    expect(clearOperationalData).not.toHaveBeenCalled();
+
+    const ok = await clearSchoolEverything(
+      form(CONFIRM_PHRASES.resetOperational, CONFIRM_PHRASES.noBackupAck, SCHOOL.id)
+    );
+    expect(ok).toMatchObject({ ok: true, data: { reversible: false } });
+    expect(backUpDatabase).not.toHaveBeenCalled();
+    expect(lastAudit()).toMatchObject({ metadata: { safetyStamp: null, reversible: false } });
+  });
+
+  it("reports the clear as done, flags the teacher step and records the error when teacher removal throws", async () => {
+    isBackupStoreConfigured.mockReturnValue(true);
+    removeAllTeacherAccounts.mockRejectedValue(new Error("auth down"));
+    userCount.mockResolvedValue(8);
+
+    const res = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    // Not { ok: false }: the records are gone, so a retry prompt would mislead.
+    expect(res).toEqual({
+      ok: true,
+      data: {
+        removed: { Learner: 12 },
+        teachersRemoved: 0,
+        teachersFailed: 8,
+        reversible: true,
+        teacherStepFailed: true,
+      },
+    });
+    expect(userCount).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL.id, role: "TEACHER", deletedAt: null },
+    });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(writeAudit.mock.calls.map((c) => (c[0] as { action: string }).action)).toEqual([
+      "DB_RESET_OPERATIONAL",
+      "DB_REMOVE_TEACHER_ACCOUNTS",
+    ]);
+    expect(lastAudit()).toMatchObject({ metadata: { stepFailed: true, safetyStamp: "2026-09-10T00:00:00.000Z" } });
+    expect(revalidateAllCachedData).toHaveBeenCalled();
+  });
+
+  it("reports teachersFailed as -1 when the remaining teachers cannot be counted", async () => {
+    isBackupStoreConfigured.mockReturnValue(true);
+    removeAllTeacherAccounts.mockRejectedValue(new Error("auth down"));
+    userCount.mockRejectedValue(new Error("db down"));
+
+    const res = await clearSchoolEverything(form(CONFIRM_PHRASES.resetOperational, undefined, SCHOOL.id));
+
+    expect(res).toMatchObject({ ok: true, data: { teachersFailed: -1, teacherStepFailed: true } });
   });
 });
 

@@ -37,7 +37,7 @@ describe("AdminSettingsShell", () => {
   it("marks the current row and titles the hero after it", () => {
     pathname = "/admin/settings/security";
     render(
-      <AdminSettingsShell>
+      <AdminSettingsShell showDemo>
         <p>Security body</p>
       </AdminSettingsShell>
     );
@@ -52,7 +52,7 @@ describe("AdminSettingsShell", () => {
 
   it("offers every Super Admin settings row, including the system-wide ones", () => {
     render(
-      <AdminSettingsShell>
+      <AdminSettingsShell showDemo>
         <p>Body</p>
       </AdminSettingsShell>
     );
@@ -62,5 +62,18 @@ describe("AdminSettingsShell", () => {
       .map((link) => link.textContent?.trim());
     expect(labels).toEqual(["Profile", "Security", "Demo session", "Submissions"]);
     expect(screen.getByRole("heading", { level: 1, name: "Profile Settings" })).not.toBeNull();
+  });
+
+  it("hides Demo session from a Division Admin", () => {
+    render(
+      <AdminSettingsShell showDemo={false}>
+        <p>Body</p>
+      </AdminSettingsShell>
+    );
+    const nav = screen.getByRole("navigation", { name: "Settings" });
+    const labels = within(nav)
+      .getAllByRole("link")
+      .map((link) => link.textContent?.trim());
+    expect(labels).toEqual(["Profile", "Security", "Submissions"]);
   });
 });

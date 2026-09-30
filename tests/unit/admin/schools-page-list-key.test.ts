@@ -54,7 +54,8 @@ beforeEach(() => {
 
 describe("SchoolsListPage — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(SCHOOLS_LIST_KEYS).toEqual(["page", "sort", "region", "status"]);
+    // `view` switches between the Active and Removed lists.
+    expect(SCHOOLS_LIST_KEYS).toEqual(["page", "sort", "region", "status", "view"]);
   });
 
   it("does not change when the search text (q) changes, so the search box is not remounted", async () => {

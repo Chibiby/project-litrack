@@ -31,6 +31,11 @@ import { ReadingLevelLegend } from "@/components/aral/reading-level-legend";
 import { fetchAralReadingLevelForMonth } from "@/lib/actions/aral-grid";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
+import {
+  UnsavedChangesBadge,
+  UnsavedGridGuard,
+} from "@/components/aral/unsaved-grid-guard";
 import type { MonthlyAssessmentProgress } from "@/lib/aral/reading-level-progress";
 import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
 import {
@@ -237,6 +242,7 @@ export function AralMonthlyReadingLevelPanel({
   const [progress, setProgress] = useState(initialProgress);
   const [loading, setLoading] = useState(false);
   const [savePending, setSavePending] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const formRef = useRef<AralMonthlyReadingLevelGridFormHandle>(null);
   const desiredMonthRef = useRef(initialMonthKey);
   const requestIdRef = useRef(0);
@@ -344,7 +350,7 @@ export function AralMonthlyReadingLevelPanel({
   function navigateTo(nextMonth: string) {
     const normalized = normalizeMonthKey(nextMonth);
     if (normalized === desiredMonthRef.current) return;
-    loadMonth(normalized, true);
+    runGuarded(() => loadMonth(normalized, true));
   }
 
   // Browser back/forward: adopt the URL month and fetch that month's records.
@@ -379,9 +385,11 @@ export function AralMonthlyReadingLevelPanel({
       // `page` is dropped on purpose: narrowing the roster invalidates the index,
       // and page 4 of 4 becoming empty reads as a bug.
     });
-    startTransition(() => {
-      router.push(`${basePath}${qs}`, { scroll: false });
-    });
+    runGuarded(() =>
+      startTransition(() => {
+        router.push(`${basePath}${qs}`, { scroll: false });
+      })
+    );
   }
 
   const busy = loading || savePending;
@@ -397,6 +405,13 @@ export function AralMonthlyReadingLevelPanel({
 
   return (
     <>
+      <UnsavedGridGuard
+        dirty={dirty}
+        saving={savePending}
+        what="reading levels"
+        onSave={async () => (await formRef.current?.persist()) ?? false}
+        onDiscard={() => formRef.current?.discard()}
+      />
       <div className="mb-4">
         <ReadingLevelStatCards
           stats={stats}
@@ -479,6 +494,8 @@ export function AralMonthlyReadingLevelPanel({
           }
           actions={
             canSave ? (
+              <>
+              <UnsavedChangesBadge dirty={dirty} />
               <Button
                 type="button"
                 size="sm"
@@ -491,6 +508,7 @@ export function AralMonthlyReadingLevelPanel({
                 <Save className="h-4 w-4" aria-hidden />
                 Save reading levels
               </Button>
+              </>
             ) : null
           }
         />
@@ -523,6 +541,7 @@ export function AralMonthlyReadingLevelPanel({
               }
               readOnly={readOnly || loading || gridLocked}
               onSavePendingChange={setSavePending}
+              onDirtyChange={setDirty}
             />
           </div>
           {loading && (

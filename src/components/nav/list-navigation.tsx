@@ -2,6 +2,7 @@
 
 import { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
+import { runGuarded } from "@/lib/ui/unsaved-guard";
 import {
   createContext,
   useCallback,
@@ -132,7 +133,8 @@ export function useListNavigate(): (href: string) => void {
 
   return useCallback(
     (href: string) => {
-      startNavigation(() => router.push(href));
+      // Held for the teacher's answer while a grid on this page has unsaved input.
+      runGuarded(() => startNavigation(() => router.push(href)));
     },
     [router, startNavigation]
   );

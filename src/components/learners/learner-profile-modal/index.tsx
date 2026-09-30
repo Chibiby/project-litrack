@@ -15,6 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FormSectionsSkeleton } from "@/components/forms/form-skeleton";
 import { ConfirmAction } from "@/components/confirm-action";
 import {
+  UnsavedChangesDialog,
+  useUnsavedChangesPrompt,
+} from "@/components/unsaved-changes-dialog";
+import {
   AssignAralTutorDialog,
   type AssignAralTutorTarget,
 } from "@/components/learners/assign-aral-tutor-dialog";
@@ -133,6 +137,7 @@ export function LearnerProfileModal({
   const editing = mode === "edit";
   /** Edit was the dialog's reason for opening, so there is no view to return to. */
   const editOnly = initialMode === "edit";
+  const [formDirty, setFormDirty] = useState(false);
 
   const load = useCallback(async (id: string) => {
     setLoading(true);
@@ -176,8 +181,11 @@ export function LearnerProfileModal({
     void load(learnerId);
   }, [learnerId, initialMode, load]);
 
+  // Every exit from a dirty edit form (X, Escape, overlay, Cancel) asks first.
+  const { guard, dialogProps } = useUnsavedChangesPrompt(editing && formDirty);
+
   const handleOpenChange = (next: boolean) => {
-    if (!next) onClose();
+    if (!next) guard(onClose);
   };
 
   const aralEnrolled = learner?.isAralLearner ?? initialIsAralLearner;
@@ -278,10 +286,13 @@ export function LearnerProfileModal({
    */
   const startEdit = () => setMode("edit");
 
-  const cancelEdit = () => {
+  const leaveEdit = () => {
+    setFormDirty(false);
     if (editOnly) onClose();
     else setMode("view");
   };
+
+  const cancelEdit = () => guard(leaveEdit);
 
   /**
    * The saved row is re-read rather than patched from the form: `updateLearner`
@@ -362,6 +373,7 @@ export function LearnerProfileModal({
               }}
               onSaved={handleSaved}
               onCancel={cancelEdit}
+              onDirtyChange={setFormDirty}
             />
           ) : (
             // The form owns the footer once it renders, so these two waiting
@@ -451,7 +463,7 @@ export function LearnerProfileModal({
                   {learner && aralEnrolled ? (
                     <ConfirmAction
                       title={`Remove ${learner.fullName} from ARAL?`}
-                      description="The learner keeps their reading records but leaves the ARAL roster and weekly grids."
+                      description="Attendance, reading levels, the ARAL profile and MOSY decisions are kept. The learner leaves the ARAL roster and weekly grids, and their assigned ARAL tutor is cleared. You can mark them as ARAL again later, but a tutor has to be assigned again."
                       confirmLabel="Remove from ARAL"
                       variant="destructive"
                       disabled={archived || pending}
@@ -493,6 +505,8 @@ export function LearnerProfileModal({
             if (learnerId) void load(learnerId);
           }}
         />
+
+        <UnsavedChangesDialog {...dialogProps} />
       </DialogContent>
     </Dialog>
   );

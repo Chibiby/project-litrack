@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { ZodTypeAny } from "zod";
 import { Form } from "@/components/ui/form";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
+import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import {
   setUnsavedChangesDirty,
@@ -141,7 +142,7 @@ export function AppForm<TFieldValues extends FieldValues>({
   onInvalid,
 }: AppFormProps<TFieldValues>) {
   const isDirty = useReliableFormDirty(form, enableUnsavedGuard);
-  useUnsavedChangesGuard(isDirty, enableUnsavedGuard, unsavedMessage);
+  const leave = useUnsavedChangesGuard(isDirty, enableUnsavedGuard, unsavedMessage);
 
   const handleInvalid = React.useCallback(() => {
     const names = Object.keys(form.formState.errors);
@@ -187,6 +188,12 @@ export function AppForm<TFieldValues extends FieldValues>({
         ) : null}
         {children}
       </form>
+      <UnsavedChangesDialog
+        open={leave.leaveOpen}
+        onKeepEditing={leave.keepEditing}
+        onDiscard={leave.discardAndLeave}
+        description={unsavedMessage}
+      />
     </Form>
   );
 }

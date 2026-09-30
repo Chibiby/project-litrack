@@ -97,7 +97,7 @@ export function AnnouncementActions({
       const fd = new FormData();
       fd.set("announcementId", announcementId);
       const res = await deleteAnnouncement(fd);
-      await settleActionResult(res, "Announcement deleted");
+      await settleActionResult(res, "Announcement removed");
     });
 
   return (
@@ -128,9 +128,9 @@ export function AnnouncementActions({
             Save announcement
           </Button>
           <ConfirmAction
-            title="Delete this announcement?"
+            title="Remove this announcement?"
             description="It will be removed from the school feed."
-            confirmLabel="Delete"
+            confirmLabel="Remove"
             variant="destructive"
             disabled={isPending}
             trigger={
@@ -141,7 +141,7 @@ export function AnnouncementActions({
                 className="text-destructive"
                 disabled={isPending}
               >
-                Delete
+                Remove
               </Button>
             }
             onConfirm={onDelete ?? runStandaloneDelete}
@@ -173,7 +173,7 @@ export function AnnouncementsList({
       const fd = new FormData();
       fd.set("announcementId", id);
       const res = await deleteAnnouncement(fd);
-      await settleActionResult(res, "Announcement deleted");
+      await settleActionResult(res, "Announcement removed");
     });
 
   return (

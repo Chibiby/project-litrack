@@ -21,6 +21,12 @@ vi.mock("@/lib/actions/auth", () => ({
   requestPasswordReset: (...args: unknown[]) => requestPasswordReset(...(args as [])),
 }));
 
+// AppForm's unsaved-changes guard needs a router; the app always provides one.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+}));
+
 const toastError = vi.fn();
 vi.mock("sonner", () => ({
   toast: { error: (...args: unknown[]) => toastError(...(args as [])) },

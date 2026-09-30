@@ -239,7 +239,7 @@ export const removeOwnAvatar = action(
 
     return { ok: true };
   },
-  { verb: "remove your profile photo" }
+  { verb: "delete your profile photo" }
 );
 
 /**
@@ -345,5 +345,5 @@ export const removeUserAvatar = action(
 
     return { ok: true };
   },
-  { verb: "remove the profile photo" }
+  { verb: "delete the profile photo" }
 );

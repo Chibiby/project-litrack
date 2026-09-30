@@ -5,11 +5,20 @@ import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { archiveLearner, restoreLearner } from "@/lib/actions/learner";
+import {
+  archiveConfirmDescription,
+  archiveConfirmLabel,
+  archiveConfirmTitle,
+} from "@/components/learners/archive-confirm-copy";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
 
 type Props = {
   learnerId: string;
+  /** Named in the confirm; without it the confirm says "The learner". */
+  learnerName?: string;
+  /** Adds the ARAL consequence to the confirm. */
+  isAralLearner?: boolean;
   archived: boolean;
   /**
    * When provided (list parent), parent owns mutation + list optimism.
@@ -20,6 +29,8 @@ type Props = {
 
 export function LearnerArchiveButton({
   learnerId,
+  learnerName,
+  isAralLearner = false,
   archived,
   onArchiveChange,
   pending: pendingProp,
@@ -70,11 +81,16 @@ export function LearnerArchiveButton({
   }
 
   const handle = onArchiveChange ?? runStandaloneArchive;
+  const target = {
+    ids: [learnerId],
+    name: learnerName ?? null,
+    aralCount: isAralLearner ? 1 : 0,
+  };
   return (
     <ConfirmAction
-      title="Archive learner?"
-      description="They will be hidden from active lists and can be restored later."
-      confirmLabel="Archive"
+      title={archiveConfirmTitle(target)}
+      description={archiveConfirmDescription(target)}
+      confirmLabel={archiveConfirmLabel(target)}
       variant="destructive"
       disabled={pending}
       trigger={

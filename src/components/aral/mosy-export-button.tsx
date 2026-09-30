@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select";
 import { triggerDownload } from "@/components/reports/trigger-download";
 import { exportMosyReport } from "@/lib/actions/aral-mosy-export";
+import { callAction } from "@/lib/ui/call-action";
+import { toastFailure } from "@/lib/ui/toast-failure";
 import { cn } from "@/lib/utils";
 
 type Format = "EXCEL" | "PDF";
@@ -56,16 +58,14 @@ export function MosyExportButton() {
         const value = searchParams.get(key);
         if (value) fd.set(key, value);
       }
-      const res = await exportMosyReport(fd);
+      const res = await callAction(() => exportMosyReport(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        toastFailure(res);
         return;
       }
       triggerDownload(res.data.base64, res.data.filename);
       toast.success(`Downloaded ${res.data.filename}`);
       setOpen(false);
-    } catch {
-      toast.error("Could not export the MOSY report. Please try again.");
     } finally {
       inFlight.current = false;
       setBusy(false);

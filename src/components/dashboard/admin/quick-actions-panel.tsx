@@ -1,14 +1,14 @@
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
-import { ChevronRight, KeyRound, LifeBuoy, Plus, ScrollText, Zap } from "lucide-react";
+import { BarChart3, ChevronRight, KeyRound, LifeBuoy, Plus, ScrollText, Zap } from "lucide-react";
 
 /**
  * The Super Admin's Quick Actions. Same anatomy as `SchoolQuickActionsPanel`
  * (`src/components/dashboard/school-head/attention-panel.tsx`), which hard-codes
  * the School Head's four destinations and hides itself for a Super Admin.
  */
-const ACTIONS = [
+const BASE_ACTIONS = [
   {
     id: "new-school",
     label: "Add a school",
@@ -30,16 +30,28 @@ const ACTIONS = [
     href: "/admin/support",
     tone: "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200",
   },
-  {
-    id: "audit",
-    label: "Review the audit log",
-    icon: ScrollText,
-    href: "/admin/audit",
-    tone: "bg-muted text-foreground hover:bg-muted/70",
-  },
 ] as const;
 
-export function AdminQuickActionsPanel() {
+/** Developer Admin: the audit log, part of Developer Controls. */
+const AUDIT_ACTION = {
+  id: "audit",
+  label: "Review the audit log",
+  icon: ScrollText,
+  href: "/admin/audit",
+  tone: "bg-muted text-foreground hover:bg-muted/70",
+} as const;
+
+/** Division Admin: the audit log is hidden from them, so the fourth slot is the summary. */
+const SUMMARY_ACTION = {
+  id: "summary",
+  label: "View division summary",
+  icon: BarChart3,
+  href: "/admin/summary",
+  tone: "bg-muted text-foreground hover:bg-muted/70",
+} as const;
+
+export function AdminQuickActionsPanel({ isDeveloperAdmin }: { isDeveloperAdmin: boolean }) {
+  const actions = [...BASE_ACTIONS, isDeveloperAdmin ? AUDIT_ACTION : SUMMARY_ACTION];
   return (
     <Surface as="section" className="rounded-2xl">
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
@@ -55,7 +67,7 @@ export function AdminQuickActionsPanel() {
       </div>
 
       <ul className="grid grid-cols-2 gap-2.5 px-4 pb-4 pt-3 sm:gap-3 sm:px-5 sm:pb-5 lg:grid-cols-4">
-        {ACTIONS.map((a) => (
+        {actions.map((a) => (
           <li key={a.id}>
             <PrefetchLink
               href={a.href}

@@ -29,7 +29,7 @@ export type GradeLevelCard = {
   type: string;
   teacherCount: number;
   learnerCount: number;
-  sections: { id: string; name: string }[];
+  sections: { id: string; name: string; learnerCount: number }[];
   /** True while waiting for server revalidation after create. */
   pendingCreate?: boolean;
 };

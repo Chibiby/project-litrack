@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,23 +82,31 @@ export function CreateSectionForm({
   );
 }
 
-type SectionItem = { id: string; name: string };
+type SectionItem = { id: string; name: string; learnerCount: number };
+
+const removeDescription = (name: string) =>
+  `"${name}" will be hidden from teachers, and any adviser assigned to it is unassigned.`;
 
 export function SectionRowActions({
   sectionId,
   name,
+  learnerCount = 0,
   pending,
-  onDelete,
+  onRequestRemove,
   onRename,
 }: {
   sectionId: string;
   name: string;
+  learnerCount?: number;
   pending?: boolean;
-  onDelete?: () => void | Promise<void>;
+  /** When set, the parent owns the confirmation dialog (see `GradeSectionsPanel`). */
+  onRequestRemove?: () => void;
   onRename?: (name: string) => void | Promise<void>;
 }) {
   const [localPending, startTransition] = useTransition();
   const isPending = Boolean(pending) || localPending;
+  const hasLearners = learnerCount > 0;
+  const blockedId = useId();
 
   const runStandaloneUpdate = (fd: FormData) =>
     runOptimistic(startTransition, async () => {
@@ -154,25 +162,55 @@ export function SectionRowActions({
           Rename section
         </Button>
       </form>
-      <ConfirmAction
-        title="Remove this section?"
-        description={`"${name}" will be hidden from teachers. You can recreate it later if needed.`}
-        confirmLabel="Remove"
-        variant="destructive"
-        disabled={isPending}
-        trigger={
+      {hasLearners ? (
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             size="sm"
             variant="ghost"
             className="text-destructive lg:h-9"
-            disabled={isPending}
+            disabled
+            aria-describedby={blockedId}
           >
-            Delete
+            Remove
           </Button>
-        }
-        onConfirm={onDelete ?? runStandaloneDelete}
-      />
+          <p id={blockedId} className="text-xs text-muted-foreground">
+            Move its {learnerCount} {learnerCount === 1 ? "learner" : "learners"} to
+            another section first
+          </p>
+        </div>
+      ) : onRequestRemove ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="text-destructive lg:h-9"
+          disabled={isPending}
+          onClick={onRequestRemove}
+        >
+          Remove
+        </Button>
+      ) : (
+        <ConfirmAction
+          title="Remove this section?"
+          description={removeDescription(name)}
+          confirmLabel="Remove"
+          variant="destructive"
+          disabled={isPending}
+          trigger={
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-destructive lg:h-9"
+              disabled={isPending}
+            >
+              Remove
+            </Button>
+          }
+          onConfirm={runStandaloneDelete}
+        />
+      )}
     </div>
   );
 }
@@ -200,6 +238,9 @@ export function GradeSectionsPanel({
   readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  // Held here, not in the row: the optimistic removal unmounts the row, which
+  // would close a dialog mounted inside it before the server has answered.
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [optimisticSections, dispatchOptimistic] = useOptimistic(
     sections,
     (state: SectionItem[], op: ListOptimisticOp<SectionItem>) =>
@@ -243,7 +284,7 @@ export function GradeSectionsPanel({
       }
       dispatchOptimistic({
         type: "append",
-        item: { id: tempOptimisticId("section"), name: trimmed },
+        item: { id: tempOptimisticId("section"), name: trimmed, learnerCount: 0 },
       });
       const fd = new FormData();
       fd.set("gradeLevelId", gradeLevelId);
@@ -255,6 +296,18 @@ export function GradeSectionsPanel({
   return (
     <div className="space-y-3 border-t border-border/60 pt-3">
       <p className="text-xs font-medium text-muted-foreground">Sections</p>
+
+      <ConfirmAction
+        open={removeTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setRemoveTarget(null);
+        }}
+        title="Remove this section?"
+        description={removeDescription(removeTarget?.name ?? "")}
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={() => (removeTarget ? deleteRow(removeTarget.id) : undefined)}
+      />
 
       {optimisticSections.length === 0 ? (
         <p className="text-xs text-muted-foreground">No sections yet</p>
@@ -271,8 +324,9 @@ export function GradeSectionsPanel({
                 <SectionRowActions
                   sectionId={s.id}
                   name={s.name}
+                  learnerCount={s.learnerCount}
                   pending={pending}
-                  onDelete={() => deleteRow(s.id)}
+                  onRequestRemove={() => setRemoveTarget({ id: s.id, name: s.name })}
                   onRename={(name) => renameRow(s.id, name)}
                 />
               )}

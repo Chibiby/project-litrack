@@ -109,6 +109,10 @@ export type BulkAttendanceAction =
 
 export type AralWeeklyAttendanceGridFormHandle = {
   save: () => void;
+  /** Like `save`, but resolves true only once the server accepted the marks (or none were pending). */
+  persist: () => Promise<boolean>;
+  /** Puts every cell back to the last saved marks. */
+  discard: () => void;
   applyBulk: (action: BulkAttendanceAction) => void;
 };
 
@@ -124,7 +128,45 @@ type Props = {
   onSavePendingChange?: (pending: boolean) => void;
   /** Lets the toolbar's Bulk Actions button show a live count. */
   onSelectionChange?: (count: number) => void;
+  /** True while any editable cell differs from the last saved marks. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
+
+type GridCell = {
+  learnerId: string;
+  date: string;
+  status: Exclude<CellStatus, ""> | null;
+  notes: string | null;
+};
+
+/** The cells whose status or reason differs from the baseline — exactly what a save sends. */
+function changedCells(
+  learners: WeeklyAttendanceGridLearner[],
+  days: Day[],
+  initial: Record<string, RowState>,
+  rows: Record<string, RowState>
+): GridCell[] {
+  const cells: GridCell[] = [];
+  for (const learner of learners) {
+    for (const day of days) {
+      if (day.locked) continue;
+      const beforeStatus = initial[learner.id]?.statuses[day.key] ?? "";
+      const afterStatus = rows[learner.id]?.statuses[day.key] ?? "";
+      const beforeNote = initial[learner.id]?.notes[day.key] ?? "";
+      const afterNote = rows[learner.id]?.notes[day.key] ?? "";
+      // A reason-only edit is a real edit: the cell travels when either half
+      // changed, so re-typing a reason on an unchanged status still saves.
+      if (beforeStatus === afterStatus && beforeNote === afterNote) continue;
+      cells.push({
+        learnerId: learner.id,
+        date: day.key,
+        status: afterStatus === "" ? null : afterStatus,
+        notes: afterNote.length > 0 ? afterNote : null,
+      });
+    }
+  }
+  return cells;
+}
 
 function buildDays(weekStartKey: string, holidayKeys: string[]): Day[] {
   const holidays = new Set(holidayKeys);
@@ -223,6 +265,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     readOnly,
     onSavePendingChange,
     onSelectionChange,
+    onDirtyChange,
   },
   ref
 ) {
@@ -376,59 +419,58 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     [readOnly, pending, learners, selected, days]
   );
 
-  const handleSave = useCallback(() => {
-    if (readOnly || pending) return;
+  const dirty = useMemo(
+    () => changedCells(learners, days, initial, rows).length > 0,
+    [learners, days, initial, rows]
+  );
 
-    const editable = days.filter((d) => !d.locked);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
-    const cells: {
-      learnerId: string;
-      date: string;
-      status: Exclude<CellStatus, ""> | null;
-      notes: string | null;
-    }[] = [];
-    for (const learner of learners) {
-      for (const day of editable) {
-        const beforeStatus = initial[learner.id]?.statuses[day.key] ?? "";
-        const afterStatus = rows[learner.id]?.statuses[day.key] ?? "";
-        const beforeNote = initial[learner.id]?.notes[day.key] ?? "";
-        const afterNote = rows[learner.id]?.notes[day.key] ?? "";
-        // A reason-only edit is a real edit: the cell travels when either half
-        // changed, so re-typing a reason on an unchanged status still saves.
-        if (beforeStatus === afterStatus && beforeNote === afterNote) continue;
-        cells.push({
-          learnerId: learner.id,
-          date: day.key,
-          status: afterStatus === "" ? null : afterStatus,
-          notes: afterNote.length > 0 ? afterNote : null,
-        });
-      }
+  const persist = useCallback((): Promise<boolean> => {
+    if (readOnly || pending) {
+      // Refusing without trying must still say so, or "Save and continue" just
+      // closes and looks like it did nothing.
+      if (pending) toast("Still saving. Try again in a moment.");
+      else toast.error("This week is locked, so these marks can't be saved.");
+      return Promise.resolve(false);
     }
+
+    const cells = changedCells(learners, days, initial, rows);
 
     if (cells.length === 0) {
       toast("Everything here is already saved.");
-      return;
+      return Promise.resolve(true);
     }
 
-    startTransition(async () => {
-      const toastId = toast.loading("Saving weekly attendance…");
-      const res = await callAction(() =>
-        saveAralWeeklyAttendance({
-          gradeId,
-          weekStart: weekStartKey,
-          cells,
-        })
-      );
-      if (!res.ok) {
-        toastFailure(res, { id: toastId });
-        return;
-      }
+    return new Promise<boolean>((resolve) => {
+      startTransition(async () => {
+        let ok = false;
+        try {
+          const toastId = toast.loading("Saving weekly attendance…");
+          const res = await callAction(() =>
+            saveAralWeeklyAttendance({
+              gradeId,
+              weekStart: weekStartKey,
+              cells,
+            })
+          );
+          if (!res.ok) {
+            toastFailure(res, { id: toastId });
+            return;
+          }
 
-      toast.success("Weekly attendance saved", { id: toastId });
-      // Every cell that travelled was accepted, so the baseline becomes what is
-      // on screen and the grid is clean again.
-      setInitial(rows);
-      router.refresh();
+          toast.success("Weekly attendance saved", { id: toastId });
+          // Every cell that travelled was accepted, so the baseline becomes what is
+          // on screen and the grid is clean again.
+          setInitial(rows);
+          router.refresh();
+          ok = true;
+        } finally {
+          resolve(ok);
+        }
+      });
     });
   }, [
     readOnly,
@@ -442,10 +484,20 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     router,
   ]);
 
-  useImperativeHandle(ref, () => ({ save: handleSave, applyBulk }), [
-    handleSave,
-    applyBulk,
-  ]);
+  const handleSave = useCallback(() => {
+    if (readOnly || pending) return;
+    void persist();
+  }, [persist, readOnly, pending]);
+
+  const discard = useCallback(() => {
+    setRows(initial);
+  }, [initial]);
+
+  useImperativeHandle(
+    ref,
+    () => ({ save: handleSave, persist, discard, applyBulk }),
+    [handleSave, persist, discard, applyBulk]
+  );
 
   if (learners.length === 0) {
     return (

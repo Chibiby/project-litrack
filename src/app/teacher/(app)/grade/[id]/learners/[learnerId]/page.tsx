@@ -222,6 +222,8 @@ export default async function LearnerDetailPage({
             )}
             <LearnerArchiveButton
               learnerId={learner.id}
+              learnerName={learner.fullName}
+              isAralLearner={learner.isAralLearner}
               archived={Boolean(learner.archivedAt)}
             />
           </div>

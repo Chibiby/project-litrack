@@ -39,7 +39,41 @@ Findings were split into two groups:
 | Admin / district | Empty lists say whether nothing exists yet or filters are hiding everything, with a Clear filters link. |
 | Admin / district | Credential cards readable in dark mode; "By school" summary toggle explains why it's disabled. |
 
-## Needs a decision
+## Decided and built in 2.26.0
+
+The owner approved every item below on 2026-09-30. Numbers refer to the list
+under "Needs a decision", kept for the record.
+
+| # | Outcome |
+|---|---|
+| 1 | Unsaved-changes guard on the weekly attendance, monthly reading level and term grades sheets: "Unsaved changes" tag, and Save and continue / Discard changes / Stay before switching. Tab close prompts too. The browser Back button is not guarded (a page cannot cancel it). |
+| 2 | Archive from the learner list (single and bulk) and from the profile page confirms with the count, where to restore, and the ARAL effect. |
+| 3 | Terms report has a Filters popover on phones. |
+| 4 | Closing Add/Edit learner with changes asks first; the form guard uses an app dialog instead of the browser's confirm. |
+| 5 | MOSY dialog button follows the choice; it says the recording tutor can undo a move-out by choosing Stay. |
+| 6 | Remove from ARAL says records are kept, the learner can be marked again, and the tutor has to be assigned again. |
+| 7 | Change email confirms old → new, and says it takes effect immediately with no confirmation email. |
+| 8 | Setting the active school year confirms first. |
+| 9 | Removing a section is refused while learners are placed in it (`SECTION_HAS_LEARNERS`); the button is disabled with the count shown. |
+| 10 | Removed schools have a Removed tab with Restore (Super Admin). A restored school comes back turned off. |
+| 11 | `/district/summary` is a facet index page. |
+| 12 | Partial bulk failures show a warning with the failed count (school detail, database console). |
+| 13 | Remove = recoverable, Delete permanently = not, across the app. |
+| 14 | "Clear everything" takes one safety point before both steps, so Undo restores learner records and teachers. The dialog says Undo rolls back the whole database. |
+| 15 | The reset dialog states the school count and that it can't be undone. |
+| 16 | Unused `PageHeader`, `reading-level-form.tsx`, `attendance-mark-form.tsx` deleted. |
+
+Security (owner-approved): admin sign-in has a per-address limit on failures
+(20 per 15 minutes), failures are never answered sooner than 800 ms, and an
+unknown username now makes the same Supabase call as a real one, so neither
+timing nor a provider error tells them apart. `cf-connecting-ip` is trusted only
+on the Cloudflare build. `reportLoginFailure` validates its input.
+
+Also in this release: every client screen calls actions through `callAction`
+(the MOSY export panel was the one gap), and
+`tests/unit/errors/client-call-sites.test.ts` now fails if a new screen doesn't.
+
+## Needs a decision (resolved 2026-09-30, see above)
 
 Ranked by how much they affect people.
 
@@ -98,7 +132,19 @@ Ranked by how much they affect people.
 16. Four page-header components coexist; one (`PageHeader`) is unused. Clean-up
     only, low priority.
 
-## Security follow-ups found during review (not changed)
+## Security hardening still open (found in the 2.26.0 review, all low)
+
+- The per-username admin limit (10 per 5 minutes) can be tripped by anyone who
+  knows a handle, locking the real admin out for a while. One address alone
+  can't sustain it any more; many addresses can.
+- The per-address admin limit is checked before and charged after the attempt,
+  so a burst of simultaneous requests all pass once per window.
+- Every refused (rate-limited) sign-in writes an `ErrorEvent` row.
+- `reportLoginFailure` is anonymous, so anyone can credit a fake denied sign-in
+  to a real School Head (the response never reveals anything).
+- IPv6 clients are limited per full address rather than per /64.
+
+## Security follow-ups found during review (2.25.0; the first three fixed in 2.26.0)
 
 | Severity | Finding |
 |---|---|
@@ -117,5 +163,6 @@ Ranked by how much they affect people.
 - A Supabase outage mid-session reads as "Your session ended" (middleware fails
   closed on purpose; changing it is a security trade-off).
 - Opening a backup download link that fails shows raw JSON in the browser tab.
-- `attendance-mark-form.tsx` and `reading-level-form.tsx` appear unused; delete
-  them if confirmed.
+- The school detail "Clear everything" panel has no "proceed without a backup"
+  option (the database console has one), so with no backup store connected it
+  is refused with the setup message.

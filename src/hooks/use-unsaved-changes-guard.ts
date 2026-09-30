@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { setUnsavedChangesDirty } from "@/hooks/unsaved-changes-context";
 
 const DEFAULT_MESSAGE =
@@ -9,7 +10,8 @@ const DEFAULT_MESSAGE =
 /**
  * Opt-in unsaved-changes guard for App Router.
  * - `beforeunload` for refresh/close
- * - Capture-phase click interceptor for in-app `<a>` navigations
+ * - Capture-phase click interceptor for in-app `<a>` navigations; the caller
+ *   renders the returned state in an app dialog (no browser confirm)
  * - Syncs dirty state into the unsaved-changes store for Sign out confirms
  *
  * Next.js 14 has no stable `useBlocker`; this covers the common cases.
@@ -19,6 +21,9 @@ export function useUnsavedChangesGuard(
   enabled: boolean,
   message: string = DEFAULT_MESSAGE
 ) {
+  const router = useRouter();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
   // Sync dirty → store. Clear only on unmount / disable, not between dep updates
   // (cleanup-set-false then set-true races made Sign out read a stale clean state).
   useEffect(() => {
@@ -72,13 +77,27 @@ export function useUnsavedChangesGuard(
         return;
       }
 
-      if (!window.confirm(message)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      // Held, not allowed through: the app dialog decides, and only "Discard
+      // changes" replays the navigation.
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingHref(`${url.pathname}${url.search}${url.hash}`);
     };
 
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
-  }, [enabled, isDirty, message]);
+  }, [enabled, isDirty]);
+
+  return {
+    /** In-app link the person tried to follow while the form was dirty. */
+    leaveOpen: pendingHref !== null,
+    keepEditing: () => setPendingHref(null),
+    discardAndLeave: () => {
+      const href = pendingHref;
+      setPendingHref(null);
+      // Clean first, so nothing re-intercepts the navigation we are replaying.
+      setUnsavedChangesDirty(false);
+      if (href) router.push(href);
+    },
+  };
 }

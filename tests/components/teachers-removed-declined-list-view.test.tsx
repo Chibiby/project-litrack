@@ -88,9 +88,9 @@ describe("TeachersDeclinedTable — mobile list view", () => {
 
     expect(clearRejectedTeacher).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText(/deleted permanently/i)).not.toBeNull();
+    expect(within(dialog).getByText(/this cannot be undone/i)).not.toBeNull();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Delete and allow re-register" })
+      within(dialog).getByRole("button", { name: "Delete permanently" })
     );
 
     await vi.waitFor(() => {

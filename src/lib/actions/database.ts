@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { revalidateAllCachedData } from "@/lib/cache/revalidate";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdmin } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
 import { action } from "@/lib/errors/action";
 import { AppError, tooManyAttempts } from "@/lib/errors/app-error";
 import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import {
   BACKUP_STORE_SETUP_MESSAGE,
   deleteBackup,
@@ -46,7 +47,7 @@ import { removeAllTeacherAccounts, resetAllSchoolHeadPasswords } from "@/lib/db/
  *
  * These actions are Super-Admin-only and, unscoped, cross every tenant at
  * once — which makes them the one place in the app where
- * `requireUser("SUPER_ADMIN")` is load-bearing on its own rather than backed by
+ * `requireDeveloperAdmin` is load-bearing on its own rather than backed by
  * a school-scoped query. The three Danger-zone actions also accept a
  * `schoolId` that narrows them to one school; see `resolveTarget`.
  *
@@ -286,7 +287,7 @@ async function runRestore(
 export const createBackupNow = action(
   "createBackupNow",
   async () => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
     requireStore();
     await enforceRate(`db:backup:${admin.id}`, BACKUP_RATE);
 
@@ -315,7 +316,7 @@ export const createBackupNow = action(
 export const restoreFromBackup = action(
   "restoreFromBackup",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
     requireStore();
 
     const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });
@@ -371,7 +372,7 @@ export const restoreFromBackup = action(
 export const restoreFromUpload = action(
   "restoreFromUpload",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
 
     if (formData.get("confirm") !== CONFIRM_PHRASES.restore) {
       throw refuse(`Type ${CONFIRM_PHRASES.restore} to confirm.`);
@@ -436,7 +437,7 @@ export const restoreFromUpload = action(
 export const undoLastOperation = action(
   "undoLastOperation",
   async () => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
     requireStore();
     await enforceRate(`db:rollback:${admin.id}`, DESTRUCTIVE_RATE);
 
@@ -474,7 +475,7 @@ export const undoLastOperation = action(
 export const resetOperationalData = action(
   "resetOperationalData",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
 
     if (formData.get("confirm") !== CONFIRM_PHRASES.resetOperational) {
       throw refuse(`Type ${CONFIRM_PHRASES.resetOperational} to confirm.`);
@@ -512,7 +513,7 @@ export const resetOperationalData = action(
 export const resetAllSchoolAccounts = action(
   "resetAllSchoolAccounts",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
 
     if (formData.get("confirm") !== CONFIRM_PHRASES.resetSchoolAccounts) {
       throw refuse(`Type ${CONFIRM_PHRASES.resetSchoolAccounts} to confirm.`);
@@ -551,7 +552,7 @@ export const resetAllSchoolAccounts = action(
 export const removeAllTeachers = action(
   "removeAllTeachers",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
 
     if (formData.get("confirm") !== CONFIRM_PHRASES.removeTeachers) {
       throw refuse(`Type ${CONFIRM_PHRASES.removeTeachers} to confirm.`);
@@ -585,10 +586,126 @@ export const removeAllTeachers = action(
   { verb: "remove the teacher accounts" }
 );
 
+/** Teachers still on the school's books, or -1 when that cannot be read. */
+async function countSchoolTeachers(schoolId: string): Promise<number> {
+  try {
+    return await prisma.user.count({ where: { schoolId, role: "TEACHER", deletedAt: null } });
+  } catch {
+    return -1;
+  }
+}
+
+/**
+ * "Clear everything for this school": operational data, then teacher accounts,
+ * behind ONE safety snapshot.
+ *
+ * `resetOperationalData` followed by `removeAllTeachers` took two whole-database
+ * snapshots, and the `safety` slot keeps one, so Undo restored only the state
+ * between the two steps. This takes the snapshot once, before either step, so
+ * Undo returns the database to before the clear. The two separate actions stay
+ * as they are for the database console.
+ *
+ * A school is required: clearing every school at once belongs to the console,
+ * with its own confirmation. Same guard, rate limit, phrase, no-store
+ * acknowledgement and audit rows as the two actions it combines.
+ */
+export const clearSchoolEverything = action(
+  "clearSchoolEverything",
+  async (formData: FormData) => {
+    const admin = await requireDeveloperAdmin("the database console");
+
+    if (formData.get("confirm") !== CONFIRM_PHRASES.resetOperational) {
+      throw refuse(`Type ${CONFIRM_PHRASES.resetOperational} to confirm.`);
+    }
+
+    await enforceRate(`db:reset:${admin.id}`, DESTRUCTIVE_RATE);
+
+    const target = await resolveTarget(formData);
+    if (!target.schoolId) throw refuse("Choose the school to clear.");
+    const safety = await safetyFor("clear everything for a school", formData);
+    const safetyMeta = { safetyStamp: safety.stamp, reversible: safety.stamp !== null };
+
+    try {
+      const removed = await clearOperationalData(target.schoolId);
+
+      // Written before the teacher step so the clear is on record even if that
+      // step throws.
+      await writeAudit({
+        userId: admin.id,
+        schoolId: target.schoolId,
+        action: AUDIT_ACTIONS.DB_RESET_OPERATIONAL,
+        resource: "Database",
+        resourceId: target.schoolId,
+        metadata: { ...scopeMetadata(target), rowsRemoved: totalOf(removed), ...safetyMeta },
+      });
+
+      let teachers: { processed: number; failed: unknown[] };
+      try {
+        teachers = await removeAllTeacherAccounts(target.schoolId);
+      } catch (err) {
+        // The records are already deleted, so answering `{ ok: false }` here would
+        // invite a retry of something that cannot be retried from this screen.
+        // Record the failure the way `action()` would, then report the clear as
+        // done with the teacher step flagged.
+        reportError(classifyError(err, { verb: "remove the teacher accounts" }), {
+          route: "clearSchoolEverything",
+          routeType: "action",
+        });
+        await writeAudit({
+          userId: admin.id,
+          schoolId: target.schoolId,
+          action: AUDIT_ACTIONS.DB_REMOVE_TEACHER_ACCOUNTS,
+          resource: "User",
+          metadata: { ...scopeMetadata(target), processed: 0, stepFailed: true, ...safetyMeta },
+        });
+        return {
+          ok: true as const,
+          data: {
+            removed,
+            teachersRemoved: 0,
+            teachersFailed: await countSchoolTeachers(target.schoolId),
+            reversible: safety.stamp !== null,
+            teacherStepFailed: true as const,
+          },
+        };
+      }
+
+      await writeAudit({
+        userId: admin.id,
+        schoolId: target.schoolId,
+        action: AUDIT_ACTIONS.DB_REMOVE_TEACHER_ACCOUNTS,
+        resource: "User",
+        metadata: {
+          ...scopeMetadata(target),
+          processed: teachers.processed,
+          failed: teachers.failed.length,
+          ...safetyMeta,
+        },
+      });
+
+      return {
+        ok: true as const,
+        data: {
+          removed,
+          teachersRemoved: teachers.processed,
+          teachersFailed: teachers.failed.length,
+          reversible: safety.stamp !== null,
+          teacherStepFailed: false as boolean,
+        },
+      };
+    } finally {
+      revalidatePath("/admin/database");
+      revalidateAllCachedData();
+      revalidatePath("/admin/accounts");
+    }
+  },
+  { verb: "clear the school" }
+);
+
 export const removeBackup = action(
   "removeBackup",
   async (formData: FormData) => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("the database console");
     requireStore();
 
     const parsed = backupPath.safeParse({ pathname: formData.get("pathname") });

@@ -3,7 +3,7 @@
 export const resetDemoData = action("resetDemoData", async (formData: FormData): Promise<
   ActionResult<{ count: number; initialPassword: string }>
 > => {
-  const admin = await requireUser("SUPER_ADMIN");
+  const admin = await requireDeveloperAdmin("demo data");
 
   const parsed = resetDemoSchema.safeParse({ confirm: formData.get("confirm") });
   if (!parsed.success) {
@@ -39,7 +39,7 @@ export const resetDemoData = action("resetDemoData", async (formData: FormData):
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdmin } from "@/lib/auth/session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { clearDemoSessionCookie, setDemoSessionCookie } from "@/lib/demo/session";
 import { provisionDemoTenant, resetDemoTenant } from "@/lib/demo/provision";
@@ -89,7 +89,7 @@ function revalidateDemoSurfaces() {
  * the signed expiry — whichever comes first.
  */
 export const startDemoSession = action("startDemoSession", async (): Promise<ActionResult<{ expiresAt: number }>> => {
-  const admin = await requireUser("SUPER_ADMIN");
+  const admin = await requireDeveloperAdmin("demo data");
 
   // A missing service-role key surfaces as CONFIG_MISSING from action().
   const session = await setDemoSessionCookie(admin.id);
@@ -132,7 +132,7 @@ export const endDemoSession = action("endDemoSession", async (): Promise<ActionR
 export const createDemoData = action("createDemoData", async (): Promise<
   ActionResult<{ count: number; initialPassword: string }>
 > => {
-  const admin = await requireUser("SUPER_ADMIN");
+  const admin = await requireDeveloperAdmin("demo data");
 
   const result = await provisionDemoTenant(admin.id);
   if (!result.ok) return result;
@@ -170,7 +170,7 @@ export type PrepareTestLabResult = { ok: true; fixtures: TestLabFixtures };
 export const prepareTestLab = action(
   "prepareTestLab",
   async (): Promise<PrepareTestLabResult> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("demo data");
     const fixtures = await prepareTestLabFixtures(admin.id);
     revalidatePath("/admin/test-lab");
     return { ok: true, fixtures };

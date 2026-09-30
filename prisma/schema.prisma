@@ -43,6 +43,14 @@ enum UserRole {
   DISTRICT_ADMIN
 }
 
+/// Which kind of Super Admin an account is. Both see the same division-wide
+/// pages; only DEVELOPER sees Developer Controls (audit log, error log, Page
+/// Test Lab, archived records, database console). See `isDeveloperAdmin`.
+enum AdminTier {
+  DEVELOPER
+  DIVISION
+}
+
 enum TeacherApprovalStatus {
   PENDING
   APPROVED
@@ -704,6 +712,10 @@ model User {
   /// forgot-password flow never reads this column.
   username                  String?                @unique
   role                      UserRole
+  /// SUPER_ADMIN only: Developer Admin or Division Admin. Null on every other
+  /// role, and a null on a Super Admin reads as DIVISION — the account without
+  /// Developer Controls — so a new admin never gets them by omission.
+  adminTier                 AdminTier?
   schoolId                  String?
   firstName                 String
   middleName                String?

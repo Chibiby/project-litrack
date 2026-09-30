@@ -10,7 +10,7 @@ import type {
   UserRole,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireDeveloperAdmin, requireUser } from "@/lib/auth/session";
 import { roleHomePath } from "@/lib/auth/roles";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -631,7 +631,7 @@ export const impersonateUser = action(
 export const startTestLabSession = action(
   "startTestLabSession",
   async (formData: FormData): Promise<{ ok: true }> => {
-    const admin = await requireUser("SUPER_ADMIN");
+    const admin = await requireDeveloperAdmin("Page Test Lab");
 
     // Same bucket as `impersonateUser`: both mint sessions for other accounts.
     const rate = await checkRateLimit(`impersonate:${admin.id}`, IMPERSONATE_RATE);

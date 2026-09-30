@@ -361,4 +361,40 @@ export const deleteSchool = action("deleteSchool", async (formData: FormData): P
   revalidatePath("/admin/schools");
   revalidateSchoolsList();
   revalidateSchoolDashboard(id);
-}, { verb: "delete the school" });
+}, { verb: "remove the school" });
+
+/**
+ * Super Admin only, like `deleteSchool`: bring a removed school back. It returns
+ * switched OFF (`isActive` stays false) so the admin turns it on deliberately.
+ * Nothing under the school was touched by the removal, so nothing else is
+ * rebuilt. The name and School ID unique indexes are not filtered by
+ * `deletedAt`, so a removed school's name was never reusable and restoring it
+ * cannot collide.
+ */
+export const restoreSchool = action("restoreSchool", async (formData: FormData): Promise<void> => {
+  const admin = await requireUser("SUPER_ADMIN");
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw fieldError("id", "Missing id");
+
+  const removed = await prisma.school.findFirst({
+    where: { id, deletedAt: { not: null } },
+    select: { id: true, name: true },
+  });
+  if (!removed) throw resourceNotFound("School");
+
+  await prisma.school.update({
+    where: { id },
+    data: { deletedAt: null, isActive: false },
+  });
+  await writeAudit({
+    userId: admin.id,
+    schoolId: id,
+    action: AUDIT_ACTIONS.SCHOOL_RESTORE,
+    resource: "School",
+    resourceId: id,
+    metadata: { schoolId: id },
+  });
+  revalidatePath("/admin/schools");
+  revalidateSchoolsList();
+  revalidateSchoolDashboard(id);
+}, { verb: "restore the school" });

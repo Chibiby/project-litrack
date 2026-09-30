@@ -51,9 +51,25 @@ function openDialog() {
   fireEvent.click(screen.getByRole("button", { name: "Reset all schools to default" }));
 }
 
+describe("ResetAllSchoolsTermSubjectsButton — school count", () => {
+  it("states how many schools change and that it cannot be undone", async () => {
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={42} />);
+    openDialog();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/all 42 schools at\s+once and cannot be undone\./)).not.toBeNull();
+  });
+
+  it("uses the singular for one school", async () => {
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={1} />);
+    openDialog();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/all 1 school at\s+once/)).not.toBeNull();
+  });
+});
+
 describe("ResetAllSchoolsTermSubjectsButton — typed guard", () => {
   it("keeps the confirm button disabled until RESET is typed exactly", async () => {
-    render(<ResetAllSchoolsTermSubjectsButton />);
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={3} />);
     openDialog();
 
     const dialog = await screen.findByRole("alertdialog");
@@ -75,7 +91,7 @@ describe("ResetAllSchoolsTermSubjectsButton — typed guard", () => {
   });
 
   it("calls the action with exactly { confirm: \"RESET\" } once unlocked", async () => {
-    render(<ResetAllSchoolsTermSubjectsButton />);
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={3} />);
     openDialog();
 
     const dialog = await screen.findByRole("alertdialog");
@@ -95,7 +111,7 @@ describe("ResetAllSchoolsTermSubjectsButton — typed guard", () => {
       data: { schools: 5, grades: 30, created: 1, restored: 0, archived: 2, failedSchools: 2 },
     });
 
-    render(<ResetAllSchoolsTermSubjectsButton />);
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={5} />);
     openDialog();
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/Type/), { target: { value: "RESET" } });
@@ -112,7 +128,7 @@ describe("ResetAllSchoolsTermSubjectsButton — typed guard", () => {
       error: "Invalid input",
     } as never);
 
-    render(<ResetAllSchoolsTermSubjectsButton />);
+    render(<ResetAllSchoolsTermSubjectsButton schoolCount={3} />);
     openDialog();
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/Type/), { target: { value: "RESET" } });

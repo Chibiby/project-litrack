@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetry/api";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
@@ -12,6 +12,8 @@ import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
 import { noteScopeUser } from "@/lib/errors/context";
 import { clearImpersonationCookie, isVerifiedImpersonationOf } from "@/lib/auth/impersonation";
+import { isDeveloperAdmin } from "@/lib/auth/admin-tier";
+import { AppError } from "@/lib/errors/app-error";
 import type { User, UserRole } from "@prisma/client";
 
 export {
@@ -367,6 +369,33 @@ export async function requireSchoolUser(
     redirect(roleHomePath(user.role));
   }
   return user as SchoolUser;
+}
+
+/**
+ * Developer Controls pages: a Super Admin whose tier is DEVELOPER. A Division
+ * Admin gets the admin 404, so the page is hidden rather than refused — the
+ * sidebar does not list it either.
+ */
+export async function requireDeveloperAdminPage(): Promise<User> {
+  const user = await requireUser("SUPER_ADMIN");
+  if (!isDeveloperAdmin(user)) notFound();
+  return user;
+}
+
+/**
+ * Developer Controls actions: same rule as `requireDeveloperAdminPage`, but
+ * thrown as `AUTH_FORBIDDEN` so the `action()` wrapper returns a result.
+ */
+export async function requireDeveloperAdmin(what: string): Promise<User> {
+  const user = await requireUser("SUPER_ADMIN");
+  if (!isDeveloperAdmin(user)) {
+    throw new AppError("AUTH_FORBIDDEN", {
+      params: { what },
+      detail: `Division Admin ${user.id} called a Developer Controls action`,
+      context: { reason: "not_developer_admin" },
+    });
+  }
+  return user;
 }
 
 /**

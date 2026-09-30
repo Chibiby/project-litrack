@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import {
   SCHOOLS_LIST_SORTS,
+  getRemovedSchools,
   getSchoolsListPage,
   parseSchoolsListParams,
   schoolsTotalPages,
@@ -12,6 +13,11 @@ import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Button } from "@/components/ui/button";
 import { Surface, SurfaceBody } from "@/components/ui/surface";
 import { SchoolsTable, type SchoolRow } from "@/components/schools-table";
+import {
+  RemovedSchoolsTable,
+  SchoolsViewTabs,
+  type RemovedSchoolTableRow,
+} from "@/components/removed-schools";
 import { TableSectionSkeleton } from "@/components/loading";
 import { Plus, School } from "lucide-react";
 import { PageTip } from "@/components/admin/page-tip";
@@ -22,7 +28,7 @@ import { listKey } from "@/lib/nav/list-params";
  * `q` is left out: search runs as you type, and a remount on each search would
  * drop the search box's focus.
  */
-export const SCHOOLS_LIST_KEYS = ["page", "sort", "region", "status"] as const;
+export const SCHOOLS_LIST_KEYS = ["page", "sort", "region", "status", "view"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +39,44 @@ interface PageProps {
     region?: string;
     status?: string;
     sort?: string;
+    view?: string;
   }>;
+}
+
+async function RemovedSchoolsBody() {
+  let rows: RemovedSchoolTableRow[] = [];
+  let dbAvailable = true;
+
+  try {
+    const removed = await getRemovedSchools();
+    rows = removed.map((school) => ({
+      id: school.id,
+      name: school.name,
+      schoolIdCode: school.schoolIdCode,
+      isDemo: school.isDemo,
+      removedAt: school.removedAt.toISOString(),
+      users: school.users,
+      learners: school.learners,
+    }));
+  } catch (err) {
+    console.error("[SchoolsListPage] failed to load removed schools:", err);
+    dbAvailable = false;
+  }
+
+  return (
+    <>
+      {!dbAvailable ? (
+        <p className="mb-4 text-sm text-destructive">
+          Could not load removed schools right now. The database may be unavailable.
+        </p>
+      ) : null}
+      <Surface as="section" className="min-w-0 rounded-2xl">
+        <SurfaceBody className="p-3 sm:p-5">
+          <RemovedSchoolsTable schools={rows} />
+        </SurfaceBody>
+      </Surface>
+    </>
+  );
 }
 
 async function SchoolsTableBody({
@@ -96,6 +139,7 @@ async function SchoolsTableBody({
 export default async function SchoolsListPage({ searchParams }: PageProps) {
   const user = await requireUser("SUPER_ADMIN");
   const params = await searchParams;
+  const removedView = params.view === "removed";
 
   return (
     <AdminPage
@@ -125,11 +169,13 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
         <code className="rounded bg-amber-100 px-1 text-xs dark:bg-amber-900/60">docs/runbook.md</code>.
       </PageTip>
 
+      <SchoolsViewTabs view={removedView ? "removed" : "active"} />
+
       <Suspense
         key={listKey(params, SCHOOLS_LIST_KEYS)}
         fallback={<TableSectionSkeleton rows={8} columns={5} />}
       >
-        <SchoolsTableBody searchParams={params} />
+        {removedView ? <RemovedSchoolsBody /> : <SchoolsTableBody searchParams={params} />}
       </Suspense>
     </AdminPage>
   );

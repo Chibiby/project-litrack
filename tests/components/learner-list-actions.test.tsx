@@ -181,6 +181,7 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
   });
@@ -193,11 +194,17 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
 
     await waitFor(() =>
-      expect(screen.queryByRole("checkbox", { name: "Select Ana Santos" })).toBeNull()
+      expect(
+        screen.queryByRole("checkbox", { name: "Select Ana Santos", hidden: true })
+      ).toBeNull()
     );
-    expect(screen.getByRole("checkbox", { name: "Select Ben Cruz" })).toBeTruthy();
+    // The confirm stays open until the server answers, so the roster is aria-hidden.
+    expect(
+      screen.getByRole("checkbox", { name: "Select Ben Cruz", hidden: true })
+    ).toBeTruthy();
     settle({ ok: true, data: { archived: 1 } });
   });
 
@@ -206,10 +213,13 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "Select Ana Santos" })).toBeTruthy()
+      expect(
+        screen.getByRole("checkbox", { name: "Select Ana Santos", hidden: true })
+      ).toBeTruthy()
     );
   });
 

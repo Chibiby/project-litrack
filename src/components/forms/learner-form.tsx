@@ -48,6 +48,7 @@ import {
 import { LEARNER_AGE_RANGE } from "@/lib/validators/common";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
+import { stableSerialize } from "@/hooks/unsaved-changes-context";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 
@@ -138,6 +139,8 @@ type LearnerFormProps = {
   onSaved?: () => void;
   /** Draws a Cancel button beside submit, for a host that can be dismissed. */
   onCancel?: () => void;
+  /** Fires when the form's values start or stop differing from how it opened. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
@@ -236,6 +239,7 @@ export function LearnerForm({
   onCreated,
   onSaved,
   onCancel,
+  onDirtyChange,
 }: LearnerFormProps) {
   const [pending, startTransition] = useTransition();
   const [duplicatePending, setDuplicatePending] = useState(false);
@@ -341,9 +345,33 @@ export function LearnerForm({
     return "—";
   }, [displayPlacement, selectedGradeType]);
 
+  // The first snapshot is how the form opened (prefilled or empty); any later
+  // difference is an unsaved edit. Reset after a create brings it back to clean.
+  const baselineRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange;
+  });
+  useEffect(
+    () => () => {
+      if (dirtyRef.current) onDirtyChangeRef.current?.(false);
+    },
+    []
+  );
+
   const refreshValues = useCallback(() => {
     const form = formRef.current;
-    if (form) setValues(snapshotForm(form));
+    if (!form) return;
+    const snapshot = snapshotForm(form);
+    setValues(snapshot);
+    const key = stableSerialize(snapshot);
+    if (baselineRef.current === null) baselineRef.current = key;
+    const dirty = key !== baselineRef.current;
+    if (dirty !== dirtyRef.current) {
+      dirtyRef.current = dirty;
+      onDirtyChangeRef.current?.(dirty);
+    }
   }, []);
 
   // Re-read on mount so an edit's prefilled row shows its ticks on the first

@@ -34,8 +34,11 @@ import { buildAdminAttention, buildAdminMetaLabel } from "./attention";
  */
 export async function loadAdminDashboard({
   firstName,
+  isDeveloperAdmin,
 }: {
   firstName: string;
+  /** Picks the fourth Quick Action; see `AdminQuickActionsPanel`. */
+  isDeveloperAdmin: boolean;
 }): Promise<{ hero: ReactNode; body: ReactNode }> {
   let metrics: Awaited<ReturnType<typeof getAdminMetricCounts>> | null = null;
   try {
@@ -146,7 +149,7 @@ export async function loadAdminDashboard({
         </aside>
       </div>
 
-      <AdminQuickActionsPanel />
+      <AdminQuickActionsPanel isDeveloperAdmin={isDeveloperAdmin} />
 
       <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
         <AdminChartsSection />
