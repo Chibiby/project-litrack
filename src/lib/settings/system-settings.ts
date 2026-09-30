@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import {
+  MOSY_SUBMISSION_LOCK_KEY,
   READING_LEVEL_UNLOCK_ALL_KEY,
   SUBMISSION_LOCKING_KEY,
 } from "@/lib/unlock/constants";
@@ -92,6 +93,23 @@ export const isMonthlyReadingLevelUnlockedForAll = cache(
     return (await readSetting(READING_LEVEL_UNLOCK_ALL_KEY)) !== "false";
   }
 );
+
+/**
+ * Are MOSY Report submissions locked?
+ *
+ * Defaults to **LOCKED**: the owner wants MOSY closed until a Super Admin opens
+ * it. Only the exact stored value `"false"` unlocks. A missing row and a failed
+ * read (`readSetting` degrades both to `null`) therefore read as locked — the
+ * fail-closed direction, opposite to `isMonthlyReadingLevelUnlockedForAll`.
+ *
+ * Only saves are gated; viewing and exporting the report stay open.
+ *
+ * `cache()` for one query per render, deliberately not `unstable_cache`, so the
+ * switch is never stuck behind a second TTL.
+ */
+export const isMosySubmissionLocked = cache(async (): Promise<boolean> => {
+  return (await readSetting(MOSY_SUBMISSION_LOCK_KEY)) !== "false";
+});
 
 /**
  * A Prisma `where` fragment that hides the demo tenant from a request that has

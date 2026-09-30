@@ -15,18 +15,18 @@ import { getTermWindows, validateTermWindows, type TermPeriodValue } from "@/lib
 import { parseLocalDateKey } from "@/lib/date-keys";
 import { UnlockConsole } from "@/components/admin/unlock-console";
 import type { ActiveUnlocks, UnlockTargetSchool } from "@/lib/unlock/admin-queries";
-import { SubmissionLockingSettings, ReadingLevelUnlockSettings } from "@/components/admin/submission-locking-settings";
+import { SubmissionLockingSettings, ReadingLevelUnlockSettings, MosySubmissionLockSettings } from "@/components/admin/submission-locking-settings";
 import { UNLOCK_SCOPES } from "@/lib/validators/support.schema";
 
 type YearOption = { id: string; schoolId: string; schoolName: string; label: string; startKey: string; endKey: string; isActive: boolean; overrides: { term: TermPeriodValue; startKey: string; endKey: string; deadlineKey: string }[] };
 
-type Props = { schools: UnlockTargetSchool[]; years: YearOption[]; selected: YearOption | null; allSelected: boolean; active: ActiveUnlocks; lockingEnabled: boolean; readingLevelUnlockedForAll: boolean };
+type Props = { schools: UnlockTargetSchool[]; years: YearOption[]; selected: YearOption | null; allSelected: boolean; active: ActiveUnlocks; lockingEnabled: boolean; readingLevelUnlockedForAll: boolean; mosyLocked: boolean };
 
 type Draft = { term: TermPeriodValue; startKey: string; endKey: string; deadlineKey: string; isOverridden: boolean; label: string; rangeLabel: string };
 
 const ALL_SCHOOLS = "__ALL_SCHOOLS__";
 
-export function SubmissionsConsole({ schools, years, selected, allSelected, active, lockingEnabled, readingLevelUnlockedForAll }: Props) {
+export function SubmissionsConsole({ schools, years, selected, allSelected, active, lockingEnabled, readingLevelUnlockedForAll, mosyLocked }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [drafts, setDrafts] = useState<Draft[]>(() => selected ? getTermWindows(parseLocalDateKey(selected.startKey), selected.overrides) : []);
@@ -86,7 +86,7 @@ export function SubmissionsConsole({ schools, years, selected, allSelected, acti
       </CardContent>
     </Card>
 
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2"><SubmissionLockingSettings enabled={lockingEnabled} /><ReadingLevelUnlockSettings enabled={readingLevelUnlockedForAll} /></div>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2"><SubmissionLockingSettings enabled={lockingEnabled} /><ReadingLevelUnlockSettings enabled={readingLevelUnlockedForAll} /><MosySubmissionLockSettings enabled={mosyLocked} /></div>
     <section aria-labelledby="revision-access-heading" className="min-w-0 space-y-3"><div><h2 id="revision-access-heading" className="flex items-center gap-2 text-lg font-semibold"><Unlock className="h-5 w-5" aria-hidden />Revision access</h2><p className="mt-0.5 text-sm text-muted-foreground">Allow all teachers at the selected school, or one teacher, to revise locked attendance or monthly reading-level records.</p></div><UnlockConsole schools={schools} active={active} scopes={UNLOCK_SCOPES.filter((scope) => scope !== "TERM_GRADES")} allowSchoolAudience initialMode="school" /></section>
   </div>;
 }

@@ -9,6 +9,7 @@ import { aralMosyExportSchema } from "@/lib/validators/aral-mosy.schema";
 import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { loadMosyExport } from "@/lib/aral/mosy-queries";
+import { resolveMosyAccess } from "@/lib/aral/mosy-access";
 import { buildMosyExportTable } from "@/lib/aral/mosy-export";
 import { REPORT_FORMAT_EXTENSION } from "@/lib/reports/kinds";
 import { resolveMosyWindow } from "@/lib/reports/mosy-window";
@@ -25,11 +26,13 @@ function formToObj(formData: FormData): Record<string, unknown> {
  * Exports the MOSY Report page (the filtered list plus the five stats) as Excel
  * or PDF, through the Reports Hub renderer so it carries the same DepEd frame.
  *
- * Authorization: `requireSchoolUser("TEACHER")`. Tenancy: `schoolId` is the
- * session's, and the tutor scope is the session user (`teacherId = user.id`);
- * a Super Admin, who passes the role check, gets the whole-school read-only
- * scope exactly as the page gives them, and only for the school on their
- * session. Neither comes from the input. Grade and section ids from the input
+ * Authorization: `requireSchoolUser("TEACHER")` then `resolveMosyAccess`
+ * (DepEd advisers only). Allowed while the MOSY submission lock is on: the lock
+ * gates saves, not viewing or exporting. Tenancy: `schoolId` is the session's,
+ * and the scope is the session teacher's advisory sections (`sectionIds`); a
+ * Super Admin, who passes the role check, gets the whole-school read-only scope
+ * (`sectionIds = null`) exactly as the page gives them, and only for the school
+ * on their session. Neither comes from the input. Grade and section ids from the input
  * are pinned to `schoolId` inside `loadMosyExport`, so a foreign id matches no
  * rows and no label.
  *
@@ -47,6 +50,10 @@ export const exportMosyReport = action(
     formData: FormData
   ): Promise<{ ok: true; data: { base64: string; filename: string } }> => {
     const user = await requireSchoolUser("TEACHER");
+    const access = await resolveMosyAccess(user);
+    if (!access.ok) {
+      throw new AppError("VALIDATION_FAILED", { params: { message: access.message } });
+    }
     const input = parseInput(aralMosyExportSchema, formToObj(formData));
 
     const schoolYear = await getActiveSchoolYear(user.schoolId);
@@ -59,7 +66,7 @@ export const exportMosyReport = action(
     const data = await loadMosyExport({
       schoolId: user.schoolId,
       schoolYear: { id: schoolYear.id, startDateKey: schoolYear.startDateKey },
-      teacherId: user.role === "SUPER_ADMIN" ? null : user.id,
+      sectionIds: access.sectionIds,
       q: input.q,
       grade: input.grade,
       section: input.section,

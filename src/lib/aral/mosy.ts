@@ -21,7 +21,6 @@ import {
   languagesForGrade,
   readingProfileOptionsForGrade,
 } from "@/lib/reading/policy";
-import { teacherOwnsMosyRow } from "@/lib/teachers/scope";
 
 export type MosyReasonChoice = {
   /** Stable, unique per choice; the dropdown's option value. */
@@ -265,7 +264,6 @@ export function formatPreviousLevel(
 }
 
 export type MosySaveFailure =
-  | "OUT_OF_SCOPE"
   | "LEVEL_NOT_ALLOWED"
   | "REASON_REQUIRED"
   | "REASON_NOT_ALLOWED"
@@ -328,9 +326,8 @@ export type MosySaveResult =
 export function resolveMosySave(input: MosySaveInput): MosySaveResult {
   const { actorId, now, learner, existing, submitted } = input;
 
-  if (!teacherOwnsMosyRow(learner, existing, actorId)) {
-    return { ok: false, failure: "OUT_OF_SCOPE" };
-  }
+  // Scope (advisory section) is the caller's job: `saveMosyDecision` checks
+  // `teacherOwnsMosyRow` on the locked learner row before calling this.
   if (!isReadingValueAllowedForGrade(submitted.mosyLevel, learner.gradeType)) {
     return { ok: false, failure: "LEVEL_NOT_ALLOWED" };
   }
@@ -375,9 +372,8 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
   }
 
   if (!learner.isAralLearner && decision === "STAY") {
-    // aralTeacherId = actorId: by scope only the tutor who recorded the Move out
-    // (existing.tutorId === actorId) can reach this branch, so re-tagging to the
-    // actor restores the original tutor rather than reassigning anyone.
+    // aralTeacherId = actorId: the adviser saving the STAY becomes the learner's
+    // designated ARAL teacher again (the Move out cleared the previous one).
     // notifyAralAssigned is deliberately not called: the actor is the assignee, so
     // it would only notify them of their own action.
     return {

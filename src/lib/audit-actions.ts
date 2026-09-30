@@ -366,6 +366,12 @@ export const AUDIT_ACTIONS = {
   READING_LEVEL_UNLOCK_ALL_SET: "READING_LEVEL_UNLOCK_ALL_SET",
 
   /**
+   * The MOSY Report submission lock (`submissions.mosyLocked`). It defaults to
+   * locked, so a flip to open is the row that explains why teachers could save.
+   */
+  MOSY_SUBMISSION_LOCK_SET: "MOSY_SUBMISSION_LOCK_SET",
+
+  /**
    * District admin accounts (`docs/specs/district-admin.md`).
    *
    * `DISTRICT_ADMIN_CREATE` and `DISTRICT_ASSIGNMENT_ADD` are written by
@@ -485,6 +491,7 @@ export const SECURITY_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.UNLOCK_SCHOOL_GRANT_REVOKE,
   AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
   AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
+  AUDIT_ACTIONS.MOSY_SUBMISSION_LOCK_SET,
   AUDIT_ACTIONS.TERM_WINDOW_OVERRIDE_SET,
   AUDIT_ACTIONS.TERM_SUBJECT_RESET_ALL_SCHOOLS,
 ] as const satisfies readonly AuditAction[];

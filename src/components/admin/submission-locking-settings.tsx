@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Lock, LockOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   setMonthlyReadingLevelUnlock,
+  setMosySubmissionLock,
   setSubmissionLocking,
 } from "@/lib/actions/submission-locking";
 import { callAction } from "@/lib/ui/call-action";
@@ -93,6 +95,82 @@ export function SubmissionLockingSettings({ enabled }: { enabled: boolean }) {
             deadlines are off they are simply not consulted; they start applying
             again the moment deadlines are switched back on.
           </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Closes the MOSY Report to saving for every teacher. Viewing and exporting stay
+ * open. Ships ON, so MOSY is closed until a Super Admin opens it.
+ */
+export function MosySubmissionLockSettings({ enabled }: { enabled: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [on, setOn] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle() {
+    const next = !on;
+    setError(null);
+    setOn(next);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("enabled", next ? "true" : "false");
+      const res = await callAction(() => setMosySubmissionLock(fd));
+      if (!res.ok) {
+        setOn(!next);
+        setError(res.error);
+        return;
+      }
+      toast.success(next ? "MOSY submissions locked." : "MOSY submissions open.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            {on ? (
+              <Lock className="h-4 w-4" aria-hidden />
+            ) : (
+              <LockOpen className="h-4 w-4" aria-hidden />
+            )}
+            MOSY Report
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="mosy-submission-lock">Lock MOSY submissions</Label>
+              <p className="text-sm text-muted-foreground">
+                While on, teachers can view and export the MOSY Report but cannot save updates.
+                {on
+                  ? " MOSY is locked right now."
+                  : " MOSY is open for updates right now."}
+              </p>
+            </div>
+            <Switch
+              id="mosy-submission-lock"
+              checked={on}
+              disabled={pending}
+              onCheckedChange={toggle}
+              aria-label="Lock MOSY submissions"
+              className="relative max-lg:before:absolute max-lg:before:-inset-y-2 max-lg:before:inset-x-0 max-lg:before:content-['']"
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

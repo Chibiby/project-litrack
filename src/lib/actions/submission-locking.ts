@@ -8,6 +8,7 @@ import { writeSetting } from "@/lib/settings/system-settings";
 import { action } from "@/lib/errors/action";
 import { parseInput } from "@/lib/errors/validation";
 import {
+  MOSY_SUBMISSION_LOCK_KEY,
   READING_LEVEL_UNLOCK_ALL_KEY,
   SUBMISSION_LOCKING_KEY,
 } from "@/lib/unlock/constants";
@@ -118,6 +119,48 @@ export const setMonthlyReadingLevelUnlock = action(
     revalidatePath("/admin/submissions");
     revalidatePath("/admin/settings/submissions");
     revalidatePath("/teacher/aral", "layout");
+    return { ok: true };
+  },
+  { verb: "save the setting" }
+);
+
+const setMosySubmissionLockSchema = z.object({ enabled: enabledFlag });
+
+/**
+ * Super Admin: lock or open MOSY Report submissions programme-wide.
+ *
+ * `enabled: true` means LOCKED. The reader (`isMosySubmissionLocked`) treats
+ * everything except the exact string `"false"` as locked, so a missing row or a
+ * failed read never opens MOSY by accident; only this action writing `"false"`
+ * does. Viewing and exporting stay available while locked.
+ *
+ * Audited (`MOSY_SUBMISSION_LOCK_SET`) because the row is the only explanation
+ * for why teachers could, or could not, save. The audit metadata is the flag
+ * only. Authorization: `requireUser("SUPER_ADMIN")`; global setting, no tenant.
+ */
+export const setMosySubmissionLock = action(
+  "setMosySubmissionLock",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const admin = await requireUser("SUPER_ADMIN");
+
+    const { enabled } = parseInput(setMosySubmissionLockSchema, {
+      enabled: formData.get("enabled"),
+    });
+
+    await writeSetting(MOSY_SUBMISSION_LOCK_KEY, enabled ? "true" : "false");
+
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.MOSY_SUBMISSION_LOCK_SET,
+      resource: "SystemSetting",
+      resourceId: MOSY_SUBMISSION_LOCK_KEY,
+      metadata: { locked: enabled },
+    });
+
+    revalidatePath("/admin/settings/submissions");
+    revalidatePath("/admin/submissions");
+    revalidatePath("/teacher/aral/mosy");
     return { ok: true };
   },
   { verb: "save the setting" }

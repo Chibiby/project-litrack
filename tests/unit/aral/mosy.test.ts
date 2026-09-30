@@ -23,7 +23,6 @@ import {
  */
 
 const ACTOR = "tutor-1";
-const OTHER = "tutor-2";
 const NOW = new Date("2026-09-29T02:00:00.000Z");
 const ENROLLED = new Date("2026-06-10T00:00:00.000Z");
 
@@ -709,81 +708,8 @@ describe("resolveMosySave — rejected paths", () => {
   });
 });
 
-describe("resolveMosySave — out of scope", () => {
-  it("another tutor on a tagged learner", () => {
-    expectFail(
-      resolve({
-        learner: tagged({ aralTeacherId: OTHER }),
-        submitted: { decision: "STAY" },
-      }),
-      "OUT_OF_SCOPE"
-    );
-  });
-
-  it("a tagged learner with no designated tutor (adviser is not the tutor)", () => {
-    expectFail(
-      resolve({
-        learner: tagged({ aralTeacherId: null }),
-        submitted: { decision: "STAY" },
-      }),
-      "OUT_OF_SCOPE"
-    );
-  });
-
-  it("untagged with a STAY row", () => {
-    expectFail(
-      resolve({
-        learner: untagged(),
-        existing: { decision: "STAY", tutorId: ACTOR, priorAralEnrolledAt: null },
-        submitted: { decision: "STAY" },
-      }),
-      "OUT_OF_SCOPE"
-    );
-  });
-
-  it("untagged with no row at all", () => {
-    expectFail(
-      resolve({ learner: untagged(), existing: null, submitted: { decision: "STAY" } }),
-      "OUT_OF_SCOPE"
-    );
-  });
-
-  it("untagged with another tutor's MOVE_OUT", () => {
-    expectFail(
-      resolve({
-        learner: untagged(),
-        existing: movedOutRow({ tutorId: OTHER }),
-        submitted: { decision: "STAY" },
-      }),
-      "OUT_OF_SCOPE"
-    );
-  });
-
-  it("an actor that owns nothing (Super Admin-like id) never resolves ok, even with a valid payload", () => {
-    for (const learner of [tagged(), untagged()]) {
-      expectFail(
-        resolve({
-          actorId: "super-admin-1",
-          learner,
-          existing: learner.isAralLearner ? null : movedOutRow(),
-          submitted: { decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" },
-        }),
-        "OUT_OF_SCOPE"
-      );
-    }
-  });
-
-  it("scope is checked before level and reason validation", () => {
-    expectFail(
-      resolve({
-        actorId: OTHER,
-        learner: tagged({ gradeType: "KINDER" }),
-        submitted: { mosyLevel: "INSTRUCTIONAL_DEVELOPING", decision: "MOVE_OUT", reason: null },
-      }),
-      "OUT_OF_SCOPE"
-    );
-  });
-});
+// Scope (advisory section) is no longer decided by resolveMosySave: see
+// tests/unit/aral/mosy-scope-parity.test.ts and tests/unit/actions/aral-mosy-save.test.ts.
 
 describe("mosyRowStatus", () => {
   const status = (isAralLearner: boolean, decision: AralMosyOutcome | null | "none") =>

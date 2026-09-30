@@ -29,6 +29,19 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+/** What `resolveMosyAccess` returns for the session user. */
+let access: unknown;
+const resolveMosyAccess = vi.fn(async (_u: unknown) => access);
+vi.mock("@/lib/aral/mosy-access", () => ({
+  resolveMosyAccess: (u: unknown) => resolveMosyAccess(u),
+}));
+
+// The lock gates saves only. Exporting must never consult it.
+const isMosySubmissionLocked = vi.fn(async () => true);
+vi.mock("@/lib/settings/system-settings", () => ({
+  isMosySubmissionLocked: () => isMosySubmissionLocked(),
+}));
+
 const requireSchoolUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireSchoolUser: (...a: unknown[]) => requireSchoolUser(...a),
@@ -121,6 +134,7 @@ function renderedTable() {
 beforeEach(() => {
   vi.clearAllMocks();
   activeYear = YEAR;
+  access = { ok: true, sectionIds: ["section-a", "section-b"] };
   requireSchoolUser.mockResolvedValue({
     id: USER_ID,
     schoolId: SCHOOL_ID,
@@ -182,14 +196,39 @@ describe("exportMosyReport", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("teacherId comes from the session, never the input", async () => {
-    const res = await exportMosyReport(form({ teacherId: "someone-else", tutorId: "someone-else" }));
+  it("the scope is the session teacher's advisory sections, never the input", async () => {
+    const res = await exportMosyReport(
+      form({ teacherId: "someone-else", tutorId: "someone-else", sectionIds: "section-z" })
+    );
     expect(res).toMatchObject({ ok: true });
+    expect(resolveMosyAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: USER_ID, schoolId: SCHOOL_ID })
+    );
     const json = JSON.stringify(listWhere());
-    expect(json).toContain(USER_ID);
+    expect(json).toContain('"sectionId":{"in":["section-a","section-b"]}');
     expect(json).not.toContain("someone-else");
+    expect(json).not.toContain("section-z");
+    expect(json).not.toContain(USER_ID);
   });
 
+  it("still exports while MOSY submissions are locked", async () => {
+    const res = await exportMosyReport(form());
+    expect(res).toMatchObject({ ok: true });
+    expect(isMosySubmissionLocked).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["volunteer", "MOSY Report is for DepEd teachers who advise a section."],
+    ["floating", "Floating teachers do not advise a section, so there is no MOSY Report."],
+    ["no_advisory", "You have no advisory section yet."],
+  ])("a %s teacher is refused and nothing is loaded, rendered or audited", async (reason, message) => {
+    access = { ok: false, reason, message };
+    const res = await exportMosyReport(form());
+    expect(res).toMatchObject({ ok: false, error: message });
+    expect(learnerFindMany).not.toHaveBeenCalled();
+    expect(renderReport).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
   it("schoolId is pinned to the session even if the form posts another", async () => {
     await exportMosyReport(form({ schoolId: "school-2" }));
     expect(listWhere()).toMatchObject({ schoolId: SCHOOL_ID });
@@ -197,12 +236,14 @@ describe("exportMosyReport", () => {
     expect(loadReportFrame).toHaveBeenCalledWith(expect.objectContaining({ schoolId: SCHOOL_ID }));
   });
 
-  it("a Super Admin session gets the whole-school scope (no tutor id), still on the session school", async () => {
+  it("a Super Admin session gets the whole-school scope (no section filter), still on the session school", async () => {
+    access = { ok: true, sectionIds: null };
     requireSchoolUser.mockResolvedValue({ id: "sa-1", schoolId: SCHOOL_ID, role: "SUPER_ADMIN", fullName: "Admin" });
     const res = await exportMosyReport(form());
     expect(res).toMatchObject({ ok: true });
     expect(listWhere()).toMatchObject({ schoolId: SCHOOL_ID });
     expect(JSON.stringify(listWhere())).not.toContain("sa-1");
+    expect(JSON.stringify(listWhere())).not.toContain('"sectionId":{');
   });
 
   it("a foreign grade/section id is scoped to the session school: lookups pinned, no labels leak", async () => {
@@ -218,7 +259,7 @@ describe("exportMosyReport", () => {
     const res = await exportMosyReport(form({ grade: FOREIGN_GRADE, section: FOREIGN_SECTION }));
     expect(res).toMatchObject({ ok: true });
     expect(gradeFindFirst.mock.calls[0]![0]).toMatchObject({ where: { id: FOREIGN_GRADE, schoolId: SCHOOL_ID } });
-    expect(sectionFindFirst.mock.calls[0]![0]).toMatchObject({ where: { id: FOREIGN_SECTION, schoolId: SCHOOL_ID } });
+    expect(sectionFindFirst.mock.calls[0]![0]).toMatchObject({ where: { id: { equals: FOREIGN_SECTION, in: ["section-a", "section-b"] }, schoolId: SCHOOL_ID } });
     expect(listWhere()).toMatchObject({ schoolId: SCHOOL_ID, gradeLevelId: FOREIGN_GRADE });
     const t = renderedTable();
     const learners = t.blocks.find((b) => b.heading === "Learners")!;

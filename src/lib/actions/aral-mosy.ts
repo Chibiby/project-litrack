@@ -13,6 +13,9 @@ import { parseInput } from "@/lib/errors/validation";
 import { resolveMosySave, type MosySaveFailure, type MosyTransition } from "@/lib/aral/mosy";
 import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import { loadPreviousFilipinoLevel } from "@/lib/aral/mosy-queries";
+import { resolveMosyAccess } from "@/lib/aral/mosy-access";
+import { isMosySubmissionLocked } from "@/lib/settings/system-settings";
+import { teacherOwnsMosyRow } from "@/lib/teachers/scope";
 import { ARAL_MOSY_HREF, ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 
 function formToObj(formData: FormData): Record<string, unknown> {
@@ -21,10 +24,7 @@ function formToObj(formData: FormData): Record<string, unknown> {
   return obj;
 }
 
-const FAILURE_FIELD: Record<
-  Exclude<MosySaveFailure, "OUT_OF_SCOPE">,
-  { field: string; message: string }
-> = {
+const FAILURE_FIELD: Record<MosySaveFailure, { field: string; message: string }> = {
   LEVEL_NOT_ALLOWED: {
     field: "mosyLevel",
     message: "That reading level is not used for this learner's grade",
@@ -44,12 +44,17 @@ const FAILURE_FIELD: Record<
 };
 
 /**
- * Authorization: `requireSchoolUser("TEACHER")`. Tenancy: `schoolId` on the row
- * comes from the session, `assertSameSchool` on the DB-loaded learner, then
- * `resolveMosySave` enforces tutor scope (`teacherOwnsMosyRow`) — the designated
- * tutor of a tagged learner, or whoever recorded the Move out. Anything else,
- * Super Admin included, is NOT_FOUND. The decision row and any learner untag /
- * re-tag commit in one transaction.
+ * Authorization: `requireSchoolUser("TEACHER")`, then in order: Super Admin is
+ * read-only (NOT_FOUND, even on a forged post); `MOSY_LOCKED` while the Super
+ * Admin submission lock is on (the default); `resolveMosyAccess` refuses
+ * volunteers, floating teachers and teachers with no advisory section.
+ *
+ * Tenancy: `schoolId` on the row comes from the session, `assertSameSchool` on the
+ * DB-loaded learner, then advisory scope (`teacherOwnsMosyRow`) is re-checked
+ * against the learner row locked inside the transaction: the learner's CURRENT
+ * section must be one of the teacher's advisory sections and the learner must be
+ * ARAL-tagged or moved out through MOSY this year. Anything else is NOT_FOUND.
+ * The decision row and any learner untag / re-tag commit in one transaction.
  */
 export const saveMosyDecision = action(
   "saveMosyDecision",
@@ -57,6 +62,17 @@ export const saveMosyDecision = action(
     formData: FormData
   ): Promise<{ ok: true; data: { transition: MosyTransition } }> => {
     const user = await requireSchoolUser("TEACHER");
+
+    // The Super Admin view is read-only: no whole-school write path exists.
+    if (user.role === "SUPER_ADMIN") throw resourceNotFound("Learner");
+
+    if (await isMosySubmissionLocked()) throw new AppError("MOSY_LOCKED");
+
+    const access = await resolveMosyAccess(user);
+    if (!access.ok) {
+      throw new AppError("VALIDATION_FAILED", { params: { message: access.message } });
+    }
+
     const input = parseInput(aralMosyDecisionSchema, formToObj(formData));
 
     const result = await prisma.$transaction(async (tx) => {
@@ -79,6 +95,7 @@ export const saveMosyDecision = action(
         select: {
           schoolId: true,
           teacherId: true,
+          sectionId: true,
           gradeLevelId: true,
           isAralLearner: true,
           aralTeacherId: true,
@@ -95,6 +112,13 @@ export const saveMosyDecision = action(
         },
         select: { decision: true, tutorId: true, priorAralEnrolledAt: true },
       });
+
+      // Advisory scope, on the row we hold the lock on (not the earlier read
+      // behind the page): a learner moved to another section since the page
+      // rendered is no longer this adviser's. Same "not found" as any other miss.
+      if (!teacherOwnsMosyRow(learner, existing, access.sectionIds)) {
+        throw resourceNotFound("Learner");
+      }
 
       // Same lookup the page uses for "previous level" (learner already verified
       // to belong to the session's school above).
@@ -125,7 +149,6 @@ export const saveMosyDecision = action(
         previousFilipinoLevel,
       });
       if (!resolved.ok) {
-        if (resolved.failure === "OUT_OF_SCOPE") throw resourceNotFound("Learner");
         const { field, message } = FAILURE_FIELD[resolved.failure];
         throw fieldError(field, message);
       }
@@ -189,7 +212,8 @@ export const saveMosyDecision = action(
       revalidateLearnerScoped({
         schoolId: user.schoolId,
         teacherId: learner.teacherId,
-        aralTeacherId: user.id,
+        // The tutor whose ARAL lists changed: the one just untagged, else the actor.
+        aralTeacherId: learner.aralTeacherId ?? user.id,
         teacherShell: true,
       });
     }
