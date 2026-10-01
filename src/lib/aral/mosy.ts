@@ -229,6 +229,23 @@ export function computeMosyStats(input: MosyStatsInput): MosyStats {
   };
 }
 
+export type MosyLevelLanguage = "FILIPINO" | "ENGLISH";
+
+/** The language the MOSY reading level is assessed in: Filipino for Kinder to G2, English above. */
+export function mosyLevelLanguage(gradeType: string): MosyLevelLanguage {
+  return languagesForGrade(gradeType).includes("ENGLISH") ? "ENGLISH" : "FILIPINO";
+}
+
+export const MOSY_LEVEL_LANGUAGE_NAMES: Record<MosyLevelLanguage, string> = {
+  FILIPINO: "Filipino",
+  ENGLISH: "English",
+};
+
+export const MOSY_LEVEL_LANGUAGE_PREFIXES: Record<MosyLevelLanguage, string> = {
+  FILIPINO: "Fil",
+  ENGLISH: "Eng",
+};
+
 export type PreviousLevel = {
   filipino: string | null;
   english: string | null;
