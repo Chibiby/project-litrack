@@ -18,8 +18,8 @@ describe("ADMIN_ROUTES", () => {
     expect(ADMIN_ROUTES.schoolHeads).toBe("/admin/management/school-heads");
     expect(ADMIN_ROUTES.schools).toBe("/admin/management/schools");
     expect(ADMIN_ROUTES.districtAdmins).toBe("/admin/management/district-admins");
-    expect(ADMIN_ROUTES.schoolYears).toBe("/admin/school-year-setup/school-years");
-    expect(ADMIN_ROUTES.termSubjects).toBe("/admin/school-year-setup/term-subjects");
+    expect(ADMIN_ROUTES.schoolYears).toBe("/admin/school-setup/school-years");
+    expect(ADMIN_ROUTES.termSubjects).toBe("/admin/school-setup/term-subjects");
     expect(ADMIN_ROUTES.reportSubmissions).toBe("/admin/school-setup/report-submissions");
     expect(ADMIN_ROUTES.learnerTransfers).toBe("/admin/school-setup/learner-transfers");
     expect(ADMIN_ROUTES.divisionSummary).toBe("/admin/monitoring/division-summary");

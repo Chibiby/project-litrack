@@ -183,7 +183,7 @@ export function getNavGroups(
         },
         {
           // Group labels mirror the URL segment each row lives under
-          // (`/admin/management/…`, `/admin/school-year-setup/…`, …).
+          // (`/admin/management/…`, `/admin/school-setup/…`, …).
           label: "Management",
           items: [
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
@@ -194,15 +194,10 @@ export function getNavGroups(
           ],
         },
         {
-          label: "School Year Setup",
+          label: "School Setup",
           items: [
             { id: "admin-school-years", label: "School Years", href: ADMIN_ROUTES.schoolYears, icon: CalendarRange },
             { id: "admin-term-subjects", label: "End-of-Term Subjects", href: ADMIN_ROUTES.termSubjects, icon: ListOrdered },
-          ],
-        },
-        {
-          label: "School Setup",
-          items: [
             { id: "admin-submissions", label: "Report Submissions", href: ADMIN_ROUTES.reportSubmissions, icon: FileCheck2 },
             { id: "admin-transfers", label: "Learner Transfers", href: ADMIN_ROUTES.learnerTransfers, icon: ArrowRightLeft },
           ],

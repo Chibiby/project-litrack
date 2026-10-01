@@ -496,12 +496,11 @@ describe("getNavGroups — floating teacher", () => {
 });
 
 describe("getNavGroups — admin", () => {
-  it("gives a Developer Admin the full sidebar: Overview, Management, School Year Setup, School Setup, Monitoring, Developer Controls", () => {
+  it("gives a Developer Admin the full sidebar: Overview, Management, School Setup, Monitoring, Developer Controls", () => {
     const groups = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
     expect(groups.map((g) => g.label)).toEqual([
       "Overview",
       "Management",
-      "School Year Setup",
       "School Setup",
       "Monitoring",
       "Developer Controls",
@@ -515,16 +514,20 @@ describe("getNavGroups — admin", () => {
       "Schools",
       "District Admins",
     ]);
-    expect(groups[2].items.map((i) => i.label)).toEqual(["School Years", "End-of-Term Subjects"]);
-    expect(groups[3].items.map((i) => i.label)).toEqual(["Report Submissions", "Learner Transfers"]);
-    expect(groups[4].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox"]);
+    expect(groups[2].items.map((i) => i.label)).toEqual([
+      "School Years",
+      "End-of-Term Subjects",
+      "Report Submissions",
+      "Learner Transfers",
+    ]);
+    expect(groups[3].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox"]);
     // Developer Controls keeps its five original rows; assert those without
     // pinning the order of any row added in front of them.
-    expect(groups[5].items.map((i) => i.label)).toEqual(
+    expect(groups[4].items.map((i) => i.label)).toEqual(
       expect.arrayContaining(["Audit Log", "Error Log", "Page Test Lab", "Archived Records", "Database Console"])
     );
-    expect(groups[5].items.find((i) => i.id === "admin-archive")).toMatchObject({ href: "/admin/archive", heavy: true });
-    expect(groups[5].items.find((i) => i.id === "admin-test-lab")).toMatchObject({ href: "/admin/test-lab" });
+    expect(groups[4].items.find((i) => i.id === "admin-archive")).toMatchObject({ href: "/admin/archive", heavy: true });
+    expect(groups[4].items.find((i) => i.id === "admin-test-lab")).toMatchObject({ href: "/admin/test-lab" });
   });
 
   it("points every Management, Setup and Monitoring row at its nested path", () => {
@@ -536,8 +539,8 @@ describe("getNavGroups — admin", () => {
       "admin-school-heads": "/admin/management/school-heads",
       "admin-schools": "/admin/management/schools",
       "admin-district-admins": "/admin/management/district-admins",
-      "admin-school-years": "/admin/school-year-setup/school-years",
-      "admin-term-subjects": "/admin/school-year-setup/term-subjects",
+      "admin-school-years": "/admin/school-setup/school-years",
+      "admin-term-subjects": "/admin/school-setup/term-subjects",
       "admin-submissions": "/admin/school-setup/report-submissions",
       "admin-transfers": "/admin/school-setup/learner-transfers",
       "admin-summary": "/admin/monitoring/division-summary",
@@ -550,7 +553,7 @@ describe("getNavGroups — admin", () => {
   it("gives a Division Admin the same menu without Developer Controls", () => {
     const division = getNavGroups("SUPER_ADMIN");
     const developer = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
-    expect(division).toEqual(developer.slice(0, 5));
+    expect(division).toEqual(developer.slice(0, 4));
     expect(division.map((g) => g.label)).not.toContain("Developer Controls");
     const hrefs = flattenNavGroups(division).map((i) => i.href);
     for (const hidden of ["/admin/audit", "/admin/errors", "/admin/test-lab", "/admin/archive", "/admin/database"]) {
@@ -580,8 +583,8 @@ describe("getNavGroups — admin", () => {
       ["/admin/management/teachers", "admin-teachers"],
       ["/admin/management/school-heads", "admin-school-heads"],
       ["/admin/management/district-admins", "admin-district-admins"],
-      ["/admin/school-year-setup/school-years", "admin-school-years"],
-      ["/admin/school-year-setup/term-subjects", "admin-term-subjects"],
+      ["/admin/school-setup/school-years", "admin-school-years"],
+      ["/admin/school-setup/term-subjects", "admin-term-subjects"],
       ["/admin/school-setup/report-submissions", "admin-submissions"],
       ["/admin/school-setup/learner-transfers", "admin-transfers"],
       ["/admin/monitoring/division-summary", "admin-summary"],

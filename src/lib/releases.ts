@@ -141,7 +141,7 @@ export const RELEASES: readonly Release[] = [
     announce: true,
     fixes: [
       {
-        text: "The admin menu is now grouped as Management (Learners, Teachers, School Heads, Schools, District Admins), School Year Setup, School Setup (Report Submissions, Learner Transfers) and Monitoring (Division Summary, Support Inbox). Your old bookmarks still open the right page.",
+        text: "The admin menu is now grouped as Management (Learners, Teachers, School Heads, Schools, District Admins), School Setup (School Years, End-of-Term Subjects, Report Submissions, Learner Transfers) and Monitoring (Division Summary, Support Inbox). Your old bookmarks still open the right page.",
         roles: ["SUPER_ADMIN"],
       },
       {

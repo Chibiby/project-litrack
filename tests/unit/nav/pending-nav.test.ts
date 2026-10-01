@@ -191,7 +191,7 @@ describe("optimistic highlight — admin and school head rails", () => {
     // The failure this whole module exists to remove: before the optimistic path,
     // the dashboard stayed lit for the entire force-dynamic render of the child.
     const path = resolveNavPath("/admin", {
-      href: "/admin/school-year-setup/school-years",
+      href: "/admin/school-setup/school-years",
       from: "/admin",
     });
     expect(resolveActiveItemId(path, adminItems)).not.toBe("admin-dashboard");

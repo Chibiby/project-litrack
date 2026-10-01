@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
 /**
- * Moved to School Year Setup → School Years. Survives as a redirect for
+ * Moved to School Setup → School Years. Survives as a redirect for
  * bookmarks; plain `redirect()` (307), never `permanentRedirect()`, so browsers
  * do not cache it forever. The destination guards itself.
  */

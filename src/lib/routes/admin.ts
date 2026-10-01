@@ -8,8 +8,8 @@
  * propagates. A `revalidatePath` string that drifts from its route fails
  * silently.
  *
- * The paths are nested by sidebar section — Management, School Year Setup,
- * School Setup, Monitoring — so the URL tells the admin where they are. The
+ * The paths are nested by sidebar section — Management, School Setup,
+ * Monitoring — so the URL tells the admin where they are. The
  * pre-restructure URLs survive as redirects (see `LEGACY_ADMIN_REDIRECTS`).
  *
  * Plain constants and pure functions with no imports, so this is safe in Edge
@@ -27,11 +27,9 @@ export const ADMIN_ROUTES = {
   school: (schoolId: string) => `/admin/management/schools/${schoolId}`,
   districtAdmins: "/admin/management/district-admins",
 
-  // School Year Setup
-  schoolYears: "/admin/school-year-setup/school-years",
-  termSubjects: "/admin/school-year-setup/term-subjects",
-
   // School Setup
+  schoolYears: "/admin/school-setup/school-years",
+  termSubjects: "/admin/school-setup/term-subjects",
   reportSubmissions: "/admin/school-setup/report-submissions",
   learnerTransfers: "/admin/school-setup/learner-transfers",
 
