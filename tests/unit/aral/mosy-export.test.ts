@@ -10,6 +10,7 @@ import {
   MOSY_STATUS_LABELS,
   computeMosyStats,
   formatPreviousLevel,
+  mosyLevelLanguage,
   type MosyRowStatus,
 } from "@/lib/aral/mosy";
 import type { MosyExportRow } from "@/lib/aral/mosy-queries";
@@ -39,6 +40,7 @@ function row(over: Partial<MosyExportRow> & { gradeType?: string } = {}): MosyEx
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
+    mosyLanguage: mosyLevelLanguage(gradeType),
     decision: null,
     reason: null,
     improvedToLevel: null,
@@ -135,8 +137,8 @@ describe("buildMosyExportBlocks", () => {
       row({ gradeType: "G4", mosyLevel: "INSTRUCTIONAL_DEVELOPING", mosyLevelLabel: g4Label }),
     ];
     const [, learners] = buildMosyExportBlocks(input({ rows, totalCount: 2 }));
-    expect(learners!.rows[0]![4]).toBe(g1Label);
-    expect(learners!.rows[1]![4]).toBe(g4Label);
+    expect(learners!.rows[0]![4]).toBe(`Fil: ${g1Label}`);
+    expect(learners!.rows[1]![4]).toBe(`Eng: ${g4Label}`);
   });
 
   it("previous level shows Filipino and English with the month for G4, English omitted for G1/G2", () => {
@@ -179,7 +181,7 @@ describe("buildMosyExportBlocks", () => {
     ];
     const [, learners] = buildMosyExportBlocks(input({ rows }));
     expect(learners!.rows[0]!.slice(4)).toEqual([
-      "Developing",
+      "Eng: Developing",
       MOSY_STATUS_LABELS.moved_out,
       "Diagnosed as Learner with Special Educational Needs (LSEN)",
       "Referred to SPED",

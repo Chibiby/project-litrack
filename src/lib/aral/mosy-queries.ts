@@ -17,10 +17,12 @@ import {
   MOSY_STATUSES,
   computeMosyStats,
   formatPreviousLevel,
+  mosyLevelLanguage,
   mosyReasonChoices,
   mosyReasonLabel,
   mosyRowStatus,
   mosyStatusWhere,
+  type MosyLevelLanguage,
   type MosyReasonChoice,
   type MosyRowStatus,
   type MosyStats,
@@ -73,6 +75,8 @@ export type MosyRow = {
   reasonChoices: MosyReasonChoice[];
   mosyLevel: ReadingProfile | null;
   mosyLevelLabel: string | null;
+  /** Language the MOSY level is read in: Filipino for Kinder to G2, English above. */
+  mosyLanguage: MosyLevelLanguage;
   decision: AralMosyOutcome | null;
   reason: AralMosyMoveOutReason | null;
   improvedToLevel: ReadingProfile | null;
@@ -217,6 +221,7 @@ function toMosyRow(l: MosyLearnerRecord): MosyRow {
     reasonChoices: mosyReasonChoices(gradeType, latest?.filipinoProfile ?? null),
     mosyLevel: d?.mosyLevel ?? null,
     mosyLevelLabel: d ? labelReadingProfile(d.mosyLevel, gradeType) : null,
+    mosyLanguage: mosyLevelLanguage(gradeType),
     decision: d?.decision ?? null,
     reason: d?.reason ?? null,
     improvedToLevel: d?.improvedToLevel ?? null,

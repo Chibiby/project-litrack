@@ -45,6 +45,7 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
+    mosyLanguage: "ENGLISH",
     decision: null,
     reason: null,
     improvedToLevel: null,
@@ -60,6 +61,21 @@ describe("MosyDecisionDialog", () => {
     render(<MosyDecisionDialog state={{ row: makeRow({}) }} onClose={() => {}} />);
     expect(screen.getByRole("heading", { name: "MOSY decision for Ana Cruz" })).not.toBeNull();
     expect(screen.queryByText("Move out from ARAL?")).toBeNull();
+  });
+
+  it("names the language of the MOSY reading level", () => {
+    const { unmount } = render(
+      <MosyDecisionDialog state={{ row: makeRow({}) }} onClose={() => {}} />
+    );
+    expect(screen.getByText("MOSY reading level (English)")).not.toBeNull();
+    unmount();
+    render(
+      <MosyDecisionDialog
+        state={{ row: makeRow({ gradeType: "G1", mosyLanguage: "FILIPINO" }) }}
+        onClose={() => {}}
+      />
+    );
+    expect(screen.getByText("MOSY reading level (Filipino)")).not.toBeNull();
   });
 
   it("submit button follows the choice", () => {

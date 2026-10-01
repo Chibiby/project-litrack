@@ -20,7 +20,10 @@ import {
   type MosyDialogState,
 } from "@/components/aral/mosy-decision-dialog";
 import { ARAL_MOSY_HREF } from "@/lib/nav/nav-config";
-import { MOSY_STATUS_LABELS, type MosyRowStatus, type MosyStatusFilter } from "@/lib/aral/mosy";
+import {
+  MOSY_LEVEL_LANGUAGE_PREFIXES,
+  MOSY_STATUS_LABELS,
+  type MosyRowStatus, type MosyStatusFilter } from "@/lib/aral/mosy";
 import type { MosyRow } from "@/lib/aral/mosy-queries";
 import { cn } from "@/lib/utils";
 
@@ -109,7 +112,7 @@ export function MosyTable({
     <Surface as="section" className="overflow-hidden rounded-2xl">
       <ListBusyRegion
         label="MOSY report"
-        skeleton={<TableSectionSkeleton rows={8} columns={8} showToolbar={false} />}
+        skeleton={<TableSectionSkeleton rows={8} columns={9} showToolbar={false} />}
       >
         {totalCount === 0 ? (
           <div className="p-4">
@@ -124,7 +127,7 @@ export function MosyTable({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table className="min-w-[60rem]">
+            <Table className="min-w-[72rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
@@ -133,7 +136,8 @@ export function MosyTable({
                   <TableHead className={HEAD_CLASS}>Previous level</TableHead>
                   <TableHead className={HEAD_CLASS}>MOSY reading level</TableHead>
                   <TableHead className={HEAD_CLASS}>ARAL status decision</TableHead>
-                  <TableHead className={HEAD_CLASS}>Remarks / Reason</TableHead>
+                  <TableHead className={HEAD_CLASS}>Reason</TableHead>
+                  <TableHead className={HEAD_CLASS}>Remarks</TableHead>
                   <TableHead className={cn(HEAD_CLASS, "text-right")}>Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -153,7 +157,12 @@ export function MosyTable({
                       </TableCell>
                       <TableCell className="min-w-[13rem]">
                         {r.mosyLevelLabel ? (
-                          <span className="text-sm">{r.mosyLevelLabel}</span>
+                          <span className="text-sm">
+                            <span className="text-muted-foreground">
+                              {MOSY_LEVEL_LANGUAGE_PREFIXES[r.mosyLanguage]}:
+                            </span>{" "}
+                            {r.mosyLevelLabel}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -161,21 +170,18 @@ export function MosyTable({
                       <TableCell>
                         <StatusChip status={r.status} />
                       </TableCell>
-                      <TableCell className="max-w-[16rem] text-sm">
-                        {r.reasonLabel || r.remarks ? (
-                          <div className="space-y-0.5">
-                            {r.reasonLabel ? (
-                              <p className="font-medium text-foreground">{r.reasonLabel}</p>
-                            ) : null}
-                            {r.remarks ? (
-                              <p
-                                className="truncate text-muted-foreground"
-                                title={r.remarks}
-                              >
-                                {r.remarks}
-                              </p>
-                            ) : null}
-                          </div>
+                      <TableCell className="min-w-[12rem] max-w-[16rem] text-sm">
+                        {r.reasonLabel ? (
+                          r.reasonLabel
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-[10rem] max-w-[16rem] text-sm">
+                        {r.remarks ? (
+                          <p className="truncate" title={r.remarks}>
+                            {r.remarks}
+                          </p>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

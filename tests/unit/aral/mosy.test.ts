@@ -5,6 +5,7 @@ import {
   MOSY_STATUSES,
   computeMosyStats,
   formatPreviousLevel,
+  mosyLevelLanguage,
   mosyReasonChoices,
   mosyReasonLabel,
   mosyRowStatus,
@@ -12,6 +13,15 @@ import {
   resolveMosySave,
   type MosySaveInput,
 } from "@/lib/aral/mosy";
+
+describe("mosyLevelLanguage", () => {
+  it.each(["KINDER", "G1", "G2"])("%s reads in Filipino", (g) => {
+    expect(mosyLevelLanguage(g)).toBe("FILIPINO");
+  });
+  it.each(["G3", "G6", "G10", "G12", "FLOATING"])("%s reads in English", (g) => {
+    expect(mosyLevelLanguage(g)).toBe("ENGLISH");
+  });
+});
 
 /**
  * Pure decision layer for the MOSY Report. Spec:
