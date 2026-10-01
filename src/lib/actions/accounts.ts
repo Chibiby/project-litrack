@@ -21,7 +21,7 @@ import { revalidateSchoolsList, revalidateAdminAccountPages } from "@/lib/cache/
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { openPasswordWithSource, sealPassword } from "@/lib/auth/password-vault";
-import { generateActivationCredential, generateReadableCredential } from "@/lib/auth/credentials";
+import { generateActivationCredential, districtAdminPassword } from "@/lib/auth/credentials";
 import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
@@ -356,8 +356,8 @@ export type ResetDistrictAdminPasswordResult = { ok: true; data: { password: str
  *
  * Takes the password rather than generating one itself: the two callers use
  * different shapes on purpose (`generateActivationCredential` for a teacher,
- * `generateReadableCredential` — meant to be read off a sheet — for a
- * district admin), so picking the generator stays the caller's decision.
+ * the name-based `districtAdminPassword` for a district admin), so picking the
+ * password stays the caller's decision.
  *
  * Three things it does NOT do, each easy to get wrong by copying the School
  * Head path:
@@ -380,6 +380,20 @@ async function issueRandomPassword(
   role: "TEACHER" | "DISTRICT_ADMIN",
   password: string
 ): Promise<void> {
+  // Force the change BEFORE swapping the password. On its own the flag is
+  // harmless, so if the Supabase call below fails nothing is lost; the reverse
+  // order could leave a one-time (for a District Admin, name-guessable)
+  // password live with no forced change.
+  await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      mustChangePassword: true,
+      passwordIsSchoolId: false,
+      passwordVaultCipher: null,
+      passwordVaultSetAt: null,
+    },
+  });
+
   const supabaseAdmin = createSupabaseAdminClient();
   const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
     password,
@@ -393,16 +407,6 @@ async function issueRandomPassword(
       detail: `issueRandomPassword: ${role} password reset failed for user ${target.id}`,
     });
   }
-
-  await prisma.user.update({
-    where: { id: target.id },
-    data: {
-      mustChangePassword: true,
-      passwordIsSchoolId: false,
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    },
-  });
 }
 
 /**
@@ -475,9 +479,10 @@ export const resetTeacherPassword = action(
  * never widened to `SUPER_ADMIN`, which is exactly the privilege the account
  * must not gain from a password reset.
  *
- * `generateReadableCredential` (not `generateActivationCredential`): the same
- * "read off a printed sheet" shape the creation script hands out, because the
- * person on the other end has no mailbox to receive a link either way.
+ * The credential is `districtAdminPassword` (`First.Last1234`), not random:
+ * owner decision, so older and busy users can remember and type it. It is
+ * guessable from the name, which is why `mustChangePassword: true` retires it
+ * at first sign-in and it is never written to the audit row.
  */
 export const resetDistrictAdminPassword = action(
   "resetDistrictAdminPassword",
@@ -493,11 +498,11 @@ export const resetDistrictAdminPassword = action(
     // simply not found — same one-refusal shape as `resetTeacherPassword`.
     const target = await prisma.user.findFirst({
       where: { id: userId, role: "DISTRICT_ADMIN", deletedAt: null },
-      select: { id: true, authId: true, schoolId: true },
+      select: { id: true, authId: true, schoolId: true, firstName: true, lastName: true },
     });
     if (!target) throw accountNotFound(`resetDistrictAdminPassword: no live DISTRICT_ADMIN ${userId}`);
 
-    const password = generateReadableCredential();
+    const password = districtAdminPassword(target);
     await issueRandomPassword(target, "DISTRICT_ADMIN", password);
 
     // Ids only, never the credential — same rule as `TEACHER_PASSWORD_RESET`.

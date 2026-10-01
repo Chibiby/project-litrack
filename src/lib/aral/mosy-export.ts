@@ -10,7 +10,10 @@
  * A `null` cell is the single "nothing to show" value: both renderers print it
  * blank, so no "-" placeholders here.
  */
-import { MOSY_STATUS_LABELS, type MosyStatusFilter, type MosyStats } from "@/lib/aral/mosy";
+import {
+  MOSY_LEVEL_LANGUAGE_PREFIXES,
+  MOSY_STATUS_LABELS,
+  type MosyStatusFilter, type MosyStats } from "@/lib/aral/mosy";
 import type { MosyExportRow } from "@/lib/aral/mosy-queries";
 import { formatReportDate, type GradeSectionLine, type ReportFrame } from "@/lib/reports/report-frame";
 import type { ReportBlock, ReportTable } from "@/lib/reports/render";
@@ -53,6 +56,12 @@ function previousLevelCell(row: MosyExportRow): string | null {
   return `${parts.join(" · ")} (${p.monthLabel})`;
 }
 
+/** "Fil: Low Emergent" (Kinder to G2) or "Eng: Developing" (G3 up); null when no level is saved. */
+function mosyLevelCell(row: MosyExportRow): string | null {
+  if (!row.mosyLevelLabel) return null;
+  return `${MOSY_LEVEL_LANGUAGE_PREFIXES[row.mosyLanguage]}: ${row.mosyLevelLabel}`;
+}
+
 function gradeSectionCell(row: MosyExportRow): string {
   return row.sectionName ? `${row.gradeLabel} - ${row.sectionName}` : row.gradeLabel;
 }
@@ -90,7 +99,7 @@ export function buildMosyExportBlocks(input: MosyExportInput): ReportBlock[] {
       row.listingName,
       gradeSectionCell(row),
       previousLevelCell(row),
-      row.mosyLevelLabel,
+      mosyLevelCell(row),
       MOSY_STATUS_LABELS[row.status],
       row.reasonLabel,
       row.remarks,

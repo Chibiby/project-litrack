@@ -135,7 +135,7 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
-    version: "2.28.0",
+    version: "2.29.0",
     date: "2026-10-01",
     title: "A clearer admin menu, with a page for each kind of account",
     announce: true,
@@ -157,6 +157,54 @@ export const RELEASES: readonly Release[] = [
         roles: ["SUPER_ADMIN"],
       },
       "This update reorganizes the Division Admin menu. Nothing changes in how teachers and School Heads use LITRACK.",
+    ],
+  },
+  {
+    version: "2.28.1",
+    date: "2026-10-01",
+    title: "MOSY Report readability and safer District Admin password resets",
+    announce: true,
+    fixes: [
+      {
+        text: "Long remarks in the MOSY Report now show in full instead of being cut off, so you can read them on a phone or with the keyboard.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Screen readers now say \"Filipino\" and \"English\" for the reading levels in the MOSY Report, instead of reading out \"Fil\" and \"Eng\".",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Issue password for a District Admin now turns on \"choose a new password at next sign-in\" before it changes the password, so a reset that fails halfway can never leave an easy password in place without that step.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
+    version: "2.28.0",
+    date: "2026-10-01",
+    title: "Clearer MOSY columns and easier District Admin passwords",
+    announce: true,
+    fixes: [
+      {
+        text: "The MOSY Report now shows Reason and Remarks in separate columns.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The MOSY reading level now says which language it is in: Filipino for Kinder to Grade 2, English for Grade 3 and up. This shows in the table, the Update window and the export.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "District Admin first-time passwords are now easy to type: your first name, a dot, your last name, then 1234 (for example Juan.Cruz1234). You will be asked to choose your own password after you sign in.",
+        roles: ["DISTRICT_ADMIN"],
+      },
+      {
+        text: "Issue password for a District Admin now gives the name-based password (First.Last1234) instead of a random one.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Teachers' MOSY Report now shows Reason and Remarks in separate columns, and labels each MOSY reading level as Filipino or English.",
+        roles: ["SCHOOL_HEAD"],
+      },
     ],
   },
   {

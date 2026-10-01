@@ -44,6 +44,46 @@ export function generateReadableCredential(): string {
   }
 }
 
+/** Reduce a name part to A-Z/a-z words: strip diacritics, drop everything else. */
+function asciiWords(raw: string): string[] {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/\s+/)
+    .map((w) => w.replace(/[^A-Za-z]/g, ""))
+    .filter((w) => w.length > 0);
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+/**
+ * First-login password for a District Admin: `[First].[Last]1234`, e.g.
+ * `Juan.Cruz1234`. Owner decision (2026-10-01): easy to remember and type for
+ * older, busy users, accepted knowing it is guessable from the name. It is
+ * one-time only — callers must set `mustChangePassword: true`.
+ *
+ * Rules:
+ *  - First name: its FIRST WORD only ("Ma. Theresa" -> "Ma", so the dot in
+ *    "Ma." is lost).
+ *  - Last name: every word, each capitalised, joined with no spaces
+ *    ("Dela Cruz" -> "DelaCruz").
+ *  - Diacritics are stripped (ñ -> n, é -> e) and any character outside A-Z/a-z
+ *    is dropped; each word is Capitalised, rest lower case.
+ *
+ * Throws when either part ends up empty, so a caller can never silently
+ * produce ".1234". Never log or persist the result.
+ */
+export function districtAdminPassword(input: { firstName: string; lastName: string }): string {
+  const first = asciiWords(input.firstName)[0];
+  const lastWords = asciiWords(input.lastName);
+  if (!first || lastWords.length === 0) {
+    throw new Error("districtAdminPassword: first and last name must each contain at least one letter");
+  }
+  return `${capitalise(first)}.${lastWords.map(capitalise).join("")}1234`;
+}
+
 export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }

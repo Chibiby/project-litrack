@@ -36,7 +36,7 @@ import { toastFailure } from "@/lib/ui/toast-failure";
 import { ARAL_MOSY_OUTCOME_CHOICE_LABELS } from "@/lib/constants/enum-labels";
 import { aralMosyDecisionSchema, MOSY_REMARKS_MAX } from "@/lib/validators/aral-mosy.schema";
 import type { MosyRow } from "@/lib/aral/mosy-queries";
-import type { MosyTransition } from "@/lib/aral/mosy";
+import { MOSY_LEVEL_LANGUAGE_NAMES, type MosyTransition } from "@/lib/aral/mosy";
 import { cn } from "@/lib/utils";
 
 export type MosyDialogState = {
@@ -239,7 +239,9 @@ function MosyDecisionForm({
         name="mosyLevel"
         render={({ field }) => (
           <FormItem>
-            <FormLabel required>MOSY reading level</FormLabel>
+            <FormLabel required>
+              {`MOSY reading level (${MOSY_LEVEL_LANGUAGE_NAMES[row.mosyLanguage]})`}
+            </FormLabel>
             <Select
               value={field.value}
               onValueChange={(value) => {
