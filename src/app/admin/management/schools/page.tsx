@@ -24,6 +24,7 @@ import {
   SummaryUnavailable,
 } from "@/components/admin/management/summary-cards";
 import {
+  demoSchoolExists,
   getSchoolsSummary,
   listDistrictOptions,
   type SchoolsSummary,
@@ -31,6 +32,7 @@ import {
 import { Plus, School } from "lucide-react";
 import { PageTip } from "@/components/admin/page-tip";
 import { listKey } from "@/lib/nav/list-params";
+import { isDemoVisible } from "@/lib/demo/session";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 /**
@@ -115,13 +117,21 @@ async function SchoolsTableBody({ searchParams }: { searchParams: SchoolsSearchP
   let tableData: SchoolRow[] = [];
   let totalCount = 0;
   let districtOptions: string[] = [];
+  let showDemoCaption = false;
   let dbAvailable = true;
 
   try {
-    const [page, districts] = await Promise.all([getSchoolsListPage(list), listDistrictOptions()]);
+    const [page, districts, demoVisible, demoExists] = await Promise.all([
+      getSchoolsListPage(list),
+      listDistrictOptions(),
+      isDemoVisible(),
+      demoSchoolExists(),
+    ]);
     tableData = page.rows;
     totalCount = page.totalCount;
     districtOptions = districts.map((d) => d.district);
+    // Not tied to the visible rows: the demo school can sit on any page.
+    showDemoCaption = demoExists && !demoVisible;
   } catch (err) {
     // DATABASE_URL missing or Prisma unavailable — degrade to an empty table
     // instead of a 500. requireUser already verified the session.
@@ -134,6 +144,14 @@ async function SchoolsTableBody({ searchParams }: { searchParams: SchoolsSearchP
       {!dbAvailable ? (
         <p className="mb-4 text-sm text-destructive">
           Could not load schools right now. The database may be unavailable.
+        </p>
+      ) : null}
+
+      {/* The list keeps the demo school so an admin can manage it; the cards
+          follow the dashboard, which leaves it out unless demo mode is on. */}
+      {showDemoCaption ? (
+        <p className="mb-2 text-xs text-muted-foreground">
+          Includes the demo school, which the counts above leave out.
         </p>
       ) : null}
 

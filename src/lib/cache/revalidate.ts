@@ -72,6 +72,8 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidateSchoolDashboard(schoolId);
   // The Super Admin Teachers summary cards count approvals and (de)activations.
   expireTag(tags.adminAccounts);
+  // The dashboard's Teachers / School Heads / Pending cards read the same rows.
+  expireTag(tags.adminDashboard);
 }
 
 /** One school's cached teacher list (ARAL tutor pickers). */
@@ -126,11 +128,15 @@ export function revalidateAdminAccountPages() {
   revalidatePath(ADMIN_ROUTES.schoolHeads);
   revalidatePath(ADMIN_ROUTES.districtAdmins);
   expireTag(tags.adminAccounts);
+  // The dashboard's Teachers / School Heads / Pending cards read the same rows.
+  expireTag(tags.adminDashboard);
 }
 
 /** Admin system-wide dashboard aggregates. */
 export function revalidateAdminDashboard() {
   expireTag(tags.adminDashboard);
+  // The Management cards share these rows (a new pending teacher, etc.).
+  expireTag(tags.adminAccounts);
 }
 
 /**

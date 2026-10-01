@@ -120,8 +120,8 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
                 />
               ) : (
                 <EmptyState
-                  title="No enrolled learners yet"
-                  description="Learners appear here once a school enrolls them in its active school year."
+                  title="No learners yet"
+                  description="Learners appear here once a school adds them."
                   icon={GraduationCap}
                 />
               )}

@@ -95,11 +95,13 @@ export function yesNoField(
   key: string,
   label: string,
   value: boolean | undefined,
-  labels: { all: string; yes: string; no: string }
+  labels: { all: string; yes: string; no: string },
+  help?: string
 ): ListFilterField {
   return {
     key,
     label,
+    help,
     allLabel: labels.all,
     value: value === true ? "yes" : value === false ? "no" : "",
     options: [

@@ -57,8 +57,8 @@ const card = { inlineOnPhone: true, denseOnPhone: true } as const;
 export function TeachersSummaryCards({ summary, scope }: { summary: TeachersSummary; scope: string }) {
   return (
     <SummaryGrid scope={scope} label="Teacher overview">
-      <StatCard title="Teachers" value={n(summary.total)} hint="Every live account" icon={Users} tone="primary" {...card} />
-      <StatCard title="Active" value={n(summary.active)} hint="Approved and can sign in" icon={CircleCheck} tone="emerald" {...card} />
+      {/* Same figure and words as the dashboard's Teachers card. */}
+      <StatCard title="Active teachers" value={n(summary.activeTeachers)} hint="Active teaching accounts" icon={CircleCheck} tone="emerald" {...card} />
       <StatCard
         title="Pending approval"
         value={n(summary.pendingApproval)}
@@ -70,6 +70,7 @@ export function TeachersSummaryCards({ summary, scope }: { summary: TeachersSumm
       <StatCard title="Inactive" value={n(summary.inactive)} hint="Approved, switched off" icon={CircleX} tone="neutral" {...card} />
       <StatCard title="Multi-advisory" value={n(summary.multiAdvisory)} hint="Advise more than one section" icon={Layers} tone="primary" {...card} />
       <StatCard title="Floating" value={n(summary.floating)} hint="No advisory section" icon={Shuffle} tone="neutral" {...card} />
+      <StatCard title="All accounts" value={n(summary.total)} hint="Includes pending and switched off" icon={Users} tone="primary" {...card} />
     </SummaryGrid>
   );
 }
@@ -83,7 +84,7 @@ export function SchoolHeadsSummaryCards({
 }) {
   return (
     <SummaryGrid scope={scope} label="School Head overview">
-      <StatCard title="School Heads" value={n(summary.total)} hint="Every live account" icon={Users} tone="primary" {...card} />
+      <StatCard title="School Heads" value={n(summary.total)} hint="Sign-in accounts" icon={Users} tone="primary" {...card} />
       <StatCard title="Active" value={n(summary.active)} hint="Can sign in" icon={CircleCheck} tone="emerald" {...card} />
       <StatCard title="Inactive" value={n(summary.inactive)} hint="Switched off" icon={CircleX} tone="neutral" {...card} />
       <StatCard

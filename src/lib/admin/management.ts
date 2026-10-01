@@ -3,7 +3,7 @@ import type { GradeLevelType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { adminAccounts, adminDashboard, schoolsList } from "@/lib/cache/tags";
-import { schoolsWhere } from "@/lib/cache/schools-list";
+import { adminPopulationScope, getAdminIpAndAdvisoryMetrics, getAdminMetricCounts } from "@/lib/dashboard/aggregates";
 import { isDemoVisible } from "@/lib/demo/session";
 import { ACTIVE_ENROLLED_LEARNER } from "@/lib/learners/population";
 import { IP_ETHNICITIES, isIpLearner } from "@/lib/ip/ethnicity";
@@ -162,6 +162,18 @@ export function listDistrictOptions(): Promise<DistrictOption[]> {
   );
 }
 
+/**
+ * True when at least one live demo school exists. One cached count (`schoolsList`,
+ * 5 min), so the Schools page can show its demo caption whichever page of rows
+ * is visible. Cross-tenant, Super Admin callers only.
+ */
+export function demoSchoolExists(): Promise<boolean> {
+  return cachedQuery(
+    async () => (await prisma.school.count({ where: { deletedAt: null, isDemo: true } })) > 0,
+    { keyParts: ["admin-demo-school-exists"], tags: [schoolsList], profile: "reference" }
+  );
+}
+
 export type SchoolOption = {
   id: string;
   name: string;
@@ -240,22 +252,68 @@ export async function listSectionOptions(opts: {
         a.name.localeCompare(b.name)
     );
 }
-
 // ─── Summaries: Teachers / School Heads / District Admins / Schools ─────────
+//
+// Every card here is defined to agree with the Super Admin dashboard
+// (`getAdminMetricCounts`, `getAdminIpAndAdvisoryMetrics`):
+//  - the demo school is scoped by `adminPopulationScope`, the same helper the
+//    dashboard uses;
+//  - the where clauses are the dashboard's own (deliberately NOT
+//    `accountsWhere`, which also hides users of soft-deleted schools — the
+//    dashboard does not);
+//  - with no filter set, the matching cards are read straight from the
+//    dashboard's own cached functions, so both pages read the same cache entry.
+// With a filter the same definitions are re-run plus the filter.
+// The summaries ignore `q`: cards describe the filtered scope, not a search.
 
 /** Filters the people summaries honour — a subset of the list's `AccountsParams`. */
 export type PeopleSummaryFilter = Partial<
   Pick<AccountsParams, "district" | "schoolId" | "grade" | "section">
 >;
 
+/**
+ * Dashboard-style filter for TEACHER / SCHOOL_HEAD users: live accounts of the
+ * role, demo school scoped like the dashboard, plus the optional filters.
+ */
+function peopleBase(
+  role: "TEACHER" | "SCHOOL_HEAD",
+  f: { district?: string; schoolId?: string; grade?: GradeLevelType; section?: string },
+  demoVisible: boolean
+): Prisma.UserWhereInput {
+  const { viaSchool } = adminPopulationScope(demoVisible);
+  const and: Prisma.UserWhereInput[] = [{ role, deletedAt: null }, viaSchool];
+  if (f.district) and.push({ school: { district: f.district } });
+  if (f.schoolId) and.push({ schoolId: f.schoolId });
+  if (f.grade || f.section) {
+    and.push({
+      advisorySections: {
+        some: {
+          deletedAt: null,
+          ...(f.section ? { id: f.section } : {}),
+          ...(f.grade ? { gradeLevel: { type: f.grade, deletedAt: null } } : {}),
+        },
+      },
+    });
+  }
+  return { AND: and };
+}
+
 export type TeachersSummary = {
-  /** Every live teacher matching the filters. */
+  /** Every live teacher in scope, whatever their status (pending, rejected, off, on). */
   total: number;
-  /** Approved (or legacy, no status) and switched on. */
+  /**
+   * Live teachers with `isActive = true` — the dashboard's "Teachers" card
+   * (`teacherCount`). Unfiltered, this is that number itself.
+   */
+  activeTeachers: number;
+  /** Approved (or legacy, no status) and switched on. Pending teachers are not on, so this is at most `activeTeachers`. */
   active: number;
-  /** Approved but switched off. */
+  /** Not pending/rejected, and switched off. */
   inactive: number;
-  /** Self-registered, awaiting a School Head's approval. */
+  /**
+   * `approvalStatus = PENDING` — the dashboard's `pendingTeacherApprovals`.
+   * Unfiltered, this is that number itself.
+   */
   pendingApproval: number;
   rejected: number;
   /** Advisory mode MULTI_GRADE — shown to users as "multi-advisory". */
@@ -265,61 +323,76 @@ export type TeachersSummary = {
 };
 
 /**
- * Three Prisma calls: one `groupBy` for the status split and two filtered
- * counts for the advisory modes. Cached under `adminAccounts` (busted by
- * account mutations and by School Head teacher approvals), 60s TTL.
+ * Three Prisma calls (cached, tag `adminAccounts`, 60s) plus, when unfiltered,
+ * the dashboard's own cached counts.
  */
-export function getTeachersSummary(filter: PeopleSummaryFilter = {}): Promise<TeachersSummary> {
+export async function getTeachersSummary(
+  filter: PeopleSummaryFilter = {}
+): Promise<TeachersSummary> {
+  const demoVisible = await isDemoVisible();
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
     grade: filter.grade,
     section: cleanFilterId(filter.section),
   };
-  return cachedQuery(
-    async () => {
-      const where = accountsWhere({ role: "TEACHER", ...f });
-      const [groups, multiAdvisory, floating] = await Promise.all([
-        prisma.user.groupBy({
-          by: ["isActive", "approvalStatus"],
-          where,
-          _count: { _all: true },
-        }),
-        prisma.user.count({
-          where: { AND: [where, { teacherProfile: { advisoryMode: "MULTI_GRADE" } }] },
-        }),
-        prisma.user.count({
-          where: { AND: [where, { teacherProfile: { advisoryMode: "FLOATING" } }] },
-        }),
-      ]);
-      const summary: TeachersSummary = {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        pendingApproval: 0,
-        rejected: 0,
-        multiAdvisory,
-        floating,
-      };
-      for (const g of groups) {
-        const n = g._count._all;
-        summary.total += n;
-        if (g.approvalStatus === "PENDING") summary.pendingApproval += n;
-        else if (g.approvalStatus === "REJECTED") summary.rejected += n;
-        else if (g.isActive) summary.active += n;
-        else summary.inactive += n;
+  const unfiltered = !f.district && !f.schoolId && !f.grade && !f.section;
+  const [summary, dash] = await Promise.all([
+    cachedQuery(
+      async () => {
+        const where = peopleBase("TEACHER", f, demoVisible);
+        const [groups, multiAdvisory, floating] = await Promise.all([
+          prisma.user.groupBy({
+            by: ["isActive", "approvalStatus"],
+            where,
+            _count: { _all: true },
+          }),
+          prisma.user.count({
+            where: { AND: [where, { teacherProfile: { advisoryMode: "MULTI_GRADE" } }] },
+          }),
+          prisma.user.count({
+            where: { AND: [where, { teacherProfile: { advisoryMode: "FLOATING" } }] },
+          }),
+        ]);
+        const s: TeachersSummary = {
+          total: 0,
+          activeTeachers: 0,
+          active: 0,
+          inactive: 0,
+          pendingApproval: 0,
+          rejected: 0,
+          multiAdvisory,
+          floating,
+        };
+        for (const g of groups) {
+          const n = g._count._all;
+          s.total += n;
+          if (g.isActive) s.activeTeachers += n;
+          if (g.approvalStatus === "PENDING") s.pendingApproval += n;
+          else if (g.approvalStatus === "REJECTED") s.rejected += n;
+          else if (g.isActive) s.active += n;
+          else s.inactive += n;
+        }
+        return s;
+      },
+      {
+        keyParts: ["admin-teachers-summary-v2", `demo:${demoVisible}`, keyOf(f)],
+        tags: [adminAccounts, adminDashboard],
+        profile: "aggregate",
       }
-      return summary;
-    },
-    {
-      keyParts: ["admin-teachers-summary", keyOf(f)],
-      tags: [adminAccounts],
-      profile: "aggregate",
-    }
-  );
+    ),
+    unfiltered ? getAdminMetricCounts() : Promise.resolve(null),
+  ]);
+  if (!dash) return summary;
+  return {
+    ...summary,
+    activeTeachers: dash.teacherCount,
+    pendingApproval: dash.pendingTeacherApprovals,
+  };
 }
 
 export type SchoolHeadsSummary = {
+  /** Every live School Head in scope — the dashboard's `schoolHeadCount`. */
   total: number;
   active: number;
   inactive: number;
@@ -327,67 +400,74 @@ export type SchoolHeadsSummary = {
   mustChangePassword: number;
   /** Never signed in (`lastLoginAt` is null). */
   neverSignedIn: number;
-  /** Live schools in the filter with no live School Head account at all. */
+  /** Live schools in scope (demo scoped like the dashboard) with no live School Head account. */
   schoolsWithoutHead: number;
 };
 
 /** Four Prisma calls. Honours `district` and `schoolId`. */
-export function getSchoolHeadsSummary(
+export async function getSchoolHeadsSummary(
   filter: Pick<PeopleSummaryFilter, "district" | "schoolId"> = {}
 ): Promise<SchoolHeadsSummary> {
+  const demoVisible = await isDemoVisible();
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
   };
-  return cachedQuery(
-    async () => {
-      const where = accountsWhere({ role: "SCHOOL_HEAD", ...f });
-      const [groups, neverSignedIn, schoolsWithoutHead] = await Promise.all([
-        prisma.user.groupBy({
-          by: ["isActive", "mustChangePassword"],
-          where,
-          _count: { _all: true },
-        }),
-        prisma.user.count({ where: { AND: [where, { lastLoginAt: null }] } }),
-        prisma.school.count({
-          where: {
-            deletedAt: null,
-            ...(f.district ? { district: f.district } : {}),
-            ...(f.schoolId ? { id: f.schoolId } : {}),
-            users: { none: { role: "SCHOOL_HEAD", deletedAt: null } },
-          },
-        }),
-      ]);
-      const summary: SchoolHeadsSummary = {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        mustChangePassword: 0,
-        neverSignedIn,
-        schoolsWithoutHead,
-      };
-      for (const g of groups) {
-        const n = g._count._all;
-        summary.total += n;
-        if (g.isActive) summary.active += n;
-        else summary.inactive += n;
-        if (g.mustChangePassword) summary.mustChangePassword += n;
+  const [summary, dash] = await Promise.all([
+    cachedQuery(
+      async () => {
+        const where = peopleBase("SCHOOL_HEAD", f, demoVisible);
+        const { schoolScope } = adminPopulationScope(demoVisible);
+        const [groups, neverSignedIn, schoolsWithoutHead] = await Promise.all([
+          prisma.user.groupBy({
+            by: ["isActive", "mustChangePassword"],
+            where,
+            _count: { _all: true },
+          }),
+          prisma.user.count({ where: { AND: [where, { lastLoginAt: null }] } }),
+          prisma.school.count({
+            where: {
+              deletedAt: null,
+              ...schoolScope,
+              ...(f.district ? { district: f.district } : {}),
+              ...(f.schoolId ? { id: f.schoolId } : {}),
+              users: { none: { role: "SCHOOL_HEAD", deletedAt: null } },
+            },
+          }),
+        ]);
+        const s: SchoolHeadsSummary = {
+          total: 0,
+          active: 0,
+          inactive: 0,
+          mustChangePassword: 0,
+          neverSignedIn,
+          schoolsWithoutHead,
+        };
+        for (const g of groups) {
+          const n = g._count._all;
+          s.total += n;
+          if (g.isActive) s.active += n;
+          else s.inactive += n;
+          if (g.mustChangePassword) s.mustChangePassword += n;
+        }
+        return s;
+      },
+      {
+        keyParts: ["admin-school-heads-summary-v2", `demo:${demoVisible}`, keyOf(f)],
+        tags: [adminAccounts, schoolsList, adminDashboard],
+        profile: "aggregate",
       }
-      return summary;
-    },
-    {
-      keyParts: ["admin-school-heads-summary", keyOf(f)],
-      tags: [adminAccounts, schoolsList],
-      profile: "aggregate",
-    }
-  );
+    ),
+    !f.district && !f.schoolId ? getAdminMetricCounts() : Promise.resolve(null),
+  ]);
+  return dash ? { ...summary, total: dash.schoolHeadCount } : summary;
 }
 
 export type DistrictAdminsSummary = {
   total: number;
   active: number;
   inactive: number;
-  /** Districts with at least one live school (demo excluded, as in a district admin's scope). */
+  /** Districts with at least one live school (demo scoped like the dashboard). */
   districtsTotal: number;
   /** ...of which at least one active, live District Admin is assigned. */
   districtsCovered: number;
@@ -396,21 +476,26 @@ export type DistrictAdminsSummary = {
   uncoveredDistricts: string[];
 };
 
-/** Three Prisma calls. Honours `district`. */
-export function getDistrictAdminsSummary(
+/**
+ * Three Prisma calls. Honours `district`. The dashboard has no District Admin
+ * card; the district list uses the dashboard's school scope.
+ */
+export async function getDistrictAdminsSummary(
   filter: Pick<PeopleSummaryFilter, "district"> = {}
 ): Promise<DistrictAdminsSummary> {
+  const demoVisible = await isDemoVisible();
   const f = { district: cleanFilterText(filter.district) };
   return cachedQuery(
     async () => {
       const where = accountsWhere({ role: "DISTRICT_ADMIN", ...f });
+      const { schoolScope } = adminPopulationScope(demoVisible);
       const [groups, districtRows, assignmentRows] = await Promise.all([
         prisma.user.groupBy({ by: ["isActive"], where, _count: { _all: true } }),
         prisma.school.groupBy({
           by: ["district"],
           where: {
             deletedAt: null,
-            isDemo: false,
+            ...schoolScope,
             district: f.district ? f.district : { not: null },
           },
         }),
@@ -425,7 +510,7 @@ export function getDistrictAdminsSummary(
       const covered = new Set(assignmentRows.map((r) => r.district));
       const districts = districtRows.flatMap((r) => (r.district ? [r.district] : []));
       const uncovered = districts.filter((d) => !covered.has(d)).sort((a, b) => a.localeCompare(b));
-      const summary: DistrictAdminsSummary = {
+      const s: DistrictAdminsSummary = {
         total: 0,
         active: 0,
         inactive: 0,
@@ -436,14 +521,14 @@ export function getDistrictAdminsSummary(
       };
       for (const g of groups) {
         const n = g._count._all;
-        summary.total += n;
-        if (g.isActive) summary.active += n;
-        else summary.inactive += n;
+        s.total += n;
+        if (g.isActive) s.active += n;
+        else s.inactive += n;
       }
-      return summary;
+      return s;
     },
     {
-      keyParts: ["admin-district-admins-summary", keyOf(f)],
+      keyParts: ["admin-district-admins-summary-v2", `demo:${demoVisible}`, keyOf(f)],
       tags: [adminAccounts, schoolsList],
       profile: "aggregate",
     }
@@ -454,8 +539,11 @@ export function getDistrictAdminsSummary(
 export type SchoolsSummaryFilter = { district?: string; region?: string };
 
 export type SchoolsSummary = {
+  /** Live schools, demo scoped like the dashboard — its `schoolsTotal`. */
   total: number;
+  /** Its `schoolsActive`. */
   active: number;
+  /** Its `schoolsInactive`. */
   inactive: number;
   /** Distinct named districts among the matching schools. */
   districtCount: number;
@@ -465,48 +553,68 @@ export type SchoolsSummary = {
   byDistrict: { district: string; count: number }[];
 };
 
-/** One `groupBy`. Uses `schoolsWhere` so the cards and the table describe the same rows. */
-export function getSchoolsSummary(filter: SchoolsSummaryFilter = {}): Promise<SchoolsSummary> {
+/** One `groupBy`; unfiltered, total/active/inactive come from the dashboard's own counts. */
+export async function getSchoolsSummary(
+  filter: SchoolsSummaryFilter = {}
+): Promise<SchoolsSummary> {
+  const demoVisible = await isDemoVisible();
   const f = {
-    district: cleanFilterText(filter.district) ?? "",
-    region: cleanFilterText(filter.region) ?? "",
+    district: cleanFilterText(filter.district),
+    region: cleanFilterText(filter.region),
   };
-  return cachedQuery(
-    async () => {
-      const groups = await prisma.school.groupBy({
-        by: ["district", "isActive"],
-        where: schoolsWhere({ q: "", region: f.region, status: "", district: f.district }),
-        _count: { _all: true },
-      });
-      const summary: SchoolsSummary = {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        districtCount: 0,
-        noDistrict: 0,
-        byDistrict: [],
-      };
-      const perDistrict = new Map<string, number>();
-      for (const g of groups) {
-        const n = g._count._all;
-        summary.total += n;
-        if (g.isActive) summary.active += n;
-        else summary.inactive += n;
-        if (g.district) perDistrict.set(g.district, (perDistrict.get(g.district) ?? 0) + n);
-        else summary.noDistrict += n;
+  const [summary, dash] = await Promise.all([
+    cachedQuery(
+      async () => {
+        const { schoolScope } = adminPopulationScope(demoVisible);
+        const groups = await prisma.school.groupBy({
+          by: ["district", "isActive"],
+          where: {
+            deletedAt: null,
+            ...schoolScope,
+            ...(f.region ? { region: f.region } : {}),
+            ...(f.district ? { district: f.district } : {}),
+          },
+          _count: { _all: true },
+        });
+        const s: SchoolsSummary = {
+          total: 0,
+          active: 0,
+          inactive: 0,
+          districtCount: 0,
+          noDistrict: 0,
+          byDistrict: [],
+        };
+        const perDistrict = new Map<string, number>();
+        for (const g of groups) {
+          const n = g._count._all;
+          s.total += n;
+          if (g.isActive) s.active += n;
+          else s.inactive += n;
+          if (g.district) perDistrict.set(g.district, (perDistrict.get(g.district) ?? 0) + n);
+          else s.noDistrict += n;
+        }
+        s.districtCount = perDistrict.size;
+        s.byDistrict = [...perDistrict]
+          .map(([district, count]) => ({ district, count }))
+          .sort((a, b) => b.count - a.count || a.district.localeCompare(b.district));
+        return s;
+      },
+      {
+        keyParts: ["admin-schools-summary-v2", `demo:${demoVisible}`, keyOf(f)],
+        tags: [schoolsList, adminDashboard],
+        profile: "aggregate",
       }
-      summary.districtCount = perDistrict.size;
-      summary.byDistrict = [...perDistrict]
-        .map(([district, count]) => ({ district, count }))
-        .sort((a, b) => b.count - a.count || a.district.localeCompare(b.district));
-      return summary;
-    },
-    {
-      keyParts: ["admin-schools-summary", keyOf(f)],
-      tags: [schoolsList],
-      profile: "aggregate",
-    }
-  );
+    ),
+    !f.district && !f.region ? getAdminMetricCounts() : Promise.resolve(null),
+  ]);
+  return dash
+    ? {
+        ...summary,
+        total: dash.schoolsTotal,
+        active: dash.schoolsActive,
+        inactive: dash.schoolsInactive,
+      }
+    : summary;
 }
 
 // ─── Learners hub ───────────────────────────────────────────────────────────
@@ -607,18 +715,20 @@ const NOT_IP_LEARNER: Prisma.LearnerWhereInput = {
 };
 
 /**
- * The learner population is `ACTIVE_ENROLLED_LEARNER` (live learners with an
- * ACTIVE enrollment in an active school year) — the same rule every dashboard
- * and the division summary count, so this hub's totals agree with them. It
- * includes `deletedAt: null`. The demo school is excluded unless
- * `demoVisible`.
+ * The directory lists the dashboard's "Learners" population: every live
+ * (`deletedAt: null`) learner, demo school scoped by `adminPopulationScope`. So
+ * the unfiltered directory count equals the dashboard Learners card. A learner
+ * with no active enrollment still appears, under their current grade/section
+ * pointer.
  */
 function learnersHubWhere(
   f: Pick<LearnersHubParams, "q" | "district" | "schoolId" | "grade" | "section" | "ip" | "aral">,
   demoVisible: boolean
 ): Prisma.LearnerWhereInput {
-  const and: Prisma.LearnerWhereInput[] = [ACTIVE_ENROLLED_LEARNER];
-  if (!demoVisible) and.push({ school: { isDemo: false } });
+  const and: Prisma.LearnerWhereInput[] = [
+    { deletedAt: null },
+    adminPopulationScope(demoVisible).viaSchool,
+  ];
   if (f.district) and.push({ school: { district: f.district } });
   if (f.schoolId) and.push({ schoolId: f.schoolId });
   if (f.grade) and.push({ gradeLevel: { type: f.grade } });
@@ -699,28 +809,44 @@ export async function getLearnersHubPage(
 }
 
 export type LearnersSummary = {
+  /**
+   * Every live learner in scope, demo scoped like the dashboard — its "Learners"
+   * card (`learnerCount`). `bySex` and `byGrade` each sum to this.
+   */
   totalLearners: number;
-  /** Teaching order, only grades that have learners. */
-  byGrade: { grade: GradeLevelType; label: string; count: number }[];
-  bySex: { male: number; female: number };
-  ipLearners: number;
-  /** "12.5%" or "—" when there are no learners. */
-  ipPercent: string;
-  /** A learner with two IP groups counts in both. Largest first. */
-  ipByGroup: { key: string; name: string; count: number }[];
+  /**
+   * Live learners holding an ACTIVE enrollment in an active school year, in live
+   * schools — the dashboard's "enrolled" figure (the IP card's denominator).
+   */
+  enrolledThisYear: number;
+  /** Every live learner flagged ARAL — the dashboard's `aralCount`. */
   aralLearners: number;
+  /** Enrolled IP learners — the dashboard IP card's `ipLearners`. */
+  ipLearners: number;
+  /** `ipLearners / enrolledThisYear`, e.g. "33.3%", or "—" when none are enrolled. */
+  ipPercent: string;
+  /** Enrolled IP learners by group; a learner with two IP groups counts in both. Largest first. */
+  ipByGroup: { key: string; name: string; count: number }[];
+  bySex: { male: number; female: number };
+  /**
+   * By the learner's current grade pointer, over `totalLearners`, teaching order
+   * (then Floating, then "Unassigned" for a pointer that resolves to no grade).
+   * Only buckets with learners appear.
+   */
+  byGrade: { grade: GradeLevelType | "UNASSIGNED"; label: string; count: number }[];
 };
 
 /** Optional scope for the learner summary; no filter means the whole division. */
 export type LearnersSummaryFilter = { district?: string; schoolId?: string };
 
 /**
- * Five Prisma calls, all `groupBy`/`count`, no rows loaded except the grade
- * lookup (one row per grade level, about 13 per school). Same population as the
- * dashboard IP card, so unfiltered figures match it. Cached under
- * `adminDashboard` + `schoolsList` — the tags learner create/archive/import
- * (`revalidateLearnerScoped({ adminDashboard: true })`) and school changes
- * already bust — with a 60s TTL as the backstop.
+ * Six `groupBy`/`count` calls plus one small grade lookup (about 13 rows per
+ * school); no learner rows are loaded. Cached under `adminDashboard` +
+ * `schoolsList` (the tags learner create/archive/import and school changes
+ * already bust), 60s TTL. Unfiltered, `totalLearners`, `aralLearners`,
+ * `enrolledThisYear`, `ipLearners` and `ipPercent` are read from
+ * `getAdminMetricCounts` / `getAdminIpAndAdvisoryMetrics`, so they are the
+ * dashboard's own cache entries.
  */
 export async function getLearnersSummary(
   filter: LearnersSummaryFilter = {}
@@ -730,71 +856,103 @@ export async function getLearnersSummary(
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
   };
-  return cachedQuery(
-    async () => {
-      const base = learnersHubWhere(
-        { q: "", district: f.district, schoolId: f.schoolId },
-        demoVisible
-      );
-      const [byGradeLevel, bySexRows, ipRows, aralLearners] = await Promise.all([
-        prisma.learner.groupBy({
-          by: ["gradeLevelId"],
-          where: base,
-          _count: { _all: true },
-        }),
-        prisma.learner.groupBy({ by: ["gender"], where: base, _count: { _all: true } }),
-        prisma.learner.groupBy({
-          by: ["ethnicity", "secondaryEthnicity"],
-          where: { AND: [base, IP_LEARNER] },
-          _count: { _all: true },
-        }),
-        prisma.learner.count({ where: { AND: [base, { isAralLearner: true }] } }),
-      ]);
+  const unfiltered = !f.district && !f.schoolId;
+  const [summary, counts, ipDash] = await Promise.all([
+    cachedQuery(
+      async () => {
+        const base = learnersHubWhere({ q: "", ...f }, demoVisible);
+        // The dashboard's enrolled/IP population also requires a live school.
+        const enrolled: Prisma.LearnerWhereInput = {
+          AND: [base, ACTIVE_ENROLLED_LEARNER, { school: { deletedAt: null } }],
+        };
+        const [bySexRows, byGradeLevel, aralLearners, enrolledThisYear, ipRows] =
+          await Promise.all([
+            prisma.learner.groupBy({ by: ["gender"], where: base, _count: { _all: true } }),
+            prisma.learner.groupBy({
+              by: ["gradeLevelId"],
+              where: base,
+              _count: { _all: true },
+            }),
+            prisma.learner.count({ where: { AND: [base, { isAralLearner: true }] } }),
+            prisma.learner.count({ where: enrolled }),
+            prisma.learner.groupBy({
+              by: ["ethnicity", "secondaryEthnicity"],
+              where: { AND: [enrolled, IP_LEARNER] },
+              _count: { _all: true },
+            }),
+          ]);
 
-      // Grade levels are per school, so `gradeLevelId` must be folded to the
-      // grade type. One small lookup for the ids that actually have learners.
-      const gradeRows = byGradeLevel.length
-        ? await prisma.gradeLevel.findMany({
-            where: { id: { in: byGradeLevel.map((g) => g.gradeLevelId) } },
-            select: { id: true, type: true },
-          })
-        : [];
-      const typeById = new Map(gradeRows.map((g) => [g.id, g.type]));
-      const perGrade = new Map<GradeLevelType, number>();
-      for (const g of byGradeLevel) {
-        const type = typeById.get(g.gradeLevelId);
-        if (type) perGrade.set(type, (perGrade.get(type) ?? 0) + g._count._all);
+        // Grade levels are per school, so `gradeLevelId` is folded to the grade
+        // type. One small lookup for the ids that actually have learners.
+        const gradeRows = byGradeLevel.length
+          ? await prisma.gradeLevel.findMany({
+              where: { id: { in: byGradeLevel.map((g) => g.gradeLevelId) } },
+              select: { id: true, type: true },
+            })
+          : [];
+        const typeById = new Map(gradeRows.map((g) => [g.id, g.type]));
+        const perGrade = new Map<GradeLevelType | "UNASSIGNED", number>();
+        for (const g of byGradeLevel) {
+          const type = typeById.get(g.gradeLevelId) ?? "UNASSIGNED";
+          perGrade.set(type, (perGrade.get(type) ?? 0) + g._count._all);
+        }
+
+        const bySex = { male: 0, female: 0 };
+        for (const r of bySexRows) {
+          if (r.gender === "MALE") bySex.male += r._count._all;
+          else bySex.female += r._count._all;
+        }
+        const ip = summarizeIpRows(ipRows);
+        const order: (GradeLevelType | "UNASSIGNED")[] = [
+          ...ACCOUNT_GRADE_VALUES,
+          "FLOATING",
+          "UNASSIGNED",
+        ];
+
+        return {
+          totalLearners: bySex.male + bySex.female,
+          enrolledThisYear,
+          aralLearners,
+          ipLearners: ip.ipCount,
+          ipPercent: formatPercent(ip.ipCount, enrolledThisYear),
+          ipByGroup: ip.kinds
+            .map((k) => ({ key: k.key, name: k.name, count: k.value }))
+            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+          bySex,
+          byGrade: order.flatMap((grade) => {
+            const count = perGrade.get(grade) ?? 0;
+            return count > 0
+              ? [
+                  {
+                    grade,
+                    label: grade === "UNASSIGNED" ? "Unassigned" : (GRADE_LEVEL_LABELS[grade] ?? grade),
+                    count,
+                  },
+                ]
+              : [];
+          }),
+        } satisfies LearnersSummary;
+      },
+      {
+        keyParts: ["admin-learners-summary-v2", `demo:${demoVisible}`, keyOf(f)],
+        tags: [adminDashboard, schoolsList],
+        profile: "aggregate",
       }
-
-      const sex = { male: 0, female: 0 };
-      for (const r of bySexRows) {
-        if (r.gender === "MALE") sex.male += r._count._all;
-        else sex.female += r._count._all;
-      }
-      const totalLearners = sex.male + sex.female;
-      const ip = summarizeIpRows(ipRows);
-
-      return {
-        totalLearners,
-        byGrade: ACCOUNT_GRADE_VALUES.flatMap((grade) => {
-          const count = perGrade.get(grade) ?? 0;
-          return count > 0
-            ? [{ grade, label: GRADE_LEVEL_LABELS[grade] ?? grade, count }]
-            : [];
-        }),
-        bySex: sex,
-        ipLearners: ip.ipCount,
-        ipPercent: formatPercent(ip.ipCount, totalLearners),
-        ipByGroup: ip.kinds
-          .map((k) => ({ key: k.key, name: k.name, count: k.value }))
-          .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-        aralLearners,
-      };
-    },
-    {
-      keyParts: ["admin-learners-summary", `demo:${demoVisible}`, keyOf(f)],
-      tags: [adminDashboard, schoolsList],
-      profile: "aggregate",
-    }
-  );
+    ),
+    unfiltered ? getAdminMetricCounts() : Promise.resolve(null),
+    unfiltered ? getAdminIpAndAdvisoryMetrics() : Promise.resolve(null),
+  ]);
+  return {
+    ...summary,
+    ...(counts
+      ? { totalLearners: counts.learnerCount, aralLearners: counts.aralCount }
+      : {}),
+    ...(ipDash
+      ? {
+          enrolledThisYear: ipDash.national.totalLearners,
+          ipLearners: ipDash.national.ipLearners,
+          ipPercent: ipDash.national.ipPercent,
+        }
+      : {}),
+  };
 }

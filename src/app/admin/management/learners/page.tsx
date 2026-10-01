@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { BookOpen, GraduationCap, School, Sparkles, Users } from "lucide-react";
+import { BookOpen, CalendarCheck, GraduationCap, School, Sparkles, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
 import { getAdminIpAndAdvisoryMetrics } from "@/lib/dashboard/aggregates";
 import { topSchoolsWithIp } from "@/lib/dashboard/ip-metrics";
@@ -74,10 +74,19 @@ async function LearnersCards({ params }: { params: LearnersHubParams }) {
   const card = { inlineOnPhone: true, denseOnPhone: true } as const;
   return (
     <SummaryGrid scope={scope} label="Learner overview">
-      <StatCard title="Learners" value={n(summary.totalLearners)} hint="Enrolled this school year" icon={GraduationCap} tone="primary" {...card} />
-      <StatCard title="Male" value={n(summary.bySex.male)} hint="Enrolled learners" icon={Users} tone="neutral" {...card} />
-      <StatCard title="Female" value={n(summary.bySex.female)} hint="Enrolled learners" icon={Users} tone="neutral" {...card} />
-      <StatCard title="IP learners" value={n(summary.ipLearners)} hint={`${summary.ipPercent} of enrolled`} icon={School} tone="amber" {...card} />
+      {/* Learners, IP and ARAL use the dashboard's figures and words. */}
+      <StatCard
+        title="Learners"
+        value={n(summary.totalLearners)}
+        hint={params.district || params.schoolId ? `In ${scope}` : "Across every school"}
+        icon={GraduationCap}
+        tone="amber"
+        {...card}
+      />
+      <StatCard title="Enrolled this school year" value={n(summary.enrolledThisYear)} hint="Active enrollment in the current year" icon={CalendarCheck} tone="primary" {...card} />
+      <StatCard title="Male" value={n(summary.bySex.male)} hint="Of all learners" icon={Users} tone="neutral" {...card} />
+      <StatCard title="Female" value={n(summary.bySex.female)} hint="Of all learners" icon={Users} tone="neutral" {...card} />
+      <StatCard title="IP learners (enrolled)" value={n(summary.ipLearners)} hint={`${summary.ipPercent} of enrolled`} icon={School} tone="amber" {...card} />
       <StatCard title="ARAL learners" value={n(summary.aralLearners)} hint="In the ARAL program" icon={Sparkles} tone="violet" {...card} />
     </SummaryGrid>
   );
@@ -111,15 +120,15 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
         {summary.byGrade.length === 0 ? (
           <SurfaceBody>
             <EmptyState
-              title="No enrolled learners"
-              description="Appears once learners are enrolled in an active school year."
+              title="No learners yet"
+              description="Appears once schools add learners."
               icon={BookOpen}
             />
           </SurfaceBody>
         ) : (
           <ul className="space-y-2 px-4 pb-4 pt-1" aria-label="Learners by grade">
             {summary.byGrade.map((g) => (
-              <li key={g.grade} className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 text-sm">
+              <li key={g.grade} className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-center gap-3 text-sm">
                 <span className="font-medium">{g.label}</span>
                 <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <span
@@ -267,7 +276,13 @@ async function directoryFilters(params: LearnersHubParams): Promise<ListFilterFi
     schoolField(schools, params.schoolId, ["section"]),
     gradeField(listGradeOptions(), params.grade, ["section"]),
     sectionField(sections, params.section, { schoolId: params.schoolId, grade: params.grade }),
-    yesNoField("ip", "IP learner", params.ip, { all: "IP and non-IP", yes: "IP learners only", no: "Non-IP only" }),
+    yesNoField(
+      "ip",
+      "IP learner",
+      params.ip,
+      { all: "IP and non-IP", yes: "IP learners only", no: "Non-IP only" },
+      "Filter covers every learner; the card counts enrolled learners only."
+    ),
     yesNoField("aral", "ARAL", params.aral, { all: "ARAL and non-ARAL", yes: "ARAL learners only", no: "Not in ARAL" }),
   ];
 }
@@ -336,11 +351,11 @@ export default async function AdminLearnersPage({
           eyebrow="Management"
           eyebrowIcon={GraduationCap}
           title="Learners"
-          subtitle="Every enrolled learner in the division. Find a learner, or see how they break down by grade, IP group and ARAL."
+          subtitle="Every learner in the division. Find a learner, or see how they break down by grade, IP group and ARAL."
         />
       }
     >
-      <Suspense key={`cards-${summaryKey}`} fallback={<MetricsGridSkeleton className="mb-0" count={5} />}>
+      <Suspense key={`cards-${summaryKey}`} fallback={<MetricsGridSkeleton className="mb-0" count={6} />}>
         <LearnersCards params={params} />
       </Suspense>
 

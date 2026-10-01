@@ -50,6 +50,30 @@ function labelProfile(key: string): string {
 // ─── Admin section fetchers ─────────────────────────────────────────────────
 
 /**
+ * The one definition of "which demo rows does an admin figure count".
+ *
+ * `schoolScope` goes in a `School` where; `viaSchool` goes in the where of
+ * anything that reaches its school through a `school` relation (users,
+ * learners). The Super Admin dashboard and every Management summary card
+ * (`src/lib/admin/management.ts`) build their filters from this, so a card and
+ * its dashboard twin can never disagree about the demo tenant.
+ *
+ * `viaSchool` also requires the school to be live (`deletedAt: null`), so users
+ * and learners of a removed school are not counted — the same rule the Super
+ * Admin account lists apply. A relation filter never matches a null `schoolId`,
+ * so SUPER_ADMIN and DISTRICT_ADMIN rows are never counted through it.
+ */
+export function adminPopulationScope(demoVisible: boolean): {
+  schoolScope: { isDemo?: false };
+  viaSchool: { school: { deletedAt: null; isDemo?: false } };
+} {
+  return {
+    schoolScope: demoSchoolFilter(demoVisible),
+    viaSchool: { school: { deletedAt: null, ...demoSchoolFilter(demoVisible) } },
+  };
+}
+
+/**
  * System-wide counts for the Super Admin dashboard.
  *
  * The demo tenant is excluded unless this request carries a demo session, so the figures an admin
@@ -59,11 +83,7 @@ function labelProfile(key: string): string {
  */
 export async function getAdminMetricCounts() {
   const demoVisible = await isDemoVisible();
-  const schoolScope = demoSchoolFilter(demoVisible);
-  // Users and learners reach the flag through their school. No count below
-  // includes SUPER_ADMIN, the one role with a null `schoolId`, so filtering
-  // through the relation cannot drop a row that should have been counted.
-  const viaSchool = demoVisible ? {} : ({ school: { isDemo: false } } as const);
+  const { schoolScope, viaSchool } = adminPopulationScope(demoVisible);
   return cachedQuery(
     async () => {
       const [
@@ -237,8 +257,7 @@ const ACTIVE_TEACHER: Prisma.UserWhereInput = {
  */
 export async function getAdminIpAndAdvisoryMetrics() {
   const demoVisible = await isDemoVisible();
-  const schoolScope = demoSchoolFilter(demoVisible);
-  const viaSchool = demoVisible ? {} : ({ school: { isDemo: false } } as const);
+  const { schoolScope, viaSchool } = adminPopulationScope(demoVisible);
   return cachedQuery(
     async () => {
       const [schools, learnerTotals, ipRows, teacherTotals] = await Promise.all([

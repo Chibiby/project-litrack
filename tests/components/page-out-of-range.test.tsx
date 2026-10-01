@@ -132,7 +132,7 @@ describe("LearnersDirectory — page past the end", () => {
 
     expect(screen.getByText("Page 40 is past the end")).not.toBeNull();
     expect(screen.getByText("There are 12 pages of learners (290 in all).")).not.toBeNull();
-    expect(screen.queryByText("No enrolled learners yet")).toBeNull();
+    expect(screen.queryByText("No learners yet")).toBeNull();
     expect(screen.queryByText("No learners match")).toBeNull();
 
     const href = screen.getByRole("link", { name: "Go to page 1" }).getAttribute("href") as string;
@@ -154,7 +154,7 @@ describe("LearnersDirectory — page past the end", () => {
 
   it("an empty directory shows the ordinary empty state and no pager", () => {
     directory({});
-    expect(screen.getByText("No enrolled learners yet")).not.toBeNull();
+    expect(screen.getByText("No learners yet")).not.toBeNull();
     expect(screen.queryByText(/is past the end/)).toBeNull();
     expect(screen.queryByRole("navigation", { name: "learners pages" })).toBeNull();
   });

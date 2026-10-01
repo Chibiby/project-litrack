@@ -35,6 +35,8 @@ export type ListFilterField = {
   clears?: readonly string[];
   /** Set when the filter cannot be used yet; the field is disabled and shows this. */
   disabledReason?: string;
+  /** One short line under the field, e.g. how it differs from a nearby card. */
+  help?: string;
   /** A type-to-search picker for long lists (schools, sections). */
   searchable?: boolean;
 };
@@ -157,6 +159,7 @@ export function ListFilterBar<K extends string>({
             const id = `filter-${field.key}`;
             const hintId = `${id}-hint`;
             const disabled = pending || Boolean(field.disabledReason);
+            const hint = field.disabledReason ?? field.help;
             return (
               <div key={field.key} className="min-w-0 space-y-1.5">
                 <Label htmlFor={id} className="text-xs font-medium">
@@ -183,7 +186,7 @@ export function ListFilterBar<K extends string>({
                     <SelectTrigger
                       id={id}
                       className="h-11 w-full lg:h-10"
-                      aria-describedby={field.disabledReason ? hintId : undefined}
+                      aria-describedby={hint ? hintId : undefined}
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -197,9 +200,9 @@ export function ListFilterBar<K extends string>({
                     </SelectContent>
                   </Select>
                 )}
-                {field.disabledReason ? (
+                {hint ? (
                   <p id={hintId} className="text-xs text-muted-foreground">
-                    {field.disabledReason}
+                    {hint}
                   </p>
                 ) : null}
               </div>

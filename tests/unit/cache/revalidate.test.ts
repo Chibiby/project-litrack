@@ -34,7 +34,12 @@ vi.mock("next/cache", () => ({
 
 // Imported after the mock factory above is registered — this is the real
 // module under test, not a double of it.
-const { revalidateSchoolHeadTeachers, revalidateSchoolDashboard, revalidateAdminAccountPages } = await import(
+const {
+  revalidateSchoolHeadTeachers,
+  revalidateSchoolDashboard,
+  revalidateAdminAccountPages,
+  revalidateAdminDashboard,
+} = await import(
   "@/lib/cache/revalidate"
 );
 
@@ -118,6 +123,28 @@ describe("revalidateAdminAccountPages", () => {
 describe("revalidateSchoolHeadTeachers — Super Admin summary cards", () => {
   it("also expires the admin accounts tag, since the Teachers cards count approvals", () => {
     revalidateSchoolHeadTeachers(SCHOOL_ID);
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
+  });
+});
+
+describe("the Super Admin dashboard and the Management cards share their invalidation", () => {
+  // The cards (adminAccounts) and the dashboard (adminDashboard) show the same
+  // figures, so a mutation that busts one must bust the other.
+  it("revalidateAdminAccountPages expires both the account cards and the dashboard", () => {
+    revalidateAdminAccountPages();
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminDashboard, { expire: 0 });
+  });
+
+  it("revalidateSchoolHeadTeachers expires the Super Admin dashboard and account cards for any school", () => {
+    revalidateSchoolHeadTeachers(SCHOOL_ID);
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminDashboard, { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
+  });
+
+  it("revalidateAdminDashboard also expires the account cards", () => {
+    revalidateAdminDashboard();
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminDashboard, { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
   });
 });
