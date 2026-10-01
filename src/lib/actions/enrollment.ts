@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
@@ -472,8 +473,8 @@ export const transferLearnerCrossSchool = action(
     revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
     revalidatePath("/teacher/learners");
     revalidatePath("/teacher/aral");
-    revalidatePath("/admin/transfers");
-    revalidatePath("/admin/schools");
+    revalidatePath(ADMIN_ROUTES.learnerTransfers);
+    revalidatePath(ADMIN_ROUTES.schools);
     revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
     revalidatePath(DISTRICT_ROUTES.transfers);
     revalidateSchoolDashboard(fromSchoolId);

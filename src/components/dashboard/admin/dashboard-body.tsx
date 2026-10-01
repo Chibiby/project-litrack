@@ -11,6 +11,7 @@ import { getAdminMetricCounts } from "@/lib/dashboard/aggregates";
 import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { Callout } from "@/components/ui/callout";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { CalendarCard } from "@/components/dashboard/teacher/calendar-card";
@@ -87,7 +88,7 @@ export async function loadAdminDashboard({
               icon={School}
               tone="primary"
               decor="bars"
-              action={{ label: "View schools", href: "/admin/schools" }}
+              action={{ label: "View schools", href: ADMIN_ROUTES.schools }}
             />
             <StatCard
               title="School Heads"
@@ -96,7 +97,7 @@ export async function loadAdminDashboard({
               icon={UserCog}
               tone="emerald"
               decor="people"
-              action={{ label: "View heads", href: "/admin/accounts?role=SCHOOL_HEAD" }}
+              action={{ label: "View heads", href: ADMIN_ROUTES.schoolHeads }}
             />
             <StatCard
               title="Teachers"
@@ -105,7 +106,7 @@ export async function loadAdminDashboard({
               icon={Users}
               tone="primary"
               decor="people"
-              action={{ label: "View teachers", href: "/admin/accounts?role=TEACHER" }}
+              action={{ label: "View teachers", href: ADMIN_ROUTES.teachers }}
             />
             <StatCard
               title="Learners"
@@ -114,7 +115,7 @@ export async function loadAdminDashboard({
               icon={GraduationCap}
               tone="amber"
               decor="wave"
-              action={{ label: "IP learners", href: "/admin/ip-learners" }}
+              action={{ label: "IP learners", href: ADMIN_ROUTES.learners }}
             />
             <StatCard
               title="ARAL learners"
@@ -123,7 +124,7 @@ export async function loadAdminDashboard({
               icon={Sparkles}
               tone="violet"
               decor="sprout"
-              href="/admin/summary"
+              href={ADMIN_ROUTES.divisionSummary}
             />
             <StatCard
               title="Pending teachers"
@@ -132,7 +133,7 @@ export async function loadAdminDashboard({
               icon={AlertTriangle}
               tone={pending > 0 ? "amber" : "neutral"}
               decor="clock"
-              action={{ label: "Review", href: "/admin/accounts?role=TEACHER" }}
+              action={{ label: "Review", href: ADMIN_ROUTES.teachers }}
             />
           </SchoolHeadStatRow>
 

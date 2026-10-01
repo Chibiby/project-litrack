@@ -14,6 +14,7 @@ import { PageHero } from "@/components/shell/page-hero";
 import { Surface } from "@/components/ui/surface";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { cn } from "@/lib/utils";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 type Row = { label: string; href: string; icon: LucideIcon };
 
@@ -23,7 +24,7 @@ const ROWS: readonly Row[] = [
   { label: "Profile", href: "/admin/settings/profile", icon: UserCircle },
   { label: "Security", href: "/admin/settings/security", icon: KeyRound },
   { label: "Demo session", href: DEMO_HREF, icon: MonitorPlay },
-  { label: "Submissions", href: "/admin/submissions", icon: Lock },
+  { label: "Submissions", href: ADMIN_ROUTES.reportSubmissions, icon: Lock },
 ];
 
 const COPY: Record<string, { title: string; subtitle: string }> = {

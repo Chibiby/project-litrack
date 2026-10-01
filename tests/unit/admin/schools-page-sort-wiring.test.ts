@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { SCHOOLS_LIST_SORTS, schoolsListOrderBy } from "@/lib/cache/schools-list";
 
 /**
- * Proves `/admin/schools` actually threads a non-empty `sortOptions` (and the
+ * Proves `/admin/management/schools` actually threads a non-empty `sortOptions` (and the
  * parsed `sort`) into the `SchoolsTable` it renders, and that the parsed sort
  * reaches the Prisma query `getSchoolsListPage` runs — not just that the
  * parser/registry exist. `SchoolsTable` itself already renders `SortSelect`
@@ -34,6 +34,12 @@ vi.mock("@/lib/cache/unstable", () => ({
   cachedQuery: (fn: () => unknown) => fn(),
 }));
 
+// The page also loads district options and summary cards; neither is under test here.
+vi.mock("@/lib/admin/management", () => ({
+  listDistrictOptions: vi.fn(async () => []),
+  getSchoolsSummary: vi.fn(async () => null),
+}));
+
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({
     role: "SUPER_ADMIN",
@@ -42,7 +48,7 @@ vi.mock("@/lib/auth/session", () => ({
   })),
 }));
 
-const { default: SchoolsListPage } = await import("@/app/admin/schools/page");
+const { default: SchoolsListPage } = await import("@/app/admin/management/schools/page");
 
 /** Walk `SchoolsListPage`'s returned tree to the `SchoolsTableBody` element. */
 function schoolsTableBodyElementOf(pageElement: ReactElement): ReactElement {
@@ -67,12 +73,12 @@ describe("SchoolsListPage — sort wiring reaches SchoolsTable and the Prisma qu
       body.props
     )) as ReactElement;
 
-    // The body renders a fragment: [errorMessageOrNull, <Card><CardContent>
-    // <SchoolsTable .../></CardContent></Card>].
+    // The body renders a fragment: [errorMessageOrNull, <Surface><SurfaceBody>
+    // <SchoolsTable .../></SurfaceBody></Surface>].
     const fragmentChildren = (tableElement.props as { children: ReactElement[] }).children;
-    const card = fragmentChildren[fragmentChildren.length - 1];
-    const cardContent = (card.props as { children: ReactElement }).children;
-    const table = (cardContent.props as { children: ReactElement }).children;
+    const surface = fragmentChildren[fragmentChildren.length - 1];
+    const surfaceBody = (surface.props as { children: ReactElement }).children;
+    const table = (surfaceBody.props as { children: ReactElement }).children;
 
     const list = (table.props as { list: { sort?: string; sortOptions?: unknown[] } }).list;
     expect(list.sort).toBe("alphabetical");

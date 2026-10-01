@@ -12,19 +12,24 @@ import {
   FileCheck2,
   FileText,
   FlaskConical,
+  GraduationCap,
   KeyRound,
   LayoutDashboard,
   LifeBuoy,
   ListOrdered,
+  MapPinned,
   Megaphone,
   School,
   ScrollText,
+  ShieldCheck,
   TriangleAlert,
   Sparkles,
   Unlock,
+  UserCog,
   Users,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DISTRICT_ROUTES, DISTRICT_SUMMARY_FACETS } from "@/lib/routes/district";
 
@@ -173,30 +178,40 @@ export function getNavGroups(
         {
           label: "Overview",
           items: [
-            { id: "admin-dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+            { id: "admin-dashboard", label: "Dashboard", href: ADMIN_ROUTES.home, icon: LayoutDashboard },
           ],
         },
         {
-          label: "Schools & People",
+          // Group labels mirror the URL segment each row lives under
+          // (`/admin/management/…`, `/admin/school-year-setup/…`, …).
+          label: "Management",
           items: [
-            { id: "admin-schools", label: "Schools", href: "/admin/schools", icon: School },
-            { id: "admin-accounts", label: "User Accounts", href: "/admin/accounts", icon: KeyRound, heavy: true },
-            { id: "admin-transfers", label: "Learner Transfers", href: "/admin/transfers", icon: ArrowRightLeft },
-            { id: "admin-summary", label: "Division Summary", href: "/admin/summary", icon: BarChart3 },
+            { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
+            { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
+            { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
+            { id: "admin-schools", label: "Schools", href: ADMIN_ROUTES.schools, icon: School },
+            { id: "admin-district-admins", label: "District Admins", href: ADMIN_ROUTES.districtAdmins, icon: MapPinned, heavy: true },
           ],
         },
         {
           label: "School Year Setup",
           items: [
-            { id: "admin-school-years", label: "School Years", href: "/admin/school-years", icon: CalendarRange },
-            { id: "admin-term-subjects", label: "End-of-Term Subjects", href: "/admin/term-subjects", icon: ListOrdered },
+            { id: "admin-school-years", label: "School Years", href: ADMIN_ROUTES.schoolYears, icon: CalendarRange },
+            { id: "admin-term-subjects", label: "End-of-Term Subjects", href: ADMIN_ROUTES.termSubjects, icon: ListOrdered },
+          ],
+        },
+        {
+          label: "School Setup",
+          items: [
+            { id: "admin-submissions", label: "Report Submissions", href: ADMIN_ROUTES.reportSubmissions, icon: FileCheck2 },
+            { id: "admin-transfers", label: "Learner Transfers", href: ADMIN_ROUTES.learnerTransfers, icon: ArrowRightLeft },
           ],
         },
         {
           label: "Monitoring",
           items: [
-            { id: "admin-submissions", label: "Report Submissions", href: "/admin/submissions", icon: FileCheck2 },
-            { id: "admin-support", label: "Support Inbox", href: "/admin/support", icon: LifeBuoy },
+            { id: "admin-summary", label: "Division Summary", href: ADMIN_ROUTES.divisionSummary, icon: BarChart3 },
+            { id: "admin-support", label: "Support Inbox", href: ADMIN_ROUTES.support, icon: LifeBuoy },
           ],
         },
         // Developer Admin only. Dropped, not rendered inert: a Division Admin
@@ -206,11 +221,12 @@ export function getNavGroups(
               {
                 label: "Developer Controls",
                 items: [
-                  { id: "admin-audit", label: "Audit Log", href: "/admin/audit", icon: ScrollText },
-                  { id: "admin-errors", label: "Error Log", href: "/admin/errors", icon: TriangleAlert },
-                  { id: "admin-test-lab", label: "Page Test Lab", href: "/admin/test-lab", icon: FlaskConical },
-                  { id: "admin-archive", label: "Archived Records", href: "/admin/archive", icon: Archive, heavy: true as const },
-                  { id: "admin-database", label: "Database Console", href: "/admin/database", icon: Database },
+                  { id: "admin-admin-accounts", label: "Admin Accounts", href: ADMIN_ROUTES.adminAccounts, icon: UserCog, heavy: true as const },
+                  { id: "admin-audit", label: "Audit Log", href: ADMIN_ROUTES.audit, icon: ScrollText },
+                  { id: "admin-errors", label: "Error Log", href: ADMIN_ROUTES.errors, icon: TriangleAlert },
+                  { id: "admin-test-lab", label: "Page Test Lab", href: ADMIN_ROUTES.testLab, icon: FlaskConical },
+                  { id: "admin-archive", label: "Archived Records", href: ADMIN_ROUTES.archive, icon: Archive, heavy: true as const },
+                  { id: "admin-database", label: "Database Console", href: ADMIN_ROUTES.database, icon: Database },
                 ],
               },
             ]

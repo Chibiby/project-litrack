@@ -51,6 +51,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: vi.fn(),
   revalidateSchoolsList: vi.fn(),
+  revalidateAdminAccountPages: vi.fn(),
 }));
 
 const { regenerateSchoolHeadCredential } = await import("@/lib/actions/school");

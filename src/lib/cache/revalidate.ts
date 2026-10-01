@@ -4,6 +4,7 @@ import type { UserRole } from "@prisma/client";
 import * as tags from "@/lib/cache/tags";
 import { roleSettingsProfilePath } from "@/lib/auth/roles";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 /**
  * Expire every Data Cache entry carrying `tag` immediately: the next read is a
@@ -69,6 +70,8 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   revalidatePath(SCHOOL_HEAD_ROUTES.teachersRemoved);
   revalidateSchoolTeachers(schoolId);
   revalidateSchoolDashboard(schoolId);
+  // The Super Admin Teachers summary cards count approvals and (de)activations.
+  expireTag(tags.adminAccounts);
 }
 
 /** One school's cached teacher list (ARAL tutor pickers). */
@@ -100,7 +103,7 @@ export function revalidateTermSubjects() {
  * goes stale here.
  */
 export function revalidateTermSubjectDefaults() {
-  revalidatePath("/admin/term-subjects");
+  revalidatePath(ADMIN_ROUTES.termSubjects);
 }
 
 /**
@@ -111,6 +114,18 @@ export function revalidateTermSubjectDefaults() {
  */
 export function revalidateAllCachedData() {
   expireTag(tags.allCachedData);
+}
+
+/**
+ * The three Super Admin account tables (Teachers, School Heads, District Admins).
+ * The old single `/admin/accounts` console is split by role, and a mutation on
+ * one account can touch any of them, so they are busted together.
+ */
+export function revalidateAdminAccountPages() {
+  revalidatePath(ADMIN_ROUTES.teachers);
+  revalidatePath(ADMIN_ROUTES.schoolHeads);
+  revalidatePath(ADMIN_ROUTES.districtAdmins);
+  expireTag(tags.adminAccounts);
 }
 
 /** Admin system-wide dashboard aggregates. */
@@ -221,7 +236,7 @@ export function revalidateSupportTicket(requesterId: string) {
  *    tickets with the expiry of the grant each produced, so the grant holder —
  *    not the admin who issued it — is whose cached list is now wrong. A
  *    school-wide grant has N of them.
- * 2. **The admin console** at `/admin/settings/submissions`, which renders the
+ * 2. **The admin console** at `/admin/school-setup/report-submissions`, which renders the
  *    live-grant tables and the admin's own view of what they just did.
  *
  * Nothing else needs busting, and in particular **the teacher-facing lock
@@ -241,7 +256,7 @@ export function revalidateSupportTicket(requesterId: string) {
  *
  * 1. **The owner's own Settings → Profile page**, which is where the change was
  *    made and the one page that must never show the old picture back.
- * 2. **`/admin/accounts`**, the Super Admin accounts table and its account
+ * 2. **the Super Admin account tables**, the accounts table and its account
  *    profile dialog. Busted for every role, because that one table lists all
  *    three and the admin who just moderated a photo is standing on it.
  * 3. **The School Head teachers workspace**, but only for a TEACHER who still
@@ -262,7 +277,7 @@ export function revalidateUserAvatar({
   schoolId: string | null;
 }) {
   revalidatePath(roleSettingsProfilePath(role));
-  revalidatePath("/admin/accounts");
+  revalidateAdminAccountPages();
   if (role === "TEACHER" && schoolId) {
     revalidateSchoolHeadTeachers(schoolId);
   }
@@ -272,6 +287,5 @@ export function revalidateUnlockGrants({ recipientIds }: { recipientIds: string[
   for (const recipientId of recipientIds) {
     revalidateSupportTicket(recipientId);
   }
-    revalidatePath("/admin/submissions");
-    revalidatePath("/admin/settings/submissions");
+  revalidatePath(ADMIN_ROUTES.reportSubmissions);
 }

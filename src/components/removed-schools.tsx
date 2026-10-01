@@ -10,6 +10,7 @@ import { restoreSchool } from "@/lib/actions/school";
 import { callAction } from "@/lib/ui/call-action";
 import { isActionFailure } from "@/lib/errors/client";
 import { cn } from "@/lib/utils";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export type RemovedSchoolTableRow = {
   id: string;
@@ -25,7 +26,7 @@ export type RemovedSchoolTableRow = {
 /** "Active" / "Removed" switch for the Super Admin schools list. */
 export function SchoolsViewTabs({
   view,
-  basePath = "/admin/schools",
+  basePath = ADMIN_ROUTES.schools,
 }: {
   view: "active" | "removed";
   basePath?: string;

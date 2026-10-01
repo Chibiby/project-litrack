@@ -1,4 +1,5 @@
 import type { AttentionItem } from "@/lib/dashboard/school-head-overview";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 /** The subset of `getAdminMetricCounts()` the attention rail reads. */
 export type AdminAttentionCounts = {
@@ -8,9 +9,9 @@ export type AdminAttentionCounts = {
 };
 
 export const ADMIN_ATTENTION_HREFS = {
-  newSchool: "/admin/schools/new",
-  inactiveSchools: "/admin/schools?status=inactive",
-  teacherAccounts: "/admin/accounts?role=TEACHER",
+  newSchool: ADMIN_ROUTES.newSchool,
+  inactiveSchools: `${ADMIN_ROUTES.schools}?status=inactive`,
+  teacherAccounts: ADMIN_ROUTES.teachers,
 } as const;
 
 function plural(n: number, one: string, many: string): string {

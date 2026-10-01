@@ -43,15 +43,15 @@ describe("resolveNavPath", () => {
   it("uses the clicked href in the frame after the click", () => {
     // The router is still fetching, usePathname() still says /admin, and the rail
     // must already show Schools.
-    expect(resolveNavPath("/admin", { href: "/admin/schools", from: "/admin" })).toBe(
-      "/admin/schools"
+    expect(resolveNavPath("/admin", { href: "/admin/management/schools", from: "/admin" })).toBe(
+      "/admin/management/schools"
     );
   });
 
   it("hands back to the real pathname once the URL has arrived", () => {
     expect(
-      resolveNavPath("/admin/schools", { href: "/admin/schools", from: "/admin" })
-    ).toBe("/admin/schools");
+      resolveNavPath("/admin/management/schools", { href: "/admin/management/schools", from: "/admin" })
+    ).toBe("/admin/management/schools");
   });
 
   it("hands back when the URL moved somewhere else entirely", () => {
@@ -59,7 +59,7 @@ describe("resolveNavPath", () => {
     // Holding the pending href here would leave Schools lit on a page that is not
     // Schools, permanently.
     expect(
-      resolveNavPath("/admin/audit", { href: "/admin/schools", from: "/admin" })
+      resolveNavPath("/admin/audit", { href: "/admin/management/schools", from: "/admin" })
     ).toBe("/admin/audit");
   });
 
@@ -183,7 +183,7 @@ describe("optimistic highlight — admin and school head rails", () => {
   const headItems = flattenNavGroups(getNavGroups("SCHOOL_HEAD"));
 
   it("lights the clicked admin row before the router commits", () => {
-    const path = resolveNavPath("/admin", { href: "/admin/transfers", from: "/admin" });
+    const path = resolveNavPath("/admin", { href: "/admin/school-setup/learner-transfers", from: "/admin" });
     expect(resolveActiveItemId(path, adminItems)).toBe("admin-transfers");
   });
 
@@ -191,7 +191,7 @@ describe("optimistic highlight — admin and school head rails", () => {
     // The failure this whole module exists to remove: before the optimistic path,
     // the dashboard stayed lit for the entire force-dynamic render of the child.
     const path = resolveNavPath("/admin", {
-      href: "/admin/school-years",
+      href: "/admin/school-year-setup/school-years",
       from: "/admin",
     });
     expect(resolveActiveItemId(path, adminItems)).not.toBe("admin-dashboard");

@@ -1,143 +1,25 @@
-import { Suspense } from "react";
-import { requireUser } from "@/lib/auth/session";
-import { KeyRound } from "lucide-react";
-import { AdminPage } from "@/components/admin/admin-page";
-import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
-import { TableSectionSkeleton } from "@/components/loading";
-import { AccountsTable } from "@/components/admin/accounts-table";
-import { listKey } from "@/lib/nav/list-params";
-import {
-  ACCOUNT_LIST_SORTS,
-  getAccountSummary,
-  getAccountsPage,
-  parseAccountsParams,
-  accountsTotalPages,
-  type AccountSummary,
-  type AccountRow,
-} from "@/lib/admin/accounts";
+import { redirect } from "next/navigation";
+import { accountsRoleRoute, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
 /**
- * Params that change which rows the accounts list shows — see `listKey`.
- * `q` is left out: search runs as you type, and a remount on each search would
- * drop the search box's focus.
+ * The all-roles accounts console split into one Management page per role.
+ * `?role=SCHOOL_HEAD` lands on School Heads, `?role=DISTRICT_ADMIN` on
+ * District Admins, anything else (no role, TEACHER, SUPER_ADMIN) on Teachers.
+ * `role` is dropped because the destination fixes it; every other param
+ * (search, school, grade, sort, page) carries over.
+ *
+ * Survives as a redirect because this URL is printed in `docs/runbook.md`, the
+ * help topics, and admins' bookmarks. A plain `redirect()` (307), never
+ * `permanentRedirect()`: a 308 is cached by browsers indefinitely. No auth
+ * guard on purpose — the destination guards itself.
  */
-export const ACCOUNTS_LIST_KEYS = ["page", "sort", "role", "schoolId", "grade"] as const;
-
 export const dynamic = "force-dynamic";
 
-interface PageProps {
-  searchParams: Promise<{
-    page?: string;
-    q?: string;
-    role?: string;
-    schoolId?: string;
-    grade?: string;
-    sort?: string;
-  }>;
-}
-
-async function AccountsTableBody({
+export default async function LegacyAccountsPage({
   searchParams,
 }: {
-  searchParams: {
-    page?: string;
-    q?: string;
-    role?: string;
-    schoolId?: string;
-    grade?: string;
-    sort?: string;
-  };
+  searchParams: Promise<PageSearchParams>;
 }) {
-  const params = parseAccountsParams(searchParams);
-  let rows: AccountRow[] = [];
-  let totalCount = 0;
-  let summary: AccountSummary | undefined;
-  let dbAvailable = true;
-
-  try {
-    const page = await getAccountsPage(params);
-    rows = page.rows;
-    totalCount = page.totalCount;
-  } catch (err) {
-    // DATABASE_URL missing or Prisma unavailable — degrade to an empty table
-    // instead of a 500. requireUser already verified the session.
-    console.error("[AdminAccountsPage] failed to load accounts:", err);
-    dbAvailable = false;
-  }
-
-  if (dbAvailable) {
-    try {
-      summary = await getAccountSummary();
-    } catch (err) {
-      // The directory remains useful if its non-essential overview query is
-      // temporarily unavailable; keep its rows and account controls visible.
-      console.error("[AdminAccountsPage] failed to load account summary:", err);
-    }
-  }
-
-  return (
-    <>
-      {!dbAvailable ? (
-        <p className="mb-4 text-sm text-destructive">
-          Could not load accounts right now. The database may be unavailable.
-        </p>
-      ) : null}
-
-      <AccountsTable
-        rows={rows}
-        summary={summary}
-        list={{
-          page: params.page,
-          pageSize: params.pageSize,
-          totalPages: accountsTotalPages(totalCount, params.pageSize),
-          totalCount,
-          role: params.role ?? "",
-          schoolId: params.schoolId ?? "",
-          grade: params.grade ?? "",
-          q: params.q,
-          sort: params.sort,
-          sortOptions: ACCOUNT_LIST_SORTS.options,
-        }}
-      />
-    </>
-  );
-}
-
-/**
- * Super Admin accounts console: every account across every school, one place
- * to find a person by name and diagnose what is wrong with their login
- * (reveal / reset a password, or sign in as them). Replaces
- * `/admin/school-accounts`, which now redirects here.
- *
- * The paged list is pinned at 3 Prisma calls regardless of row count: the
- * rows, their count, and one batch lookup for each school's sign-in head. The
- * compact overview adds one grouped aggregate query; nothing here may add a
- * per-row query or per-row `await`.
- */
-export default async function AdminAccountsPage({ searchParams }: PageProps) {
-  const user = await requireUser("SUPER_ADMIN");
   const params = await searchParams;
-
-  return (
-    <AdminPage
-      title="Accounts"
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="People"
-          eyebrowIcon={KeyRound}
-          title="Accounts"
-          subtitle="Every account in every school. Find a person, check their sign-in, or reset their password."
-        />
-      }
-    >
-      <Suspense
-        key={listKey(params, ACCOUNTS_LIST_KEYS)}
-        fallback={<TableSectionSkeleton rows={10} columns={6} />}
-      >
-        <AccountsTableBody searchParams={params} />
-      </Suspense>
-    </AdminPage>
-  );
+  redirect(withSearchParams(accountsRoleRoute(params.role), params, ["role"]));
 }

@@ -1,75 +1,22 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { requireUser } from "@/lib/auth/session";
-import { AdminPage } from "@/components/admin/admin-page";
-import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
-import { Button } from "@/components/ui/button";
-import { SchoolDetailView } from "@/components/admin/school-detail-view";
-import { getSchoolDetail } from "@/lib/admin/school-detail";
-import { ChevronLeft, School } from "lucide-react";
-
-export const dynamic = "force-dynamic";
-
-interface PageProps {
-  params: Promise<{ schoolId: string }>;
-  searchParams: Promise<{ learners?: string; learnersSort?: string }>;
-}
+import { redirect } from "next/navigation";
+import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
 /**
- * One school, in full: its profile, its teachers, its learners.
- *
- * The page an admin opens to find out what is actually inside a school before
- * deciding whether any of it should stay — which is why nothing here is cached
- * and why the removal controls sit next to the rows rather than on a separate
- * screen.
- *
- * `SchoolDetailView` owns the Learners panel's keyed `<Suspense>` boundary
- * (built from the raw `searchParams` passed straight through below) and its
- * own `ListNavigationProvider`/`ListBusyRegion` pair, so paging or re-sorting
- * that roster shows a skeleton over just that table. The (unpaginated,
- * client-sorted) Teachers table never re-fetches, so it has no equivalent —
- * see `SchoolDetailView`'s own comment.
+ * A school's detail page moved under Management → Schools. Survives as a
+ * redirect because school links are shared and bookmarked; the tab and filter
+ * query carry over. Plain `redirect()` (307), never `permanentRedirect()`, so
+ * browsers do not cache it forever. The destination guards itself and checks
+ * the school exists, so this discloses nothing.
  */
-export default async function SchoolDetailPage({ params, searchParams }: PageProps) {
-  const user = await requireUser("SUPER_ADMIN");
+export const dynamic = "force-dynamic";
+
+export default async function LegacySchoolDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ schoolId: string }>;
+  searchParams: Promise<PageSearchParams>;
+}) {
   const { schoolId } = await params;
-  const sp = await searchParams;
-  const { learners, learnersSort } = sp;
-
-  const page = Number.parseInt(learners ?? "1", 10);
-  const detail = await getSchoolDetail(
-    schoolId,
-    Number.isNaN(page) ? 1 : page,
-    learnersSort
-  );
-  if (!detail) notFound();
-
-  return (
-    <AdminPage
-      title={detail.school.name}
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="School"
-          eyebrowIcon={School}
-          title={detail.school.name}
-          subtitle={`School ID ${detail.school.schoolIdCode}`}
-          meta={[detail.school.district, detail.school.division]
-            .filter((part): part is string => Boolean(part?.trim()))
-            .join(" · ") || undefined}
-          topRight={
-            <Button asChild variant="ghost" size="sm" className="lg:h-9">
-              <Link href="/admin/schools">
-                <ChevronLeft aria-hidden />
-                <span className="max-sm:sr-only">All schools</span>
-              </Link>
-            </Button>
-          }
-        />
-      }
-    >
-      <SchoolDetailView detail={detail} searchParams={sp} />
-    </AdminPage>
-  );
+  redirect(withSearchParams(ADMIN_ROUTES.school(encodeURIComponent(schoolId)), await searchParams));
 }

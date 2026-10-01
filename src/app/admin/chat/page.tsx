@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -18,5 +19,5 @@ export default async function AdminChatPage({
   const { channel } = await searchParams;
   const query = new URLSearchParams({ tab: "chat" });
   if (channel) query.set("channel", channel);
-  redirect(`/admin/support?${query.toString()}`);
+  redirect(`${ADMIN_ROUTES.support}?${query.toString()}`);
 }

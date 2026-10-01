@@ -74,7 +74,7 @@ export type SummaryFacetViewProps = {
   facetId: SummaryFacetId;
   adminScope: AdminScope;
   searchParams: Record<string, string | string[] | undefined>;
-  /** `/district/summary` or `/admin/summary`; the facet id is appended. */
+  /** `/district/summary` or `/admin/monitoring/division-summary`; the facet id is appended. */
   basePath: string;
   userId: string;
 };

@@ -496,51 +496,107 @@ describe("getNavGroups — floating teacher", () => {
 });
 
 describe("getNavGroups — admin", () => {
-  it("gives a Developer Admin Overview, Schools & People, School Year Setup, Monitoring and Developer Controls", () => {
+  it("gives a Developer Admin the full sidebar: Overview, Management, School Year Setup, School Setup, Monitoring, Developer Controls", () => {
     const groups = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
     expect(groups.map((g) => g.label)).toEqual([
       "Overview",
-      "Schools & People",
+      "Management",
       "School Year Setup",
+      "School Setup",
       "Monitoring",
       "Developer Controls",
     ]);
     expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
     expect(groups[0].items[0].href).toBe("/admin");
     expect(groups[1].items.map((i) => i.label)).toEqual([
+      "Learners",
+      "Teachers",
+      "School Heads",
       "Schools",
-      "User Accounts",
-      "Learner Transfers",
-      "Division Summary",
+      "District Admins",
     ]);
-    expect(groups[2].items.map((i) => i.label)).toEqual([
-      "School Years",
-      "End-of-Term Subjects",
-    ]);
-    expect(groups[3].items.map((i) => i.label)).toEqual([
-      "Report Submissions",
-      "Support Inbox",
-    ]);
-    expect(groups[4].items.map((i) => i.label)).toEqual([
-      "Audit Log",
-      "Error Log",
-      "Page Test Lab",
-      "Archived Records",
-      "Database Console",
-    ]);
-    expect(groups[1].items[1]).toMatchObject({ id: "admin-accounts", href: "/admin/accounts", heavy: true });
-    expect(groups[4].items[3]).toMatchObject({ id: "admin-archive", href: "/admin/archive", heavy: true });
-    expect(groups[4].items[2]).toMatchObject({ id: "admin-test-lab", href: "/admin/test-lab" });
+    expect(groups[2].items.map((i) => i.label)).toEqual(["School Years", "End-of-Term Subjects"]);
+    expect(groups[3].items.map((i) => i.label)).toEqual(["Report Submissions", "Learner Transfers"]);
+    expect(groups[4].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox"]);
+    // Developer Controls keeps its five original rows; assert those without
+    // pinning the order of any row added in front of them.
+    expect(groups[5].items.map((i) => i.label)).toEqual(
+      expect.arrayContaining(["Audit Log", "Error Log", "Page Test Lab", "Archived Records", "Database Console"])
+    );
+    expect(groups[5].items.find((i) => i.id === "admin-archive")).toMatchObject({ href: "/admin/archive", heavy: true });
+    expect(groups[5].items.find((i) => i.id === "admin-test-lab")).toMatchObject({ href: "/admin/test-lab" });
+  });
+
+  it("points every Management, Setup and Monitoring row at its nested path", () => {
+    const items = flattenNavGroups(getNavGroups("SUPER_ADMIN"));
+    const byId = Object.fromEntries(items.map((i) => [i.id, i.href]));
+    expect(byId).toMatchObject({
+      "admin-learners": "/admin/management/learners",
+      "admin-teachers": "/admin/management/teachers",
+      "admin-school-heads": "/admin/management/school-heads",
+      "admin-schools": "/admin/management/schools",
+      "admin-district-admins": "/admin/management/district-admins",
+      "admin-school-years": "/admin/school-year-setup/school-years",
+      "admin-term-subjects": "/admin/school-year-setup/term-subjects",
+      "admin-submissions": "/admin/school-setup/report-submissions",
+      "admin-transfers": "/admin/school-setup/learner-transfers",
+      "admin-summary": "/admin/monitoring/division-summary",
+      "admin-support": "/admin/monitoring/support",
+    });
+    expect(items.find((i) => i.id === "admin-teachers")).toMatchObject({ heavy: true });
+    expect(items.find((i) => i.id === "admin-school-heads")).toMatchObject({ heavy: true });
   });
 
   it("gives a Division Admin the same menu without Developer Controls", () => {
     const division = getNavGroups("SUPER_ADMIN");
     const developer = getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true });
-    expect(division).toEqual(developer.slice(0, 4));
+    expect(division).toEqual(developer.slice(0, 5));
+    expect(division.map((g) => g.label)).not.toContain("Developer Controls");
     const hrefs = flattenNavGroups(division).map((i) => i.href);
     for (const hidden of ["/admin/audit", "/admin/errors", "/admin/test-lab", "/admin/archive", "/admin/database"]) {
       expect(hrefs).not.toContain(hidden);
     }
+  });
+
+  it("adds Developer Controls only when isDeveloperAdmin is true", () => {
+    expect(getNavGroups("SUPER_ADMIN", [], {}).map((g) => g.label)).not.toContain("Developer Controls");
+    expect(getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: false }).map((g) => g.label)).not.toContain(
+      "Developer Controls"
+    );
+    expect(getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true }).map((g) => g.label)).toContain(
+      "Developer Controls"
+    );
+  });
+
+  describe("active row for nested admin routes", () => {
+    const items = flattenNavGroups(getNavGroups("SUPER_ADMIN", [], { isDeveloperAdmin: true }));
+
+    it.each([
+      ["/admin", "admin-dashboard"],
+      ["/admin/management/schools", "admin-schools"],
+      ["/admin/management/schools/new", "admin-schools"],
+      ["/admin/management/schools/0b7f2c1e-1111-4222-8333-444455556666", "admin-schools"],
+      ["/admin/management/learners", "admin-learners"],
+      ["/admin/management/teachers", "admin-teachers"],
+      ["/admin/management/school-heads", "admin-school-heads"],
+      ["/admin/management/district-admins", "admin-district-admins"],
+      ["/admin/school-year-setup/school-years", "admin-school-years"],
+      ["/admin/school-year-setup/term-subjects", "admin-term-subjects"],
+      ["/admin/school-setup/report-submissions", "admin-submissions"],
+      ["/admin/school-setup/learner-transfers", "admin-transfers"],
+      ["/admin/monitoring/division-summary", "admin-summary"],
+      ["/admin/monitoring/division-summary/learners", "admin-summary"],
+      ["/admin/monitoring/support", "admin-support"],
+      ["/admin/audit", "admin-audit"],
+    ])("%s lights %s", (path, id) => {
+      expect(resolveActiveItemId(path, items)).toBe(id);
+    });
+
+    it("no longer claims the pre-restructure paths (they redirect before rendering)", () => {
+      for (const legacy of ["/admin/schools", "/admin/accounts", "/admin/transfers", "/admin/summary/learners"]) {
+        expect(resolveActiveItemId(legacy, items)).toBe("admin-dashboard");
+      }
+    });
   });
 });
 

@@ -12,6 +12,7 @@ import type { AdminChatSchool } from "@/lib/chat/queries";
 import type { ChatChannelView } from "@/lib/actions/chat";
 import type { TicketRow } from "@/lib/support/queries";
 import { cn } from "@/lib/utils";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export function AdminSupportHub({
   schools,
@@ -54,7 +55,7 @@ export function AdminSupportHub({
     setTab(next);
     const params = new URLSearchParams({ tab: next });
     if (next === "chat" && channelId) params.set("channel", channelId);
-    router.replace(`/admin/support?${params.toString()}`, { scroll: false });
+    router.replace(`${ADMIN_ROUTES.support}?${params.toString()}`, { scroll: false });
   }
 
   return (
@@ -110,7 +111,7 @@ export function AdminSupportHub({
             onSelectChannel={(channelId) => {
               setChannelId(channelId);
               const params = new URLSearchParams({ tab: "chat", channel: channelId });
-              router.replace(`/admin/support?${params.toString()}`, { scroll: false });
+              router.replace(`${ADMIN_ROUTES.support}?${params.toString()}`, { scroll: false });
             }}
           />
         </div>

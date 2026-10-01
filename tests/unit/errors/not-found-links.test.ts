@@ -13,7 +13,7 @@ describe("notFoundLinksFor", () => {
       "/teacher/learners",
     ]);
     expect(notFoundLinksFor("SCHOOL_HEAD")[0].href).toBe("/school-head");
-    expect(notFoundLinksFor("SUPER_ADMIN").map((l) => l.href)).toContain("/admin/schools");
+    expect(notFoundLinksFor("SUPER_ADMIN").map((l) => l.href)).toEqual(["/admin", "/admin/management/schools", "/admin/management/teachers"]);
   });
 
   it("labels every link, and points every one somewhere real", () => {

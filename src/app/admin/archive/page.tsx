@@ -47,7 +47,7 @@ function schoolsFromArchive(data: Archive): { id: string; name: string }[] {
 /**
  * Every soft-deleted Teacher and Learner, across every school, one place a
  * Super Admin can restore or permanently delete a mistake — deliberately
- * uncached, for the same reason `/admin/schools/[schoolId]` is: this is the
+ * uncached, for the same reason `/admin/management/schools/[schoolId]` is: this is the
  * page read immediately before an irreversible action.
  *
  * Both buckets are fetched together in one `getArchive` call, unchanged from

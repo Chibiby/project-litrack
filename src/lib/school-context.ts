@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 /**
@@ -25,7 +26,7 @@ export async function resolveSchoolContext(
 
   if (isSuperAdmin) {
     if (!schoolIdParam) {
-      redirect("/admin/schools");
+      redirect(ADMIN_ROUTES.schools);
     }
 
     // Audit on real admin drill-down only. Impersonation mass FULL-warm was

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *    school with the same generic NOT_FOUND `assertSameSchool` uses.
  *  - isTestLabSession is true only with a ticket, for this user, in a demo school.
  *  - readTestLabSession needs a BOUND ticket (not just a cookie) naming this user.
- *  - impersonationReturnPath: demo -> /admin/test-lab, else /admin/accounts.
+ *  - impersonationReturnPath: demo -> /admin/test-lab, else /admin/management/teachers.
  *  - isAllowedTestLabNext refuses anything outside the persona's role tree.
  */
 
@@ -147,7 +147,7 @@ describe("readTestLabSession", () => {
 describe("impersonationReturnPath", () => {
   it("returns demo sessions to Test Lab and everything else to the accounts console", () => {
     expect(impersonationReturnPath({ targetSchoolIsDemo: true })).toBe("/admin/test-lab");
-    expect(impersonationReturnPath({ targetSchoolIsDemo: false })).toBe("/admin/accounts");
+    expect(impersonationReturnPath({ targetSchoolIsDemo: false })).toBe("/admin/management/teachers");
   });
 
   it("returns a real-account session Test Lab started (signed returnTo) to Test Lab", () => {

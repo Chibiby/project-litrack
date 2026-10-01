@@ -1,4 +1,5 @@
 import type { UserRole } from "@prisma/client";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 /**
  * The assistant's entire knowledge base.
@@ -549,12 +550,12 @@ export const HELP_TOPICS: HelpTopic[] = [
       "division",
     ],
     body: [
-      "Open Support. Requests arrive there newest first, with open ones at the top.",
+      "Open Monitoring → Support Inbox. Requests arrive there newest first, with open ones at the top.",
       "An unlock request can be answered by granting temporary access from the ticket itself — pick how long it should last, and it closes again on its own.",
     ],
     roles: ["SUPER_ADMIN"],
     routes: ["/admin"],
-    action: { label: "Open Support", href: "/admin/support" },
+    action: { label: "Open Support Inbox", href: ADMIN_ROUTES.support },
   },
   {
     id: "admin-school-view",
@@ -568,7 +569,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       "switch school",
     ],
     body: [
-      "Open Schools and select one. School head pages accept a school in the address, so you see that school's dashboard exactly as its head does.",
+      "Open Management → Schools and select one. School head pages accept a school in the address, so you see that school's dashboard exactly as its head does.",
       "Every such view is recorded in the audit log.",
     ],
     roles: ["SUPER_ADMIN"],

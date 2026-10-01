@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
@@ -68,8 +69,7 @@ export const setSubmissionLocking = action(
       metadata: { enabled },
     });
 
-    revalidatePath("/admin/submissions");
-    revalidatePath("/admin/settings/submissions");
+    revalidatePath(ADMIN_ROUTES.reportSubmissions);
     revalidatePath("/teacher/aral", "layout");
     return { ok: true };
   },
@@ -116,8 +116,7 @@ export const setMonthlyReadingLevelUnlock = action(
       metadata: { enabled },
     });
 
-    revalidatePath("/admin/submissions");
-    revalidatePath("/admin/settings/submissions");
+    revalidatePath(ADMIN_ROUTES.reportSubmissions);
     revalidatePath("/teacher/aral", "layout");
     return { ok: true };
   },
@@ -157,9 +156,7 @@ export const setMosySubmissionLock = action(
       resourceId: MOSY_SUBMISSION_LOCK_KEY,
       metadata: { locked: enabled },
     });
-
-    revalidatePath("/admin/settings/submissions");
-    revalidatePath("/admin/submissions");
+    revalidatePath(ADMIN_ROUTES.reportSubmissions);
     revalidatePath("/teacher/aral/mosy");
     return { ok: true };
   },

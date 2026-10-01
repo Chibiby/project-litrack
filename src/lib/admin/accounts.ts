@@ -149,6 +149,17 @@ export type AccountsParams = {
   schoolId?: string;
   /** Teachers who advise a section of this grade; only ever set with role TEACHER. */
   grade?: GradeLevelType;
+  /**
+   * Teachers who advise this section (`Section.id`); only ever set with role
+   * TEACHER. Section ids are globally unique, so no school is needed to apply it.
+   */
+  section?: string;
+  /**
+   * `School.district` for School Heads and Teachers (via their school);
+   * `DistrictAdminAssignment.district` for District Admins. Without a role it
+   * matches either.
+   */
+  district?: string;
   sort: AccountListSort;
 };
 
@@ -174,7 +185,7 @@ function isUserRole(value: string | undefined): value is UserRole {
 }
 
 /** FLOATING is an advisory mode, not a grade a section belongs to. */
-const ACCOUNT_GRADE_VALUES: readonly GradeLevelType[] = [
+export const ACCOUNT_GRADE_VALUES: readonly GradeLevelType[] = [
   "KINDER",
   "G1",
   "G2",
@@ -194,6 +205,18 @@ function isAccountGrade(value: string | undefined): value is GradeLevelType {
   return value !== undefined && (ACCOUNT_GRADE_VALUES as readonly string[]).includes(value);
 }
 
+/** An id-shaped filter value: trimmed, non-empty, at most 64 characters. */
+export function cleanFilterId(value: string | undefined): string | undefined {
+  const v = value?.trim();
+  return v && v.length <= 64 ? v : undefined;
+}
+
+/** A free-text filter value (a district name): trimmed, non-empty, at most 120 characters. */
+export function cleanFilterText(value: string | undefined): string | undefined {
+  const v = value?.trim();
+  return v && v.length <= 120 ? v : undefined;
+}
+
 export function parseAccountsParams(
   searchParams: {
     page?: string;
@@ -201,6 +224,8 @@ export function parseAccountsParams(
     role?: string;
     schoolId?: string;
     grade?: string;
+    section?: string;
+    district?: string;
     sort?: string;
   },
   pageSize: number = ACCOUNTS_PAGE_SIZE
@@ -213,6 +238,9 @@ export function parseAccountsParams(
   const schoolId = searchParams.schoolId?.trim() || undefined;
   const grade =
     role === "TEACHER" && isAccountGrade(searchParams.grade) ? searchParams.grade : undefined;
+  const section =
+    role === "TEACHER" && schoolId ? cleanFilterId(searchParams.section) : undefined;
+  const district = cleanFilterText(searchParams.district);
   const sort = ACCOUNT_LIST_SORTS.parse(searchParams.sort);
   return {
     page,
@@ -223,6 +251,8 @@ export function parseAccountsParams(
     role,
     schoolId,
     grade,
+    section,
+    district,
     sort,
   };
 }
@@ -281,17 +311,33 @@ export function accountsWhere(params: {
   schoolId?: string;
   q?: string;
   grade?: GradeLevelType;
+  section?: string;
+  district?: string;
 }): Prisma.UserWhereInput {
-  const where: Prisma.UserWhereInput = {
-    deletedAt: null,
-    AND: [{ OR: [{ schoolId: null }, { school: { deletedAt: null } }] }],
-  };
+  const and: Prisma.UserWhereInput[] = [
+    { OR: [{ schoolId: null }, { school: { deletedAt: null } }] },
+  ];
+  const where: Prisma.UserWhereInput = { deletedAt: null, AND: and };
   if (params.role) where.role = params.role;
   if (params.schoolId) where.schoolId = params.schoolId;
-  if (params.grade) {
+  if (params.grade || params.section) {
+    // One `some` so a grade and a section must both hold for the same section.
     where.advisorySections = {
-      some: { deletedAt: null, gradeLevel: { type: params.grade, deletedAt: null } },
+      some: {
+        deletedAt: null,
+        ...(params.section ? { id: params.section } : {}),
+        ...(params.grade ? { gradeLevel: { type: params.grade, deletedAt: null } } : {}),
+      },
     };
+  }
+  if (params.district) {
+    const viaSchool: Prisma.UserWhereInput = { school: { district: params.district } };
+    const viaAssignment: Prisma.UserWhereInput = {
+      districtAssignments: { some: { district: params.district } },
+    };
+    if (params.role === "DISTRICT_ADMIN") and.push(viaAssignment);
+    else if (params.role) and.push(viaSchool);
+    else and.push({ OR: [viaSchool, viaAssignment] });
   }
   const q = params.q?.trim();
   if (q) {

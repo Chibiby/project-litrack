@@ -83,7 +83,7 @@ describe("restoreSchool", () => {
         resourceId: SCHOOL_ID,
       })
     );
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/schools");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/management/schools");
     expect(revalidateSchoolsList).toHaveBeenCalled();
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
   });

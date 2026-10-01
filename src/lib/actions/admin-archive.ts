@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireDeveloperAdmin } from "@/lib/auth/session";
@@ -119,7 +120,7 @@ export const restoreRemovedLearner = action(
     });
     revalidateSchoolsList();
     revalidatePath("/admin/archive");
-    revalidatePath(`/admin/schools/${learner.schoolId}`);
+    revalidatePath(ADMIN_ROUTES.school(learner.schoolId));
 
     return { ok: true, enrollmentOutcome: outcome.outcome };
   },
@@ -173,7 +174,7 @@ export const purgeRemovedLearner = action(
     });
     revalidateSchoolsList();
     revalidatePath("/admin/archive");
-    revalidatePath(`/admin/schools/${learner.schoolId}`);
+    revalidatePath(ADMIN_ROUTES.school(learner.schoolId));
 
     return { ok: true };
   },
@@ -257,7 +258,7 @@ export const restoreRemovedTeacher = action(
     revalidateSchoolsList();
     revalidateTeacherCaches(teacher.id);
     revalidatePath("/admin/archive");
-    if (teacher.schoolId) revalidatePath(`/admin/schools/${teacher.schoolId}`);
+    if (teacher.schoolId) revalidatePath(ADMIN_ROUTES.school(teacher.schoolId));
 
     return { ok: true, needsCredentials: true, emailRestored };
   },
@@ -375,7 +376,7 @@ export const purgeRemovedTeacher = action(
       revalidateSchoolTeachers(teacher.schoolId);
       revalidateSchoolDashboard(teacher.schoolId);
       revalidateSchoolHeadTeachers(teacher.schoolId);
-      revalidatePath(`/admin/schools/${teacher.schoolId}`);
+      revalidatePath(ADMIN_ROUTES.school(teacher.schoolId));
     }
     revalidateSchoolsList();
     revalidateTeacherCaches(teacher.id);

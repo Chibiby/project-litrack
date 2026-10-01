@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -230,7 +231,7 @@ export const updateSchoolAsAdmin = action(
 );
 
 function revalidateSchoolInfoWrites(schoolId: string) {
-  revalidatePath("/admin/schools");
+  revalidatePath(ADMIN_ROUTES.schools);
   revalidatePath(DISTRICT_ROUTES.schools);
   revalidatePath(DISTRICT_ROUTES.school(schoolId));
   revalidateSchoolDashboard(schoolId);
@@ -277,7 +278,7 @@ export const setSchoolActive = action(
       },
     });
 
-    revalidatePath("/admin/schools");
+    revalidatePath(ADMIN_ROUTES.schools);
     revalidatePath(DISTRICT_ROUTES.schools);
     revalidatePath(DISTRICT_ROUTES.school(school.id));
     revalidateSchoolsList();

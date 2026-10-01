@@ -147,6 +147,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: (...a: unknown[]) => revalidateSchoolDashboard(...(a as [])),
   revalidateSchoolsList: (...a: unknown[]) => revalidateSchoolsList(...(a as [])),
   revalidateDivisionSummary: (...a: unknown[]) => revalidateDivisionSummary(...(a as [])),
+  revalidateAdminAccountPages: vi.fn(),
 }));
 
 const reportError = vi.fn(() => "E-TESTREF");

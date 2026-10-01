@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
@@ -16,6 +17,7 @@ import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import { isDemoVisible } from "@/lib/demo/session";
 import { schoolsList } from "@/lib/cache/tags";
 import {
+  revalidateAdminAccountPages,
   revalidateSchoolDashboard,
   revalidateSchoolsList,
 } from "@/lib/cache/revalidate";
@@ -148,7 +150,7 @@ export const createSchool = action("createSchool", async (
     metadata: { schoolId: school.id, name: school.name },
   });
 
-  revalidatePath("/admin/schools");
+  revalidatePath(ADMIN_ROUTES.schools);
   revalidateSchoolsList();
   return { ok: true, data: { id: school.id, initialPassword } };
 }, { verb: "create the school" });
@@ -240,8 +242,8 @@ export const regenerateSchoolHeadCredential = action(
       },
     });
 
-    revalidatePath("/admin/schools");
-    revalidatePath("/admin/accounts");
+    revalidatePath(ADMIN_ROUTES.schools);
+    revalidateAdminAccountPages();
     revalidatePath(DISTRICT_ROUTES.schools);
     revalidatePath(DISTRICT_ROUTES.school(school.id));
     revalidateSchoolsList();
@@ -358,7 +360,7 @@ export const deleteSchool = action("deleteSchool", async (formData: FormData): P
     resourceId: id,
     metadata: { schoolId: id },
   });
-  revalidatePath("/admin/schools");
+  revalidatePath(ADMIN_ROUTES.schools);
   revalidateSchoolsList();
   revalidateSchoolDashboard(id);
 }, { verb: "remove the school" });
@@ -394,7 +396,7 @@ export const restoreSchool = action("restoreSchool", async (formData: FormData):
     resourceId: id,
     metadata: { schoolId: id },
   });
-  revalidatePath("/admin/schools");
+  revalidatePath(ADMIN_ROUTES.schools);
   revalidateSchoolsList();
   revalidateSchoolDashboard(id);
 }, { verb: "restore the school" });

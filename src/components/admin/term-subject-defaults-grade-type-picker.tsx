@@ -8,6 +8,7 @@
 
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export function TermSubjectDefaultsGradeTypePicker({
   gradeTypes,
@@ -19,7 +20,7 @@ export function TermSubjectDefaultsGradeTypePicker({
   const router = useRouter();
 
   function hrefFor(gradeType: string): string {
-    return `/admin/term-subjects?type=${encodeURIComponent(gradeType)}`;
+    return `${ADMIN_ROUTES.termSubjects}?type=${encodeURIComponent(gradeType)}`;
   }
 
   return (

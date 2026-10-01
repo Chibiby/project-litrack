@@ -31,6 +31,7 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { callAction } from "@/lib/ui/call-action";
 import { isActionFailure } from "@/lib/errors/client";
 import { setSchoolActive } from "@/lib/actions/school-management";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { SortSelect } from "@/components/ui/sort-select";
 import type { SortOption } from "@/lib/sort/registry";
@@ -113,7 +114,7 @@ const ADMIN_SCHOOLS_TABLE_CAPABILITIES: SchoolsTableCapabilities = {
   delete: true,
   openAsSchoolHead: true,
   columns: "admin",
-  basePath: "/admin/schools",
+  basePath: ADMIN_ROUTES.schools,
   emptyMessage: "No schools found. Create your first school to get started.",
 };
 
@@ -125,6 +126,8 @@ export type SchoolsTableList = {
   q: string;
   region: string;
   status: "" | "active" | "inactive";
+  /** Exact district filter; only offered when the caller passes `districtOptions`. */
+  district?: string;
   /**
    * "Sort by" for this table. Optional so `list` stays a safe superset for
    * any caller that does not wire it — mirrors `TeachersActiveTable`'s
@@ -209,6 +212,7 @@ function hrefFor(list: SchoolsTableList, page: number, basePath: string): string
   if (list.q) params.set("q", list.q);
   if (list.region) params.set("region", list.region);
   if (list.status) params.set("status", list.status);
+  if (list.district) params.set("district", list.district);
   if (list.sort) params.set("sort", list.sort);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
@@ -238,7 +242,7 @@ function SchoolsPager({
         disabled={!canGoBack}
       >
         <Link
-          href={buildHref(list, list.page - 1)}
+          href={buildHref(list, Math.min(list.page - 1, list.totalPages))}
           className={!canGoBack ? "pointer-events-none opacity-50" : ""}
           aria-disabled={!canGoBack || pending}
         >
@@ -283,6 +287,8 @@ export function SchoolsTable(props: {
   list: SchoolsTableList;
   /** Defaults to the Super Admin console's full set. */
   capabilities?: Partial<SchoolsTableCapabilities>;
+  /** District names for a District filter; omitted hides the filter. */
+  districtOptions?: string[];
 }) {
   return (
     <ListNavigationProvider>
@@ -295,10 +301,12 @@ function SchoolsTableInner({
   schools,
   list,
   capabilities,
+  districtOptions,
 }: {
   schools: SchoolsTableRow[];
   list: SchoolsTableList;
   capabilities?: Partial<SchoolsTableCapabilities>;
+  districtOptions?: string[];
 }) {
   const caps: SchoolsTableCapabilities = { ...ADMIN_SCHOOLS_TABLE_CAPABILITIES, ...capabilities };
   const { basePath } = caps;
@@ -341,15 +349,23 @@ function SchoolsTableInner({
     }
   }
 
-  const pushList = (next: { page?: number; q?: string; region?: string; status?: SchoolsTableList["status"] }) => {
+  const pushList = (next: {
+    page?: number;
+    q?: string;
+    region?: string;
+    status?: SchoolsTableList["status"];
+    district?: string;
+  }) => {
     const params = new URLSearchParams();
     const q = next.q !== undefined ? next.q : list.q;
     const region = next.region !== undefined ? next.region : list.region;
     const status = next.status !== undefined ? next.status : list.status;
+    const district = next.district !== undefined ? next.district : list.district ?? "";
     const page = next.page !== undefined ? next.page : list.page;
     if (q) params.set("q", q);
     if (region) params.set("region", region);
     if (status) params.set("status", status);
+    if (district) params.set("district", district);
     if (list.sort) params.set("sort", list.sort);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
@@ -384,10 +400,30 @@ function SchoolsTableInner({
     }).finally(() => setActingId(null));
   };
 
-  const hasActiveFilters = Boolean(list.q || list.region || list.status);
-  const emptyContent = hasActiveFilters ? (
+  const hasActiveFilters = Boolean(list.q || list.region || list.status || list.district);
+  const activeParts = [
+    list.district ? `District: ${list.district}` : "",
+    list.region ? `Region: ${list.region}` : "",
+    list.status ? `Status: ${list.status === "active" ? "Active" : "Inactive"}` : "",
+    list.q ? `Search: “${list.q}”` : "",
+  ].filter(Boolean);
+  // A page past the last one (old bookmark, shrunk list): the list is not
+  // empty, so say where the schools are instead of "no schools".
+  const pastEnd = list.totalCount > 0 && list.page > list.totalPages;
+  const emptyContent = pastEnd ? (
     <>
-      No schools match your search or filters.{" "}
+      Page {list.page} is past the end — there {list.totalPages === 1 ? "is 1 page" : `are ${list.totalPages} pages`}{" "}
+      of schools.{" "}
+      <Link
+        href={hrefFor(list, 1, basePath)}
+        className="font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Go to page 1
+      </Link>
+    </>
+  ) : hasActiveFilters ? (
+    <>
+      No schools match {activeParts.join(" · ")}.{" "}
       <Link
         href={list.sort ? `${basePath}?sort=${list.sort}` : basePath}
         className="font-medium text-primary underline-offset-4 hover:underline"
@@ -491,6 +527,26 @@ function SchoolsTableInner({
               </SelectContent>
             </Select>
           ) : null}
+          {districtOptions ? (
+            <Select
+              value={list.district || "all"}
+              onValueChange={(value) =>
+                pushList({ page: 1, district: value === "all" ? "" : value })
+              }
+            >
+              <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by district">
+                <SelectValue placeholder="District" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All districts</SelectItem>
+                {districtOptions.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={list.status || "all"}
             onValueChange={(value) =>
@@ -517,10 +573,11 @@ function SchoolsTableInner({
                 q: list.q || undefined,
                 region: list.region || undefined,
                 status: list.status || undefined,
+                district: list.district || undefined,
               }}
             />
           ) : null}
-          {list.q || list.region || list.status ? (
+          {hasActiveFilters ? (
             <Button
               type="button"
               variant="ghost"
@@ -529,7 +586,7 @@ function SchoolsTableInner({
               onClick={() => {
                 setSearchValue("");
                 setPushedQ("");
-                pushList({ page: 1, q: "", region: "", status: "" });
+                pushList({ page: 1, q: "", region: "", status: "", district: "" });
               }}
             >
               Clear
@@ -539,7 +596,9 @@ function SchoolsTableInner({
       </div>
 
       <div className="text-sm text-muted-foreground">
-        Showing {from} to {to} of {list.totalCount} results
+        {pastEnd
+          ? `${list.totalCount} results on ${list.totalPages} ${list.totalPages === 1 ? "page" : "pages"}`
+          : `Showing ${from} to ${to} of ${list.totalCount} results`}
       </div>
 
       <ListBusyRegion

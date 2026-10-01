@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
 
 /**
@@ -52,7 +53,7 @@ export async function getChatNotifications(user: {
     // assistant panel, which has no route of its own — so the link takes them
     // to a page where the panel is reachable rather than nowhere.
     const href = isAdmin
-      ? `/admin/support?tab=chat${row.channelId ? `&channel=${row.channelId}` : ""}`
+      ? `${ADMIN_ROUTES.support}?tab=chat${row.channelId ? `&channel=${row.channelId}` : ""}`
       : "/teacher";
 
     if (row.type === "CHAT_DIRECT_MESSAGE") {

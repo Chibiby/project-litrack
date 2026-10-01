@@ -1,27 +1,17 @@
-import { School } from "lucide-react";
-import { requireUser } from "@/lib/auth/session";
-import { AdminPage } from "@/components/admin/admin-page";
-import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
-import { CreateSchoolForm } from "@/components/forms/create-school-form";
+import { redirect } from "next/navigation";
+import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
-export default async function NewSchoolPage() {
-  const user = await requireUser("SUPER_ADMIN");
+/**
+ * Moved to Management → Schools → New. Survives as a redirect for bookmarks
+ * and printed docs; plain `redirect()` (307), never `permanentRedirect()`, so
+ * browsers do not cache it forever. The destination guards itself.
+ */
+export const dynamic = "force-dynamic";
 
-  return (
-    <AdminPage
-      title="New school"
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="Schools"
-          eyebrowIcon={School}
-          title="New school"
-          subtitle="Provision a new school and its School Head login."
-        />
-      }
-    >
-      <CreateSchoolForm />
-    </AdminPage>
-  );
+export default async function LegacyNewSchoolPage({
+  searchParams,
+}: {
+  searchParams: Promise<PageSearchParams>;
+}) {
+  redirect(withSearchParams(ADMIN_ROUTES.newSchool, await searchParams));
 }

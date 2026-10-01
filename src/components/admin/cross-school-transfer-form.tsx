@@ -13,6 +13,7 @@ import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import type { LearnerSearchHit } from "@/lib/learners/search";
 import { SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 type SchoolOption = { id: string; name: string };
 type GradeOption = { id: string; label: string };
@@ -26,7 +27,7 @@ export function CrossSchoolTransferForm({
   grades,
   sections,
   teachers,
-  basePath = "/admin/transfers",
+  basePath = ADMIN_ROUTES.learnerTransfers,
 }: {
   schools: SchoolOption[];
   fromSchoolId: string;

@@ -213,7 +213,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolsList: vi.fn() }));
+vi.mock("@/lib/cache/revalidate", () => ({
+  revalidateSchoolsList: vi.fn(),
+  revalidateAdminAccountPages: vi.fn(),
+}));
 
 // ── the module under test ────────────────────────────────────────────────
 const { impersonateUser, endImpersonation, resetTeacherPassword, resetDistrictAdminPassword,
@@ -633,7 +636,7 @@ describe("endImpersonation", () => {
 
     const res = await run(endImpersonation());
 
-    expect(res).toEqual({ redirectedTo: "/admin/accounts" });
+    expect(res).toEqual({ redirectedTo: "/admin/management/teachers" });
     expect(adminSignOut).toHaveBeenCalledWith("the-bound-access-token", "local");
     expect(clearImpersonationCookie).toHaveBeenCalledTimes(1);
   });
@@ -653,8 +656,8 @@ describe("endImpersonation", () => {
 
   it.each([
     [true, "/admin/test-lab"],
-    [false, "/admin/accounts"],
-    [null, "/admin/accounts"],
+    [false, "/admin/management/teachers"],
+    [null, "/admin/management/teachers"],
   ])("returns a session whose target school isDemo=%s to %s", async (isDemo, path) => {
     readImpersonationTicket.mockResolvedValue(ticket());
     checkCurrentSession.mockResolvedValue({ status: "live", sessionId: SESSION_ID, accessToken: "tok" });

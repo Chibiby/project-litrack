@@ -20,7 +20,7 @@ export type SummaryDistrictPickPromptProps = {
 /**
  * Shown instead of the "By school" results at division scope until a district
  * is chosen: listing every school in the division (300+) at once is what made
- * `/admin/summary/<facet>?level=school` never finish loading, so the page must
+ * `/admin/monitoring/division-summary/<facet>?level=school` never finish loading, so the page must
  * not call `facet.load` for that scope at all (see `SummaryFacetView`).
  */
 export function SummaryDistrictPickPrompt({

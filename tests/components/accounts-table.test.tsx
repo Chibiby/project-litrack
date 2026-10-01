@@ -1,14 +1,16 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ACCOUNT_LIST_SORTS } from "@/lib/admin/accounts";
+import { districtField } from "@/components/admin/management/filter-fields";
 
 /**
- * The Super Admin accounts table: it must display the surname-first
+ * The Super Admin accounts table: one table per role (Teachers, School Heads,
+ * District Admins, Admin Accounts). It must display the surname-first
  * `listingName`, never the denormalized `fullName` (same consistency rule as
- * `TeachersActiveTable`'s Name column — a table ordered surname-first but
- * displaying `fullName` looks unsorted), and — once a `list` with
- * `sort`/`sortOptions` is passed — it renders the "Sort by" control and wires
- * it to preserve the other filters while dropping `page`.
+ * `TeachersActiveTable`'s Name column), render the "Sort by" control wired to
+ * keep the other filters while dropping `page`, and show only the columns that
+ * make sense for the one role it lists — no Role column anywhere, a School
+ * column for teachers and heads, a Districts column for district admins.
  */
 
 beforeAll(() => {
@@ -23,10 +25,11 @@ beforeAll(() => {
 });
 
 const push = vi.fn();
+let currentQuery = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/admin/accounts",
-  useSearchParams: () => new URLSearchParams(""),
+  usePathname: () => "/admin/management/teachers",
+  useSearchParams: () => new URLSearchParams(currentQuery),
 }));
 
 vi.mock("sonner", () => ({
@@ -37,6 +40,7 @@ vi.mock("@/lib/actions/accounts", () => ({
   revealSchoolHeadPassword: vi.fn(),
   resetSchoolHeadPasswordToDefault: vi.fn(),
   resetTeacherPassword: vi.fn(),
+  resetDistrictAdminPassword: vi.fn(),
   impersonateUser: vi.fn(),
 }));
 
@@ -61,61 +65,147 @@ const ROW: AccountRowType = {
   canRecoverByEmail: true,
 };
 
+const DISTRICT_ADMIN_ROW: AccountRowType = {
+  ...ROW,
+  id: "user-2",
+  role: "DISTRICT_ADMIN",
+  fullName: "Ramon Dela Cruz",
+  listingName: "Dela Cruz, Ramon",
+  schoolId: null,
+  school: null,
+  signIn: { kind: "username", value: "rdelacruz" },
+  districtAdminDistricts: ["Alamada", "Banga"],
+};
+
+const LIST = {
+  page: 1,
+  pageSize: 20,
+  totalPages: 1,
+  totalCount: 1,
+  q: "",
+};
+
+const TEACHERS = { role: "TEACHER" as const, basePath: "/admin/management/teachers", filters: [] };
+
 beforeEach(() => {
   vi.clearAllMocks();
+  currentQuery = "";
 });
 
 afterEach(cleanup);
 
+function headers(): string[] {
+  return screen.getAllByRole("columnheader").map((h) => h.textContent ?? "");
+}
+
 describe("AccountsTable — Name column", () => {
   it("renders listingName (surname-first), not fullName", () => {
-    render(
-      <AccountsTable
-        rows={[ROW]}
-        list={{
-          page: 1,
-          pageSize: 20,
-          totalPages: 1,
-          totalCount: 1,
-          role: "",
-          schoolId: "",
-          q: "",
-        }}
-      />
-    );
+    render(<AccountsTable rows={[ROW]} list={LIST} {...TEACHERS} />);
 
     expect(screen.getAllByText("Cruz, Marivic Santos").length).toBeGreaterThan(0);
     expect(screen.queryByText("Marivic Santos Cruz")).toBeNull();
   });
 });
 
+describe("AccountsTable — columns per role", () => {
+  it("has no Role column on a one-role page, and a School column for teachers", () => {
+    render(<AccountsTable rows={[ROW]} list={LIST} {...TEACHERS} />);
+    const h = headers();
+    expect(h).not.toContain("Role");
+    expect(h).toContain("School");
+    expect(h).not.toContain("Districts");
+    expect(h).toEqual(["Name", "School", "Email / sign-in", "Status", "Password", "Actions"]);
+  });
+
+  it("has no Role column and a School column for School Heads", () => {
+    render(
+      <AccountsTable
+        rows={[{ ...ROW, role: "SCHOOL_HEAD" }]}
+        list={LIST}
+        role="SCHOOL_HEAD"
+        basePath="/admin/management/school-heads"
+        filters={[]}
+      />
+    );
+    expect(headers()).not.toContain("Role");
+    expect(headers()).toContain("School");
+  });
+
+  it("shows a Districts column, not School, for District Admins", () => {
+    render(
+      <AccountsTable
+        rows={[DISTRICT_ADMIN_ROW]}
+        list={LIST}
+        role="DISTRICT_ADMIN"
+        basePath="/admin/management/district-admins"
+        filters={[]}
+      />
+    );
+    const h = headers();
+    expect(h).toContain("Districts");
+    expect(h).not.toContain("School");
+    expect(h).not.toContain("Role");
+    expect(screen.getAllByText("Alamada, Banga").length).toBeGreaterThan(0);
+  });
+
+  it("says so when a District Admin has no district assigned", () => {
+    render(
+      <AccountsTable
+        rows={[{ ...DISTRICT_ADMIN_ROW, districtAdminDistricts: [] }]}
+        list={LIST}
+        role="DISTRICT_ADMIN"
+        basePath="/admin/management/district-admins"
+        filters={[]}
+      />
+    );
+    expect(screen.getAllByText("No district assigned").length).toBeGreaterThan(0);
+  });
+
+  it("has neither School nor Districts nor Role on the Admin Accounts page", () => {
+    render(
+      <AccountsTable
+        rows={[{ ...ROW, role: "SUPER_ADMIN", school: null, schoolId: null }]}
+        list={LIST}
+        role="SUPER_ADMIN"
+        basePath="/admin/admin-accounts"
+        filters={[]}
+      />
+    );
+    expect(headers()).toEqual(["Name", "Email / sign-in", "Status", "Password", "Actions"]);
+  });
+
+  it("titles the table with the role's plural and the total count", () => {
+    render(<AccountsTable rows={[ROW]} list={{ ...LIST, totalCount: 1234 }} {...TEACHERS} />);
+    expect(screen.getByRole("heading", { name: /Teachers/ }).textContent).toContain("1,234");
+  });
+
+  it("labels the search box for the role", () => {
+    render(<AccountsTable rows={[ROW]} list={LIST} {...TEACHERS} />);
+    expect(screen.getByRole("searchbox", { name: "Search teachers" })).not.toBeNull();
+  });
+});
+
 describe("AccountsTable — Sort by", () => {
-  const baseList = {
-    page: 1,
-    pageSize: 20,
-    totalPages: 1,
-    totalCount: 1,
-    role: "TEACHER",
-    schoolId: "",
-    q: "cruz",
-  };
+  const baseList = { ...LIST, q: "cruz" };
 
   it("renders the Sort by control when list carries sort + sortOptions", () => {
     render(
       <AccountsTable
         rows={[ROW]}
         list={{ ...baseList, sort: "alphabetical", sortOptions: ACCOUNT_LIST_SORTS.options }}
+        {...TEACHERS}
       />
     );
     expect(screen.getByLabelText("Sort by")).not.toBeNull();
   });
 
   it("omits the Sort by control when list has no sort info", () => {
-    render(<AccountsTable rows={[ROW]} list={baseList} />);
+    render(<AccountsTable rows={[ROW]} list={baseList} {...TEACHERS} />);
     expect(screen.queryByLabelText("Sort by")).toBeNull();
   });
 
-  it("choosing a different sort preserves the other filters (q, role) and drops page", async () => {
+  it("choosing a different sort preserves the search and active filters and drops page", async () => {
+    currentQuery = "page=3&district=Alamada";
     render(
       <AccountsTable
         rows={[ROW]}
@@ -125,6 +215,9 @@ describe("AccountsTable — Sort by", () => {
           sort: "alphabetical",
           sortOptions: ACCOUNT_LIST_SORTS.options,
         }}
+        role="TEACHER"
+        basePath="/admin/management/teachers"
+        filters={[districtField([{ district: "Alamada", schools: 4 }], "Alamada")]}
       />
     );
 
@@ -134,31 +227,12 @@ describe("AccountsTable — Sort by", () => {
 
     expect(push).toHaveBeenCalledTimes(1);
     const href = push.mock.calls[0][0] as string;
+    expect(href.startsWith("/admin/management/teachers?")).toBe(true);
     expect(href).toContain("sort=date-added");
     expect(href).toContain("q=cruz");
-    expect(href).toContain("role=TEACHER");
+    expect(href).toContain("district=Alamada");
     expect(href).not.toContain("page=");
-  });
-});
-
-describe("AccountsTable — district admins", () => {
-  it("shows a District admins count card from the summary", () => {
-    render(
-      <AccountsTable
-        rows={[ROW]}
-        list={{ page: 1, pageSize: 20, totalPages: 1, totalCount: 1, role: "", schoolId: "", q: "" }}
-        summary={{
-          totalCount: 10,
-          activeCount: 9,
-          inactiveCount: 1,
-          schoolHeadCount: 2,
-          teacherCount: 5,
-          districtAdminCount: 14,
-        }}
-      />
-    );
-    const overview = screen.getByRole("region", { name: "Account overview" });
-    expect(within(overview).getAllByText("District admins").length).toBeGreaterThan(0);
-    expect(within(overview).getAllByText("14").length).toBeGreaterThan(0);
+    // The role is fixed by the page; it never rides along in the URL.
+    expect(href).not.toContain("role=");
   });
 });

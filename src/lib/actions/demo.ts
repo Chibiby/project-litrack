@@ -37,6 +37,7 @@ export const resetDemoData = action("resetDemoData", async (formData: FormData):
   };
 }, { verb: "reset the demo data" });
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireDeveloperAdmin } from "@/lib/auth/session";
@@ -69,7 +70,7 @@ function revalidateDemoSurfaces() {
   revalidateSchoolsList();
   revalidateAdminDashboard();
   revalidatePath(DEMO_SETTINGS_PATH);
-  revalidatePath("/admin/schools");
+  revalidatePath(ADMIN_ROUTES.schools);
   revalidatePath("/login");
 }
 

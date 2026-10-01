@@ -135,6 +135,31 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.28.0",
+    date: "2026-10-01",
+    title: "A clearer admin menu, with a page for each kind of account",
+    announce: true,
+    fixes: [
+      {
+        text: "The admin menu is now grouped as Management (Learners, Teachers, School Heads, Schools, District Admins), School Year Setup, School Setup (Report Submissions, Learner Transfers) and Monitoring (Division Summary, Support Inbox). Your old bookmarks still open the right page.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "User Accounts is now split into Teachers, School Heads and District Admins, each with its own counts, search and filters. Teachers can be filtered by district, school, grade and section; School Heads by district and school.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "The new Learners page shows every learner in the division with counts by grade, sex, IP group and ARAL, and a searchable list you can filter by district, school, grade and section.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Schools can now be filtered by district, and District Admins shows which districts have no admin yet.",
+        roles: ["SUPER_ADMIN"],
+      },
+      "This update reorganizes the Division Admin menu. Nothing changes in how teachers and School Heads use LITRACK.",
+    ],
+  },
+  {
     version: "2.27.0",
     date: "2026-09-30",
     title: "Fewer ways to lose your work by accident",

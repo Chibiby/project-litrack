@@ -1,6 +1,7 @@
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { BarChart3, ChevronRight, KeyRound, LifeBuoy, Plus, ScrollText, Zap } from "lucide-react";
 
 /**
@@ -13,21 +14,21 @@ const BASE_ACTIONS = [
     id: "new-school",
     label: "Add a school",
     icon: Plus,
-    href: "/admin/schools/new",
+    href: ADMIN_ROUTES.newSchool,
     tone: "bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-200",
   },
   {
     id: "accounts",
-    label: "Manage accounts",
+    label: "Manage teachers",
     icon: KeyRound,
-    href: "/admin/accounts",
+    href: ADMIN_ROUTES.teachers,
     tone: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200",
   },
   {
     id: "support",
     label: "Open support inbox",
     icon: LifeBuoy,
-    href: "/admin/support",
+    href: ADMIN_ROUTES.support,
     tone: "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200",
   },
 ] as const;
@@ -37,7 +38,7 @@ const AUDIT_ACTION = {
   id: "audit",
   label: "Review the audit log",
   icon: ScrollText,
-  href: "/admin/audit",
+  href: ADMIN_ROUTES.audit,
   tone: "bg-muted text-foreground hover:bg-muted/70",
 } as const;
 
@@ -46,7 +47,7 @@ const SUMMARY_ACTION = {
   id: "summary",
   label: "View division summary",
   icon: BarChart3,
-  href: "/admin/summary",
+  href: ADMIN_ROUTES.divisionSummary,
   tone: "bg-muted text-foreground hover:bg-muted/70",
 } as const;
 

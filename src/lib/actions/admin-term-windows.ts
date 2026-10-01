@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
@@ -81,8 +82,7 @@ export const updateAdminTermWindows = action(
       });
       revalidateSchoolDashboard(year.schoolId);
     }
-    revalidatePath("/admin/submissions");
-    revalidatePath("/admin/settings/submissions");
+    revalidatePath(ADMIN_ROUTES.reportSubmissions);
     return { ok: true };
   },
   { verb: "save the term windows" }

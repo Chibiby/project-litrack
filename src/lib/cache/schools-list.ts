@@ -78,6 +78,11 @@ export type SchoolsListParams = {
   q: string;
   region: string;
   status: "" | "active" | "inactive";
+  /**
+   * Exact `School.district` match; empty/absent means every district. Optional so
+   * callers that predate the district filter keep compiling.
+   */
+  district?: string;
   sort: SchoolsListSort;
 };
 
@@ -91,7 +96,14 @@ export type SchoolsListPage = {
  * Pure — no I/O.
  */
 export function parseSchoolsListParams(
-  searchParams: { page?: string; q?: string; region?: string; status?: string; sort?: string },
+  searchParams: {
+    page?: string;
+    q?: string;
+    region?: string;
+    status?: string;
+    district?: string;
+    sort?: string;
+  },
   pageSize: number = SCHOOLS_PAGE_SIZE
 ): SchoolsListParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
@@ -101,10 +113,12 @@ export function parseSchoolsListParams(
   const rawStatus = (searchParams.status ?? "").trim().toLowerCase();
   const status: SchoolsListParams["status"] =
     rawStatus === "active" || rawStatus === "inactive" ? rawStatus : "";
+  const rawDistrict = (searchParams.district ?? "").trim();
+  const district = rawDistrict.length <= 120 ? rawDistrict : "";
   const sort = SCHOOLS_LIST_SORTS.parse(searchParams.sort);
   const size = pageSize > 0 ? pageSize : SCHOOLS_PAGE_SIZE;
   const skip = (page - 1) * size;
-  return { page, pageSize: size, skip, take: size, q, region, status, sort };
+  return { page, pageSize: size, skip, take: size, q, region, status, district, sort };
 }
 
 export function schoolsTotalPages(
@@ -115,8 +129,13 @@ export function schoolsTotalPages(
   return Math.ceil(totalCount / pageSize);
 }
 
-function schoolsWhere(
-  params: Pick<SchoolsListParams, "q" | "region" | "status">
+/**
+ * The live-school filter shared by the list and `getSchoolsSummary` so the cards
+ * and the table always describe the same rows. Demo schools stay visible (admin
+ * console), like the list.
+ */
+export function schoolsWhere(
+  params: Pick<SchoolsListParams, "q" | "region" | "status" | "district">
 ): Prisma.SchoolWhereInput {
   const where: Prisma.SchoolWhereInput = { deletedAt: null };
   if (params.region) {
@@ -125,12 +144,16 @@ function schoolsWhere(
   if (params.status) {
     where.isActive = params.status === "active";
   }
+  if (params.district) {
+    where.district = params.district;
+  }
   if (params.q) {
     where.OR = [
       { name: { contains: params.q, mode: "insensitive" } },
       { schoolIdCode: { contains: params.q, mode: "insensitive" } },
       { division: { contains: params.q, mode: "insensitive" } },
       { region: { contains: params.q, mode: "insensitive" } },
+      { district: { contains: params.q, mode: "insensitive" } },
     ];
   }
   return where;
@@ -195,9 +218,10 @@ export function getSchoolsListPage(
   params: SchoolsListParams
 ): Promise<SchoolsListPage> {
   const { skip, take, q, region, status, page, pageSize, sort } = params;
+  const district = params.district ?? "";
   return cachedQuery(
     async () => {
-      const where = schoolsWhere({ q, region, status });
+      const where = schoolsWhere({ q, region, status, district });
       const [schools, totalCount] = await Promise.all([
         prisma.school.findMany({
           where,
@@ -234,6 +258,7 @@ export function getSchoolsListPage(
         `q:${q}`,
         `r:${region}`,
         `s:${status}`,
+        `d:${district}`,
         // Cache-poisoning guard: two sorts differing only by `sort` must not
         // collide on the same Data Cache entry, or one order serves the
         // other's page until the TTL expires. See cache-schools-list.test.ts.

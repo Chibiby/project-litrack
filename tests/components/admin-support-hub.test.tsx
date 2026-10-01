@@ -43,7 +43,7 @@ describe("AdminSupportHub", () => {
     expect(screen.getByRole("tab", { name: "Support Tickets" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("support-inbox")).not.toBeNull();
     expect(screen.queryByTestId("admin-chat-browser")).toBeNull();
-    expect(replace).toHaveBeenCalledWith("/admin/support?tab=tickets", { scroll: false });
+    expect(replace).toHaveBeenCalledWith("/admin/monitoring/support?tab=tickets", { scroll: false });
   });
 
   it("refreshes current presence while the chat workspace remains visible", () => {
@@ -64,6 +64,6 @@ describe("AdminSupportHub", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Email" }));
     expect(screen.getByRole("tab", { name: "Email" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("Email composer")).not.toBeNull();
-    expect(replace).toHaveBeenCalledWith("/admin/support?tab=email", { scroll: false });
+    expect(replace).toHaveBeenCalledWith("/admin/monitoring/support?tab=email", { scroll: false });
   });
 });

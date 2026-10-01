@@ -34,7 +34,7 @@ vi.mock("next/cache", () => ({
 
 // Imported after the mock factory above is registered — this is the real
 // module under test, not a double of it.
-const { revalidateSchoolHeadTeachers, revalidateSchoolDashboard } = await import(
+const { revalidateSchoolHeadTeachers, revalidateSchoolDashboard, revalidateAdminAccountPages } = await import(
   "@/lib/cache/revalidate"
 );
 
@@ -87,5 +87,37 @@ describe("revalidateSchoolHeadTeachers", () => {
     expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID), { expire: 0 });
     expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolTeachers(SCHOOL_ID), { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(otherSchoolId), { expire: 0 });
+  });
+});
+
+describe("revalidateAdminAccountPages", () => {
+  it("busts all three Super Admin account tables, not just one", () => {
+    revalidateAdminAccountPages();
+
+    const paths = revalidatePath.mock.calls.map((c) => c[0]);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "/admin/management/teachers",
+        "/admin/management/school-heads",
+        "/admin/management/district-admins",
+      ])
+    );
+  });
+
+  it("expires the Management summary-card tag", () => {
+    revalidateAdminAccountPages();
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
+  });
+
+  it("never revalidates the retired /admin/accounts path", () => {
+    revalidateAdminAccountPages();
+    expect(revalidatePath).not.toHaveBeenCalledWith("/admin/accounts");
+  });
+});
+
+describe("revalidateSchoolHeadTeachers — Super Admin summary cards", () => {
+  it("also expires the admin accounts tag, since the Teachers cards count approvals", () => {
+    revalidateSchoolHeadTeachers(SCHOOL_ID);
+    expect(revalidateTag).toHaveBeenCalledWith(tags.adminAccounts, { expire: 0 });
   });
 });

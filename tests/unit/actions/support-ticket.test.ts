@@ -345,7 +345,7 @@ describe("submitTicket", () => {
     await submitTicket(unlockRequest());
 
     expect(revalidateSupportTicket).toHaveBeenCalledWith("teacher-1");
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/support");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/monitoring/support");
   });
 });
 

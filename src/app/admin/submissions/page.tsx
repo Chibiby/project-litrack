@@ -1,33 +1,18 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
-import { formatLocalDateKey } from "@/lib/date-keys";
-import { isMonthlyReadingLevelUnlockedForAll, isMosySubmissionLocked, isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
-import { listActiveUnlocks, listUnlockTargets } from "@/lib/unlock/admin-queries";
-import { Lock } from "lucide-react";
-import { AdminPage } from "@/components/admin/admin-page";
-import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
-import { SubmissionsConsole } from "@/components/admin/submissions-console";
+import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
+/**
+ * Moved to School Setup → Report Submissions. Survives as a redirect for
+ * bookmarks; `?schoolId=` / `?schoolYearId=` carry over. Plain `redirect()`
+ * (307), never `permanentRedirect()`, so browsers do not cache it forever. The
+ * destination guards itself.
+ */
 export const dynamic = "force-dynamic";
 
-type SearchParams = { schoolId?: string; schoolYearId?: string };
-
-export default async function AdminSubmissionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const user = await requireUser("SUPER_ADMIN");
-  if (user.role !== "SUPER_ADMIN") redirect("/forbidden");
-  const params = await searchParams;
-  const [schools, years, active, lockingEnabled, readingLevelUnlockedForAll, mosyLocked] = await Promise.all([
-    listUnlockTargets({ kind: "division" }),
-    prisma.schoolYear.findMany({ where: { school: { deletedAt: null } }, include: { school: { select: { id: true, name: true } }, termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } } }, orderBy: [{ school: { name: "asc" } }, { isActive: "desc" }, { startDate: "desc" }] }),
-    listActiveUnlocks({ kind: "division" }),
-    isSubmissionLockingEnabled(),
-    isMonthlyReadingLevelUnlockedForAll(),
-    isMosySubmissionLocked(),
-  ]);
-  const allSelected = !params.schoolId || params.schoolId === "all";
-  const selectedRow = years.find((year) => year.id === params.schoolYearId) ?? years.find((year) => year.school.id === params.schoolId) ?? years[0] ?? null;
-  const selected = selectedRow ? { id: selectedRow.id, schoolId: selectedRow.school.id, schoolName: selectedRow.school.name, label: selectedRow.label, startKey: formatLocalDateKey(selectedRow.startDate), endKey: formatLocalDateKey(selectedRow.endDate), overrides: selectedRow.termWindowOverrides, isActive: selectedRow.isActive } : null;
-  const yearOptions = years.map((year) => ({ id: year.id, schoolId: year.school.id, schoolName: year.school.name, label: year.label, startKey: formatLocalDateKey(year.startDate), endKey: formatLocalDateKey(year.endDate), overrides: year.termWindowOverrides, isActive: year.isActive }));
-  return <AdminPage title="Report submissions" role={user.role} userName={user.fullName || user.email} hero={<SchoolHeadHero eyebrow="Reports" eyebrowIcon={Lock} title="Report submissions" subtitle="Set term windows, lock or unlock submissions, and grant revision access across schools." />}><SubmissionsConsole schools={schools} years={yearOptions} selected={selected} allSelected={allSelected} active={active} lockingEnabled={lockingEnabled} readingLevelUnlockedForAll={readingLevelUnlockedForAll} mosyLocked={mosyLocked} /></AdminPage>;
+export default async function LegacySubmissionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<PageSearchParams>;
+}) {
+  redirect(withSearchParams(ADMIN_ROUTES.reportSubmissions, await searchParams));
 }

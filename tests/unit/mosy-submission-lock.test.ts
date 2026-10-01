@@ -137,8 +137,7 @@ describe("setMosySubmissionLock", () => {
     const paths = revalidatePath.mock.calls.map((c) => c[0]);
     expect(paths).toEqual(
       expect.arrayContaining([
-        "/admin/settings/submissions",
-        "/admin/submissions",
+        "/admin/school-setup/report-submissions",
         "/teacher/aral/mosy",
       ])
     );

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { revalidateAllCachedData } from "@/lib/cache/revalidate";
+import { revalidateAllCachedData, revalidateAdminAccountPages } from "@/lib/cache/revalidate";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireDeveloperAdmin } from "@/lib/auth/session";
@@ -542,7 +542,7 @@ export const resetAllSchoolAccounts = action(
 
     revalidatePath("/admin/database");
     revalidateAllCachedData();
-    revalidatePath("/admin/accounts");
+    revalidateAdminAccountPages();
     return { ok: true as const, data: { processed: result.processed, failed: result.failed.length } };
   },
   { verb: "reset the school accounts" }
@@ -696,7 +696,7 @@ export const clearSchoolEverything = action(
     } finally {
       revalidatePath("/admin/database");
       revalidateAllCachedData();
-      revalidatePath("/admin/accounts");
+      revalidateAdminAccountPages();
     }
   },
   { verb: "clear the school" }

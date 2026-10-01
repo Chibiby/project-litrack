@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { readBoundImpersonationSession, type ImpersonationReturnTo } from "@/lib/auth/impersonation";
@@ -56,7 +57,7 @@ export function impersonationReturnPath(input: {
   targetSchoolIsDemo: boolean;
   returnTo?: ImpersonationReturnTo;
 }): string {
-  return input.targetSchoolIsDemo || input.returnTo === "test-lab" ? "/admin/test-lab" : "/admin/accounts";
+  return input.targetSchoolIsDemo || input.returnTo === "test-lab" ? ADMIN_ROUTES.testLab : ADMIN_ROUTES.teachers;
 }
 
 const readTestLabSessionCached = cache(

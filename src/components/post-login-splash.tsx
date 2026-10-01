@@ -10,6 +10,7 @@ import {
   clearPendingPostLoginSplash,
   consumePostLoginFlag,
 } from "@/lib/post-login-flag";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import styles from "./post-login-splash.module.css";
 
@@ -59,7 +60,7 @@ const ROLE_PREFETCH: Record<PostLoginSplashRole, readonly string[]> = {
     SCHOOL_HEAD_ROUTES.school,
     SCHOOL_HEAD_ROUTES.settings,
   ],
-  admin: ["/admin/schools", "/admin/transfers", "/admin/settings"],
+  admin: [ADMIN_ROUTES.schools, ADMIN_ROUTES.learnerTransfers, ADMIN_ROUTES.settings],
 };
 
 const PHRASES = [

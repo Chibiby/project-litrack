@@ -1,46 +1,24 @@
-import { notFound, redirect } from "next/navigation";
-import { requireAdminScope } from "@/lib/auth/district-scope";
-import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
-import { DISTRICT_ROUTES } from "@/lib/routes/district";
-import { AppShell } from "@/components/app-shell";
-import { SummaryFacetView } from "@/components/summary/summary-facet-view";
-import { SummaryPageHero } from "@/components/summary/summary-page-hero";
+import { redirect } from "next/navigation";
+import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
+/**
+ * A summary facet moved under Monitoring → Division Summary. Survives as a
+ * redirect because facet views (with their level/district/month filters) are
+ * bookmarked and shared; the query string carries over. Plain `redirect()`
+ * (307), never `permanentRedirect()`, so browsers do not cache it forever. The
+ * destination validates the facet and guards itself.
+ */
 export const dynamic = "force-dynamic";
 
-export default async function AdminSummaryFacetPage({
+export default async function LegacySummaryFacetPage({
   params,
   searchParams,
 }: {
   params: Promise<{ facet: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageSearchParams>;
 }) {
-  const { user, scope } = await requireAdminScope();
   const { facet } = await params;
-  if (!isSummaryFacetId(facet)) notFound();
-  // A district admin's summary lives under /district; middleware normally
-  // sends them there first, but it is not the authoritative gate.
-  if (user.role !== "SUPER_ADMIN") redirect(DISTRICT_ROUTES.summary(facet));
-
-  const meta = SUMMARY_FACET_META[facet];
-  return (
-    <AppShell
-      title={meta.label}
-      subtitle={meta.description}
-      role={user.role}
-      userName={user.fullName || user.email}
-      hideTitle
-    >
-      <div className="mb-6">
-        <SummaryPageHero facetId={facet} portal="division" meta="Every school in the division" />
-      </div>
-      <SummaryFacetView
-        facetId={facet}
-        adminScope={scope}
-        searchParams={await searchParams}
-        basePath="/admin/summary"
-        userId={user.id}
-      />
-    </AppShell>
+  redirect(
+    withSearchParams(ADMIN_ROUTES.divisionSummaryFacet(encodeURIComponent(facet)), await searchParams)
   );
 }

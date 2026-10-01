@@ -6,6 +6,7 @@ import { requireAdminScope } from "@/lib/auth/district-scope";
 import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import { teacherLearnerScope } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { action } from "@/lib/errors/action";
 import {
@@ -172,7 +173,7 @@ export const globalSearch = action(
           kind: "school",
           title: s.name,
           subtitle: [s.division, s.district].filter(Boolean).join(" · ") || null,
-          href: `/admin/schools?q=${encodeURIComponent(s.name)}`,
+          href: `${ADMIN_ROUTES.schools}?q=${encodeURIComponent(s.name)}`,
         });
       }
     }

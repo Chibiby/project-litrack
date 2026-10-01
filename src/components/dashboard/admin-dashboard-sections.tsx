@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export async function AdminChartsSection() {
           <EmptyState
             title="No data yet"
             description="Create a school to see status breakdown."
-            actionHref="/admin/schools/new"
+            actionHref={ADMIN_ROUTES.newSchool}
             actionLabel="New school"
             icon={School}
           />
@@ -106,7 +107,7 @@ export async function AdminIpAdvisorySection() {
 
   const viewAll = (
     <Button asChild size="sm" variant="outline" className="lg:h-9">
-      <PrefetchLink href="/admin/ip-learners">View all</PrefetchLink>
+      <PrefetchLink href={ADMIN_ROUTES.learners}>View all</PrefetchLink>
     </Button>
   );
 
@@ -132,7 +133,7 @@ export async function AdminIpAdvisorySection() {
           decor="bars"
           inlineOnPhone
           denseOnPhone
-          href="/admin/ip-learners"
+          href={ADMIN_ROUTES.learners}
         />
       </div>
 
@@ -229,7 +230,7 @@ export async function AdminRecentSchoolsSection() {
           </p>
         </div>
         <Button asChild size="sm" variant="outline" className="lg:h-9">
-          <PrefetchLink href="/admin/schools">All schools</PrefetchLink>
+          <PrefetchLink href={ADMIN_ROUTES.schools}>All schools</PrefetchLink>
         </Button>
       </SurfaceHeader>
       <SurfaceBody className="p-3 sm:p-4">
@@ -237,7 +238,7 @@ export async function AdminRecentSchoolsSection() {
           <EmptyState
             title="No data yet"
             description="Create a school to enable drill-down."
-            actionHref="/admin/schools/new"
+            actionHref={ADMIN_ROUTES.newSchool}
             actionLabel="New school"
             icon={School}
             className="border-0 bg-transparent py-6"

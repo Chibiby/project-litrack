@@ -17,6 +17,7 @@ import { UnlockConsole } from "@/components/admin/unlock-console";
 import type { ActiveUnlocks, UnlockTargetSchool } from "@/lib/unlock/admin-queries";
 import { SubmissionLockingSettings, ReadingLevelUnlockSettings, MosySubmissionLockSettings } from "@/components/admin/submission-locking-settings";
 import { UNLOCK_SCOPES } from "@/lib/validators/support.schema";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 type YearOption = { id: string; schoolId: string; schoolName: string; label: string; startKey: string; endKey: string; isActive: boolean; overrides: { term: TermPeriodValue; startKey: string; endKey: string; deadlineKey: string }[] };
 
@@ -35,15 +36,15 @@ export function SubmissionsConsole({ schools, years, selected, allSelected, acti
 
   function chooseSchool(schoolId: string) {
     if (schoolId === ALL_SCHOOLS) {
-      router.push("/admin/submissions?schoolId=all");
+      router.push(`${ADMIN_ROUTES.reportSubmissions}?schoolId=all`);
       return;
     }
     const first = years.find((year) => year.schoolId === schoolId);
-    router.push(`/admin/submissions?schoolId=${schoolId}${first ? `&schoolYearId=${first.id}` : ""}`);
+    router.push(`${ADMIN_ROUTES.reportSubmissions}?schoolId=${schoolId}${first ? `&schoolYearId=${first.id}` : ""}`);
   }
   function chooseYear(yearId: string) {
     const year = years.find((item) => item.id === yearId);
-    if (year) router.push(`/admin/submissions?schoolId=${year.schoolId}&schoolYearId=${year.id}`);
+    if (year) router.push(`${ADMIN_ROUTES.reportSubmissions}?schoolId=${year.schoolId}&schoolYearId=${year.id}`);
   }
   function updateDraft(term: TermPeriodValue, field: "startKey" | "endKey" | "deadlineKey", value: string) {
     setDrafts((current) => current.map((item) => item.term === term ? { ...item, [field]: value, isOverridden: true } : item));

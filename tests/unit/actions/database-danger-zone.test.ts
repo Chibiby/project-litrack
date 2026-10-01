@@ -104,6 +104,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 const revalidateAllCachedData = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateAllCachedData: (...a: unknown[]) => revalidateAllCachedData(...a),
+  revalidateAdminAccountPages: vi.fn(),
 }));
 
 // The action() wrapper records non-user failures; the recorder itself is

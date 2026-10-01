@@ -16,6 +16,13 @@ export const adminDashboard = "admin-dashboard";
 export const schoolsList = "schools-list";
 
 /**
+ * The Super Admin Management summary cards (Teachers, School Heads, District
+ * Admins). Global, like `schoolsList`: those cards are cross-tenant counts.
+ * Busted by `revalidateAdminAccountPages` and `revalidateSchoolHeadTeachers`.
+ */
+export const adminAccounts = "admin-accounts";
+
+/**
  * Every cached summary facet (`src/lib/summary/**`), at every scope.
  *
  * Global rather than per-district: summary data is refreshed on a short TTL, and

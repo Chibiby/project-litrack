@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -118,7 +119,7 @@ export const removeSchoolTeachers = action("removeSchoolTeachers", async (
   revalidateSchoolDashboard(schoolId);
   revalidateSchoolsList();
   for (const teacher of teachers) revalidateTeacherCaches(teacher.id);
-  revalidatePath(`/admin/schools/${schoolId}`);
+  revalidatePath(ADMIN_ROUTES.school(schoolId));
 
   return { ok: true, data: { removed: result.processed, failed: result.failed.length } };
 }, { verb: "remove the teachers" });
@@ -191,7 +192,7 @@ export const removeSchoolLearners = action("removeSchoolLearners", async (
     });
   }
   revalidateSchoolsList();
-  revalidatePath(`/admin/schools/${schoolId}`);
+  revalidatePath(ADMIN_ROUTES.school(schoolId));
 
   return { ok: true, data: { removed: learners.length } };
 }, { verb: "remove the learners" });

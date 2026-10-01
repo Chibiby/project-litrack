@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { KeyRound, Lock, MonitorPlay, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export type SettingsRoleBase = "/admin" | "/school-head" | "/teacher" | "/district";
 
@@ -19,7 +20,7 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
     ...(roleBase === "/admin"
       ? ([
           { label: "Demo session", href: "/admin/settings/demo", icon: MonitorPlay },
-          { label: "Submissions", href: "/admin/settings/submissions", icon: Lock },
+          { label: "Submissions", href: ADMIN_ROUTES.reportSubmissions, icon: Lock },
         ] as const)
       : []),
   ] as const;

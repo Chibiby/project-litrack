@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { listKey } from "@/lib/nav/list-params";
 
 /**
- * `/admin/schools` wraps its data-fetching subtree in a `<Suspense key={...}>`
+ * `/admin/management/schools` wraps its data-fetching subtree in a `<Suspense key={...}>`
  * keyed by `listKey(searchParams, SCHOOLS_LIST_KEYS)`. Without that key the
  * boundary never re-suspends on a same-route searchParam change, so the
  * skeleton fallback never appears — this proves the key actually reacts to
@@ -28,6 +28,11 @@ vi.mock("@/lib/cache/unstable", () => ({
   cachedQuery: (fn: () => unknown) => fn(),
 }));
 
+vi.mock("@/lib/admin/management", () => ({
+  listDistrictOptions: vi.fn(async () => []),
+  getSchoolsSummary: vi.fn(async () => null),
+}));
+
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({
     role: "SUPER_ADMIN",
@@ -37,7 +42,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 
 const { default: SchoolsListPage, SCHOOLS_LIST_KEYS } = await import(
-  "@/app/admin/schools/page"
+  "@/app/admin/management/schools/page"
 );
 
 /** Walk `SchoolsListPage`'s returned tree to its `Suspense` element. */
@@ -55,7 +60,14 @@ beforeEach(() => {
 describe("SchoolsListPage — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
     // `view` switches between the Active and Removed lists.
-    expect(SCHOOLS_LIST_KEYS).toEqual(["page", "sort", "region", "status", "view"]);
+    expect(SCHOOLS_LIST_KEYS).toEqual([
+      "page",
+      "sort",
+      "region",
+      "status",
+      "district",
+      "view",
+    ]);
   });
 
   it("does not change when the search text (q) changes, so the search box is not remounted", async () => {
@@ -92,6 +104,14 @@ describe("SchoolsListPage — Suspense boundary key", () => {
     expect(bySort.key).not.toBe(base.key);
     expect(byRegion.key).not.toBe(base.key);
     expect(byStatus.key).not.toBe(base.key);
+  });
+
+  it("changes when the district filter changes", async () => {
+    const base = suspenseElementOf(await SchoolsListPage({ searchParams: Promise.resolve({}) }));
+    const byDistrict = suspenseElementOf(
+      await SchoolsListPage({ searchParams: Promise.resolve({ district: "Alamada" }) })
+    );
+    expect(byDistrict.key).not.toBe(base.key);
   });
 
   it("does NOT change when an unrelated param changes", async () => {

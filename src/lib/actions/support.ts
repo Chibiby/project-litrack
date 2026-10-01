@@ -1,5 +1,6 @@
 "use server";
 
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidatePath } from "next/cache";
 import type {
   Prisma,
@@ -51,7 +52,7 @@ import {
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-const SUPPORT_ROUTE = "/admin/support";
+const SUPPORT_ROUTE = ADMIN_ROUTES.support;
 
 /**
  * One of the requester's own tickets, as the assistant renders it.

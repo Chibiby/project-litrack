@@ -37,7 +37,7 @@ beforeAll(() => {
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/admin/accounts",
+  usePathname: () => "/admin/management/teachers",
   useSearchParams: () => new URLSearchParams(""),
 }));
 
@@ -88,10 +88,11 @@ const LIST = {
   pageSize: 1,
   totalPages: 3,
   totalCount: 3,
-  role: "",
-  schoolId: "",
   q: "",
 };
+
+const BASE_PATH = "/admin/management/teachers";
+const tableProps = { role: "TEACHER" as const, basePath: BASE_PATH, filters: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -102,7 +103,7 @@ afterEach(cleanup);
 
 describe("AccountsTable — instant feedback while a list navigation is pending", () => {
   it("sets aria-busy on the rows region and swaps to the skeleton while a pager link is in flight", () => {
-    const { rerender } = render(<AccountsTable rows={[ROW]} list={LIST} />);
+    const { rerender } = render(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
 
     const region = document.querySelector('[data-slot="list-busy-region"]');
     expect(region?.getAttribute("aria-busy")).toBeNull();
@@ -112,13 +113,13 @@ describe("AccountsTable — instant feedback while a list navigation is pending"
     // jsdom — the pager's own `<Link>` reporting through `useLinkStatus` —
     // not the Search button's `router.push` (see the file header).
     useLinkStatusMock.mockReturnValue({ pending: true });
-    rerender(<AccountsTable rows={[ROW]} list={LIST} />);
+    rerender(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
 
     expect(region?.getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector('[data-slot="table-skeleton"]')).toBeTruthy();
 
     useLinkStatusMock.mockReturnValue({ pending: false });
-    rerender(<AccountsTable rows={[ROW]} list={LIST} />);
+    rerender(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
     expect(region?.getAttribute("aria-busy")).toBeNull();
   });
 
@@ -126,10 +127,10 @@ describe("AccountsTable — instant feedback while a list navigation is pending"
     // The pending WINDOW this opens is not observable with a synchronous
     // `push` mock (see file header) — the busy-region reaction itself is
     // covered by the test above via the pager link's `useLinkStatus` report.
-    render(<AccountsTable rows={[ROW]} list={LIST} />);
+    render(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
 
     expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
-    const input = screen.getByRole("searchbox", { name: "Search accounts" });
+    const input = screen.getByRole("searchbox", { name: "Search teachers" });
     fireEvent.change(input, { target: { value: "Cruz" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -138,14 +139,14 @@ describe("AccountsTable — instant feedback while a list navigation is pending"
   });
 
   it("gives the pager aria-disabled (not disabled) on a non-boundary control while a pager link is in flight", () => {
-    const { rerender } = render(<AccountsTable rows={[ROW]} list={LIST} />);
+    const { rerender } = render(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
 
     const nextLink = screen.getByRole("link", { name: "Next page" });
     expect(nextLink.getAttribute("aria-disabled")).toBeNull();
     expect(nextLink.hasAttribute("disabled")).toBe(false);
 
     useLinkStatusMock.mockReturnValue({ pending: true });
-    rerender(<AccountsTable rows={[ROW]} list={LIST} />);
+    rerender(<AccountsTable rows={[ROW]} list={LIST} {...tableProps} />);
 
     expect(nextLink.getAttribute("aria-disabled")).toBe("true");
     expect(nextLink.hasAttribute("disabled")).toBe(false);

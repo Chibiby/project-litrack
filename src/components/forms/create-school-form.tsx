@@ -12,6 +12,7 @@ import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 import { Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 import { copyText } from "@/lib/ui/copy-text";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 export function CreateSchoolForm() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export function CreateSchoolForm() {
               {copied ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
               {copied ? "Copied" : "Copy School ID"}
             </Button>
-            <Button type="button" onClick={() => router.push("/admin/schools")}>
+            <Button type="button" onClick={() => router.push(ADMIN_ROUTES.schools)}>
               Done — back to schools
             </Button>
           </div>
@@ -74,7 +75,7 @@ export function CreateSchoolForm() {
                 toast.success("School created");
               } else {
                 toast.success("School created");
-                router.push("/admin/schools");
+                router.push(ADMIN_ROUTES.schools);
               }
             })
           }

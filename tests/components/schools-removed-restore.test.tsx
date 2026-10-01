@@ -14,7 +14,7 @@ beforeAll(() => {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/admin/schools",
+  usePathname: () => "/admin/management/schools",
   useSearchParams: () => new URLSearchParams(""),
   unstable_isUnrecognizedActionError: () => false,
 }));
@@ -62,8 +62,8 @@ describe("SchoolsViewTabs", () => {
     render(<SchoolsViewTabs view="removed" />);
     const removed = screen.getByRole("link", { name: "Removed" });
     const active = screen.getByRole("link", { name: "Active" });
-    expect(removed.getAttribute("href")).toBe("/admin/schools?view=removed");
-    expect(active.getAttribute("href")).toBe("/admin/schools");
+    expect(removed.getAttribute("href")).toBe("/admin/management/schools?view=removed");
+    expect(active.getAttribute("href")).toBe("/admin/management/schools");
     expect(removed.getAttribute("aria-current")).toBe("page");
     expect(active.getAttribute("aria-current")).toBeNull();
   });

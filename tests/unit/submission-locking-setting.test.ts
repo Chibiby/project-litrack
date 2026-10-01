@@ -233,7 +233,7 @@ describe("setMonthlyReadingLevelUnlock", () => {
   it("refreshes the admin page and the teacher ARAL layout", async () => {
     await setMonthlyReadingLevelUnlock(form("false"));
 
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/settings/submissions");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/school-setup/report-submissions");
     expect(revalidatePath).toHaveBeenCalledWith("/teacher/aral", "layout");
   });
 

@@ -76,6 +76,7 @@ vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-SCHO
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: vi.fn(),
   revalidateSchoolsList: vi.fn(),
+  revalidateAdminAccountPages: vi.fn(),
 }));
 vi.mock("@/lib/settings/system-settings", () => ({
   demoSchoolFilter: vi.fn(async () => ({})),

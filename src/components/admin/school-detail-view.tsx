@@ -26,6 +26,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { removeSchoolLearners, removeSchoolTeachers } from "@/lib/actions/admin-school";
 import { CONFIRM_PHRASES } from "@/lib/constants/confirm-phrases";
@@ -681,7 +682,7 @@ function SchoolLearnersPanelBody({
     const next = new URLSearchParams(searchParams.toString());
     next.set("learnersSort", value);
     next.delete("learners");
-    navigate(`/admin/schools/${schoolId}?${next.toString()}`);
+    navigate(`${ADMIN_ROUTES.school(schoolId)}?${next.toString()}`);
   };
 
   const removeLearners = (ids: string[]) => {
@@ -705,7 +706,7 @@ function SchoolLearnersPanelBody({
   const learnerHref = (page: number) => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("learners", String(page));
-    return `/admin/schools/${schoolId}?${next.toString()}`;
+    return `${ADMIN_ROUTES.school(schoolId)}?${next.toString()}`;
   };
 
   return (

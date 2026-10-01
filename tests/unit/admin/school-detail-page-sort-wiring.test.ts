@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Proves `/admin/schools/[schoolId]` reads `?learnersSort=` and actually
+ * Proves `/admin/management/schools/[schoolId]` reads `?learnersSort=` and actually
  * threads it into `getSchoolDetail`'s third argument, rather than dropping it
  * on the floor. `SchoolDetailView` reads its own `learnersSort` copy straight
  * from the URL for the client-side "Sort by" control (see
@@ -50,7 +50,7 @@ vi.mock("@/components/admin/school-detail-view", () => ({
 }));
 
 const { default: SchoolDetailPage } = await import(
-  "@/app/admin/schools/[schoolId]/page"
+  "@/app/admin/management/schools/[schoolId]/page"
 );
 
 beforeEach(() => {

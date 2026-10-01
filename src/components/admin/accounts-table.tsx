@@ -1,19 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import {
-  ChevronLeft,
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  GraduationCap,
-  KeyRound,
-  MapPinned,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { KeyRound } from "lucide-react";
 import {
   AccountRowActions,
   PasswordCell,
@@ -21,25 +8,9 @@ import {
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { UserAvatar } from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
-import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
-import {
-  ListNavigationProvider,
-  LinkStatusPulse,
-  useListNavigate,
-  useListPending,
-} from "@/components/nav/list-navigation";
+import { ListNavigationProvider } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -48,121 +19,71 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SortSelect } from "@/components/ui/sort-select";
+import {
+  ListFilterBar,
+  describeActiveFilters,
+  type ListFilterField,
+} from "@/components/admin/management/list-filter-bar";
+import { ListPager, PageOutOfRangeState } from "@/components/admin/management/list-pager";
 import type { SortOption } from "@/lib/sort/registry";
-import type {
-  AccountListSort,
-  AccountRow,
-  AccountSummary,
-} from "@/lib/admin/accounts";
-import { GRADE_LEVEL_OPTIONS, USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
+import type { AccountListSort, AccountRow } from "@/lib/admin/accounts";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import type { UserRole } from "@prisma/client";
 
-const ANY_ROLE = "any";
-// FLOATING is an advisory mode, not a grade a section belongs to.
-const GRADE_FILTER_OPTIONS = GRADE_LEVEL_OPTIONS.filter(
-  (grade) => grade.value !== "FLOATING"
-);
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: "SUPER_ADMIN", label: USER_ROLE_LABELS.SUPER_ADMIN },
-  { value: "DISTRICT_ADMIN", label: USER_ROLE_LABELS.DISTRICT_ADMIN },
-  { value: "SCHOOL_HEAD", label: USER_ROLE_LABELS.SCHOOL_HEAD },
-  { value: "TEACHER", label: USER_ROLE_LABELS.TEACHER },
-];
+/** The roles that have their own accounts page; each page lists exactly one. */
+export type ManagedAccountRole = Extract<
+  UserRole,
+  "TEACHER" | "SCHOOL_HEAD" | "DISTRICT_ADMIN" | "SUPER_ADMIN"
+>;
+
+const ROLE_COPY: Record<
+  ManagedAccountRole,
+  {
+    plural: string;
+    /** What the place column shows for this role, or null for no column. */
+    place: "school" | "districts" | null;
+    emptyDescription: string;
+    emptyAction?: { href: string; label: string };
+  }
+> = {
+  TEACHER: {
+    plural: "Teachers",
+    place: "school",
+    emptyDescription: "Teachers appear here once they register at a school.",
+  },
+  SCHOOL_HEAD: {
+    plural: "School Heads",
+    place: "school",
+    emptyDescription: "A School Head account is created with its school.",
+    emptyAction: { href: ADMIN_ROUTES.newSchool, label: "Create a school" },
+  },
+  DISTRICT_ADMIN: {
+    plural: "District admins",
+    place: "districts",
+    emptyDescription: "District admin accounts appear here once they are set up.",
+  },
+  SUPER_ADMIN: {
+    plural: "Admin accounts",
+    place: null,
+    emptyDescription: "Division and Developer Admin accounts appear here once they are set up.",
+  },
+};
 
 export type AccountsTableList = {
   page: number;
   pageSize: number;
   totalPages: number;
   totalCount: number;
-  role: string;
-  schoolId: string;
-  /** Advisory-section grade filter; only meaningful when `role` is TEACHER. */
-  grade?: string;
   q: string;
   /**
-   * "Sort by" for this table. Optional so `list` stays a safe superset for
-   * any caller that does not wire it. `AccountListSort` and the option list
-   * live in `@/lib/admin/accounts`, a `server-only` module; both are
-   * imported here as types only (erased at compile time by
-   * `isolatedModules`), so the actual option data must be threaded in as a
-   * prop by the server page rather than imported at runtime from a Client
-   * Component.
+   * "Sort by" for this table. `AccountListSort` and the option list live in
+   * `@/lib/admin/accounts`, a `server-only` module; both are imported here as
+   * types only, so the option data is threaded in as a prop by the server page
+   * rather than imported at runtime from a Client Component.
    */
   sort?: AccountListSort;
   sortOptions?: readonly SortOption<AccountListSort>[];
 };
-
-function Paginator({
-  page,
-  pageSize,
-  pages,
-  totalCount,
-  hrefFor,
-}: {
-  page: number;
-  pageSize: number;
-  pages: number;
-  totalCount: number;
-  hrefFor: (page: number) => string;
-}) {
-  const pending = useListPending();
-  const firstItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const lastItem = Math.min(page * pageSize, totalCount);
-  const canGoBack = page > 1;
-  const canGoForward = page < pages;
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-3 sm:px-4">
-      <span className="text-xs text-muted-foreground">
-        Showing {firstItem}–{lastItem} of {totalCount.toLocaleString()} accounts
-      </span>
-      <nav className="flex items-center gap-1" aria-label="Account pages">
-        <Button
-          asChild={canGoBack}
-          variant="ghost"
-          size="icon"
-          disabled={!canGoBack}
-          aria-disabled={canGoBack && pending ? true : undefined}
-          aria-label="Previous page"
-        >
-          {canGoBack ? (
-            <Link href={hrefFor(page - 1)}>
-              <ChevronLeft aria-hidden />
-              <LinkStatusPulse />
-            </Link>
-          ) : (
-            <span>
-              <ChevronLeft aria-hidden />
-            </span>
-          )}
-        </Button>
-        <span className="min-w-14 text-center text-xs font-medium text-muted-foreground">
-          {page} / {pages}
-        </span>
-        <Button
-          asChild={canGoForward}
-          variant="ghost"
-          size="icon"
-          disabled={!canGoForward}
-          aria-disabled={canGoForward && pending ? true : undefined}
-          aria-label="Next page"
-        >
-          {canGoForward ? (
-            <Link href={hrefFor(page + 1)}>
-              <ChevronRight aria-hidden />
-              <LinkStatusPulse />
-            </Link>
-          ) : (
-            <span>
-              <ChevronRight aria-hidden />
-            </span>
-          )}
-        </Button>
-      </nav>
-    </div>
-  );
-}
 
 function SignInCell({ row }: { row: AccountRow }) {
   if (row.signIn.kind === "username")
@@ -222,83 +143,31 @@ function StatusCell({ row }: { row: AccountRow }) {
   );
 }
 
-function AccountOverview({ summary }: { summary?: AccountSummary }) {
-  if (!summary) return null;
-  return (
-    <section
-      aria-label="Account overview"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 2xl:grid-cols-6"
-    >
-      <StatCard
-        title="Total accounts"
-        value={summary.totalCount.toLocaleString()}
-        hint="Every role"
-        icon={Users}
-        tone="primary"
-        inlineOnPhone
-        denseOnPhone
-      />
-      <StatCard
-        title="Active"
-        value={summary.activeCount.toLocaleString()}
-        hint="Can sign in"
-        icon={CircleCheck}
-        tone="emerald"
-        inlineOnPhone
-        denseOnPhone
-      />
-      <StatCard
-        title="Inactive"
-        value={summary.inactiveCount.toLocaleString()}
-        hint="Switched off"
-        icon={CircleX}
-        tone="neutral"
-        inlineOnPhone
-        denseOnPhone
-      />
-      <StatCard
-        title="School Heads"
-        value={summary.schoolHeadCount.toLocaleString()}
-        hint="One per school"
-        icon={ShieldCheck}
-        tone="amber"
-        inlineOnPhone
-        denseOnPhone
-      />
-      <StatCard
-        title="District admins"
-        value={summary.districtAdminCount.toLocaleString()}
-        hint="Oversee their districts"
-        icon={MapPinned}
-        tone="emerald"
-        inlineOnPhone
-        denseOnPhone
-      />
-      <StatCard
-        title="Teachers"
-        value={summary.teacherCount.toLocaleString()}
-        hint="Across every school"
-        icon={GraduationCap}
-        tone="primary"
-        inlineOnPhone
-        denseOnPhone
-      />
-    </section>
-  );
+function placeText(row: AccountRow, place: "school" | "districts"): string {
+  if (place === "districts") {
+    const districts = row.districtAdminDistricts ?? [];
+    return districts.length > 0 ? districts.join(", ") : "No district assigned";
+  }
+  return row.school ? `${row.school.name} · ${row.school.schoolIdCode}` : "—";
 }
 
-/**
- * Thin wrapper so `useListNavigate`/`useListPending` inside
- * `AccountsTableInner` (and its `Paginator`) resolve to THIS table's own
- * `ListNavigationProvider` rather than the no-provider fallback — a hook
- * call sees only ANCESTOR context, so it must live inside the provider's
- * subtree, not in the same component that renders the provider.
- */
-export function AccountsTable(props: {
+export type AccountsTableProps = {
   rows: AccountRow[];
-  summary?: AccountSummary;
   list: AccountsTableList;
-}) {
+  /** The one role this page lists; there is no role picker. */
+  role: ManagedAccountRole;
+  /** The page's own route, so filters, sort and paging stay on it. */
+  basePath: string;
+  /** Contextual filters the page offers for this role (district, school, …). */
+  filters: ListFilterField[];
+};
+
+/**
+ * Thin wrapper so `useListNavigate`/`useListPending` inside the filter bar,
+ * the busy region and the pager resolve to THIS table's own
+ * `ListNavigationProvider` — a hook sees only ancestor context.
+ */
+export function AccountsTable(props: AccountsTableProps) {
   return (
     <ListNavigationProvider>
       <AccountsTableInner {...props} />
@@ -306,203 +175,72 @@ export function AccountsTable(props: {
   );
 }
 
-function AccountsTableInner({
-  rows,
-  summary,
-  list,
-}: {
-  rows: AccountRow[];
-  summary?: AccountSummary;
-  list: AccountsTableList;
-}) {
-  const searchParams = useSearchParams();
-  const navigate = useListNavigate();
-  const pending = useListPending();
-  const [query, setQuery] = useState(list.q);
-  const [prevListQ, setPrevListQ] = useState(list.q);
-  // The last term this box sent to the URL. When that same term comes back it
-  // is our own search landing, and adopting it would erase characters typed
-  // while the request was in flight.
-  const [pushedQ, setPushedQ] = useState(list.q);
-  if (list.q !== prevListQ) {
-    setPrevListQ(list.q);
-    if (list.q !== pushedQ) {
-      setQuery(list.q);
-      setPushedQ(list.q);
-    }
-  }
-
-  const apply = (changes: Record<string, string | null>) => {
-    const next = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(changes)) {
-      if (!value || value === ANY_ROLE) next.delete(key);
-      else next.set(key, value);
-    }
-    next.delete("page");
-    navigate(`/admin/accounts?${next.toString()}`);
-  };
-
-  const searchNow = (value: string) => {
-    const term = value.trim();
-    if (term === pushedQ) return;
-    setPushedQ(term);
-    apply({ q: term || null });
-  };
-
-  const hrefFor = (page: number) => {
-    const next = new URLSearchParams(searchParams.toString());
-    if (page > 1) next.set("page", String(page));
-    else next.delete("page");
-    return `/admin/accounts?${next.toString()}`;
-  };
-
-  const showGrade = list.role === "TEACHER";
-  const activeGrade = showGrade ? list.grade ?? "" : "";
+function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTableProps) {
+  const copy = ROLE_COPY[role];
+  const plural = copy.plural.toLowerCase();
+  const active = describeActiveFilters(filters, list.q);
+  const place = copy.place;
+  const placeLabel = place === "districts" ? "Districts" : "School";
 
   return (
-      <div className="space-y-4">
-      <AccountOverview summary={summary} />
-      <Surface as="section" className="rounded-2xl p-3 sm:p-4">
-          <form
-            className={
-              showGrade
-                ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_minmax(10rem,0.8fr)_auto]"
-                : "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(13rem,1.25fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_auto]"
-            }
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <div className="space-y-1.5">
-              <SearchInput
-                id="accounts-q"
-                value={query}
-                onValueChange={setQuery}
-                onDebouncedChange={searchNow}
-                resultCount={list.totalCount}
-                label="Search accounts"
-                labelVisible
-                placeholder="Name, email, or school..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="accounts-role" className="text-xs font-medium">
-                Role
-              </Label>
-              <Select
-                value={list.role || ANY_ROLE}
-                onValueChange={(value) => apply({ role: value, grade: null })}
-                disabled={pending}
-              >
-                <SelectTrigger id="accounts-role" className="h-11 w-full lg:h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY_ROLE}>All roles</SelectItem>
-                  {ROLE_OPTIONS.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {showGrade ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="accounts-grade" className="text-xs font-medium">
-                  Grade
-                </Label>
-                <Select
-                  value={activeGrade || ANY_ROLE}
-                  onValueChange={(value) => apply({ grade: value })}
-                  disabled={pending}
-                >
-                  <SelectTrigger id="accounts-grade" className="h-11 w-full lg:h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ANY_ROLE}>All grades</SelectItem>
-                    {GRADE_FILTER_OPTIONS.map((grade) => (
-                      <SelectItem key={grade.value} value={grade.value}>
-                        {grade.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            {list.sort && list.sortOptions ? (
-              <div className="space-y-1.5">
-                <SortSelect
-                  mode="link"
-                  id="accounts-sort"
-                  basePath="/admin/accounts"
-                  value={list.sort}
-                  options={list.sortOptions}
-                  searchParams={{
-                    q: list.q || undefined,
-                    role: list.role || undefined,
-                    schoolId: list.schoolId || undefined,
-                    grade: activeGrade || undefined,
-                  }}
-                />
-              </div>
-            ) : null}
-            {list.role || list.q || list.schoolId || activeGrade ? (
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 flex-1 lg:h-10 xl:flex-none"
-                  disabled={pending}
-                  onClick={() => {
-                    setQuery("");
-                    setPushedQ("");
-                    navigate("/admin/accounts");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              </div>
-            ) : null}
-          </form>
+    <div className="space-y-4">
+      <Surface as="section" aria-label={`Find ${plural}`} className="rounded-2xl p-3 sm:p-4">
+        <ListFilterBar
+          basePath={basePath}
+          q={list.q}
+          resultCount={list.totalCount}
+          searchLabel={`Search ${plural}`}
+          searchPlaceholder={
+            place === "school" ? "Name, email, or school…" : "Name, username, or email…"
+          }
+          fields={filters}
+          sort={
+            list.sort && list.sortOptions
+              ? { value: list.sort, options: list.sortOptions }
+              : undefined
+          }
+        />
       </Surface>
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
-            <h2 className="text-base font-semibold">
-              Accounts{" "}
-              <span className="text-muted-foreground">
-                ({list.totalCount.toLocaleString()})
-              </span>
-            </h2>
-            <span className="text-xs text-muted-foreground">
-              Page {list.page} of {list.totalPages}
+        <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
+          <h2 className="text-base font-semibold">
+            {copy.plural}{" "}
+            <span className="text-muted-foreground">
+              ({list.totalCount.toLocaleString()})
             </span>
-          </div>
-          <ListBusyRegion
-            label="accounts"
-            skeleton={
-              <TableSectionSkeleton rows={10} columns={7} showToolbar={false} />
-            }
-          >
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            Page {list.page} of {list.totalPages}
+          </span>
+        </div>
+        <ListBusyRegion
+          label={plural}
+          skeleton={<TableSectionSkeleton rows={10} columns={6} showToolbar={false} />}
+        >
           {rows.length === 0 ? (
             <div className="px-4 pb-4">
-              {list.role || list.q || list.schoolId || activeGrade ? (
+              {list.totalCount > 0 ? (
+                <PageOutOfRangeState
+                  basePath={basePath}
+                  page={list.page}
+                  totalPages={list.totalPages}
+                  totalCount={list.totalCount}
+                  noun={plural}
+                />
+              ) : active.length > 0 ? (
                 <EmptyState
-                  title="No accounts match"
-                  description={
-                    activeGrade
-                      ? "No teacher advises a section of this grade. Try another grade or clear the filters."
-                      : "No accounts match your search or filters."
-                  }
-                  actionHref="/admin/accounts"
+                  title={`No ${plural} match`}
+                  description={`Nothing matches ${active.join(" · ")}. Try a wider filter or clear them.`}
+                  actionHref={basePath}
                   actionLabel="Clear filters"
                   icon={KeyRound}
                 />
               ) : (
                 <EmptyState
-                  title="No accounts yet"
-                  description="Accounts appear here once a school is created or a teacher registers."
-                  actionHref="/admin/schools/new"
-                  actionLabel="Create a school"
+                  title={`No ${plural} yet`}
+                  description={copy.emptyDescription}
+                  actionHref={copy.emptyAction?.href}
+                  actionLabel={copy.emptyAction?.label}
                   icon={KeyRound}
                 />
               )}
@@ -514,14 +252,11 @@ function AccountsTableInner({
                   <TableHeader>
                     <TableRow>
                       <TableHead className="pl-4 text-xs">Name</TableHead>
-                      <TableHead className="text-xs">Role</TableHead>
-                      <TableHead className="text-xs">School</TableHead>
+                      {place ? <TableHead className="text-xs">{placeLabel}</TableHead> : null}
                       <TableHead className="text-xs">Email / sign-in</TableHead>
                       <TableHead className="text-xs">Status</TableHead>
                       <TableHead className="text-xs">Password</TableHead>
-                      <TableHead className="pr-4 text-right text-xs">
-                        Actions
-                      </TableHead>
+                      <TableHead className="pr-4 text-right text-xs">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -535,31 +270,25 @@ function AccountsTableInner({
                               size={32}
                               variant="thumb"
                             />
-                            <span className="text-sm font-medium">
-                              {row.listingName}
-                            </span>
+                            <span className="text-sm font-medium">{row.listingName}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="py-2.5">
-                          <Badge
-                            variant="outline"
-                            className="w-fit border-primary/15 bg-primary/10 text-primary dark:border-primary/30"
-                          >
-                            {USER_ROLE_LABELS[row.role]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2.5 text-sm text-muted-foreground">
-                          {row.school ? (
-                            <div className="flex flex-col">
-                              <span>{row.school.name}</span>
-                              <span className="text-xs">
-                                {row.school.schoolIdCode}
-                              </span>
-                            </div>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
+                        {place === "school" ? (
+                          <TableCell className="py-2.5 text-sm text-muted-foreground">
+                            {row.school ? (
+                              <div className="flex flex-col">
+                                <span>{row.school.name}</span>
+                                <span className="text-xs">{row.school.schoolIdCode}</span>
+                              </div>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        ) : place === "districts" ? (
+                          <TableCell className="py-2.5 text-sm text-muted-foreground">
+                            {placeText(row, place)}
+                          </TableCell>
+                        ) : null}
                         <TableCell className="py-2.5">
                           <SignInCell row={row} />
                         </TableCell>
@@ -591,38 +320,27 @@ function AccountsTableInner({
                           size={32}
                           variant="thumb"
                         />
-                        <div className="min-w-0">
-                          <h3 className="truncate font-medium">{row.listingName}</h3>
-                          <Badge variant="outline" className="mt-1">
-                            {USER_ROLE_LABELS[row.role]}
-                          </Badge>
-                        </div>
+                        <h3 className="min-w-0 truncate font-medium">{row.listingName}</h3>
                       </div>
                       <StatusCell row={row} />
                     </div>
                     <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-1">
+                      {place ? (
+                        <div className="min-w-0">
+                          <dt className="text-xs font-medium text-muted-foreground">
+                            {placeLabel}
+                          </dt>
+                          <dd className="mt-1 truncate">{placeText(row, place)}</dd>
+                        </div>
+                      ) : null}
                       <div className="min-w-0">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          School
-                        </dt>
-                        <dd className="mt-1 truncate">
-                          {row.school
-                            ? `${row.school.name} · ${row.school.schoolIdCode}`
-                            : "—"}
-                        </dd>
-                      </div>
-                      <div className="min-w-0">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          Sign-in
-                        </dt>
+                        <dt className="text-xs font-medium text-muted-foreground">Sign-in</dt>
                         <dd className="mt-1">
                           <SignInCell row={row} />
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          Password
-                        </dt>
+                        <dt className="text-xs font-medium text-muted-foreground">Password</dt>
                         <dd className="mt-1">
                           <PasswordCell row={row} />
                         </dd>
@@ -636,17 +354,18 @@ function AccountsTableInner({
               </div>
             </>
           )}
-          </ListBusyRegion>
-          {rows.length > 0 ? (
-            <Paginator
-              page={list.page}
-              pageSize={list.pageSize}
-              pages={list.totalPages}
-              totalCount={list.totalCount}
-              hrefFor={hrefFor}
-            />
-          ) : null}
+        </ListBusyRegion>
+        {list.totalCount > 0 ? (
+          <ListPager
+            basePath={basePath}
+            page={list.page}
+            pageSize={list.pageSize}
+            totalPages={list.totalPages}
+            totalCount={list.totalCount}
+            noun={plural}
+          />
+        ) : null}
       </Surface>
-      </div>
+    </div>
   );
 }

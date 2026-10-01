@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import type {
   AdvisoryMode,
@@ -18,7 +17,7 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { SECURITY_AUDIT_ACTIONS } from "@/lib/audit-actions";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { revalidateSchoolsList } from "@/lib/cache/revalidate";
+import { revalidateSchoolsList, revalidateAdminAccountPages } from "@/lib/cache/revalidate";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
 import { openPasswordWithSource, sealPassword } from "@/lib/auth/password-vault";
@@ -338,7 +337,7 @@ export const resetSchoolHeadPasswordToDefault = action("resetSchoolHeadPasswordT
     metadata: { schoolId: target.school.id },
   });
 
-  revalidatePath("/admin/accounts");
+  revalidateAdminAccountPages();
   revalidateSchoolsList();
   // The School ID is not a secret — it is printed on the schools table and on
   // this console's own row — so returning it here reveals nothing new.
@@ -458,7 +457,7 @@ export const resetTeacherPassword = action(
       metadata: { schoolId: target.schoolId, via: "admin_accounts" },
     });
 
-    revalidatePath("/admin/accounts");
+    revalidateAdminAccountPages();
     return { ok: true, data: { password } };
   },
   { verb: "reset that password" }
@@ -511,7 +510,7 @@ export const resetDistrictAdminPassword = action(
       metadata: { via: "admin_accounts" },
     });
 
-    revalidatePath("/admin/accounts");
+    revalidateAdminAccountPages();
     return { ok: true, data: { password } };
   },
   { verb: "reset that password" }

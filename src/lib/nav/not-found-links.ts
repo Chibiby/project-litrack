@@ -1,4 +1,5 @@
 import type { UserRole } from "@prisma/client";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 
@@ -25,9 +26,9 @@ export function notFoundLinksFor(role: UserRole | null): Array<{ href: string; l
       ];
     case "SUPER_ADMIN":
       return [
-        { href: "/admin", label: "Dashboard" },
-        { href: "/admin/schools", label: "Schools" },
-        { href: "/admin/accounts", label: "Accounts" },
+        { href: ADMIN_ROUTES.home, label: "Dashboard" },
+        { href: ADMIN_ROUTES.schools, label: "Schools" },
+        { href: ADMIN_ROUTES.teachers, label: "Teachers" },
       ];
     case "DISTRICT_ADMIN":
       return [

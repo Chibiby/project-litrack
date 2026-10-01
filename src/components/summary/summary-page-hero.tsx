@@ -6,7 +6,7 @@ import { SUMMARY_FACET_ICON } from "./summary-facet-index";
 /**
  * The banded page hero for one summary facet, the same `SchoolHeadHero` the
  * School Head's list pages open with. `portal` names whose summary it is:
- * a district admin's (`/district/summary`) or the division's (`/admin/summary`).
+ * a district admin's (`/district/summary`) or the division's (`/admin/monitoring/division-summary`).
  */
 export function SummaryPageHero({
   facetId,
