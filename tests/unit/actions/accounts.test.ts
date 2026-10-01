@@ -878,12 +878,14 @@ describe("resetDistrictAdminPassword", () => {
       id: targetId,
       authId: "auth-district-1",
       schoolId: null,
+      firstName: "Juan",
+      lastName: "Dela Cruz",
     });
 
     const res = await resetDistrictAdminPassword(form(targetId));
     expect(res.ok).toBe(true);
     const password = res.ok ? res.data.password : "";
-    expect(password.length).toBeGreaterThan(0);
+    expect(password).toBe("Juan.DelaCruz1234");
 
     expect(updateUserById).toHaveBeenCalledWith(
       "auth-district-1",
@@ -905,6 +907,7 @@ describe("resetDistrictAdminPassword", () => {
       resourceId: targetId,
     });
     expect(JSON.stringify(entry)).not.toContain(password);
+    expect(JSON.stringify(entry)).not.toContain("1234");
   });
 });
 

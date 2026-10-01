@@ -27,7 +27,7 @@ import { spawnSync } from "node:child_process";
 import { UserRole } from "@prisma/client";
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
 import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
-import { generateReadableCredential } from "../src/lib/auth/credentials";
+import { districtAdminPassword } from "../src/lib/auth/credentials";
 import { AUDIT_ACTIONS } from "../src/lib/audit-actions";
 import {
   planDistrictAdmins,
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
 
     await inParallel(plan.create, CONCURRENCY, async (item) => {
       const email = emailFor(item.username);
-      const password = generateReadableCredential();
+      const password = districtAdminPassword(item);
       try {
         // Resumable: reuse an auth identity left behind by a half-finished run.
         // Only when it is actually half-created — no Prisma `User` row points
