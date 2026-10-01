@@ -93,9 +93,39 @@ describe("MosyTable", () => {
       makeRow({ id: "c" }),
     ]);
     const rows = screen.getAllByRole("row").slice(1);
-    const levelCell = (i: number) => within(rows[i]!).getAllByRole("cell")[4]!.textContent;
-    expect(levelCell(0)).toBe("Fil: Low Emergent");
-    expect(levelCell(1)).toBe("Eng: Developing");
-    expect(levelCell(2)).toBe("—");
+    const levelCell = (i: number) => within(rows[i]!).getAllByRole("cell")[4]!;
+    // What a sighted reader sees: the aria-hidden abbreviation, not the sr-only name.
+    const visible = (el: HTMLElement) =>
+      Array.from(el.querySelectorAll<HTMLElement>("span"))
+        .filter((s) => !s.classList.contains("sr-only"))
+        .map((s) => s.textContent)
+        .join("");
+    expect(visible(levelCell(0))).toContain("Fil:");
+    expect(levelCell(0).textContent).toContain("Low Emergent");
+    expect(visible(levelCell(1))).toContain("Eng:");
+    expect(levelCell(2).textContent).toBe("—");
+  });
+
+  it("gives screen readers the full language name, not the abbreviation", () => {
+    renderTable([
+      makeRow({ id: "a", gradeType: "G1", mosyLanguage: "FILIPINO", mosyLevelLabel: "Low Emergent" }),
+      makeRow({ id: "b", mosyLanguage: "ENGLISH", mosyLevelLabel: "Developing" }),
+    ]);
+    const rows = screen.getAllByRole("row").slice(1);
+    const cell = (i: number) => within(rows[i]!).getAllByRole("cell")[4]!;
+    const abbr = (i: number) => cell(i).querySelector('[aria-hidden="true"]');
+    expect(abbr(0)?.textContent).toBe("Fil:");
+    expect(abbr(1)?.textContent).toBe("Eng:");
+    expect(cell(0).querySelector(".sr-only")?.textContent).toBe("Filipino:");
+    expect(cell(1).querySelector(".sr-only")?.textContent).toBe("English:");
+  });
+
+  it("shows long remarks in full instead of truncating them", () => {
+    const remarks = "Reads two-syllable words with support; needs daily practice at home.";
+    renderTable([makeRow({ id: "a", remarks })]);
+    const [, first] = screen.getAllByRole("row");
+    const remarksCell = within(first!).getAllByRole("cell")[7]!;
+    expect(remarksCell.textContent).toBe(remarks);
+    expect(remarksCell.querySelector(".truncate")).toBeNull();
   });
 });

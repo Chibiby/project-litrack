@@ -381,6 +381,20 @@ async function issueRandomPassword(
   role: "TEACHER" | "DISTRICT_ADMIN",
   password: string
 ): Promise<void> {
+  // Force the change BEFORE swapping the password. On its own the flag is
+  // harmless, so if the Supabase call below fails nothing is lost; the reverse
+  // order could leave a one-time (for a District Admin, name-guessable)
+  // password live with no forced change.
+  await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      mustChangePassword: true,
+      passwordIsSchoolId: false,
+      passwordVaultCipher: null,
+      passwordVaultSetAt: null,
+    },
+  });
+
   const supabaseAdmin = createSupabaseAdminClient();
   const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
     password,
@@ -394,16 +408,6 @@ async function issueRandomPassword(
       detail: `issueRandomPassword: ${role} password reset failed for user ${target.id}`,
     });
   }
-
-  await prisma.user.update({
-    where: { id: target.id },
-    data: {
-      mustChangePassword: true,
-      passwordIsSchoolId: false,
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    },
-  });
 }
 
 /**

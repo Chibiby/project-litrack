@@ -13,11 +13,12 @@
  * Supabase hosts, then lists every live (deletedAt null) DISTRICT_ADMIN and
  * whether `mustChangePassword` is currently true.
  *
- * --apply, per user: Supabase `auth.admin.updateUserById` (password +
- * app_metadata.role, exactly as `issueRandomPassword` in
- * src/lib/actions/accounts.ts), then the Prisma `User` columns that function
- * writes (mustChangePassword true, passwordIsSchoolId false, vault columns
- * null; `isActive` is never touched), then one DISTRICT_ADMIN_PASSWORD_RESET
+ * --apply, per user, in the same order as `issueRandomPassword` in
+ * src/lib/actions/accounts.ts: first the Prisma `User` columns
+ * (mustChangePassword true, passwordIsSchoolId false, vault columns null;
+ * `isActive` is never touched; role re-checked on the write), then Supabase
+ * `auth.admin.updateUserById` (password + app_metadata.role), then one
+ * DISTRICT_ADMIN_PASSWORD_RESET
  * audit row with metadata { via: "reset_script" } and no credential. Users with
  * no authId are skipped and reported. Failures are reported and counted; the
  * exit code is non-zero if any user failed or was skipped.
@@ -143,14 +144,11 @@ async function main(): Promise<void> {
       try {
         const password = districtAdminPassword(u);
 
-        const { error } = await supabase.auth.admin.updateUserById(u.authId, {
-          password,
-          app_metadata: { role: "DISTRICT_ADMIN", schoolId: null },
-        });
-        if (error) throw new Error(`auth password update failed: ${error.message}`);
-
-        await prisma.user.update({
-          where: { id: u.id },
+        // Force the change first (harmless alone), then swap the password, so a
+        // failure can never leave a guessable password with no forced change.
+        // The role is re-checked on the write, not only on the read above.
+        const flagged = await prisma.user.updateMany({
+          where: { id: u.id, role: UserRole.DISTRICT_ADMIN, deletedAt: null },
           data: {
             mustChangePassword: true,
             passwordIsSchoolId: false,
@@ -158,6 +156,13 @@ async function main(): Promise<void> {
             passwordVaultSetAt: null,
           },
         });
+        if (flagged.count !== 1) throw new Error("user is no longer a live district admin");
+
+        const { error } = await supabase.auth.admin.updateUserById(u.authId, {
+          password,
+          app_metadata: { role: "DISTRICT_ADMIN", schoolId: null },
+        });
+        if (error) throw new Error(`auth password update failed: ${error.message}`);
 
         await prisma.auditLog.create({
           data: {

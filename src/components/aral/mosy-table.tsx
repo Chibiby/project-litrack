@@ -21,9 +21,13 @@ import {
 } from "@/components/aral/mosy-decision-dialog";
 import { ARAL_MOSY_HREF } from "@/lib/nav/nav-config";
 import {
+  MOSY_LEVEL_LANGUAGE_NAMES,
   MOSY_LEVEL_LANGUAGE_PREFIXES,
   MOSY_STATUS_LABELS,
-  type MosyRowStatus, type MosyStatusFilter } from "@/lib/aral/mosy";
+  type MosyLevelLanguage,
+  type MosyRowStatus,
+  type MosyStatusFilter,
+} from "@/lib/aral/mosy";
 import type { MosyRow } from "@/lib/aral/mosy-queries";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +53,21 @@ function StatusChip({ status }: { status: MosyRowStatus }) {
   );
 }
 
+/**
+ * "Fil:" / "Eng:" on screen, the full language name for screen readers, which
+ * would otherwise read the bare abbreviation.
+ */
+function LanguageTag({ language }: { language: MosyLevelLanguage }) {
+  return (
+    <>
+      <span aria-hidden className="text-muted-foreground">
+        {MOSY_LEVEL_LANGUAGE_PREFIXES[language]}:
+      </span>
+      <span className="sr-only">{MOSY_LEVEL_LANGUAGE_NAMES[language]}:</span>{" "}
+    </>
+  );
+}
+
 function PreviousLevelCell({ row }: { row: MosyRow }) {
   const prev = row.previousLevel;
   if (!prev || (!prev.filipino && !prev.english)) {
@@ -58,12 +77,14 @@ function PreviousLevelCell({ row }: { row: MosyRow }) {
     <div className="space-y-0.5 text-sm">
       {prev.filipino ? (
         <p>
-          <span className="text-muted-foreground">Fil:</span> {prev.filipino}
+          <LanguageTag language="FILIPINO" />
+          {prev.filipino}
         </p>
       ) : null}
       {prev.english ? (
         <p>
-          <span className="text-muted-foreground">Eng:</span> {prev.english}
+          <LanguageTag language="ENGLISH" />
+          {prev.english}
         </p>
       ) : null}
       <p className="text-xs text-muted-foreground">{prev.monthLabel}</p>
@@ -158,9 +179,7 @@ export function MosyTable({
                       <TableCell className="min-w-[13rem]">
                         {r.mosyLevelLabel ? (
                           <span className="text-sm">
-                            <span className="text-muted-foreground">
-                              {MOSY_LEVEL_LANGUAGE_PREFIXES[r.mosyLanguage]}:
-                            </span>{" "}
+                            <LanguageTag language={r.mosyLanguage} />
                             {r.mosyLevelLabel}
                           </span>
                         ) : (
@@ -178,10 +197,11 @@ export function MosyTable({
                         )}
                       </TableCell>
                       <TableCell className="min-w-[10rem] max-w-[16rem] text-sm">
+                        {/* Wrapped in full rather than truncated behind a hover
+                            title, which keyboard and touch users cannot open.
+                            Remarks are capped at MOSY_REMARKS_MAX characters. */}
                         {r.remarks ? (
-                          <p className="truncate" title={r.remarks}>
-                            {r.remarks}
-                          </p>
+                          <p className="whitespace-normal break-words">{r.remarks}</p>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

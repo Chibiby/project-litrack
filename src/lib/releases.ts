@@ -135,6 +135,26 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.28.1",
+    date: "2026-10-01",
+    title: "MOSY Report readability and safer District Admin password resets",
+    announce: true,
+    fixes: [
+      {
+        text: "Long remarks in the MOSY Report now show in full instead of being cut off, so you can read them on a phone or with the keyboard.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Screen readers now say \"Filipino\" and \"English\" for the reading levels in the MOSY Report, instead of reading out \"Fil\" and \"Eng\".",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Issue password for a District Admin now turns on \"choose a new password at next sign-in\" before it changes the password, so a reset that fails halfway can never leave an easy password in place without that step.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.28.0",
     date: "2026-10-01",
     title: "Clearer MOSY columns and easier District Admin passwords",

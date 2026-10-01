@@ -909,6 +909,28 @@ describe("resetDistrictAdminPassword", () => {
     expect(JSON.stringify(entry)).not.toContain(password);
     expect(JSON.stringify(entry)).not.toContain("1234");
   });
+
+  it("forces the password change before swapping the password", async () => {
+    // A guessable First.Last1234 password must never be live without the
+    // forced change: the flag is written first, so a failed flag write leaves
+    // the old password in place rather than the new one unprotected.
+    const targetId = "77777777-7777-4777-8777-777777777777";
+    prismaMock.user.findFirst.mockResolvedValueOnce({
+      id: targetId,
+      authId: "auth-district-2",
+      schoolId: null,
+      firstName: "Ana",
+      lastName: "Reyes",
+    });
+
+    const res = await resetDistrictAdminPassword(form(targetId));
+    expect(res.ok).toBe(true);
+    const flagAt = prismaMock.user.update.mock.invocationCallOrder[0];
+    const swapAt = updateUserById.mock.invocationCallOrder[0];
+    expect(flagAt).toBeDefined();
+    expect(swapAt).toBeDefined();
+    expect(flagAt!).toBeLessThan(swapAt!);
+  });
 });
 
 describe("getAccountProfile", () => {
