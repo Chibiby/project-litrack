@@ -71,7 +71,10 @@ export function ListFilterBar<K extends string>({
   searchPlaceholder,
   fields,
   sort,
+  keepParams = [],
 }: {
+  /** Params that survive "Clear filters" — a Super Admin's `schoolId` view context. */
+  keepParams?: readonly string[];
   basePath: string;
   q: string;
   resultCount: number;
@@ -116,8 +119,13 @@ export function ListFilterBar<K extends string>({
   const clearAll = () => {
     setQuery("");
     setPushedQ("");
-    const sortValue = searchParams.get("sort");
-    navigate(sortValue ? `${basePath}?sort=${encodeURIComponent(sortValue)}` : basePath);
+    const kept = new URLSearchParams();
+    for (const key of ["sort", ...keepParams]) {
+      const value = searchParams.get(key);
+      if (value) kept.set(key, value);
+    }
+    const qs = kept.toString();
+    navigate(qs ? `${basePath}?${qs}` : basePath);
   };
 
   const active = describeActiveFilters(fields, q);
@@ -226,7 +234,7 @@ export function ListFilterBar<K extends string>({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9"
+            className="h-11 lg:h-9"
             disabled={pending}
             onClick={clearAll}
           >

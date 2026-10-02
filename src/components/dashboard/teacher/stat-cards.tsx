@@ -281,7 +281,9 @@ export function StatCard({
             <h2
               className={cn(
                 "font-semibold leading-snug text-foreground sm:text-sm lg:hidden",
-                denseOnPhone ? "whitespace-nowrap text-xs" : "text-[13px]"
+                // Wraps rather than clipping: a two-up phone or tablet row cuts
+                // longer titles ("Learners without a tutor") mid-word otherwise.
+                denseOnPhone ? "text-xs break-words" : "text-[13px]"
               )}
             >
               {title}

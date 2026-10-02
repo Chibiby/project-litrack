@@ -154,6 +154,9 @@ describe("SearchInput — result count", () => {
 
     rerender(<Controlled resultCount={1} />);
     expect(screen.getByRole("status").textContent).toBe("1 result");
+
+    rerender(<Controlled resultCount={2618} />);
+    expect(screen.getByRole("status").textContent).toBe((2618).toLocaleString() + " results");
   });
 });
 

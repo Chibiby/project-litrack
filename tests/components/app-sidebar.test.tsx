@@ -520,7 +520,8 @@ describe("AppSidebar — school head", () => {
     render(<AppSidebar role="SCHOOL_HEAD" userName="Head" expanded />);
     expect(screen.getAllByText("Overview").length).toBeGreaterThan(0);
     expect(screen.getAllByText("School Setup").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("People").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Management").length).toBeGreaterThan(0);
+    expect(screen.queryByText("People")).toBeNull();
     expect(screen.getAllByText("Programs").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Communication & Records").length).toBeGreaterThan(0);
     expect(

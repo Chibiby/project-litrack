@@ -510,6 +510,7 @@ describe("getNavGroups — admin", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
       "Teachers",
+      "ARAL Tutors",
       "School Heads",
       "Schools",
       "District Admins",
@@ -536,6 +537,7 @@ describe("getNavGroups — admin", () => {
     expect(byId).toMatchObject({
       "admin-learners": "/admin/management/learners",
       "admin-teachers": "/admin/management/teachers",
+      "admin-aral-tutors": "/admin/management/aral-tutors",
       "admin-school-heads": "/admin/management/school-heads",
       "admin-schools": "/admin/management/schools",
       "admin-district-admins": "/admin/management/district-admins",
@@ -581,6 +583,7 @@ describe("getNavGroups — admin", () => {
       ["/admin/management/schools/0b7f2c1e-1111-4222-8333-444455556666", "admin-schools"],
       ["/admin/management/learners", "admin-learners"],
       ["/admin/management/teachers", "admin-teachers"],
+      ["/admin/management/aral-tutors", "admin-aral-tutors"],
       ["/admin/management/school-heads", "admin-school-heads"],
       ["/admin/management/district-admins", "admin-district-admins"],
       ["/admin/school-setup/school-years", "admin-school-years"],
@@ -604,12 +607,12 @@ describe("getNavGroups — admin", () => {
 });
 
 describe("getNavGroups — school head", () => {
-  it("splits nav into Overview, School Setup, People, Programs and Communication & Records", () => {
+  it("splits nav into Overview, Management, School Setup, Programs and Communication & Records", () => {
     const groups = getNavGroups("SCHOOL_HEAD");
     expect(groups.map((g) => g.label)).toEqual([
       "Overview",
+      "Management",
       "School Setup",
-      "People",
       "Programs",
       "Communication & Records",
     ]);
@@ -618,11 +621,18 @@ describe("getNavGroups — school head", () => {
     expect(groups[0].items.map((i) => i.label)).toEqual(["Dashboard"]);
     expect(groups[0].items[0].href).toBe("/school-head");
     expect(groups[1].items.map((i) => i.label)).toEqual([
-      "School Setup",
-      "End-of-Term Subjects",
+      "Learners",
+      "Teachers",
+      "ARAL Tutors",
+    ]);
+    expect(groups[1].items.map((i) => i.href)).toEqual([
+      "/school-head/learners",
+      "/school-head/teachers",
+      "/school-head/aral-tutors",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
-      "Teachers",
+      "School Setup",
+      "End-of-Term Subjects",
       "Learner Transfers",
     ]);
     expect(groups[3].items.map((i) => i.label)).toEqual([
@@ -634,6 +644,18 @@ describe("getNavGroups — school head", () => {
       "Reports",
       "Audit Log",
     ]);
+  });
+
+  it("keeps the Teachers pending badge in Management and lights the new rows by prefix", () => {
+    const groups = getNavGroups("SCHOOL_HEAD", [], { pendingTeacherCount: 3 });
+    expect(groups[1].items.find((i) => i.id === "school-head-teachers")?.badge).toBe(3);
+    expect(getNavGroups("SCHOOL_HEAD")[1].items.find((i) => i.id === "school-head-teachers")?.badge).toBeUndefined();
+    const items = flattenNavGroups(groups);
+    expect(resolveActiveItemId("/school-head/learners", items)).toBe("school-head-learners");
+    expect(resolveActiveItemId("/school-head/aral-tutors", items)).toBe("school-head-aral-tutors");
+    // The longer /aral-tutors path must not fall to the ARAL Program row.
+    expect(resolveActiveItemId("/school-head/aral", items)).toBe("school-head-aral");
+    expect(resolveActiveItemId("/school-head/transfer", items)).toBe("school-head-transfer");
   });
 
   it("points Teachers at the workspace root so every tab keeps it highlighted", () => {

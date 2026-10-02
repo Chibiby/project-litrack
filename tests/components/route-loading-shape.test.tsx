@@ -37,6 +37,8 @@ import SchoolWorkspaceLoading from "@/app/school-head/(app)/school/loading";
 import SchoolHeadTeachersLoading from "@/app/school-head/(app)/teachers/loading";
 import SchoolHeadKinderChecklistLoading from "@/app/school-head/(app)/terms-reports/kinder/loading";
 import SchoolHeadIpLearnersLoading from "@/app/school-head/(app)/ip-learners/loading";
+import SchoolHeadLearnersLoading from "@/app/school-head/(app)/learners/loading";
+import SchoolHeadAralTutorsLoading from "@/app/school-head/(app)/aral-tutors/loading";
 import SchoolHeadAuditLoading from "@/app/school-head/(app)/audit/loading";
 import SchoolHeadTermSubjectsLoading from "@/app/school-head/(app)/term-subjects/loading";
 import SchoolHeadReportsLoading from "@/app/school-head/(app)/reports/loading";
@@ -466,6 +468,8 @@ const SCHOOL_HEAD_HERO_ROUTES: SchoolHeadHeroRoute[] = [
     tabs: 0,
   },
   { label: "ip-learners", Boundary: SchoolHeadIpLearnersLoading, tabs: 0 },
+  { label: "learners", Boundary: SchoolHeadLearnersLoading, tabs: 0 },
+  { label: "aral-tutors", Boundary: SchoolHeadAralTutorsLoading, tabs: 0 },
 ];
 
 /**

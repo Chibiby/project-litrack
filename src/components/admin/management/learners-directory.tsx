@@ -36,6 +36,14 @@ type LearnersDirectoryProps = {
   list: LearnersDirectoryList;
   basePath: string;
   filters: ListFilterField[];
+  /** Drops the School column — a single-school view has nothing to tell apart. */
+  hideSchool?: boolean;
+  /** Params that survive "Clear filters" (a Super Admin's `schoolId` view context). */
+  keepParams?: readonly string[];
+  /** Where "Clear filters" in the empty state goes; defaults to `basePath`. */
+  clearHref?: string;
+  /** Empty-state line when no learner exists at all; the default speaks to the division-wide view. */
+  emptyDescription?: string;
 };
 
 function ProgramBadges({ row }: { row: LearnerHubRow }) {
@@ -71,7 +79,16 @@ export function LearnersDirectory(props: LearnersDirectoryProps) {
   );
 }
 
-function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirectoryProps) {
+function LearnersDirectoryInner({
+  rows,
+  list,
+  basePath,
+  filters,
+  hideSchool = false,
+  keepParams,
+  clearHref,
+  emptyDescription = "Learners appear here once a school adds them.",
+}: LearnersDirectoryProps) {
   const active = describeActiveFilters(filters, list.q);
 
   return (
@@ -84,6 +101,7 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
           searchLabel="Search learners"
           searchPlaceholder="Learner name…"
           fields={filters}
+          keepParams={keepParams}
         />
       </Surface>
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
@@ -98,7 +116,7 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
         </div>
         <ListBusyRegion
           label="learners"
-          skeleton={<TableSectionSkeleton rows={10} columns={6} showToolbar={false} />}
+          skeleton={<TableSectionSkeleton rows={10} columns={hideSchool ? 5 : 6} showToolbar={false} />}
         >
           {rows.length === 0 ? (
             <div className="px-4 pb-4">
@@ -113,15 +131,19 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
               ) : active.length > 0 ? (
                 <EmptyState
                   title="No learners match"
-                  description={`Nothing matches ${active.join(" · ")}. Try a wider filter or clear them.`}
-                  actionHref={basePath}
+                  description={`Nothing matches ${active.join(" · ")}. ${
+                    filters.every((f) => !f.value)
+                      ? "Try a different search or clear it."
+                      : "Try a wider filter or clear them."
+                  }`}
+                  actionHref={clearHref ?? basePath}
                   actionLabel="Clear filters"
                   icon={GraduationCap}
                 />
               ) : (
                 <EmptyState
                   title="No learners yet"
-                  description="Learners appear here once a school adds them."
+                  description={emptyDescription}
                   icon={GraduationCap}
                 />
               )}
@@ -136,7 +158,7 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
                       <TableHead className="text-xs">Sex</TableHead>
                       <TableHead className="text-xs">Grade</TableHead>
                       <TableHead className="text-xs">Section</TableHead>
-                      <TableHead className="text-xs">School</TableHead>
+                      {hideSchool ? null : <TableHead className="text-xs">School</TableHead>}
                       <TableHead className="pr-4 text-xs">Programs</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -147,7 +169,9 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
                         <TableCell className="py-2.5 text-sm">{GENDER_LABELS[row.gender]}</TableCell>
                         <TableCell className="py-2.5 text-sm">{row.gradeLabel}</TableCell>
                         <TableCell className="py-2.5 text-sm">{row.sectionName ?? "—"}</TableCell>
-                        <TableCell className="py-2.5 text-sm text-muted-foreground">{row.school.name}</TableCell>
+                        {hideSchool ? null : (
+                          <TableCell className="py-2.5 text-sm text-muted-foreground">{row.school.name}</TableCell>
+                        )}
                         <TableCell className="py-2.5 pr-4">
                           <ProgramBadges row={row} />
                         </TableCell>
@@ -165,7 +189,9 @@ function LearnersDirectoryInner({ rows, list, basePath, filters }: LearnersDirec
                         {GENDER_LABELS[row.gender]} · {row.gradeLabel}
                         {row.sectionName ? ` · ${row.sectionName}` : ""}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.school.name}</p>
+                      {hideSchool ? null : (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.school.name}</p>
+                      )}
                     </div>
                     <div className="shrink-0">
                       <ProgramBadges row={row} />

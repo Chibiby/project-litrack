@@ -66,7 +66,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function defaultResultCountLabel(count: number): string {
-  return `${count} ${count === 1 ? "result" : "results"}`;
+  return `${count.toLocaleString()} ${count === 1 ? "result" : "results"}`;
 }
 
 /** The leading glyph other search-styled fields (comboboxes) can reuse to match spacing. */

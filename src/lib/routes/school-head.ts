@@ -51,6 +51,11 @@ export const SCHOOL_HEAD_ROUTES = {
   teachersDeclined: "/school-head/teachers/declined",
   teachersRemoved: "/school-head/teachers/removed",
 
+  /** Read-only learner directory for the school (Management group). */
+  learners: "/school-head/learners",
+  /** Teachers who tutor ARAL learners (Management group). */
+  aralTutors: "/school-head/aral-tutors",
+
   aral: "/school-head/aral",
   transfer: "/school-head/transfer",
   announcements: "/school-head/announcements",

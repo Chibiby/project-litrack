@@ -13,6 +13,7 @@ import {
   FileText,
   FlaskConical,
   GraduationCap,
+  HandHelping,
   KeyRound,
   LayoutDashboard,
   LifeBuoy,
@@ -188,6 +189,7 @@ export function getNavGroups(
           items: [
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
+            { id: "admin-aral-tutors", label: "ARAL Tutors", href: ADMIN_ROUTES.aralTutors, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
             { id: "admin-schools", label: "Schools", href: ADMIN_ROUTES.schools, icon: School },
             { id: "admin-district-admins", label: "District Admins", href: ADMIN_ROUTES.districtAdmins, icon: MapPinned, heavy: true },
@@ -236,18 +238,9 @@ export function getNavGroups(
           ],
         },
         {
-          // "School Setup" replaces the three separate entries (school years,
-          // grade levels, school info) that were really one job; they are tabs
-          // inside the workspace now.
-          label: "School Setup",
+          label: "Management",
           items: [
-            { id: "school-head-school", label: "School Setup", href: SCHOOL_HEAD_ROUTES.school, icon: School },
-            { id: "school-head-term-subjects", label: "End-of-Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
-          ],
-        },
-        {
-          label: "People",
-          items: [
+            { id: "school-head-learners", label: "Learners", href: SCHOOL_HEAD_ROUTES.learners, icon: GraduationCap },
             {
               id: "school-head-teachers",
               label: "Teachers",
@@ -255,6 +248,17 @@ export function getNavGroups(
               icon: Users,
               ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
             },
+            { id: "school-head-aral-tutors", label: "ARAL Tutors", href: SCHOOL_HEAD_ROUTES.aralTutors, icon: HandHelping },
+          ],
+        },
+        {
+          // "School Setup" replaces the three separate entries (school years,
+          // grade levels, school info) that were really one job; they are tabs
+          // inside the workspace now.
+          label: "School Setup",
+          items: [
+            { id: "school-head-school", label: "School Setup", href: SCHOOL_HEAD_ROUTES.school, icon: School },
+            { id: "school-head-term-subjects", label: "End-of-Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
             { id: "school-head-transfer", label: "Learner Transfers", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
           ],
         },

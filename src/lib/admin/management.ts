@@ -765,7 +765,50 @@ export type LearnerHubRow = {
 export async function getLearnersHubPage(
   params: LearnersHubParams
 ): Promise<{ rows: LearnerHubRow[]; totalCount: number }> {
-  const demoVisible = await isDemoVisible();
+  return queryLearnersHub(params, await isDemoVisible());
+}
+
+/**
+ * School Head "Learners" params. The school is NOT read from `searchParams`:
+ * a `?schoolId=` / `?district=` in the URL is discarded, and the caller's own
+ * school id (from the session, or `resolveSchoolContext` for a Super Admin
+ * view) is the only school the result can carry. Supplying it also keeps the
+ * `section` filter (which needs a school).
+ */
+export function parseSchoolLearnersParams(
+  searchParams: Omit<LearnersHubSearchParams, "schoolId" | "district">,
+  schoolId: string,
+  pageSize: number = LEARNERS_HUB_PAGE_SIZE
+): LearnersHubParams {
+  return parseLearnersHubParams(
+    { ...searchParams, schoolId, district: undefined },
+    pageSize
+  );
+}
+
+/**
+ * The learner directory limited to ONE school. `schoolId` is a separate
+ * argument that overrides whatever `params.schoolId` / `params.district` hold,
+ * so a hand-built params object cannot widen it. The demo-school exclusion is
+ * not applied: a School Head of the demo school must see their own learners
+ * (the exclusion exists to keep demo rows out of division-wide figures).
+ *
+ * Callers must take `schoolId` from `requireSchoolUser("SCHOOL_HEAD")` or
+ * `resolveSchoolContext`, never from the request.
+ */
+export function getSchoolLearnersPage(
+  schoolId: string,
+  params: LearnersHubParams
+): Promise<{ rows: LearnerHubRow[]; totalCount: number }> {
+  // An empty id is falsy in `learnersHubWhere` and would drop the school filter.
+  if (!schoolId) throw new Error("getSchoolLearnersPage requires a schoolId");
+  return queryLearnersHub({ ...params, schoolId, district: undefined }, true);
+}
+
+async function queryLearnersHub(
+  params: LearnersHubParams,
+  demoVisible: boolean
+): Promise<{ rows: LearnerHubRow[]; totalCount: number }> {
   const where = learnersHubWhere(params, demoVisible);
   const [learners, totalCount] = await Promise.all([
     prisma.learner.findMany({
@@ -849,9 +892,10 @@ export type LearnersSummaryFilter = { district?: string; schoolId?: string };
  * dashboard's own cache entries.
  */
 export async function getLearnersSummary(
-  filter: LearnersSummaryFilter = {}
+  filter: LearnersSummaryFilter = {},
+  opts: { includeDemo?: boolean } = {}
 ): Promise<LearnersSummary> {
-  const demoVisible = await isDemoVisible();
+  const demoVisible = opts.includeDemo === true || (await isDemoVisible());
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
@@ -955,4 +999,16 @@ export async function getLearnersSummary(
         }
       : {}),
   };
+}
+
+/**
+ * Learner overview for ONE school (School Head "Learners" cards). Same figures
+ * and definitions as the admin summary, pinned to `schoolId`, which must come
+ * from the session / `resolveSchoolContext`. The demo exclusion is skipped so a
+ * demo school's own head still sees their learners.
+ */
+export function getSchoolLearnersSummary(schoolId: string): Promise<LearnersSummary> {
+  // An empty id would be cleaned to "no filter" and widen to the division.
+  if (!cleanFilterId(schoolId)) throw new Error("getSchoolLearnersSummary requires a schoolId");
+  return getLearnersSummary({ schoolId }, { includeDemo: true });
 }

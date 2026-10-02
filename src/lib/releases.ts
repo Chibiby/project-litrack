@@ -135,6 +135,38 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.30.0",
+    date: "2026-10-02",
+    title: "A Management menu for School Heads, and ARAL Tutors pages",
+    announce: true,
+    fixes: [
+      {
+        text: "The sidebar now has a Management section with Learners, Teachers and ARAL Tutors. School Setup sits below it, and Learner Transfers has moved into School Setup.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "A new Learners page lists every learner in your school, with totals and filters for grade, section, IP and ARAL.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "A new ARAL Tutors page shows every teacher who tutors ARAL learners, whether they are DepEd or Non-DepEd, how many learners they tutor and in which grades. Totals at the top show how many ARAL learners have a tutor and how many still need one. Filter by grade, search by name, and sort by name or by most ARAL learners.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "Management now has an ARAL Tutors page listing every ARAL tutor in the division, with totals, district, school and grade filters, and sorting by name or by most ARAL learners.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Figure cards on the Management pages no longer cut off long titles on phones and tablets, and result counts show thousands separators (2,618 results).",
+        roles: ["SUPER_ADMIN", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Your School Head can now see which teachers tutor ARAL learners on a new ARAL Tutors page.",
+        roles: ["TEACHER"],
+      },
+    ],
+  },
+  {
     version: "2.29.0",
     date: "2026-10-01",
     title: "A clearer admin menu, with a page for each kind of account",

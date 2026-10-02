@@ -70,6 +70,8 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "sh-term-subjects", role: "SCHOOL_HEAD", group: "Reports", label: "Term subjects", href: "/school-head/term-subjects" },
     { id: "sh-kinder-checklist", role: "SCHOOL_HEAD", group: "Reports", label: "Kindergarten checklist", href: "/school-head/terms-reports/kinder" },
     { id: "sh-transfer", role: "SCHOOL_HEAD", group: "Reports", label: "Transfer", href: "/school-head/transfer" },
+    { id: "sh-learners", role: "SCHOOL_HEAD", group: "Management", label: "Learners", href: "/school-head/learners" },
+    { id: "sh-aral-tutors", role: "SCHOOL_HEAD", group: "Management", label: "ARAL tutors", href: "/school-head/aral-tutors" },
     { id: "sh-teachers", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (active)", href: "/school-head/teachers" },
     { id: "sh-teachers-pending", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (pending)", href: "/school-head/teachers/pending" },
     { id: "sh-teachers-inactive", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (inactive)", href: "/school-head/teachers/inactive" },
