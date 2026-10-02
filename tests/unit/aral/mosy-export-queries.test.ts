@@ -229,6 +229,28 @@ describe("mosy scope in the list where", () => {
   });
 });
 
+describe("mosy row levelOptionsByDecision", () => {
+  it("carries TRANSFERRED_OUT: the grade's whole scale without the legacy level", async () => {
+    learnerFindMany.mockResolvedValue([{ ...learner(1), gradeLevel: { type: "G3" } }]);
+    const out = await loadMosyPage({ ...base, page: 1 });
+    const opts = out.rows[0]!.levelOptionsByDecision;
+    expect(opts.TRANSFERRED_OUT.map((o) => o.value)).toEqual([
+      "NON_DECODER_LOW_EMERGENT",
+      "FRUSTRATION_HIGH_EMERGENT",
+      "DEVELOPING",
+      "TRANSITIONING",
+      "INDEPENDENT_GRADE_READY",
+    ]);
+    // the other lists are unchanged
+    expect(opts.MOVE_OUT.map((o) => o.value)).toEqual([
+      "DEVELOPING",
+      "TRANSITIONING",
+      "INDEPENDENT_GRADE_READY",
+    ]);
+    expect(out.rows[0]!.reasonChoices.at(-1)!.reason).toBe("TRANSFERRED_OUT");
+  });
+});
+
 describe("mosy gradeOptions", () => {
   it("a teacher's options come only from their advisory sections, ordered Kinder, G1, G2 and by section name", async () => {
     sectionFindMany.mockResolvedValue([

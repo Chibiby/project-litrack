@@ -12,6 +12,7 @@ import {
   mosyReasonChoices,
   mosyReasonLabel,
   mosyRowStatus,
+  mosyTransferLevelOptions,
   parseMosyStatus,
   resolveMosySave,
   type MosySaveInput,
@@ -150,12 +151,34 @@ describe("mosyLevelOptions", () => {
   });
 });
 
+describe("mosyTransferLevelOptions", () => {
+  it("G1 to G3: the whole scale without the legacy combined level", () => {
+    for (const g of ["G1", "G2", "G3"]) {
+      expect(mosyTransferLevelOptions(g).map((o) => o.value)).toEqual([
+        "NON_DECODER_LOW_EMERGENT",
+        "FRUSTRATION_HIGH_EMERGENT",
+        "DEVELOPING",
+        "TRANSITIONING",
+        "INDEPENDENT_GRADE_READY",
+      ]);
+    }
+  });
+
+  it("G4 to G10: the whole scale, Instructional is not legacy there", () => {
+    expect(mosyTransferLevelOptions("G5").map((o) => o.value)).toEqual(
+      readingProfileOptionsForGrade("G5").map((o) => o.value)
+    );
+    expect(mosyTransferLevelOptions("G5").map((o) => o.value)).toContain("INSTRUCTIONAL_DEVELOPING");
+  });
+});
+
 describe("mosyReasonChoices", () => {
   const labels = (g: string, prev: string | null) =>
     mosyReasonChoices(g, prev).map((c) => c.label);
   const LSEN = [
     "Diagnosed as Learner with Special Educational Needs (LSEN)",
     "Recommended for LSEN assessment",
+    "Transferred out",
   ];
 
   it.each(["G1", "G2", "G3"])(
@@ -195,14 +218,36 @@ describe("mosyReasonChoices", () => {
     }
   );
 
-  it("an off-band grade (SHS) with BOSY at the top offers no improvement, only LSEN", () => {
+  it.each(["G1", "G5", "G11", "KINDER", "FLOATING"])(
+    "%s ends with Transferred out, after the two LSEN reasons",
+    (g) => {
+      const c = mosyReasonChoices(g, null);
+      expect(c.at(-1)).toEqual({
+        key: "TRANSFERRED_OUT",
+        reason: "TRANSFERRED_OUT",
+        improvedToLevel: null,
+        label: "Transferred out",
+      });
+      expect(c.slice(-3, -1).map((x) => x.reason)).toEqual([
+        "DIAGNOSED_LSEN",
+        "RECOMMENDED_LSEN_ASSESSMENT",
+      ]);
+    }
+  );
+
+  it("an off-band grade (SHS) with BOSY at the top offers no improvement, only LSEN and Transferred out", () => {
     const c = mosyReasonChoices("G11", "INDEPENDENT_GRADE_READY");
-    expect(c.map((x) => x.reason)).toEqual(["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"]);
+    expect(c.map((x) => x.reason)).toEqual([
+      "DIAGNOSED_LSEN",
+      "RECOMMENDED_LSEN_ASSESSMENT",
+      "TRANSFERRED_OUT",
+    ]);
     expect(c.every((x) => x.improvedToLevel === null)).toBe(true);
   });
 
   it("an off-band grade (floating) with no BOSY level offers every level but the lowest", () => {
-    expect(labels("FLOATING", null)).toHaveLength(5);
+    // 2 improved levels + 2 LSEN reasons + Transferred out
+    expect(labels("FLOATING", null)).toHaveLength(5 + 1);
     expect(
       mosyReasonChoices("FLOATING", "FRUSTRATION_HIGH_EMERGENT")
         .filter((x) => x.improvedToLevel)
@@ -252,13 +297,14 @@ describe("mosyReasonChoices", () => {
   });
 
   it.each(Object.values(GradeLevelType))(
-    "%s always offers both LSEN reasons, last, with a unique key per choice",
+    "%s always offers both LSEN reasons and Transferred out, last, with a unique key per choice",
     (g) => {
       for (const prev of [null, "NON_DECODER_LOW_EMERGENT", "INDEPENDENT_GRADE_READY", "CVC_BLENDING"]) {
         const c = mosyReasonChoices(g, prev);
-        expect(c.slice(-2).map((x) => x.reason)).toEqual([
+        expect(c.slice(-3).map((x) => x.reason)).toEqual([
           "DIAGNOSED_LSEN",
           "RECOMMENDED_LSEN_ASSESSMENT",
+          "TRANSFERRED_OUT",
         ]);
         expect(new Set(c.map((x) => x.key)).size).toBe(c.length);
         // Never the lowest level, never a legacy grouped reason.
@@ -305,6 +351,7 @@ describe("mosyReasonLabel", () => {
       "Improved to Instructional / Independent Reader"
     );
     expect(mosyReasonLabel("DIAGNOSED_LSEN", null, "G6")).toMatch(/LSEN/);
+    expect(mosyReasonLabel("TRANSFERRED_OUT", null, "G6")).toBe("Transferred out");
   });
 
   it("every offered choice's label equals mosyReasonLabel for it", () => {
@@ -633,6 +680,99 @@ describe("resolveMosySave — deferred decision", () => {
     expectFail(
       resolve({ learner: untagged(), existing: movedOutRow(), submitted: { decision: null } }),
       "DECISION_REQUIRED"
+    );
+  });
+});
+
+describe("resolveMosySave — Transferred out", () => {
+  it("G3: MOVE_OUT + TRANSFERRED_OUT saves at Low Emergent (a stay level) and moves the learner out", () => {
+    const res = expectOk(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: {
+          mosyLevel: "NON_DECODER_LOW_EMERGENT",
+          decision: "MOVE_OUT",
+          reason: "TRANSFERRED_OUT",
+          improvedToLevel: "DEVELOPING",
+        },
+      })
+    );
+    expect(res.transition).toBe("MOVED_OUT");
+    expect(res.row).toMatchObject({
+      mosyLevel: "NON_DECODER_LOW_EMERGENT",
+      decision: "MOVE_OUT",
+      reason: "TRANSFERRED_OUT",
+      improvedToLevel: null,
+    });
+  });
+
+  it("G5: MOVE_OUT + TRANSFERRED_OUT saves at Frustration", () => {
+    const res = expectOk(
+      resolve({
+        learner: tagged({ gradeType: "G5" }),
+        submitted: {
+          mosyLevel: "FRUSTRATION_HIGH_EMERGENT",
+          decision: "MOVE_OUT",
+          reason: "TRANSFERRED_OUT",
+        },
+      })
+    );
+    expect(res.row.reason).toBe("TRANSFERRED_OUT");
+    expect(res.row.improvedToLevel).toBeNull();
+  });
+
+  it("G3: DIAGNOSED_LSEN at Low Emergent is still LEVEL_NOT_ALLOWED", () => {
+    expectFail(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" },
+      }),
+      "LEVEL_NOT_ALLOWED"
+    );
+  });
+
+  it("G3: IMPROVED_READING_LEVEL at Low Emergent is still LEVEL_NOT_ALLOWED", () => {
+    expectFail(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: {
+          mosyLevel: "NON_DECODER_LOW_EMERGENT",
+          decision: "MOVE_OUT",
+          reason: "IMPROVED_READING_LEVEL",
+          improvedToLevel: "DEVELOPING",
+        },
+      }),
+      "LEVEL_NOT_ALLOWED"
+    );
+  });
+
+  it("G3: TRANSFERRED_OUT with the legacy combined level is LEVEL_NOT_ALLOWED", () => {
+    expectFail(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: { mosyLevel: "INSTRUCTIONAL_DEVELOPING", decision: "MOVE_OUT", reason: "TRANSFERRED_OUT" },
+      }),
+      "LEVEL_NOT_ALLOWED"
+    );
+  });
+
+  it("a Stay level on a STAY decision stays valid and carries no reason", () => {
+    const res = expectOk(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "STAY", reason: "TRANSFERRED_OUT" },
+      })
+    );
+    expect(res.row.reason).toBeNull();
+  });
+
+  it("G3: a transfer-out level outside the grade scale is LEVEL_NOT_ALLOWED", () => {
+    expectFail(
+      resolve({
+        learner: tagged({ gradeType: "G3" }),
+        submitted: { mosyLevel: "LETTER_LEVEL", decision: "MOVE_OUT", reason: "TRANSFERRED_OUT" },
+      }),
+      "LEVEL_NOT_ALLOWED"
     );
   });
 });

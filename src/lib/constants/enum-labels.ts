@@ -254,6 +254,7 @@ export const ARAL_MOSY_MOVE_OUT_REASON_LABELS = {
   IMPROVED_UPPER_GRADES: "Improved to Instructional / Independent Reader",
   DIAGNOSED_LSEN: "Diagnosed as Learner with Special Educational Needs (LSEN)",
   RECOMMENDED_LSEN_ASSESSMENT: "Recommended for LSEN assessment",
+  TRANSFERRED_OUT: "Transferred out",
 } as const;
 
 const EARLY_GRADE_TYPES = new Set(["KINDER", "G1", "G2", "G3"]);

@@ -87,16 +87,19 @@ function MosyDecisionForm({
     : (row.decision ?? "MOVE_OUT");
 
   // Only prefill when the saved level and choice are still offered; otherwise the teacher re-picks.
-  const levelIsValid =
-    row.mosyLevel !== null &&
-    row.levelOptionsByDecision[initialDecision || "NONE"].some((o) => o.value === row.mosyLevel);
-  const initialLevel = levelIsValid ? (row.mosyLevel ?? "") : "";
   const foundChoice =
     initialDecision === "MOVE_OUT"
       ? row.reasonChoices.find(
           (c) => c.reason === row.reason && c.improvedToLevel === (row.improvedToLevel ?? null)
         )
       : undefined;
+  const initialLevelList =
+    foundChoice?.reason === "TRANSFERRED_OUT"
+      ? row.levelOptionsByDecision.TRANSFERRED_OUT
+      : row.levelOptionsByDecision[initialDecision || "NONE"];
+  const levelIsValid =
+    row.mosyLevel !== null && initialLevelList.some((o) => o.value === row.mosyLevel);
+  const initialLevel = levelIsValid ? (row.mosyLevel ?? "") : "";
   const savedChoice =
     foundChoice && foundChoice.improvedToLevel && foundChoice.improvedToLevel !== initialLevel
       ? undefined
@@ -124,7 +127,15 @@ function MosyDecisionForm({
   });
 
   const decision = form.watch("decision");
-  const levelOptions = row.levelOptionsByDecision[decision || "NONE"];
+  const watchedReason = form.watch("reason");
+  const isTransferredOut = decision === "MOVE_OUT" && watchedReason === "TRANSFERRED_OUT";
+  const levelOptions = isTransferredOut
+    ? row.levelOptionsByDecision.TRANSFERRED_OUT
+    : row.levelOptionsByDecision[decision || "NONE"];
+  const transferWidensLevels =
+    decision === "MOVE_OUT" &&
+    !isTransferredOut &&
+    row.levelOptionsByDecision.TRANSFERRED_OUT.length > row.levelOptionsByDecision.MOVE_OUT.length;
 
   function clearReason() {
     form.setValue("reason", "", { shouldDirty: true });
@@ -145,7 +156,6 @@ function MosyDecisionForm({
     }
     form.clearErrors(["reason", "improvedToLevel"]);
   }
-  const watchedReason = form.watch("reason");
   const watchedImprovedTo = form.watch("improvedToLevel");
   const selectedChoiceKey =
     row.reasonChoices.find(
@@ -319,6 +329,11 @@ function MosyDecisionForm({
                 again.
               </p>
             ) : null}
+            {transferWidensLevels ? (
+              <p className="text-sm text-muted-foreground">
+                Transferred out? Choose that reason to pick any level.
+              </p>
+            ) : null}
             <FormMessage />
           </FormItem>
         )}
@@ -340,13 +355,22 @@ function MosyDecisionForm({
                   form.setValue("improvedToLevel", choice.improvedToLevel ?? "", {
                     shouldDirty: true,
                   });
+                  const moveOutLevels = row.levelOptionsByDecision.MOVE_OUT;
+                  const currentLevel = form.getValues("mosyLevel");
                   if (
                     choice.improvedToLevel &&
-                    levelOptions.some((o) => o.value === choice.improvedToLevel)
+                    moveOutLevels.some((o) => o.value === choice.improvedToLevel)
                   ) {
                     form.setValue("mosyLevel", choice.improvedToLevel, { shouldDirty: true });
                     setStaleLevelLabel(null);
                     form.clearErrors("mosyLevel");
+                  } else if (
+                    choice.reason !== "TRANSFERRED_OUT" &&
+                    currentLevel &&
+                    !moveOutLevels.some((o) => o.value === currentLevel)
+                  ) {
+                    form.setValue("mosyLevel", "", { shouldDirty: true });
+                    setStaleLevelLabel(null);
                   }
                   setStaleReasonLabel(null);
                   form.clearErrors(["reason", "improvedToLevel"]);

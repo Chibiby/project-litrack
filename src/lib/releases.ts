@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.32.0",
+    date: "2026-10-03",
+    title: "\"Transferred out\" is now a MOSY move-out reason",
+    announce: true,
+    fixes: [
+      "When you move a learner out of ARAL in the MOSY Report, you can now choose \"Transferred out\" as the reason, for every grade. With this reason you can record any of the grade's reading levels.",
+    ],
+  },
+  {
     version: "2.31.1",
     date: "2026-10-02",
     title: "MOSY Report column renamed to BOSY reading level",

@@ -45,6 +45,10 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
       STAY: [{ value: "LOW_EMERGENT", label: "Low Emergent" }],
       MOVE_OUT: [{ value: "DEVELOPING", label: "Developing" }],
       NONE: [{ value: "LOW_EMERGENT", label: "Low Emergent" }],
+      TRANSFERRED_OUT: [
+        { value: "LOW_EMERGENT", label: "Low Emergent" },
+        { value: "DEVELOPING", label: "Developing" },
+      ],
     },
     reasonChoices: [],
     mosyLevel: null,
@@ -73,6 +77,12 @@ const LEVELS_BY_DECISION: MosyRow["levelOptionsByDecision"] = {
     { value: "LOW_EMERGENT", label: "Low Emergent" },
     { value: "HIGH_EMERGENT", label: "High Emergent" },
   ],
+  TRANSFERRED_OUT: [
+    { value: "LOW_EMERGENT", label: "Low Emergent" },
+    { value: "HIGH_EMERGENT", label: "High Emergent" },
+    { value: "DEVELOPING", label: "Developing" },
+    { value: "TRANSITIONING", label: "Transitioning" },
+  ],
 };
 
 const REASON_CHOICES: MosyRow["reasonChoices"] = [
@@ -93,6 +103,12 @@ const REASON_CHOICES: MosyRow["reasonChoices"] = [
     reason: "DIAGNOSED_LSEN",
     improvedToLevel: null,
     label: "Diagnosed LSEN",
+  },
+  {
+    key: "TRANSFERRED_OUT",
+    reason: "TRANSFERRED_OUT",
+    improvedToLevel: null,
+    label: "Transferred out",
   },
 ];
 
@@ -254,6 +270,81 @@ describe("MosyDecisionDialog Improved reason and level stay in sync", () => {
     expect(levelTrigger().textContent).toBe("Developing");
     pick(levelTrigger(), "Transitioning");
     expect(reasonTrigger().textContent).toBe("Diagnosed LSEN");
+  });
+});
+
+describe("MosyDecisionDialog Transferred out", () => {
+  function renderMoveOut(row = splitRow()) {
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+  }
+
+  it("hints at the wider list until Transferred out is chosen", () => {
+    renderMoveOut();
+    const hint = "Transferred out? Choose that reason to pick any level.";
+    expect(screen.getByText(hint)).not.toBeNull();
+    pick(reasonTrigger(), "Transferred out");
+    expect(screen.queryByText(hint)).toBeNull();
+  });
+
+  it("does not show the hint for a Stay decision", () => {
+    render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Stay as ARAL learner/ }));
+    expect(screen.queryByText(/Transferred out\? Choose/)).toBeNull();
+  });
+
+  it("widens the level list to include a Stay level", () => {
+    renderMoveOut();
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual(["Developing", "Transitioning"]);
+    cleanup();
+
+    renderMoveOut();
+    pick(reasonTrigger(), "Transferred out");
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual([
+      "Low Emergent",
+      "High Emergent",
+      "Developing",
+      "Transitioning",
+    ]);
+  });
+
+  it("keeps the level when switching to Transferred out", () => {
+    renderMoveOut();
+    pick(levelTrigger(), "Developing");
+    pick(reasonTrigger(), "Transferred out");
+    expect(levelTrigger().textContent).toBe("Developing");
+  });
+
+  it("clears a Stay level when switching back to an LSEN reason", () => {
+    renderMoveOut();
+    pick(reasonTrigger(), "Transferred out");
+    pick(levelTrigger(), "Low Emergent");
+    pick(reasonTrigger(), "Diagnosed LSEN");
+    expect(levelTrigger().textContent).toBe("Select level");
+  });
+
+  it("opens a saved Transferred out row with its level intact", () => {
+    const row = splitRow({
+      isAralLearner: false,
+      decision: "MOVE_OUT",
+      mosyLevel: "NON_DECODER_LOW_EMERGENT",
+      mosyLevelLabel: "Low Emergent",
+      reason: "TRANSFERRED_OUT",
+      reasonLabel: "Transferred out",
+      levelOptionsByDecision: {
+        ...LEVELS_BY_DECISION,
+        TRANSFERRED_OUT: [
+          { value: "NON_DECODER_LOW_EMERGENT", label: "Low Emergent" },
+          { value: "DEVELOPING", label: "Developing" },
+        ],
+      },
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    expect(levelTrigger().textContent).toBe("Low Emergent");
+    expect(reasonTrigger().textContent).toBe("Transferred out");
+    expect(screen.queryByText(/no longer an option/)).toBeNull();
   });
 });
 

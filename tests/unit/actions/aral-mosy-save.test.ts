@@ -389,6 +389,60 @@ describe("saveMosyDecision — guards", () => {
     }
   });
 
+  it("G3: Transferred out saves at Low Emergent with improvedToLevel null and moves the learner out", async () => {
+    learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });
+    const res = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "TRANSFERRED_OUT",
+        mosyLevel: "NON_DECODER_LOW_EMERGENT",
+        improvedToLevel: "DEVELOPING",
+      })
+    );
+    expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+    const up = upsert.mock.calls[0][0];
+    expect(up.create).toMatchObject({
+      mosyLevel: "NON_DECODER_LOW_EMERGENT",
+      reason: "TRANSFERRED_OUT",
+      improvedToLevel: null,
+    });
+    expect(up.update.improvedToLevel).toBeNull();
+    expect(learnerUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("G5: Transferred out saves at Frustration", async () => {
+    learnerRow = taggedLearner({ gradeLevel: { type: "G5" } });
+    const res = await saveMosyDecision(
+      form({ decision: "MOVE_OUT", reason: "TRANSFERRED_OUT", mosyLevel: "FRUSTRATION_HIGH_EMERGENT" })
+    );
+    expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+    expect(upsert.mock.calls[0][0].create).toMatchObject({
+      mosyLevel: "FRUSTRATION_HIGH_EMERGENT",
+      reason: "TRANSFERRED_OUT",
+    });
+  });
+
+  it("G3: an LSEN move out at Low Emergent is still rejected on mosyLevel", async () => {
+    learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });
+    const res = await saveMosyDecision(
+      form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", mosyLevel: "NON_DECODER_LOW_EMERGENT" })
+    );
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("mosyLevel");
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("G3: Transferred out with the legacy combined level is rejected on mosyLevel", async () => {
+    learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });
+    const res = await saveMosyDecision(
+      form({ decision: "MOVE_OUT", reason: "TRANSFERRED_OUT", mosyLevel: "INSTRUCTIONAL_DEVELOPING" })
+    );
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("mosyLevel");
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+  });
+
   it("G3: Improved to Transitioning persists with MOSY level Transitioning, whatever the BOSY level", async () => {
     learnerRow = taggedLearner({
       gradeLevel: { type: "G3" },

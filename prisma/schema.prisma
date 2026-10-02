@@ -1382,6 +1382,9 @@ enum AralMosyMoveOutReason {
   RECOMMENDED_LSEN_ASSESSMENT
   /// "Improved to <level>"; the level is stored in AralMosyDecision.improvedToLevel.
   IMPROVED_READING_LEVEL
+  /// The learner transferred to another school. Offered to every grade; any of
+  /// the grade's reading levels may be recorded with it.
+  TRANSFERRED_OUT
 }
 
 /// One MOSY (middle of school year) decision per learner per school year.

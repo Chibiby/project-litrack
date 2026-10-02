@@ -35,7 +35,7 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     sectionName: "Atis",
     isAralLearner: true,
     status: "not_updated",
-    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [] },
+    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [], TRANSFERRED_OUT: [] },
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,

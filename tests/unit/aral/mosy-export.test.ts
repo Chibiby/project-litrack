@@ -11,6 +11,7 @@ import {
   computeMosyStats,
   formatBosyLevel,
   mosyLevelLanguage,
+  mosyReasonLabel,
   type MosyRowStatus,
 } from "@/lib/aral/mosy";
 import type { MosyExportRow } from "@/lib/aral/mosy-queries";
@@ -36,7 +37,7 @@ function row(over: Partial<MosyExportRow> & { gradeType?: string } = {}): MosyEx
     sectionName: "Sampaguita",
     isAralLearner: true,
     status: "not_updated" as MosyRowStatus,
-    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [] },
+    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [], TRANSFERRED_OUT: [] },
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
@@ -194,6 +195,18 @@ describe("buildMosyExportBlocks", () => {
       "Diagnosed as Learner with Special Educational Needs (LSEN)",
       "Referred to SPED",
     ]);
+  });
+
+  it("prints Transferred out as the reason", () => {
+    const rows = [
+      row({
+        status: "moved_out",
+        reason: "TRANSFERRED_OUT",
+        reasonLabel: mosyReasonLabel("TRANSFERRED_OUT", null, "G4"),
+      }),
+    ];
+    const [, learners] = buildMosyExportBlocks(input({ rows }));
+    expect(learners!.rows[0]![6]).toBe("Transferred out");
   });
 });
 

@@ -21,6 +21,7 @@ import {
   mosyReasonLabel,
   mosyRowStatus,
   mosyStatusWhere,
+  mosyTransferLevelOptions,
   type BosyLevel,
   type MosyLevelLanguage,
   type MosyLevelOption,
@@ -48,6 +49,8 @@ export type MosyRow = {
     STAY: MosyLevelOption[];
     MOVE_OUT: MosyLevelOption[];
     NONE: MosyLevelOption[];
+    /** Move out with the reason "Transferred out": any level of the grade. */
+    TRANSFERRED_OUT: MosyLevelOption[];
   };
   /** Move-out reasons offered to this learner (see `mosyReasonChoices`). */
   reasonChoices: MosyReasonChoice[];
@@ -201,6 +204,7 @@ function toMosyRow(l: MosyLearnerRecord): MosyRow {
       STAY: mosyLevelOptions(gradeType, "STAY"),
       MOVE_OUT: mosyLevelOptions(gradeType, "MOVE_OUT"),
       NONE: mosyLevelOptions(gradeType, null),
+      TRANSFERRED_OUT: mosyTransferLevelOptions(gradeType),
     },
     reasonChoices: mosyReasonChoices(gradeType, l.filipinoReadingProfile),
     mosyLevel: d?.mosyLevel ?? null,
