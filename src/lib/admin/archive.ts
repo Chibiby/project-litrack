@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import type { LearnerPurgeCounts } from "@/lib/archive/purge";
+
+/** The counts the admin dialog shows; the audit row also records the two newer tables. */
+type AdminPurgeCounts = Omit<LearnerPurgeCounts, "aralMosyDecision" | "kinderCompetencyRecord">;
 import { assertOrderByCoversOptions } from "@/lib/sort/registry";
 import {
   ARCHIVE_LEARNER_SORTS,
@@ -120,7 +123,7 @@ export type ArchivedLearnerRow = {
   section: string | null;
   isAralLearner: boolean;
   deletedAt: string;
-  purgeCounts: LearnerPurgeCounts;
+  purgeCounts: AdminPurgeCounts;
 };
 
 export type ArchivePage<T> = {
@@ -280,7 +283,7 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
       readingLevelRecord: readingLevelByLearner.get(l.id) ?? 0,
       termGrade: termGradeByLearner.get(l.id) ?? 0,
       aralProfile: aralProfileByLearner.get(l.id) ?? 0,
-    } satisfies LearnerPurgeCounts,
+    } satisfies AdminPurgeCounts,
   }));
 
   return {

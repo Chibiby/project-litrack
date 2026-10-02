@@ -9,7 +9,7 @@ import {
 import {
   MOSY_STATUS_LABELS,
   computeMosyStats,
-  formatPreviousLevel,
+  formatBosyLevel,
   mosyLevelLanguage,
   type MosyRowStatus,
 } from "@/lib/aral/mosy";
@@ -36,7 +36,7 @@ function row(over: Partial<MosyExportRow> & { gradeType?: string } = {}): MosyEx
     sectionName: "Sampaguita",
     isAralLearner: true,
     status: "not_updated" as MosyRowStatus,
-    levelOptions: [],
+    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [] },
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
@@ -46,7 +46,7 @@ function row(over: Partial<MosyExportRow> & { gradeType?: string } = {}): MosyEx
     improvedToLevel: null,
     reasonLabel: null,
     remarks: null,
-    previousLevel: null,
+    bosyLevel: null,
     ...over,
   };
 }
@@ -99,7 +99,7 @@ describe("buildMosyExportBlocks", () => {
       "#",
       "Learner name",
       "Grade & section",
-      "Previous level",
+      "BOSY level",
       "MOSY reading level",
       "ARAL status decision",
       "Reason",
@@ -121,7 +121,7 @@ describe("buildMosyExportBlocks", () => {
   it("null cells stay null (blank), never a placeholder", () => {
     const [, learners] = buildMosyExportBlocks(input());
     const cells = learners!.rows[0]!;
-    expect(cells[3]).toBeNull(); // previous level
+    expect(cells[3]).toBeNull(); // BOSY level
     expect(cells[4]).toBeNull(); // MOSY level
     expect(cells[6]).toBeNull(); // reason
     expect(cells[7]).toBeNull(); // remarks
@@ -141,30 +141,38 @@ describe("buildMosyExportBlocks", () => {
     expect(learners!.rows[1]![4]).toBe(`Eng: ${g4Label}`);
   });
 
-  it("previous level shows Filipino and English with the month for G4, English omitted for G1/G2", () => {
-    const rec = { monthKey: "2026-10-05", englishProfile: "INSTRUCTIONAL_DEVELOPING", filipinoProfile: "INSTRUCTIONAL_DEVELOPING" };
-    const g4 = formatPreviousLevel(rec, "G4");
-    const g1 = formatPreviousLevel(rec, "G1");
-    const g2 = formatPreviousLevel(rec, "G2");
+  it("BOSY level shows Filipino and English with no month for G4, English omitted for G1/G2", () => {
+    const profiles = {
+      englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
+      filipinoReadingProfile: "FRUSTRATION_HIGH_EMERGENT",
+    };
     const rows = [
-      row({ gradeType: "G4", previousLevel: g4 }),
-      row({ gradeType: "G1", previousLevel: g1 }),
-      row({ gradeType: "G2", previousLevel: g2 }),
+      row({ gradeType: "G4", bosyLevel: formatBosyLevel(profiles, "G4") }),
+      row({ gradeType: "G1", bosyLevel: formatBosyLevel(profiles, "G1") }),
+      row({ gradeType: "G2", bosyLevel: formatBosyLevel(profiles, "G2") }),
     ];
     const [, learners] = buildMosyExportBlocks(input({ rows, totalCount: 3 }));
     const [c4, c1, c2] = learners!.rows.map((r) => r[3] as string);
-    expect(c4).toContain("Fil: ");
-    expect(c4).toContain("Eng: ");
-    expect(c4).toContain("Oct 2026");
-    expect(c1).toContain("Fil: ");
-    expect(c1).not.toContain("Eng");
+    expect(c4).toBe(
+      `Fil: ${labelReadingProfile("FRUSTRATION_HIGH_EMERGENT", "G4")} · Eng: ${labelReadingProfile("INSTRUCTIONAL_DEVELOPING", "G4")}`
+    );
+    expect(c1).toBe(`Fil: ${labelReadingProfile("FRUSTRATION_HIGH_EMERGENT", "G1")}`);
     expect(c2).not.toContain("Eng");
-    expect(c1).toContain("(Oct 2026)");
+    expect(c4).not.toMatch(/\(|20\d\d/);
   });
 
-  it("previous level with neither language is blank", () => {
+  it("a Grade 1-3 legacy BOSY value prints 'needs update'", () => {
+    const bosyLevel = formatBosyLevel(
+      { englishReadingProfile: null, filipinoReadingProfile: "INSTRUCTIONAL_DEVELOPING" },
+      "G2"
+    );
+    const [, learners] = buildMosyExportBlocks(input({ rows: [row({ gradeType: "G2", bosyLevel })] }));
+    expect(learners!.rows[0]![3]).toBe("Fil: Developing or Transitioning — needs update");
+  });
+
+  it("BOSY level with neither language is blank", () => {
     const [, learners] = buildMosyExportBlocks(
-      input({ rows: [row({ previousLevel: { filipino: null, english: null, monthLabel: "Oct 2026" } })] })
+      input({ rows: [row({ bosyLevel: { filipino: null, english: null } })] })
     );
     expect(learners!.rows[0]![3]).toBeNull();
   });

@@ -11,8 +11,6 @@ import { action } from "@/lib/errors/action";
 import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { resolveMosySave, type MosySaveFailure, type MosyTransition } from "@/lib/aral/mosy";
-import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
-import { loadPreviousFilipinoLevel } from "@/lib/aral/mosy-queries";
 import { resolveMosyAccess } from "@/lib/aral/mosy-access";
 import { isMosySubmissionLocked } from "@/lib/settings/system-settings";
 import { teacherOwnsMosyRow } from "@/lib/teachers/scope";
@@ -27,7 +25,7 @@ function formToObj(formData: FormData): Record<string, unknown> {
 const FAILURE_FIELD: Record<MosySaveFailure, { field: string; message: string }> = {
   LEVEL_NOT_ALLOWED: {
     field: "mosyLevel",
-    message: "That reading level is not used for this learner's grade",
+    message: "Choose a reading level that fits this decision",
   },
   REASON_REQUIRED: {
     field: "reason",
@@ -35,7 +33,7 @@ const FAILURE_FIELD: Record<MosySaveFailure, { field: string; message: string }>
   },
   REASON_NOT_ALLOWED: {
     field: "reason",
-    message: "That reason is not available for this learner's grade",
+    message: "That reason is not available for this learner or reading level",
   },
   DECISION_REQUIRED: {
     field: "decision",
@@ -86,7 +84,7 @@ export const saveMosyDecision = action(
       // Fresh read, not the cached getActiveSchoolYear: a write must not trust a TTL.
       const schoolYear = await tx.schoolYear.findFirst({
         where: { schoolId: user.schoolId, isActive: true },
-        select: { id: true, startDate: true },
+        select: { id: true },
       });
       if (!schoolYear) throw new AppError("SCHOOL_YEAR_NOT_ACTIVE");
 
@@ -100,6 +98,7 @@ export const saveMosyDecision = action(
           isAralLearner: true,
           aralTeacherId: true,
           aralEnrolledAt: true,
+          filipinoReadingProfile: true,
           gradeLevel: { select: { type: true } },
         },
       });
@@ -120,15 +119,6 @@ export const saveMosyDecision = action(
         throw resourceNotFound("Learner");
       }
 
-      // Same lookup the page uses for "previous level" (learner already verified
-      // to belong to the session's school above).
-      const previousFilipinoLevel = await loadPreviousFilipinoLevel(
-        tx,
-        input.learnerId,
-        // Same normalisation the page applies to its startDateKey.
-        parseLocalDateKey(formatLocalDateKey(schoolYear.startDate))
-      );
-
       const resolved = resolveMosySave({
         actorId: user.id,
         now: new Date(),
@@ -146,7 +136,8 @@ export const saveMosyDecision = action(
           improvedToLevel: input.improvedToLevel,
           remarks: input.remarks,
         },
-        previousFilipinoLevel,
+        // BOSY level, from the DB-loaded learner (never the client).
+        bosyFilipinoLevel: learner.filipinoReadingProfile,
       });
       if (!resolved.ok) {
         const { field, message } = FAILURE_FIELD[resolved.failure];

@@ -25,7 +25,6 @@ const ADVISER_ID = "adviser-1";
 const SECTION_ID = "section-1";
 const OTHER_SECTION = "section-2";
 const ENROLLED = new Date("2026-06-10T00:00:00.000Z");
-const YEAR_START = new Date(2026, 5, 8); // local midnight, as the page derives it
 
 type LearnerRow = {
   schoolId: string;
@@ -35,6 +34,8 @@ type LearnerRow = {
   isAralLearner: boolean;
   aralTeacherId: string | null;
   aralEnrolledAt: Date | null;
+  /** The learner's BOSY Filipino level (the initial reading profile). */
+  filipinoReadingProfile: string | null;
   gradeLevel: { type: string };
 };
 type Existing = { decision: "MOVE_OUT" | "STAY" | null; tutorId: string | null; priorAralEnrolledAt: Date | null };
@@ -42,13 +43,11 @@ type Existing = { decision: "MOVE_OUT" | "STAY" | null; tutorId: string | null; 
 let learnerRow: LearnerRow | null;
 let existingRow: Existing | null;
 let activeYear: { id: string; startDate: Date } | null;
-/** Filipino profile of the DB's latest reading record (null = no record). */
-let dbPreviousFilipino: string | null;
 /** Ordered log of every tx write, to prove both happen on the same transaction. */
 let txLog: { tx: number; op: string; args: unknown }[];
 let txCounter: number;
 
-/** Order of the lock and the two reads inside the transaction. */
+/** Order of the lock and the reads inside the transaction. */
 let readOrder: string[];
 const lockCall = vi.fn();
 const learnerFindFirst = vi.fn();
@@ -56,20 +55,12 @@ const learnerUpdate = vi.fn();
 const upsert = vi.fn();
 const findUnique = vi.fn();
 const yearFindFirst = vi.fn();
-const readingFindFirst = vi.fn();
 
 function makeTx() {
   const id = ++txCounter;
   return {
-    readingLevelRecord: {
-      findFirst: (a: unknown) => {
-        readingFindFirst(a);
-        readOrder.push("previous.read");
-        return Promise.resolve(
-          dbPreviousFilipino === null ? null : { filipinoProfile: dbPreviousFilipino }
-        );
-      },
-    },
+    // No readingLevelRecord: the BOSY level rides on the learner row, so a read of
+    // the monthly records would throw here and fail the case.
     $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => {
       lockCall(strings.join("?"), values);
       readOrder.push("lock");
@@ -155,7 +146,8 @@ const { ARAL_MOSY_HREF, ARAL_PROFILING_HREF } = await import("@/lib/nav/nav-conf
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
   fd.set("learnerId", LEARNER_ID);
-  fd.set("mosyLevel", "INSTRUCTIONAL_DEVELOPING");
+  // A G4 level that fits the decision: stay levels for STAY / deferred, move-out levels otherwise.
+  fd.set("mosyLevel", fields.decision === "MOVE_OUT" ? "INSTRUCTIONAL_DEVELOPING" : "NON_DECODER_LOW_EMERGENT");
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
   return fd;
 }
@@ -168,6 +160,7 @@ const taggedLearner = (over: Partial<LearnerRow> = {}): LearnerRow => ({
   isAralLearner: true,
   aralTeacherId: USER_ID,
   aralEnrolledAt: ENROLLED,
+  filipinoReadingProfile: null,
   gradeLevel: { type: "G4" },
   ...over,
 });
@@ -177,8 +170,7 @@ beforeEach(() => {
   txCounter = 0;
   txLog = [];
   readOrder = [];
-  activeYear = { id: YEAR_ID, startDate: YEAR_START };
-  dbPreviousFilipino = null;
+  activeYear = { id: YEAR_ID, startDate: new Date(2026, 5, 8) };
   learnerRow = taggedLearner();
   existingRow = null;
   mosyLocked = false;
@@ -199,7 +191,7 @@ describe("saveMosyDecision — guards", () => {
     expect(res).toMatchObject({ ok: false, code: "SCHOOL_YEAR_NOT_ACTIVE" });
     expect(yearFindFirst).toHaveBeenCalledWith({
       where: { schoolId: SCHOOL_ID, isActive: true },
-      select: { id: true, startDate: true },
+      select: { id: true },
     });
     expect(upsert).not.toHaveBeenCalled();
     expect(learnerUpdate).not.toHaveBeenCalled();
@@ -235,19 +227,14 @@ describe("saveMosyDecision — guards", () => {
     expect(sql).toContain('FROM "Learner"');
     expect(sql).toContain("FOR UPDATE");
     expect(values).toEqual([LEARNER_ID, SCHOOL_ID]);
-    expect(readOrder).toEqual(["lock", "learner.read", "decision.read", "previous.read"]);
+    expect(readOrder).toEqual(["lock", "learner.read", "decision.read"]);
   });
 
-  it("looks up the previous Filipino level after the row lock, for this learner and the year start", async () => {
+  it("reads the BOSY level from the learner row selected after the lock, with no extra query", async () => {
     const res = await saveMosyDecision(form({ decision: "STAY" }));
     expect(res).toMatchObject({ ok: true });
-    expect(readOrder.indexOf("lock")).toBe(0);
-    expect(readOrder.indexOf("previous.read")).toBeGreaterThan(readOrder.indexOf("lock"));
-    expect(readingFindFirst).toHaveBeenCalledTimes(1);
-    const arg = readingFindFirst.mock.calls[0][0];
-    expect(arg.where.learnerId).toBe(LEARNER_ID);
-    expect(arg.where.weekStart.gte).toEqual(YEAR_START);
-    expect(arg.orderBy).toEqual({ weekStart: "desc" });
+    expect(learnerFindFirst.mock.calls[0][0].select.filipinoReadingProfile).toBe(true);
+    expect(learnerFindFirst).toHaveBeenCalledTimes(1);
   });
 
   it("filters deleted and archived learners in the query", async () => {
@@ -357,83 +344,100 @@ describe("saveMosyDecision — guards", () => {
     expect(learnerUpdate).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["equal to", "FRUSTRATION_HIGH_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"],
-    ["below", "INSTRUCTIONAL_DEVELOPING", "FRUSTRATION_HIGH_EMERGENT"],
-  ])(
-    "a client level %s the DB previous level is VALIDATION_FAILED and nothing is written",
-    async (_n, dbPrev, clientLevel) => {
-      dbPreviousFilipino = dbPrev;
-      const res = await saveMosyDecision(
-        form({
-          decision: "MOVE_OUT",
-          reason: "IMPROVED_READING_LEVEL",
-          improvedToLevel: clientLevel,
-        })
-      );
-      expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
-      expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty(
-        "reason"
-      );
-      expect(readingFindFirst).toHaveBeenCalledTimes(1);
-      expect(upsert).not.toHaveBeenCalled();
-      expect(learnerUpdate).not.toHaveBeenCalled();
-      expect(writeAudit).not.toHaveBeenCalled();
-      expect(revalidatePath).not.toHaveBeenCalled();
-    }
-  );
-
-  it("ignores a client-supplied previous level: only the DB-loaded one counts", async () => {
-    dbPreviousFilipino = "INDEPENDENT_GRADE_READY"; // top: nothing to improve to
-    const fd = form({
-      decision: "MOVE_OUT",
-      reason: "IMPROVED_READING_LEVEL",
-      improvedToLevel: "INDEPENDENT_GRADE_READY",
-    });
-    fd.set("previousFilipinoLevel", "NON_DECODER_LOW_EMERGENT");
-    const res = await saveMosyDecision(fd);
-    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
-    expect(upsert).not.toHaveBeenCalled();
-  });
-
-  it("accepts a level above the DB previous level and persists improvedToLevel", async () => {
-    dbPreviousFilipino = "FRUSTRATION_HIGH_EMERGENT";
+  it("G4: Improved to Independent with MOSY level Instructional is VALIDATION_FAILED and nothing is written", async () => {
+    // form() defaults a MOVE_OUT to the Instructional level.
     const res = await saveMosyDecision(
       form({
         decision: "MOVE_OUT",
         reason: "IMPROVED_READING_LEVEL",
-        improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+      })
+    );
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("reason");
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("a level that does not fit the decision is VALIDATION_FAILED on mosyLevel with the new message", async () => {
+    const cases: Record<string, string>[] = [
+      { decision: "STAY", mosyLevel: "INDEPENDENT_GRADE_READY" },
+      { decision: "", mosyLevel: "INSTRUCTIONAL_DEVELOPING" },
+      { decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", mosyLevel: "FRUSTRATION_HIGH_EMERGENT" },
+    ];
+    for (const fields of cases) {
+      const res = await saveMosyDecision(form(fields));
+      expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+      expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toEqual({
+        mosyLevel: "Choose a reading level that fits this decision",
+      });
+    }
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("an LSEN move out accepts every move-out level of the grade band", async () => {
+    for (const mosyLevel of ["INSTRUCTIONAL_DEVELOPING", "INDEPENDENT_GRADE_READY"]) {
+      const res = await saveMosyDecision(
+        form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", mosyLevel })
+      );
+      expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+      expect(upsert.mock.calls.at(-1)![0].create.mosyLevel).toBe(mosyLevel);
+    }
+  });
+
+  it("G3: Improved to Transitioning persists with MOSY level Transitioning, whatever the BOSY level", async () => {
+    learnerRow = taggedLearner({
+      gradeLevel: { type: "G3" },
+      filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
+    });
+    const res = await saveMosyDecision(
+      form({
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "TRANSITIONING",
+        mosyLevel: "TRANSITIONING",
       })
     );
     expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
     const up = upsert.mock.calls[0][0];
     expect(up.create).toMatchObject({
+      mosyLevel: "TRANSITIONING",
       reason: "IMPROVED_READING_LEVEL",
-      improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+      improvedToLevel: "TRANSITIONING",
     });
-    expect(up.update).toMatchObject({
-      reason: "IMPROVED_READING_LEVEL",
-      improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
-    });
+    expect(up.update).toMatchObject({ improvedToLevel: "TRANSITIONING" });
     expect(learnerUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it("with no DB reading record the lowest level is rejected and the next accepted", async () => {
-    dbPreviousFilipino = null;
-    const bad = await saveMosyDecision(
-      form({
-        decision: "MOVE_OUT",
-        reason: "IMPROVED_READING_LEVEL",
-        improvedToLevel: "NON_DECODER_LOW_EMERGENT",
-      })
-    );
-    expect(bad).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+  it("an off-band grade filters Improved to by the DB learner's BOSY level, never a client-supplied one", async () => {
+    learnerRow = taggedLearner({
+      gradeLevel: { type: "G11" },
+      filipinoReadingProfile: "INSTRUCTIONAL_DEVELOPING", // only Independent is above it
+    });
+    const fd = form({
+      decision: "MOVE_OUT",
+      reason: "IMPROVED_READING_LEVEL",
+      improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
+    });
+    fd.set("bosyFilipinoLevel", "NON_DECODER_LOW_EMERGENT");
+    fd.set("filipinoReadingProfile", "NON_DECODER_LOW_EMERGENT");
+    const res = await saveMosyDecision(fd);
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
     expect(upsert).not.toHaveBeenCalled();
+
+    learnerRow = taggedLearner({
+      gradeLevel: { type: "G11" },
+      filipinoReadingProfile: "FRUSTRATION_HIGH_EMERGENT",
+    });
     const ok = await saveMosyDecision(
       form({
         decision: "MOVE_OUT",
         reason: "IMPROVED_READING_LEVEL",
-        improvedToLevel: "FRUSTRATION_HIGH_EMERGENT",
+        improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
       })
     );
     expect(ok).toMatchObject({ ok: true });
@@ -605,7 +609,7 @@ describe("saveMosyDecision — level-only saves", () => {
     ["deferred (decision empty)", { decision: "" }],
     ["STAY", { decision: "STAY" }],
   ])("%s never calls learner.update and only revalidates the MOSY page", async (_n, fields) => {
-    const res = await saveMosyDecision(form({ ...fields, mosyLevel: "INDEPENDENT_GRADE_READY" }));
+    const res = await saveMosyDecision(form({ ...fields, mosyLevel: "FRUSTRATION_HIGH_EMERGENT" }));
     expect(res).toEqual({ ok: true, data: { transition: "NONE" } });
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(learnerUpdate).not.toHaveBeenCalled();
@@ -638,6 +642,7 @@ describe("saveMosyDecision — audit metadata", () => {
         decision: "MOVE_OUT",
         reason: "IMPROVED_READING_LEVEL",
         improvedToLevel: "INDEPENDENT_GRADE_READY",
+        mosyLevel: "INDEPENDENT_GRADE_READY",
         remarks: "Ana Cruz has epilepsy",
       },
     ],
@@ -673,6 +678,7 @@ describe("saveMosyDecision — audit metadata", () => {
         decision: "MOVE_OUT",
         reason: "IMPROVED_READING_LEVEL",
         improvedToLevel: "INDEPENDENT_GRADE_READY",
+        mosyLevel: "INDEPENDENT_GRADE_READY",
       })
     );
     await saveMosyDecision(form({ decision: "STAY" }));

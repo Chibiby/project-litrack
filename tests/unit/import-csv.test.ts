@@ -381,3 +381,103 @@ describe("validateImportRows — legacy reading profile carve-out (gradeType)", 
     expect(results[0]?.ok).toBe(true);
   });
 });
+
+describe("Grade 1-3 Developing / Transitioning split on import", () => {
+  const LEGACY_ERROR =
+    "Filipino reading level: Choose Developing or Transitioning — the old combined level was split";
+  const row = {
+    firstName: "Lea",
+    lastName: "Reyes",
+    age: "8",
+    gender: "FEMALE",
+    englishReadingProfile: "Developing",
+    filipinoReadingProfile: "Transitioning",
+    filipinoFrustrationSubtypes: "",
+    governmentBenefits: "",
+    parentEducation: "SECONDARY_GRADUATE",
+    isAralLearner: "false",
+  };
+
+  it("maps the new labels and codes", () => {
+    for (const [cell, expected] of [
+      ["Transitioning", "TRANSITIONING"],
+      ["TRANSITIONING", "TRANSITIONING"],
+      ["Developing", "DEVELOPING"],
+      ["DEVELOPING", "DEVELOPING"],
+    ] as const) {
+      expect(
+        mapCsvRowToImportCandidate({ ...row, filipinoReadingProfile: cell }).filipinoReadingProfile,
+        cell
+      ).toBe(expected);
+    }
+  });
+
+  it("reads the old combined labels as INSTRUCTIONAL_DEVELOPING", () => {
+    for (const cell of [
+      "Developing or Transitioning",
+      "Developing or Transitioning — needs update",
+      "Instructional / Developing or Transitioning",
+    ]) {
+      expect(
+        mapCsvRowToImportCandidate({ ...row, filipinoReadingProfile: cell }).filipinoReadingProfile,
+        cell
+      ).toBe("INSTRUCTIONAL_DEVELOPING");
+    }
+  });
+
+  it("accepts Developing and Transitioning for Grade 3", () => {
+    expect(validateImportRows([row], { gradeType: "G3" })[0]?.ok).toBe(true);
+  });
+
+  it("rejects the old combined label for Grade 1-3 with a row error naming the two choices", () => {
+    const legacy = { ...row, englishReadingProfile: undefined, filipinoReadingProfile: "Developing or Transitioning" };
+    for (const gradeType of ["G1", "G2"]) {
+      const result = validateImportRows([legacy], { gradeType })[0];
+      expect(result?.ok, gradeType).toBe(false);
+      if (result && !result.ok) expect(result.errors).toEqual([LEGACY_ERROR]);
+    }
+    const g3 = validateImportRows(
+      [{ ...row, englishReadingProfile: "Developing or Transitioning" }],
+      { gradeType: "G3" }
+    )[0];
+    expect(g3?.ok).toBe(false);
+    if (g3 && !g3.ok) {
+      expect(g3.errors).toEqual([
+        "English reading level: Choose Developing or Transitioning — the old combined level was split",
+      ]);
+    }
+  });
+
+  it("rejects the old combined level for Grade 1-3 even when it matches the stored value", () => {
+    const legacy = { ...row, englishReadingProfile: undefined, filipinoReadingProfile: "INSTRUCTIONAL_DEVELOPING" };
+    const existingReadingProfiles = new Map<string, ExistingReadingProfile>([
+      [
+        learnerDuplicateKey("Lea", "Reyes", 8),
+        { englishReadingProfile: null, filipinoReadingProfile: "INSTRUCTIONAL_DEVELOPING" },
+      ],
+    ]);
+    const result = validateImportRows([legacy], { gradeType: "G2", existingReadingProfiles })[0];
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) expect(result.errors).toEqual([LEGACY_ERROR]);
+  });
+
+  it("Grade 4 still accepts Instructional and rejects Developing and Transitioning", () => {
+    const g4Row = { ...row, englishReadingProfile: "Instructional", filipinoReadingProfile: "Instructional" };
+    expect(validateImportRows([g4Row], { gradeType: "G4" })[0]?.ok).toBe(true);
+
+    const g4 = validateImportRows([row], { gradeType: "G4" })[0];
+    expect(g4?.ok).toBe(false);
+    if (g4 && !g4.ok) {
+      expect(g4.errors).toEqual([
+        "Invalid English reading level for this grade",
+        "Invalid Filipino reading level for this grade",
+      ]);
+    }
+  });
+
+  it("the Grade 3 template's English example is Developing, which the import accepts", () => {
+    const g3 = learnerCsvTemplate("G3");
+    expect(g3).toContain(",Developing,");
+    expect(g3).not.toContain("needs update");
+  });
+});

@@ -4,6 +4,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useState,
@@ -39,6 +40,7 @@ import {
   labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import {
+  isLegacyReadingValue,
   isReadingRecordComplete,
   languagesForGrade,
   readingProfileOptionsForGrade,
@@ -52,7 +54,7 @@ import { toastFailure } from "@/lib/ui/toast-failure";
 /**
  * Short codes for the badge face. The dropdown always carries the full label.
  *
- * The K3 and G4+ maps cover the SAME four legacy `ReadingProfile` values under
+ * The K3 and G4+ maps cover the SAME legacy `ReadingProfile` values under
  * their two label sets (a Grade 3 sheet reads "Low Emergent", a Grade 5 sheet
  * "Non-decoder" — see `readingProfileLabelsForGradeType`); the rubric map
  * covers the four DISJOINT Kinder/Grade 1/Grade 2 values, so there is no
@@ -61,13 +63,18 @@ import { toastFailure } from "@/lib/ui/toast-failure";
 const PROFILE_CODES_K3: Record<string, string> = {
   NON_DECODER_LOW_EMERGENT: "LE",
   FRUSTRATION_HIGH_EMERGENT: "HE",
-  INSTRUCTIONAL_DEVELOPING: "DT",
+  DEVELOPING: "DV",
+  TRANSITIONING: "TR",
   INDEPENDENT_GRADE_READY: "GR",
+  // Display only: the old combined level is flagged for re-assessment, never offered.
+  INSTRUCTIONAL_DEVELOPING: "DT",
 };
 const PROFILE_CODES_G4_PLUS: Record<string, string> = {
   NON_DECODER_LOW_EMERGENT: "ND",
   FRUSTRATION_HIGH_EMERGENT: "FR",
   INSTRUCTIONAL_DEVELOPING: "IP",
+  DEVELOPING: "DV",
+  TRANSITIONING: "TR",
   INDEPENDENT_GRADE_READY: "IPR",
 };
 /** Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md section 2a). */
@@ -172,7 +179,11 @@ export function bandWithLegacyValue(
   storedValue: string,
   gradeType: string
 ): BandOption[] {
-  if (!storedValue || band.some((option) => option.value === storedValue)) {
+  if (
+    !storedValue ||
+    band.some((option) => option.value === storedValue) ||
+    isLegacyReadingValue(storedValue, gradeType)
+  ) {
     return band;
   }
   return [
@@ -184,6 +195,24 @@ export function bandWithLegacyValue(
       tone: TONE_EMPTY,
     },
   ];
+}
+
+/**
+ * The old combined Grade 1-3 level, shown on the cell so the teacher can see
+ * what is stored but never offered in the list. Amber plus the "Needs update"
+ * text under the cell, so the flag does not rest on colour alone.
+ */
+const TONE_NEEDS_UPDATE =
+  "border-amber-500 bg-amber-100 text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200";
+
+function legacyOptionFor(value: string, gradeType: string): BandOption | null {
+  if (!isLegacyReadingValue(value, gradeType)) return null;
+  return {
+    value,
+    code: PROFILE_CODES_K3[value] ?? value,
+    label: labelReadingProfile(value, gradeType),
+    tone: TONE_NEEDS_UPDATE,
+  };
 }
 
 export type MonthlyReadingLevelGridLearner = {
@@ -565,6 +594,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
             <BandSelect
               options={bandWithLegacyValue(profileBand, row.englishProfile, gradeType)}
               value={row.englishProfile}
+              legacy={legacyOptionFor(row.englishProfile, gradeType)}
               disabled={readOnly || pending}
               label={`${learner.fullName} — English reading level`}
               onChange={(v) => setField(learner.id, "englishProfile", v)}
@@ -575,6 +605,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
           <BandSelect
             options={bandWithLegacyValue(profileBand, row.filipinoProfile, gradeType)}
             value={row.filipinoProfile}
+            legacy={legacyOptionFor(row.filipinoProfile, gradeType)}
             disabled={readOnly || pending}
             label={`${learner.fullName} — Filipino reading level`}
             onChange={(v) => setField(learner.id, "filipinoProfile", v)}
@@ -740,15 +771,19 @@ function BandSelect({
   disabled,
   label,
   onChange,
+  legacy,
 }: {
   options: BandOption[];
   value: string;
   disabled?: boolean;
   label: string;
   onChange: (value: string) => void;
+  /** Stored value this scale no longer offers: shown on the face, flagged, not in the list. */
+  legacy?: BandOption | null;
 }) {
   const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
+  const hintId = useId();
+  const selected = options.find((o) => o.value === value) ?? legacy ?? undefined;
   // "Not assessed" is a real entry in the list, not a placeholder, so clearing a
   // cell is reachable by the same keys as setting one.
   const entries: { value: string; code: string; label: string; tone: string }[] = [
@@ -819,6 +854,7 @@ function BandSelect({
   }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -826,7 +862,8 @@ function BandSelect({
           variant="outline"
           size="sm"
           disabled={disabled}
-          aria-label={label}
+          aria-label={legacy ? `${label} — needs update` : label}
+          aria-describedby={legacy ? hintId : undefined}
           title={selected ? `${selected.code} — ${selected.label}` : "Not assessed"}
           className={cn(
             "flex h-11 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 lg:h-8",
@@ -881,6 +918,16 @@ function BandSelect({
         </ul>
       </PopoverContent>
     </Popover>
+    {legacy ? (
+      <p
+        id={hintId}
+        className="mt-1 text-center text-xs font-medium leading-tight text-amber-800 dark:text-amber-300"
+      >
+        Needs update
+        <span className="block font-normal">Choose Developing or Transitioning</span>
+      </p>
+    ) : null}
+    </>
   );
 }
 

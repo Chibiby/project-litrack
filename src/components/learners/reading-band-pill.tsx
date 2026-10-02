@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { readingProfileLabelsForGradeType } from "@/lib/constants/enum-labels";
+import { labelReadingProfile } from "@/lib/constants/enum-labels";
+import { isLegacyReadingValue } from "@/lib/reading/policy";
 
 /**
  * The four DepEd reading bands, rendered as the roster's soft tinted pills.
@@ -23,6 +24,10 @@ const BAND_TONE: Record<string, string> = {
     "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
   INSTRUCTIONAL_DEVELOPING:
     "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
+  DEVELOPING:
+    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
+  TRANSITIONING:
+    "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200",
   INDEPENDENT_GRADE_READY:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
   // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
@@ -57,12 +62,20 @@ export function ReadingBandPill({
     return <span className={cn("text-xs text-muted-foreground", className)}>—</span>;
   }
 
-  const labels = readingProfileLabelsForGradeType(gradeType);
-  const label = labels[profile as keyof typeof labels] ?? profile;
+  // Grade 1-3 rows still holding the old combined level read "needs update"
+  // in amber; the label text carries the flag, not the colour alone.
+  const needsUpdate = isLegacyReadingValue(profile, gradeType ?? "");
+  const label = labelReadingProfile(profile, gradeType);
 
   return (
     <span
-      className={cn(PILL_BASE, BAND_TONE[profile] ?? UNKNOWN_TONE, className)}
+      className={cn(
+        PILL_BASE,
+        needsUpdate
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+          : (BAND_TONE[profile] ?? UNKNOWN_TONE),
+        className
+      )}
     >
       {label}
     </span>

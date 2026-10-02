@@ -41,7 +41,11 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     sectionName: "Atis",
     isAralLearner: true,
     status: "not_updated",
-    levelOptions: [{ value: "LOW_EMERGENT", label: "Low Emergent" }],
+    levelOptionsByDecision: {
+      STAY: [{ value: "LOW_EMERGENT", label: "Low Emergent" }],
+      MOVE_OUT: [{ value: "DEVELOPING", label: "Developing" }],
+      NONE: [{ value: "LOW_EMERGENT", label: "Low Emergent" }],
+    },
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
@@ -51,10 +55,65 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     improvedToLevel: null,
     reasonLabel: null,
     remarks: null,
-    previousLevel: null,
+    bosyLevel: null,
     ...overrides,
   };
 }
+
+const LEVELS_BY_DECISION: MosyRow["levelOptionsByDecision"] = {
+  STAY: [
+    { value: "LOW_EMERGENT", label: "Low Emergent" },
+    { value: "HIGH_EMERGENT", label: "High Emergent" },
+  ],
+  MOVE_OUT: [
+    { value: "DEVELOPING", label: "Developing" },
+    { value: "TRANSITIONING", label: "Transitioning" },
+  ],
+  NONE: [
+    { value: "LOW_EMERGENT", label: "Low Emergent" },
+    { value: "HIGH_EMERGENT", label: "High Emergent" },
+  ],
+};
+
+const REASON_CHOICES: MosyRow["reasonChoices"] = [
+  {
+    key: "IMPROVED_READING_LEVEL:DEVELOPING",
+    reason: "IMPROVED_READING_LEVEL",
+    improvedToLevel: "DEVELOPING",
+    label: "Improved to Developing",
+  },
+  {
+    key: "IMPROVED_READING_LEVEL:TRANSITIONING",
+    reason: "IMPROVED_READING_LEVEL",
+    improvedToLevel: "TRANSITIONING",
+    label: "Improved to Transitioning",
+  },
+  {
+    key: "DIAGNOSED_LSEN",
+    reason: "DIAGNOSED_LSEN",
+    improvedToLevel: null,
+    label: "Diagnosed LSEN",
+  },
+];
+
+const splitRow = (overrides: Partial<MosyRow> = {}) =>
+  makeRow({ levelOptionsByDecision: LEVELS_BY_DECISION, reasonChoices: REASON_CHOICES, ...overrides });
+
+function openSelect(trigger: HTMLElement) {
+  fireEvent.keyDown(trigger, { key: "Enter" });
+}
+
+function optionNames() {
+  return screen.queryAllByRole("option").map((o) => o.textContent);
+}
+
+function pick(trigger: HTMLElement, name: string) {
+  openSelect(trigger);
+  fireEvent.click(screen.getByRole("option", { name }));
+}
+
+const levelTrigger = () => screen.getAllByRole("combobox")[0]!;
+const reasonTrigger = () => screen.getAllByRole("combobox")[1]!;
 
 describe("MosyDecisionDialog", () => {
   it("has a neutral title", () => {
@@ -90,7 +149,115 @@ describe("MosyDecisionDialog", () => {
   });
 });
 
-const WARNING = "You will become this learner's ARAL teacher";
+describe("MosyDecisionDialog level options follow the decision", () => {
+  it("offers only the levels valid for the chosen decision", () => {
+    render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual(["Low Emergent", "High Emergent"]);
+    cleanup();
+
+    render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual(["Developing", "Transitioning"]);
+  });
+
+  it("clears a chosen level that the new decision does not allow, without picking another", () => {
+    render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
+    pick(levelTrigger(), "Low Emergent");
+    expect(levelTrigger().textContent).toBe("Low Emergent");
+
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+    expect(levelTrigger().textContent).toBe("Select level");
+  });
+
+  it("keeps a chosen level that the new decision still allows", () => {
+    const row = splitRow({
+      levelOptionsByDecision: {
+        ...LEVELS_BY_DECISION,
+        STAY: [{ value: "DEVELOPING", label: "Developing" }],
+      },
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Stay as ARAL learner/ }));
+    pick(levelTrigger(), "Developing");
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+    expect(levelTrigger().textContent).toBe("Developing");
+  });
+
+  it("starts empty with a helper when the saved level is not valid for the saved decision", () => {
+    const row = splitRow({
+      isAralLearner: false,
+      decision: "MOVE_OUT",
+      mosyLevel: "NON_DECODER_LOW_EMERGENT",
+      mosyLevelLabel: "Low Emergent",
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    expect(levelTrigger().textContent).toBe("Select level");
+    expect(
+      screen.getByText(/The saved level Low Emergent is no longer an option for this decision/)
+    ).not.toBeNull();
+    pick(levelTrigger(), "Developing");
+    expect(screen.queryByText(/is no longer an option for this decision/)).toBeNull();
+  });
+
+  it("starts empty with a helper when the saved reason is not offered", () => {
+    const row = splitRow({
+      isAralLearner: false,
+      decision: "MOVE_OUT",
+      mosyLevel: "DEVELOPING",
+      mosyLevelLabel: "Developing",
+      reason: "IMPROVED_EARLY_GRADES",
+      reasonLabel: "Improved to a higher level",
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    expect(levelTrigger().textContent).toBe("Developing");
+    expect(reasonTrigger().textContent).toBe("Select reason");
+    expect(screen.getByText(/The saved reason Improved to a higher level is no longer an option/)).not.toBeNull();
+  });
+});
+
+describe("MosyDecisionDialog Improved reason and level stay in sync", () => {
+  function renderMoveOut() {
+    render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+  }
+
+  it("sets the level when an Improved reason is picked", () => {
+    renderMoveOut();
+    pick(reasonTrigger(), "Improved to Transitioning");
+    expect(levelTrigger().textContent).toBe("Transitioning");
+  });
+
+  it("switches the reason to the matching Improved choice when the level changes", () => {
+    renderMoveOut();
+    pick(reasonTrigger(), "Improved to Transitioning");
+    pick(levelTrigger(), "Developing");
+    expect(reasonTrigger().textContent).toBe("Improved to Developing");
+  });
+
+  it("clears the reason when no Improved choice matches the new level", () => {
+    const row = splitRow({
+      reasonChoices: REASON_CHOICES.filter((c) => c.improvedToLevel !== "DEVELOPING"),
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
+    pick(reasonTrigger(), "Improved to Transitioning");
+    pick(levelTrigger(), "Developing");
+    expect(reasonTrigger().textContent).toBe("Select reason");
+  });
+
+  it("leaves the level alone when an LSEN reason is picked or the level changes", () => {
+    renderMoveOut();
+    pick(levelTrigger(), "Developing");
+    pick(reasonTrigger(), "Diagnosed LSEN");
+    expect(levelTrigger().textContent).toBe("Developing");
+    pick(levelTrigger(), "Transitioning");
+    expect(reasonTrigger().textContent).toBe("Diagnosed LSEN");
+  });
+});
+
+const WARNING ="You will become this learner's ARAL teacher";
 
 describe("MosyDecisionDialog — Stay on a moved-out learner", () => {
   it("warns that the adviser becomes the ARAL teacher", async () => {

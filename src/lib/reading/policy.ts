@@ -36,7 +36,7 @@ export const SHS_ALLOWED_VALUES = [
   "INDEPENDENT_GRADE_READY",
 ] as const;
 
-/** The original four members, offered unrestricted (G1-G10 and FLOATING; Kinder is early-rubric-only). */
+/** The original four members, offered unrestricted (G4-G10 and FLOATING). */
 export const STANDARD_VALUES = [
   "NON_DECODER_LOW_EMERGENT",
   "FRUSTRATION_HIGH_EMERGENT",
@@ -44,9 +44,84 @@ export const STANDARD_VALUES = [
   "INDEPENDENT_GRADE_READY",
 ] as const;
 
+/**
+ * Grade 1-3: the CRLA five, lowest first. `DEVELOPING` and `TRANSITIONING`
+ * replace the old combined `INSTRUCTIONAL_DEVELOPING` ("Developing or
+ * Transitioning"), which Grade 1-3 no longer offer or accept on a save — see
+ * `isLegacyReadingValue`.
+ */
+export const G1_TO_G3_VALUES = [
+  "NON_DECODER_LOW_EMERGENT",
+  "FRUSTRATION_HIGH_EMERGENT",
+  "DEVELOPING",
+  "TRANSITIONING",
+  "INDEPENDENT_GRADE_READY",
+] as const;
+
+/**
+ * Every non-rubric band, lowest first, for a chart or table that mixes
+ * grades: Grade 4+'s Instructional sits beside Grade 1-3's Developing and
+ * Transitioning, all below the top band.
+ */
+export const ALL_BAND_VALUES = [
+  "NON_DECODER_LOW_EMERGENT",
+  "FRUSTRATION_HIGH_EMERGENT",
+  "INSTRUCTIONAL_DEVELOPING",
+  "DEVELOPING",
+  "TRANSITIONING",
+  "INDEPENDENT_GRADE_READY",
+] as const;
+
 const EARLY_RUBRIC_GRADE_TYPES = new Set(["KINDER"]);
 const ENGLISH_EXCLUDED_GRADE_TYPES = new Set(["KINDER", "G1", "G2"]);
 const SHS_GRADE_TYPES = new Set(["G11", "G12"]);
+const G1_TO_G3_GRADE_TYPES = new Set(["G1", "G2", "G3"]);
+
+/**
+ * The message a Grade 1-3 save gets when it still carries the old combined
+ * level. Shared so the learner form, the monthly grid and the CSV import all
+ * say the same thing.
+ */
+export const LEGACY_READING_VALUE_MESSAGE =
+  "Choose Developing or Transitioning — the old combined level was split";
+
+/**
+ * The same message naming the learners who still carry the old level, for a
+ * save that covers many (the monthly grid). Lists up to three names, then
+ * "and N more". Names are `Lastname, Firstname` and so contain commas, hence
+ * the semicolons between them.
+ */
+export function legacyReadingValueMessageFor(names: readonly string[]): string {
+  if (names.length === 0) return LEGACY_READING_VALUE_MESSAGE;
+  const shown = names.slice(0, 3).join("; ");
+  const rest = names.length - 3;
+  const who = rest > 0 ? `${shown} and ${rest} more` : shown;
+  return `Choose Developing or Transitioning for ${who} — the old combined level was split`;
+}
+
+/**
+ * True when `value` is the old combined "Developing or Transitioning" level
+ * (`INSTRUCTIONAL_DEVELOPING`) on a Grade 1-3 learner. Such a row was saved
+ * before the split: it still displays (labelled "needs update") and still
+ * counts as Developing in reports (`reportingBandValue`), but a save must
+ * re-pick Developing or Transitioning. Grade 4+ keep `INSTRUCTIONAL_DEVELOPING`
+ * as "Instructional", so it is never legacy there.
+ */
+export function isLegacyReadingValue(
+  value: string | null | undefined,
+  gradeType: string
+): boolean {
+  return value === "INSTRUCTIONAL_DEVELOPING" && G1_TO_G3_GRADE_TYPES.has(gradeType);
+}
+
+/**
+ * The band a stored value is counted under in reports, charts and averages:
+ * a Grade 1-3 legacy `INSTRUCTIONAL_DEVELOPING` counts as `DEVELOPING`;
+ * everything else counts as itself.
+ */
+export function reportingBandValue(value: string, gradeType: string): string {
+  return isLegacyReadingValue(value, gradeType) ? "DEVELOPING" : value;
+}
 
 /**
  * Kinder, Grade 1 and Grade 2 = Filipino only; every other grade
@@ -60,13 +135,16 @@ export function languagesForGrade(gradeType: string): ReadingLanguage[] {
 }
 
 /**
- * Kinder -> the letter/word rubric; G11/G12 -> the restricted SHS
- * three; everything else (G1-G10, FLOATING) -> the original four. Kinder, G1
- * and G2 are Filipino-only (languagesForGrade); G1/G2 share G3's levels.
+ * Kinder -> the letter/word rubric; G1-G3 -> the CRLA five; G11/G12 -> the
+ * restricted SHS three; everything else (G4-G10, FLOATING) -> the original
+ * four. Kinder, G1 and G2 are Filipino-only (languagesForGrade).
  */
 export function allowedReadingValuesForGrade(gradeType: string): readonly string[] {
   if (EARLY_RUBRIC_GRADE_TYPES.has(gradeType)) {
     return EARLY_RUBRIC_VALUES;
+  }
+  if (G1_TO_G3_GRADE_TYPES.has(gradeType)) {
+    return G1_TO_G3_VALUES;
   }
   if (SHS_GRADE_TYPES.has(gradeType)) {
     return SHS_ALLOWED_VALUES;

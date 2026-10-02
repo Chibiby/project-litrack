@@ -86,19 +86,36 @@ function MosyDecisionForm({
       : ""
     : (row.decision ?? "MOVE_OUT");
 
-  // Only prefill when the saved choice is still offered; otherwise the teacher re-picks.
-  const savedChoice =
+  // Only prefill when the saved level and choice are still offered; otherwise the teacher re-picks.
+  const levelIsValid =
+    row.mosyLevel !== null &&
+    row.levelOptionsByDecision[initialDecision || "NONE"].some((o) => o.value === row.mosyLevel);
+  const initialLevel = levelIsValid ? (row.mosyLevel ?? "") : "";
+  const foundChoice =
     initialDecision === "MOVE_OUT"
       ? row.reasonChoices.find(
           (c) => c.reason === row.reason && c.improvedToLevel === (row.improvedToLevel ?? null)
         )
       : undefined;
+  const savedChoice =
+    foundChoice && foundChoice.improvedToLevel && foundChoice.improvedToLevel !== initialLevel
+      ? undefined
+      : foundChoice;
+
+  const [staleLevelLabel, setStaleLevelLabel] = useState<string | null>(
+    row.mosyLevel !== null && !levelIsValid ? (row.mosyLevelLabel ?? row.mosyLevel) : null
+  );
+  const [staleReasonLabel, setStaleReasonLabel] = useState<string | null>(
+    initialDecision === "MOVE_OUT" && row.reason !== null && !savedChoice
+      ? (row.reasonLabel ?? row.reason)
+      : null
+  );
 
   const form = useAppForm<MosyFormValues>({
     schema: aralMosyDecisionSchema,
     defaultValues: {
       learnerId: row.id,
-      mosyLevel: row.mosyLevel ?? "",
+      mosyLevel: initialLevel,
       decision: initialDecision,
       reason: savedChoice?.reason ?? "",
       improvedToLevel: savedChoice?.improvedToLevel ?? "",
@@ -107,6 +124,27 @@ function MosyDecisionForm({
   });
 
   const decision = form.watch("decision");
+  const levelOptions = row.levelOptionsByDecision[decision || "NONE"];
+
+  function clearReason() {
+    form.setValue("reason", "", { shouldDirty: true });
+    form.setValue("improvedToLevel", "", { shouldDirty: true });
+  }
+
+  // Keeps an "Improved to X" reason and the level agreeing with each other.
+  function syncReasonToLevel(level: string) {
+    const improvedTo = form.getValues("improvedToLevel");
+    if (!improvedTo || improvedTo === level) return;
+    const match = row.reasonChoices.find(
+      (c) => c.reason === form.getValues("reason") && c.improvedToLevel === level
+    );
+    if (match) {
+      form.setValue("improvedToLevel", level, { shouldDirty: true });
+    } else {
+      clearReason();
+    }
+    form.clearErrors(["reason", "improvedToLevel"]);
+  }
   const watchedReason = form.watch("reason");
   const watchedImprovedTo = form.watch("improvedToLevel");
   const selectedChoiceKey =
@@ -183,11 +221,21 @@ function MosyDecisionForm({
                 value={field.value}
                 onValueChange={(value) => {
                   field.onChange(value);
-                  if (value !== "MOVE_OUT") {
-                    form.setValue("reason", "");
-                    form.setValue("improvedToLevel", "");
+                  const nextOptions = row.levelOptionsByDecision[value === "" ? "NONE" : (value as "MOVE_OUT" | "STAY")];
+                  const level = form.getValues("mosyLevel");
+                  if (level && !nextOptions.some((o) => o.value === level)) {
+                    form.setValue("mosyLevel", "", { shouldDirty: true });
+                    setStaleLevelLabel(null);
                   }
-                  form.clearErrors(["decision", "reason", "improvedToLevel"]);
+                  if (value !== "MOVE_OUT") {
+                    clearReason();
+                    setStaleReasonLabel(null);
+                  } else {
+                    const keptLevel = form.getValues("mosyLevel");
+                    const improvedTo = form.getValues("improvedToLevel");
+                    if (improvedTo && improvedTo !== keptLevel) clearReason();
+                  }
+                  form.clearErrors(["decision", "mosyLevel", "reason", "improvedToLevel"]);
                 }}
                 aria-labelledby="mosy-decision-label"
                 disabled={pending}
@@ -246,6 +294,8 @@ function MosyDecisionForm({
               value={field.value}
               onValueChange={(value) => {
                 field.onChange(value);
+                setStaleLevelLabel(null);
+                syncReasonToLevel(value);
                 form.clearErrors("mosyLevel");
               }}
               disabled={pending}
@@ -256,13 +306,19 @@ function MosyDecisionForm({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                {row.levelOptions.map((o) => (
+                {levelOptions.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {staleLevelLabel && !field.value ? (
+              <p className="text-sm text-muted-foreground">
+                The saved level {staleLevelLabel} is no longer an option for this decision. Choose
+                again.
+              </p>
+            ) : null}
             <FormMessage />
           </FormItem>
         )}
@@ -284,6 +340,15 @@ function MosyDecisionForm({
                   form.setValue("improvedToLevel", choice.improvedToLevel ?? "", {
                     shouldDirty: true,
                   });
+                  if (
+                    choice.improvedToLevel &&
+                    levelOptions.some((o) => o.value === choice.improvedToLevel)
+                  ) {
+                    form.setValue("mosyLevel", choice.improvedToLevel, { shouldDirty: true });
+                    setStaleLevelLabel(null);
+                    form.clearErrors("mosyLevel");
+                  }
+                  setStaleReasonLabel(null);
                   form.clearErrors(["reason", "improvedToLevel"]);
                 }}
                 disabled={pending}
@@ -301,6 +366,11 @@ function MosyDecisionForm({
                   ))}
                 </SelectContent>
               </Select>
+              {staleReasonLabel && !selectedChoiceKey ? (
+                <p className="text-sm text-muted-foreground">
+                  The saved reason {staleReasonLabel} is no longer an option. Choose again.
+                </p>
+              ) : null}
               <FormMessage />
               {improvedToError ? (
                 <p className="text-sm font-medium text-destructive">{improvedToError}</p>

@@ -11,7 +11,12 @@ import {
   TRANSPORTATION_LABELS,
   readingProfileLabelsForGradeType,
 } from "@/lib/constants/enum-labels";
-import { EARLY_RUBRIC_VALUES, STANDARD_VALUES, languagesForGrade } from "@/lib/reading/policy";
+import {
+  ALL_BAND_VALUES,
+  EARLY_RUBRIC_VALUES,
+  languagesForGrade,
+  reportingBandValue,
+} from "@/lib/reading/policy";
 import { populationCte, type RawCountRow } from "@/lib/summary/queries/population";
 import {
   NOT_ANSWERED,
@@ -109,7 +114,9 @@ const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
 /**
  * SQL rows to facet rows. A NULL English profile is "Not collected" in a grade
  * that does not record English (`languagesForGrade`) and "Not answered"
- * elsewhere; every other NULL is "Not answered".
+ * elsewhere; every other NULL is "Not answered". A Grade 1-3 profile still on
+ * the old combined "Developing or Transitioning" is counted as Developing
+ * (`reportingBandValue`); `rollUp` sums it into that bucket's other rows.
  */
 export function learnerFacetRows(raw: readonly RawCountRow[]): FacetRow[] {
   return raw.map((r) => {
@@ -119,13 +126,17 @@ export function learnerFacetRows(raw: readonly RawCountRow[]): FacetRow[] {
         r.field === "englishProfile" && r.gt && !languagesForGrade(r.gt).includes("ENGLISH")
           ? NOT_COLLECTED
           : NOT_ANSWERED;
+    } else if ((r.field === "englishProfile" || r.field === "filipinoProfile") && r.gt) {
+      bucket = reportingBandValue(bucket, r.gt);
     }
     return { schoolId: r.school_id, gradeType: r.gt, field: r.field, bucket, count: Number(r.count) };
   });
 }
 
+// Every band across grades, lowest first; a grade simply has no rows in the
+// columns it never offers.
 const PROFILE_BUCKETS = [
-  ...STANDARD_VALUES,
+  ...ALL_BAND_VALUES,
   ...EARLY_RUBRIC_VALUES,
   NOT_ANSWERED,
   NOT_COLLECTED,

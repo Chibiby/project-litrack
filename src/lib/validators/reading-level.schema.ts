@@ -14,6 +14,12 @@ const READING_PROFILE = [
   "LETTER_LEVEL",
   "CV_BLENDING",
   "CVC_BLENDING",
+  // Grade 1-3 only. Which values a grade may save — including rejecting the
+  // legacy combined INSTRUCTIONAL_DEVELOPING for Grade 1-3 — is the action's
+  // check (`allowedReadingValuesForGrade`, `isLegacyReadingValue`), because
+  // only the action knows the learner's grade.
+  "DEVELOPING",
+  "TRANSITIONING",
 ] as const;
 
 const WEEKLY_WORD_RECOGNITION_LEVEL = [

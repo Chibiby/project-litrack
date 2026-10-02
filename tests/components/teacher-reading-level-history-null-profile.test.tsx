@@ -1,5 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readingProfileLabelsForGradeType } from "@/lib/constants/enum-labels";
 
 /**
  * `ReadingLevelRecord.englishProfile` / `filipinoProfile` became nullable so a
@@ -99,7 +100,14 @@ describe("teacher reading-level history — null profile", () => {
     expect(partialRow.getAllByText("—").length).toBeGreaterThanOrEqual(2);
 
     const completeRow = within(rows[2]);
-    expect(completeRow.getByText("Developing or Transitioning")).not.toBeNull();
+    expect(
+      completeRow.getByText(
+        readingProfileLabelsForGradeType("G3").INSTRUCTIONAL_DEVELOPING
+      )
+    ).not.toBeNull();
+    expect(
+      readingProfileLabelsForGradeType("G3").INSTRUCTIONAL_DEVELOPING
+    ).toBe("Developing or Transitioning — needs update");
     expect(completeRow.getByText("Grade-level Ready")).not.toBeNull();
   });
 });

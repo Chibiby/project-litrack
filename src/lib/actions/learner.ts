@@ -38,7 +38,9 @@ import {
 } from "@/lib/teachers/advisory";
 import { isEligibleAralTutor } from "@/lib/teachers/aral-tutor";
 import { notifyAralAssigned } from "@/lib/notifications";
-import { languagesForGrade, allowedReadingValuesForGrade } from "@/lib/reading/policy";
+import {
+  LEGACY_READING_VALUE_MESSAGE, allowedReadingValuesForGrade, isLegacyReadingValue, languagesForGrade,
+} from "@/lib/reading/policy";
 import { action } from "@/lib/errors/action";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
@@ -133,6 +135,10 @@ export const createLearner = action("createLearner", async (
   }
   if (!collectsEnglish && parsed.data.englishReadingProfile) {
     return { ok: false, error: "English reading level is not collected for this grade" };
+  }
+  const profiles = [parsed.data.englishReadingProfile, parsed.data.filipinoReadingProfile];
+  if (profiles.some((v) => isLegacyReadingValue(v, advisory.gradeType))) {
+    return { ok: false, error: LEGACY_READING_VALUE_MESSAGE };
   }
   if (
     parsed.data.englishReadingProfile &&
@@ -288,6 +294,12 @@ export const updateLearner = action("updateLearner", async (formData: FormData):
   // that is both out-of-policy AND changed gets rejected. This carve-out is
   // update-only: `createLearner` has no stored value to compare against, so
   // every value there must be in policy.
+  // Except: a Grade 1-3 legacy combined level must be re-picked even when
+  // unchanged — the project owner wants those rows re-assessed, not carried.
+  const profiles = [parsed.data.englishReadingProfile, parsed.data.filipinoReadingProfile];
+  if (profiles.some((v) => isLegacyReadingValue(v, learner.gradeLevel.type))) {
+    return { ok: false, error: LEGACY_READING_VALUE_MESSAGE };
+  }
   if (
     parsed.data.englishReadingProfile &&
     parsed.data.englishReadingProfile !== learner.englishReadingProfile &&

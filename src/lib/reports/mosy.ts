@@ -21,18 +21,23 @@
  * every learner's `profile` is `null` — the ARAL Profile is a dormant-safe,
  * optional record, and no workflow (this report included) may gate on it.
  *
- * DECISION — no invented "Transitioning" band. DepEd's CRLA rubric (Grades
+ * DECISION — CRLA five bands, Phil-IRI four. DepEd's CRLA rubric (Grades
  * 1-3) has FIVE bands (Low Emerging, High Emerging, Developing, Transitioning,
- * Grade Ready); LITRACK's `ReadingProfile` enum has FOUR values. Rather than
- * split `INSTRUCTIONAL_DEVELOPING` or `INDEPENDENT_GRADE_READY` into a
- * fabricated fifth band with no underlying data, the CRLA summary block below
- * shows exactly LITRACK's four bands under DepEd's CRLA names (`Developing`
- * and `Grade Ready` absorb whatever a paper CRLA form would have called
- * "Transitioning") and its note says so explicitly. Kinder is excluded from
- * both DepEd summary blocks below — it is assessed on a separate letter/word
- * readiness rubric (`EARLY_RUBRIC_VALUES`), not the CRLA/Phil-IRI four bands,
- * and mapping one onto the other would be inventing data the school never
- * recorded.
+ * Grade Ready), and Grade 1-3 now record all five: `DEVELOPING` and
+ * `TRANSITIONING` are their own `ReadingProfile` values, split out of the old
+ * combined "Developing or Transitioning" (`INSTRUCTIONAL_DEVELOPING`). So the
+ * CRLA summary block shows a real Transitioning column between Developing and
+ * Grade Ready. A Grade 1-3 row saved before the split still holds
+ * `INSTRUCTIONAL_DEVELOPING`; every count here passes values through
+ * `reportingBandValue`, so such a row is counted as Developing (the project
+ * owner's rule) while the Learner Detail block still labels it "needs update".
+ * Phil-IRI (Grades 4+) keeps its four bands; a stray `DEVELOPING` or
+ * `TRANSITIONING` under a Grade 4+ grade (a promoted learner's old value) is
+ * off that grade's rubric, so like any off-rubric value it is counted as Not
+ * Assessed rather than forced into a band. Kinder is excluded from both DepEd
+ * summary blocks below — it is assessed on a separate letter/word readiness
+ * rubric (`EARLY_RUBRIC_VALUES`), not the CRLA/Phil-IRI bands, and mapping one
+ * onto the other would be inventing data the school never recorded.
  */
 import { computeReadingLevelStats } from "@/lib/aral/reading-level-stats";
 import { parseLocalDateKey } from "@/lib/date-keys";
@@ -40,12 +45,16 @@ import {
   INTERVENTION_LABELS,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
+  labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import { formatListingName } from "@/lib/names";
 import {
+  G1_TO_G3_VALUES,
+  STANDARD_VALUES,
   allowedReadingValuesForGrade,
   languagesForGrade,
   readingProfileOptionsForGrade,
+  reportingBandValue,
 } from "@/lib/reading/policy";
 import type { ReportBlock } from "./render";
 
@@ -183,8 +192,14 @@ function buildLanguageBlock(
     // across the row. `computeReadingLevelStats`'s own docblock already
     // treats off-rubric values as "ignored" for the average; this keeps that
     // same rule for the assessed/coverage figures.
-    const assessedCount = learnersInGrade.filter((l) => {
+    // Every count reads the reporting band: a Grade 1-3 legacy "Developing or
+    // Transitioning" row counts as Developing (see the file header).
+    const bandOf = (l: MosyLearner): string | null => {
       const value = l.record?.[langKey];
+      return value == null ? null : reportingBandValue(value, grade.type);
+    };
+    const assessedCount = learnersInGrade.filter((l) => {
+      const value = bandOf(l);
       return value != null && allowed.includes(value);
     }).length;
     const statsRecords = learnersInGrade.map((l) => ({
@@ -205,7 +220,7 @@ function buildLanguageBlock(
 
     const bandCounts = bandColumns.map((col) => {
       if (!allowed.includes(col.value)) return null;
-      return learnersInGrade.filter((l) => l.record?.[langKey] === col.value).length;
+      return learnersInGrade.filter((l) => bandOf(l) === col.value).length;
     });
 
     rows.push([
@@ -274,18 +289,17 @@ const PHIL_IRI_GRADE_TYPES = new Set([
   "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "FLOATING",
 ]);
 
-/** Band order shared by both DepEd summaries — see the file header decision on "Transitioning". */
-const BAND_VALUES = [
-  "NON_DECODER_LOW_EMERGENT",
-  "FRUSTRATION_HIGH_EMERGENT",
-  "INSTRUCTIONAL_DEVELOPING",
-  "INDEPENDENT_GRADE_READY",
-] as const;
+/** CRLA bands, lowest first — the Grade 1-3 rubric (see the file header decision). */
+const CRLA_BAND_VALUES = G1_TO_G3_VALUES;
+
+/** Phil-IRI bands, lowest first — the Grade 4+ four (see the file header decision). */
+const PHIL_IRI_BAND_VALUES = STANDARD_VALUES;
 
 const CRLA_BAND_LABELS: Record<string, string> = {
   NON_DECODER_LOW_EMERGENT: "Low Emerging",
   FRUSTRATION_HIGH_EMERGENT: "High Emerging",
-  INSTRUCTIONAL_DEVELOPING: "Developing",
+  DEVELOPING: "Developing",
+  TRANSITIONING: "Transitioning",
   INDEPENDENT_GRADE_READY: "Grade Ready",
 };
 
@@ -305,9 +319,10 @@ const PHIL_IRI_BAND_LABELS: Record<string, string> = {
  */
 function primaryBandValue(learner: MosyLearner): string | null {
   if (!learner.record) return null;
-  return languagesForGrade(learner.gradeType).includes("ENGLISH")
+  const value = languagesForGrade(learner.gradeType).includes("ENGLISH")
     ? learner.record.englishProfile
     : learner.record.filipinoProfile;
+  return value == null ? null : reportingBandValue(value, learner.gradeType);
 }
 
 function sexRowLabel(sex: "MALE" | "FEMALE" | "TOTAL"): string {
@@ -317,9 +332,8 @@ function sexRowLabel(sex: "MALE" | "FEMALE" | "TOTAL"): string {
 /**
  * One DepEd-style consolidation block (CRLA or Phil-IRI): a row per grade x
  * (Male, Female, Total), columns ARAL Learners / Assessed / Not Assessed then
- * the bucket's four DepEd-labelled bands. `bandLabels` distinguishes the two
- * callers below; the underlying `ReadingProfile` values and their order are
- * identical, only the DepEd-facing header text differs.
+ * the bucket's DepEd-labelled bands. `bandValues`/`bandLabels` distinguish the
+ * two callers below: CRLA has five bands, Phil-IRI four.
  */
 function buildGradeSexSummaryBlock(
   heading: string,
@@ -328,6 +342,7 @@ function buildGradeSexSummaryBlock(
   gradeTypes: Set<string>,
   grades: MosyGrade[],
   learners: MosyLearner[],
+  bandValues: readonly string[],
   bandLabels: Record<string, string>
 ): ReportBlock {
   const inScope = grades.filter((g) => gradeTypes.has(g.type));
@@ -350,7 +365,7 @@ function buildGradeSexSummaryBlock(
         return value != null && allowed.includes(value);
       });
       const notAssessed = group.length - assessed.length;
-      const bandCounts = BAND_VALUES.map((value) => {
+      const bandCounts = bandValues.map((value) => {
         if (!allowed.includes(value)) return null;
         return group.filter((l) => primaryBandValue(l) === value).length;
       });
@@ -376,7 +391,7 @@ function buildGradeSexSummaryBlock(
       { header: "ARAL Learners", width: 12 },
       { header: "Assessed", width: 10 },
       { header: "Not Assessed", width: 12 },
-      ...BAND_VALUES.map((v) => ({ header: bandLabels[v], width: 16 })),
+      ...bandValues.map((v) => ({ header: bandLabels[v] ?? v, width: 16 })),
     ],
     rows,
     boldRowIndices,
@@ -388,10 +403,11 @@ function buildCrlaSummaryBlock(grades: MosyGrade[], learners: MosyLearner[]): Re
   return buildGradeSexSummaryBlock(
     "Summary by Grade and Sex — CRLA (Grades 1-3)",
     "CRLA Summary",
-    "CRLA per DO 18 s. 2025 defines five bands including Transitioning; LITRACK's rubric has four, so Developing and Grade Ready absorb what a paper CRLA form would separate out as Transitioning — no band is invented. Kinder is not included here; it is assessed on a separate letter/word readiness rubric.",
+    "CRLA per DO 18 s. 2025 defines five bands, and Grades 1-3 record all five. Levels saved before Developing and Transitioning were separate choices read \"Developing or Transitioning\" and are counted under Developing until the teacher updates them. Kinder is not included here; it is assessed on a separate letter/word readiness rubric.",
     CRLA_GRADE_TYPES,
     grades,
     learners,
+    CRLA_BAND_VALUES,
     CRLA_BAND_LABELS
   );
 }
@@ -404,6 +420,7 @@ function buildPhilIriSummaryBlock(grades: MosyGrade[], learners: MosyLearner[]):
     PHIL_IRI_GRADE_TYPES,
     grades,
     learners,
+    PHIL_IRI_BAND_VALUES,
     PHIL_IRI_BAND_LABELS
   );
 }
@@ -479,7 +496,10 @@ function formatAssessmentMonth(weekStartKey: string): string {
 function labelForBand(value: string | null, gradeType: string): string | null {
   if (value == null) return null;
   const option = readingProfileOptionsForGrade(gradeType).find((o) => o.value === value);
-  return option?.label ?? value;
+  // A value no longer offered (a Grade 1-3 legacy combined level, a promoted
+  // learner's old band) still gets its label — "… needs update" for the legacy
+  // one — rather than the raw enum name.
+  return option?.label ?? labelReadingProfile(value, gradeType);
 }
 
 function assessmentStatus(record: MosyReadingRecord | null): string {

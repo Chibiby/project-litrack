@@ -5,7 +5,12 @@ import {
   READING_PROFILE_LABELS,
   readingProfileLabelsForGradeType,
 } from "@/lib/constants/enum-labels";
-import { EARLY_RUBRIC_VALUES, STANDARD_VALUES, languagesForGrade } from "@/lib/reading/policy";
+import {
+  ALL_BAND_VALUES,
+  EARLY_RUBRIC_VALUES,
+  languagesForGrade,
+  reportingBandValue,
+} from "@/lib/reading/policy";
 import { populationCte } from "@/lib/summary/queries/population";
 import {
   monthLabel,
@@ -100,8 +105,10 @@ export async function queryReadingLevelRows(
   `);
 }
 
+// Every band across grades, lowest first; a grade simply has no rows in the
+// columns it never offers.
 const PROFILE_BUCKETS = [
-  ...STANDARD_VALUES,
+  ...ALL_BAND_VALUES,
   ...EARLY_RUBRIC_VALUES,
   NOT_ANSWERED,
   NO_RECORD,
@@ -132,7 +139,8 @@ export function readingLevelDistRows(
       schoolId: r.school_id,
       gradeType: r.gt,
       field: "level",
-      bucket: r.val ?? NOT_ANSWERED,
+      // A Grade 1-3 legacy "Developing or Transitioning" counts as Developing.
+      bucket: r.val == null ? NOT_ANSWERED : reportingBandValue(r.val, r.gt),
       count: Number(r.n),
     });
     const k = `${r.school_id}|${r.gt}`;

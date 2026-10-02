@@ -2,7 +2,6 @@ import "server-only";
 import type { AralMosyMoveOutReason, AralMosyOutcome, Prisma, ReadingProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS, labelReadingProfile } from "@/lib/constants/enum-labels";
-import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 import {
   LEARNER_PAGE_SIZE,
   nameSearchWhere,
@@ -11,53 +10,25 @@ import {
   type LearnerListSectionFilter,
 } from "@/lib/learners/pagination";
 import { formatListingNameFromRecord } from "@/lib/names";
-import { readingProfileOptionsForGrade } from "@/lib/reading/policy";
 import { mosyLearnerScope } from "@/lib/teachers/scope";
 import {
   MOSY_STATUSES,
   computeMosyStats,
-  formatPreviousLevel,
+  formatBosyLevel,
   mosyLevelLanguage,
+  mosyLevelOptions,
   mosyReasonChoices,
   mosyReasonLabel,
   mosyRowStatus,
   mosyStatusWhere,
+  type BosyLevel,
   type MosyLevelLanguage,
+  type MosyLevelOption,
   type MosyReasonChoice,
   type MosyRowStatus,
   type MosyStats,
   type MosyStatusFilter,
-  type PreviousLevel,
 } from "@/lib/aral/mosy";
-
-/**
- * The one definition of a learner's "previous level" record: the latest reading
- * record on or after the school year start. The page renders it and the save
- * action validates the reason against it, so they cannot disagree.
- */
-export function previousReadingLevelArgs(schoolYearStart: Date) {
-  return {
-    where: { weekStart: { gte: schoolYearStart } },
-    orderBy: { weekStart: "desc" },
-    take: 1,
-    select: { weekStart: true, englishProfile: true, filipinoProfile: true },
-  } as const satisfies Prisma.Learner$readingLevelsArgs;
-}
-
-/** Filipino profile of the previous-level record, or null. Caller scopes the learner to its school. */
-export async function loadPreviousFilipinoLevel(
-  tx: Prisma.TransactionClient,
-  learnerId: string,
-  schoolYearStart: Date
-): Promise<string | null> {
-  const args = previousReadingLevelArgs(schoolYearStart);
-  const record = await tx.readingLevelRecord.findFirst({
-    where: { learnerId, ...args.where },
-    orderBy: args.orderBy,
-    select: args.select,
-  });
-  return record?.filipinoProfile ?? null;
-}
 
 /** Plain, serializable row for the MOSY table. No `Date` crosses to the client. */
 export type MosyRow = {
@@ -69,9 +40,16 @@ export type MosyRow = {
   sectionName: string | null;
   isAralLearner: boolean;
   status: MosyRowStatus;
-  /** Levels this learner's grade may use, in rubric order. */
-  levelOptions: { value: string; label: string }[];
-  /** Move-out reasons offered to this learner (levels above the previous one, plus LSEN). */
+  /**
+   * Levels this learner's grade may use, in rubric order, by the decision being
+   * saved. `NONE` is a deferred (no decision yet) save.
+   */
+  levelOptionsByDecision: {
+    STAY: MosyLevelOption[];
+    MOVE_OUT: MosyLevelOption[];
+    NONE: MosyLevelOption[];
+  };
+  /** Move-out reasons offered to this learner (see `mosyReasonChoices`). */
   reasonChoices: MosyReasonChoice[];
   mosyLevel: ReadingProfile | null;
   mosyLevelLabel: string | null;
@@ -82,7 +60,8 @@ export type MosyRow = {
   improvedToLevel: ReadingProfile | null;
   reasonLabel: string | null;
   remarks: string | null;
-  previousLevel: PreviousLevel | null;
+  /** BOSY level (initial reading profile); null only when neither language is set. */
+  bosyLevel: BosyLevel | null;
 };
 
 export type MosyPageData = {
@@ -196,7 +175,8 @@ function mosyRowSelect(schoolYear: { id: string; startDateKey: string }) {
         updatedAt: true,
       },
     },
-    readingLevels: previousReadingLevelArgs(parseLocalDateKey(schoolYear.startDateKey)),
+    filipinoReadingProfile: true,
+    englishReadingProfile: true,
   } as const satisfies Prisma.LearnerSelect;
 }
 
@@ -206,8 +186,8 @@ type MosyLearnerRecord = Prisma.LearnerGetPayload<{
 
 function toMosyRow(l: MosyLearnerRecord): MosyRow {
   const d = l.mosyDecisions[0] ?? null;
-  const latest = l.readingLevels[0] ?? null;
   const gradeType = l.gradeLevel.type;
+  const bosy = formatBosyLevel(l, gradeType);
   return {
     id: l.id,
     fullName: l.fullName,
@@ -217,8 +197,12 @@ function toMosyRow(l: MosyLearnerRecord): MosyRow {
     sectionName: l.section?.name ?? null,
     isAralLearner: l.isAralLearner,
     status: mosyRowStatus({ isAralLearner: l.isAralLearner, row: d }),
-    levelOptions: readingProfileOptionsForGrade(gradeType),
-    reasonChoices: mosyReasonChoices(gradeType, latest?.filipinoProfile ?? null),
+    levelOptionsByDecision: {
+      STAY: mosyLevelOptions(gradeType, "STAY"),
+      MOVE_OUT: mosyLevelOptions(gradeType, "MOVE_OUT"),
+      NONE: mosyLevelOptions(gradeType, null),
+    },
+    reasonChoices: mosyReasonChoices(gradeType, l.filipinoReadingProfile),
     mosyLevel: d?.mosyLevel ?? null,
     mosyLevelLabel: d ? labelReadingProfile(d.mosyLevel, gradeType) : null,
     mosyLanguage: mosyLevelLanguage(gradeType),
@@ -227,16 +211,7 @@ function toMosyRow(l: MosyLearnerRecord): MosyRow {
     improvedToLevel: d?.improvedToLevel ?? null,
     reasonLabel: d?.reason ? mosyReasonLabel(d.reason, d.improvedToLevel, gradeType) : null,
     remarks: d?.remarks ?? null,
-    previousLevel: formatPreviousLevel(
-      latest
-        ? {
-            monthKey: formatLocalDateKey(latest.weekStart),
-            englishProfile: latest.englishProfile,
-            filipinoProfile: latest.filipinoProfile,
-          }
-        : null,
-      gradeType
-    ),
+    bosyLevel: bosy.filipino === null && bosy.english === null ? null : bosy,
   };
 }
 

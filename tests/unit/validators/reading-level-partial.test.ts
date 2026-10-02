@@ -44,6 +44,20 @@ describe("readingLevelMonthlyBulkSchema — partial rows", () => {
     expect(res.data.entries[0].readingComprehensionLevel).toBeUndefined();
   });
 
+  it("accepts DEVELOPING and TRANSITIONING (the Grade 1-3 split levels) as profile values", () => {
+    const res = readingLevelMonthlyBulkSchema.safeParse({
+      monthStart: "2026-08-15",
+      entries: [
+        { learnerId: "learner-a", englishProfile: "DEVELOPING", filipinoProfile: "TRANSITIONING" },
+      ],
+    });
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.entries[0].englishProfile).toBe("DEVELOPING");
+    expect(res.data.entries[0].filipinoProfile).toBe("TRANSITIONING");
+  });
+
   it("rejects an entry with all six fields absent, with the exact message", () => {
     const res = readingLevelMonthlyBulkSchema.safeParse({
       monthStart: "2026-08-15",

@@ -31,6 +31,8 @@ export type LearnerPurgeCounts = {
   readingLevelRecord: number;
   termGrade: number;
   aralProfile: number;
+  aralMosyDecision: number;
+  kinderCompetencyRecord: number;
 };
 
 /**
@@ -43,14 +45,32 @@ export async function learnerPurgeCounts(
   client: Client,
   learnerId: string
 ): Promise<LearnerPurgeCounts> {
-  const [enrollment, attendance, readingLevelRecord, termGrade, aralProfile] = await Promise.all([
+  const [
+    enrollment,
+    attendance,
+    readingLevelRecord,
+    termGrade,
+    aralProfile,
+    aralMosyDecision,
+    kinderCompetencyRecord,
+  ] = await Promise.all([
     client.enrollment.count({ where: { learnerId } }),
     client.attendance.count({ where: { learnerId } }),
     client.readingLevelRecord.count({ where: { learnerId } }),
     client.termGrade.count({ where: { learnerId } }),
     client.aralProfile.count({ where: { learnerId } }),
+    client.aralMosyDecision.count({ where: { learnerId } }),
+    client.kinderCompetencyRecord.count({ where: { learnerId } }),
   ]);
-  return { enrollment, attendance, readingLevelRecord, termGrade, aralProfile };
+  return {
+    enrollment,
+    attendance,
+    readingLevelRecord,
+    termGrade,
+    aralProfile,
+    aralMosyDecision,
+    kinderCompetencyRecord,
+  };
 }
 
 /**
@@ -60,14 +80,24 @@ export async function learnerPurgeCounts(
  */
 export async function purgeLearnerRecord(
   tx: Prisma.TransactionClient,
-  learnerId: string
+  learnerId: string,
+  opts: { acceptArchived?: boolean } = {}
 ): Promise<LearnerPurgeCounts> {
   const counts = await learnerPurgeCounts(tx, learnerId);
-  // The `deletedAt IS NOT NULL` guard has to live on the write, not only on
-  // the caller's earlier `findFirst` — a live row must never be reachable
-  // from this page, and the read and the delete are not the same statement.
+  // The guard has to live on the write, not only on the caller's earlier
+  // `findFirst` — a live row must never be reachable from here, and the read
+  // and the delete are not the same statement. By default only a soft-deleted
+  // row (`deletedAt`) qualifies, which is what `/admin/archive` lists. The
+  // teacher's Archived Learners tab also holds learners that were only
+  // archived (`archivedAt` set, `deletedAt` null), so that caller opts in with
+  // `acceptArchived`; an active learner (both null) still matches nothing.
   const { count } = await tx.learner.deleteMany({
-    where: { id: learnerId, deletedAt: { not: null } },
+    where: opts.acceptArchived
+      ? {
+          id: learnerId,
+          OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+        }
+      : { id: learnerId, deletedAt: { not: null } },
   });
   if (count !== 1) throw resourceNotFound("Learner");
   return counts;

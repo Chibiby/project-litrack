@@ -44,16 +44,15 @@ export type MosyExportInput = {
   truncated: boolean;
 };
 
-/** "Fil: Low Emerging · Eng: Developing (Oct 2026)", or null when there is no record. */
-function previousLevelCell(row: MosyExportRow): string | null {
-  const p = row.previousLevel;
-  if (!p) return null;
+/** "Fil: Low Emergent · Eng: Developing", or null when no BOSY level is set. */
+function bosyLevelCell(row: MosyExportRow): string | null {
+  const b = row.bosyLevel;
+  if (!b) return null;
   const parts = [
-    p.filipino ? `Fil: ${p.filipino}` : null,
-    p.english ? `Eng: ${p.english}` : null,
+    b.filipino ? `Fil: ${b.filipino}` : null,
+    b.english ? `Eng: ${b.english}` : null,
   ].filter((s): s is string => s !== null);
-  if (parts.length === 0) return null;
-  return `${parts.join(" · ")} (${p.monthLabel})`;
+  return parts.length === 0 ? null : parts.join(" · ");
 }
 
 /** "Fil: Low Emergent" (Kinder to G2) or "Eng: Developing" (G3 up); null when no level is saved. */
@@ -86,7 +85,7 @@ export function buildMosyExportBlocks(input: MosyExportInput): ReportBlock[] {
       { header: "#", width: 4 },
       { header: "Learner name", width: 24 },
       { header: "Grade & section", width: 16 },
-      { header: "Previous level", width: 34 },
+      { header: "BOSY level", width: 30 },
       { header: "MOSY reading level", width: 20 },
       { header: "ARAL status decision", width: 14 },
       { header: "Reason", width: 26 },
@@ -98,7 +97,7 @@ export function buildMosyExportBlocks(input: MosyExportInput): ReportBlock[] {
       i + 1,
       row.listingName,
       gradeSectionCell(row),
-      previousLevelCell(row),
+      bosyLevelCell(row),
       mosyLevelCell(row),
       MOSY_STATUS_LABELS[row.status],
       row.reasonLabel,

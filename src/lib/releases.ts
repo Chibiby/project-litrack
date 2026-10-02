@@ -135,6 +135,38 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.31.0",
+    date: "2026-10-02",
+    title: "Developing and Transitioning are now separate levels, and a clearer MOSY decision",
+    announce: true,
+    fixes: [
+      {
+        text: "Grade 1 to 3 reading levels now list Developing and Transitioning separately. Learners saved as \"Developing or Transitioning\" are marked \"needs update\" until you choose one of the two; reports count them as Developing until then.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"],
+      },
+      {
+        text: "In the MOSY decision, the reading levels now match the decision. Grade 1 to 3: Stay in ARAL offers Low or High Emergent, and Move out offers Developing, Transitioning or Grade-level Ready. Grade 4 to 10: Stay offers Non-decoder or Frustration, and Move out offers Instructional or Independent.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Move-out reasons follow the reading level you pick (\"Improved to …\"), and the two LSEN reasons are still there.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The MOSY Report now shows each learner's BOSY level, the reading level entered when they were first enrolled, instead of the previous month's level.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "You can now permanently remove an archived learner from the Archived Learners tab. You confirm by typing the learner's name, and it cannot be undone.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "On Monthly Reading Level, Grade is now its own filter on computers. On phones, Grade, Section and Gender are together under one Filter button.",
+        roles: ["TEACHER"],
+      },
+    ],
+  },
+  {
     version: "2.30.0",
     date: "2026-10-02",
     title: "A Management menu for School Heads, and ARAL Tutors pages",

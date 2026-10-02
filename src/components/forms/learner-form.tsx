@@ -41,6 +41,8 @@ import {
   toOptions,
 } from "@/lib/constants/enum-labels";
 import {
+  LEGACY_READING_VALUE_MESSAGE,
+  isLegacyReadingValue,
   isReadingValueAllowedForGrade,
   languagesForGrade,
   readingProfileOptionsForGrade,
@@ -160,6 +162,8 @@ function optionsWithLegacyValue(
   storedValue: string | null | undefined
 ): { value: string; label: string }[] {
   const base = readingProfileOptionsForGrade(gradeType ?? "");
+  // The old combined Grade 1-3 level is never offered back: the teacher re-picks.
+  if (isLegacyReadingValue(storedValue, gradeType ?? "")) return base;
   if (isEdit && storedValue && !isReadingValueAllowedForGrade(storedValue, gradeType ?? "")) {
     return [...base, { value: storedValue, label: labelReadingProfile(storedValue, gradeType) }];
   }
@@ -243,9 +247,19 @@ export function LearnerForm({
 }: LearnerFormProps) {
   const [pending, startTransition] = useTransition();
   const [duplicatePending, setDuplicatePending] = useState(false);
-  const [englishProfile, setEnglishProfile] = useState(defaultValues?.englishReadingProfile ?? "");
+  const englishIsLegacy = isLegacyReadingValue(
+    defaultValues?.englishReadingProfile,
+    gradeType ?? ""
+  );
+  const filipinoIsLegacy = isLegacyReadingValue(
+    defaultValues?.filipinoReadingProfile,
+    gradeType ?? ""
+  );
+  const [englishProfile, setEnglishProfile] = useState(
+    englishIsLegacy ? "" : (defaultValues?.englishReadingProfile ?? "")
+  );
   const [filipinoProfile, setFilipinoProfile] = useState(
-    defaultValues?.filipinoReadingProfile ?? ""
+    filipinoIsLegacy ? "" : (defaultValues?.filipinoReadingProfile ?? "")
   );
   const [previousTransfers, setPreviousTransfers] = useState(
     defaultValues?.previousTransfers ?? ""
@@ -714,12 +728,19 @@ export function LearnerForm({
         {includesEnglish ? (
           <div>
             <p className="mb-2 text-sm font-medium">Reading Level (English) *</p>
+            {englishIsLegacy && englishProfile === "" ? (
+              <p role="status" className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                {LEGACY_READING_VALUE_MESSAGE}
+              </p>
+            ) : null}
             <FieldRadioGroup
               name="englishReadingProfile"
               options={englishReadingProfileOptions}
               value={englishProfile}
               onValueChange={setEnglishProfile}
-              defaultValue={defaultValues?.englishReadingProfile ?? undefined}
+              defaultValue={
+                englishIsLegacy ? undefined : (defaultValues?.englishReadingProfile ?? undefined)
+              }
             />
             {englishProfile === FRUSTRATION ? (
               <div className="mt-2">
@@ -736,12 +757,17 @@ export function LearnerForm({
 
         <div className={includesEnglish ? "border-t border-border/60 pt-4" : undefined}>
           <p className="mb-2 text-sm font-medium">Reading Level (Filipino) *</p>
+          {filipinoIsLegacy && filipinoProfile === "" ? (
+            <p role="status" className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              {LEGACY_READING_VALUE_MESSAGE}
+            </p>
+          ) : null}
           <FieldRadioGroup
             name="filipinoReadingProfile"
             options={filipinoReadingProfileOptions}
             value={filipinoProfile}
             onValueChange={setFilipinoProfile}
-            defaultValue={defaultValues?.filipinoReadingProfile}
+            defaultValue={filipinoIsLegacy ? undefined : defaultValues?.filipinoReadingProfile}
           />
           {filipinoProfile === FRUSTRATION ? (
             <div className="mt-2">

@@ -24,6 +24,17 @@ describe("computeReadingLevelStats", () => {
     expect(stats.averageLabel).toBe("Instructional");
   });
 
+  it("Grade 1-3: a legacy combined level averages as Developing", () => {
+    const stats = computeReadingLevelStats({
+      total: 1,
+      completed: 1,
+      records: [{ englishProfile: null, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" }],
+      gradeType: "G2",
+    });
+
+    expect(stats.averageLabel).toBe("Developing");
+  });
+
   it("nobody assessed: averageLabel is null, completionPct is 0, nothing is NaN", () => {
     const stats = computeReadingLevelStats({
       total: 10,

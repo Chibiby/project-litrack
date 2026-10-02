@@ -537,11 +537,45 @@ describe("buildMosyBlocks — Summary by Grade and Sex (CRLA / Phil-IRI)", () =>
           isAralLearner: true,
           record: null,
         }),
+        learner({
+          id: "f1",
+          gradeLevelId: G3.id,
+          gradeType: G3.type,
+          gradeLabel: G3.label,
+          sex: "FEMALE",
+          isAralLearner: true,
+          record: {
+            weekStartKey: "2026-11-10",
+            englishProfile: "TRANSITIONING",
+            filipinoProfile: "TRANSITIONING",
+            wordRecognitionLevel: "LEVEL_4",
+            readingComprehensionLevel: "LEVEL_2",
+            complete: true,
+          },
+        }),
+        // Saved before the split: the old combined level counts as Developing.
+        learner({
+          id: "f2",
+          gradeLevelId: G3.id,
+          gradeType: G3.type,
+          gradeLabel: G3.label,
+          sex: "FEMALE",
+          isAralLearner: true,
+          record: {
+            weekStartKey: "2026-11-10",
+            englishProfile: "INSTRUCTIONAL_DEVELOPING",
+            filipinoProfile: "INSTRUCTIONAL_DEVELOPING",
+            wordRecognitionLevel: "LEVEL_3",
+            readingComprehensionLevel: "LEVEL_1",
+            complete: true,
+          },
+        }),
       ],
     };
     const blocks = buildMosyBlocks(input);
     const crla = findBlock(blocks, "Summary by Grade and Sex — CRLA (Grades 1-3)");
 
+    // CRLA's five bands, Transitioning a real band between Developing and Grade Ready.
     expect(crla.columns.map((c) => c.header)).toEqual([
       "Grade Level",
       "Sex",
@@ -551,19 +585,31 @@ describe("buildMosyBlocks — Summary by Grade and Sex (CRLA / Phil-IRI)", () =>
       "Low Emerging",
       "High Emerging",
       "Developing",
+      "Transitioning",
       "Grade Ready",
     ]);
-    // No "Transitioning" column is ever invented.
-    expect(crla.columns.map((c) => c.header)).not.toContain("Transitioning");
 
     const maleRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Male")!;
-    expect(maleRow).toEqual([G3.label, "Male", 2, 1, 1, 0, 0, 0, 1]);
+    expect(maleRow).toEqual([G3.label, "Male", 2, 1, 1, 0, 0, 0, 0, 1]);
 
+    // f1 Transitioning, f2 legacy combined level counted as Developing.
     const femaleRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Female")!;
-    expect(femaleRow).toEqual([G3.label, "Female", 0, 0, 0, 0, 0, 0, 0]);
+    expect(femaleRow).toEqual([G3.label, "Female", 2, 2, 0, 0, 0, 1, 1, 0]);
 
     const totalRow = crla.rows.find((r) => r[0] === G3.label && r[1] === "Total")!;
-    expect(totalRow).toEqual([G3.label, "Total", 2, 1, 1, 0, 0, 0, 1]);
+    expect(totalRow).toEqual([G3.label, "Total", 4, 3, 1, 0, 0, 1, 1, 1]);
+
+    // The per-grade English block counts the legacy row under Developing too…
+    const english = findBlock(blocks, "Reading Level Profile per Grade Level (English)");
+    const developingCol = english.columns.findIndex((c) => c.header === "Developing");
+    expect(developingCol).toBeGreaterThan(-1);
+    expect(english.rows[0]![developingCol]).toBe(1);
+    expect(english.rows[0]![2]).toBe(3); // Assessed: m1, f1, f2
+
+    // …while Learner Detail still flags it for re-assessment.
+    const detail = findBlock(blocks, "Learner Detail");
+    const f2Row = detail.rows.find((r) => r[7] === "Developing or Transitioning — needs update");
+    expect(f2Row).toBeDefined();
   });
 
   it("Phil-IRI (Grades 4+): counts Non-decoder as its own band, separate from Frustration", () => {
@@ -608,6 +654,39 @@ describe("buildMosyBlocks — Summary by Grade and Sex (CRLA / Phil-IRI)", () =>
     const femaleRow = philIri.rows.find((r) => r[0] === G7.label && r[1] === "Female")!;
     // Non-decoder = 1, Frustration = 0 — the two are never conflated.
     expect(femaleRow).toEqual([G7.label, "Female", 1, 1, 0, 1, 0, 0, 0]);
+  });
+
+  it("Phil-IRI keeps four bands; a stray TRANSITIONING in Grade 4+ counts as Not Assessed", () => {
+    const G5 = { id: "grade-5", type: "G5", label: "Grade 5" };
+    const input: MosyInput = {
+      window: RESOLVED_WINDOW,
+      grades: [G5],
+      learners: [
+        learner({
+          id: "p1",
+          gradeLevelId: G5.id,
+          gradeType: G5.type,
+          gradeLabel: G5.label,
+          sex: "MALE",
+          isAralLearner: true,
+          record: {
+            weekStartKey: "2026-11-10",
+            englishProfile: "TRANSITIONING",
+            filipinoProfile: "TRANSITIONING",
+            wordRecognitionLevel: "LEVEL_4",
+            readingComprehensionLevel: "LEVEL_2",
+            complete: true,
+          },
+        }),
+      ],
+    };
+    const blocks = buildMosyBlocks(input);
+    const philIri = findBlock(blocks, "Summary by Grade and Sex — Phil-IRI (Grades 4+)");
+    expect(blocks).toHaveLength(6);
+    expect(philIri.columns.map((c) => c.header)).not.toContain("Transitioning");
+    expect(philIri.columns).toHaveLength(9);
+    const maleRow = philIri.rows.find((r) => r[0] === G5.label && r[1] === "Male")!;
+    expect(maleRow).toEqual([G5.label, "Male", 1, 0, 1, 0, 0, 0, 0]);
   });
 
   it("excludes Kinder from both DepEd summary blocks", () => {

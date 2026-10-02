@@ -15,9 +15,7 @@ import {
   ARAL_MOSY_MOVE_OUT_REASON_LABELS,
   labelReadingProfile,
 } from "@/lib/constants/enum-labels";
-import { parseLocalDateKey } from "@/lib/date-keys";
 import {
-  isReadingValueAllowedForGrade,
   languagesForGrade,
   readingProfileOptionsForGrade,
 } from "@/lib/reading/policy";
@@ -30,27 +28,68 @@ export type MosyReasonChoice = {
   label: string;
 };
 
+export type MosyLevelOption = { value: string; label: string };
+
+/** Grades whose MOSY levels depend on the decision (G1 to G10). */
+const BAND_SPLIT_G1_TO_G3 = new Set(["G1", "G2", "G3"]);
+const BAND_SPLIT_G4_TO_G10 = new Set(["G4", "G5", "G6", "G7", "G8", "G9", "G10"]);
+
+/** The two levels a learner who stays in ARAL (or has no decision yet) can be at. */
+const STAY_LEVELS = ["NON_DECODER_LOW_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"];
+const MOVE_OUT_LEVELS_G1_TO_G3 = ["DEVELOPING", "TRANSITIONING", "INDEPENDENT_GRADE_READY"];
+const MOVE_OUT_LEVELS_G4_TO_G10 = ["INSTRUCTIONAL_DEVELOPING", "INDEPENDENT_GRADE_READY"];
+
+/** True for G1 to G10, where level and reason follow the decision. */
+function isDecisionBandGrade(gradeType: string): boolean {
+  return BAND_SPLIT_G1_TO_G3.has(gradeType) || BAND_SPLIT_G4_TO_G10.has(gradeType);
+}
+
+function moveOutLevelValues(gradeType: string): string[] {
+  return BAND_SPLIT_G1_TO_G3.has(gradeType) ? MOVE_OUT_LEVELS_G1_TO_G3 : MOVE_OUT_LEVELS_G4_TO_G10;
+}
+
+/**
+ * MOSY reading levels a learner may be saved at, by decision. G1 to G10: STAY or
+ * no decision yet offers the two lowest levels, MOVE_OUT offers the move-out
+ * levels of the grade band. Every other grade (Kinder, G11, G12, floating)
+ * offers its whole scale whatever the decision. Labels and order come from
+ * `readingProfileOptionsForGrade`.
+ */
+export function mosyLevelOptions(
+  gradeType: string,
+  decision: AralMosyOutcome | null
+): MosyLevelOption[] {
+  const scale = readingProfileOptionsForGrade(gradeType);
+  if (!isDecisionBandGrade(gradeType)) return scale;
+  const wanted = decision === "MOVE_OUT" ? moveOutLevelValues(gradeType) : STAY_LEVELS;
+  return scale.filter((o) => wanted.includes(o.value));
+}
+
 /**
  * The only place that decides which move-out reasons a learner may use. The
  * dialog renders its result and `resolveMosySave` validates against it.
  *
- * Improvement choices: one per level of the grade's scale, in scale order, only
- * strictly above the previous Filipino level. No previous level, or one outside
- * the scale, offers every level except the lowest. The two LSEN reasons are
- * always offered.
+ * G1 to G10: one "Improved to" choice per move-out level of the grade band (the
+ * BOSY level does not filter them), then the two LSEN reasons. Other grades:
+ * one per level of the grade's scale strictly above the BOSY Filipino level; no
+ * BOSY level, or one outside the scale, offers every level except the lowest.
+ * The two LSEN reasons are always offered.
  */
 export function mosyReasonChoices(
   gradeType: string,
-  previousFilipinoLevel: string | null
+  bosyFilipinoLevel: string | null
 ): MosyReasonChoice[] {
   const scale = readingProfileOptionsForGrade(gradeType);
-  const prevIndex =
-    previousFilipinoLevel === null
-      ? -1
-      : scale.findIndex((o) => o.value === previousFilipinoLevel);
-  // Unknown previous level behaves like "at the lowest": everything above index 0.
-  const from = prevIndex < 0 ? 1 : prevIndex + 1;
-  const improved: MosyReasonChoice[] = scale.slice(from).map((o) => ({
+  let offered: MosyLevelOption[];
+  if (isDecisionBandGrade(gradeType)) {
+    offered = mosyLevelOptions(gradeType, "MOVE_OUT");
+  } else {
+    const bosyIndex =
+      bosyFilipinoLevel === null ? -1 : scale.findIndex((o) => o.value === bosyFilipinoLevel);
+    // Unknown BOSY level behaves like "at the lowest": everything above index 0.
+    offered = scale.slice(bosyIndex < 0 ? 1 : bosyIndex + 1);
+  }
+  const improved: MosyReasonChoice[] = offered.map((o) => ({
     key: `IMPROVED_READING_LEVEL:${o.value}`,
     reason: "IMPROVED_READING_LEVEL",
     improvedToLevel: o.value as ReadingProfile,
@@ -246,37 +285,32 @@ export const MOSY_LEVEL_LANGUAGE_PREFIXES: Record<MosyLevelLanguage, string> = {
   ENGLISH: "Eng",
 };
 
-export type PreviousLevel = {
+export type BosyLevel = {
   filipino: string | null;
   english: string | null;
-  monthLabel: string;
 };
 
-const monthFormat = new Intl.DateTimeFormat("en-PH", { month: "short", year: "numeric" });
-
 /**
- * Latest monthly reading level for the row. English is left out when the grade
- * does not read English. `monthKey` is a local `YYYY-MM-DD` key.
+ * The learner's BOSY level: the initial reading profile entered at enrolment.
+ * English is left out when the grade does not read English. Labels come from
+ * `labelReadingProfile`, so a Grade 1 to 3 legacy value reads "needs update".
  */
-export function formatPreviousLevel(
-  record: {
-    monthKey: string;
-    englishProfile: string | null;
-    filipinoProfile: string | null;
-  } | null,
+export function formatBosyLevel(
+  learner: {
+    filipinoReadingProfile: string | null;
+    englishReadingProfile: string | null;
+  },
   gradeType: string
-): PreviousLevel | null {
-  if (!record) return null;
+): BosyLevel {
   const showEnglish = languagesForGrade(gradeType).includes("ENGLISH");
   return {
-    filipino: record.filipinoProfile
-      ? labelReadingProfile(record.filipinoProfile, gradeType)
+    filipino: learner.filipinoReadingProfile
+      ? labelReadingProfile(learner.filipinoReadingProfile, gradeType)
       : null,
     english:
-      showEnglish && record.englishProfile
-        ? labelReadingProfile(record.englishProfile, gradeType)
+      showEnglish && learner.englishReadingProfile
+        ? labelReadingProfile(learner.englishReadingProfile, gradeType)
         : null,
-    monthLabel: monthFormat.format(parseLocalDateKey(record.monthKey)),
   };
 }
 
@@ -309,8 +343,8 @@ export type MosySaveInput = {
     improvedToLevel: ReadingProfile | null;
     remarks: string | null;
   };
-  /** Filipino profile of the latest reading record (what the page shows as previous level). */
-  previousFilipinoLevel: string | null;
+  /** The learner's BOSY Filipino reading profile (`Learner.filipinoReadingProfile`). */
+  bosyFilipinoLevel: string | null;
 };
 
 export type MosySaveResult =
@@ -345,7 +379,11 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
 
   // Scope (advisory section) is the caller's job: `saveMosyDecision` checks
   // `teacherOwnsMosyRow` on the locked learner row before calling this.
-  if (!isReadingValueAllowedForGrade(submitted.mosyLevel, learner.gradeType)) {
+  if (
+    !mosyLevelOptions(learner.gradeType, submitted.decision).some(
+      (o) => o.value === submitted.mosyLevel
+    )
+  ) {
     return { ok: false, failure: "LEVEL_NOT_ALLOWED" };
   }
 
@@ -362,10 +400,18 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
     if (!submitted.reason) return { ok: false, failure: "REASON_REQUIRED" };
     const wantedLevel =
       submitted.reason === "IMPROVED_READING_LEVEL" ? submitted.improvedToLevel : null;
-    const allowed = mosyReasonChoices(learner.gradeType, input.previousFilipinoLevel).some(
+    const allowed = mosyReasonChoices(learner.gradeType, input.bosyFilipinoLevel).some(
       (c) => c.reason === submitted.reason && c.improvedToLevel === wantedLevel
     );
     if (!allowed) return { ok: false, failure: "REASON_NOT_ALLOWED" };
+    // G1 to G10: "Improved to X" and the MOSY level X cannot disagree.
+    if (
+      isDecisionBandGrade(learner.gradeType) &&
+      submitted.reason === "IMPROVED_READING_LEVEL" &&
+      wantedLevel !== submitted.mosyLevel
+    ) {
+      return { ok: false, failure: "REASON_NOT_ALLOWED" };
+    }
     reason = submitted.reason;
     improvedToLevel = wantedLevel;
   }

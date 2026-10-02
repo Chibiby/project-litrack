@@ -35,7 +35,7 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     sectionName: "Atis",
     isAralLearner: true,
     status: "not_updated",
-    levelOptions: [],
+    levelOptionsByDecision: { STAY: [], MOVE_OUT: [], NONE: [] },
     reasonChoices: [],
     mosyLevel: null,
     mosyLevelLabel: null,
@@ -45,7 +45,7 @@ function makeRow(overrides: Partial<MosyRow>): MosyRow {
     improvedToLevel: null,
     reasonLabel: null,
     remarks: null,
-    previousLevel: null,
+    bosyLevel: null,
     ...overrides,
   };
 }
@@ -118,6 +118,24 @@ describe("MosyTable", () => {
     expect(abbr(1)?.textContent).toBe("Eng:");
     expect(cell(0).querySelector(".sr-only")?.textContent).toBe("Filipino:");
     expect(cell(1).querySelector(".sr-only")?.textContent).toBe("English:");
+  });
+
+  it("labels the column BOSY level and shows both languages without a month", () => {
+    renderTable([
+      makeRow({ id: "a", bosyLevel: { filipino: "Low Emergent", english: "Developing" } }),
+      makeRow({ id: "b" }),
+    ]);
+    expect(screen.getByRole("columnheader", { name: "BOSY level" })).not.toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Previous level" })).toBeNull();
+    const [, first, second] = screen.getAllByRole("row");
+    const cell = within(first!).getAllByRole("cell")[3]!;
+    const lines = Array.from(cell.querySelectorAll("p"));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.textContent).toContain("Low Emergent");
+    expect(lines[0]!.querySelector('[aria-hidden="true"]')?.textContent).toBe("Fil:");
+    expect(lines[1]!.textContent).toContain("Developing");
+    expect(lines[1]!.querySelector('[aria-hidden="true"]')?.textContent).toBe("Eng:");
+    expect(within(second!).getAllByRole("cell")[3]!.textContent).toBe("—");
   });
 
   it("shows long remarks in full instead of truncating them", () => {

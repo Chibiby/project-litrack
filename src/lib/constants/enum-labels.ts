@@ -122,6 +122,10 @@ export const READING_PROFILE_LABELS = {
   NON_DECODER_LOW_EMERGENT: "Non-Decoder / Low Emergent",
   FRUSTRATION_HIGH_EMERGENT: "Frustration / High Emergent",
   INSTRUCTIONAL_DEVELOPING: "Instructional / Developing or Transitioning",
+  // Grade 1-3 only; listed here, between their neighbours, so charts that
+  // walk this map's keys run lowest to highest.
+  DEVELOPING: "Developing",
+  TRANSITIONING: "Transitioning",
   INDEPENDENT_GRADE_READY: "Independent / Grade-level Ready",
   // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
   // section 2a). Flat map so `src/lib/reports/queries.ts`'s ungrouped lookup
@@ -190,19 +194,44 @@ export const WEEKLY_WRITING_LEVEL_LABELS = {
   NA: "N/A",
 } as const;
 
-/** Kinder–G3 CRLA-style reading band labels. */
+/**
+ * Kinder–G3 CRLA-style reading band labels. Grade 1-3 offer five of these:
+ * Low Emergent, High Emergent, Developing, Transitioning, Grade-level Ready.
+ * `INSTRUCTIONAL_DEVELOPING` is the old combined "Developing or Transitioning"
+ * band — no longer offered, but still held by rows saved before the split;
+ * Grade 1-3 relabel it with `READING_PROFILE_LEGACY_LABELS_G1_G3`. Kinder
+ * (early rubric) offers none of these and keeps the label as it was.
+ */
 export const READING_PROFILE_LABELS_K3 = {
   NON_DECODER_LOW_EMERGENT: "Low Emergent",
   FRUSTRATION_HIGH_EMERGENT: "High Emergent",
   INSTRUCTIONAL_DEVELOPING: "Developing or Transitioning",
+  DEVELOPING: "Developing",
+  TRANSITIONING: "Transitioning",
   INDEPENDENT_GRADE_READY: "Grade-level Ready",
 } as const;
 
-/** G4–G12 / FLOATING PHIL-IRI-style reading band labels. */
+/**
+ * Grade 1-3 label for a legacy `INSTRUCTIONAL_DEVELOPING` row: the teacher has
+ * to re-pick Developing or Transitioning (see `isLegacyReadingValue` in
+ * `src/lib/reading/policy.ts`).
+ */
+export const READING_PROFILE_LEGACY_LABELS_G1_G3 = {
+  INSTRUCTIONAL_DEVELOPING: "Developing or Transitioning — needs update",
+} as const;
+
+/**
+ * G4–G12 / FLOATING PHIL-IRI-style reading band labels. `DEVELOPING` and
+ * `TRANSITIONING` are never offered to these grades; their entries only make a
+ * promoted Grade 1-3 learner's row read "Developing"/"Transitioning" rather
+ * than the raw enum value.
+ */
 export const READING_PROFILE_LABELS_G4_PLUS = {
   NON_DECODER_LOW_EMERGENT: "Non-decoder",
   FRUSTRATION_HIGH_EMERGENT: "Frustration",
   INSTRUCTIONAL_DEVELOPING: "Instructional",
+  DEVELOPING: "Developing",
+  TRANSITIONING: "Transitioning",
   INDEPENDENT_GRADE_READY: "Independent",
 } as const;
 
@@ -233,6 +262,8 @@ export function isEarlyGradeReadingBand(type: string): boolean {
   return EARLY_GRADE_TYPES.has(type);
 }
 
+const CRLA_READING_GRADE_TYPES = new Set(["G1", "G2", "G3"]);
+
 const SHS_READING_GRADE_TYPES = new Set(["G11", "G12"]);
 
 /**
@@ -246,6 +277,11 @@ const SHS_READING_GRADE_TYPES = new Set(["G11", "G12"]);
  * `READING_PROFILE_LABELS_G4_PLUS`, so the three renamed levels get their SHS
  * label while `NON_DECODER_LOW_EMERGENT` — not offered to SHS going forward,
  * but still held by legacy rows — falls back to "Non-decoder".
+ *
+ * G1-G3 layer `READING_PROFILE_LEGACY_LABELS_G1_G3` on top of
+ * `READING_PROFILE_LABELS_K3`, so a row still holding the old combined
+ * `INSTRUCTIONAL_DEVELOPING` reads "Developing or Transitioning — needs
+ * update". Kinder keeps the plain K3 map.
  */
 export function readingProfileLabelsForGradeType(
   type: string | null | undefined
@@ -253,9 +289,11 @@ export function readingProfileLabelsForGradeType(
   const original: Record<string, string> =
     type && SHS_READING_GRADE_TYPES.has(type)
       ? { ...READING_PROFILE_LABELS_G4_PLUS, ...READING_PROFILE_LABELS_SHS }
-      : type && isEarlyGradeReadingBand(type)
-        ? READING_PROFILE_LABELS_K3
-        : READING_PROFILE_LABELS_G4_PLUS;
+      : type && CRLA_READING_GRADE_TYPES.has(type)
+        ? { ...READING_PROFILE_LABELS_K3, ...READING_PROFILE_LEGACY_LABELS_G1_G3 }
+        : type && isEarlyGradeReadingBand(type)
+          ? READING_PROFILE_LABELS_K3
+          : READING_PROFILE_LABELS_G4_PLUS;
   return { ...EARLY_RUBRIC_LABELS, ...original };
 }
 

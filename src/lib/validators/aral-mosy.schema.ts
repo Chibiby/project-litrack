@@ -7,8 +7,9 @@ import { reportPurposeSchema } from "@/lib/validators/report.schema";
 export const MOSY_REMARKS_MAX = 250;
 
 /**
- * Grade-dependent rules (level allowed, reason allowed) are deliberately NOT
- * here: the grade must come from the DB-loaded learner, so they live in
+ * Grade-dependent rules (level allowed for the decision, reason allowed, the
+ * "Improved to X" = MOSY level X match) are deliberately NOT here: the grade and
+ * BOSY level must come from the DB-loaded learner, so they live in
  * `resolveMosySave`.
  */
 export const aralMosyDecisionSchema = z

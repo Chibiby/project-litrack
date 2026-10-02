@@ -94,7 +94,7 @@ describe("buildReadingLevelTable — the grid", () => {
     expect(row[4]).not.toBe("null");
   });
 
-  it("keeps labeling a fully-assessed row exactly as before", async () => {
+  it("labels a fully-assessed row with the learner's grade labels (G3 legacy combined level flagged)", async () => {
     learnerFindMany.mockResolvedValueOnce([LEARNER]);
     readingLevelRecordFindMany.mockResolvedValueOnce([
       {
@@ -111,8 +111,29 @@ describe("buildReadingLevelTable — the grid", () => {
 
     const table = await buildReadingLevelTable(SCOPE, { from: "2026-08-01", to: "2026-08-01" });
     const [row] = table.rows;
-    expect(row[4]).toBe("Independent / Grade-level Ready");
-    expect(row[5]).toBe("Instructional / Developing or Transitioning");
+    expect(row[4]).toBe("Grade-level Ready");
+    expect(row[5]).toBe("Developing or Transitioning — needs update");
+  });
+
+  it("labels the Grade 1-3 DEVELOPING and TRANSITIONING levels", async () => {
+    learnerFindMany.mockResolvedValueOnce([LEARNER]);
+    readingLevelRecordFindMany.mockResolvedValueOnce([
+      {
+        weekStart: new Date(2026, 7, 1),
+        englishProfile: "DEVELOPING",
+        filipinoProfile: "TRANSITIONING",
+        wordRecognitionLevel: null,
+        readingComprehensionLevel: null,
+        writingLevel: null,
+        notes: null,
+        learnerId: "learner-1",
+      },
+    ]);
+
+    const table = await buildReadingLevelTable(SCOPE, { from: "2026-08-01", to: "2026-08-01" });
+    const [row] = table.rows;
+    expect(row[4]).toBe("Developing");
+    expect(row[5]).toBe("Transitioning");
   });
 
   it("unions in a legacy Monday weekStart that is not the 1st of its month", async () => {
@@ -134,7 +155,7 @@ describe("buildReadingLevelTable — the grid", () => {
 
     const legacyRow = table.rows.find((r) => r[0] === "2026-08-10");
     expect(legacyRow).toBeDefined();
-    expect(legacyRow?.[4]).toBe("Independent / Grade-level Ready");
+    expect(legacyRow?.[4]).toBe("Grade-level Ready");
     // The month's own 1st is still present as its own period.
     expect(table.rows.some((r) => r[0] === "2026-08-01")).toBe(true);
   });

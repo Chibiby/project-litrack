@@ -111,7 +111,8 @@ function learnerRow(over: Record<string, unknown> = {}) {
     mosyDecisions: [
       { mosyLevel: "INSTRUCTIONAL_DEVELOPING", decision: "STAY", reason: null, improvedToLevel: null, remarks: "Ana Cruz has epilepsy", updatedAt: new Date() },
     ],
-    readingLevels: [],
+    filipinoReadingProfile: "FRUSTRATION_HIGH_EMERGENT",
+    englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
     ...over,
   };
 }
@@ -267,6 +268,21 @@ describe("exportMosyReport", () => {
     // no label resolved -> header falls back to the unlabelled scope
     expect(t.gradeSection).toEqual({ label: "All Classes" });
     expect(JSON.stringify(t)).not.toContain("Secret");
+  });
+
+  it("selects the BOSY profiles on the learner, prints them under 'BOSY level', and reads no monthly records", async () => {
+    await exportMosyReport(form());
+    const select = (learnerFindMany.mock.calls[0]![0] as { select: Record<string, unknown> }).select;
+    expect(select.filipinoReadingProfile).toBe(true);
+    expect(select.englishReadingProfile).toBe(true);
+    expect(select).not.toHaveProperty("readingLevels");
+    const learners = renderedTable().blocks.find((b) => b.heading === "Learners")! as unknown as {
+      columns: { header: string }[];
+      rows: unknown[][];
+    };
+    expect(learners.columns.map((c) => c.header)).toContain("BOSY level");
+    expect(learners.columns.map((c) => c.header)).not.toContain("Previous level");
+    expect(learners.rows[0]![3]).toBe("Fil: Frustration · Eng: Instructional");
   });
 
   it("the Summary block carries the five stats", async () => {

@@ -1,4 +1,4 @@
-import { readingProfileOptionsForGrade } from "@/lib/reading/policy";
+import { readingProfileOptionsForGrade, reportingBandValue } from "@/lib/reading/policy";
 
 /**
  * The reading-profile fields this module ranks. `wordRecognitionLevel` and
@@ -53,7 +53,9 @@ export type ReadingLevelStats = {
  *   rubric (`readingProfileOptionsForGrade`, index 0 = lowest) into one
  *   per-learner rank; values not on the grade's scale (e.g. a promoted
  *   learner's stale early-rubric value under a later grade) are ignored, not
- *   coerced. A record contributing no ranked value is skipped entirely. The
+ *   coerced — except a Grade 1-3 legacy `INSTRUCTIONAL_DEVELOPING`, which
+ *   `reportingBandValue` ranks as Developing (the project owner's rule).
+ *   A record contributing no ranked value is skipped entirely. The
  *   per-learner ranks are then averaged across learners and rounded to the
  *   nearest scale index (`Math.round`, so a tie lands on the higher index,
  *   matching `Math.round`'s standard "round half up" behaviour) to pick a
@@ -79,11 +81,16 @@ export function computeReadingLevelStats({
   const learnerRanks: number[] = [];
   for (const record of records) {
     const ranks: number[] = [];
-    if (record.englishProfile != null && rankOf.has(record.englishProfile)) {
-      ranks.push(rankOf.get(record.englishProfile)!);
+    // A Grade 1-3 legacy "Developing or Transitioning" ranks as Developing.
+    const english =
+      record.englishProfile == null ? null : reportingBandValue(record.englishProfile, gradeType);
+    const filipino =
+      record.filipinoProfile == null ? null : reportingBandValue(record.filipinoProfile, gradeType);
+    if (english != null && rankOf.has(english)) {
+      ranks.push(rankOf.get(english)!);
     }
-    if (record.filipinoProfile != null && rankOf.has(record.filipinoProfile)) {
-      ranks.push(rankOf.get(record.filipinoProfile)!);
+    if (filipino != null && rankOf.has(filipino)) {
+      ranks.push(rankOf.get(filipino)!);
     }
     if (ranks.length === 0) continue;
     const mean = ranks.reduce((sum, r) => sum + r, 0) / ranks.length;

@@ -68,8 +68,8 @@ function LanguageTag({ language }: { language: MosyLevelLanguage }) {
   );
 }
 
-function PreviousLevelCell({ row }: { row: MosyRow }) {
-  const prev = row.previousLevel;
+function BosyLevelCell({ row }: { row: MosyRow }) {
+  const prev = row.bosyLevel;
   if (!prev || (!prev.filipino && !prev.english)) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -87,7 +87,6 @@ function PreviousLevelCell({ row }: { row: MosyRow }) {
           {prev.english}
         </p>
       ) : null}
-      <p className="text-xs text-muted-foreground">{prev.monthLabel}</p>
     </div>
   );
 }
@@ -154,7 +153,7 @@ export function MosyTable({
                   <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
                   <TableHead className={HEAD_CLASS}>Learner name</TableHead>
                   <TableHead className={HEAD_CLASS}>Grade &amp; section</TableHead>
-                  <TableHead className={HEAD_CLASS}>Previous level</TableHead>
+                  <TableHead className={HEAD_CLASS}>BOSY level</TableHead>
                   <TableHead className={HEAD_CLASS}>MOSY reading level</TableHead>
                   <TableHead className={HEAD_CLASS}>ARAL status decision</TableHead>
                   <TableHead className={HEAD_CLASS}>Reason</TableHead>
@@ -174,7 +173,7 @@ export function MosyTable({
                         {r.sectionName ? `${r.gradeLabel} - ${r.sectionName}` : r.gradeLabel}
                       </TableCell>
                       <TableCell>
-                        <PreviousLevelCell row={r} />
+                        <BosyLevelCell row={r} />
                       </TableCell>
                       <TableCell className="min-w-[13rem]">
                         {r.mosyLevelLabel ? (

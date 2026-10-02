@@ -1,11 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpRight, BookOpen, ClipboardList, Save } from "lucide-react";
+import { ArrowUpRight, BookOpen, ClipboardList, Filter, Save } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useListNavigate } from "@/components/nav/list-navigation";
 import {
   Select,
   SelectContent,
@@ -14,10 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AralDateNav } from "@/components/aral/date-nav";
-import {
-  AralFilterPopover,
-  type AralGradeOption,
-} from "@/components/aral/aral-filter-popover";
+import { type AralGradeOption } from "@/components/aral/aral-filter-popover";
 import {
   AralMonthlyReadingLevelGridForm,
   type AralMonthlyReadingLevelGridFormHandle,
@@ -232,6 +243,7 @@ export function AralMonthlyReadingLevelPanel({
   unlockedMonths = [],
 }: Props) {
   const router = useRouter();
+  const listNavigate = useListNavigate();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   /** Month shown in the nav and the banner — updates immediately on click. */
@@ -393,6 +405,65 @@ export function AralMonthlyReadingLevelPanel({
   }
 
   const busy = loading || savePending;
+
+  const showGradeFilter = grades.length > 1;
+  const activeFilterCount =
+    (showSection && section !== "all" ? 1 : 0) + (gender !== "all" ? 1 : 0);
+
+  function changeGrade(nextGradeId: string) {
+    if (nextGradeId === gradeId) return;
+    // Section IDs are grade-scoped, so it is dropped; gender is not, so it is
+    // carried across with the month.
+    listNavigate(
+      `/teacher/aral/${nextGradeId}/reading-level${buildQuery({
+        schoolId,
+        month: pickerMonth,
+        gender: gender !== "all" ? gender : undefined,
+      })}`
+    );
+  }
+
+  const renderFilterFields = (stacked: boolean) => (
+    <>
+      {showGradeFilter && (
+        <FacetSelect
+          name="Grade"
+          stacked={stacked}
+          value={gradeId}
+          disabled={busy}
+          onChange={changeGrade}
+          options={grades.map((g) => ({ value: g.id, label: g.label }))}
+        />
+      )}
+      {showSection && (
+        <FacetSelect
+          name="Section"
+          stacked={stacked}
+          value={section}
+          disabled={busy}
+          onChange={(value) => pushFilters({ section: value })}
+          options={[
+            { value: "all", label: "All" },
+            { value: "none", label: "No section" },
+            ...sections.map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
+      )}
+      <FacetSelect
+        name="Gender"
+        stacked={stacked}
+        value={gender}
+        disabled={busy}
+        onChange={(value) => pushFilters({ gender: value })}
+        options={[
+          { value: "all", label: "All" },
+          { value: "MALE", label: "Male" },
+          { value: "FEMALE", label: "Female" },
+        ]}
+      />
+    </>
+  );
+
   const canSave = !readOnly && !status.locked && learners.length > 0;
 
   // Months the picker offers: this month back through the history, newest first,
@@ -434,47 +505,39 @@ export function AralMonthlyReadingLevelPanel({
           pending={loading}
           filter={
             <>
-              <AralFilterPopover
-                gradeId={gradeId}
-                grades={grades}
-                section={section}
-                sections={sections}
-                // Section has its own control in this bar, per the comp — leaving
-                // it in the popover too would give it two sources of truth.
-                showSection={false}
-                schoolId={schoolId}
-                pathForGrade={(id) => `/teacher/aral/${id}/reading-level`}
-                // Section is grade-scoped so the popover drops it on a grade
-                // change; gender is not, so it has to be carried across.
-                preserveParams={{
-                  month: pickerMonth,
-                  gender: gender !== "all" ? gender : undefined,
-                }}
-              />
-              {showSection && (
-                <FacetSelect
-                  name="Section"
-                  value={section}
-                  disabled={busy}
-                  onChange={(value) => pushFilters({ section: value })}
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "none", label: "No section" },
-                    ...sections.map((s) => ({ value: s.id, label: s.name })),
-                  ]}
-                />
-              )}
-              <FacetSelect
-                name="Gender"
-                value={gender}
-                disabled={busy}
-                onChange={(value) => pushFilters({ gender: value })}
-                options={[
-                  { value: "all", label: "All" },
-                  { value: "MALE", label: "Male" },
-                  { value: "FEMALE", label: "Female" },
-                ]}
-              />
+              <Popover modal>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-11 md:hidden"
+                      aria-label={
+                        activeFilterCount > 0
+                          ? `Filter by grade, section and gender, ${activeFilterCount} active`
+                          : "Filter by grade, section and gender"
+                      }
+                    >
+                      <Filter className="h-4 w-4" aria-hidden />
+                      Filter
+                      {activeFilterCount > 0 && (
+                        <span
+                          className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground"
+                          aria-hidden
+                        >
+                          {activeFilterCount}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-64 space-y-3 p-3">
+                    {renderFilterFields(true)}
+                  </PopoverContent>
+              </Popover>
+              {/* One set of fields per breakpoint: inline from `md`, inside the
+                  Filter popover below it. `hidden` removes this copy from the
+                  accessibility tree on a phone. */}
+              <div className="hidden md:contents">{renderFilterFields(false)}</div>
               <FacetSelect
                 id="aral-reading-level-sort"
                 name="Sort by"
@@ -605,7 +668,10 @@ function FacetSelect({
   onChange,
   id,
   ariaLabel,
+  stacked,
 }: {
+  /** Label above a full-width select (Filter popover) instead of the in-trigger caption. */
+  stacked?: boolean;
   name: string;
   value: string;
   options: { value: string; label: string }[];
@@ -616,14 +682,20 @@ function FacetSelect({
    * filter, and reading it as one misdescribes what it does. */
   ariaLabel?: string;
 }) {
-  return (
+  const generatedId = useId();
+  const triggerId = id ?? generatedId;
+  const select = (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
-        id={id}
-        className="h-11 w-auto min-w-[8rem] gap-1.5 lg:h-9"
+        id={triggerId}
+        className={
+          stacked
+            ? "h-11 w-full"
+            : "h-11 w-auto min-w-[8rem] gap-1.5 lg:h-9"
+        }
         aria-label={ariaLabel ?? `Filter by ${name.toLowerCase()}`}
       >
-        <span className="text-muted-foreground">{name}</span>
+        {!stacked && <span className="text-muted-foreground">{name}</span>}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -634,6 +706,15 @@ function FacetSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+  if (!stacked) return select;
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={triggerId} className="text-xs text-muted-foreground">
+        {name}
+      </Label>
+      {select}
+    </div>
   );
 }
 

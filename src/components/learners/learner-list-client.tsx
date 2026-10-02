@@ -55,7 +55,11 @@ import {
   type LearnerListGradeFilter,
   type LearnerListSort,
 } from "@/lib/learners/pagination";
-import { Archive, Eye, MoreVertical, RotateCcw, Sparkles } from "lucide-react";
+import { Archive, Eye, MoreVertical, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import {
+  LearnerPurgeConfirm,
+  type PurgeTarget,
+} from "@/components/learners/learner-purge-confirm";
 import { toast } from "sonner";
 import { archiveLearners, restoreLearner } from "@/lib/actions/learner";
 import { callAction } from "@/lib/ui/call-action";
@@ -233,6 +237,7 @@ function LearnerListPanel({
   );
   /** Learners awaiting archive confirmation; `null` when no confirm is open. */
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<PurgeTarget | null>(null);
 
   // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
   // React docs "adjusting state when a prop changes" pattern.
@@ -512,6 +517,24 @@ function LearnerListPanel({
     </Button>
   );
 
+  const archivedActions = (l: LearnerListRow) => (
+    <>
+      {restoreButton(l)}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="rounded-xl text-destructive hover:text-destructive"
+        disabled={pending}
+        onClick={() => setPurgeTarget({ id: l.id, fullName: l.fullName })}
+        aria-label={`Remove ${l.fullName} permanently`}
+      >
+        <Trash2 className="size-4" aria-hidden />
+        <span className="hidden sm:inline">Remove</span>
+      </Button>
+    </>
+  );
+
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
 
   return (
@@ -693,7 +716,7 @@ function LearnerListPanel({
                               </Button>
                             )}
                             {!isSuperAdmin && archivedView
-                              ? restoreButton(l)
+                              ? archivedActions(l)
                               : rowMenu(l, false)}
                           </div>
                         </TableCell>
@@ -749,7 +772,7 @@ function LearnerListPanel({
                       className="hidden min-[400px]:inline-flex"
                     />
                     {!isSuperAdmin && archivedView
-                      ? restoreButton(l)
+                      ? archivedActions(l)
                       : rowMenu(l, true)}
                   </li>
                 );
@@ -790,6 +813,18 @@ function LearnerListPanel({
         onClose={() => setAralTarget(null)}
         onDone={() => setSelected(new Set())}
       />
+
+      {purgeTarget ? (
+        <LearnerPurgeConfirm
+          key={purgeTarget.id}
+          target={purgeTarget}
+          onClose={() => setPurgeTarget(null)}
+          onPurged={() => {
+            invalidateNavWarm();
+            router.refresh();
+          }}
+        />
+      ) : null}
 
       {archiveTarget ? (
         <ConfirmAction

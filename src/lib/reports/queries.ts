@@ -6,11 +6,11 @@ import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   ATTENDANCE_STATUS_LABELS,
   GRADE_LEVEL_LABELS,
-  READING_PROFILE_LABELS,
   TERM_PERIOD_LABELS,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
   WEEKLY_WRITING_LEVEL_LABELS,
+  labelReadingProfile,
 } from "@/lib/constants/enum-labels";
 import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { formatListingNameFromRecord } from "@/lib/names";
@@ -368,8 +368,9 @@ export async function buildReadingLevelTable(
         formatListingNameFromRecord(learner),
         GRADE_LEVEL_LABELS[learner.gradeLevel.type] ?? learner.gradeLevel.type,
         learner.section?.name ?? "—",
-        r?.englishProfile ? (READING_PROFILE_LABELS[r.englishProfile] ?? r.englishProfile) : "",
-        r?.filipinoProfile ? (READING_PROFILE_LABELS[r.filipinoProfile] ?? r.filipinoProfile) : "",
+        // Grade labels: a Grade 1-3 legacy combined level reads "… needs update".
+        r?.englishProfile ? labelReadingProfile(r.englishProfile, learner.gradeLevel.type) : "",
+        r?.filipinoProfile ? labelReadingProfile(r.filipinoProfile, learner.gradeLevel.type) : "",
         r?.wordRecognitionLevel
           ? (WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[r.wordRecognitionLevel] ??
             r.wordRecognitionLevel)
@@ -396,6 +397,7 @@ export async function buildReadingLevelTable(
     gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
     sectionLabel: l.section?.name ?? "—",
   }));
+  const gradeTypeOf = new Map(learners.map((l) => [l.id, l.gradeLevel.type as string]));
   const blocks: NonNullable<ReportTable["blocks"]> = periods.map((periodKey) => {
     const columns = [
       { header: "#", width: 5 },
@@ -424,8 +426,8 @@ export async function buildReadingLevelTable(
           seq,
           sf2Learner.displayName,
           ...(includeGradeSection ? [sf2Learner.gradeLabel, sf2Learner.sectionLabel] : []),
-          r?.englishProfile ? (READING_PROFILE_LABELS[r.englishProfile] ?? r.englishProfile) : "",
-          r?.filipinoProfile ? (READING_PROFILE_LABELS[r.filipinoProfile] ?? r.filipinoProfile) : "",
+          r?.englishProfile ? labelReadingProfile(r.englishProfile, gradeTypeOf.get(sf2Learner.id)) : "",
+          r?.filipinoProfile ? labelReadingProfile(r.filipinoProfile, gradeTypeOf.get(sf2Learner.id)) : "",
           r?.wordRecognitionLevel
             ? (WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[r.wordRecognitionLevel] ?? r.wordRecognitionLevel)
             : "",

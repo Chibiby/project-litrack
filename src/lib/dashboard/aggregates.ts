@@ -17,7 +17,7 @@ import { teacherRosterScope, TEACHER_ROSTER_STATE } from "@/lib/teachers/roster"
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import { isDemoVisible } from "@/lib/demo/session";
-import { completeAssessmentWhereForGrades } from "@/lib/reading/policy";
+import { completeAssessmentWhereForGrades, reportingBandValue } from "@/lib/reading/policy";
 import { ACTIVE_ENROLLED_LEARNER } from "@/lib/learners/population";
 import {
   adminDashboard,
@@ -475,8 +475,10 @@ export async function getSchoolHeadCharts(schoolId: string) {
             },
             _count: { _all: true },
           }),
+          // `gradeLevelId` is in the key only so a Grade 1-3 legacy
+          // "Developing or Transitioning" can be counted as Developing below.
           prisma.learner.groupBy({
-            by: ["englishReadingProfile", "filipinoReadingProfile"],
+            by: ["gradeLevelId", "englishReadingProfile", "filipinoReadingProfile"],
             where: { schoolId, deletedAt: null, archivedAt: null },
             _count: { _all: true },
           }),
@@ -509,22 +511,31 @@ export async function getSchoolHeadCharts(schoolId: string) {
         });
       }
 
+      const gradeIds = [...new Set(learnersWithProfiles.map((r) => r.gradeLevelId))];
+      const gradeTypeById = new Map(
+        gradeIds.length === 0
+          ? []
+          : (
+              await prisma.gradeLevel.findMany({
+                where: { id: { in: gradeIds }, schoolId },
+                select: { id: true, type: true },
+              })
+            ).map((g) => [g.id, g.type as string])
+      );
+
       const enMap = new Map<string, number>();
       const filMap = new Map<string, number>();
       for (const row of learnersWithProfiles) {
+        const gradeType = gradeTypeById.get(row.gradeLevelId) ?? "";
         // `englishReadingProfile` is null for Kinder/Grade 1/Grade 2 (never collected)
         // and for anyone not yet assessed — neither belongs in a distribution of
         // recorded English bands.
         if (row.englishReadingProfile) {
-          enMap.set(
-            row.englishReadingProfile,
-            (enMap.get(row.englishReadingProfile) ?? 0) + row._count._all
-          );
+          const en = reportingBandValue(row.englishReadingProfile, gradeType);
+          enMap.set(en, (enMap.get(en) ?? 0) + row._count._all);
         }
-        filMap.set(
-          row.filipinoReadingProfile,
-          (filMap.get(row.filipinoReadingProfile) ?? 0) + row._count._all
-        );
+        const fil = reportingBandValue(row.filipinoReadingProfile, gradeType);
+        filMap.set(fil, (filMap.get(fil) ?? 0) + row._count._all);
       }
 
       const englishDistribution: NamedCount[] = Object.keys(

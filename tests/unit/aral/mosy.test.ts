@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { GradeLevelType } from "@prisma/client";
 import type { AralMosyOutcome, ReadingProfile } from "@prisma/client";
+import { labelReadingProfile } from "@/lib/constants/enum-labels";
+import { readingProfileOptionsForGrade } from "@/lib/reading/policy";
 import {
   MOSY_STATUSES,
   computeMosyStats,
-  formatPreviousLevel,
+  formatBosyLevel,
   mosyLevelLanguage,
+  mosyLevelOptions,
   mosyReasonChoices,
   mosyReasonLabel,
   mosyRowStatus,
@@ -60,8 +63,11 @@ const movedOutRow = (over: Partial<Existing> = {}): Existing => ({
   priorAralEnrolledAt: ENROLLED,
   ...over,
 });
+// Default level is one the G4 learner may use for the decision: the stay levels
+// for STAY / no decision, a move-out level for MOVE_OUT.
 const submit = (over: Partial<Submitted> = {}): Submitted => ({
-  mosyLevel: "INSTRUCTIONAL_DEVELOPING",
+  mosyLevel:
+    over.decision === "MOVE_OUT" ? "INSTRUCTIONAL_DEVELOPING" : "NON_DECODER_LOW_EMERGENT",
   decision: null,
   reason: null,
   improvedToLevel: null,
@@ -74,7 +80,7 @@ function resolve(args: {
   existing?: Existing | null;
   submitted?: Partial<Submitted>;
   actorId?: string;
-  previousFilipinoLevel?: string | null;
+  bosyFilipinoLevel?: string | null;
 }) {
   return resolveMosySave({
     actorId: args.actorId ?? ACTOR,
@@ -82,7 +88,7 @@ function resolve(args: {
     learner: args.learner,
     existing: args.existing ?? null,
     submitted: submit(args.submitted),
-    previousFilipinoLevel: args.previousFilipinoLevel ?? null,
+    bosyFilipinoLevel: args.bosyFilipinoLevel ?? null,
   });
 }
 
@@ -95,6 +101,55 @@ function expectOk(res: ReturnType<typeof resolveMosySave>) {
   return res;
 }
 
+describe("mosyLevelOptions", () => {
+  const values = (g: string, d: AralMosyOutcome | null) =>
+    mosyLevelOptions(g, d).map((o) => o.value);
+  const labelsOf = (g: string, d: AralMosyOutcome | null) =>
+    mosyLevelOptions(g, d).map((o) => o.label);
+
+  it.each(["G1", "G2", "G3"])("%s: STAY or no decision offers the two lowest levels", (g) => {
+    for (const d of ["STAY", null] as const) {
+      expect(values(g, d)).toEqual(["NON_DECODER_LOW_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"]);
+    }
+    expect(labelsOf(g, "STAY")).toEqual(["Low Emergent", "High Emergent"]);
+  });
+
+  it.each(["G1", "G2", "G3"])("%s: MOVE_OUT offers Developing, Transitioning, Grade-level Ready", (g) => {
+    expect(values(g, "MOVE_OUT")).toEqual(["DEVELOPING", "TRANSITIONING", "INDEPENDENT_GRADE_READY"]);
+    expect(labelsOf(g, "MOVE_OUT")).toEqual(["Developing", "Transitioning", "Grade-level Ready"]);
+  });
+
+  it.each(["G4", "G5", "G6", "G7", "G8", "G9", "G10"])(
+    "%s: STAY or no decision offers the two lowest levels, MOVE_OUT the two highest",
+    (g) => {
+      for (const d of ["STAY", null] as const) {
+        expect(values(g, d)).toEqual(["NON_DECODER_LOW_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"]);
+      }
+      expect(values(g, "MOVE_OUT")).toEqual(["INSTRUCTIONAL_DEVELOPING", "INDEPENDENT_GRADE_READY"]);
+      expect(labelsOf(g, "MOVE_OUT")).toEqual(["Instructional", "Independent"]);
+    }
+  );
+
+  it.each(["KINDER", "G11", "G12", "FLOATING"])(
+    "%s: the whole scale for every decision, unchanged",
+    (g) => {
+      const scale = readingProfileOptionsForGrade(g);
+      for (const d of ["STAY", "MOVE_OUT", null] as const) {
+        expect(mosyLevelOptions(g, d)).toEqual(scale);
+      }
+    }
+  );
+
+  it("every option's value and label come from the grade's own scale", () => {
+    for (const g of Object.values(GradeLevelType)) {
+      const scale = readingProfileOptionsForGrade(g);
+      for (const d of ["STAY", "MOVE_OUT", null] as const) {
+        for (const o of mosyLevelOptions(g, d)) expect(scale).toContainEqual(o);
+      }
+    }
+  });
+});
+
 describe("mosyReasonChoices", () => {
   const labels = (g: string, prev: string | null) =>
     mosyReasonChoices(g, prev).map((c) => c.label);
@@ -103,35 +158,56 @@ describe("mosyReasonChoices", () => {
     "Recommended for LSEN assessment",
   ];
 
-  it("operator example: Grade 3, previous Low Emergent offers the three levels above it", () => {
-    expect(labels("G3", "NON_DECODER_LOW_EMERGENT")).toEqual([
-      "Improved to High Emergent",
-      "Improved to Developing or Transitioning",
-      "Improved to Grade-level Ready",
-      ...LSEN,
-    ]);
-  });
+  it.each(["G1", "G2", "G3"])(
+    "%s offers the three move-out levels whatever the BOSY level",
+    (g) => {
+      const expected = [
+        "Improved to Developing",
+        "Improved to Transitioning",
+        "Improved to Grade-level Ready",
+        ...LSEN,
+      ];
+      for (const bosy of [
+        null,
+        "NON_DECODER_LOW_EMERGENT",
+        "FRUSTRATION_HIGH_EMERGENT",
+        "DEVELOPING",
+        "INDEPENDENT_GRADE_READY",
+        "INSTRUCTIONAL_DEVELOPING",
+      ]) {
+        expect(labels(g, bosy)).toEqual(expected);
+      }
+      expect(
+        mosyReasonChoices(g, null)
+          .filter((x) => x.reason === "IMPROVED_READING_LEVEL")
+          .map((x) => x.improvedToLevel)
+      ).toEqual(["DEVELOPING", "TRANSITIONING", "INDEPENDENT_GRADE_READY"]);
+    }
+  );
 
-  it("offers only levels strictly above the previous level (mid-scale)", () => {
-    const c = mosyReasonChoices("G3", "FRUSTRATION_HIGH_EMERGENT");
-    expect(
-      c.filter((x) => x.reason === "IMPROVED_READING_LEVEL").map((x) => x.improvedToLevel)
-    ).toEqual(["INSTRUCTIONAL_DEVELOPING", "INDEPENDENT_GRADE_READY"]);
-  });
+  it.each(["G4", "G5", "G6", "G10"])(
+    "%s offers Instructional and Independent whatever the BOSY level",
+    (g) => {
+      const expected = ["Improved to Instructional", "Improved to Independent", ...LSEN];
+      for (const bosy of [null, "NON_DECODER_LOW_EMERGENT", "INDEPENDENT_GRADE_READY", "LETTER_LEVEL"]) {
+        expect(labels(g, bosy)).toEqual(expected);
+      }
+    }
+  );
 
-  it("previous at the top of the scale offers no improvement, only LSEN", () => {
-    const c = mosyReasonChoices("G3", "INDEPENDENT_GRADE_READY");
+  it("an off-band grade (SHS) with BOSY at the top offers no improvement, only LSEN", () => {
+    const c = mosyReasonChoices("G11", "INDEPENDENT_GRADE_READY");
     expect(c.map((x) => x.reason)).toEqual(["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"]);
     expect(c.every((x) => x.improvedToLevel === null)).toBe(true);
   });
 
-  it("null previous offers every level but the lowest", () => {
-    expect(labels("G3", null).slice(0, 3)).toEqual([
-      "Improved to High Emergent",
-      "Improved to Developing or Transitioning",
-      "Improved to Grade-level Ready",
-    ]);
-    expect(mosyReasonChoices("G3", null)).toHaveLength(5);
+  it("an off-band grade (floating) with no BOSY level offers every level but the lowest", () => {
+    expect(labels("FLOATING", null)).toHaveLength(5);
+    expect(
+      mosyReasonChoices("FLOATING", "FRUSTRATION_HIGH_EMERGENT")
+        .filter((x) => x.improvedToLevel)
+        .map((x) => x.improvedToLevel)
+    ).toEqual(["INSTRUCTIONAL_DEVELOPING", "INDEPENDENT_GRADE_READY"]);
   });
 
   it("a previous level outside the grade's scale behaves like no previous level", () => {
@@ -167,9 +243,8 @@ describe("mosyReasonChoices", () => {
     }
   });
 
-  it("G4+ uses the PHIL-IRI band labels", () => {
+  it("G4 to G10 use the PHIL-IRI band labels", () => {
     expect(labels("G6", "NON_DECODER_LOW_EMERGENT")).toEqual([
-      "Improved to Frustration",
       "Improved to Instructional",
       "Improved to Independent",
       ...LSEN,
@@ -200,8 +275,15 @@ describe("mosyReasonChoices", () => {
 
 describe("mosyReasonLabel", () => {
   it("renders Improved to <level> with the grade's label", () => {
+    expect(mosyReasonLabel("IMPROVED_READING_LEVEL", "DEVELOPING", "G3")).toBe(
+      "Improved to Developing"
+    );
+    expect(mosyReasonLabel("IMPROVED_READING_LEVEL", "TRANSITIONING", "G3")).toBe(
+      "Improved to Transitioning"
+    );
+    // A row saved before the split keeps its old level, flagged for update.
     expect(mosyReasonLabel("IMPROVED_READING_LEVEL", "INSTRUCTIONAL_DEVELOPING", "G3")).toBe(
-      "Improved to Developing or Transitioning"
+      "Improved to Developing or Transitioning — needs update"
     );
     expect(mosyReasonLabel("IMPROVED_READING_LEVEL", "INSTRUCTIONAL_DEVELOPING", "G11")).toBe(
       "Improved to Instructional Level"
@@ -235,12 +317,8 @@ describe("mosyReasonLabel", () => {
 });
 
 describe("resolveMosySave — never untags on a level change", () => {
-  const levels: ReadingProfile[] = [
-    "NON_DECODER_LOW_EMERGENT",
-    "FRUSTRATION_HIGH_EMERGENT",
-    "INSTRUCTIONAL_DEVELOPING",
-    "INDEPENDENT_GRADE_READY",
-  ];
+  // G4: the levels offered for STAY / no decision.
+  const levels: ReadingProfile[] = ["NON_DECODER_LOW_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"];
 
   it.each(levels)("tagged learner, level %s, decision null, no row: no patch", (mosyLevel) => {
     const res = expectOk(resolve({ learner: tagged(), submitted: { mosyLevel, decision: null } }));
@@ -267,7 +345,7 @@ describe("resolveMosySave — never untags on a level change", () => {
       resolve({
         learner: tagged(),
         existing: { decision: null, tutorId: ACTOR, priorAralEnrolledAt: null },
-        submitted: { mosyLevel: "INDEPENDENT_GRADE_READY", decision: "STAY" },
+        submitted: { mosyLevel: "FRUSTRATION_HIGH_EMERGENT", decision: "STAY" },
       })
     );
     expect(res.learnerPatch).toBeNull();
@@ -330,12 +408,13 @@ describe("resolveMosySave — MOVE_OUT on a tagged learner", () => {
     expect(res.learnerPatch?.aralTeacherId).toBeNull();
   });
 
-  it("accepts Improved to a level above the previous one and stores improvedToLevel", () => {
+  it("accepts Improved to X when the MOSY level is X and stores improvedToLevel", () => {
     const res = expectOk(
       resolve({
         learner: tagged({ gradeType: "G6" }),
-        previousFilipinoLevel: "NON_DECODER_LOW_EMERGENT",
+        bosyFilipinoLevel: "NON_DECODER_LOW_EMERGENT",
         submitted: {
+          mosyLevel: "INSTRUCTIONAL_DEVELOPING",
           decision: "MOVE_OUT",
           reason: "IMPROVED_READING_LEVEL",
           improvedToLevel: "INSTRUCTIONAL_DEVELOPING",
@@ -347,11 +426,30 @@ describe("resolveMosySave — MOVE_OUT on a tagged learner", () => {
     expect(res.row.improvedToLevel).toBe("INSTRUCTIONAL_DEVELOPING");
   });
 
-  it("accepts Improved to a Kinder rubric level above the previous one", () => {
+  it.each(["G1", "G3"])(
+    "%s: Improved to Transitioning with MOSY level Transitioning, whatever the BOSY level",
+    (g) => {
+      const res = expectOk(
+        resolve({
+          learner: tagged({ gradeType: g }),
+          bosyFilipinoLevel: "INDEPENDENT_GRADE_READY",
+          submitted: {
+            mosyLevel: "TRANSITIONING",
+            decision: "MOVE_OUT",
+            reason: "IMPROVED_READING_LEVEL",
+            improvedToLevel: "TRANSITIONING",
+          },
+        })
+      );
+      expect(res.row.improvedToLevel).toBe("TRANSITIONING");
+    }
+  );
+
+  it("accepts Improved to a Kinder rubric level above the BOSY one", () => {
     const res = expectOk(
       resolve({
         learner: tagged({ gradeType: "KINDER" }),
-        previousFilipinoLevel: "LETTER_LEVEL",
+        bosyFilipinoLevel: "LETTER_LEVEL",
         submitted: {
           mosyLevel: "CV_BLENDING",
           decision: "MOVE_OUT",
@@ -484,7 +582,7 @@ describe("resolveMosySave — STAY / re-tag", () => {
         learner: untagged(),
         existing: movedOutRow(),
         submitted: {
-          mosyLevel: "FRUSTRATION_HIGH_EMERGENT",
+          mosyLevel: "INSTRUCTIONAL_DEVELOPING",
           decision: "MOVE_OUT",
           reason: "RECOMMENDED_LSEN_ASSESSMENT",
         },
@@ -553,6 +651,10 @@ describe("resolveMosySave — rejected paths", () => {
       for (const g of Object.values(GradeLevelType)) {
         const levels: Record<string, ReadingProfile> = {
           KINDER: "LETTER_LEVEL",
+          // Grade 1-3 no longer accept the combined INSTRUCTIONAL_DEVELOPING.
+          G1: "DEVELOPING",
+          G2: "DEVELOPING",
+          G3: "DEVELOPING",
         };
         expectFail(
           resolve({
@@ -573,8 +675,13 @@ describe("resolveMosySave — rejected paths", () => {
     expectFail(
       resolve({
         learner: tagged({ gradeType: "G3" }),
-        previousFilipinoLevel: "NON_DECODER_LOW_EMERGENT",
-        submitted: { decision: "MOVE_OUT", reason: "IMPROVED_READING_LEVEL", improvedToLevel: null },
+        bosyFilipinoLevel: "NON_DECODER_LOW_EMERGENT",
+        submitted: {
+          mosyLevel: "DEVELOPING",
+          decision: "MOVE_OUT",
+          reason: "IMPROVED_READING_LEVEL",
+          improvedToLevel: null,
+        },
       }),
       "REASON_NOT_ALLOWED"
     );
@@ -595,26 +702,40 @@ describe("resolveMosySave — rejected paths", () => {
   });
 
   it.each([
-    ["equal to previous", "FRUSTRATION_HIGH_EMERGENT", "FRUSTRATION_HIGH_EMERGENT"],
-    ["below previous", "INSTRUCTIONAL_DEVELOPING", "NON_DECODER_LOW_EMERGENT"],
-    ["at the top, previous at top", "INDEPENDENT_GRADE_READY", "INDEPENDENT_GRADE_READY"],
-  ] as const)("improved level %s is REASON_NOT_ALLOWED", (_n, previous, improvedToLevel) => {
+    ["Improved to Developing but MOSY level Transitioning", "TRANSITIONING", "DEVELOPING"],
+    ["Improved to Grade-level Ready but MOSY level Developing", "DEVELOPING", "INDEPENDENT_GRADE_READY"],
+  ] as const)("G3: %s is REASON_NOT_ALLOWED", (_n, mosyLevel, improvedToLevel) => {
     expectFail(
       resolve({
         learner: tagged({ gradeType: "G3" }),
-        previousFilipinoLevel: previous,
-        submitted: { decision: "MOVE_OUT", reason: "IMPROVED_READING_LEVEL", improvedToLevel },
+        submitted: { mosyLevel, decision: "MOVE_OUT", reason: "IMPROVED_READING_LEVEL", improvedToLevel },
       }),
       "REASON_NOT_ALLOWED"
     );
   });
 
-  it("with no previous level the lowest level is not offered, the next one is", () => {
+  it("G6: Improved to Independent but MOSY level Instructional is REASON_NOT_ALLOWED", () => {
+    expectFail(
+      resolve({
+        learner: tagged({ gradeType: "G6" }),
+        submitted: {
+          mosyLevel: "INSTRUCTIONAL_DEVELOPING",
+          decision: "MOVE_OUT",
+          reason: "IMPROVED_READING_LEVEL",
+          improvedToLevel: "INDEPENDENT_GRADE_READY",
+        },
+      }),
+      "REASON_NOT_ALLOWED"
+    );
+  });
+
+  it("G1 to G10: an improved level that is not a move-out level is REASON_NOT_ALLOWED", () => {
+    // Low Emergent is a stay level, never offered as "Improved to".
     expectFail(
       resolve({
         learner: tagged({ gradeType: "G3" }),
-        previousFilipinoLevel: null,
         submitted: {
+          mosyLevel: "DEVELOPING",
           decision: "MOVE_OUT",
           reason: "IMPROVED_READING_LEVEL",
           improvedToLevel: "NON_DECODER_LOW_EMERGENT",
@@ -622,16 +743,112 @@ describe("resolveMosySave — rejected paths", () => {
       }),
       "REASON_NOT_ALLOWED"
     );
+  });
+
+  it.each(["G1", "G2", "G3", "G4", "G10"])(
+    "%s: an LSEN reason is allowed with every move-out level",
+    (g) => {
+      for (const o of mosyLevelOptions(g, "MOVE_OUT")) {
+        for (const reason of ["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"] as const) {
+          const res = expectOk(
+            resolve({
+              learner: tagged({ gradeType: g }),
+              submitted: { mosyLevel: o.value as ReadingProfile, decision: "MOVE_OUT", reason },
+            })
+          );
+          expect(res.row.mosyLevel).toBe(o.value);
+        }
+      }
+    }
+  );
+
+  it.each(["G1", "G3", "G4", "G10"])(
+    "%s: a stay level on a MOVE_OUT, and a move-out level on STAY or no decision, is LEVEL_NOT_ALLOWED",
+    (g) => {
+      const learner = tagged({ gradeType: g });
+      expectFail(
+        resolve({
+          learner,
+          submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" },
+        }),
+        "LEVEL_NOT_ALLOWED"
+      );
+      expectFail(
+        resolve({
+          learner,
+          submitted: { mosyLevel: "INDEPENDENT_GRADE_READY", decision: "STAY" },
+        }),
+        "LEVEL_NOT_ALLOWED"
+      );
+      expectFail(
+        resolve({
+          learner,
+          submitted: { mosyLevel: "INDEPENDENT_GRADE_READY", decision: null },
+        }),
+        "LEVEL_NOT_ALLOWED"
+      );
+    }
+  );
+
+  it("G1 to G3 refuse the legacy combined level on every decision", () => {
+    for (const decision of ["STAY", "MOVE_OUT", null] as const) {
+      expectFail(
+        resolve({
+          learner: tagged({ gradeType: "G2" }),
+          submitted: {
+            mosyLevel: "INSTRUCTIONAL_DEVELOPING",
+            decision,
+            reason: decision === "MOVE_OUT" ? "DIAGNOSED_LSEN" : null,
+          },
+        }),
+        "LEVEL_NOT_ALLOWED"
+      );
+    }
+  });
+
+  it("off-band grades keep the whole scale for every decision", () => {
     expectOk(
       resolve({
-        learner: tagged({ gradeType: "G3" }),
-        previousFilipinoLevel: null,
+        learner: tagged({ gradeType: "G11" }),
+        submitted: { mosyLevel: "INDEPENDENT_GRADE_READY", decision: "STAY" },
+      })
+    );
+    expectOk(
+      resolve({
+        learner: tagged({ gradeType: "KINDER" }),
+        submitted: { mosyLevel: "CVC_BLENDING", decision: null },
+      })
+    );
+  });
+
+  it("an off-band grade is not held to Improved to X = MOSY level X", () => {
+    expectOk(
+      resolve({
+        learner: tagged({ gradeType: "KINDER" }),
+        bosyFilipinoLevel: "LETTER_LEVEL",
         submitted: {
+          mosyLevel: "CV_BLENDING",
           decision: "MOVE_OUT",
           reason: "IMPROVED_READING_LEVEL",
-          improvedToLevel: "FRUSTRATION_HIGH_EMERGENT",
+          improvedToLevel: "CVC_BLENDING",
         },
       })
+    );
+  });
+
+  it("off-band grades still filter Improved to by the BOSY level, and the input flips it", () => {
+    const submitted = {
+      mosyLevel: "INDEPENDENT_GRADE_READY" as const,
+      decision: "MOVE_OUT" as const,
+      reason: "IMPROVED_READING_LEVEL" as const,
+      improvedToLevel: "INSTRUCTIONAL_DEVELOPING" as const,
+    };
+    expectOk(
+      resolve({ learner: tagged({ gradeType: "G11" }), bosyFilipinoLevel: "FRUSTRATION_HIGH_EMERGENT", submitted })
+    );
+    expectFail(
+      resolve({ learner: tagged({ gradeType: "G11" }), bosyFilipinoLevel: "INSTRUCTIONAL_DEVELOPING", submitted }),
+      "REASON_NOT_ALLOWED"
     );
   });
 
@@ -656,21 +873,6 @@ describe("resolveMosySave — rejected paths", () => {
           improvedToLevel: "NON_DECODER_LOW_EMERGENT",
         },
       }),
-      "REASON_NOT_ALLOWED"
-    );
-  });
-
-  it("the previous level comes from the input, so the same submission flips with it", () => {
-    const submitted = {
-      decision: "MOVE_OUT" as const,
-      reason: "IMPROVED_READING_LEVEL" as const,
-      improvedToLevel: "INSTRUCTIONAL_DEVELOPING" as const,
-    };
-    expectOk(
-      resolve({ learner: tagged(), previousFilipinoLevel: "FRUSTRATION_HIGH_EMERGENT", submitted })
-    );
-    expectFail(
-      resolve({ learner: tagged(), previousFilipinoLevel: "INSTRUCTIONAL_DEVELOPING", submitted }),
       "REASON_NOT_ALLOWED"
     );
   });
@@ -786,50 +988,45 @@ describe("computeMosyStats", () => {
   });
 });
 
-describe("formatPreviousLevel", () => {
-  const record = {
-    monthKey: "2026-08-03",
-    englishProfile: "INSTRUCTIONAL_DEVELOPING",
-    filipinoProfile: "FRUSTRATION_HIGH_EMERGENT",
+describe("formatBosyLevel", () => {
+  const learner = {
+    englishReadingProfile: "INSTRUCTIONAL_DEVELOPING",
+    filipinoReadingProfile: "FRUSTRATION_HIGH_EMERGENT",
   };
 
-  it("returns null with no record", () => {
-    expect(formatPreviousLevel(null, "G4")).toBeNull();
+  it("shows both languages for G4, labelled by the grade", () => {
+    expect(formatBosyLevel(learner, "G4")).toEqual({
+      filipino: labelReadingProfile("FRUSTRATION_HIGH_EMERGENT", "G4"),
+      english: labelReadingProfile("INSTRUCTIONAL_DEVELOPING", "G4"),
+    });
   });
 
-  it("shows both languages for G4", () => {
-    const out = formatPreviousLevel(record, "G4");
-    expect(out?.filipino).toBeTruthy();
-    expect(out?.english).toBeTruthy();
-    expect(out?.filipino).not.toBe(out?.english);
-  });
-
-  it.each(["G1", "G2"])("drops English for %s even when the record has one", (g) => {
-    const out = formatPreviousLevel(record, g);
-    expect(out?.english).toBeNull();
-    expect(out?.filipino).toBeTruthy();
+  it.each(["G1", "G2"])("drops English for %s even when the learner has one", (g) => {
+    const out = formatBosyLevel(learner, g);
+    expect(out.english).toBeNull();
+    expect(out.filipino).toBeTruthy();
   });
 
   it("drops English for Kinder (Filipino only) and keeps it for G3 (languagesForGrade)", () => {
-    const kinder = formatPreviousLevel(
-      { ...record, englishProfile: "LETTER_LEVEL", filipinoProfile: "LETTER_LEVEL" },
+    const kinder = formatBosyLevel(
+      { englishReadingProfile: "LETTER_LEVEL", filipinoReadingProfile: "LETTER_LEVEL" },
       "KINDER"
     );
-    expect(kinder?.english).toBeNull();
-    expect(kinder?.filipino).toBeTruthy();
-    expect(formatPreviousLevel(record, "G3")?.english).toBeTruthy();
+    expect(kinder.english).toBeNull();
+    expect(kinder.filipino).toBeTruthy();
+    expect(formatBosyLevel(learner, "G3").english).toBeTruthy();
   });
 
-  it("null profiles stay null", () => {
-    const out = formatPreviousLevel({ monthKey: "2026-08-03", englishProfile: null, filipinoProfile: null }, "G4");
-    expect(out).toMatchObject({ filipino: null, english: null });
+  it("null profiles stay null and there is no month", () => {
+    const out = formatBosyLevel({ englishReadingProfile: null, filipinoReadingProfile: null }, "G4");
+    expect(out).toEqual({ filipino: null, english: null });
   });
 
-  it("derives the month from the local date key, not UTC (first of month must not slip back)", () => {
-    const out = formatPreviousLevel({ ...record, monthKey: "2026-09-01" }, "G4");
-    expect(out?.monthLabel).toMatch(/Sep/);
-    expect(out?.monthLabel).toMatch(/2026/);
-    const out2 = formatPreviousLevel({ ...record, monthKey: "2026-08-31" }, "G4");
-    expect(out2?.monthLabel).toMatch(/Aug/);
+  it("a Grade 1-3 legacy combined level reads 'needs update'", () => {
+    const out = formatBosyLevel(
+      { englishReadingProfile: null, filipinoReadingProfile: "INSTRUCTIONAL_DEVELOPING" },
+      "G2"
+    );
+    expect(out.filipino).toBe("Developing or Transitioning — needs update");
   });
 });

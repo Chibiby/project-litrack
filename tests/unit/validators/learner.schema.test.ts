@@ -38,6 +38,28 @@ describe("learnerCreateSchema", () => {
     expect("isAralLearner" in result.data).toBe(false);
   });
 
+  it("accepts DEVELOPING and TRANSITIONING as reading profiles (grade gating is the action's job, via the reading policy)", () => {
+    for (const value of ["DEVELOPING", "TRANSITIONING"] as const) {
+      const result = learnerCreateSchema.safeParse({
+        ...validBase,
+        englishReadingProfile: undefined,
+        filipinoReadingProfile: value,
+      });
+      expect(result.success, value).toBe(true);
+      if (!result.success) return;
+      expect(result.data.filipinoReadingProfile).toBe(value);
+    }
+  });
+
+  it("rejects frustration subtypes alongside TRANSITIONING", () => {
+    const result = learnerCreateSchema.safeParse({
+      ...validBase,
+      filipinoReadingProfile: "TRANSITIONING",
+      filipinoFrustrationSubtypes: ["DECODING"],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("accepts optional Section B fields and requires transferDetails for MULTIPLE", () => {
     const withB = learnerCreateSchema.safeParse({
       ...validBase,

@@ -101,6 +101,15 @@ enum ReadingProfile {
   NON_DECODER_LOW_EMERGENT
   FRUSTRATION_HIGH_EMERGENT
   INSTRUCTIONAL_DEVELOPING
+  // Grade 1-3 only: "Developing" and "Transitioning", split out of the old
+  // combined "Developing or Transitioning" band. For Grade 1-3,
+  // INSTRUCTIONAL_DEVELOPING is now legacy: no longer offered, shown as
+  // "Developing or Transitioning - needs update" until a teacher re-picks.
+  // G4+ keep INSTRUCTIONAL_DEVELOPING as "Instructional". Added BEFORE
+  // INDEPENDENT_GRADE_READY in the migration: reading-level sorts
+  // (learners/pagination.ts, aral/grid-sorts.ts) order by the enum ordinal.
+  DEVELOPING
+  TRANSITIONING
   INDEPENDENT_GRADE_READY
   // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
   // section 2a). Only ever written by K/1/2 collection; label dispatch is

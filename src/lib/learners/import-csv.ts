@@ -9,6 +9,7 @@ import {
   READING_PROFILE_LABELS,
   READING_PROFILE_LABELS_K3,
   READING_PROFILE_LABELS_G4_PLUS,
+  READING_PROFILE_LEGACY_LABELS_G1_G3,
   FRUSTRATION_SUBTYPE_LABELS,
   GENDER_LABELS,
   ETHNICITY_LABELS,
@@ -23,7 +24,12 @@ import {
 } from "@/lib/validators/learner-import.schema";
 import { learnerDuplicateKey } from "@/lib/learners/normalize";
 import { formatPersonName } from "@/lib/names";
-import { languagesForGrade, allowedReadingValuesForGrade } from "@/lib/reading/policy";
+import {
+  LEGACY_READING_VALUE_MESSAGE,
+  allowedReadingValuesForGrade,
+  isLegacyReadingValue,
+  languagesForGrade,
+} from "@/lib/reading/policy";
 
 /** Canonical CSV headers (Section A + B + optional section + isAralLearner). */
 export const LEARNER_CSV_HEADERS = [
@@ -71,6 +77,11 @@ export function learnerCsvTemplate(gradeType?: string | null): string {
     ? readingProfileLabelsForGradeType(gradeType)
     : null;
   const collectsEnglish = gradeType ? languagesForGrade(gradeType).includes("ENGLISH") : true;
+  // Grade 3 no longer accepts the combined level, so its example is Developing.
+  const englishExample =
+    gradeType && isLegacyReadingValue("INSTRUCTIONAL_DEVELOPING", gradeType)
+      ? "DEVELOPING"
+      : "INSTRUCTIONAL_DEVELOPING";
 
   const row: Record<LearnerCsvHeader, string> = {
     firstName: "Ana",
@@ -85,8 +96,7 @@ export function learnerCsvTemplate(gradeType?: string | null): string {
     secondaryEthnicity: "",
     secondaryEthnicityOther: "",
     section: "",
-    englishReadingProfile:
-      profileLabels?.INSTRUCTIONAL_DEVELOPING ?? "INSTRUCTIONAL_DEVELOPING",
+    englishReadingProfile: profileLabels?.[englishExample] ?? englishExample,
     englishFrustrationSubtypes: "",
     filipinoReadingProfile:
       profileLabels?.INDEPENDENT_GRADE_READY ?? "INDEPENDENT_GRADE_READY",
@@ -124,11 +134,18 @@ function normalizeKey(s: string): string {
 
 const GENDER_LOOKUP = buildLookup(GENDER_LABELS as Record<string, string>);
 const ETHNICITY_LOOKUP = buildLookup(ETHNICITY_LABELS as Record<string, string>);
-/** Accept combined + K3 + G4+ band labels (and enum codes). */
+/**
+ * Accept combined + K3 + G4+ band labels (and enum codes). The old combined
+ * "Developing or Transitioning" (K3) and "... — needs update" (Grade 1-3
+ * legacy) labels resolve to `INSTRUCTIONAL_DEVELOPING`, which
+ * `validateImportRows` then refuses for Grade 1-3 with a message naming the
+ * two levels to pick instead.
+ */
 const PROFILE_LOOKUP = (() => {
   const map = buildLookup(READING_PROFILE_LABELS as Record<string, string>);
   for (const labels of [
     READING_PROFILE_LABELS_K3,
+    READING_PROFILE_LEGACY_LABELS_G1_G3,
     READING_PROFILE_LABELS_G4_PLUS,
   ] as const) {
     for (const [code, label] of Object.entries(labels)) {
@@ -433,14 +450,23 @@ function validateReadingProfileForGrade(
   if (!collectsEnglish && data.englishReadingProfile) {
     errors.push("English reading level is not collected for this grade");
   }
-  if (
+  // The old combined "Developing or Transitioning" cannot be mapped to either
+  // new Grade 1-3 level, so it is refused outright — even when it matches the
+  // stored value — and the row tells the user what to pick instead.
+  const englishLegacy = isLegacyReadingValue(data.englishReadingProfile, gradeType);
+  const filipinoLegacy = isLegacyReadingValue(data.filipinoReadingProfile, gradeType);
+  if (englishLegacy) {
+    errors.push(`English reading level: ${LEGACY_READING_VALUE_MESSAGE}`);
+  } else if (
     data.englishReadingProfile &&
     !allowed.includes(data.englishReadingProfile) &&
     data.englishReadingProfile !== existing?.englishReadingProfile
   ) {
     errors.push("Invalid English reading level for this grade");
   }
-  if (
+  if (filipinoLegacy) {
+    errors.push(`Filipino reading level: ${LEGACY_READING_VALUE_MESSAGE}`);
+  } else if (
     !allowed.includes(data.filipinoReadingProfile) &&
     data.filipinoReadingProfile !== existing?.filipinoReadingProfile
   ) {

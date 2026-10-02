@@ -32,6 +32,12 @@ describe("classifyReadingMovement", () => {
     );
   });
 
+  it("Grade 1-3: ranks Developing below Transitioning, and a legacy combined level as Developing", () => {
+    expect(classifyReadingMovement("DEVELOPING", "TRANSITIONING", "G2")).toBe("improved");
+    expect(classifyReadingMovement("INSTRUCTIONAL_DEVELOPING", "DEVELOPING", "G2")).toBe("same");
+    expect(classifyReadingMovement("INSTRUCTIONAL_DEVELOPING", "TRANSITIONING", "G3")).toBe("improved");
+  });
+
   it("not comparable: Non-decoder is not on the Grade 11/12 scale", () => {
     expect(classifyReadingMovement("NON_DECODER_LOW_EMERGENT", "FRUSTRATION_HIGH_EMERGENT", "G11")).toBe(
       "not_comparable"

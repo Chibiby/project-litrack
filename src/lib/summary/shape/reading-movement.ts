@@ -1,4 +1,4 @@
-import { allowedReadingValuesForGrade } from "@/lib/reading/policy";
+import { allowedReadingValuesForGrade, reportingBandValue } from "@/lib/reading/policy";
 
 /**
  * Month-over-month movement of one learner's reading level in one language
@@ -37,8 +37,9 @@ export function classifyReadingMovement(
   gradeType: string
 ): ReadingMovement {
   const scale = allowedReadingValuesForGrade(gradeType);
-  const before = scale.indexOf(previous);
-  const after = scale.indexOf(current);
+  // A Grade 1-3 legacy "Developing or Transitioning" ranks as Developing.
+  const before = scale.indexOf(reportingBandValue(previous, gradeType));
+  const after = scale.indexOf(reportingBandValue(current, gradeType));
   if (before === -1 || after === -1) return "not_comparable";
   if (after > before) return "improved";
   if (after < before) return "declined";

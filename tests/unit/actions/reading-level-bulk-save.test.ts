@@ -113,6 +113,15 @@ const CROSS_TENANT_LEARNER = "learner-other-school";
  */
 let learnerGradeTypes: Record<string, string>;
 
+/** [lastName, firstName] per fake learner, for the messages that name them. */
+const LEARNER_NAMES: Record<string, [string, string]> = {
+  "learner-a": ["Andrews", "Asriel Gabby B."],
+  "learner-b": ["Bautista", "Bea"],
+  "learner-c": ["Cruz", "Carlo"],
+  "learner-d": ["Diaz", "Dina"],
+  "learner-e": ["Evangelista", "Eli"],
+};
+
 /**
  * Two tenants in one table. Modelled so an UNSCOPED query returns the cross-tenant
  * row, exactly as Postgres would: drop `schoolId: user.schoolId` from the action and
@@ -135,6 +144,9 @@ const learnerFindMany = vi.fn(async (args: { where: Record<string, unknown> }) =
       gradeLevelId: GRADE_ID,
       teacherId: TEACHER_ID,
       aralTeacherId: null,
+      firstName: LEARNER_NAMES[r.id]?.[1] ?? "Ana",
+      middleName: null,
+      lastName: LEARNER_NAMES[r.id]?.[0] ?? "Santos",
       gradeLevel: { type: learnerGradeTypes[r.id] ?? "G7" },
     }));
 });
@@ -674,5 +686,87 @@ describe("bulkRecordMonthlyReadingLevel — legacy-value carve-out (defect fixed
     ]);
 
     expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+  });
+});
+
+describe("bulkRecordMonthlyReadingLevel — Grade 1-3 Developing / Transitioning split", () => {
+  const FIELD = "Choose Developing or Transitioning — the old combined level was split";
+
+  it("rejects the old combined level for Grade 1-3 even when UNCHANGED, naming the learner", async () => {
+    learnerGradeTypes = { "learner-a": "G2" };
+    existingReadingLevelRows = [
+      { learnerId: "learner-a", englishProfile: null, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" },
+    ];
+
+    const res = await post([
+      entry("learner-a", { englishProfile: undefined, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" }),
+    ]);
+
+    const message =
+      "Choose Developing or Transitioning for Andrews, Asriel Gabby B. — the old combined level was split";
+    expect(res).toEqual({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      error: message,
+      fieldErrors: { _form: message, "entries.0.filipinoProfile": FIELD },
+    });
+    expect(rawCalls).toHaveLength(0);
+  });
+
+  it("rejects the old combined level on a Grade 3 English profile", async () => {
+    learnerGradeTypes = { "learner-a": "G3" };
+
+    const res = await post([
+      entry("learner-a", { englishProfile: "INSTRUCTIONAL_DEVELOPING", filipinoProfile: "DEVELOPING" }),
+    ]);
+
+    expect(res).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      fieldErrors: { "entries.0.englishProfile": FIELD },
+    });
+  });
+
+  it("names up to three learners, then 'and N more', in entry order", async () => {
+    learnerIds = ["learner-a", "learner-b", "learner-c", "learner-d", "learner-e"];
+    learnerGradeTypes = Object.fromEntries(learnerIds.map((id) => [id, "G1"]));
+    const legacy = { englishProfile: undefined, filipinoProfile: "INSTRUCTIONAL_DEVELOPING" };
+
+    const res = await post(learnerIds.map((id) => entry(id, legacy)));
+
+    expect(res).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      error:
+        "Choose Developing or Transitioning for Andrews, Asriel Gabby B.; Bautista, Bea; Cruz, Carlo and 2 more — the old combined level was split",
+    });
+    expect(rawCalls).toHaveLength(0);
+  });
+
+  it("accepts Developing and Transitioning for Grade 3", async () => {
+    learnerGradeTypes = { "learner-a": "G3" };
+
+    const res = await post([
+      entry("learner-a", { englishProfile: "DEVELOPING", filipinoProfile: "TRANSITIONING" }),
+    ]);
+
+    expect(res).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+  });
+
+  it("Grade 4 still accepts INSTRUCTIONAL_DEVELOPING and rejects DEVELOPING / TRANSITIONING", async () => {
+    learnerGradeTypes = { "learner-a": "G4" };
+
+    expect(
+      await post([entry("learner-a", { englishProfile: "INSTRUCTIONAL_DEVELOPING" })])
+    ).toEqual({ ok: true, data: { upserted: 1, cleared: 0 } });
+
+    expect(await post([entry("learner-a", { englishProfile: "DEVELOPING" })])).toEqual({
+      ok: false,
+      error: "Invalid English reading level for this grade",
+    });
+    expect(await post([entry("learner-a", { filipinoProfile: "TRANSITIONING" })])).toEqual({
+      ok: false,
+      error: "Invalid Filipino reading level for this grade",
+    });
   });
 });

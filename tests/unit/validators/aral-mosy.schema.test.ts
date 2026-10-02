@@ -83,6 +83,20 @@ describe("aralMosyDecisionSchema", () => {
     expect(r.improvedToLevel).toBeNull();
   });
 
+  it("keeps decision-dependent level rules out of Zod (they live in resolveMosySave)", () => {
+    // INDEPENDENT_GRADE_READY on STAY and on a deferred save is a grade-rule
+    // failure for G1 to G10, decided by resolveMosySave from the DB-loaded grade.
+    for (const decision of ["STAY", ""]) {
+      expect(
+        aralMosyDecisionSchema.safeParse({ ...base, mosyLevel: "INDEPENDENT_GRADE_READY", decision }).success
+      ).toBe(true);
+    }
+    // The split Grade 1-3 values parse too.
+    for (const mosyLevel of ["DEVELOPING", "TRANSITIONING"]) {
+      expect(aralMosyDecisionSchema.safeParse({ ...base, mosyLevel }).success).toBe(true);
+    }
+  });
+
   it("treats omitted optional fields like empty strings", () => {
     const r = aralMosyDecisionSchema.parse(base);
     expect(r.decision).toBeNull();

@@ -51,6 +51,10 @@ function makeTx(counts: Record<string, number> = {}) {
     readingLevelRecord: { count: countStub("readingLevelRecord", counts.readingLevelRecord ?? 0) },
     termGrade: { count: countStub("termGrade", counts.termGrade ?? 0) },
     aralProfile: { count: countStub("aralProfile", counts.aralProfile ?? 0) },
+    aralMosyDecision: { count: countStub("aralMosyDecision", counts.aralMosyDecision ?? 0) },
+    kinderCompetencyRecord: {
+      count: countStub("kinderCompetencyRecord", counts.kinderCompetencyRecord ?? 0),
+    },
     teacherSection: { count: countStub("teacherSection", counts.teacherSection ?? 0) },
     notification: { count: countStub("notification", counts.notification ?? 0) },
     chatMessage: { count: countStub("chatMessage", counts.chatMessage ?? 0) },
@@ -90,8 +94,16 @@ beforeEach(() => {
 });
 
 describe("learnerPurgeCounts", () => {
-  it("counts all five learner-scoped tables by learnerId", async () => {
-    const tx = makeTx({ enrollment: 2, attendance: 40, readingLevelRecord: 6, termGrade: 8, aralProfile: 1 });
+  it("counts all seven learner-scoped tables by learnerId", async () => {
+    const tx = makeTx({
+      enrollment: 2,
+      attendance: 40,
+      readingLevelRecord: 6,
+      termGrade: 8,
+      aralProfile: 1,
+      aralMosyDecision: 3,
+      kinderCompetencyRecord: 5,
+    });
 
     const counts = await learnerPurgeCounts(tx, LEARNER_ID);
 
@@ -101,7 +113,11 @@ describe("learnerPurgeCounts", () => {
       readingLevelRecord: 6,
       termGrade: 8,
       aralProfile: 1,
+      aralMosyDecision: 3,
+      kinderCompetencyRecord: 5,
     });
+    expect(tx.aralMosyDecision.count).toHaveBeenCalledWith({ where: { learnerId: LEARNER_ID } });
+    expect(tx.kinderCompetencyRecord.count).toHaveBeenCalledWith({ where: { learnerId: LEARNER_ID } });
     expect(tx.enrollment.count).toHaveBeenCalledWith({ where: { learnerId: LEARNER_ID } });
     expect(tx.attendance.count).toHaveBeenCalledWith({ where: { learnerId: LEARNER_ID } });
     expect(tx.readingLevelRecord.count).toHaveBeenCalledWith({ where: { learnerId: LEARNER_ID } });
@@ -149,7 +165,15 @@ describe("purgeLearnerRecord", () => {
 
     const counts = await purgeLearnerRecord(tx, LEARNER_ID);
 
-    expect(counts).toEqual({ enrollment: 1, attendance: 10, readingLevelRecord: 2, termGrade: 3, aralProfile: 1 });
+    expect(counts).toEqual({
+      enrollment: 1,
+      attendance: 10,
+      readingLevelRecord: 2,
+      termGrade: 3,
+      aralProfile: 1,
+      aralMosyDecision: 0,
+      kinderCompetencyRecord: 0,
+    });
     // The delete is a `deleteMany` guarded by `deletedAt: { not: null }` on the
     // statement itself — not merely on an earlier read — so a live row can
     // never be reachable here even under a concurrent purge race.
@@ -162,6 +186,25 @@ describe("purgeLearnerRecord", () => {
     expect(order.slice(0, deleteIndex)).toEqual(
       expect.arrayContaining(["count:enrollment", "count:attendance", "count:readingLevelRecord", "count:termGrade", "count:aralProfile"])
     );
+  });
+
+  it("defaults to a deletedAt-only guard (admin path never reaches archived-only rows)", async () => {
+    const tx = makeTx();
+    await purgeLearnerRecord(tx, LEARNER_ID);
+    expect(tx.learner.deleteMany).toHaveBeenCalledWith({
+      where: { id: LEARNER_ID, deletedAt: { not: null } },
+    });
+  });
+
+  it("acceptArchived adds the archivedAt branch to the guard on the write", async () => {
+    const tx = makeTx();
+    await purgeLearnerRecord(tx, LEARNER_ID, { acceptArchived: true });
+    expect(tx.learner.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: LEARNER_ID,
+        OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+      },
+    });
   });
 
   it("refuses when the guarded deleteMany matches no row (e.g. a concurrent purge already removed it)", async () => {

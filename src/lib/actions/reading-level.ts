@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
 import { action } from "@/lib/errors/action";
-import { resourceNotFound } from "@/lib/errors/app-error";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import {
   readingLevelSchema,
@@ -27,7 +27,13 @@ import {
   nextMonthStart,
 } from "@/lib/month-range";
 import { resolveMonthlyReadingLevelWindow } from "@/lib/unlock/reading-level-window";
-import { allowedReadingValuesForGrade } from "@/lib/reading/policy";
+import {
+  LEGACY_READING_VALUE_MESSAGE,
+  allowedReadingValuesForGrade,
+  isLegacyReadingValue,
+  legacyReadingValueMessageFor,
+} from "@/lib/reading/policy";
+import { formatListingNameFromRecord } from "@/lib/names";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -214,6 +220,9 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
       gradeLevelId: true,
       teacherId: true,
       aralTeacherId: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
       gradeLevel: { select: { type: true } },
     },
   });
@@ -262,7 +271,35 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
   // into each other's rubric. A value outside that set is still accepted when
   // it is byte-identical to what is already stored for this learner this
   // month (untouched legacy row); only a value that is both out-of-policy AND
-  // changed is rejected.
+  // changed is rejected. The exception is a Grade 1-3 row still holding the
+  // old combined "Developing or Transitioning": it must be re-picked as
+  // Developing or Transitioning before the month can be saved, changed or not.
+  // Every such row is collected first so one error names them all — the grid
+  // re-sends untouched rows, so the teacher may not have edited the one that
+  // blocks the save. Names go only to this teacher's own grid (the learners
+  // were loaded under `aralLearnerScope`), never into audit metadata.
+  const legacyNames: string[] = [];
+  const legacyFieldErrors: Record<string, string> = {};
+  parsed.data.entries.forEach((entry, index) => {
+    const learner = byId.get(entry.learnerId);
+    if (!learner) return;
+    const fields = (["englishProfile", "filipinoProfile"] as const).filter((field) =>
+      isLegacyReadingValue(entry[field], learner.gradeLevel.type)
+    );
+    if (fields.length === 0) return;
+    legacyNames.push(formatListingNameFromRecord(learner));
+    for (const field of fields) {
+      legacyFieldErrors[`entries.${index}.${field}`] = LEGACY_READING_VALUE_MESSAGE;
+    }
+  });
+  if (legacyNames.length > 0) {
+    const message = legacyReadingValueMessageFor(legacyNames);
+    throw new AppError("VALIDATION_FAILED", {
+      params: { message },
+      fieldErrors: { _form: message, ...legacyFieldErrors },
+    });
+  }
+
   for (const entry of parsed.data.entries) {
     const learner = byId.get(entry.learnerId);
     if (!learner) continue;

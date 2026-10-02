@@ -9,8 +9,12 @@ import {
   EARLY_RUBRIC_VALUES,
   SHS_ALLOWED_VALUES,
   STANDARD_VALUES,
+  G1_TO_G3_VALUES,
+  LEGACY_READING_VALUE_MESSAGE,
+  isLegacyReadingValue,
+  reportingBandValue,
 } from "@/lib/reading/policy";
-import { labelReadingProfile } from "@/lib/constants/enum-labels";
+import { READING_PROFILE_LABELS, labelReadingProfile } from "@/lib/constants/enum-labels";
 
 /**
  * Regression coverage for the shared reading-policy module
@@ -76,7 +80,7 @@ describe("allowedReadingValuesForGrade", () => {
     expect(isReadingValueAllowedForGrade("NON_DECODER_LOW_EMERGENT", "G11")).toBe(false);
   });
 
-  it("pins G3-G10 (and FLOATING) to exactly the original four, unrestricted", () => {
+  it("pins G4-G10 (and FLOATING) to exactly the original four, unrestricted", () => {
     const expected = [
       "NON_DECODER_LOW_EMERGENT",
       "FRUSTRATION_HIGH_EMERGENT",
@@ -84,9 +88,72 @@ describe("allowedReadingValuesForGrade", () => {
       "INDEPENDENT_GRADE_READY",
     ];
     expect(STANDARD_VALUES).toEqual(expected);
-    for (const gradeType of ["G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "FLOATING"]) {
+    for (const gradeType of ["G4", "G5", "G6", "G7", "G8", "G9", "G10", "FLOATING"]) {
       expect(allowedReadingValuesForGrade(gradeType), gradeType).toEqual(expected);
     }
+  });
+
+  it("pins Grade 1-3 to the five new levels, Developing and Transitioning replacing the combined level", () => {
+    const expected = [
+      "NON_DECODER_LOW_EMERGENT",
+      "FRUSTRATION_HIGH_EMERGENT",
+      "DEVELOPING",
+      "TRANSITIONING",
+      "INDEPENDENT_GRADE_READY",
+    ];
+    expect(G1_TO_G3_VALUES).toEqual(expected);
+    for (const gradeType of ["G1", "G2", "G3"]) {
+      expect(allowedReadingValuesForGrade(gradeType), gradeType).toEqual(expected);
+      expect(isReadingValueAllowedForGrade("DEVELOPING", gradeType), gradeType).toBe(true);
+      expect(isReadingValueAllowedForGrade("TRANSITIONING", gradeType), gradeType).toBe(true);
+    }
+  });
+
+  it("Grade 1-3 no longer accept the old combined INSTRUCTIONAL_DEVELOPING", () => {
+    for (const gradeType of ["G1", "G2", "G3"]) {
+      expect(isReadingValueAllowedForGrade("INSTRUCTIONAL_DEVELOPING", gradeType), gradeType).toBe(false);
+    }
+  });
+
+  it("Grade 4 accepts INSTRUCTIONAL_DEVELOPING and rejects DEVELOPING and TRANSITIONING", () => {
+    expect(isReadingValueAllowedForGrade("INSTRUCTIONAL_DEVELOPING", "G4")).toBe(true);
+    expect(isReadingValueAllowedForGrade("DEVELOPING", "G4")).toBe(false);
+    expect(isReadingValueAllowedForGrade("TRANSITIONING", "G4")).toBe(false);
+  });
+
+  it("never offers DEVELOPING or TRANSITIONING outside Grade 1-3", () => {
+    for (const gradeType of ["KINDER", "G4", "G5", "G10", "G11", "G12", "FLOATING"]) {
+      for (const value of ["DEVELOPING", "TRANSITIONING"]) {
+        expect(allowedReadingValuesForGrade(gradeType), `${gradeType} ${value}`).not.toContain(value);
+      }
+    }
+  });
+});
+
+describe("isLegacyReadingValue / reportingBandValue", () => {
+  it("flags INSTRUCTIONAL_DEVELOPING as legacy for Grade 1-3 only", () => {
+    for (const gradeType of ["G1", "G2", "G3"]) {
+      expect(isLegacyReadingValue("INSTRUCTIONAL_DEVELOPING", gradeType), gradeType).toBe(true);
+    }
+    for (const gradeType of ["KINDER", "G4", "G7", "G11", "FLOATING"]) {
+      expect(isLegacyReadingValue("INSTRUCTIONAL_DEVELOPING", gradeType), gradeType).toBe(false);
+    }
+    expect(isLegacyReadingValue("DEVELOPING", "G2")).toBe(false);
+    expect(isLegacyReadingValue(null, "G2")).toBe(false);
+    expect(isLegacyReadingValue(undefined, "G2")).toBe(false);
+  });
+
+  it("counts a Grade 1-3 legacy row as DEVELOPING and leaves everything else alone", () => {
+    expect(reportingBandValue("INSTRUCTIONAL_DEVELOPING", "G3")).toBe("DEVELOPING");
+    expect(reportingBandValue("INSTRUCTIONAL_DEVELOPING", "G4")).toBe("INSTRUCTIONAL_DEVELOPING");
+    expect(reportingBandValue("TRANSITIONING", "G3")).toBe("TRANSITIONING");
+    expect(reportingBandValue("CV_BLENDING", "G1")).toBe("CV_BLENDING");
+  });
+
+  it("the shared message names both levels to pick", () => {
+    expect(LEGACY_READING_VALUE_MESSAGE).toBe(
+      "Choose Developing or Transitioning — the old combined level was split"
+    );
   });
 });
 
@@ -106,6 +173,19 @@ describe("readingProfileOptionsForGrade — exact labels", () => {
       { value: "INSTRUCTIONAL_DEVELOPING", label: "Instructional Level" },
       { value: "INDEPENDENT_GRADE_READY", label: "Independent Level" },
     ]);
+  });
+
+  it("Grade 1, Grade 2 and Grade 3 labels are the five CRLA bands, in order", () => {
+    const expected = [
+      { value: "NON_DECODER_LOW_EMERGENT", label: "Low Emergent" },
+      { value: "FRUSTRATION_HIGH_EMERGENT", label: "High Emergent" },
+      { value: "DEVELOPING", label: "Developing" },
+      { value: "TRANSITIONING", label: "Transitioning" },
+      { value: "INDEPENDENT_GRADE_READY", label: "Grade-level Ready" },
+    ];
+    for (const gradeType of ["G1", "G2", "G3"]) {
+      expect(readingProfileOptionsForGrade(gradeType), gradeType).toEqual(expected);
+    }
   });
 
   it("Grade 5 labels are pinned to the current PHIL-IRI-style set, unchanged by this spec", () => {
@@ -178,5 +258,39 @@ describe("labelReadingProfile — value-first dispatch (decision I)", () => {
     expect(labelReadingProfile("INDEPENDENT_GRADE_READY", "G5")).toBe("Independent");
     expect(labelReadingProfile("INDEPENDENT_GRADE_READY", "G2")).toBe("Grade-level Ready");
     expect(labelReadingProfile("INDEPENDENT_GRADE_READY", "G11")).toBe("Independent Level");
+  });
+
+  it("a legacy INSTRUCTIONAL_DEVELOPING row reads 'needs update' for Grade 1-3, unchanged elsewhere", () => {
+    for (const gradeType of ["G1", "G2", "G3"]) {
+      expect(labelReadingProfile("INSTRUCTIONAL_DEVELOPING", gradeType), gradeType).toBe(
+        "Developing or Transitioning — needs update"
+      );
+    }
+    expect(labelReadingProfile("INSTRUCTIONAL_DEVELOPING", "G5")).toBe("Instructional");
+    expect(labelReadingProfile("INSTRUCTIONAL_DEVELOPING", "G11")).toBe("Instructional Level");
+    expect(labelReadingProfile("INSTRUCTIONAL_DEVELOPING", "KINDER")).toBe(
+      "Developing or Transitioning"
+    );
+  });
+
+  it("DEVELOPING and TRANSITIONING keep their labels under any grade, even where not offered", () => {
+    for (const gradeType of ["KINDER", "G2", "G5", "G11", "FLOATING"]) {
+      expect(labelReadingProfile("DEVELOPING", gradeType), gradeType).toBe("Developing");
+      expect(labelReadingProfile("TRANSITIONING", gradeType), gradeType).toBe("Transitioning");
+    }
+  });
+
+  it("with no grade, falls back to the combined labels", () => {
+    expect(labelReadingProfile("INSTRUCTIONAL_DEVELOPING")).toBe(
+      "Instructional / Developing or Transitioning"
+    );
+    expect(labelReadingProfile("DEVELOPING")).toBe("Developing");
+    expect(labelReadingProfile("TRANSITIONING")).toBe("Transitioning");
+    // The combined map runs Instructional, Developing, Transitioning, then the
+    // top band, so charts that iterate it run lowest to highest.
+    const keys = Object.keys(READING_PROFILE_LABELS);
+    expect(keys.indexOf("DEVELOPING")).toBe(keys.indexOf("INSTRUCTIONAL_DEVELOPING") + 1);
+    expect(keys.indexOf("TRANSITIONING")).toBe(keys.indexOf("DEVELOPING") + 1);
+    expect(keys.indexOf("INDEPENDENT_GRADE_READY")).toBe(keys.indexOf("TRANSITIONING") + 1);
   });
 });
