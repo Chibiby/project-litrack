@@ -85,7 +85,7 @@ export function buildMosyExportBlocks(input: MosyExportInput): ReportBlock[] {
       { header: "#", width: 4 },
       { header: "Learner name", width: 24 },
       { header: "Grade & section", width: 16 },
-      { header: "BOSY level", width: 30 },
+      { header: "BOSY reading level", width: 30 },
       { header: "MOSY reading level", width: 20 },
       { header: "ARAL status decision", width: 14 },
       { header: "Reason", width: 26 },

@@ -125,7 +125,7 @@ describe("MosyTable", () => {
       makeRow({ id: "a", bosyLevel: { filipino: "Low Emergent", english: "Developing" } }),
       makeRow({ id: "b" }),
     ]);
-    expect(screen.getByRole("columnheader", { name: "BOSY level" })).not.toBeNull();
+    expect(screen.getByRole("columnheader", { name: "BOSY reading level" })).not.toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Previous level" })).toBeNull();
     const [, first, second] = screen.getAllByRole("row");
     const cell = within(first!).getAllByRole("cell")[3]!;

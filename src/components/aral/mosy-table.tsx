@@ -153,7 +153,7 @@ export function MosyTable({
                   <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
                   <TableHead className={HEAD_CLASS}>Learner name</TableHead>
                   <TableHead className={HEAD_CLASS}>Grade &amp; section</TableHead>
-                  <TableHead className={HEAD_CLASS}>BOSY level</TableHead>
+                  <TableHead className={HEAD_CLASS}>BOSY reading level</TableHead>
                   <TableHead className={HEAD_CLASS}>MOSY reading level</TableHead>
                   <TableHead className={HEAD_CLASS}>ARAL status decision</TableHead>
                   <TableHead className={HEAD_CLASS}>Reason</TableHead>

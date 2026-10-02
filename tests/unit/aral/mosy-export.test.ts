@@ -99,7 +99,7 @@ describe("buildMosyExportBlocks", () => {
       "#",
       "Learner name",
       "Grade & section",
-      "BOSY level",
+      "BOSY reading level",
       "MOSY reading level",
       "ARAL status decision",
       "Reason",

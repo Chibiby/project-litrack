@@ -280,7 +280,7 @@ describe("exportMosyReport", () => {
       columns: { header: string }[];
       rows: unknown[][];
     };
-    expect(learners.columns.map((c) => c.header)).toContain("BOSY level");
+    expect(learners.columns.map((c) => c.header)).toContain("BOSY reading level");
     expect(learners.columns.map((c) => c.header)).not.toContain("Previous level");
     expect(learners.rows[0]![3]).toBe("Fil: Frustration · Eng: Instructional");
   });

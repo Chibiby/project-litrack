@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.31.1",
+    date: "2026-10-02",
+    title: "MOSY Report column renamed to BOSY reading level",
+    announce: false,
+    fixes: [
+      "The MOSY Report column and its export now read \"BOSY reading level\".",
+    ],
+  },
+  {
     version: "2.31.0",
     date: "2026-10-02",
     title: "Developing and Transitioning are now separate levels, and a clearer MOSY decision",
