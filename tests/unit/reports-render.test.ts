@@ -1,4 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
+// Static, not the dynamic import `renderExcel` uses: requiring exceljs cold
+// loads ~470 modules (~1s idle, ~2s under a full `vitest run`, far more when the
+// machine swaps). Loaded here it is paid during collection, which has no per-test
+// timeout, and `renderExcel`'s own dynamic import resolves to this instance —
+// so "produces a real xlsx" no longer carries the whole load on its 5s budget.
+import ExcelJS from "exceljs";
 import type { CellValue, Workbook, Worksheet } from "exceljs";
 import type { ReportTable } from "@/lib/reports/render";
 
@@ -59,7 +65,6 @@ const TABLE: ReportTable = {
 };
 
 async function load(buf: Buffer): Promise<Workbook> {
-  const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as unknown as ExcelLoadable);
   return wb;

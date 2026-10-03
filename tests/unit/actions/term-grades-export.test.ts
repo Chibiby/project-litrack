@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import ExcelJS from "exceljs";
 import type { CellValue, Workbook, Worksheet } from "exceljs";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { getTermWindows, isTermLocked } from "@/lib/terms/windows";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 
 /**
- * 20s, not the 5s default. The first test in this file pays for the dynamic
- * `import("exceljs")` and the zip write; run alone it finishes in ~2s, but under
- * a full `vitest run` the workers contend and it crosses 5s intermittently. The
- * timeout is the flake, not the code — so it is raised here rather than made
- * global, and only in the files that unzip a workbook.
+ * exceljs is imported statically, here, on purpose. Requiring it cold loads ~470
+ * modules (~1s on an idle machine), and the action reaches it through a dynamic
+ * `import("exceljs")`. Left to that dynamic import, the whole load landed inside
+ * whichever test exported first — ~2s under a full `vitest run`, and past 30s
+ * when the machine was also swapping — and timed it out. Imported at the top, the
+ * load happens during collection, which has no per-test timeout, and the
+ * action's dynamic import resolves to the already-loaded module. Each test then
+ * times only its own render and unzip (~100-250ms).
  */
-vi.setConfig({ testTimeout: 20_000 });
 
 /**
  * Action-level coverage for `exportTermGrades` — the read half of the End of Terms
@@ -678,7 +681,6 @@ async function readExport(base64: string): Promise<{
   rows: Cell[][];
   info: Cell[][];
 }> {
-  const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(Buffer.from(base64, "base64") as unknown as ExcelLoadable);
   const [main, info] = wb.worksheets;
@@ -789,11 +791,9 @@ describe("exportTermGrades — the fixture clock", () => {
 });
 
 describe("exportTermGrades — the shared header and footer", () => {
-  // The first exceljs load in this file; slow cold under full-suite load.
-  it("opens the data sheet with the shared DepEd header and closes it with the shared footer", { timeout: 30_000 }, async () => {
+  it("opens the data sheet with the shared DepEd header and closes it with the shared footer", async () => {
     const file = fileOf(await post());
 
-    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
     const sheet = wb.getWorksheet("Second Term")!;
@@ -823,7 +823,6 @@ describe("exportTermGrades — the shared header and footer", () => {
   it("writes a plain sortable sheet for purpose RECORDS", async () => {
     const file = fileOf(await exportTermGrades({ gradeLevelId: GRADE_ID, term: OPEN_TERM, purpose: "RECORDS" }));
 
-    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
     const sheet = wb.getWorksheet("Second Term")!;
@@ -1372,7 +1371,7 @@ describe("exportTermGrades — the Super Admin branch", () => {
     });
   });
 
-  it("names a requested section on the sheet even when nobody is enrolled in it", { timeout: 30_000 }, async () => {
+  it("names a requested section on the sheet even when nobody is enrolled in it", async () => {
     asSuperAdmin(null);
     sections.push({
       id: OTHER_SECTION_ID,
@@ -1393,7 +1392,6 @@ describe("exportTermGrades — the Super Admin branch", () => {
       gradeLevelId: GRADE_ID,
       deletedAt: null,
     });
-    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(file.base64, "base64") as unknown as ExcelLoadable);
     const texts: string[] = [];
@@ -1733,7 +1731,6 @@ describe("exportTermGrades — one worksheet per advisory (sectionIds)", () => {
   }
 
   async function sheetsOf(base64: string) {
-    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(base64, "base64") as unknown as ExcelLoadable);
     return wb.worksheets.map((sheet) => ({ name: sheet.name, rows: grid(sheet, 5) }));
@@ -1838,7 +1835,6 @@ describe("exportTermGrades — Grade 1 letter marks", () => {
   }
 
   async function g1Sheet(base64: string) {
-    const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(base64, "base64") as unknown as ExcelLoadable);
     return grid(wb.worksheets[0], 3);
