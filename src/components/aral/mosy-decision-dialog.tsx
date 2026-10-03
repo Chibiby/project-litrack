@@ -132,10 +132,16 @@ function MosyDecisionForm({
   const levelOptions = isTransferredOut
     ? row.levelOptionsByDecision.TRANSFERRED_OUT
     : row.levelOptionsByDecision[decision || "NONE"];
-  const transferWidensLevels =
-    decision === "MOVE_OUT" &&
-    !isTransferredOut &&
-    row.levelOptionsByDecision.TRANSFERRED_OUT.length > row.levelOptionsByDecision.MOVE_OUT.length;
+
+  // RHF's own focus order follows registration, and the reason field mounts
+  // after the level; point focus at the first invalid field in visual order.
+  function focusFirstInvalid() {
+    const errors = form.formState.errors;
+    const order = ["decision", "reason", "improvedToLevel", "mosyLevel"] as const;
+    const first = order.find((name) => errors[name]);
+    if (!first) return;
+    form.setFocus(first === "improvedToLevel" ? "reason" : first);
+  }
 
   function clearReason() {
     form.setValue("reason", "", { shouldDirty: true });
@@ -203,7 +209,7 @@ function MosyDecisionForm({
   }
 
   return (
-    <AppForm form={form} onSubmit={onValid} className="grid gap-4">
+    <AppForm form={form} onSubmit={onValid} onInvalid={focusFirstInvalid} className="grid gap-4">
       <DialogHeader className="pr-8">
         <DialogTitle>MOSY decision for {row.fullName}</DialogTitle>
         <DialogDescription asChild>
@@ -292,58 +298,11 @@ function MosyDecisionForm({
         </Callout>
       ) : null}
 
-      <FormField
-        control={form.control}
-        name="mosyLevel"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel required>
-              {`MOSY reading level (${MOSY_LEVEL_LANGUAGE_NAMES[row.mosyLanguage]})`}
-            </FormLabel>
-            <Select
-              value={field.value}
-              onValueChange={(value) => {
-                field.onChange(value);
-                setStaleLevelLabel(null);
-                syncReasonToLevel(value);
-                form.clearErrors("mosyLevel");
-              }}
-              disabled={pending}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {levelOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {staleLevelLabel && !field.value ? (
-              <p className="text-sm text-muted-foreground">
-                The saved level {staleLevelLabel} is no longer an option for this decision. Choose
-                again.
-              </p>
-            ) : null}
-            {transferWidensLevels ? (
-              <p className="text-sm text-muted-foreground">
-                Transferred out? Choose that reason to pick any level.
-              </p>
-            ) : null}
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
       {decision === "MOVE_OUT" ? (
         <FormField
           control={form.control}
           name="reason"
-          render={() => (
+          render={({ field: reasonField }) => (
             <FormItem>
               <FormLabel required>Select reason</FormLabel>
               <Select
@@ -378,7 +337,7 @@ function MosyDecisionForm({
                 disabled={pending}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger ref={reasonField.ref}>
                     <SelectValue placeholder="Select reason" />
                   </SelectTrigger>
                 </FormControl>
@@ -403,6 +362,48 @@ function MosyDecisionForm({
           )}
         />
       ) : null}
+
+      <FormField
+        control={form.control}
+        name="mosyLevel"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel required>
+              {`MOSY reading level (${MOSY_LEVEL_LANGUAGE_NAMES[row.mosyLanguage]})`}
+            </FormLabel>
+            <Select
+              value={field.value}
+              onValueChange={(value) => {
+                field.onChange(value);
+                setStaleLevelLabel(null);
+                syncReasonToLevel(value);
+                form.clearErrors("mosyLevel");
+              }}
+              disabled={pending}
+            >
+              <FormControl>
+                <SelectTrigger ref={field.ref}>
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {levelOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {staleLevelLabel && !field.value ? (
+              <p className="text-sm text-muted-foreground">
+                The saved level {staleLevelLabel} is no longer an option for this decision. Choose
+                again.
+              </p>
+            ) : null}
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <FormField
         control={form.control}

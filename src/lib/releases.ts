@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.32.1",
+    date: "2026-10-03",
+    title: "MOSY decision asks for the reason first",
+    announce: false,
+    fixes: [
+      "When you move a learner out of ARAL in the MOSY Report, the reason now comes before the reading level, so the levels you see already match the reason you chose.",
+    ],
+  },
+  {
     version: "2.32.0",
     date: "2026-10-03",
     title: "\"Transferred out\" is now a MOSY move-out reason",

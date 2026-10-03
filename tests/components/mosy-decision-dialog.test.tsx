@@ -128,8 +128,8 @@ function pick(trigger: HTMLElement, name: string) {
   fireEvent.click(screen.getByRole("option", { name }));
 }
 
-const levelTrigger = () => screen.getAllByRole("combobox")[0]!;
-const reasonTrigger = () => screen.getAllByRole("combobox")[1]!;
+const levelTrigger = () => screen.getByRole("combobox", { name: /MOSY reading level/ });
+const reasonTrigger = () => screen.getByRole("combobox", { name: /Select reason/ });
 
 describe("MosyDecisionDialog", () => {
   it("has a neutral title", () => {
@@ -279,18 +279,17 @@ describe("MosyDecisionDialog Transferred out", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Move out learner from ARAL/ }));
   }
 
-  it("hints at the wider list until Transferred out is chosen", () => {
+  it("puts the reason field before the level field when moving out", () => {
     renderMoveOut();
-    const hint = "Transferred out? Choose that reason to pick any level.";
-    expect(screen.getByText(hint)).not.toBeNull();
-    pick(reasonTrigger(), "Transferred out");
-    expect(screen.queryByText(hint)).toBeNull();
+    const after = reasonTrigger().compareDocumentPosition(levelTrigger());
+    expect(after & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("does not show the hint for a Stay decision", () => {
+  it("shows no reason field for a Stay decision", () => {
     render(<MosyDecisionDialog state={{ row: splitRow() }} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("radio", { name: /Stay as ARAL learner/ }));
-    expect(screen.queryByText(/Transferred out\? Choose/)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /Select reason/ })).toBeNull();
+    expect(levelTrigger()).not.toBeNull();
   });
 
   it("widens the level list to include a Stay level", () => {
