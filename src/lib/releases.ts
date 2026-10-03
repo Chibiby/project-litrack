@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.34.0",
+    date: "2026-10-03",
+    title: "Division Summary: see every school at once",
+    announce: false,
+    fixes: [
+      "\"By school\" on the Division Summary now works without picking a district first, on every tab.",
+      "School-by-school tables show 25 schools at a time, with Previous and Next to move through the rest.",
+      "Search for a school by name or school ID to find it in every table on the page.",
+      "Sort any school-by-school table by school name, by total, or by any column, highest or lowest first.",
+    ],
+  },
+  {
     version: "2.33.0",
     date: "2026-10-03",
     title: "Clearer screens, safer saves, and faster pages",

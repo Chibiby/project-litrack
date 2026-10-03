@@ -15,7 +15,12 @@ import { useListNavigate, useListPending } from "@/components/nav/list-navigatio
 import { cn } from "@/lib/utils";
 import { NO_DISTRICT_LABEL } from "@/lib/summary/shape/rollup";
 import type { SummaryLevel } from "@/lib/summary/types";
-import { summaryHref, type FlatSearchParams } from "./summary-href";
+import {
+  SUMMARY_SCOPE_KEYS,
+  summaryHref,
+  withoutTableParams,
+  type FlatSearchParams,
+} from "./summary-href";
 
 export type ScopeBarSchool = {
   id: string;
@@ -35,13 +40,6 @@ export type SummaryScopeBarProps = {
   schools: readonly ScopeBarSchool[];
   /** "All my districts" for a district admin, "All districts" for the division. */
   allDistrictsLabel: string;
-  /**
-   * SUPER_ADMIN only: the division has too many schools (300+) to list at
-   * "By school" without a district first — loading them all times out. When
-   * true and no district is chosen yet, the "By school" toggle is disabled
-   * rather than navigating straight to the scope that times out.
-   */
-  requireDistrictForSchool?: boolean;
   /** Compliance facet only: pick one flag's list instead of all of them. */
   flag?: string | null;
   /** Present only for the compliance facet; renders the Flag select when set. */
@@ -53,8 +51,6 @@ const LEVELS: { id: SummaryLevel; label: string }[] = [
   { id: "district", label: "By district" },
   { id: "school", label: "By school" },
 ];
-
-const SCHOOL_LEVEL_HINT = "Pick a district first to see its schools.";
 
 /** Radix Select cannot hold an empty item value. */
 const ALL = "__all__";
@@ -74,7 +70,6 @@ export function SummaryScopeBar({
   districts,
   schools,
   allDistrictsLabel,
-  requireDistrictForSchool = false,
   flag = null,
   flagOptions,
 }: SummaryScopeBarProps) {
@@ -92,7 +87,8 @@ export function SummaryScopeBar({
   ];
 
   function go(patch: Record<string, string | null>) {
-    navigate(summaryHref(basePath, searchParams, patch));
+    const changesScope = SUMMARY_SCOPE_KEYS.some((key) => key in patch);
+    navigate(summaryHref(basePath, changesScope ? withoutTableParams(searchParams) : searchParams, patch));
   }
 
   return (
@@ -111,25 +107,20 @@ export function SummaryScopeBar({
         >
           {LEVELS.map((item) => {
             const active = item.id === level;
-            const disabled = item.id === "school" && requireDistrictForSchool && !district;
             return (
               <Button
                 key={item.id}
                 type="button"
                 variant="ghost"
                 aria-pressed={active}
-                disabled={disabled}
-                aria-describedby={disabled ? "summary-level-hint" : undefined}
-                title={disabled ? SCHOOL_LEVEL_HINT : undefined}
                 onClick={() => {
-                  if (!active && !disabled) go({ level: item.id === "overall" ? null : item.id });
+                  if (!active) go({ level: item.id === "overall" ? null : item.id });
                 }}
                 className={cn(
                   "h-11 px-2 text-sm sm:px-3 lg:h-9",
                   active
                     ? "bg-card text-foreground shadow-sm hover:bg-card"
-                    : "text-muted-foreground",
-                  disabled && "opacity-50"
+                    : "text-muted-foreground"
                 )}
               >
                 {item.label}
@@ -137,11 +128,6 @@ export function SummaryScopeBar({
             );
           })}
         </div>
-        {requireDistrictForSchool && !district ? (
-          <p id="summary-level-hint" className="mt-1.5 text-xs text-muted-foreground">
-            {SCHOOL_LEVEL_HINT}
-          </p>
-        ) : null}
       </div>
 
       <div

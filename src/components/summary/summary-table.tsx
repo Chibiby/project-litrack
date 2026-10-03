@@ -1,9 +1,13 @@
+import type { ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Table } from "@/components/ui/table";
+import { SummaryTableNavLink } from "./summary-table-nav";
 import { cn } from "@/lib/utils";
 import { cellOf } from "@/lib/summary/shape/rollup";
 import { NOT_COLLECTED } from "@/lib/summary/shape/section";
 import type { SummaryBucket, SummaryGroup, SummarySection } from "@/lib/summary/types";
 import { formatCount, formatMean, formatPct } from "./summary-format";
+import { sortHref, type SchoolPaging } from "./summary-school-paging";
 
 type Block = { total: SummaryGroup; grades: SummaryGroup[] };
 
@@ -148,19 +152,74 @@ function Row({
 }
 
 export type SummaryTableProps = {
+  /** All of the section; with `paging`, the columns come from here, the rows from the page. */
   section: SummarySection;
   /** First column heading, e.g. "District" or "School". */
   rowHeader?: string;
+  /** By-school tables only: one page of schools, with sortable headers. */
+  paging?: SchoolPaging;
 };
+
+const TH_BASE = "border-b border-border/60 bg-card text-xs font-semibold text-muted-foreground";
+
+/** A header cell that is a plain sort link when the table is paged. */
+function HeaderCell({
+  paging,
+  sectionId,
+  column,
+  align,
+  className,
+  children,
+}: {
+  paging: SchoolPaging | undefined;
+  sectionId: string;
+  column: string;
+  align: "left" | "right";
+  className?: string;
+  children: ReactNode;
+}) {
+  const active = paging?.params.sort === column;
+  const dir = paging?.params.dir;
+  const Arrow = !active ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
+      className={cn(
+        TH_BASE,
+        align === "left" ? "text-left align-bottom" : "text-right align-bottom",
+        paging ? "p-0" : "px-3 py-2.5",
+        className
+      )}
+    >
+      {paging ? (
+        <SummaryTableNavLink
+          href={sortHref(paging, sectionId, column)}
+          className={cn(
+            "flex min-h-11 w-full items-center gap-1 px-3 py-2.5 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:min-h-9",
+            align === "right" ? "justify-end text-right" : "justify-start text-left",
+            active && "text-foreground"
+          )}
+        >
+          <span className="sr-only">Sort by </span>
+          <span>{children}</span>
+          <Arrow className={cn("size-3.5 shrink-0", !active && "opacity-50")} aria-hidden />
+        </SummaryTableNavLink>
+      ) : (
+        children
+      )}
+    </th>
+  );
+}
 
 /**
  * Count and % cells for one summary section, first column pinned. Wide tables
  * scroll inside the `Table` primitive's own box, so the page itself never
  * scrolls sideways.
  */
-export function SummaryTable({ section, rowHeader = "Group" }: SummaryTableProps) {
+export function SummaryTable({ section, rowHeader = "Group", paging }: SummaryTableProps) {
   const buckets = visibleBuckets(section);
-  const blocks = toBlocks(section.table.groups);
+  const blocks = toBlocks((paging?.page.section ?? section).table.groups);
   const totalHeader = section.kind === "multi" ? "Population" : "Total";
 
   return (
@@ -171,28 +230,31 @@ export function SummaryTable({ section, rowHeader = "Group" }: SummaryTableProps
         </caption>
         <thead>
           <tr>
-            <th
-              scope="col"
-              className="sticky left-0 z-20 border-b border-r border-border/60 bg-card px-3 py-2.5 text-left align-bottom text-xs font-semibold text-muted-foreground"
+            <HeaderCell
+              paging={paging}
+              sectionId={section.id}
+              column="name"
+              align="left"
+              className="sticky left-0 z-20 border-r border-border/60"
             >
               {section.byGrade ? `${rowHeader} / grade` : rowHeader}
-            </th>
+            </HeaderCell>
             {hasTotalColumn(section.kind) ? (
-              <th
-                scope="col"
-                className="border-b border-border/60 bg-card px-3 py-2.5 text-right align-bottom text-xs font-semibold text-muted-foreground"
-              >
+              <HeaderCell paging={paging} sectionId={section.id} column="total" align="right">
                 {totalHeader}
-              </th>
+              </HeaderCell>
             ) : null}
             {buckets.map((bucket) => (
-              <th
+              <HeaderCell
                 key={bucket.id}
-                scope="col"
-                className="min-w-[7rem] max-w-[11rem] border-b border-border/60 bg-card px-3 py-2.5 text-right align-bottom text-xs font-semibold text-muted-foreground"
+                paging={paging}
+                sectionId={section.id}
+                column={bucket.id}
+                align="right"
+                className="min-w-[7rem] max-w-[11rem]"
               >
                 {bucket.label}
-              </th>
+              </HeaderCell>
             ))}
           </tr>
         </thead>

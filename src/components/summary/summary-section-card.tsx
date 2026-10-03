@@ -1,11 +1,22 @@
-import { BarChart3, Calculator, ListChecks, PieChart, TrendingUp, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  Calculator,
+  ListChecks,
+  PieChart,
+  SearchX,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { DashboardBarChart, DashboardLineChart } from "@/components/dashboard/lazy-charts";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { cellOf } from "@/lib/summary/shape/rollup";
 import { NOT_ANSWERED, NOT_APPLICABLE, NOT_COLLECTED, NO_RECORD } from "@/lib/summary/shape/section";
 import type { SummaryGroup, SummaryLevel, SummarySection } from "@/lib/summary/types";
 import { SummaryTable } from "./summary-table";
+import { SummaryTablePager } from "./summary-table-pager";
+import { SummaryTableFrame } from "./summary-table-nav";
 import { sectionAnchorId } from "./summary-href";
+import { clearSearchHref, type SchoolPaging } from "./summary-school-paging";
 
 const KIND_ICON: Record<SummarySection["kind"], LucideIcon> = {
   single: PieChart,
@@ -70,9 +81,13 @@ function SectionChart({ section, level }: { section: SummarySection; level: Summ
 export function SummarySectionCard({
   section,
   level,
+  paging,
 }: {
+  /** The whole section, even when `paging` shows only one page of its schools. */
   section: SummarySection;
   level: SummaryLevel;
+  /** By-school tables of a many-school scope: one page of rows, sortable, with a pager. */
+  paging?: SchoolPaging;
 }) {
   const kindNote =
     section.kind === "single"
@@ -115,10 +130,26 @@ export function SummarySectionCard({
             description="No figures exist for this table in the chosen scope and period."
             className="py-8"
           />
+        ) : paging && paging.query && paging.page.matchedSchools === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title="No schools match your search"
+            description={`No school name or ID in this table contains “${paging.query}”.`}
+            actionHref={clearSearchHref(paging)}
+            actionLabel="Clear search"
+            className="py-8"
+          />
         ) : (
           <>
             <SectionChart section={section} level={level} />
-            <SummaryTable section={section} rowHeader={ROW_HEADER[level]} />
+            {paging ? (
+              <SummaryTableFrame>
+                <SummaryTable section={section} rowHeader={ROW_HEADER[level]} paging={paging} />
+                <SummaryTablePager paging={paging} sectionId={section.id} sectionTitle={section.title} />
+              </SummaryTableFrame>
+            ) : (
+              <SummaryTable section={section} rowHeader={ROW_HEADER[level]} />
+            )}
           </>
         )}
       </div>

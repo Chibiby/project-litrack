@@ -44,6 +44,36 @@ export function summaryHref(
   return qs ? `${basePath}?${qs}` : basePath;
 }
 
+const TABLE_PARAM = /^(sort|dir|page)\./;
+const PAGE_PARAM = /^page\./;
+
+function omitKeys(current: FlatSearchParams, drop: (key: string) => boolean): FlatSearchParams {
+  const next: FlatSearchParams = {};
+  for (const [key, value] of Object.entries(current)) {
+    if (!drop(key)) next[key] = value;
+  }
+  return next;
+}
+
+/**
+ * `current` without any per-table `sort.<k>`, `dir.<k>` or `page.<k>` param.
+ * Those keys are dynamic (one set per section), so a scope change cannot name
+ * them in a patch.
+ */
+export function withoutTableParams(current: FlatSearchParams): FlatSearchParams {
+  return omitKeys(current, (key) => TABLE_PARAM.test(key));
+}
+
+/** `current` without any `page.<k>`: a new search shrinks every table. */
+export function withoutPageParams(current: FlatSearchParams): FlatSearchParams {
+  return omitKeys(current, (key) => PAGE_PARAM.test(key));
+}
+
+/** The params that change what the period bar shows; search, sort and paging do not. */
+export function withoutListParams(current: FlatSearchParams): FlatSearchParams {
+  return omitKeys(current, (key) => key === "q" || TABLE_PARAM.test(key));
+}
+
 /** Anchor id for a section; facet section ids carry `:` and `.`. */
 export function sectionAnchorId(sectionId: string): string {
   return `summary-${sectionId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;

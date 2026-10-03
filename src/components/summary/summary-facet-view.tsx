@@ -13,13 +13,19 @@ import {
   parseComplianceFlagParam,
 } from "@/lib/summary/shape/compliance";
 import { monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
-import type { FacetResult, SummaryFacetId, SummaryLevel } from "@/lib/summary/types";
+import {
+  pageSchoolSection,
+  readSchoolQuery,
+  readSchoolTableParams,
+} from "@/lib/summary/shape/school-page";
+import type { FacetResult, SummaryFacetId, SummaryLevel, SummarySection } from "@/lib/summary/types";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Surface } from "@/components/ui/surface";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
 import { ListBusyRegion } from "@/components/loading/list-busy-region";
 import { SummaryScopeBar } from "./summary-scope-bar";
-import { SummaryDistrictPickPrompt } from "./summary-district-pick-prompt";
+import { SummarySchoolSearch } from "./summary-school-search";
+import type { SchoolPaging } from "./summary-school-paging";
 import { SummaryParamControls } from "./summary-param-controls";
 import { SummaryExportMenu, type SummaryExportRequest } from "./summary-export-menu";
 import { SummarySectionCard } from "./summary-section-card";
@@ -34,6 +40,7 @@ import {
   flattenSearchParams,
   sectionAnchorId,
   summaryHref,
+  withoutListParams,
   type FlatSearchParams,
 } from "./summary-href";
 
@@ -116,14 +123,12 @@ export async function SummaryFacetView({
   }
 
   const level = levelOf(flat);
-  const resultsKey = JSON.stringify(flat);
+  // Search, sort and paging stay out of both Suspense keys: the period bar does
+  // not depend on them, and the tables must stay mounted (dimmed by their own
+  // frame) while a sort or page change loads, instead of showing the fallback.
+  const periodKey = JSON.stringify(withoutListParams(flat));
   const scopeLabel = page.school?.name ?? page.district;
-  // At division scope, "By school" with no district picked resolves to
-  // `{ kind: "all" }` — every school in the division. Loading that facet
-  // result (up to ~2 MB for 300+ schools) is what made this page never
-  // finish; render a prompt instead of ever calling `facet.load` for it.
-  const needsDistrictPick =
-    adminScope.kind === "division" && level === "school" && page.scope.kind === "all";
+  const showSchoolSearch = level === "school" && page.school === null;
 
   return (
     <ListNavigationProvider>
@@ -146,7 +151,6 @@ export async function SummaryFacetView({
                 district: s.district,
               }))}
               allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
-              requireDistrictForSchool={adminScope.kind === "division"}
               flag={facetId === "compliance" ? parseComplianceFlagParam(flat.flag) : undefined}
               flagOptions={
                 facetId === "compliance"
@@ -155,31 +159,35 @@ export async function SummaryFacetView({
               }
             />
           </div>
-          {needsDistrictPick ? null : (
-            <div className="border-t border-border/60 p-3 sm:p-4 lg:px-5">
-              <Suspense key={resultsKey} fallback={<SummaryPeriodBarSkeleton />}>
-                <SummaryPeriodBar
-                  facetId={facetId}
-                  scope={page.scope}
-                  scopeLabel={scopeLabel}
-                  searchParams={searchParams}
-                  flat={flat}
-                  facetPath={facetPath}
-                />
-              </Suspense>
-            </div>
-          )}
+          <div className="border-t border-border/60 p-3 sm:p-4 lg:px-5">
+            <Suspense key={periodKey} fallback={<SummaryPeriodBarSkeleton />}>
+              <SummaryPeriodBar
+                facetId={facetId}
+                scope={page.scope}
+                scopeLabel={scopeLabel}
+                searchParams={searchParams}
+                flat={flat}
+                facetPath={facetPath}
+              />
+            </Suspense>
+          </div>
         </Surface>
 
-        {needsDistrictPick ? (
-          <SummaryDistrictPickPrompt basePath={facetPath} searchParams={flat} districts={districts} />
-        ) : (
-          <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
-            <Suspense key={resultsKey} fallback={<SummaryResultsSkeleton />}>
-              <SummaryFacetResults facetId={facetId} scope={page.scope} searchParams={searchParams} />
-            </Suspense>
-          </ListBusyRegion>
-        )}
+        {showSchoolSearch ? (
+          <SummarySchoolSearch basePath={facetPath} searchParams={flat} query={readSchoolQuery(flat)} />
+        ) : null}
+
+        <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
+          <Suspense key={periodKey} fallback={<SummaryResultsSkeleton />}>
+            <SummaryFacetResults
+              facetId={facetId}
+              scope={page.scope}
+              searchParams={searchParams}
+              facetPath={facetPath}
+              schoolCodes={schools.map((s) => [s.id, s.schoolIdCode] as const)}
+            />
+          </Suspense>
+        </ListBusyRegion>
       </div>
     </ListNavigationProvider>
   );
@@ -259,17 +267,40 @@ async function SummaryFacetResults({
   facetId,
   scope,
   searchParams,
+  facetPath,
+  schoolCodes,
 }: {
   facetId: SummaryFacetId;
   scope: SummaryScope;
   searchParams: Record<string, string | string[] | undefined>;
+  facetPath: string;
+  /** `[schoolId, schoolIdCode]` for every school in view, so the search can match IDs. */
+  schoolCodes: readonly (readonly [string, string])[];
 }) {
   const loaded = await loadFacetResult(facetId, scope, searchParams);
   if (!loaded) return null;
+  const flat = flattenSearchParams(searchParams);
   const result =
     facetId === "compliance"
-      ? filterComplianceResult(loaded, parseComplianceFlagParam(flattenSearchParams(searchParams).flag))
+      ? filterComplianceResult(loaded, parseComplianceFlagParam(flat.flag))
       : loaded;
+
+  // Every school's rows in every table made a multi-MB page; show one page of
+  // schools per table. The loaded result stays whole (and cached whole).
+  const paged = result.level === "school" && result.schoolCount > 1;
+  const query = readSchoolQuery(flat);
+  const codes = new Map(schoolCodes);
+  const pageOf = (section: SummarySection): SchoolPaging | undefined => {
+    if (!paged) return undefined;
+    const params = readSchoolTableParams(flat, section.id);
+    return {
+      basePath: facetPath,
+      searchParams: flat,
+      query,
+      params,
+      page: pageSchoolSection(section, { query, params, schoolCodes: codes }),
+    };
+  };
 
   return (
     <div className="min-w-0 space-y-4">
@@ -313,7 +344,12 @@ async function SummaryFacetResults({
             />
           ) : (
             result.sections.map((section) => (
-              <SummarySectionCard key={section.id} section={section} level={result.level} />
+              <SummarySectionCard
+                key={section.id}
+                section={section}
+                level={result.level}
+                paging={pageOf(section)}
+              />
             ))
           )}
 
