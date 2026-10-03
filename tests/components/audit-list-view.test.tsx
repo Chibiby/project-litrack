@@ -66,6 +66,10 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  requireUser: vi.fn(async () => ({ id: "head-1", role: "SCHOOL_HEAD", adminTier: null })),
+}));
+
 vi.mock("@/lib/school-head/view", () => ({
   resolveSchoolHeadView: vi.fn(async () => ({
     user: { id: "head-1" },

@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
 import {
   MOSY_SUBMISSION_LOCK_KEY,
   READING_LEVEL_UNLOCK_ALL_KEY,
@@ -12,9 +14,12 @@ import {
  * the normal state for a switch nobody has touched yet — callers supply the
  * default rather than this module guessing one.
  *
- * Every failure degrades to `null` instead of throwing: these are operator
- * switches read on the login path, and a settings-table hiccup must never turn
- * into a 500 on the page every user starts from.
+ * A failed read is NOT the same as an absent row, so it throws
+ * `AppError("DB_UNAVAILABLE")` instead of returning `null`. Collapsing the two
+ * made every lock guard fail toward its default when the database hiccuped:
+ * submission locking read as off and the reading-level window read as open, so a
+ * transient error silently lifted the locks. Write-path guards let the error
+ * propagate to the `action()` wrapper, which reports it; nothing here guesses.
  */
 export async function readSetting(key: string): Promise<string | null> {
   try {
@@ -25,7 +30,11 @@ export async function readSetting(key: string): Promise<string | null> {
     return row?.value ?? null;
   } catch (err) {
     console.error(`[system-settings] read ${key} failed:`, err);
-    return null;
+    throw new AppError("DB_UNAVAILABLE", {
+      cause: err,
+      detail: `SystemSetting read failed for key ${key}`,
+      context: { settingKey: key },
+    });
   }
 }
 
@@ -47,10 +56,9 @@ export async function writeSetting(key: string, value: string): Promise<void> {
  * settles, so a database with no `submissions.locking` row ships with every
  * window open and no `UnlockGrant` lookup on any save path.
  *
- * `readSetting` degrades a failure to `null`, and `null` here means "off". That
- * is this module's rule — a settings hiccup must never become a 500 — pointed in
- * the direction that leaves teachers able to work rather than locked out of a
- * week they are in the middle of encoding.
+ * A missing row reads as "off". A FAILED read throws (`readSetting`), so a
+ * database hiccup can never be mistaken for "locking is off" and lift the
+ * deadlines; write-path callers fail closed through the action wrapper.
  *
  * Individual grants are untouched while this is off. They are not consulted, and
  * they start mattering again the instant it is switched on.
@@ -75,14 +83,10 @@ export const isSubmissionLockingEnabled = cache(async (): Promise<boolean> => {
  * row has never had reading level closed off, so "unknown" reads as "still
  * open" rather than "just got locked".
  *
- * `readSetting` degrades a failure to `null`, and `null !== "false"` evaluates
- * to `true` — on. That is load-bearing: a settings-table hiccup must leave
- * every teacher able to record a reading level rather than silently locking the
- * whole programme out of a monthly window the instant Postgres hiccups. (Verify
- * this against `readSetting` above before changing either function — its
- * contract is "throws degrade to `null`", not "throws degrade to a specific
- * boolean", so each reader picks its own fail-open or fail-closed direction by
- * how it compares the string.)
+ * Only an ABSENT row defaults to on (`null !== "false"`). A failed read throws
+ * from `readSetting` rather than reading as on, so a database error cannot
+ * unlock the reading-level window for everyone. `resolveMonthlyReadingLevelWindow`
+ * catches the throw and answers "locked"; the lock-state reader does likewise.
  *
  * `cache()` for the same reason as `isSubmissionLockingEnabled` — one query per
  * render, not per window checked — and deliberately not `unstable_cache`, so the
@@ -98,9 +102,8 @@ export const isMonthlyReadingLevelUnlockedForAll = cache(
  * Are MOSY Report submissions locked?
  *
  * Defaults to **LOCKED**: the owner wants MOSY closed until a Super Admin opens
- * it. Only the exact stored value `"false"` unlocks. A missing row and a failed
- * read (`readSetting` degrades both to `null`) therefore read as locked — the
- * fail-closed direction, opposite to `isMonthlyReadingLevelUnlockedForAll`.
+ * it. Only the exact stored value `"false"` unlocks. A missing row reads as
+ * locked; a failed read throws, so the save is refused either way.
  *
  * Only saves are gated; viewing and exporting the report stay open.
  *
@@ -110,6 +113,50 @@ export const isMonthlyReadingLevelUnlockedForAll = cache(
 export const isMosySubmissionLocked = cache(async (): Promise<boolean> => {
   return (await readSetting(MOSY_SUBMISSION_LOCK_KEY)) !== "false";
 });
+
+/**
+ * Display-path variants of the three readers above, for pages that only RENDER
+ * lock state. A failed settings read must not turn a read-only view into an
+ * error page, so these degrade to the fail-closed answer (locked / locking on /
+ * nothing unlocked) and `reportError` once per render.
+ *
+ * NEVER call these from a write path. A guard that decides whether a save may
+ * proceed must use the throwing readers, so a failed read cannot let a write
+ * through; these exist only so the surrounding page still renders.
+ */
+export async function readForDisplay<T>(
+  read: () => Promise<T>,
+  failClosed: T,
+  route: string
+): Promise<T> {
+  try {
+    return await read();
+  } catch (err) {
+    if (err instanceof AppError && err.code === "DB_UNAVAILABLE") {
+      reportError(err, { route });
+      return failClosed;
+    }
+    throw err;
+  }
+}
+
+/** Display-only `isSubmissionLockingEnabled`; a failed read reads as ON (locked). */
+export const isSubmissionLockingEnabledForDisplay = cache(
+  (): Promise<boolean> =>
+    readForDisplay(isSubmissionLockingEnabled, true, "settings/submission-locking")
+);
+
+/** Display-only `isMonthlyReadingLevelUnlockedForAll`; a failed read reads as NOT unlocked. */
+export const isMonthlyReadingLevelUnlockedForAllForDisplay = cache(
+  (): Promise<boolean> =>
+    readForDisplay(isMonthlyReadingLevelUnlockedForAll, false, "settings/reading-level-unlock-all")
+);
+
+/** Display-only `isMosySubmissionLocked`; a failed read reads as locked. */
+export const isMosySubmissionLockedForDisplay = cache(
+  (): Promise<boolean> =>
+    readForDisplay(isMosySubmissionLocked, true, "settings/mosy-lock")
+);
 
 /**
  * A Prisma `where` fragment that hides the demo tenant from a request that has

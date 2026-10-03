@@ -4,6 +4,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { action } from "@/lib/errors/action";
 import { resourceNotFound } from "@/lib/errors/app-error";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 import { parseInput } from "@/lib/errors/validation";
 import {
   getUnreadAralAssignments,
@@ -47,6 +49,7 @@ export async function fetchAralAssignmentAlerts(): Promise<AralAssignmentAlert[]
   } catch (err) {
     // A bell that cannot load must not break the page it sits on.
     console.error("[notifications] alert read failed:", err);
+    reportError(classifyError(err), { userId: user.id, schoolId: user.schoolId });
     return [];
   }
 }
@@ -91,6 +94,7 @@ export async function fetchUnlockAlerts(): Promise<UnlockAlert[]> {
   } catch (err) {
     // A bell that cannot load must not break the page it sits on.
     console.error("[notifications] unlock alert read failed:", err);
+    reportError(classifyError(err), { userId: user.id, schoolId: user.schoolId });
     return [];
   }
 }

@@ -135,6 +135,26 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.33.0",
+    date: "2026-10-03",
+    title: "Clearer screens, safer saves, and faster pages",
+    announce: true,
+    fixes: [
+      "Screen readers now say the attendance mark and the reading level in each ARAL grid cell, not just the learner's name, and announce the weekly totals as they change.",
+      "Error messages and required-field marks are easier to read in dark mode, and checkboxes, radio buttons and menu items are easier to tap and show where the keyboard is.",
+      "Approving a teacher now asks you to confirm, and the request only leaves the list once the approval has gone through.",
+      "After a learner import, you can see every row that was skipped and why, and download those rows as a CSV file.",
+      "If a week fails to load in ARAL Weekly Attendance, the week picker goes back to the week you are looking at, so you can try again.",
+      "A renamed school now shows its new name right away.",
+      "Restoring a learner never reports success when the restore did not go through.",
+      "A learner who transfers to another school drops the old school's ARAL tutor and waits for a tutor at the new school.",
+      "Only a School Head can bring back a learner the School Head removed; teachers can still restore learners they archived.",
+      "If two people make a school year active at the same moment, the second one sees a clear message instead of an error.",
+      "If the system cannot read the submission settings, report pages show them as locked instead of failing to open, and saving waits until the settings can be read.",
+      "Dashboards, the header search and the teachers page load faster.",
+    ],
+  },
+  {
     version: "2.32.1",
     date: "2026-10-03",
     title: "MOSY decision asks for the reason first",

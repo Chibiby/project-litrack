@@ -73,6 +73,7 @@ vi.mock("@/lib/audit", async () => {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: vi.fn(),
+  revalidateSchoolName: vi.fn(),
   revalidateSchoolsList: vi.fn(),
   revalidateDivisionSummary: vi.fn(),
 }));

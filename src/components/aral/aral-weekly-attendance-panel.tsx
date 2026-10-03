@@ -161,6 +161,7 @@ export function AralWeeklyAttendancePanel({
   const formRef = useRef<AralWeeklyAttendanceGridFormHandle>(null);
   const desiredWeekRef = useRef(initialWeekKey);
   const requestIdRef = useRef(0);
+  const loadedWeekRef = useRef(initialWeekKey);
 
   // The banner follows the week the teacher asked for; the grid follows the week
   // whose rows have arrived. While a fetch is in flight those differ, and the
@@ -210,11 +211,20 @@ export function AralWeeklyAttendancePanel({
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
         toastFailure(res);
+        // Roll the picker and URL back to the week the grid still shows, so
+        // they agree and choosing the same week again retries the fetch.
+        desiredWeekRef.current = loadedWeekRef.current;
+        setPickerWeek(loadedWeekRef.current);
+        const qs = buildQuery({ ...sharedParams, week: loadedWeekRef.current });
+        startTransition(() => {
+          router.replace(`${basePath}${qs}`, { scroll: false });
+        });
         setLoading(false);
         return;
       }
       setExisting(res.data.records);
       setHolidayKeys(res.data.holidayKeys);
+      loadedWeekRef.current = normalized;
       setLoadedWeek(normalized);
       setLoading(false);
     })();

@@ -21,7 +21,7 @@ import { ARAL_MOSY_HREF } from "@/lib/nav/nav-config";
 import { LEARNER_PAGE_SIZE, type LearnerListSectionFilter } from "@/lib/learners/pagination";
 import { loadMosyPage } from "@/lib/aral/mosy-queries";
 import { resolveMosyAccess } from "@/lib/aral/mosy-access";
-import { isMosySubmissionLocked } from "@/lib/settings/system-settings";
+import { isMosySubmissionLockedForDisplay } from "@/lib/settings/system-settings";
 import { MOSY_STATUSES, MOSY_STATUS_LABELS, parseMosyStatus, type MosyStatusFilter } from "@/lib/aral/mosy";
 import { cn } from "@/lib/utils";
 
@@ -229,7 +229,7 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
     sectionIds = access.sectionIds;
   }
 
-  const locked = await isMosySubmissionLocked();
+  const locked = await isMosySubmissionLockedForDisplay();
 
   const status = parseMosyStatus(sp.status);
   const q = (sp.q ?? "").trim();

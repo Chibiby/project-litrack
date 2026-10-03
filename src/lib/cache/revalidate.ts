@@ -36,7 +36,8 @@ function expireTag(tag: string) {
  * awaits `getSchoolName` (`src/lib/cache/school.ts`) — a `cachedQuery` read — so
  * that path does create a `school-name:<id>` entry. Do not rely on these
  * `revalidatePath` calls to clear it; the tag `schoolName(schoolId)` is its named
- * bust, and `revalidateSchoolDashboard` is what emits that. The tab badges are
+ * bust, and `revalidateSchoolName` is what emits that (`revalidateSchoolDashboard`
+ * does not). The tab badges are
  * fresh because the pages re-query per request, and the client Router Cache is
  * cleared wholesale by any server action regardless of this call.
  *
@@ -156,9 +157,13 @@ export function revalidateDivisionSummary() {
   expireTag(tags.divisionSummary);
 }
 
-/** School-scoped dashboard + school name. */
+/** School-scoped dashboard only. Does NOT bust the school name; see `revalidateSchoolName`. */
 export function revalidateSchoolDashboard(schoolId: string) {
   expireTag(tags.schoolDashboard(schoolId));
+}
+
+/** The cached school name. Call from every action that renames a school. */
+export function revalidateSchoolName(schoolId: string) {
   expireTag(tags.schoolName(schoolId));
 }
 

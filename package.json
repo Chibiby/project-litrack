@@ -1,6 +1,6 @@
 {
   "name": "litrack",
-  "version": "2.32.1",
+  "version": "2.33.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -23,6 +23,7 @@
     "diagnose:login-trail": "tsx scripts/diagnose-login-trail.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "node scripts/test-db.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -59,7 +60,7 @@
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.454.0",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "papaparse": "^5.4.1",
     "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
@@ -87,7 +88,7 @@
     "@types/react-dom": "19.2.4",
     "autoprefixer": "^10.4.20",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.49",
     "prisma": "6.19.0",

@@ -37,6 +37,7 @@ vi.mock("next/cache", () => ({
 const {
   revalidateSchoolHeadTeachers,
   revalidateSchoolDashboard,
+  revalidateSchoolName,
   revalidateAdminAccountPages,
   revalidateAdminDashboard,
 } = await import(
@@ -48,7 +49,7 @@ beforeEach(() => {
 });
 
 describe("revalidateSchoolHeadTeachers", () => {
-  it("busts the school dashboard and school name tags, not just the teacher tag", async () => {
+  it("busts the school dashboard tag, not just the teacher tag", async () => {
     revalidateSchoolHeadTeachers(SCHOOL_ID);
 
     // The teacher-list side, tenant-scoped.
@@ -57,7 +58,15 @@ describe("revalidateSchoolHeadTeachers", () => {
     // The fold under test: everything `revalidateSchoolDashboard` itself emits
     // must show up here too, with no call site having to ask for it.
     expect(revalidateTag).toHaveBeenCalledWith(tags.schoolDashboard(SCHOOL_ID), { expire: 0 });
+  });
+
+  it("leaves the school name alone; only revalidateSchoolName busts it", async () => {
+    revalidateSchoolDashboard(SCHOOL_ID);
+    expect(revalidateTag).not.toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID), { expire: 0 });
+
+    revalidateSchoolName(SCHOOL_ID);
     expect(revalidateTag).toHaveBeenCalledWith(tags.schoolName(SCHOOL_ID), { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledTimes(2);
   });
 
   it("folds in exactly what a direct revalidateSchoolDashboard call would emit", async () => {

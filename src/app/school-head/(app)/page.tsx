@@ -26,12 +26,14 @@ export default async function SchoolHeadDashboard({
   // deploy-before-migrate window, spec risk R7) falls back to the default
   // banner instead of a 500 — the same defensive shape
   // `src/app/teacher/(app)/(dashboard)/page.tsx` uses for `TeacherProfile.gender`.
-  const gender = view.isSuperAdminView
-    ? null
-    : await prisma.schoolHeadProfile
+  // Started here and awaited inside `loadSchoolHeadDashboard`, in parallel
+  // with its own queries; the `.catch` keeps it from ever rejecting.
+  const bannerSrc: Promise<string> = view.isSuperAdminView
+    ? Promise.resolve(teacherBannerSrc(null))
+    : prisma.schoolHeadProfile
         .findUnique({ where: { userId: user.id }, select: { gender: true } })
-        .then((p) => p?.gender ?? null)
-        .catch(() => null);
+        .then((p) => teacherBannerSrc(p?.gender ?? null))
+        .catch(() => teacherBannerSrc(null));
 
   const displayName = view.isSuperAdminView
     ? view.schoolName ?? "Unknown school"
@@ -40,7 +42,7 @@ export default async function SchoolHeadDashboard({
   const { hero, body } = await loadSchoolHeadDashboard({
     view,
     displayName,
-    bannerSrc: teacherBannerSrc(gender),
+    bannerSrc,
   });
 
   return (

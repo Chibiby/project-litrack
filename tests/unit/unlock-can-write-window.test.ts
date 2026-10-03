@@ -10,12 +10,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * closed the moment that query threw. So the grant reads are spies, and the
  * tests assert on whether they ran.
  *
- * The second property is the direction of the failure. `readSetting` degrades a
- * database error to `null`, and `null` means "off" for this key — the opposite
- * direction from `isDemoEnabled`, and deliberately so: a settings hiccup must
- * leave teachers able to work rather than locked out of a week they are in the
- * middle of encoding. That is the one place where this switch and the demo
- * switch disagree, so it gets its own test.
+ * The second property is the direction of the failure. A failed settings read
+ * makes `readSetting` throw DB_UNAVAILABLE, so the write guard (`canWriteWindow`)
+ * never lets a save through on a guess. The display path (`readUnlockState`)
+ * instead degrades to "locking on, nothing unlocked" — covered in
+ * settings-display-reads.test.ts against the real settings module.
  */
 
 const USER_ID = "teacher-marivic";
@@ -42,6 +41,7 @@ vi.mock("@/lib/prisma", () => ({
 const isSubmissionLockingEnabled = vi.fn();
 vi.mock("@/lib/settings/system-settings", () => ({
   isSubmissionLockingEnabled: () => isSubmissionLockingEnabled(),
+  isSubmissionLockingEnabledForDisplay: () => isSubmissionLockingEnabled(),
 }));
 
 import { canWriteWindow, readUnlockState } from "@/lib/unlock/grants";

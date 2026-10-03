@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
+import { reportError } from "@/lib/errors/report";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { archiveRowSchema } from "@/lib/validators/admin-archive.schema";
 import { purgeLearnerRecord, purgeTeacherRecord } from "@/lib/archive/purge";
@@ -346,15 +347,29 @@ export const purgeRemovedTeacher = action(
     }
 
     let authDeleted = false;
+    let authDeleteFailure: string | null = null;
     try {
       const supabase = createSupabaseAdminClient();
       const { error } = await supabase.auth.admin.deleteUser(teacher.authId);
-      authDeleted = !error;
-      if (error && !/not.?found/i.test(error.message)) {
-        console.error("[purgeRemovedTeacher] Supabase deleteUser failed:", error.message);
-      }
+      // "Not found" means the auth user is already gone: that is the goal, not a failure.
+      const alreadyGone = Boolean(error && /not.?found/i.test(error.message));
+      authDeleted = !error || alreadyGone;
+      if (error && !alreadyGone) authDeleteFailure = error.message;
     } catch (err) {
-      console.error("[purgeRemovedTeacher] Supabase deleteUser threw:", err);
+      authDeleteFailure = err instanceof Error ? err.message : "unknown error";
+    }
+    // The purge itself committed, so this stays a success; `authDeleted: false`
+    // is the partial-result signal for the UI, and the leftover auth user is
+    // recorded as a system error so an operator can remove it.
+    if (authDeleteFailure !== null) {
+      reportError(
+        new AppError("AUTH_PROVIDER_ERROR", {
+          severity: "system",
+          detail: `Supabase deleteUser failed after purging teacher ${teacher.id}: ${authDeleteFailure}`,
+          context: { service: "supabase-auth", reason: "purge-auth-delete-failed" },
+        }),
+        { userId: admin.id, schoolId: teacher.schoolId }
+      );
     }
 
     await writeAudit({

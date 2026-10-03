@@ -21,19 +21,41 @@ const yearFields = {
   endDate: nonEmpty("End date required"),
 };
 
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * UTC-midnight instant for a `YYYY-MM-DD` key, or null when it is not a real
+ * calendar day. Built from parts (never `new Date(string)` on free text) and
+ * round-tripped so `2026-02-30` is rejected instead of rolling into March. UTC
+ * midnight is also what the action stores into the `@db.Date` columns.
+ */
+function parseDateKey(value: string): Date | null {
+  if (!DATE_KEY.test(value)) return null;
+  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() !== m - 1 ||
+    date.getUTCDate() !== d
+  ) {
+    return null;
+  }
+  return date;
+}
+
 function refineYearFields(
   data: { label: string; startDate: string; endDate: string },
   ctx: z.RefinementCtx
 ) {
-  const start = new Date(data.startDate);
-  const end = new Date(data.endDate);
-  if (Number.isNaN(start.getTime())) {
+  const start = parseDateKey(data.startDate);
+  const end = parseDateKey(data.endDate);
+  if (!start) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start date", path: ["startDate"] });
   }
-  if (Number.isNaN(end.getTime())) {
+  if (!end) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end date", path: ["endDate"] });
   }
-  if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end <= start) {
+  if (start && end && end <= start) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "End date must be after start date",

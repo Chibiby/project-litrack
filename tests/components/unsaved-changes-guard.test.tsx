@@ -357,7 +357,7 @@ describe("monthly reading-level grid", () => {
 
   async function makeDirty() {
     const label = "Ana Santos — English reading level";
-    fireEvent.click(button(label));
+    fireEvent.click(button(/^Ana Santos — English reading level: /));
     const listbox = await screen.findByRole("listbox", { name: label });
     fireEvent.click(within(listbox).getByText("GR"));
   }

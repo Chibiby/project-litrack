@@ -60,6 +60,9 @@ CREATE UNIQUE INDEX "Enrollment_learner_active_unique"
 
 Prisma’s schema language cannot express partial unique indexes, so this lives only in the SQL migration. Keep it when editing Enrollment-related migrations.
 
+`SchoolYear` allows at most one active row per school
+(`20261003000003_school_year_one_active`): `CREATE UNIQUE INDEX "SchoolYear_school_active_unique" ON "SchoolYear"("schoolId") WHERE "isActive";` — SQL-only, keep it; run the dedupe pre-flight in that migration's header first, as it fails on existing duplicates.
+
 `TermSubject` has the same kind of SQL-only object, added in
 `20260915000001_term_subject_table`: one ACTIVE (non-archived) subject name per
 grade, case- and whitespace-insensitively —

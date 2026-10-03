@@ -114,7 +114,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   sendPasswordRecoveryEmail.mockResolvedValue(undefined);
-  headersMock.mockResolvedValue(new Headers({ origin: "https://litrack.example.org" }));
+  process.env.NEXT_PUBLIC_APP_URL = "https://litrack.example.org";
+  headersMock.mockResolvedValue(new Headers());
   userFindUnique.mockResolvedValue({
     id: "user-1",
     authId: "11111111-1111-1111-1111-111111111111",

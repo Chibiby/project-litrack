@@ -30,16 +30,13 @@ import {
 export type NamedCount = { name: string; value: number };
 export type DayCount = { date: string; value: number };
 
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
+/**
+ * The school's civil day `n` days back, at runtime-local midnight. Anchored on
+ * `schoolToday()` rather than the runtime clock, which is UTC on Workers and
+ * would name the previous day between 00:00 and 08:00 in Manila.
+ */
 function daysAgo(n: number): Date {
-  const d = startOfDay(new Date());
-  d.setDate(d.getDate() - n);
-  return d;
+  return addDays(schoolToday(), -n);
 }
 
 /** School-wide charts mix K3 + G4+; use combined slash labels. */
@@ -503,8 +500,9 @@ export async function getSchoolHeadCharts(schoolId: string) {
 
       const attendanceTrend: DayCount[] = [];
       for (let i = 6; i >= 0; i--) {
-        const day = daysAgo(i);
-        const key = day.toISOString().slice(0, 10);
+        // Window keys are local civil days; `presentByDay` keys are the stored
+        // `@db.Date` (UTC-midnight) days. Both name the same calendar day.
+        const key = formatLocalDateKey(daysAgo(i));
         attendanceTrend.push({
           date: key.slice(5),
           value: presentByDay.get(key) ?? 0,

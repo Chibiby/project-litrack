@@ -43,6 +43,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { formatSchoolDateTime } from "@/lib/format-datetime";
 import { generateReport, deleteReport } from "@/lib/actions/reports";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
@@ -586,7 +587,7 @@ export function ReportsHub({
                           {row.scopeLabel ?? "All Classes"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {new Date(row.createdAt).toLocaleString()}
+                          {formatSchoolDateTime(row.createdAt)}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {row.createdByName}

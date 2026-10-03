@@ -26,15 +26,17 @@ const purgeArchivedLearnerSchema = z.object({
 });
 
 /**
- * Permanently delete ONE archived (or old-style removed) learner from the
- * teacher's Archived Learners tab. Cannot be undone; the teacher confirms by
- * typing the learner's name.
+ * Permanently delete ONE teacher-archived learner from the teacher's Archived
+ * Learners tab. Cannot be undone; the teacher confirms by typing the learner's
+ * name.
  *
- * Reach is identical to `restoreLearner`: the learner must be archived/removed
- * (an active learner is NOT_FOUND), in the caller's school, and the caller must
- * be the adviser or designated ARAL teacher. A Super Admin passes
- * `requireSchoolUser` but is neither pointer, so is refused as NOT_FOUND here —
- * Super Admins purge from `/admin/archive` instead.
+ * Reach is the TEACHER branch of `restoreLearner` and no wider: the learner must
+ * be archived (an active learner is NOT_FOUND), in the caller's school, NOT
+ * removed by a School Head (`deletedAt` set is NOT_FOUND, as restore refuses a
+ * teacher there), and the caller must be the adviser or designated ARAL teacher.
+ * Unlike restore, purge is TEACHER-only: a School Head cannot purge here, and a
+ * Super Admin passes `requireSchoolUser` but is neither pointer, so is refused
+ * as NOT_FOUND — Super Admins purge from `/admin/archive` instead.
  */
 export const purgeArchivedLearner = action(
   "purgeArchivedLearner",
@@ -63,12 +65,17 @@ export const purgeArchivedLearner = action(
         aralTeacherId: true,
         isAralLearner: true,
         gradeLevelId: true,
+        deletedAt: true,
       },
     });
     if (!learner) throw resourceNotFound("Learner");
 
     assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-    if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
+    // A `deletedAt` row was removed by a School Head / admin; a teacher may not
+    // restore it, so may not permanently purge it either (same NOT_FOUND).
+    if (learner.deletedAt || !teacherCanAccessLearner(learner, user.id)) {
+      throw resourceNotFound("Learner");
+    }
 
     if (normalizePersonName(input.confirmName) !== normalizePersonName(learner.fullName)) {
       throw fieldError("confirmName", "Type the learner's name exactly to confirm");

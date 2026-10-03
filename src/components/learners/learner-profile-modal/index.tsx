@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeftRight, Pencil, Sparkles, UserRound, UserRoundCog } from "lucide-react";
@@ -139,10 +139,15 @@ export function LearnerProfileModal({
   const editOnly = initialMode === "edit";
   const [formDirty, setFormDirty] = useState(false);
 
+  const latestRequest = useRef(0);
+
   const load = useCallback(async (id: string) => {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     setError(null);
     const res = await callAction(() => getLearnerProfile(id));
+    // A slower earlier response must not overwrite the learner now showing.
+    if (requestId !== latestRequest.current) return;
     if (res.ok) {
       setLearner(res.data);
     } else {
@@ -172,7 +177,10 @@ export function LearnerProfileModal({
   }
 
   useEffect(() => {
-    if (!learnerId) return;
+    if (!learnerId) {
+      latestRequest.current++;
+      return;
+    }
     // `load` fetches from the server (a genuine external system) and also sets
     // its own loading/error flags synchronously before awaiting; it is reused
     // by `handleSaved`/`onDone` re-fetches below, so hoisting those setState

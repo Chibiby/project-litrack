@@ -1,6 +1,7 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { isActionFailure } from "@/lib/errors/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -12,7 +13,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/confirm-action";
+import { toast } from "sonner";
 import { approveTeacher, rejectTeacher } from "@/lib/actions/school-head";
+import type { ActionFailure } from "@/lib/errors/result";
+import { callAction } from "@/lib/ui/call-action";
 import { formatDate } from "@/lib/utils";
 import {
   listOptimisticReducer,
@@ -48,22 +52,82 @@ export function TeachersPendingTable({
       listOptimisticReducer(state, op)
   );
 
-  const runApprove = (userId: string) => {
+  /** Rows the server has confirmed as approved; hidden until the refreshed list arrives. */
+  const [approvedIds, setApprovedIds] = useState<ReadonlySet<string>>(new Set());
+  const visibleRows = optimisticRows.filter((r) => !approvedIds.has(r.id));
+
+  const [announcement, setAnnouncement] = useState("");
+  /** Where focus goes once the approved row is gone: a row's Approve button, or the heading when `rowId` is null. */
+  const [focusRequest, setFocusRequest] = useState<{ rowId: string | null } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    if (focusRequest.rowId !== null) {
+      const candidates = Array.from(
+        rootRef.current?.querySelectorAll<HTMLButtonElement>(
+          "button[data-approve-for]"
+        ) ?? []
+      ).filter((b) => b.dataset.approveFor === focusRequest.rowId);
+      // The table and the stacked list both render; only one is displayed.
+      const target = candidates.find((b) => b.offsetParent !== null) ?? candidates[0];
+      if (target) {
+        target.focus();
+        setFocusRequest(null);
+        return;
+      }
+    }
+    headingRef.current?.focus();
+    setFocusRequest(null);
+  }, [focusRequest]);
+
+  // Not optimistic: the row stays until the server confirms. A failure is
+  // returned so ConfirmAction toasts it and keeps the dialog open for a retry.
+  // Grade/section assignment happens when the teacher completes their own
+  // profile, so approval takes no section.
+  const runApprove = async (userId: string): Promise<void | ActionFailure> => {
     const fd = new FormData();
     fd.set("userId", userId);
     setActingKey(`${userId}:approve`);
-    // Grade/section assignment now happens when the teacher completes their own
-    // profile, so approval no longer takes a section.
-    void runOptimistic(startTransition, async () => {
-      dispatchOptimistic({ type: "remove", id: userId });
-      const res = await approveTeacher(fd);
-      await settleActionResult(res, "Teacher approved");
-    })
-      .catch(() => {
-        /* toast already shown */
-      })
-      .finally(() => setActingKey(null));
+    try {
+      const res = await callAction(() => approveTeacher(fd));
+      if (isActionFailure(res)) return res;
+      if (!res.ok) return;
+      toast.success("Teacher approved");
+      const index = visibleRows.findIndex((r) => r.id === userId);
+      const neighbour = visibleRows[index + 1] ?? visibleRows[index - 1];
+      const approvedName = visibleRows[index]?.fullName ?? "Teacher";
+      setAnnouncement(`${approvedName} approved`);
+      setFocusRequest({ rowId: neighbour?.id ?? null });
+      setApprovedIds((prev) => new Set(prev).add(userId));
+    } finally {
+      setActingKey(null);
+    }
   };
+
+  const approveControl = (row: PendingTeacherRow, className?: string) => (
+    <ConfirmAction
+      title="Approve this teacher?"
+      description={`${row.fullName} (${row.email}) will be able to sign in and see this school's learners.`}
+      confirmLabel="Approve teacher"
+      variant="default"
+      disabled={actingKey?.startsWith(`${row.id}:`) ?? false}
+      trigger={
+        <Button
+          size="sm"
+          className={className}
+          data-approve-for={row.id}
+          loading={actingKey === `${row.id}:approve`}
+          loadingText="Approving…"
+          disabled={actingKey?.startsWith(`${row.id}:`) ?? false}
+        >
+          Approve
+        </Button>
+      }
+      onConfirm={() => runApprove(row.id)}
+    />
+  );
 
   const runReject = (userId: string) => {
     setActingKey(`${userId}:reject`);
@@ -77,11 +141,18 @@ export function TeachersPendingTable({
   };
 
   return (
-    <Card>
+    <Card ref={rootRef}>
       <CardContent className="p-0">
-        <div className="border-b px-4 py-3 text-sm font-medium">
-          Pending requests ({optimisticRows.length})
-        </div>
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="border-b px-4 py-3 text-sm font-medium focus:outline-none"
+        >
+          Pending requests ({visibleRows.length})
+        </h2>
         <div className="hidden lg:block">
         <Table>
           <TableHeader>
@@ -93,7 +164,7 @@ export function TeachersPendingTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {optimisticRows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={readOnly ? 3 : 4}
@@ -103,7 +174,7 @@ export function TeachersPendingTable({
                 </TableCell>
               </TableRow>
             ) : (
-              optimisticRows.map((row) => {
+              visibleRows.map((row) => {
                 const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
                 return (
                   <TableRow key={row.id}>
@@ -114,15 +185,7 @@ export function TeachersPendingTable({
                     </TableCell>
                     {!readOnly ? (
                       <TableCell className="space-x-1 text-right align-top">
-                        <Button
-                          size="sm"
-                          loading={actingKey === `${row.id}:approve`}
-                          loadingText="Approving…"
-                          disabled={rowBusy}
-                          onClick={() => runApprove(row.id)}
-                        >
-                          Approve
-                        </Button>
+                        {approveControl(row)}
                         <ConfirmAction
                           title="Decline registration?"
                           description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
@@ -155,12 +218,12 @@ export function TeachersPendingTable({
 
         {/* Below lg: one stacked row per pending request. */}
         <ul className="divide-y divide-border/60 lg:hidden" aria-label="Pending requests">
-          {optimisticRows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <li className="px-4 py-6 text-center text-sm text-muted-foreground">
               No pending registration requests.
             </li>
           ) : (
-            optimisticRows.map((row) => {
+            visibleRows.map((row) => {
               const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
               return (
                 <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
@@ -173,16 +236,7 @@ export function TeachersPendingTable({
                   </div>
                   {!readOnly ? (
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        className="lg:h-9"
-                        loading={actingKey === `${row.id}:approve`}
-                        loadingText="Approving…"
-                        disabled={rowBusy}
-                        onClick={() => runApprove(row.id)}
-                      >
-                        Approve
-                      </Button>
+                      {approveControl(row, "lg:h-9")}
                       <ConfirmAction
                         title="Decline registration?"
                         description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}

@@ -145,6 +145,7 @@ const revalidateSchoolsList = vi.fn();
 const revalidateDivisionSummary = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolDashboard: (...a: unknown[]) => revalidateSchoolDashboard(...(a as [])),
+  revalidateSchoolName: vi.fn(),
   revalidateSchoolsList: (...a: unknown[]) => revalidateSchoolsList(...(a as [])),
   revalidateDivisionSummary: (...a: unknown[]) => revalidateDivisionSummary(...(a as [])),
   revalidateAdminAccountPages: vi.fn(),

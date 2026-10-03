@@ -114,9 +114,12 @@ beforeEach(() => {
   requireUser.mockResolvedValue(ADMIN);
   checkRateLimit.mockResolvedValue({ ok: true });
   writeAuditMany.mockResolvedValue(undefined);
+  learnerUpdateMany.mockImplementation(
+    async (args: { where: { id: { in: string[] } } }) => ({ count: args.where.id.in.length })
+  );
   schoolFindFirst.mockResolvedValue(SCHOOL);
   removeTeacherAccountsByIds.mockResolvedValue({ processed: 2, failed: [] });
-  transaction.mockImplementation(async (fn: (tx: unknown) => Promise<void>) =>
+  transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       learner: { updateMany: learnerUpdateMany },
       enrollment: { updateMany: enrollmentUpdateMany },
@@ -215,15 +218,31 @@ describe("removeSchoolLearners", () => {
 
     expect(res).toEqual({ ok: true, data: { removed: 2 } });
     expect(learnerUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [LEARNER_A, LEARNER_B] } },
+      where: { id: { in: [LEARNER_A, LEARNER_B] }, schoolId: SCHOOL.id, deletedAt: null },
       data: { deletedAt: expect.any(Date) },
     });
     expect(enrollmentUpdateMany).toHaveBeenCalledWith({
-      where: { learnerId: { in: [LEARNER_A, LEARNER_B] }, status: "ACTIVE" },
+      where: { learnerId: { in: [LEARNER_A, LEARNER_B] }, schoolId: SCHOOL.id, status: "ACTIVE" },
       data: { status: "ARCHIVED", endedAt: expect.any(Date) },
     });
     // One transaction, so a learner is never hidden while keeping a live seat.
     expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not update a learner that moved to another school after the read", async () => {
+    learnerFindMany.mockResolvedValue(rowsInSchool);
+    // The scoped write only matches one of the two ids.
+    learnerUpdateMany.mockResolvedValue({ count: 1 });
+
+    const res = await removeSchoolLearners(learnerForm([LEARNER_A, LEARNER_B]));
+
+    expect(res.ok).toBe(false);
+    expect(learnerUpdateMany.mock.calls[0]?.[0]).toMatchObject({
+      where: { schoolId: SCHOOL.id, deletedAt: null },
+    });
+    // Count mismatch aborts before the enrolments are touched or anything is audited.
+    expect(enrollmentUpdateMany).not.toHaveBeenCalled();
+    expect(writeAuditMany).not.toHaveBeenCalled();
   });
 
   it("refuses the whole batch when one learner belongs to another school", async () => {

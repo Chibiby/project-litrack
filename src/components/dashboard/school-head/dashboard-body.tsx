@@ -82,20 +82,23 @@ export async function loadSchoolHeadDashboard({
   view: SchoolHeadView;
   /** The head's first name — or, for a Super Admin drilling in, the school's name. */
   displayName: string;
-  bannerSrc: string;
+  /** A promise lets the page start the banner lookup without blocking these queries. */
+  bannerSrc: string | Promise<string>;
 }): Promise<{ hero: ReactNode; body: ReactNode }> {
   let data: Awaited<ReturnType<typeof getSchoolHeadOverview>> | null = null;
   let attendanceMix: Awaited<ReturnType<typeof getSchoolHeadAttendanceMix>> | null = null;
+  let resolvedBannerSrc: string | null = null;
   try {
-    [data, attendanceMix] = await Promise.all([
+    [data, attendanceMix, resolvedBannerSrc] = await Promise.all([
       getSchoolHeadOverview(view.schoolId),
       getSchoolHeadAttendanceMix(view.schoolId),
+      bannerSrc,
     ]);
   } catch (err) {
     console.error("[loadSchoolHeadDashboard] failed to load:", err);
   }
 
-  if (!data || !attendanceMix) {
+  if (!data || !attendanceMix || resolvedBannerSrc === null) {
     return {
       hero: null,
       body: (
@@ -132,7 +135,7 @@ export async function loadSchoolHeadDashboard({
     <SchoolHeadGreetingHero
       firstName={displayName}
       todayKey={data.todayKey}
-      bannerSrc={bannerSrc}
+      bannerSrc={resolvedBannerSrc}
       quote={quote}
       meta={buildMetaLabel(data)}
       isSuperAdminView={view.isSuperAdminView}

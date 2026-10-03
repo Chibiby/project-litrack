@@ -15,6 +15,12 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
+      textColor: {
+        destructive: {
+          DEFAULT: "hsl(var(--destructive-text))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

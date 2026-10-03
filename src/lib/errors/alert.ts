@@ -1,5 +1,6 @@
 import "server-only";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { canonicalAppUrl } from "@/lib/app-url";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 
 /**
@@ -50,8 +51,7 @@ export async function sendErrorAlert(event: AlertEvent): Promise<void> {
     const gate = await checkRateLimit(`alert:${event.code}`, ALERT_WINDOW);
     if (!gate.ok) return;
 
-    const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const link = `${base}/admin/errors?ref=${encodeURIComponent(event.ref)}`;
+    const link = `${canonicalAppUrl()}/admin/errors?ref=${encodeURIComponent(event.ref)}`;
 
     await sendEmail({
       to,

@@ -5,6 +5,8 @@ import {
   isSubmissionLockingEnabled,
 } from "@/lib/settings/system-settings";
 import { readingLevelDeadline } from "@/lib/month-range";
+import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 
 /**
  * The single place that answers "may this person write this month's reading
@@ -29,14 +31,10 @@ import { readingLevelDeadline } from "@/lib/month-range";
  *
  * - Rung 1 issues no query, so there is nothing to fail.
  * - Rungs 2 and 3 call `isSubmissionLockingEnabled` / `isMonthlyReadingLevel-
- *   UnlockedForAll`, which read through `readSetting` — and `readSetting`
- *   itself degrades a failed read to `null` rather than throwing. `null` reads
- *   as "locking not enabled" for rung 2 and as "unlocked for all" for rung 3,
- *   so a settings-table hiccup at either rung fails OPEN, on purpose: it must
- *   leave every teacher able to write rather than silently locking the whole
- *   programme out the instant Postgres hiccups. See the comment on
- *   `isMonthlyReadingLevelUnlockedForAll` in `system-settings.ts`.
- * - Rung 4 (`canWriteWindow`) and any other unexpected throw are caught by the
+ *   UnlockedForAll`, which read through `readSetting`. A missing row takes the
+ *   documented default, but a FAILED read throws (`DB_UNAVAILABLE`), so it is
+ *   never mistaken for "locking off" or "unlocked for all".
+ * - Every throw from rungs 2-4 (`canWriteWindow` included) is caught by the
  *   `try`/`catch` below, which fails CLOSED: a lookup that actually throws
  *   must never turn a transient error into an open editing window.
  */
@@ -105,6 +103,9 @@ export async function resolveMonthlyReadingLevelWindow({
     // Fail closed, same reasoning as `grants.ts`: a lookup that throws must
     // never turn a transient error into an open editing window.
     console.error("[unlock] monthly reading level window resolution failed:", err);
+    // Still closed, but not silent: without this the teacher sees an ordinary
+    // deadline lock and admins never learn the settings read is failing.
+    reportError(classifyError(err), { route: "unlock/reading-level-window" });
     return { writable: false, reason: "locked", deadline, grantId: null, grantKind: null };
   }
 }
@@ -146,8 +147,14 @@ export async function readMonthlyReadingLevelLockState({
     });
     return { lockingEnabled: true, programUnlockAll: false, unlockedMonths: [...keys] };
   } catch (err) {
-    // Fail closed on the read path too, same as `readUnlockState`.
+    // Fail closed on the read path too: report "locking on, nothing unlocked"
+    // rather than letting a transient error render an open window. This reader
+    // does not delegate to `readUnlockState`, so it owns its own catch and its
+    // own report; the two are independent and neither relies on the other's.
     console.error("[unlock] monthly reading level lock state read failed:", err);
+    // Still closed, but not silent: without this the page shows an ordinary
+    // lock and admins never learn the settings read is failing.
+    reportError(classifyError(err), { route: "unlock/reading-level-window" });
     return { lockingEnabled: true, programUnlockAll: false, unlockedMonths: [] };
   }
 }

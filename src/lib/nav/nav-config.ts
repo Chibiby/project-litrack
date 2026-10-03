@@ -275,7 +275,12 @@ export function getNavGroups(
           items: [
             { id: "school-head-announcements", label: "Announcements", href: SCHOOL_HEAD_ROUTES.announcements, icon: Megaphone },
             { id: "school-head-reports", label: "Reports", href: SCHOOL_HEAD_ROUTES.reports, icon: FileBarChart },
-            { id: "school-head-audit", label: "Audit Log", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText },
+            // `=== false`, not falsy: a real School Head passes no tier at all,
+            // while a Division Admin viewing the school passes an explicit false
+            // and the audit page 404s for them.
+            ...(options.isDeveloperAdmin === false
+              ? []
+              : [{ id: "school-head-audit", label: "Audit Log", href: SCHOOL_HEAD_ROUTES.audit, icon: ScrollText }]),
           ],
         },
       ];

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { action } from "@/lib/errors/action";
+import { resourceNotFound } from "@/lib/errors/app-error";
 import { requireUser } from "@/lib/auth/session";
 import { AUDIT_ACTIONS, writeAuditMany } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -164,9 +165,14 @@ export const removeSchoolLearners = action("removeSchoolLearners", async (
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.learner.updateMany({ where: { id: { in: ids } }, data: { deletedAt: now } });
+    const { count } = await tx.learner.updateMany({
+      where: { id: { in: ids }, schoolId, deletedAt: null },
+      data: { deletedAt: now },
+    });
+    // Rolls the whole batch back if a row changed since the read above.
+    if (count !== ids.length) throw resourceNotFound("Learner");
     await tx.enrollment.updateMany({
-      where: { learnerId: { in: ids }, status: "ACTIVE" },
+      where: { learnerId: { in: ids }, schoolId, status: "ACTIVE" },
       data: { status: "ARCHIVED", endedAt: now },
     });
   });

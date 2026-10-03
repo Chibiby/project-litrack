@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import Papa from "papaparse";
 import { toast } from "sonner";
@@ -32,9 +32,39 @@ import { toastFailure } from "@/lib/ui/toast-failure";
 import { Download, FileUp, Loader2, ArrowLeft } from "lucide-react";
 
 const UNREADABLE_FILE_MESSAGE =
-  "That file couldn't be read. Save it as .csv or .xlsx and try again.";
+  "That file couldn't be read. Save it as a .csv file (UTF-8) and try again.";
+
+// Mirrors the 500-row cap in commitLearnerImport/previewLearnerImport; a
+// "use server" module cannot export a constant to share.
+const MAX_IMPORT_ROWS = 500;
 
 type Step = "upload" | "preview" | "done";
+
+type SkippedRow = { rowNumber: number; name: string; reason: string };
+
+function csvSafe(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
+function collectSkippedRows(results: ImportRowResult[], allowDuplicates: boolean): SkippedRow[] {
+  const skipped: SkippedRow[] = [];
+  for (const r of results) {
+    if (!r.ok) {
+      skipped.push({
+        rowNumber: r.rowNumber,
+        name: r.rawPreview || "(no name)",
+        reason: r.errors.join("; "),
+      });
+    } else if (r.duplicateWarning && !allowDuplicates) {
+      skipped.push({
+        rowNumber: r.rowNumber,
+        name: `${r.data.firstName} ${r.data.lastName}`,
+        reason: "Possible duplicate (same name and age as an existing learner or an earlier row)",
+      });
+    }
+  }
+  return skipped;
+}
 
 type Props = {
   gradeLevelId: string;
@@ -78,6 +108,27 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
     () => results.filter((r) => r.ok && (allowDuplicates || !r.duplicateWarning)).length,
     [results, allowDuplicates]
   );
+
+  const doneHeadingRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (step === "done") doneHeadingRef.current?.focus();
+  }, [step]);
+
+  const skippedRows = useMemo(
+    () => (step === "done" ? collectSkippedRows(results, allowDuplicates) : []),
+    [step, results, allowDuplicates]
+  );
+
+  function handleDownloadSkipped() {
+    const csv = Papa.unparse(
+      skippedRows.map((s) => ({
+        row: csvSafe(String(s.rowNumber)),
+        name: csvSafe(s.name),
+        reason: csvSafe(s.reason),
+      }))
+    );
+    downloadBlob("litrack-skipped-rows.csv", csv, "text/csv;charset=utf-8");
+  }
 
   function handleTemplate() {
     setBusy("template");
@@ -201,6 +252,9 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
               <span className="text-xs text-muted-foreground">
                 Headers: {LEARNER_CSV_HEADERS.join(", ")}
               </span>
+              <span className="text-xs text-muted-foreground">
+                Up to {MAX_IMPORT_ROWS} rows per file. CSV (UTF-8) only.
+              </span>
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -211,7 +265,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
             </label>
             {busy === "parse" && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Parsing and validating…
+                <Loader2 className="h-4 w-4 animate-spin" /> Validating {rawRows.length} row{rawRows.length === 1 ? "" : "s"}…
               </p>
             )}
           </CardContent>
@@ -319,14 +373,50 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
       {step === "done" && commitStats && (
         <Card>
           <CardHeader>
-            <CardTitle>Import complete</CardTitle>
+            <CardTitle ref={doneHeadingRef} tabIndex={-1} className="outline-none">
+              Import complete
+            </CardTitle>
             <CardDescription>
               Imported {commitStats.imported} · skipped invalid{" "}
               {commitStats.skippedInvalid} · skipped duplicates{" "}
               {commitStats.skippedDuplicate}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
+          <CardContent className="space-y-4">
+            {skippedRows.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  {skippedRows.length} row{skippedRows.length === 1 ? "" : "s"} did not import
+                </p>
+                <div className="max-h-[320px] overflow-auto rounded-lg border">
+                  <Table>
+                    <caption className="sr-only">
+                      {skippedRows.length} row{skippedRows.length === 1 ? "" : "s"} did not import
+                    </caption>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Row</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Reason</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {skippedRows.map((s) => (
+                        <TableRow key={s.rowNumber}>
+                          <TableCell>{s.rowNumber}</TableCell>
+                          <TableCell className="text-sm">{s.name}</TableCell>
+                          <TableCell className="text-sm text-destructive">{s.reason}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handleDownloadSkipped}>
+                  <Download className="h-4 w-4" /> Download skipped rows as CSV
+                </Button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
             <Button asChild>
               <Link href={`/teacher/learners?grade=${gradeLevelId}`}>View learners</Link>
             </Button>
@@ -342,6 +432,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
             >
               Import another file
             </Button>
+            </div>
           </CardContent>
         </Card>
       )}

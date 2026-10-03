@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
 import {
   AUDIT_LOG_RETENTION,
   deleteInBatches,
@@ -33,6 +35,8 @@ export type RetentionReport = {
   notificationsRead: RulePurge;
   notifications: RulePurge;
   auditLogs: RulePurge;
+  /** Present (true) only when at least one rule failed; absent on a clean run. */
+  retentionFailed?: true;
 };
 
 async function runRule(
@@ -51,6 +55,15 @@ async function runRule(
     // One rule failing must not stop the others or the backup. The message is
     // the database's, about a DELETE on a fixed table — no row content.
     console.error(`[retention] ${name} purge failed:`, err instanceof Error ? err.message : err);
+    // Also surface it to admins: a purge that silently never runs lets the
+    // tables grow past the retention promise in docs/privacy.md.
+    reportError(
+      new AppError("DB_ERROR", {
+        cause: err,
+        detail: `Retention purge "${name}" failed: ${err instanceof Error ? err.message : "unknown error"}`,
+      }),
+      { route: "retention/purge", routeType: "cron" }
+    );
     return { status: "failed" };
   }
 }
@@ -105,5 +118,8 @@ export async function runDailyRetention(now: Date = new Date()): Promise<Retenti
   const notificationsRead = await purgeReadNotifications(now);
   const notifications = await purgeExpiredNotifications(now);
   const auditLogs = await purgeExpiredAuditLogs(now);
-  return { notificationsRead, notifications, auditLogs };
+  const failed = [notificationsRead, notifications, auditLogs].some((r) => r.status === "failed");
+  return failed
+    ? { notificationsRead, notifications, auditLogs, retentionFailed: true }
+    : { notificationsRead, notifications, auditLogs };
 }

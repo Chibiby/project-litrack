@@ -6,7 +6,7 @@ import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-k
 import { formatWeekRange } from "@/lib/week-range";
 import { currentMonthKey, formatMonthLabel, monthStartOf, nextMonthStart } from "@/lib/month-range";
 import { getMonday } from "@/lib/utils";
-import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
+import { isSubmissionLockingEnabledForDisplay } from "@/lib/settings/system-settings";
 import type { SchoolUser } from "@/lib/auth/session";
 import type { AssistantScope } from "@/lib/assistant/prompt";
 
@@ -74,7 +74,7 @@ export async function buildAssistantScope(user: SchoolUser): Promise<AssistantSc
     // Whether deadlines are enforced at all today. The model is told this as
     // live state, because the help index describes locks as a feature that
     // exists and this switch decides whether that description applies today.
-    isSubmissionLockingEnabled(),
+    isSubmissionLockingEnabledForDisplay(),
   ]);
 
   const aralLearners = learners.filter((l) => l.isAralLearner);

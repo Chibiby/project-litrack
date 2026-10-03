@@ -658,6 +658,14 @@ describe("getNavGroups — school head", () => {
     expect(resolveActiveItemId("/school-head/transfer", items)).toBe("school-head-transfer");
   });
 
+  it("shows the Audit Log to a real School Head and a Developer, not a Division Admin", () => {
+    const has = (opts?: { isDeveloperAdmin?: boolean }) =>
+      flattenNavGroups(getNavGroups("SCHOOL_HEAD", [], opts)).some((i) => i.id === "school-head-audit");
+    expect(has()).toBe(true);
+    expect(has({ isDeveloperAdmin: true })).toBe(true);
+    expect(has({ isDeveloperAdmin: false })).toBe(false);
+  });
+
   it("points Teachers at the workspace root so every tab keeps it highlighted", () => {
     const items = flattenNavGroups(getNavGroups("SCHOOL_HEAD"));
     expect(items.find((i) => i.id === "school-head-teachers")?.href).toBe(

@@ -30,6 +30,11 @@ vi.mock("@/lib/unlock/grants", () => ({
   listActiveUnlockKeys: (...a: unknown[]) => listActiveUnlockKeys(...a),
 }));
 
+const reportError = vi.fn();
+vi.mock("@/lib/errors/report", () => ({
+  reportError: (...a: unknown[]) => reportError(...a),
+}));
+
 import {
   resolveMonthlyReadingLevelWindow,
   readMonthlyReadingLevelLockState,
@@ -185,6 +190,21 @@ describe("resolveMonthlyReadingLevelWindow — rung 4: grant", () => {
     expect(verdict.writable).toBe(false);
     expect(verdict.reason).toBe("locked");
   });
+
+  it("reports the failure to admins while failing closed", async () => {
+    isSubmissionLockingEnabled.mockRejectedValue(new Error("P2024 pool timeout"));
+
+    const verdict = await resolveMonthlyReadingLevelWindow({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+      monthKey: MONTH_KEY,
+      today: pastDeadline,
+    });
+
+    expect(verdict.writable).toBe(false);
+    expect(verdict.reason).toBe("locked");
+    expect(reportError).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("readMonthlyReadingLevelLockState", () => {
@@ -238,5 +258,18 @@ describe("readMonthlyReadingLevelLockState", () => {
     });
 
     expect(state).toEqual({ lockingEnabled: true, programUnlockAll: false, unlockedMonths: [] });
+  });
+
+  it("reports the failure to admins while failing closed", async () => {
+    isSubmissionLockingEnabled.mockRejectedValue(new Error("P2024 pool timeout"));
+
+    const state = await readMonthlyReadingLevelLockState({
+      userId: USER_ID,
+      schoolId: SCHOOL_ID,
+    });
+
+    expect(state).toEqual({ lockingEnabled: true, programUnlockAll: false, unlockedMonths: [] });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0][1]).toMatchObject({ route: "unlock/reading-level-window" });
   });
 });

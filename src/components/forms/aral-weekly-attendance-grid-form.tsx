@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -249,6 +250,24 @@ function countRow(row: RowState | undefined, days: Day[]) {
   // own status and is never folded into the Present column.
   const percent = marked > 0 ? Math.round(((present + late) / marked) * 100) : 0;
   return { present, absent, excused, late, marked, percent };
+}
+
+function TotalsAnnouncer({ message }: { message: string }) {
+  const [announced, setAnnounced] = useState("");
+  const previous = useRef(message);
+
+  useEffect(() => {
+    if (message === previous.current) return;
+    previous.current = message;
+    const timer = window.setTimeout(() => setAnnounced(message), 1000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  return (
+    <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {announced}
+    </span>
+  );
 }
 
 export const AralWeeklyAttendanceGridForm = forwardRef<
@@ -598,9 +617,13 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
           Summary ({learners.length} learner{learners.length === 1 ? "" : "s"})
         </span>
+        <TotalsAnnouncer
+          key={weekStartKey}
+          message={`Present ${totals.present}, absent ${totals.absent}, excused ${totals.excused}. Average attendance ${averagePercent} percent.`}
+        />
         <span>
           Total Present:{" "}
-          <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+          <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
             {totals.present}
           </span>
         </span>
@@ -612,7 +635,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         </span>
         <span>
           Total Excused:{" "}
-          <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+          <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
             {totals.excused}
           </span>
         </span>

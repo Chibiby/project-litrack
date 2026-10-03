@@ -90,6 +90,44 @@ describe("updateSchoolYearSchema", () => {
   });
 });
 
+describe("school year date keys", () => {
+  it.each([
+    ["an impossible calendar day", { startDate: "2026-02-30" }],
+    ["a non-leap Feb 29", { startDate: "2026-02-29" }],
+    ["month 13", { endDate: "2027-13-01" }],
+    ["a free-form date string", { startDate: "June 2, 2025" }],
+    ["a datetime string", { startDate: "2025-06-02T00:00:00+08:00" }],
+    ["an unpadded date", { startDate: "2025-6-2" }],
+  ])("rejects %s on both create and update", (_name, patch) => {
+    expect(createSchoolYearSchema.safeParse({ ...VALID, ...patch }).success).toBe(false);
+    expect(
+      updateSchoolYearSchema.safeParse({ schoolYearId: "y1", ...VALID, ...patch }).success
+    ).toBe(false);
+  });
+
+  it("accepts a real leap day", () => {
+    const res = createSchoolYearSchema.safeParse({
+      label: "2027-2028",
+      startDate: "2028-02-29",
+      endDate: "2028-03-31",
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("keeps a date as its calendar-day key, which stores as that UTC day", () => {
+    const res = createSchoolYearSchema.safeParse({
+      label: "2026-2027",
+      startDate: "2026-06-01",
+      endDate: "2027-03-31",
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.startDate).toBe("2026-06-01");
+      expect(new Date(res.data.startDate).toISOString().slice(0, 10)).toBe("2026-06-01");
+    }
+  });
+});
+
 describe("setActiveSchoolYearSchema / deleteSchoolYearSchema", () => {
   it("both require a school year id", () => {
     expect(setActiveSchoolYearSchema.safeParse({ schoolYearId: "y1" }).success).toBe(true);

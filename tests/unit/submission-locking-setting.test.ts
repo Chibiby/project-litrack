@@ -12,10 +12,9 @@ import {
  *   1. **The default is off**, which is the opposite of `isDemoEnabled` sitting
  *      beside it in the same module. A database with no row has never had the
  *      switch touched, and the programme asked to ship writable.
- *   2. **A read failure degrades to off, not on.** `readSetting` swallows the
- *      error and returns `null`, and `null` is "off" here. That is the module's
- *      "never 500 on a settings hiccup" rule pointed in the direction that
- *      leaves a teacher able to finish the week they are encoding.
+ *   2. **A read failure throws, it does not read as a default.** `readSetting`
+ *      distinguishes an absent row (`null`, default applies) from a failed read
+ *      (`AppError DB_UNAVAILABLE`), so a database hiccup can never lift a lock.
  *
  * The key string is asserted separately because three places name it — the
  * reader, the toggle action and the audit row — and a typo in any one of them
@@ -35,7 +34,7 @@ vi.mock("@/lib/prisma", () => ({
 
 // The two writers below need a session, an audit sink and a cache bust. The
 // settings module itself stays REAL so the reader tests in this file keep
-// exercising the real `readSetting` degrade-to-null behaviour.
+// exercising the real `readSetting` (absent row -> null, failed read -> throws).
 const requireUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...a: unknown[]) => requireUser(...a),
@@ -90,10 +89,14 @@ describe("isSubmissionLockingEnabled", () => {
     });
   });
 
-  it("is off when the read fails, rather than throwing or locking everyone out", async () => {
+  it("throws DB_UNAVAILABLE when the read fails, rather than reading as off", async () => {
     findUnique.mockRejectedValue(new Error("P2024 pool timeout"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
-    expect(await isSubmissionLockingEnabled()).toBe(false);
+    await expect(isSubmissionLockingEnabled()).rejects.toMatchObject({
+      name: "AppError",
+      code: "DB_UNAVAILABLE",
+    });
   });
 
   it("is off for any value that is not exactly \"true\"", async () => {
@@ -129,9 +132,9 @@ describe("isSubmissionLockingEnabled — on", () => {
 
 /**
  * The reading-level-unlock-for-everyone switch, which defaults the OPPOSITE
- * direction from `isSubmissionLockingEnabled`: a missing row, or a read that
- * throws, both mean "still unlocked" here, because `readSetting` degrades every
- * failure to `null` and `null !== "false"` is `true`.
+ * direction from `isSubmissionLockingEnabled`: a missing row means "still
+ * unlocked" here (`null !== "false"`), but a failed read throws DB_UNAVAILABLE
+ * instead of reading as unlocked.
  */
 describe("isMonthlyReadingLevelUnlockedForAll", () => {
   it("names the key the setting reads and writes", () => {
@@ -147,10 +150,14 @@ describe("isMonthlyReadingLevelUnlockedForAll", () => {
     });
   });
 
-  it("is on when the read fails, rather than locking every teacher out", async () => {
+  it("throws DB_UNAVAILABLE when the read fails, rather than reading as unlocked", async () => {
     findUnique.mockRejectedValue(new Error("P2024 pool timeout"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
-    expect(await isMonthlyReadingLevelUnlockedForAll()).toBe(true);
+    await expect(isMonthlyReadingLevelUnlockedForAll()).rejects.toMatchObject({
+      name: "AppError",
+      code: "DB_UNAVAILABLE",
+    });
   });
 
   it("is off only when the row says exactly \"false\"", async () => {

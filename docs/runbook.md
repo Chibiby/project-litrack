@@ -307,6 +307,17 @@ change) and adding grade levels. The **School Head** button needs only a selecte
 
 Never apply remote migrations without approval. Command: `npx prisma migrate deploy` with direct URL. Details: `docs/migrations.md`.
 
+## Database test lane (`npm run test:db`)
+
+Opt-in and local-only. Every default test mocks Prisma, so this lane exists to check what mocks cannot: tenancy `where` clauses and the SQL-only partial unique indexes (`Enrollment_learner_active_unique`, `SchoolYear_school_active_unique`). It is **not** part of `npm run test` (`vitest.config.ts` excludes `tests/db/**`) and CI does not run it; run it before pushing anything that touches queries or migrations.
+
+- **Prerequisite:** PostgreSQL binaries, `scoop install postgresql` (override the bin directory with `LITRACK_TEST_PG_BIN`). No Docker, no new npm dependencies.
+- **Command:** `npm run test:db`. `scripts/test-db.mjs` creates a cluster once in `%LOCALAPPDATA%\litrack-test-pg`, starts it on `127.0.0.1:54329` (not 5432), rebuilds database `litrack_test` from every `prisma/migrations/*/migration.sql`, runs `vitest.db.config.ts`, then stops the cluster and exits with vitest's code. Pass extra vitest arguments after it, e.g. `npm run test:db -- -t "P2002"`.
+- **Safety:** the URL is built inside the script and handed to the vitest child only; it never reads `.env*`, and refuses any host other than `127.0.0.1` / `localhost`.
+- **Supabase stub:** migration `20260915000007` needs role `authenticated` and `auth.uid()`; the script creates test-only stand-ins. They are never shipped.
+- Tests live in `tests/db/`, share one database (no file parallelism), and truncate every table in `beforeEach` via `truncateAll`.
+- Uses the already generated Prisma client; it does not run `prisma generate`.
+
 ## Local `next dev` console notes
 
 - **Prisma SQL flood:** Query logging is off by default. Set `PRISMA_LOG_QUERIES=1` only when debugging SQL (`src/lib/prisma.ts`).

@@ -216,6 +216,21 @@ describe("purgeArchivedLearner", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
+  it("refuses a teacher on a School-Head-removed (deletedAt) row, as restoreLearner does", async () => {
+    learnerFindFirst.mockResolvedValue(archived({ deletedAt: new Date() }));
+    const res = await purgeArchivedLearner(fd(NAME));
+    expect(res).toMatchObject({ ok: false });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(purgeLearnerRecord).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("still purges the teacher's own archived-only row (deletedAt null)", async () => {
+    learnerFindFirst.mockResolvedValue(archived({ deletedAt: null }));
+    expect(await purgeArchivedLearner(fd(NAME))).toEqual({ ok: true });
+    expect(purgeLearnerRecord).toHaveBeenCalledTimes(1);
+  });
+
   it("allows the designated ARAL teacher", async () => {
     learnerFindFirst.mockResolvedValue(archived({ teacherId: null, aralTeacherId: TEACHER_ID }));
     expect(await purgeArchivedLearner(fd(NAME))).toEqual({ ok: true });

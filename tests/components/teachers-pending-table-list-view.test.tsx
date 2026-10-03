@@ -64,6 +64,7 @@ describe("TeachersPendingTable — mobile list view", () => {
     fireEvent.click(
       within(listItem as HTMLElement).getByRole("button", { name: "Approve" })
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Approve teacher" }));
 
     await vi.waitFor(() => {
       expect(approveTeacher).toHaveBeenCalledTimes(1);

@@ -89,7 +89,7 @@ async function ActiveTeachersBody({
   // its shape answers both capacity questions below (any grade at all? any
   // adviser-free section?). Read first because the facets are validated
   // against it before the roster query runs.
-  const gradeSections = await prismaFresh.gradeLevel.findMany({
+  const gradeSectionsPromise = prismaFresh.gradeLevel.findMany({
     where: { schoolId, deletedAt: null },
     orderBy: { createdAt: "asc" },
     select: {
@@ -106,6 +106,12 @@ async function ActiveTeachersBody({
       },
     },
   });
+  const multiIdsPromise =
+    list.filter === "multi-advisory" ? multiAdvisoryTeacherIds(schoolId) : null;
+  const [gradeSections, multiIds] = await Promise.all([
+    gradeSectionsPromise,
+    multiIdsPromise,
+  ]);
 
   const gradesWithSections = gradeSections.filter((g) => g.sections.length > 0);
   const facet = resolveAdvisoryFacet(gradesWithSections, list.grade, list.section);
@@ -115,7 +121,7 @@ async function ActiveTeachersBody({
     list.filter === "all"
       ? {}
       : list.filter === "multi-advisory"
-        ? { id: { in: await multiAdvisoryTeacherIds(schoolId) } }
+        ? { id: { in: multiIds ?? [] } }
         : teacherRosterFilterWhere(list.filter);
 
   const activeWhere: Prisma.UserWhereInput = {

@@ -279,7 +279,10 @@ vi.mock("@/lib/audit", () => ({
   },
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const revalidatePath = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: (...a: unknown[]) => revalidatePath(...(a as [never])),
+}));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateLearnerScoped: vi.fn(),
   revalidateTeacherDashboard: vi.fn(),
@@ -747,5 +750,24 @@ describe("saveAralWeeklyAttendance â€” payload size and tenancy", () => {
       cells: [{ learnerId: "learner-nowhere", date: TUESDAY, status: "PRESENT" }],
     });
     expect(JSON.stringify(missing)).toBe(JSON.stringify(res));
+  });
+});
+
+describe("saveAralWeeklyAttendance - revalidation fan-out", () => {
+  it("calls each distinct revalidatePath once for a multi-day, multi-learner save", async () => {
+    const days = ["2026-08-24", "2026-08-25", "2026-08-26"];
+    const res = await post({
+      cells: learnerIds.flatMap((learnerId) =>
+        days.map((date) => ({ learnerId, date, status: "PRESENT" }))
+      ),
+    });
+    expect(res.ok).toBe(true);
+
+    const paths = revalidatePath.mock.calls.map((c) => c[0] as string);
+    expect(new Set(paths).size).toBe(paths.length);
+    // grade sheet + ARAL index + 2 per learner
+    expect(paths).toHaveLength(2 + learnerIds.length * 2);
+    expect(paths).toContain(`/teacher/aral/${GRADE_ID}/attendance`);
+    expect(paths).toContain("/teacher/aral");
   });
 });

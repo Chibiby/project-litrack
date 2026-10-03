@@ -216,12 +216,19 @@ describe("LearnerListClient — Actions column", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("checkbox", { name: "Select Ana Santos", hidden: true })
-      ).toBeTruthy()
+    // The row returns only when the async transition (action -> callAction ->
+    // toast -> rejection) settles and React commits the reverted optimistic
+    // state at transition priority. That is several scheduler hops, so under
+    // a loaded CPU it can outlast waitFor's 1s default; the assertion is
+    // unchanged, only the budget for the mechanism is explicit.
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole("checkbox", { name: "Select Ana Santos", hidden: true })
+        ).toBeTruthy(),
+      { timeout: 10_000 }
     );
-  });
+  }, 20_000);
 
   it("restores a learner from the archived view", async () => {
     renderRoster(false, true);

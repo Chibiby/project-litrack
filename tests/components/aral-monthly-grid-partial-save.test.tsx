@@ -108,7 +108,11 @@ function rowFor(name: string): HTMLElement {
 /** Opens a learner's English band picker and selects one option by its code. */
 async function pickEnglish(learnerName: string, code: string) {
   const label = `${STORED_NAME[learnerName]} — English reading level`;
-  fireEvent.click(within(rowFor(learnerName)).getByRole("button", { name: label }));
+  fireEvent.click(
+    within(rowFor(learnerName)).getByRole("button", {
+      name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `),
+    })
+  );
   const listbox = await screen.findByRole("listbox", { name: label });
   fireEvent.click(within(listbox).getByText(code));
 }

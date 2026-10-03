@@ -30,6 +30,10 @@ export async function reactivateEnrollment(
   tx: Prisma.TransactionClient,
   learner: Pick<Learner, "id" | "schoolId" | "gradeLevelId" | "sectionId" | "teacherId">,
 ): Promise<ReactivateEnrollmentResult> {
+  // Serialise concurrent restores of the same learner: the second waits here
+  // and then sees the first's committed ACTIVE row at the check below.
+  await tx.$queryRaw`SELECT "id" FROM "Learner" WHERE "id" = ${learner.id} AND "schoolId" = ${learner.schoolId} FOR UPDATE`;
+
   const existingActive = await tx.enrollment.findFirst({
     where: { learnerId: learner.id, status: "ACTIVE" },
   });
@@ -67,6 +71,11 @@ export async function reactivateEnrollment(
     return { outcome: "revived", enrollmentId: revived.id };
   }
 
+  // A P2002 here (the one-ACTIVE partial unique index) is deliberately NOT
+  // caught: Postgres has already aborted the surrounding transaction (25P02),
+  // so reporting success would hide a rollback. The row lock above makes it
+  // unreachable in practice; if it still fires, it propagates and the action
+  // wrapper classifies it as a retryable DB_CONFLICT.
   const created = await tx.enrollment.create({
     data: {
       learnerId: learner.id,

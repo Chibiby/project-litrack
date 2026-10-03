@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
+import { isDeveloperAdmin } from "@/lib/auth/admin-tier";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
@@ -239,6 +242,11 @@ async function SchoolAuditTable({
 
 export default async function SchoolAuditPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  // Same rule as /admin/audit: the audit log is a Developer Control, so a
+  // Division Admin gets the admin 404 here too. Checked before the school view
+  // resolves so a refused admin leaves no ADMIN_SCHOOL_VIEW row.
+  const actor = await requireUser("SCHOOL_HEAD");
+  if (actor.role === "SUPER_ADMIN" && !isDeveloperAdmin(actor)) notFound();
   const { view } = await resolveSchoolHeadView(
     params.schoolId,
     SCHOOL_HEAD_ROUTES.audit

@@ -112,7 +112,10 @@ function AttendanceGridRowImpl({
                 className="text-sm text-muted-foreground"
                 title={day.lockReason}
               >
-                —
+                <span aria-hidden>—</span>
+                <span className="sr-only">
+                  {day.aria}: {day.lockReason}
+                </span>
               </span>
             </TableCell>
           );
@@ -214,7 +217,10 @@ function AttendanceCellPicker({
           variant="outline"
           size="sm"
           disabled={disabled}
-          aria-label={label}
+          aria-label={`${label}: ${STATUS_LABEL[status] || "not marked"}${
+            note ? `, reason ${note}` : ""
+          }`}
+          aria-haspopup="dialog"
           title={note || undefined}
           className={cn(
             "flex h-11 w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 xl:h-8",
@@ -230,7 +236,11 @@ function AttendanceCellPicker({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
+      <PopoverContent
+        align="start"
+        className="w-72 p-0"
+        aria-label={`Set ${label}`}
+      >
         <div className="p-1">
           <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
             Attendance

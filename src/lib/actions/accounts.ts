@@ -27,6 +27,7 @@ import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
 import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { parseInput } from "@/lib/errors/validation";
 import { accountUserIdSchema, impersonateUserSchema } from "@/lib/validators/accounts.schema";
@@ -878,7 +879,7 @@ export const endImpersonation = action("endImpersonation", async (): Promise<Act
   // Single use. Only now, with the admin restored: revoking first would mean a
   // failed switch left the admin with no session at all. The token is the one
   // the binding check just verified as the bound session.
-  await revokeImpersonationSession(caller.accessToken, {
+  const revoked = await revokeImpersonationSession(caller.accessToken, {
     adminUserId: ticket.adminUserId,
     targetUserId: ticket.targetUserId,
   });
@@ -888,6 +889,7 @@ export const endImpersonation = action("endImpersonation", async (): Promise<Act
     action: AUDIT_ACTIONS.IMPERSONATION_END,
     resource: "User",
     resourceId: ticket.targetUserId,
+    ...(revoked ? {} : { metadata: { revokeFailed: true } }),
   });
 
   // Where to land, and nothing else: the admin is already restored, so a failed
@@ -1017,29 +1019,42 @@ async function mintSessionFor(
  * which is what makes the ticket single-use — a copy of both cookies taken
  * before the return now fails the binding check in `endImpersonation`.
  *
- * Never throws and returns nothing. The admin is already restored when this
- * runs, so a failed revoke must not turn that into a reported failure; it is
- * logged, and the ticket is already gone from this browser. What a failure
- * leaves is the pre-hardening state: that session lives until it expires.
+ * Never throws. Returns whether the revoke succeeded. The admin is already
+ * restored when this runs, so a failed revoke must not turn that into a
+ * reported failure; it is recorded as a system error (admin log + alert), the
+ * caller stamps `revokeFailed` on the IMPERSONATION_END audit row, and the
+ * ticket is already gone from this browser. What a failure leaves is the
+ * pre-hardening state: that session lives until it expires.
  */
 async function revokeImpersonationSession(
   accessToken: string,
   ids: { adminUserId: string; targetUserId: string }
-): Promise<void> {
+): Promise<boolean> {
+  let failure: unknown = null;
   try {
     const { error } = await createSupabaseAdminClient().auth.admin.signOut(accessToken, "local");
-    if (error) {
-      console.error(
-        `[impersonation] revoking the impersonation session failed after return (admin ${ids.adminUserId}, target ${ids.targetUserId}):`,
-        error
-      );
-    }
+    if (error) failure = error;
   } catch (err) {
-    console.error(
-      `[impersonation] revoking the impersonation session threw after return (admin ${ids.adminUserId}, target ${ids.targetUserId}):`,
-      err
-    );
+    failure = err;
   }
+  if (!failure) return true;
+
+  // Ids only; the access token is never put in the detail or the cause.
+  const reason =
+    failure instanceof Error
+      ? failure.message
+      : typeof failure === "object" && failure !== null && "message" in failure
+        ? String((failure as { message: unknown }).message)
+        : "unknown error";
+  reportError(
+    new AppError("AUTH_PROVIDER_ERROR", {
+      severity: "system",
+      detail: `Revoking the impersonation session failed after return (admin ${ids.adminUserId}, target ${ids.targetUserId}): ${reason}`,
+      context: { service: "supabase-auth", reason: "impersonation-revoke-failed" },
+    }),
+    { userId: ids.adminUserId }
+  );
+  return false;
 }
 
 // ── Profile modal ──────────────────────────────────────────────────────────

@@ -441,4 +441,29 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     // The incoming call here is unconditional, so distinct ids keep this at 3.
     expect(revalidateTeacherCaches).toHaveBeenCalledTimes(3);
   });
+
+  it("clears aralTeacherId so no pointer to the old school's tutor survives", async () => {
+    // Seed explicitly non-null so a dropped `aralTeacherId: null` (key absent or
+    // pointer carried over) cannot pass by coincidence.
+    learnerRow = makeLearner({ aralTeacherId: TEACHER_ARAL });
+    expect(learnerRow.aralTeacherId).not.toBeNull();
+
+    const result = await transferLearnerCrossSchool(crossSchoolFormData());
+    expect(result).toEqual({ ok: true });
+
+    const update = txCalls.learnerUpdate[0] as { data: Record<string, unknown> };
+    // Own-property + strict null: `undefined`, a missing key, or TEACHER_ARAL all fail.
+    expect(Object.prototype.hasOwnProperty.call(update.data, "aralTeacherId")).toBe(true);
+    expect(update.data.aralTeacherId).toBeNull();
+    expect(update.data).toEqual({
+      schoolId: OTHER_SCHOOL_ID,
+      gradeLevelId: TO_GRADE_ID,
+      sectionId: null,
+      teacherId: TEACHER_IN,
+      aralTeacherId: null,
+      archivedAt: null,
+    });
+    // The old tutor's caches are still busted from the pre-update row value.
+    expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ARAL);
+  });
 });

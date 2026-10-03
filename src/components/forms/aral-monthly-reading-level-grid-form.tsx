@@ -7,6 +7,7 @@ import {
   useId,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -765,7 +766,7 @@ function ScaleHead({ title, sub }: { title: string; sub: string }) {
  * letter jumps to the next option starting with it. `role="listbox"` with
  * `aria-selected` on every option is what keeps a screen reader hearing a select.
  */
-function BandSelect({
+export function BandSelect({
   options,
   value,
   disabled,
@@ -783,6 +784,8 @@ function BandSelect({
 }) {
   const [open, setOpen] = useState(false);
   const hintId = useId();
+  const listId = useId();
+  const listRef = useRef<HTMLUListElement>(null);
   const selected = options.find((o) => o.value === value) ?? legacy ?? undefined;
   // "Not assessed" is a real entry in the list, not a placeholder, so clearing a
   // cell is reachable by the same keys as setting one.
@@ -804,6 +807,11 @@ function BandSelect({
     setPrevActiveKey({ open, selectedIndex });
     if (open) setActive(selectedIndex);
   }
+
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, active, listId]);
 
   function commit(next: string) {
     onChange(next);
@@ -862,8 +870,10 @@ function BandSelect({
           variant="outline"
           size="sm"
           disabled={disabled}
-          aria-label={legacy ? `${label} — needs update` : label}
+          aria-label={legacy ? `${label} — needs update` : `${label}: ${selected ? selected.label : "Not assessed"}`}
           aria-describedby={legacy ? hintId : undefined}
+          aria-haspopup="listbox"
+          aria-expanded={open}
           title={selected ? `${selected.code} — ${selected.label}` : "Not assessed"}
           className={cn(
             "flex h-11 w-full min-w-[3.75rem] items-center justify-center gap-1 rounded-md border px-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 lg:h-8",
@@ -876,21 +886,29 @@ function BandSelect({
           <ChevronDown aria-hidden className="size-3 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-      {/* Radix moves focus onto the content when it opens, so the key handler
-          sits here rather than on a list that would need focusing by hand. */}
+      {/* Focus goes to the listbox itself so aria-activedescendant is read from
+          the focused element; keydown still bubbles to this handler. */}
       <PopoverContent
         align="start"
         className="w-64 p-1"
         onKeyDown={onKeyDown}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          listRef.current?.focus();
+        }}
       >
         <ul
+          ref={listRef}
           role="listbox"
+          tabIndex={-1}
           aria-label={label}
+          aria-activedescendant={`${listId}-${active}`}
           className="max-h-72 overflow-y-auto focus:outline-none"
         >
           {entries.map((entry, i) => (
             <li
               key={entry.value || "none"}
+              id={`${listId}-${i}`}
               role="option"
               aria-selected={entry.value === value}
               onClick={() => commit(entry.value)}

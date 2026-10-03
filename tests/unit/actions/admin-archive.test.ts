@@ -73,6 +73,11 @@ vi.mock("@/lib/rate-limit", () => ({
 
 // ── audit ────────────────────────────────────────────────────────────────
 
+const reportError = vi.fn(() => "E-TESTREF00");
+vi.mock("@/lib/errors/report", () => ({
+  reportError: (...args: unknown[]) => reportError(...(args as [])),
+}));
+
 const writeAudit = vi.fn();
 vi.mock("@/lib/audit", () => ({
   writeAudit: (...args: unknown[]) => writeAudit(...args),
@@ -639,6 +644,29 @@ describe("purgeRemovedTeacher", () => {
     expect(entry.metadata).toMatchObject({ authDeleted: false });
   });
 
+  it("records a system error when the Supabase deleteUser fails (returned or thrown)", async () => {
+    userFindFirst.mockResolvedValue(removedTeacher());
+    deleteUser.mockResolvedValue({ error: { message: "boom" } });
+
+    const res = await purgeRemovedTeacher(fd(TEACHER_ID));
+
+    expect(res).toEqual({ ok: true, authDeleted: false });
+    expect(reportError).toHaveBeenCalledTimes(1);
+    const err = (reportError.mock.calls[0] as unknown[])[0] as { severity: string; detail: string };
+    expect(err.severity).toBe("system");
+    expect(err.detail).toContain(TEACHER_ID);
+  });
+
+  it("treats a Supabase 'not found' as already deleted and reports nothing", async () => {
+    userFindFirst.mockResolvedValue(removedTeacher());
+    deleteUser.mockResolvedValue({ error: { message: "User not found" } });
+
+    const res = await purgeRemovedTeacher(fd(TEACHER_ID));
+
+    expect(res).toEqual({ ok: true, authDeleted: true });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
   it("reports authDeleted true when Supabase succeeds", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
     deleteUser.mockResolvedValue({ error: null });
@@ -646,6 +674,7 @@ describe("purgeRemovedTeacher", () => {
     const res = await purgeRemovedTeacher(fd(TEACHER_ID));
 
     expect(res).toEqual({ ok: true, authDeleted: true });
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   it("purges with the teacher's own id and schoolId", async () => {

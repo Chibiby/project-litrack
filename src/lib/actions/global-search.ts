@@ -68,7 +68,7 @@ export const globalSearch = action(
     const contains = { contains: q, mode: "insensitive" as const };
     const hits: GlobalSearchHit[] = [];
 
-    const learners = await prisma.learner.findMany({
+    const learnersQuery = prisma.learner.findMany({
       where: {
         ...schoolScope,
         deletedAt: null,
@@ -86,6 +86,59 @@ export const globalSearch = action(
       orderBy: { fullName: "asc" },
       take: PER_GROUP_TAKE,
     });
+
+    // The groups are independent, so they run concurrently (this fires on every
+    // debounced keystroke). A teacher runs the learner query only: staff and
+    // structure are not theirs to browse, and nothing else is queried for them.
+    // Output order below stays learners, teachers, sections, schools.
+    const teachersQuery = isTeacher
+      ? null
+      : prisma.user.findMany({
+          where: {
+            ...schoolScope,
+            role: "TEACHER",
+            deletedAt: null,
+            fullName: contains,
+          },
+          select: {
+            id: true,
+            fullName: true,
+            advisorySections: { where: { deletedAt: null }, select: { name: true } },
+          },
+          orderBy: { fullName: "asc" },
+          take: PER_GROUP_TAKE,
+        });
+
+    const sectionsQuery = isTeacher
+      ? null
+      : prisma.section.findMany({
+          where: { ...schoolScope, deletedAt: null, name: contains },
+          select: {
+            id: true,
+            name: true,
+            gradeLevel: { select: { type: true } },
+          },
+          orderBy: { name: "asc" },
+          take: PER_GROUP_TAKE,
+        });
+
+    // Schools are a Super Admin concept; a School Head has exactly one and does
+    // not need to search for it.
+    const schoolsQuery = isAdmin
+      ? prisma.school.findMany({
+          where: { deletedAt: null, name: contains },
+          select: { id: true, name: true, division: true, district: true },
+          orderBy: { name: "asc" },
+          take: PER_GROUP_TAKE,
+        })
+      : null;
+
+    const [learners, teachers, sections, schools] = await Promise.all([
+      learnersQuery,
+      teachersQuery,
+      sectionsQuery,
+      schoolsQuery,
+    ]);
 
     for (const l of learners) {
       const grade = GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type;
@@ -105,23 +158,7 @@ export const globalSearch = action(
     // A teacher stops here. Staff and structure are not theirs to browse.
     if (isTeacher) return { ok: true, data: hits };
 
-    const teachers = await prisma.user.findMany({
-      where: {
-        ...schoolScope,
-        role: "TEACHER",
-        deletedAt: null,
-        fullName: contains,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        advisorySections: { where: { deletedAt: null }, select: { name: true } },
-      },
-      orderBy: { fullName: "asc" },
-      take: PER_GROUP_TAKE,
-    });
-
-    for (const t of teachers) {
+    for (const t of teachers ?? []) {
       hits.push({
         id: t.id,
         kind: "teacher",
@@ -136,18 +173,7 @@ export const globalSearch = action(
       });
     }
 
-    const sections = await prisma.section.findMany({
-      where: { ...schoolScope, deletedAt: null, name: contains },
-      select: {
-        id: true,
-        name: true,
-        gradeLevel: { select: { type: true } },
-      },
-      orderBy: { name: "asc" },
-      take: PER_GROUP_TAKE,
-    });
-
-    for (const s of sections) {
+    for (const s of sections ?? []) {
       hits.push({
         id: s.id,
         kind: "section",
@@ -157,16 +183,7 @@ export const globalSearch = action(
       });
     }
 
-    // Schools are a Super Admin concept; a School Head has exactly one and does
-    // not need to search for it.
-    if (isAdmin) {
-      const schools = await prisma.school.findMany({
-        where: { deletedAt: null, name: contains },
-        select: { id: true, name: true, division: true, district: true },
-        orderBy: { name: "asc" },
-        take: PER_GROUP_TAKE,
-      });
-
+    if (schools) {
       for (const s of schools) {
         hits.push({
           id: s.id,

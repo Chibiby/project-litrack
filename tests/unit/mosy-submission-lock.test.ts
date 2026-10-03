@@ -3,8 +3,10 @@ import { MOSY_SUBMISSION_LOCK_KEY } from "@/lib/unlock/constants";
 
 /**
  * The MOSY submission lock. It defaults to LOCKED: only the exact stored value
- * "false" opens it. A missing row and a failed read (`readSetting` degrades both
- * to null) must therefore read as locked.
+ * "false" opens it. A missing row reads as locked; a failed read makes
+ * `readSetting` throw DB_UNAVAILABLE, so the write guard refuses the save. The
+ * display variant (`isMosySubmissionLockedForDisplay`) degrades to locked instead
+ * of throwing — see settings-display-reads.test.ts.
  */
 
 const findUnique = vi.fn();
@@ -63,9 +65,9 @@ describe("isMosySubmissionLocked", () => {
     expect(findUnique.mock.calls[0][0]).toMatchObject({ where: { key: MOSY_SUBMISSION_LOCK_KEY } });
   });
 
-  it("reads as locked when the read fails", async () => {
+  it("throws DB_UNAVAILABLE when the read fails, so the save is refused", async () => {
     findUnique.mockRejectedValue(new Error("P2024 pool timeout"));
-    expect(await isMosySubmissionLocked()).toBe(true);
+    await expect(isMosySubmissionLocked()).rejects.toMatchObject({ code: "DB_UNAVAILABLE" });
   });
 
   it('reads as unlocked only for the exact value "false"', async () => {

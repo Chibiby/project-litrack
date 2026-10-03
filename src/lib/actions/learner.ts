@@ -446,10 +446,8 @@ export const archiveLearner = action("archiveLearner", async (formData: FormData
 }, { verb: "archive the learner" });
 
 export const restoreLearner = action("restoreLearner", async (formData: FormData): Promise<ActionResult> => {
-  const user = await requireSchoolUser("TEACHER");
-  const parsed = {
-    data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }),
-  };
+  const user = await requireSchoolUser(["TEACHER", "SCHOOL_HEAD"]);
+  const parsed = { data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }) };
 
   const learner = await prisma.learner.findFirst({
     where: {
@@ -460,7 +458,12 @@ export const restoreLearner = action("restoreLearner", async (formData: FormData
   if (!learner) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
+  // Rows with `deletedAt` were removed by a School Head / admin; only they (or a
+  // Super Admin impersonating) may bring them back. Same NOT_FOUND as a missing
+  // row so a teacher learns nothing about it.
+  if (user.role === "TEACHER" && (learner.deletedAt || !teacherCanAccessLearner(learner, user.id))) {
+    throw resourceNotFound("Learner");
+  }
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
@@ -529,12 +532,14 @@ export const archiveLearners = action("archiveLearners", async (
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.learner.updateMany({
-      where: { id: { in: ids } },
+    const { count } = await tx.learner.updateMany({
+      where: { id: { in: ids }, schoolId: user.schoolId, deletedAt: null, archivedAt: null },
       data: { archivedAt: now },
     });
+    // Rolls the whole batch back if a row changed since the read above.
+    if (count !== ids.length) throw resourceNotFound("Learner");
     await tx.enrollment.updateMany({
-      where: { learnerId: { in: ids }, status: "ACTIVE" },
+      where: { learnerId: { in: ids }, schoolId: user.schoolId, status: "ACTIVE" },
       data: { status: "ARCHIVED", endedAt: now },
     });
   });
@@ -614,14 +619,16 @@ export const deleteLearners = action("deleteLearners", async (
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.learner.updateMany({
-      where: { id: { in: ids } },
+    const { count } = await tx.learner.updateMany({
+      where: { id: { in: ids }, schoolId: user.schoolId, deletedAt: null },
       data: { deletedAt: now },
     });
+    // Rolls the whole batch back if a row changed since the read above.
+    if (count !== ids.length) throw resourceNotFound("Learner");
     // End the active enrollment too, so the learner does not keep a live seat
     // in the school year they were removed from.
     await tx.enrollment.updateMany({
-      where: { learnerId: { in: ids }, status: "ACTIVE" },
+      where: { learnerId: { in: ids }, schoolId: user.schoolId, status: "ACTIVE" },
       data: { status: "ARCHIVED", endedAt: now },
     });
   });

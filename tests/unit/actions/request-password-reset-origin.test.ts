@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * `requestPasswordReset`'s recovery link used to be built from
@@ -6,12 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * any deploy where that env var isn't set, the emailed link pointed at
  * localhost no matter what site the person was actually using.
  *
- * It now resolves the site origin from the request's own `Origin` header
- * first (Next validates a Server Action POST's `Origin` against `Host`
- * before the action body runs, so it's trustworthy), falling back to
- * `NEXT_PUBLIC_APP_URL` only when that header is absent, and to localhost
- * only as a last resort. Pinned here so a revert to the env-var-only
- * resolution fails loudly.
+ * A later change trusted the request's `Origin` header instead, which let a
+ * non-browser caller (who controls Origin and x-forwarded-host) mint a genuine
+ * recovery link pointing at their own host. The link is now built only from
+ * the canonical `NEXT_PUBLIC_APP_URL`; localhost is allowed only outside
+ * production. Pinned here so neither regression comes back.
  */
 
 const userFindUnique = vi.fn();
@@ -124,21 +123,31 @@ beforeEach(() => {
 });
 
 describe("requestPasswordReset — origin resolution", () => {
-  it("prefers the request's Origin header over NEXT_PUBLIC_APP_URL", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://from-env.example";
-    headersMock.mockResolvedValue(new Headers({ origin: "https://from-request.example" }));
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("ignores a client-supplied Origin/Host and uses NEXT_PUBLIC_APP_URL", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://from-env.example");
+    headersMock.mockResolvedValue(
+      new Headers({
+        origin: "https://evil.example",
+        host: "evil.example",
+        "x-forwarded-host": "evil.example",
+      })
+    );
 
     const result = await requestPasswordReset(form("teacher@example.com"));
 
     expect(result).toEqual({ ok: true });
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://from-request.example"
+      "https://from-env.example"
     );
   });
 
-  it("falls back to NEXT_PUBLIC_APP_URL when there is no Origin header", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://from-env.example";
+  it("strips trailing slashes from NEXT_PUBLIC_APP_URL", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://from-env.example//");
     headersMock.mockResolvedValue(new Headers());
 
     await requestPasswordReset(form("teacher@example.com"));
@@ -149,9 +158,10 @@ describe("requestPasswordReset — origin resolution", () => {
     );
   });
 
-  it("falls back to localhost only when neither Origin nor NEXT_PUBLIC_APP_URL is set", async () => {
-    delete process.env.NEXT_PUBLIC_APP_URL;
-    headersMock.mockResolvedValue(new Headers());
+  it("falls back to localhost outside production when the env var is missing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NODE_ENV", "development");
+    headersMock.mockResolvedValue(new Headers({ origin: "https://evil.example" }));
 
     await requestPasswordReset(form("teacher@example.com"));
 
@@ -161,14 +171,19 @@ describe("requestPasswordReset — origin resolution", () => {
     );
   });
 
-  it("strips a trailing slash from the resolved origin", async () => {
-    headersMock.mockResolvedValue(new Headers({ origin: "https://from-request.example/" }));
+  it("uses the canonical fallback in production when the env var is missing, never an attacker origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NODE_ENV", "production");
+    headersMock.mockResolvedValue(
+      new Headers({ origin: "https://evil.example", host: "evil.example" })
+    );
 
-    await requestPasswordReset(form("teacher@example.com"));
+    const result = await requestPasswordReset(form("teacher@example.com"));
 
+    expect(result).toEqual({ ok: true });
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://from-request.example"
+      "https://arallitrack.com"
     );
   });
 });

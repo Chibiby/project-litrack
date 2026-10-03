@@ -78,6 +78,13 @@ describe("sendErrorAlert", () => {
     expect(mail.text).not.toMatch(/\n\s+at /);
   });
 
+  it("builds an absolute link even when NEXT_PUBLIC_APP_URL is unset", async () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    await sendErrorAlert(EVENT);
+    const mail = sendEmail.mock.calls[0][0];
+    expect(mail.text).toContain("https://arallitrack.com/admin/errors?ref=E-7K2P9QXM");
+  });
+
   it("throttles per code", async () => {
     checkRateLimit.mockResolvedValue({ ok: false, retryAfterMs: 60_000 });
     await sendErrorAlert(EVENT);

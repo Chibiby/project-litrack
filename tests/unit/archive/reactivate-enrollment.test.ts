@@ -61,6 +61,7 @@ let nextId: number;
 
 function makeTx() {
   return {
+    $queryRaw: async () => [],
     enrollment: {
       findFirst: async (args: {
         where: { learnerId: string; status?: string; schoolYearId?: string };

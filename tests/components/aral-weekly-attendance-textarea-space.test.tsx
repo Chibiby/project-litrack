@@ -116,7 +116,7 @@ describe("weekly attendance grid — Optional details textarea", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: `Ana Santos attendance for ${MON_ARIA}`,
+        name: `Ana Santos attendance for ${MON_ARIA}: Absent`,
       })
     );
 

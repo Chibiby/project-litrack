@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { canonicalAppUrl } from "@/lib/app-url";
 
 /**
  * The one place LITRACK sends email through Resend. Reads env directly rather
@@ -21,7 +22,7 @@ function escapeHtml(value: string): string {
 }
 
 function brandedHtml(text: string): string {
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://arallitrack.com").replace(/\/$/, "");
+  const baseUrl = canonicalAppUrl();
   const message = escapeHtml(text).replaceAll("\n", "<br>");
   return `<!doctype html>
 <html><body style="margin:0;background:#f5f3ff;font-family:Arial,sans-serif;color:#1f2937">

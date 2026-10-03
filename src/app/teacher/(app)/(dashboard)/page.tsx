@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ComponentProps } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +12,16 @@ export const dynamic = "force-dynamic";
 
 interface TeacherDashboardProps {
   searchParams: Promise<{ schoolId?: string }>;
+}
+
+async function BannerDashboardBody({
+  genderPromise,
+  ...props
+}: {
+  genderPromise: Promise<"MALE" | "FEMALE" | null>;
+} & Omit<ComponentProps<typeof TeacherDashboardBody>, "bannerSrc">) {
+  const gender = await genderPromise;
+  return <TeacherDashboardBody {...props} bannerSrc={teacherBannerSrc(gender)} />;
 }
 
 export default async function TeacherDashboard({
@@ -36,9 +46,10 @@ export default async function TeacherDashboard({
   // Artwork must never take the dashboard down: any read failure (including a
   // database the gender migration has not reached yet) falls back to the
   // default banner.
-  const gender = isSuperAdmin
-    ? null
-    : await prisma.teacherProfile
+  // Started here but awaited under Suspense so the shell flushes first.
+  const genderPromise: Promise<"MALE" | "FEMALE" | null> = isSuperAdmin
+    ? Promise.resolve(null)
+    : prisma.teacherProfile
         .findUnique({ where: { userId: user.id }, select: { gender: true } })
         .then((p) => p?.gender ?? null)
         .catch(() => null);
@@ -57,12 +68,12 @@ export default async function TeacherDashboard({
       viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<TeacherDashboardSkeleton />}>
-        <TeacherDashboardBody
+        <BannerDashboardBody
+          genderPromise={genderPromise}
           schoolId={targetSchoolId}
           teacherId={user.id}
           isSuperAdmin={isSuperAdmin}
           firstName={isSuperAdmin ? "Admin" : user.firstName}
-          bannerSrc={teacherBannerSrc(gender)}
           subtitle={
             isSuperAdmin
               ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`

@@ -432,6 +432,9 @@ export const transferLearnerCrossSchool = action(
           gradeLevelId: targetGradeLevelId,
           sectionId: resolvedSectionId,
           teacherId: targetTeacherId,
+          // The designated ARAL tutor belongs to the origin school; keeping the
+          // pointer would be a cross-tenant reference.
+          aralTeacherId: null,
           archivedAt: null,
         },
       });

@@ -639,6 +639,41 @@ describe("endImpersonation", () => {
     expect(res).toEqual({ redirectedTo: "/admin/management/teachers" });
     expect(adminSignOut).toHaveBeenCalledWith("the-bound-access-token", "local");
     expect(clearImpersonationCookie).toHaveBeenCalledTimes(1);
+
+    // The failure is recorded as a system error and stamped on the audit row,
+    // with ids only (no token anywhere).
+    expect(reportError).toHaveBeenCalledTimes(1);
+    const err = (reportError.mock.calls[0] as unknown[])[0] as { severity: string; detail: string };
+    expect(err.severity).toBe("system");
+    expect(err.detail).not.toContain("the-bound-access-token");
+    const end = writeAudit.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find((e) => e.action === AUDIT_ACTIONS.IMPERSONATION_END);
+    expect(end?.metadata).toEqual({ revokeFailed: true });
+  });
+
+  it("flags revokeFailed when the revoke call throws, and not when it succeeds", async () => {
+    for (const mode of ["throws", "ok"] as const) {
+      vi.clearAllMocks();
+      readImpersonationTicket.mockResolvedValue(ticket());
+      checkCurrentSession.mockResolvedValue({ status: "live", sessionId: SESSION_ID, accessToken: "tok" });
+      prismaMock.user.findFirst.mockResolvedValueOnce({ id: ADMIN_ID, email: "admin@litrack.local" });
+      serverVerifyOtp.mockResolvedValueOnce({ error: null });
+      if (mode === "throws") adminSignOut.mockRejectedValueOnce(new Error("network down"));
+
+      await run(endImpersonation());
+
+      const end = writeAudit.mock.calls
+        .map((c) => c[0] as Record<string, unknown>)
+        .find((e) => e.action === AUDIT_ACTIONS.IMPERSONATION_END);
+      if (mode === "throws") {
+        expect(reportError).toHaveBeenCalledTimes(1);
+        expect(end?.metadata).toEqual({ revokeFailed: true });
+      } else {
+        expect(reportError).not.toHaveBeenCalled();
+        expect(end?.metadata).toBeUndefined();
+      }
+    }
   });
 
   it("returns to Test Lab when the signed ticket says Test Lab started it (a real district admin)", async () => {

@@ -51,6 +51,7 @@ export const ERROR_CONTEXT_KEYS = new Set([
   "digest",
   "userSource",
   "service",
+  "settingKey",
 ]);
 
 type EventRow = {

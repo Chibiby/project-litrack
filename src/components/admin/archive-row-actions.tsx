@@ -151,7 +151,13 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
       toastFailure(res);
       throw new ToastedError(res.error);
     }
-    toast.success(`${teacher.fullName}'s account permanently deleted.`);
+    if (res.authDeleted === false) {
+      toast.warning(
+        `${teacher.fullName}'s record was deleted, but their sign-in account could not be removed. It is logged in the admin error log.`
+      );
+    } else {
+      toast.success(`${teacher.fullName}'s account permanently deleted.`);
+    }
     router.refresh();
   };
 

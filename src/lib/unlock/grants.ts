@@ -2,6 +2,8 @@ import "server-only";
 import { cache } from "react";
 import type { UnlockScope } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors/app-error";
+import { reportError } from "@/lib/errors/report";
 import { isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
 
 /**
@@ -271,6 +273,23 @@ export type UnlockState = {
   unlockedKeys: Set<string>;
 };
 
+/**
+ * The settings read for `readUnlockState`, `cache()`d so a page that calls it
+ * several times reports an outage once per request, not once per call. `null`
+ * means DB_UNAVAILABLE (reported); any other error propagates.
+ */
+const readLockingForState = cache(async (): Promise<boolean | null> => {
+  try {
+    return await isSubmissionLockingEnabled();
+  } catch (err) {
+    if (err instanceof AppError && err.code === "DB_UNAVAILABLE") {
+      reportError(err, { route: "settings/submission-locking" });
+      return null;
+    }
+    throw err;
+  }
+});
+
 export async function readUnlockState({
   userId,
   schoolId,
@@ -280,7 +299,16 @@ export async function readUnlockState({
   schoolId: string | null;
   scope: UnlockScope;
 }): Promise<UnlockState> {
-  if (!(await isSubmissionLockingEnabled())) {
+  // Display path: a failed settings read (DB_UNAVAILABLE) degrades to "locking
+  // on, nothing unlocked" (reported once) and skips the grant lookups, instead
+  // of throwing into the page. The display reader hides the failure behind its
+  // fail-closed value, so this uses the throwing reader and catches it here.
+  // The write guard `canWriteWindow` keeps the throwing reader uncaught.
+  const lockingOn = await readLockingForState();
+  if (lockingOn === null) {
+    return { lockingEnabled: true, unlockedKeys: new Set() };
+  }
+  if (!lockingOn) {
     return { lockingEnabled: false, unlockedKeys: new Set() };
   }
   return {

@@ -24,6 +24,7 @@ import { resourceNotFound, fieldError } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import {
   revalidateSchoolDashboard,
+  revalidateSchoolName,
   revalidateSchoolsList,
   revalidateDivisionSummary,
 } from "@/lib/cache/revalidate";
@@ -151,6 +152,7 @@ export const updateSchoolInfo = action(
 
     revalidatePath(SCHOOL_HEAD_ROUTES.schoolInfo);
     revalidateSchoolDashboard(user.schoolId);
+    revalidateSchoolName(user.schoolId);
     revalidateSchoolsList();
     return { ok: true };
   },
@@ -235,6 +237,7 @@ function revalidateSchoolInfoWrites(schoolId: string) {
   revalidatePath(DISTRICT_ROUTES.schools);
   revalidatePath(DISTRICT_ROUTES.school(schoolId));
   revalidateSchoolDashboard(schoolId);
+  revalidateSchoolName(schoolId);
   revalidateSchoolsList();
   revalidateDivisionSummary();
 }

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   // Next 16 rewrites tsconfig.json to jsx: "react-jsx" (it was "preserve" on
@@ -12,6 +12,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    exclude: [...configDefaults.exclude, "tests/db/**"],
     // Component tests need a DOM; pure-logic tests stay on the faster node env.
     environmentMatchGlobs: [["tests/components/**", "jsdom"]],
   },

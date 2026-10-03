@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatLocalDateKey } from "@/lib/date-keys";
-import { isMonthlyReadingLevelUnlockedForAll, isMosySubmissionLocked, isSubmissionLockingEnabled } from "@/lib/settings/system-settings";
+import { isMonthlyReadingLevelUnlockedForAllForDisplay, isMosySubmissionLockedForDisplay, isSubmissionLockingEnabledForDisplay } from "@/lib/settings/system-settings";
 import { listActiveUnlocks, listUnlockTargets } from "@/lib/unlock/admin-queries";
 import { Lock } from "lucide-react";
 import { AdminPage } from "@/components/admin/admin-page";
@@ -21,9 +21,9 @@ export default async function AdminSubmissionsPage({ searchParams }: { searchPar
     listUnlockTargets({ kind: "division" }),
     prisma.schoolYear.findMany({ where: { school: { deletedAt: null } }, include: { school: { select: { id: true, name: true } }, termWindowOverrides: { select: { term: true, startKey: true, endKey: true, deadlineKey: true } } }, orderBy: [{ school: { name: "asc" } }, { isActive: "desc" }, { startDate: "desc" }] }),
     listActiveUnlocks({ kind: "division" }),
-    isSubmissionLockingEnabled(),
-    isMonthlyReadingLevelUnlockedForAll(),
-    isMosySubmissionLocked(),
+    isSubmissionLockingEnabledForDisplay(),
+    isMonthlyReadingLevelUnlockedForAllForDisplay(),
+    isMosySubmissionLockedForDisplay(),
   ]);
   const allSelected = !params.schoolId || params.schoolId === "all";
   const selectedRow = years.find((year) => year.id === params.schoolYearId) ?? years.find((year) => year.school.id === params.schoolId) ?? years[0] ?? null;

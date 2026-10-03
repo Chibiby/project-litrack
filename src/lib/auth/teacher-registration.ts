@@ -20,6 +20,7 @@ import {
 } from "@/lib/auth/teacher-registration-helpers";
 import { AppError, fieldError } from "@/lib/errors/app-error";
 import { classifyError } from "@/lib/errors/classify";
+import { reportError } from "@/lib/errors/report";
 
 export type TeacherAuthIntent = "login" | "register";
 
@@ -100,9 +101,23 @@ async function setTeacherAppMetadata(authId: string, schoolId: string): Promise<
     });
     if (error) {
       console.error("[teacher-registration] app_metadata update failed:", error.message);
+      reportError(
+        new AppError("AUTH_PROVIDER_ERROR", {
+          cause: error,
+          detail: `Teacher app_metadata (role/schoolId) update failed: ${error.message}`,
+        }),
+        { schoolId }
+      );
     }
   } catch (err) {
     console.error("[teacher-registration] app_metadata update threw:", err);
+    reportError(
+      new AppError("AUTH_PROVIDER_ERROR", {
+        cause: err,
+        detail: "Teacher app_metadata (role/schoolId) update threw",
+      }),
+      { schoolId }
+    );
   }
 }
 
@@ -193,7 +208,6 @@ export async function completeTeacherAuthAfterVerify(
         resourceId: created.id,
         metadata: {
           schoolId,
-          email,
           method: "self_register",
           isAralVolunteer: params.isAralVolunteer === true,
         },

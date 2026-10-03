@@ -415,20 +415,22 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
     });
   }
 
-  revalidatePath(`/teacher/aral/${grade.id}/attendance`);
-  revalidatePath("/teacher/aral");
+  // Distinct paths and teacher scopes first, then one call each: a bulk save
+  // must not issue a tag-cache write per learner.
+  const paths = new Set<string>([`/teacher/aral/${grade.id}/attendance`, "/teacher/aral"]);
+  const otherTeacherIds = new Set<string>();
   for (const l of learners) {
-    revalidatePath(`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/attendance`);
-    revalidatePath(`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`);
+    paths.add(`/teacher/aral/${l.gradeLevelId}/learners/${l.id}/attendance`);
+    paths.add(`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`);
+    for (const id of [l.teacherId, l.aralTeacherId]) {
+      if (id && id !== user.id) otherTeacherIds.add(id);
+    }
   }
+  for (const p of paths) revalidatePath(p);
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
   // The acting teacher may be the ARAL teacher while somebody else advises the
   // learner (or vice versa) — bust every affected teacher's metrics.
-  for (const l of learners) {
-    for (const id of [l.teacherId, l.aralTeacherId]) {
-      if (id && id !== user.id) revalidateTeacherDashboard(id);
-    }
-  }
+  for (const id of otherTeacherIds) revalidateTeacherDashboard(id);
 
   return { ok: true, data: { upserted, cleared } };
 }, { verb: "save the week's attendance" });
@@ -452,7 +454,10 @@ export const setAttendanceDayHoliday = action("setAttendanceDayHoliday", async (
     data: parseInput(
       z.object({
         gradeId: z.string().min(1),
-        date: z.coerce.date(),
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
+          .refine((v) => formatLocalDateKey(parseLocalDateKey(v)) === v, "Invalid date"),
         isHoliday: z.boolean(),
       }),
       input
@@ -472,7 +477,7 @@ export const setAttendanceDayHoliday = action("setAttendanceDayHoliday", async (
   });
   if (!grade) return { ok: false, error: "Grade not found" };
 
-  const date = normalizeDate(parsed.data.date);
+  const date = parseLocalDateKey(parsed.data.date);
 
   await prisma.attendanceDayMeta.upsert({
     where: { gradeLevelId_date: { gradeLevelId: grade.id, date } },
@@ -497,7 +502,7 @@ export const setAttendanceDayHoliday = action("setAttendanceDayHoliday", async (
     metadata: {
       schoolId: user.schoolId,
       gradeLevelId: grade.id,
-      date: date.toISOString().slice(0, 10),
+      date: parsed.data.date,
       isHoliday: parsed.data.isHoliday,
     },
   });

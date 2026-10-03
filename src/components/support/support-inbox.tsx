@@ -28,6 +28,7 @@ import {
 } from "@/lib/actions/support";
 import { revokeUnlock } from "@/lib/actions/unlock-admin";
 import { callAction } from "@/lib/ui/call-action";
+import { formatSchoolDate, formatSchoolDateTime } from "@/lib/format-datetime";
 import { toastFailure } from "@/lib/ui/toast-failure";
 import {
   DEFAULT_UNLOCK_DAYS,
@@ -242,7 +243,7 @@ function TicketCard({
             <>
               <Badge variant="violet" className="gap-1">
                 <Clock className="size-3" aria-hidden />
-                Access until {ticket.activeGrant.expiresAt.toLocaleDateString()}
+                Access until {formatSchoolDate(ticket.activeGrant.expiresAt)}
               </Badge>
               <Button
                 type="button"
@@ -284,7 +285,7 @@ function TicketCard({
           )}
 
           <span className="ml-auto text-xs text-muted-foreground">
-            {ticket.createdAt.toLocaleString()}
+            {formatSchoolDateTime(ticket.createdAt)}
           </span>
         </div>
       </CardContent>

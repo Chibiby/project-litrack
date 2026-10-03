@@ -13,19 +13,16 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { action } from "@/lib/errors/action";
-import { fieldError, resourceNotFound } from "@/lib/errors/app-error";
+import { AppError, fieldError, resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
+import { isActiveYearConflict, isLabelConflict } from "@/lib/school-year-conflicts";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
-/** The one known write failure both create and update translate: the label's unique index. */
-function isLabelConflict(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : "";
-  return (
-    (err as { code?: unknown } | null)?.code === "P2002" ||
-    msg.includes("Unique constraint") ||
-    msg.includes("schoolId_label")
-  );
+function activeYearRaced(): AppError {
+  return new AppError("VALIDATION_FAILED", {
+    params: { message: "Another school year was just made active. Refresh and try again." },
+  });
 }
 
 export const createSchoolYear = action("createSchoolYear", async (formData: FormData): Promise<ActionResult> => {
@@ -64,6 +61,7 @@ export const createSchoolYear = action("createSchoolYear", async (formData: Form
       });
     });
   } catch (err) {
+    if (isActiveYearConflict(err)) throw activeYearRaced();
     if (isLabelConflict(err)) {
       throw fieldError("label", "A school year with this label already exists");
     }
@@ -102,16 +100,21 @@ export const setActiveSchoolYear = action("setActiveSchoolYear", async (formData
   });
   if (!year) throw resourceNotFound("School year");
 
-  await prisma.$transaction(async (tx) => {
-    await tx.schoolYear.updateMany({
-      where: { schoolId: user.schoolId, isActive: true },
-      data: { isActive: false },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.schoolYear.updateMany({
+        where: { schoolId: user.schoolId, isActive: true },
+        data: { isActive: false },
+      });
+      await tx.schoolYear.update({
+        where: { id: year.id },
+        data: { isActive: true },
+      });
     });
-    await tx.schoolYear.update({
-      where: { id: year.id },
-      data: { isActive: true },
-    });
-  });
+  } catch (err) {
+    if (isActiveYearConflict(err)) throw activeYearRaced();
+    throw err;
+  }
 
   await writeAudit({
     userId: user.id,
