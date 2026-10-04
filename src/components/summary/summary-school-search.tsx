@@ -13,13 +13,20 @@ export type SummarySchoolSearchProps = {
   searchParams: FlatSearchParams;
   /** The `q` in the URL, trimmed. */
   query: string;
+  /** What the search finds; "schools" when omitted. */
+  unit?: "schools" | "districts";
 };
 
 /**
  * One search for every by-school table on the page. It lives in the URL (`q`)
  * so a view can be shared; a new search sends every table back to page 1.
  */
-export function SummarySchoolSearch({ basePath, searchParams, query }: SummarySchoolSearchProps) {
+export function SummarySchoolSearch({
+  basePath,
+  searchParams,
+  query,
+  unit = "schools",
+}: SummarySchoolSearchProps) {
   const navigate = useListNavigate();
   const pending = useListPending();
   const [draft, setDraft] = useState(query);
@@ -42,7 +49,7 @@ export function SummarySchoolSearch({ basePath, searchParams, query }: SummarySc
   return (
     <form role="search" onSubmit={onSubmit} className="flex min-w-0 flex-col gap-1.5 sm:max-w-xl">
       <Label htmlFor="summary-school-search" className="text-xs font-medium text-muted-foreground">
-        Search schools
+        {unit === "districts" ? "Search districts" : "Search schools"}
       </Label>
       <div className="flex min-w-0 gap-2">
         <div className="relative min-w-0 flex-1">
@@ -56,7 +63,7 @@ export function SummarySchoolSearch({ basePath, searchParams, query }: SummarySc
             value={draft}
             maxLength={100}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="School name or ID"
+            placeholder={unit === "districts" ? "District name" : "School name or ID"}
             autoComplete="off"
             className="h-11 bg-card pl-9 lg:h-10"
           />

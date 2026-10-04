@@ -3,7 +3,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SummaryTableNavLink } from "./summary-table-nav";
 import { formatCount } from "./summary-format";
-import { pageHref, type SchoolPaging } from "./summary-school-paging";
+import { pageHref, pagingInfo, type SchoolPaging } from "./summary-school-paging";
 
 const STEP = cn(buttonVariants({ variant: "outline", size: "sm" }), "px-3");
 
@@ -21,12 +21,12 @@ export function SummaryTablePager({
   sectionId: string;
   sectionTitle: string;
 }) {
-  const { page, pageCount, pageSize, matchedSchools } = paging.page;
+  const { page, pageCount, pageSize, matched: matchedSchools, unit } = pagingInfo(paging);
   if (pageCount <= 1) return null;
 
   const first = (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, matchedSchools);
-  const noun = paging.query ? "matching schools" : "schools";
+  const noun = paging.query ? `matching ${unit}` : unit;
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">

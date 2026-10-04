@@ -5,12 +5,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  * - A district admin asking for a district or school outside their assignment
  *   gets NOT_FOUND before any summary query runs.
- * - The facet reads only the ids of in-scope schools.
+ * - The summary SQL is division-wide (one shared raw cache entry per facet and
+ *   period) and returns other districts' rows too; what is EXPORTED must hold
+ *   only the in-scope schools. The tests feed raw rows for out-of-scope and
+ *   demo schools and assert on the rendered report table and the audit counts.
  * - The audit row carries counts and choices, never a name.
  *
- * `@/lib/auth/admin-scope` and `@/lib/auth/district-scope` are NOT mocked: the
- * point is that the real scope filter reaches the WHERE. Only `requireUser`
- * (the session) and Prisma are.
+ * `@/lib/auth/admin-scope`, `@/lib/auth/district-scope`, the scope school list
+ * and the `scopeRaw` fence are NOT mocked: the point is that the real scope
+ * filter decides what is exported. Only `requireUser` (the session) and Prisma
+ * are.
  */
 
 const assignmentFindMany = vi.fn();
@@ -21,6 +25,7 @@ const executeRaw = vi.fn();
 // `queryLearnerRows` wraps its query in `prisma.$transaction` to scope a
 // `SET LOCAL work_mem` bump to just that statement; the mock's `tx` exposes
 // the same `$queryRaw`/`$executeRaw` stubs so callers don't need to branch.
+vi.mock("@/lib/cache/unstable", () => ({ cachedQuery: (fn: () => unknown) => fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     districtAdminAssignment: {
@@ -92,17 +97,75 @@ const DA = { id: "da-1", role: "DISTRICT_ADMIN", schoolId: null, fullName: "Ferd
 const SA = { id: "sa-1", role: "SUPER_ADMIN", schoolId: null, fullName: "John Division" };
 
 const ALABEL_SCHOOLS = [
-  { id: "s-alabel-ces", name: "Alabel Central Elementary School", schoolIdCode: "130001", district: "Alabel 1", division: "Sarangani", region: "XII", isActive: true },
-  { id: "s-bagacay", name: "Bagacay Elementary School", schoolIdCode: "130002", district: "Alabel 2", division: "Sarangani", region: "XII", isActive: true },
+  { id: "s-alabel-ces", name: "Alabel Central Elementary School", schoolIdCode: "130001", district: "Alabel 1", division: "Sarangani", region: "XII", isActive: true, isDemo: false },
+  { id: "s-bagacay", name: "Bagacay Elementary School", schoolIdCode: "130002", district: "Alabel 2", division: "Sarangani", region: "XII", isActive: true, isDemo: false },
 ];
+/** Outside the district admin's assignment. */
+const GLAN_SCHOOL = { id: "s-glan-ces", name: "Glan Central Elementary School", schoolIdCode: "130201", district: "Glan 1", division: "Sarangani", region: "XII", isActive: true, isDemo: false };
+/** Inside an assigned district, but a demo school: never in a district scope. */
+const DEMO_SCHOOL = { id: "s-demo", name: "Demo Sandbox Elementary School", schoolIdCode: "999901", district: "Alabel 1", division: "Sarangani", region: "XII", isActive: true, isDemo: true };
+/** The one live division list every scope is cut from. */
+const DIVISION_SCHOOLS = [...ALABEL_SCHOOLS, DEMO_SCHOOL, GLAN_SCHOOL];
+const OUT_OF_SCOPE_NAMES = ["Glan", "Demo Sandbox"];
 
-/** Every array of strings bound into summary SQL (the `ANY(ids)` parameters). */
-function boundIdArrays(): string[][] {
-  return queryRaw.mock.calls.flatMap(([sql]) =>
-    (sql as { values: unknown[] }).values.filter(
-      (v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string") && v.some((x) => x.startsWith("s-"))
-    )
-  );
+/**
+ * Learner raw rows as the division-wide SQL returns them: population, a gender
+ * split, and an age only this school has. The age list is read out of the
+ * data, so an unfenced row would add its age as a column even where `rollUp`
+ * drops its counts.
+ */
+function learnerRaw(schoolId: string, n: number, age: string) {
+  return [
+    { school_id: schoolId, gt: "G3", field: "population", bucket: "ALL", count: n },
+    { school_id: schoolId, gt: "G3", field: "gender", bucket: "FEMALE", count: n },
+    { school_id: schoolId, gt: "G3", field: "age", bucket: age, count: n },
+  ];
+}
+
+function profilingRaw(schoolId: string, n: number) {
+  return [
+    { school_id: schoolId, who: "TEACHER", field: "accounts", bucket: "ALL", count: n },
+    { school_id: schoolId, who: "TEACHER", field: "population", bucket: "ALL", count: n },
+    { school_id: schoolId, who: "TEACHER", field: "position", bucket: "TEACHER_I", count: n },
+  ];
+}
+
+function complianceRaw(schoolId: string, live: number) {
+  return {
+    school_id: schoolId,
+    live,
+    non_archived: live,
+    pending: 0,
+    grades_no_adviser: 0,
+    aral: 0,
+    incomplete: 0,
+    enrollments: live,
+    drift: 0,
+    last_attendance: null,
+    reading: 0,
+    last_week: 0,
+    has_admin: true,
+  };
+}
+
+type RenderedTable = {
+  frame: { schoolName: string };
+  blocks: { heading: string; rows: (string | number | null)[][] }[];
+};
+
+function renderedTable(): RenderedTable {
+  expect(renderReport).toHaveBeenCalledTimes(1);
+  return renderReport.mock.calls[0]![0] as RenderedTable;
+}
+
+/** The first column of every exported row: the school name at the `school` level. */
+function exportedSchoolNames(table: RenderedTable): Set<string> {
+  return new Set(table.blocks.flatMap((b) => b.rows.map((r) => String(r[0]))));
+}
+
+function expectNoOutOfScopeSchool(table: RenderedTable) {
+  const text = JSON.stringify(table);
+  for (const name of OUT_OF_SCOPE_NAMES) expect(text).not.toContain(name);
 }
 
 function expectNothingRead() {
@@ -117,7 +180,7 @@ beforeEach(() => {
   requireUser.mockResolvedValue(DA);
   assignmentFindMany.mockResolvedValue([{ district: "Alabel 1" }, { district: "Alabel 2" }]);
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
-  schoolFindMany.mockResolvedValue(ALABEL_SCHOOLS);
+  schoolFindMany.mockResolvedValue(DIVISION_SCHOOLS);
   queryRaw.mockResolvedValue([]);
 });
 
@@ -142,26 +205,63 @@ describe("exportSummary scope (T9)", () => {
     expectNothingRead();
   });
 
-  it("reads only the admin's own districts' schools, and binds only their ids", async () => {
-    const res = await exportSummary({ facet: "learners", format: "EXCEL", purpose: "RECORDS" });
+  it("exports only the admin's own districts' schools, though the raw rows hold every school", async () => {
+    queryRaw.mockResolvedValueOnce([
+      ...learnerRaw("s-alabel-ces", 10, "8"),
+      ...learnerRaw("s-bagacay", 20, "9"),
+      ...learnerRaw("s-glan-ces", 300, "13"),
+      ...learnerRaw("s-demo", 4000, "16"),
+    ]);
+
+    const res = await exportSummary({ facet: "learners", format: "EXCEL", purpose: "RECORDS", level: "school" });
 
     expect(res).toMatchObject({ ok: true, data: { filename: expect.stringMatching(/^litrack-learners-summary-\d{4}-\d{2}-\d{2}\.xlsx$/) } });
-    for (const [args] of schoolFindMany.mock.calls) {
-      expect(args.where).toEqual({ deletedAt: null, isDemo: false, district: { in: ["Alabel 1", "Alabel 2"] } });
-    }
-    const arrays = boundIdArrays();
-    expect(arrays.length).toBeGreaterThan(0);
-    for (const ids of arrays) expect(ids).toEqual(["s-alabel-ces", "s-bagacay"]);
+    // The raw rows really did carry the other schools: the fence did the work.
+    expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(renderReport).toHaveBeenCalledWith(expect.anything(), "EXCEL", expect.objectContaining({ purpose: "RECORDS" }));
+
+    const table = renderedTable();
+    expect(exportedSchoolNames(table)).toEqual(
+      new Set(["Alabel Central Elementary School", "Bagacay Elementary School"])
+    );
+    expectNoOutOfScopeSchool(table);
+    // Figures are the in-scope schools' only: 10 + 20 girls, never Glan's 300 or the demo's 4000.
+    const gender = table.blocks.find((b) => b.heading === "Gender")!;
+    const counts = gender.rows.filter((r) => r[1] === "Female").map((r) => r[2]);
+    expect(counts.sort()).toEqual([10, 20]);
+    // Ages are read from the rows: only the in-scope schools' ages are columns.
+    const age = table.blocks.find((b) => b.heading === "Age")!;
+    expect(new Set(age.rows.map((r) => r[1]))).toEqual(new Set(["8", "9"]));
+
+    expect(writeAudit.mock.calls[0]![0].metadata).toMatchObject({
+      scopeKind: "districts",
+      districtCount: 2,
+      schoolCount: 2,
+    });
   });
 
   it("narrows to one assigned district", async () => {
-    await exportSummary({ facet: "compliance", format: "PDF", district: "Alabel 2" });
+    queryRaw.mockResolvedValueOnce([
+      complianceRaw("s-alabel-ces", 0),
+      complianceRaw("s-bagacay", 5),
+      complianceRaw("s-glan-ces", 0),
+      complianceRaw("s-demo", 0),
+    ]);
 
-    expect(schoolFindMany.mock.calls[0]![0].where).toEqual({
-      deletedAt: null,
-      isDemo: false,
-      district: { in: ["Alabel 2"] },
+    const res = await exportSummary({ facet: "compliance", format: "PDF", district: "Alabel 2", level: "school" });
+
+    expect(res).toMatchObject({ ok: true });
+    const table = renderedTable();
+    expect(table.frame.schoolName).toBe("Alabel 2 district (1 school)");
+    const names = exportedSchoolNames(table);
+    expect(names).toContain("Bagacay Elementary School");
+    expect(names).not.toContain("Alabel Central Elementary School");
+    expect(JSON.stringify(table)).not.toContain("Alabel Central");
+    expectNoOutOfScopeSchool(table);
+    expect(writeAudit.mock.calls[0]![0].metadata).toMatchObject({
+      scopeKind: "districts",
+      districtCount: 1,
+      schoolCount: 1,
     });
   });
 
@@ -326,14 +426,22 @@ describe("exportSummary scope (T9)", () => {
   it("lets a Super Admin export any district", async () => {
     requireUser.mockResolvedValue(SA);
 
-    const res = await exportSummary({ facet: "profiling", format: "EXCEL", district: "Glan 1" });
+    queryRaw.mockResolvedValueOnce([...profilingRaw("s-alabel-ces", 8), ...profilingRaw("s-glan-ces", 3)]);
+
+    const res = await exportSummary({ facet: "profiling", format: "EXCEL", district: "Glan 1", level: "school" });
 
     expect(res).toMatchObject({ ok: true });
     expect(assignmentFindMany).not.toHaveBeenCalled();
-    expect(schoolFindMany.mock.calls[0]![0].where).toEqual({
-      deletedAt: null,
-      isDemo: false,
-      district: { in: ["Glan 1"] },
+    const table = renderedTable();
+    expect(table.frame.schoolName).toBe("Glan 1 district (1 school)");
+    const names = exportedSchoolNames(table);
+    expect(names).toContain("Glan Central Elementary School");
+    expect(names).not.toContain("Alabel Central Elementary School");
+    expect(JSON.stringify(table)).not.toContain("Alabel Central");
+    expect(writeAudit.mock.calls[0]![0].metadata).toMatchObject({
+      scopeKind: "districts",
+      districtCount: 1,
+      schoolCount: 1,
     });
   });
 });

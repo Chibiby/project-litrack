@@ -1,6 +1,5 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   EDUCATIONAL_ATTAINMENT_LABELS,
   ENGLISH_TRAINING_LABELS,
@@ -12,7 +11,8 @@ import {
   TEACHER_POSITION_LABELS,
   TRAINING_LEVEL_LABELS,
 } from "@/lib/constants/enum-labels";
-import { inScopeSchools } from "@/lib/summary/queries/population";
+import { runSummaryQuery } from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import {
   DESIGNATION_BUCKETS,
   DESIGNATION_LABELS,
@@ -50,13 +50,16 @@ export type RawProfilingRow = {
   count: number;
 };
 
-export async function queryProfilingRows(schoolIds: readonly string[]): Promise<RawProfilingRow[]> {
-  if (schoolIds.length === 0) return [];
-  return prisma.$queryRaw<RawProfilingRow[]>(Prisma.sql`
+/**
+ * Every school's accounts; `scopeRaw` keeps the caller's. Designations are
+ * free text, so a row from another school must never reach `shapeProfiling`.
+ */
+export async function queryProfilingRows(): Promise<RawProfilingRow[]> {
+  return runSummaryQuery<RawProfilingRow>(Prisma.sql`
     WITH acct AS (
       SELECT u."id", u."schoolId", u."role"::text AS who
       FROM "User" u
-      WHERE ${inScopeSchools(Prisma.sql`u."schoolId"`, schoolIds)}
+      WHERE u."schoolId" IS NOT NULL
         AND u."deletedAt" IS NULL AND u."isActive" = true
         AND ((u."role" = 'TEACHER' AND u."approvalStatus" = 'APPROVED') OR u."role" = 'SCHOOL_HEAD')
     ),
@@ -294,7 +297,7 @@ function roleSections(
 }
 
 export function shapeProfiling(args: {
-  raw: readonly RawProfilingRow[];
+  raw: ScopedRaw<RawProfilingRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   computedAt: string;

@@ -3,9 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * T10 / invariant I9: a cached summary is never served to a different scope.
  *
- * Every facet's cache key must carry `scopeCacheKey(scope, demoVisible)`. The
- * test iterates the registry, so a facet added to `facets.ts` is covered with
- * no edit here.
+ * Nothing scope-specific is cached any more: a facet's only entries are the
+ * division-wide raw rows and the division school list, shared by every scope,
+ * and each request fences and shapes them for its own scope (`scopeRaw`; the
+ * fence and leak tests are in scoped-raw.test.ts). So these tests hold that
+ * every scope reads the SAME entries (no scope or demo flag in any key, hence
+ * no per-scope result that could be served to another scope), and that a
+ * school scope's raw read checks that school's dashboard tag. The test
+ * iterates the registry, so a facet added to `facets.ts` is covered with no
+ * edit here.
  */
 
 const schoolFindMany = vi.fn();
@@ -65,11 +71,16 @@ beforeEach(() => {
   isDemoVisible.mockResolvedValue(false);
 });
 
-/** The options of the facet's own cache entry (not the scope-schools one). */
-function facetCacheOptions(): CacheOptions {
-  const call = cachedQuery.mock.calls.find(([, opts]) => opts.keyParts[0] === "summary");
+/** The options of the facet's raw cache entry (not the scope-schools one). */
+function rawCacheOptions(): CacheOptions {
+  const call = cachedQuery.mock.calls.find(([, opts]) => opts.keyParts[0] === "summary-raw");
   if (!call) throw new Error("the facet load did not go through cachedQuery");
   return call[1];
+}
+
+/** Every key the last load(s) used. */
+function allKeys(): string[] {
+  return [...new Set(cachedQuery.mock.calls.map(([, o]) => JSON.stringify(o.keyParts)))].sort();
 }
 
 describe("scopeCacheKey", () => {
@@ -88,30 +99,42 @@ describe("scopeCacheKey", () => {
 describe.each(Object.values(SUMMARY_FACETS).map((f) => [f.id, f] as const))(
   "facet %s cache key",
   (_id, facet) => {
-    it.each(SCOPES.flatMap((scope) => [[scope, false] as const, [scope, true] as const]))(
-      "carries scopeCacheKey for %j (demo %s)",
+    // Scopes with at least one school read the raw entry (a scope with none reads nothing).
+    const READING = SCOPES.filter(
+      (s) => s.kind === "all" || (s.kind === "districts" && s.districts.includes("Alabel 1")) || (s.kind === "school" && s.schoolId === "s1")
+    );
+
+    it.each(READING.flatMap((scope) => [[scope, false] as const, [scope, true] as const]))(
+      "the raw entry for %j (demo %s) carries no scope or demo flag, and the right tags",
       async (scope, demo) => {
         isDemoVisible.mockResolvedValue(demo);
         await facet.load(scope, {});
-        const opts = facetCacheOptions();
-        expect(opts.keyParts).toContain(scopeCacheKey(scope, demo));
+        const opts = rawCacheOptions();
+        for (const s of SCOPES) {
+          for (const d of [false, true]) expect(opts.keyParts).not.toContain(scopeCacheKey(s, d));
+        }
         expect(opts.tags).toContain("division-summary");
         if (scope.kind === "school") expect(opts.tags).toContain(`school-dashboard:${scope.schoolId}`);
+        else expect(opts.tags).toEqual(["division-summary"]);
       }
     );
 
-    it("never shares a key between two different scopes", async () => {
-      const keys = new Set<string>();
-      for (const scope of SCOPES) {
+    it("every scope and demo flag reads the same, shared entries (nothing per scope is cached)", async () => {
+      const seen = new Set<string>();
+      for (const scope of READING) {
         for (const demo of [false, true]) {
           cachedQuery.mockClear();
           isDemoVisible.mockResolvedValue(demo);
           await facet.load(scope, {});
-          keys.add(JSON.stringify(facetCacheOptions().keyParts));
+          seen.add(JSON.stringify(allKeys()));
         }
       }
-      // `all` with demo on/off, districts x3 x2, school x2 x2: every one distinct.
-      expect(keys.size).toBe(SCOPES.length * 2);
+      expect(seen.size).toBe(1);
+      const [keys] = [...seen].map((k) => JSON.parse(k) as string[]);
+      expect(keys!.map((k) => (JSON.parse(k) as string[])[0]).sort()).toEqual([
+        "summary-raw",
+        "summary-scope-schools",
+      ]);
     });
   }
 );

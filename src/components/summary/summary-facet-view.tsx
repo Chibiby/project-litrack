@@ -12,7 +12,8 @@ import {
   filterComplianceResult,
   parseComplianceFlagParam,
 } from "@/lib/summary/shape/compliance";
-import { monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
+import { isPastMonth, monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
+import { pageDistrictSection } from "@/lib/summary/shape/district-page";
 import {
   pageSchoolSection,
   readSchoolQuery,
@@ -53,6 +54,16 @@ function monthOptions(): string[] {
 
 function levelOf(flat: FlatSearchParams): SummaryLevel {
   return flat.level === "district" || flat.level === "school" ? flat.level : "overall";
+}
+
+/**
+ * Mirrors the cache rule in `lib/summary/facets.ts` (`periodEnd` + `isPastMonth`):
+ * a period ending before the current month is cached for an hour, else 5 minutes.
+ */
+function isPastPeriod(params: FacetResult["params"]): boolean {
+  const { month, from, to } = params;
+  const end = month ?? (from && to ? (from <= to ? to : from) : null);
+  return end !== null && isPastMonth(end, formatLocalDateKey(schoolToday()));
 }
 
 function scopeQuery(flat: FlatSearchParams): string {
@@ -106,13 +117,21 @@ export async function SummaryFacetView({
     { route: `${basePath}/[facet]`, userId }
   );
 
+  const noDistrictsAssigned = adminScope.kind === "districts" && adminScope.districts.length === 0;
+  if (!noDistrictsAssigned) {
+    // Start the figures now so they load alongside the school list. The
+    // Suspense child awaiting the same cached promise reports a failure through
+    // the error boundary; this handler only stops an unhandled rejection here.
+    loadFacetResult(facetId, page.scope, searchParams).catch(() => {});
+  }
+
   const schools = await resolveScopeSchools(adminScope, await isDemoVisible());
   const districts =
     adminScope.kind === "districts"
       ? [...adminScope.districts]
       : [...new Set(schools.map((s) => s.district).filter((d): d is string => d !== null))].sort();
 
-  if (adminScope.kind === "districts" && adminScope.districts.length === 0) {
+  if (noDistrictsAssigned) {
     return (
       <EmptyState
         icon={Building2}
@@ -129,6 +148,7 @@ export async function SummaryFacetView({
   const periodKey = JSON.stringify(withoutListParams(flat));
   const scopeLabel = page.school?.name ?? page.district;
   const showSchoolSearch = level === "school" && page.school === null;
+  const showDistrictSearch = level === "district" && !flat.district && !flat.schoolId;
 
   return (
     <ListNavigationProvider>
@@ -175,6 +195,14 @@ export async function SummaryFacetView({
 
         {showSchoolSearch ? (
           <SummarySchoolSearch basePath={facetPath} searchParams={flat} query={readSchoolQuery(flat)} />
+        ) : null}
+        {showDistrictSearch ? (
+          <SummarySchoolSearch
+            basePath={facetPath}
+            searchParams={flat}
+            query={readSchoolQuery(flat)}
+            unit="districts"
+          />
         ) : null}
 
         <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
@@ -241,7 +269,7 @@ async function SummaryPeriodBar({
           <p className="mt-0.5 text-sm text-muted-foreground">
             {scopeLabel ? `${scopeLabel} · ` : ""}
             {formatCount(result.schoolCount)} {schoolWord}
-            {time ? ` · Figures as of ${time} (refreshed every 5 minutes)` : ""}
+            {time ? ` · Figures as of ${time} (refreshed ${isPastPeriod(result.params) ? "every hour" : "every 5 minutes"})` : ""}
           </p>
         </div>
         <SummaryParamControls
@@ -290,7 +318,20 @@ async function SummaryFacetResults({
   const paged = result.level === "school" && result.schoolCount > 1;
   const query = readSchoolQuery(flat);
   const codes = new Map(schoolCodes);
+  // By district: every district's per-grade rows made a ~1 MB page per table,
+  // so show DISTRICT_PAGE_SIZE districts at a time, grade rows kept under theirs.
+  const districtPaged = result.level === "district" && !flat.district && !flat.schoolId;
   const pageOf = (section: SummarySection): SchoolPaging | undefined => {
+    if (districtPaged) {
+      const params = readSchoolTableParams(flat, section.id);
+      return {
+        basePath: facetPath,
+        searchParams: flat,
+        query,
+        params,
+        page: pageDistrictSection(section, { query, params }),
+      };
+    }
     if (!paged) return undefined;
     const params = readSchoolTableParams(flat, section.id);
     return {

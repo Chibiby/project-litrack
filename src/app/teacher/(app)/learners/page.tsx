@@ -262,42 +262,55 @@ async function LearnersBody({
   // Section is no longer a facet, but it is still a column: this answers "does
   // this grade use sections at all", which is what decides whether the column
   // earns its width.
-  const [sections, totalCount] = await Promise.all([
+  const fetchLearners = (skip: number) =>
+    prisma.learner.findMany({
+      relationLoadStrategy: "join",
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        fullName: true,
+        age: true,
+        gender: true,
+        isAralLearner: true,
+        archivedAt: true,
+        deletedAt: true,
+        englishReadingProfile: true,
+        filipinoReadingProfile: true,
+        gradeLevelId: true,
+        gradeLevel: { select: { type: true } },
+        section: { select: { id: true, name: true } },
+      },
+      orderBy: learnerListOrderBy(list.sort),
+      skip,
+      take: list.take,
+    });
+
+  // The count and the page of rows run together, on the page the URL asked for.
+  // The page is clamped to the last one by the count, so a request past the end
+  // (rare: a stale link after learners were archived) re-reads the clamped page.
+  // Every in-range request, which is nearly all of them, costs one round trip
+  // fewer than count-then-read.
+  const requestedSkip = (list.page - 1) * list.pageSize;
+  const [sections, totalCount, requestedLearners] = await Promise.all([
     getGradeSections({
       schoolId,
       gradeLevelIds: activeGrade === "all" ? assignedGradeIds : [activeGrade],
     }),
     prisma.learner.count({ where }),
+    // `?page=` is user input; an absurd value must not reach the query as an
+    // out-of-range OFFSET, so it takes the clamped read below instead.
+    requestedSkip < 1_000_000 ? fetchLearners(requestedSkip) : null,
   ]);
 
   const pages = totalPages(totalCount, list.pageSize);
   const page = Math.min(list.page, pages);
   const skip = (page - 1) * list.pageSize;
 
-  const learners = await prisma.learner.findMany({
-    relationLoadStrategy: "join",
-    where,
-    select: {
-      id: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
-      fullName: true,
-      age: true,
-      gender: true,
-      isAralLearner: true,
-      archivedAt: true,
-      deletedAt: true,
-      englishReadingProfile: true,
-      filipinoReadingProfile: true,
-      gradeLevelId: true,
-      gradeLevel: { select: { type: true } },
-      section: { select: { id: true, name: true } },
-    },
-    orderBy: learnerListOrderBy(list.sort),
-    skip,
-    take: list.take,
-  });
+  const learners =
+    requestedLearners && skip === requestedSkip ? requestedLearners : await fetchLearners(skip);
 
   const rows: LearnerListRow[] = learners.map((l) => ({
     id: l.id,

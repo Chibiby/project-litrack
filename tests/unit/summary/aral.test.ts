@@ -8,6 +8,7 @@ import {
   type RawAralRow,
 } from "@/lib/summary/queries/aral";
 import { NOT_ANSWERED } from "@/lib/summary/shape/section";
+import { scopeRaw } from "@/lib/summary/scoped-raw";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import type { ScopeSchool } from "@/lib/summary/types";
 
@@ -110,8 +111,11 @@ const RAW: RawAralRow[] = [
   { school_id: "s2", field: "tutor", bucket: null, employment_type: null, designation: null, count: 1 },
 ];
 
+/** Shape functions only accept rows fenced by `scopeRaw`. */
+const SCOPED = scopeRaw("aral", RAW, SCHOOLS);
+
 describe("shapeAral", () => {
-  const result = shapeAral({ raw: RAW, schools: SCHOOLS, level: "overall", computedAt: "2026-09-25T00:00:00.000Z" });
+  const result = shapeAral({ raw: SCOPED, schools: SCHOOLS, level: "overall", computedAt: "2026-09-25T00:00:00.000Z" });
 
   it("returns the facetId, title and both sections", () => {
     expect(result.facetId).toBe("aral");
@@ -139,7 +143,7 @@ describe("shapeAral", () => {
     });
 
     it("falls back to the full grade list when nothing has any ARAL learners", () => {
-      const empty = shapeAral({ raw: [], schools: SCHOOLS, level: "overall", computedAt: "x" });
+      const empty = shapeAral({ raw: scopeRaw("aral", [], SCHOOLS), schools: SCHOOLS, level: "overall", computedAt: "x" });
       const emptySection = empty.sections.find((s) => s.id === "learnersByGrade")!;
       expect(emptySection.buckets.length).toBe(14);
       expect(emptySection.buckets[0]!.id).toBe("KINDER");
@@ -168,7 +172,7 @@ describe("shapeAral", () => {
   describe("district and school rollup", () => {
     it("district level sums school rows within the same district", () => {
       const district = shapeAral({
-        raw: RAW,
+        raw: SCOPED,
         schools: SCHOOLS,
         level: "district",
         computedAt: "2026-09-25T00:00:00.000Z",
@@ -185,7 +189,7 @@ describe("shapeAral", () => {
 
     it("school level keeps one row per school, matching the raw counts", () => {
       const bySchool = shapeAral({
-        raw: RAW,
+        raw: SCOPED,
         schools: SCHOOLS,
         level: "school",
         computedAt: "2026-09-25T00:00:00.000Z",

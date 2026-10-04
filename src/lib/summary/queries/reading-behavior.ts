@@ -1,11 +1,15 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
   WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
 } from "@/lib/constants/enum-labels";
-import { populationCte, type RawCountRow } from "@/lib/summary/queries/population";
+import {
+  populationCte,
+  runSummaryQuery,
+  type RawCountRow,
+} from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import { monthLabel, monthStartKey, shiftMonth } from "@/lib/summary/shape/months";
 import {
   NOT_ANSWERED,
@@ -23,15 +27,11 @@ import type { FacetResult, FacetRow, ScopeSchool, SummaryLevel } from "@/lib/sum
  * One record per learner per month: the latest `weekStart` in the month
  * (`DISTINCT ON`), because legacy weekly rows can share a month.
  */
-export async function queryReadingBehaviorRows(
-  schoolIds: readonly string[],
-  month: string
-): Promise<RawCountRow[]> {
-  if (schoolIds.length === 0) return [];
+export async function queryReadingBehaviorRows(month: string): Promise<RawCountRow[]> {
   const start = monthStartKey(month);
   const end = monthStartKey(shiftMonth(month, 1));
-  return prisma.$queryRaw<RawCountRow[]>(Prisma.sql`
-    WITH pop AS (${populationCte(schoolIds, { aral: true })}),
+  return runSummaryQuery<RawCountRow>(Prisma.sql`
+    WITH pop AS (${populationCte({ aral: true })}),
     rec AS (
       SELECT DISTINCT ON (r."learnerId")
         r."learnerId",
@@ -82,7 +82,7 @@ function toRows(raw: readonly RawCountRow[]): FacetRow[] {
 }
 
 export function shapeReadingBehavior(args: {
-  raw: readonly RawCountRow[];
+  raw: ScopedRaw<RawCountRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   month: string;

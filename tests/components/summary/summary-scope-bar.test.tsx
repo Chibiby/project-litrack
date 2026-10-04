@@ -95,6 +95,59 @@ describe("SummaryScopeBar", () => {
     expect([...url.searchParams.keys()].filter((k) => /^(sort|dir|page)\./.test(k))).toEqual([]);
   });
 
+  it("drops the search too when the level changes, keeping period and scope", () => {
+    const search = {
+      district: "Alabel 1",
+      month: "2026-05",
+      q: "glan",
+      "sort.gender": "total",
+      "dir.gender": "desc",
+      "page.gender": "3",
+    };
+    render(<SummaryScopeBar {...base} level="school" searchParams={{ level: "school", ...search }} />);
+    fireEvent.click(screen.getByRole("button", { name: "By district" }));
+
+    const url = hrefOfLastPush();
+    expect(url.searchParams.get("level")).toBe("district");
+    expect(url.searchParams.get("district")).toBe("Alabel 1");
+    expect(url.searchParams.get("month")).toBe("2026-05");
+    expect([...url.searchParams.keys()].filter((k) => /^(q|sort\.|dir\.|page\.)/.test(k))).toEqual([]);
+  });
+
+  it("drops the search when going from By district back to By school", () => {
+    render(
+      <SummaryScopeBar
+        {...base}
+        level="district"
+        searchParams={{ level: "district", district: "Alabel 1", month: "2026-05", q: "alabel", "page.gender": "2" }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "By school" }));
+
+    const url = hrefOfLastPush();
+    expect(url.searchParams.get("level")).toBe("school");
+    expect(url.searchParams.get("month")).toBe("2026-05");
+    expect(url.searchParams.get("district")).toBe("Alabel 1");
+    expect(url.searchParams.has("q")).toBe(false);
+    expect(url.searchParams.has("page.gender")).toBe(false);
+  });
+
+  it("drops the by-district table params when leaving By district", () => {
+    render(
+      <SummaryScopeBar
+        {...base}
+        district={null}
+        level="district"
+        searchParams={{ level: "district", "sort.gender": "total", "dir.gender": "desc", "page.gender": "2" }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "By school" }));
+
+    const url = hrefOfLastPush();
+    expect(url.searchParams.get("level")).toBe("school");
+    expect([...url.searchParams.keys()].filter((k) => /^(sort|dir|page)\./.test(k))).toEqual([]);
+  });
+
   it("drops the table params when the school or district changes", () => {
     render(
       <SummaryScopeBar

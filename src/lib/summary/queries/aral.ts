@@ -1,9 +1,9 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
-import { populationCte } from "@/lib/summary/queries/population";
+import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import { NOT_ANSWERED, buildSection, bucketsFrom } from "@/lib/summary/shape/section";
 import type {
   FacetResult,
@@ -63,13 +63,17 @@ export function classifyAralTutor(
   return NOT_ANSWERED;
 }
 
-export async function queryAralRows(schoolIds: readonly string[]): Promise<RawAralRow[]> {
-  if (schoolIds.length === 0) return [];
-  const pop = populationCte(schoolIds, {
+/**
+ * Every school's rows (see `populationCte`). Tutors are counted DISTINCT per
+ * school, so one school's rows never depend on another's and the per-scope
+ * sums `rollUp` makes match the old per-scope query.
+ */
+export async function queryAralRows(): Promise<RawAralRow[]> {
+  const pop = populationCte({
     aral: true,
     columns: Prisma.sql`l."aralTeacherId" AS aral_teacher_id`,
   });
-  return prisma.$queryRaw<RawAralRow[]>(Prisma.sql`
+  return runSummaryQuery<RawAralRow>(Prisma.sql`
     WITH pop AS (${pop}),
     tutor AS (
       SELECT DISTINCT pop."schoolId", u."id" AS teacher_id,
@@ -138,7 +142,7 @@ function presentGradeBuckets(gradeRows: readonly FacetRow[]): string[] {
 }
 
 export function shapeAral(args: {
-  raw: readonly RawAralRow[];
+  raw: ScopedRaw<RawAralRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   computedAt: string;

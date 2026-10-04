@@ -1,6 +1,5 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   READING_PROFILE_LABELS,
   readingProfileLabelsForGradeType,
@@ -11,7 +10,8 @@ import {
   languagesForGrade,
   reportingBandValue,
 } from "@/lib/reading/policy";
-import { populationCte } from "@/lib/summary/queries/population";
+import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import {
   monthLabel,
   monthStartKey,
@@ -59,16 +59,15 @@ export type RawReadingLevelRow = {
   n: number;
 };
 
-export async function queryReadingLevelRows(
-  schoolIds: readonly string[],
-  range: { from: string; to: string }
-): Promise<RawReadingLevelRow[]> {
-  if (schoolIds.length === 0) return [];
+export async function queryReadingLevelRows(range: {
+  from: string;
+  to: string;
+}): Promise<RawReadingLevelRow[]> {
   // One month earlier than `from`, so the first month has something to move from.
   const scanStart = monthStartKey(shiftMonth(range.from, -1));
   const end = monthStartKey(shiftMonth(range.to, 1));
-  return prisma.$queryRaw<RawReadingLevelRow[]>(Prisma.sql`
-    WITH pop AS (${populationCte(schoolIds, { aral: true })}),
+  return runSummaryQuery<RawReadingLevelRow>(Prisma.sql`
+    WITH pop AS (${populationCte({ aral: true })}),
     m AS (
       SELECT DISTINCT ON (r."learnerId", to_char(r."weekStart", 'YYYY-MM'))
         r."learnerId",
@@ -182,7 +181,7 @@ export function readingMovementRows(
 }
 
 export function shapeReadingLevels(args: {
-  raw: readonly RawReadingLevelRow[];
+  raw: ScopedRaw<RawReadingLevelRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   from: string;

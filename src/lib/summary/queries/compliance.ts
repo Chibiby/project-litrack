@@ -1,9 +1,9 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { languagesForGrade } from "@/lib/reading/policy";
-import { inScopeSchools, populationCte } from "@/lib/summary/queries/population";
+import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import { lastFullWeek, monthKeyOf, monthStartKey, shiftMonth } from "@/lib/summary/shape/months";
 import {
   COMPLIANCE_FLAGS,
@@ -52,18 +52,18 @@ function gradesWithoutEnglish(): string[] {
   return Object.keys(GRADE_LEVEL_LABELS).filter((t) => !languagesForGrade(t).includes("ENGLISH"));
 }
 
-export async function queryComplianceRows(
-  schoolIds: readonly string[],
-  todayKey: string
-): Promise<RawComplianceRow[]> {
-  if (schoolIds.length === 0) return [];
+/**
+ * One row per live school, every school (see `populationCte`); `scopeRaw`
+ * keeps the caller's active ones.
+ */
+export async function queryComplianceRows(todayKey: string): Promise<RawComplianceRow[]> {
   const floor = recentAttendanceFloorKey(todayKey);
   const monthStart = monthStartKey(monthKeyOf(todayKey));
   const nextMonth = monthStartKey(shiftMonth(monthKeyOf(todayKey), 1));
   const week = lastFullWeek(todayKey);
   const noEnglish = gradesWithoutEnglish();
-  return prisma.$queryRaw<RawComplianceRow[]>(Prisma.sql`
-    WITH pop AS (${populationCte(schoolIds, {
+  const sql = Prisma.sql`
+    WITH pop AS (${populationCte({
       aral: false,
       columns: Prisma.sql`
         l."isAralLearner" AS aral,
@@ -76,7 +76,7 @@ export async function queryComplianceRows(
              COUNT(*)::int AS live,
              (COUNT(*) FILTER (WHERE l."archivedAt" IS NULL))::int AS non_archived
       FROM "Learner" l
-      WHERE ${inScopeSchools(Prisma.sql`l."schoolId"`, schoolIds)} AND l."deletedAt" IS NULL
+      WHERE l."deletedAt" IS NULL
       GROUP BY 1
     ),
     popc AS (
@@ -90,15 +90,14 @@ export async function queryComplianceRows(
     pend AS (
       SELECT u."schoolId", COUNT(*)::int AS n
       FROM "User" u
-      WHERE ${inScopeSchools(Prisma.sql`u."schoolId"`, schoolIds)}
+      WHERE u."schoolId" IS NOT NULL
         AND u."role" = 'TEACHER' AND u."approvalStatus" = 'PENDING' AND u."deletedAt" IS NULL
       GROUP BY 1
     ),
     gna AS (
       SELECT g."schoolId", COUNT(*)::int AS n
       FROM "GradeLevel" g
-      WHERE ${inScopeSchools(Prisma.sql`g."schoolId"`, schoolIds)}
-        AND g."deletedAt" IS NULL AND g."type" <> 'FLOATING'
+      WHERE g."deletedAt" IS NULL AND g."type" <> 'FLOATING'
         AND NOT EXISTS (
           SELECT 1 FROM "Section" sec
           JOIN "User" adv ON adv."id" = sec."adviserId"
@@ -111,16 +110,14 @@ export async function queryComplianceRows(
       SELECT e."schoolId", COUNT(*)::int AS n
       FROM "Enrollment" e
       JOIN "SchoolYear" sy ON sy."id" = e."schoolYearId"
-      WHERE ${inScopeSchools(Prisma.sql`e."schoolId"`, schoolIds)}
-        AND e."status" = 'ACTIVE' AND sy."isActive" = true
+      WHERE e."status" = 'ACTIVE' AND sy."isActive" = true
       GROUP BY 1
     ),
     drift AS (
       SELECT l."schoolId", COUNT(*)::int AS n
       FROM "Learner" l
       JOIN "Enrollment" e ON e."learnerId" = l."id" AND e."status" = 'ACTIVE'
-      WHERE ${inScopeSchools(Prisma.sql`l."schoolId"`, schoolIds)}
-        AND l."deletedAt" IS NULL AND e."gradeLevelId" <> l."gradeLevelId"
+      WHERE l."deletedAt" IS NULL AND e."gradeLevelId" <> l."gradeLevelId"
       GROUP BY 1
     ),
     att AS (
@@ -169,8 +166,9 @@ export async function queryComplianceRows(
     LEFT JOIN att ON att."schoolId" = s."id"
     LEFT JOIN rd ON rd."schoolId" = s."id"
     LEFT JOIN wk ON wk."schoolId" = s."id"
-    WHERE ${inScopeSchools(Prisma.sql`s."id"`, schoolIds)}
-  `);
+    WHERE s."deletedAt" IS NULL
+  `;
+  return runSummaryQuery<RawComplianceRow>(sql);
 }
 
 export function complianceFacts(r: RawComplianceRow): SchoolComplianceFacts {
@@ -192,7 +190,7 @@ export function complianceFacts(r: RawComplianceRow): SchoolComplianceFacts {
 const COMPLIANT = "COMPLIANT";
 
 export function shapeCompliance(args: {
-  raw: readonly RawComplianceRow[];
+  raw: ScopedRaw<RawComplianceRow>;
   /** Active schools in scope only. */
   schools: readonly ScopeSchool[];
   level: SummaryLevel;

@@ -18,6 +18,7 @@ import type { SummaryLevel } from "@/lib/summary/types";
 import {
   SUMMARY_SCOPE_KEYS,
   summaryHref,
+  withoutListParams,
   withoutTableParams,
   type FlatSearchParams,
 } from "./summary-href";
@@ -87,8 +88,14 @@ export function SummaryScopeBar({
   ];
 
   function go(patch: Record<string, string | null>) {
+    const changesLevel = "level" in patch;
     const changesScope = SUMMARY_SCOPE_KEYS.some((key) => key in patch);
-    navigate(summaryHref(basePath, changesScope ? withoutTableParams(searchParams) : searchParams, patch));
+    const base = changesLevel
+      ? withoutListParams(searchParams)
+      : changesScope
+        ? withoutTableParams(searchParams)
+        : searchParams;
+    navigate(summaryHref(basePath, base, patch));
   }
 
   return (

@@ -80,8 +80,9 @@ Cron Triggers invoke a Worker's `scheduled()` handler; they cannot fetch a URL t
 | --- | --- | --- |
 | `0 16 * * *` | 00:00 daily | `/api/cron/backup?kind=daily` |
 | `30 16 * * 6` | 00:30 Sunday | `/api/cron/backup?kind=weekly` |
+| `*/5 * * * *` | every 5 minutes | `/api/cron/summary-warm` |
 
-The two lists must stay in step — an expression in `wrangler.jsonc` with no entry in `worker.js`
+The `summary-warm` tick is not a backup: it refreshes the Division Summary's 8 division-wide raw cache entries (`src/lib/summary/warm.ts`), running SQL only on the first tick after a deploy, after a `divisionSummary` bust, and on each Manila day; other ticks are one cache read. The lists must stay in step — an expression in `wrangler.jsonc` with no entry in `worker.js`
 fires and does nothing. The route authorizes itself against `CRON_SECRET` and **fails closed**, so
 an unset secret means no backups, silently, forever. The daily run also runs retention (below)
 **before** the snapshot, so a failed backup never stops it.

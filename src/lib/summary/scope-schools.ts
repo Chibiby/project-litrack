@@ -7,7 +7,6 @@ import { divisionSummary, schoolsList } from "@/lib/cache/tags";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import {
   schoolWhereForScope,
-  scopeCacheKey,
   type AdminScope,
   type SummaryScope,
 } from "@/lib/auth/admin-scope";
@@ -16,15 +15,20 @@ import type { ScopeSchool } from "@/lib/summary/types";
 /**
  * Where scoped schools come from, once (docs/specs/district-admin.md 3.5).
  *
- * Every district page, picker and summary query takes its school list from
- * here; the summary SQL is then scoped by `"schoolId" = ANY(<these ids>)`.
+ * Every district page, picker and summary facet takes its school list from
+ * here; the summary's raw rows are then fenced to these ids by `scopeRaw`.
  *
  * Demo exclusion (invariant I10): a district scope always carries
  * `isDemo: false` through `schoolWhereForScope`; the division follows
  * `demoSchoolFilter(demoVisible)`, exactly as `getAdminMetricCounts` does.
  *
- * A `school` scope must already have passed `loadSchoolInScope`; this only
- * re-applies the live/demo filter to it.
+ * A `school` scope must already have passed `loadSchoolInScope` (or the
+ * in-memory `findSchoolInAdminScope` hit in `resolvePageSummaryScope`); this
+ * only re-applies the live/demo filter to it.
+ *
+ * `scopeSchoolWhere` is the WHERE form of the rule; `schoolsForScope` is the
+ * same rule applied in memory to the one cached division list, and the unit
+ * tests hold the two equal.
  */
 export function scopeSchoolWhere(
   scope: AdminScope | SummaryScope,
@@ -46,39 +50,29 @@ export function scopeSchoolWhere(
   }
 }
 
+/** A live school with its demo flag: the one list every scope is cut from. */
+export type DivisionSchool = ScopeSchool & { isDemo: boolean };
+
 /**
- * The schools a scope covers, name order. Cached under `schoolsList` and
+ * Every live school (`deletedAt: null`, demo and inactive included), name
+ * order. ONE cache entry for the whole division, under `schoolsList` and
  * `divisionSummary` (a school created, archived, re-districted or flagged demo
- * busts both), keyed by `scopeCacheKey`.
+ * busts both). It is never handed out as it is: callers get a scope's slice
+ * through `schoolsForScope` / `schoolsForAdminScope`.
  *
- * `/district`'s overview calls this once directly and again inside each of the
- * four summary-facet loads, all with the same scope — five separate
- * `unstable_cache`/KV lookups per request without the map below. React
- * `cache()` dedupes by argument identity, and each call site rebuilds its own
- * `scope` object (the page passes an `AdminScope`, the facet loads pass the
- * `SummaryScope` `resolveSummaryScope` just returned) — two different object
- * identities that carry the same tenancy, so keying a `cache()`-wrapped
- * function on `scope` itself would miss on every call. Instead this keys a
- * single per-request `Map` on `scopeCacheKey` alone (a string, which already
- * fully determines the query, same as the `cachedQuery` key below) — the ONE
- * argument to the outer `cache()` call is the map-factory itself, so React
- * cache only ever needs to dedupe a zero-arg call.
+ * `/district`'s overview reads it directly and again inside each of the four
+ * summary-facet loads; the per-request memo below collapses those into one
+ * `unstable_cache`/KV lookup. React `cache()` only dedupes a zero-arg call
+ * here, so scope object identity does not matter.
  */
-const getRequestMemo = cache(() => new Map<string, Promise<ScopeSchool[]>>());
+const getRequestMemo = cache(() => ({ division: null as Promise<DivisionSchool[]> | null }));
 
-export async function resolveScopeSchools(
-  scope: AdminScope | SummaryScope,
-  demoVisible: boolean
-): Promise<ScopeSchool[]> {
-  const key = scopeCacheKey(scope, demoVisible);
+export function loadDivisionSchools(): Promise<DivisionSchool[]> {
   const memo = getRequestMemo();
-  const cached = memo.get(key);
-  if (cached) return cached;
-
-  const promise = cachedQuery(
+  memo.division ??= cachedQuery(
     () =>
       prisma.school.findMany({
-        where: scopeSchoolWhere(scope, demoVisible),
+        where: schoolWhereForScope({ kind: "division" }),
         select: {
           id: true,
           name: true,
@@ -87,15 +81,95 @@ export async function resolveScopeSchools(
           division: true,
           region: true,
           isActive: true,
+          isDemo: true,
         },
         orderBy: [{ name: "asc" }, { id: "asc" }],
       }),
     {
-      keyParts: ["summary-scope-schools", "v1", key],
+      keyParts: ["summary-scope-schools", "v2", "division-live"],
       tags: [schoolsList, divisionSummary],
       profile: "reference",
     }
   );
-  memo.set(key, promise);
-  return promise;
+  return memo.division;
+}
+
+function toScopeSchool(s: DivisionSchool): ScopeSchool {
+  return {
+    id: s.id,
+    name: s.name,
+    schoolIdCode: s.schoolIdCode,
+    district: s.district,
+    division: s.division,
+    region: s.region,
+    isActive: s.isActive,
+  };
+}
+
+/** `district: { in: [...] }`: a school with no district is in no district scope. */
+function inDistricts(s: DivisionSchool, districts: readonly string[]): boolean {
+  return s.district !== null && districts.includes(s.district);
+}
+
+/**
+ * `scopeSchoolWhere(scope, demoVisible)` applied in memory to the live
+ * division list. Order is kept (name, then id).
+ */
+export function schoolsForScope(
+  all: readonly DivisionSchool[],
+  scope: AdminScope | SummaryScope,
+  demoVisible: boolean
+): ScopeSchool[] {
+  const demoOk = (s: DivisionSchool) => demoVisible || s.isDemo !== true;
+  let kept: DivisionSchool[];
+  switch (scope.kind) {
+    case "division":
+    case "all":
+      kept = all.filter(demoOk);
+      break;
+    case "districts":
+      // A district scope never includes a demo school, demo session or not.
+      kept = all.filter((s) => s.isDemo !== true && inDistricts(s, scope.districts));
+      break;
+    case "school":
+      kept = all.filter((s) => s.id === scope.schoolId && demoOk(s));
+      break;
+  }
+  return kept.map(toScopeSchool);
+}
+
+/**
+ * `schoolWhereForScope(adminScope)` applied in memory: the schools an admin
+ * may open, which is what `loadSchoolInScope` checks. The division does NOT
+ * filter demo schools here, matching `loadSchoolInScope`.
+ */
+export function schoolsForAdminScope(
+  all: readonly DivisionSchool[],
+  adminScope: AdminScope
+): DivisionSchool[] {
+  return adminScope.kind === "division"
+    ? [...all]
+    : all.filter((s) => s.isDemo !== true && inDistricts(s, adminScope.districts));
+}
+
+/**
+ * A requested school, if it is inside `adminScope` according to the cached
+ * division list; null on a miss. A miss proves nothing (the list may predate
+ * a new school), so the caller falls back to `loadSchoolInScope`, which reads
+ * the database and records an out-of-scope request as `crossTenant`.
+ */
+export async function findSchoolInAdminScope(
+  adminScope: AdminScope,
+  schoolId: string
+): Promise<DivisionSchool | null> {
+  const all = await loadDivisionSchools();
+  return schoolsForAdminScope(all, adminScope).find((s) => s.id === schoolId) ?? null;
+}
+
+/** The schools a scope covers, name order, cut from the one cached division list. */
+export async function resolveScopeSchools(
+  scope: AdminScope | SummaryScope,
+  demoVisible: boolean
+): Promise<ScopeSchool[]> {
+  return schoolsForScope(await loadDivisionSchools(), scope, demoVisible);
 }

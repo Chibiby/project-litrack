@@ -1,3 +1,4 @@
+import type { DistrictPage } from "@/lib/summary/shape/district-page";
 import {
   tableParamNames,
   type SchoolPage,
@@ -13,8 +14,25 @@ export type SchoolPaging = {
   /** The shared search text, already trimmed. */
   query: string;
   params: SchoolTableParams;
-  page: SchoolPage;
+  page: SchoolPage | DistrictPage;
 };
+
+export type PagingInfo = {
+  matched: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  /** Plural noun for the paged unit. */
+  unit: "schools" | "districts";
+};
+
+export function pagingInfo(paging: SchoolPaging): PagingInfo {
+  const p = paging.page;
+  if ("matchedDistricts" in p) {
+    return { matched: p.matchedDistricts, page: p.page, pageCount: p.pageCount, pageSize: p.pageSize, unit: "districts" };
+  }
+  return { matched: p.matchedSchools, page: p.page, pageCount: p.pageCount, pageSize: p.pageSize, unit: "schools" };
+}
 
 /** Name sorts A-Z first; every figure sorts largest first. */
 export function defaultSortDir(sort: string): "asc" | "desc" {

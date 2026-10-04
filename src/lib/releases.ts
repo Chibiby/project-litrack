@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.35.0",
+    date: "2026-10-04",
+    title: "Faster Division Summary",
+    announce: true,
+    fixes: [
+      "Division Summary pages open much faster, including for district admins and when you pick one district or school.",
+      "Switching between Overall, By district and By school no longer recalculates the same figures.",
+      "\"By district\" now shows 5 districts per page with search and sorting, so big summaries stay quick.",
+      "Figures are prepared right after each update, so the first visit after an update is fast too.",
+      "Summaries for past months refresh hourly.",
+      "The admin dashboard and the teacher learner list load faster.",
+    ],
+  },
+  {
     version: "2.34.0",
     date: "2026-10-03",
     title: "Division Summary: see every school at once",

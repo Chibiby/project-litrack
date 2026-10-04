@@ -4,13 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `resolveScopeSchools`'s per-request dedupe (src/lib/summary/scope-schools.ts).
  *
  * `/district`'s overview calls `resolveScopeSchools` once directly and again
- * inside each of the four summary-facet loads — all with the same tenancy but
- * different `scope` object identities (an `AdminScope` from the page, a
- * `SummaryScope` `resolveSummaryScope` returns for the facets). The module
- * keys a single per-request `Map` on `scopeCacheKey(scope, demoVisible)`
- * rather than on `scope` itself so those calls collapse into one
- * `cachedQuery`/Postgres read; two DIFFERENT scopes (different tenancy) must
- * never share an entry — that would be a cross-tenant leak, not a speedup.
+ * inside each of the four summary-facet loads — with different `scope` object
+ * identities (an `AdminScope` from the page, a `SummaryScope`
+ * `resolveSummaryScope` returns for the facets). Every scope is cut in memory
+ * from ONE cached list of live schools, memoized per request, so all those
+ * calls collapse into one `cachedQuery`/Postgres read; two DIFFERENT scopes
+ * (different tenancy) still get different school lists.
  *
  * React `cache()` only memoizes inside a render/request context that does not
  * exist in a unit test, so `react` is mocked here to a memo that is fresh
@@ -56,7 +55,11 @@ vi.mock("@/lib/cache/unstable", () => ({
   cachedQuery: (fn: () => Promise<unknown>, opts: unknown) => cachedQueryImpl(fn, opts),
 }));
 
-const ROWS = [{ id: "s-1", name: "A", schoolIdCode: "1", district: "D1", division: null, region: null, isActive: true }];
+const ROWS = [
+  { id: "s-1", name: "A", schoolIdCode: "1", district: "Alabel 1", division: null, region: null, isActive: true, isDemo: false },
+  { id: "s-2", name: "B", schoolIdCode: "2", district: "Alabel 2", division: null, region: null, isActive: true, isDemo: false },
+  { id: "s-3", name: "C", schoolIdCode: "3", district: "Alabel 1", division: null, region: null, isActive: true, isDemo: true },
+];
 
 let resolveScopeSchools: typeof import("@/lib/summary/scope-schools").resolveScopeSchools;
 
@@ -79,23 +82,35 @@ describe("resolveScopeSchools — per-request dedupe", () => {
     expect(schoolFindMany).toHaveBeenCalledTimes(1);
   });
 
-  it("runs the underlying query twice for two genuinely different scopes", async () => {
+  it("reads the one division list once for two genuinely different scopes, and cuts each its own", async () => {
     const scopeA = { kind: "districts" as const, districts: ["Alabel 1"] };
     const scopeB = { kind: "districts" as const, districts: ["Alabel 2"] };
 
-    await resolveScopeSchools(scopeA, false);
-    await resolveScopeSchools(scopeB, false);
+    const a = await resolveScopeSchools(scopeA, false);
+    const b = await resolveScopeSchools(scopeB, false);
 
-    expect(cachedQueryImpl).toHaveBeenCalledTimes(2);
-    expect(schoolFindMany).toHaveBeenCalledTimes(2);
+    expect(cachedQueryImpl).toHaveBeenCalledTimes(1);
+    expect(schoolFindMany).toHaveBeenCalledTimes(1);
+    // Two different tenancies never share a result.
+    expect(a.map((s) => s.id)).toEqual(["s-1"]);
+    expect(b.map((s) => s.id)).toEqual(["s-2"]);
   });
 
-  it("treats a different demoVisible flag as a different scope, even with identical districts", async () => {
-    const scope = { kind: "districts" as const, districts: ["Alabel 1"] };
+  it("applies a different demoVisible flag in memory, without a second read", async () => {
+    const division = await resolveScopeSchools({ kind: "all" }, false);
+    const demoDivision = await resolveScopeSchools({ kind: "all" }, true);
 
-    await resolveScopeSchools(scope, false);
-    await resolveScopeSchools(scope, true);
+    expect(cachedQueryImpl).toHaveBeenCalledTimes(1);
+    expect(division.map((s) => s.id)).toEqual(["s-1", "s-2"]);
+    expect(demoDivision.map((s) => s.id)).toEqual(["s-1", "s-2", "s-3"]);
+  });
 
-    expect(cachedQueryImpl).toHaveBeenCalledTimes(2);
+  it("starts a fresh read for a new request", async () => {
+    await resolveScopeSchools({ kind: "all" }, false);
+    vi.resetModules();
+    const fresh = (await import("@/lib/summary/scope-schools")).resolveScopeSchools;
+    await fresh({ kind: "all" }, false);
+
+    expect(schoolFindMany).toHaveBeenCalledTimes(2);
   });
 });

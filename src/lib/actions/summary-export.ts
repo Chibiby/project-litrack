@@ -34,8 +34,10 @@ export type SummaryExportResult = { base64: string; filename: string };
  * 2. `resolveSummaryScope` narrows the requested district/school to that scope;
  *    an out-of-scope district is NOT_FOUND before any query runs.
  * 3. A requested school must pass `loadSchoolInScope` (scope in the WHERE).
- * 4. The facet reads only the ids `resolveScopeSchools` returns for that
- *    narrowed scope.
+ * 4. The facet's SQL is division-wide (one shared raw cache entry per facet
+ *    and period); `facet.load` fences those rows with `scopeRaw` to the
+ *    schools `resolveScopeSchools` returns for that narrowed scope, so only
+ *    they reach the shaped result, the report table and the audit counts.
  *
  * Writes no `Report` row (`Report.schoolId` is required and a district export
  * has no single school). The audit row carries counts, never a name.

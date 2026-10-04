@@ -21,6 +21,8 @@ const CRON_ROUTES = {
   "0 16 * * *": "/api/cron/backup?kind=daily",
   // Sunday 00:30 Asia/Manila
   "30 16 * * 6": "/api/cron/backup?kind=weekly",
+  // Every 5 minutes, but it only re-warms the Division Summary cache after a deploy or a summary reset
+  "*/5 * * * *": "/api/cron/summary-warm",
 };
 
 export default {

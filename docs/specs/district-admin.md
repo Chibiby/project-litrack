@@ -197,7 +197,7 @@ Rules every district-scoped call site follows:
 1. The first line is `requireAdminScope()`. Never `requireUser("DISTRICT_ADMIN")` alone: that call lets `SUPER_ADMIN` through implicitly, and the Super Admin branch must be explicit.
 2. Every school, learner, ticket, grant or teacher lookup puts `school: schoolWhereForScope(scope)` (or `schoolId = ANY(scopeSchoolIds)` in raw SQL) **in the where**. A payload-supplied `schoolId` is never trusted until `loadSchoolInScope` returns it.
 3. An out-of-scope hit throws `resourceNotFound(..., { crossTenant: true })`. The user sees the same message as for a missing row. `/admin/errors` records it with severity `security`.
-4. Cache keys for any scoped read include `scopeCacheKey(...)`. The where clause and the key are built from the same `AdminScope` value, and the two helpers are tested together.
+4. A cached read that is scoped carries the scope in its key (`scopeCacheKey(...)`), built from the same `AdminScope` value as the where clause. The Division Summary is the exception: it caches nothing per scope (see Caching under 3.6 and I9); each request fences the shared division rows with `scopeRaw`.
 5. Existing `requireUser("SUPER_ADMIN")` sites are **not** widened, except the ones in 3.5. A repository scan test pins that list (T14).
 
 ### 3.5 Per-feature reuse plan
@@ -222,7 +222,7 @@ Each reused action switches its guard from `requireUser("SUPER_ADMIN")` to `requ
 
 New `AUDIT_ACTIONS` (`src/lib/audit-actions.ts`): `DISTRICT_ADMIN_CREATE` and `DISTRICT_ASSIGNMENT_ADD` (both written by the script), `DISTRICT_ADMIN_PASSWORD_RESET`, `ANNOUNCEMENT_BROADCAST`, `ANNOUNCEMENT_BROADCAST_RETRACT`, `SUMMARY_EXPORT`. The reused actions keep their existing audit names and add `actorRole` to the metadata. Their rows carry the school's `schoolId`, so a district admin's changes show up in that school's own `/school-head/audit`.
 
-**Where scoped schools come from, once.** `resolveScopeSchools(scope, demoVisible)` in `src/lib/summary/scope-schools.ts` returns `{ id, name, schoolIdCode, district, isActive }[]`, cached under `[schoolsList, divisionSummary]` with the key `scopeCacheKey`. Every district page, picker and summary query takes its school list from it. No page writes its own `prisma.school.findMany` for a district view.
+**Where scoped schools come from, once.** `resolveScopeSchools(scope, demoVisible)` in `src/lib/summary/scope-schools.ts` returns `{ id, name, schoolIdCode, district, isActive }[]`, sliced per request from ONE division-wide school list (`loadDivisionSchools`, cached under `[schoolsList, divisionSummary]` with the key `["summary-scope-schools", "v2", "division-live"]`: no scope in it). Every district page, picker and summary query takes its school list from it. No page writes its own `prisma.school.findMany` for a district view.
 
 ### 3.6 Summary: one component set, one query set
 
@@ -247,10 +247,12 @@ One `pct(count, base)` helper decides rounding for everything: 1 decimal, and `n
 
 **Demo exclusion.** For `division`, `resolveScopeSchools` applies `demoSchoolFilter(await isDemoVisible())`, exactly as `getAdminMetricCounts` does. For `districts`, `isDemo: false` is always part of `schoolWhereForScope`, and the account script refuses to assign `[demo district]`.
 
-**Caching.** Each facet load is wrapped in `cachedQuery`:
-- `keyParts: ["summary", facetId, "v1", scopeCacheKey(summaryScope, demoVisible), paramsKey]`
-- `tags: [divisionSummary]`, plus `schoolDashboard(id)` for a school scope
-- `profile: "reference"` (300 s TTL)
+**Caching.** Each facet has ONE cache entry per period: its division-wide raw rows, loaded by `loadDivisionRaw` (`src/lib/summary/facets.ts`) through `cachedQuery`:
+- `keyParts: ["summary-raw", facetId, SUMMARY_CACHE_VERSION, JSON.stringify(sqlParams)]` (`rawCacheKeyParts`; version is `"v3"`). No scope, demo flag or level is in the key, so every scope and level of a period shares one SQL run.
+- `tags: [divisionSummary]`, plus `schoolDashboard(id)` for a school scope (`rawTagsFor`)
+- `profile: "reference"` (300 s TTL); 3600 s for a period wholly before the current month
+- Per request, `scopeRaw` (`src/lib/summary/scoped-raw.ts`) fences those rows to the schools `resolveScopeSchools` returned and returns a branded `ScopedRaw<T>`; only that type reaches `shape`, and the roll-up runs in pure code on every request. Nothing scope-specific is cached.
+- Warm: the `*/5 * * * *` cron (`worker.js` maps it to `/api/cron/summary-warm`, `src/lib/summary/warm.ts`) fills the 8 default raw entries (one per facet). It runs once per deploy, once per `divisionSummary` bust and once per Manila day; other ticks are a single cached read and run no SQL.
 
 Add a `divisionSummary` tag to `src/lib/cache/tags.ts` and `revalidateDivisionSummary()` to `src/lib/cache/revalidate.ts`. `revalidateSchoolsList()` also expires `divisionSummary`, because adding, removing, activating or re-districting a school changes the school set of every summary. Attendance, reading and grade writes deliberately do **not** bust it: across 339 schools that would mean one flush per teacher click. The page prints "Figures as of HH:MM (refreshed every 5 minutes)".
 
@@ -427,7 +429,7 @@ Adding the enum value breaks every `Record<UserRole, …>` map at compile time, 
 | I6 | Every district-scoped read and write touches only in-scope schools | `schoolWhereForScope` in the Prisma where, or `ANY(scopeSchoolIds)` in raw SQL; per-action tests T3–T9 |
 | I7 | An out-of-scope school looks exactly like one that does not exist | `assertSchoolInScope` / `loadSchoolInScope` throw `resourceNotFound(..., { crossTenant: true })` + T2 |
 | I8 | A Super Admin sees the whole division through an explicit branch, never through `allowSuperAdmin` | `requireAdminScope` + T1 |
-| I9 | A cached scoped result is never served to a different scope | `scopeCacheKey` in every summary `keyParts` + T10 |
+| I9 | A cached scoped result is never served to a different scope | No scope in any summary cache key: one division-wide raw entry per facet and period, fenced per request by `scopeRaw` (`ScopedRaw<T>`) to the schools `resolveScopeSchools` returns + T10 |
 | I10 | The demo tenant is excluded | `schoolWhereForScope` (districts always add `isDemo: false`), `demoSchoolFilter` on the division scope, and the script's refusal + T11 |
 | I11 | Only a Super Admin changes a school's district | `updateSchoolInfo` no longer writes it; the `updateSchoolAsAdmin` validator is chosen by `scope.kind` + T6 |
 | I12 | A cross-school transfer by a district admin has both schools in scope | `transferLearnerCrossSchool` + T7 |
@@ -499,7 +501,7 @@ Every scope test is written to fail if the scope check it guards is removed. Tes
 | T7 | `tests/unit/actions/enrollment-transfer-scope.test.ts` | DA with the source out of scope gives NOT_FOUND; with the target out of scope gives NOT_FOUND; with both in scope, one transaction runs. SA behaviour is unchanged. |
 | T8 | `tests/unit/actions/district-announcements.test.ts` | A broadcast that names an out-of-scope school gives NOT_FOUND and no `createMany`. Retract's `where` carries the scope. SH `updateAnnouncement` and `deleteAnnouncement` on a broadcast row give NOT_FOUND. |
 | T9 | `tests/unit/actions/summary-export.test.ts` | A DA export with `?district=` outside the assignment gives NOT_FOUND before any query runs. The facet loader receives only in-scope school ids. The audit metadata holds no names. |
-| T10 | `tests/unit/summary/scope-cache-key.test.ts` | Different district sets give different keys. The same set in another order gives the same key. Division with demo on and off gives different keys. A school scope keys on the school id. A spy on `cachedQuery` asserts that `keyParts` contains `scopeCacheKey(...)` for every facet; the test iterates `facets.ts`, so a new facet is covered automatically. |
+| T10 | `tests/unit/summary/scope-cache-key.test.ts` | Different district sets give different keys. The same set in another order gives the same key. Division with demo on and off gives different keys. A school scope keys on the school id. A second test asserts that every scope and demo flag reads the same shared raw entries (nothing per scope is cached). The fence itself is covered by `tests/unit/summary/scoped-raw.test.ts`. |
 | T11 | `tests/unit/summary/scope-schools.test.ts` | For a DA, `resolveScopeSchools` never returns `isDemo` schools, even in a demo session. For the division, it follows `demoSchoolFilter`. |
 | T12 | `tests/unit/auth/district-admin-surfaces.test.ts` | A DA calling `globalSearch` gets only in-scope schools, and **no** learner or teacher query runs. `askAssistant` answers NO_SCHOOL. Chat reads return empty or forbidden. `requireUser("SCHOOL_HEAD")` and `requireSchoolUser` as a DA redirect to `/district`. |
 | T13 | `tests/unit/actions/accounts.test.ts` (extend) | `impersonateUser` with a DA target, called by a Super Admin, signs in and lands on `/district` (amended 2026-09-25, I14); a SUPER_ADMIN target gives NOT_FOUND; a non-Super-Admin caller is refused before any lookup. `resetDistrictAdminPassword` as a DA is forbidden. As an SA it sets `mustChangePassword: true`, and the audit metadata does not contain the credential. |

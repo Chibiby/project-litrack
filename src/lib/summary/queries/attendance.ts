@@ -1,8 +1,8 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { attendancePossibleMarks } from "@/lib/attendance/week-stats";
-import { populationCte } from "@/lib/summary/queries/population";
+import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import {
   monthKeyOf,
   monthLabel,
@@ -41,15 +41,20 @@ export type RawAttendanceRow = {
   n: number;
 };
 
-export async function queryAttendanceRows(
-  schoolIds: readonly string[],
-  range: { from: string; to: string; todayKey: string }
-): Promise<RawAttendanceRow[]> {
-  if (schoolIds.length === 0) return [];
+/**
+ * Every school's rows (see `populationCte`). `holiday` rows carry no school:
+ * `scopeRaw` keeps one only when its grade level belongs to a kept `roster`
+ * row, the same set `pop` would have held for the scope alone.
+ */
+export async function queryAttendanceRows(range: {
+  from: string;
+  to: string;
+  todayKey: string;
+}): Promise<RawAttendanceRow[]> {
   const start = monthStartKey(range.from);
   const end = monthStartKey(shiftMonth(range.to, 1));
-  return prisma.$queryRaw<RawAttendanceRow[]>(Prisma.sql`
-    WITH pop AS (${populationCte(schoolIds, { aral: true })}),
+  const sql = Prisma.sql`
+    WITH pop AS (${populationCte({ aral: true })}),
     att AS (
       SELECT p."schoolId", p."gradeLevelId", a."date", a."weekStart", a."status"::text AS status
       FROM "Attendance" a
@@ -82,7 +87,8 @@ export async function queryAttendanceRows(
       GROUP BY 3, 5
     UNION ALL
     SELECT 'marks', att."schoolId", NULL, NULL, NULL, COUNT(*)::int FROM att GROUP BY 2
-  `);
+  `;
+  return runSummaryQuery<RawAttendanceRow>(sql);
 }
 
 /** "Week of September 14, 2026". */
@@ -131,7 +137,7 @@ function schoolListRow(s: ScopeSchool): (string | number | null)[] {
 }
 
 export function shapeAttendance(args: {
-  raw: readonly RawAttendanceRow[];
+  raw: ScopedRaw<RawAttendanceRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   from: string;

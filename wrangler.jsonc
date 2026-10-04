@@ -67,8 +67,10 @@
     "cpu_ms": 300000
   },
   // Replaces the `crons` block in vercel.json. Times are UTC; Manila is UTC+8.
+  // "*/5 * * * *" fires every 5 minutes, but it only re-warms the Division Summary
+  // cache after a deploy, a summary reset, or once a day.
   "triggers": {
-    "crons": ["0 16 * * *", "30 16 * * 6"]
+    "crons": ["0 16 * * *", "30 16 * * 6", "*/5 * * * *"]
   },
   "observability": {
     "enabled": true

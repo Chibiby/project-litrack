@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { isCronAuthorized } from "@/lib/cron/auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { backUpDatabase } from "@/lib/db/snapshot";
 import { isBackupStoreConfigured, type BackupKind } from "@/lib/db/backup-store";
@@ -24,26 +24,8 @@ export const dynamic = "force-dynamic";
 /** Reads every table; well past the default but inside the 300s platform ceiling. */
 export const maxDuration = 300;
 
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  // Fail closed. An unset secret must not mean "allow everyone" — that is the
-  // difference between a misconfiguration and an open endpoint.
-  if (!secret) return false;
-
-  const header = request.headers.get("authorization");
-  if (!header) return false;
-
-  // Constant-time compare. SHA-256 both sides first so the two buffers
-  // handed to timingSafeEqual are always 32 bytes each — that sidesteps the
-  // length check `timingSafeEqual` would otherwise need (and the throw on
-  // mismatched lengths that check exists to avoid).
-  const expectedDigest = createHash("sha256").update(`Bearer ${secret}`).digest();
-  const receivedDigest = createHash("sha256").update(header).digest();
-  return timingSafeEqual(expectedDigest, receivedDigest);
-}
-
 export const GET = route("GET /api/cron/backup", async (request: NextRequest) => {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     throw new AppError("AUTH_NOT_SIGNED_IN", { detail: "Missing or wrong CRON_SECRET" });
   }
 

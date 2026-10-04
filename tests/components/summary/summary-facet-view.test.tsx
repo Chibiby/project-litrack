@@ -20,7 +20,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
 }));
 
-const load = vi.fn(async (_scope: unknown, _params: unknown) => ({
+const defaultLoad = async (_scope: unknown, _params: unknown): Promise<unknown> => ({
   level: "school",
   subtitle: "Figures",
   schoolCount: 1,
@@ -30,7 +30,11 @@ const load = vi.fn(async (_scope: unknown, _params: unknown) => ({
   sections: [],
   lists: [],
   params: { level: "school" },
-}));
+});
+// Outside a React request `cache()` does not dedupe, so the early start in
+// SummaryFacetView and the Suspense child each call this; tests set one
+// implementation for every call instead of a single-use one.
+const load = vi.fn(defaultLoad);
 
 vi.mock("@/lib/summary/facets", () => ({
   getSummaryFacet: () => ({ load }),
@@ -72,6 +76,7 @@ vi.mock("@/components/summary/resolve-page-scope", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  load.mockImplementation(defaultLoad);
 });
 
 afterEach(cleanup);
@@ -117,7 +122,7 @@ describe("SummaryFacetView — division scope, By school, no district picked", (
     expect(results).not.toBeNull();
     render(await runAsync(results!));
 
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalled();
     expect(load.mock.calls[0]![0]).toEqual({ kind: "all" });
     expect(screen.queryByText("Pick a district to see its schools")).toBeNull();
   });
@@ -173,6 +178,199 @@ describe("SummaryFacetView — division scope, By school, no district picked", (
     });
 
     expect(findElementNamed(jsx, "SummarySchoolSearch")).toBeNull();
+  });
+});
+
+describe("SummaryFacetView — by-district results are paged with grade rows kept under their district", () => {
+  const COUNT = 12;
+  const names = Array.from({ length: COUNT }, (_, i) => `District ${String(i + 1).padStart(2, "0")}`);
+
+  function districtResult() {
+    const row = (name: string, i: number, gradeType: string | null) => ({
+      key: gradeType ? `district:${name}|${gradeType}` : `district:${name}`,
+      label: name,
+      district: name,
+      gradeType,
+      gradeLabel: gradeType ?? "All grades",
+      base: (i + 1) * 10,
+      cells: {
+        MALE: { count: i + 1, base: (i + 1) * 10, pct: 10 },
+        FEMALE: { count: i + 1, base: (i + 1) * 10, pct: 10 },
+      },
+    });
+    return {
+      facetId: "learners",
+      level: "district",
+      subtitle: "Figures",
+      schoolCount: 30,
+      computedAt: new Date("2026-06-01T00:00:00.000Z").toISOString(),
+      notes: [],
+      gaps: [],
+      lists: [],
+      params: { level: "district" },
+      sections: [
+        {
+          id: "gender",
+          title: "Gender",
+          kind: "single",
+          byGrade: true,
+          buckets: [
+            { id: "MALE", label: "Male" },
+            { id: "FEMALE", label: "Female" },
+          ],
+          baseLabel: "% of learners",
+          table: {
+            groups: names.flatMap((n, i) => [row(n, i, "G1"), row(n, i, "G2"), row(n, i, null)]),
+          },
+        },
+      ],
+    };
+  }
+
+  async function renderDistricts(searchParams: Record<string, string>) {
+    load.mockImplementation(async () => districtResult() as never);
+    const jsx = await SummaryFacetView({
+      facetId: "learners",
+      adminScope: { kind: "division" },
+      searchParams: { level: "district", ...searchParams },
+      basePath: "/admin/summary",
+      userId: "admin-1",
+    });
+    const results = findElementNamed(jsx, "SummaryFacetResults");
+    expect(results).not.toBeNull();
+    return { jsx, ...render(await runAsync(results!)) };
+  }
+
+  const rowKeys = (container: HTMLElement) =>
+    [...container.querySelectorAll("tr[data-group-key]")].map((r) => r.getAttribute("data-group-key"));
+
+  it("renders 5 districts with their grade rows and a pager", async () => {
+    const { container } = await renderDistricts({});
+    const keys = rowKeys(container);
+    expect(keys).toHaveLength(15);
+    expect(keys.slice(0, 3)).toEqual([
+      "district:District 01",
+      "district:District 01|G1",
+      "district:District 01|G2",
+    ]);
+    expect(screen.getByText("Page 1 of 3")).toBeTruthy();
+    expect(screen.getByText("Showing 1–5 of 12 districts")).toBeTruthy();
+  });
+
+  it("renders the 2 remaining districts on page 3", async () => {
+    const { container } = await renderDistricts({ "page.gender": "3" });
+    expect(rowKeys(container)).toHaveLength(6);
+    expect(screen.getByText("Page 3 of 3")).toBeTruthy();
+  });
+
+  it("pager and sort links use the same param scheme as schools", async () => {
+    await renderDistricts({ q: "district" });
+    const next = screen.getByRole("link", { name: /Next/ });
+    const nextUrl = new URL(next.getAttribute("href")!, "http://x");
+    expect(nextUrl.searchParams.get("page.gender")).toBe("2");
+    expect(nextUrl.searchParams.get("q")).toBe("district");
+    const sort = screen.getByRole("link", { name: /Sort by.*Total/ });
+    const sortUrl = new URL(sort.getAttribute("href")!, "http://x");
+    expect(sortUrl.searchParams.get("sort.gender")).toBe("total");
+    expect(sortUrl.searchParams.get("dir.gender")).toBe("desc");
+  });
+
+  it("narrows by district name", async () => {
+    const { container } = await renderDistricts({ q: "district 07" });
+    expect(rowKeys(container)).toEqual([
+      "district:District 07",
+      "district:District 07|G1",
+      "district:District 07|G2",
+    ]);
+    expect(screen.queryByRole("navigation", { name: "Gender pages" })).toBeNull();
+  });
+
+  it("says so, with a way out, when no district matches", async () => {
+    await renderDistricts({ q: "zzz" });
+    expect(screen.getByText("No districts match your search")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Clear search" })).toBeTruthy();
+  });
+
+  it("offers a district search box", async () => {
+    const { jsx } = await renderDistricts({});
+    const search = findElementNamed(jsx, "SummarySchoolSearch");
+    expect(search).not.toBeNull();
+    expect(search!.props).toMatchObject({ unit: "districts" });
+  });
+});
+
+describe("SummaryFacetView — footer refresh cadence follows the cache rule", () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function footer(params: Record<string, string>) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T04:00:00.000Z"));
+    load.mockImplementation(async () => ({ ...(await defaultLoad(null, null)) as object, params }) as never);
+    const jsx = await SummaryFacetView({
+      facetId: "learners",
+      adminScope: { kind: "division" },
+      searchParams: {},
+      basePath: "/admin/summary",
+      userId: "admin-1",
+    });
+    const bar = findElementNamed(jsx, "SummaryPeriodBar");
+    expect(bar).not.toBeNull();
+    return render(await runAsync(bar!)).container.textContent ?? "";
+  }
+
+  it("says every hour for a month before the current one", async () => {
+    const text = await footer({ level: "overall", month: "2026-09" });
+    expect(text).toContain("refreshed every hour");
+    expect(text).not.toContain("every 5 minutes");
+  });
+
+  it("says every hour for a range that ends before the current month", async () => {
+    expect(await footer({ level: "overall", from: "2026-07", to: "2026-09" })).toContain("every hour");
+  });
+
+  it("says every 5 minutes for the current month or a period-less facet", async () => {
+    expect(await footer({ level: "overall", month: "2026-10" })).toContain("refreshed every 5 minutes");
+    expect(await footer({ level: "overall" })).toContain("refreshed every 5 minutes");
+  });
+});
+
+describe("SummaryFacetView — figures start loading before the school list resolves", () => {
+  it("calls the facet load while resolveScopeSchools is still pending", async () => {
+    const scopeSchools = await import("@/lib/summary/scope-schools");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi
+      .spyOn(scopeSchools, "resolveScopeSchools")
+      .mockImplementationOnce(async () => {
+        await gate;
+        return SCHOOLS as never;
+      });
+
+    const pending = SummaryFacetView({
+      facetId: "learners",
+      adminScope: { kind: "division" },
+      searchParams: {},
+      basePath: "/admin/summary",
+      userId: "admin-1",
+    });
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(load).toHaveBeenCalledTimes(1);
+    release();
+    await pending;
+    spy.mockRestore();
+  });
+
+  it("does not load figures when the district admin has no districts", async () => {
+    await SummaryFacetView({
+      facetId: "learners",
+      adminScope: { kind: "districts", districts: [] },
+      searchParams: {},
+      basePath: "/district/summary",
+      userId: "district-1",
+    });
+    expect(load).not.toHaveBeenCalled();
   });
 });
 
@@ -232,7 +430,7 @@ describe("SummaryFacetView — by-school results are paged before they reach the
 
   async function renderResults(searchParams: Record<string, string>) {
     SCHOOLS.splice(0, SCHOOLS.length, ...sixty);
-    load.mockImplementationOnce(async () => bigResult() as never);
+    load.mockImplementation(async () => bigResult() as never);
     const jsx = await SummaryFacetView({
       facetId: "learners",
       adminScope: { kind: "division" },

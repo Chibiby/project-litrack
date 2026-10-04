@@ -1,6 +1,5 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   DISTANCE_LABELS,
   FRUSTRATION_SUBTYPE_LABELS,
@@ -17,7 +16,12 @@ import {
   languagesForGrade,
   reportingBandValue,
 } from "@/lib/reading/policy";
-import { populationCte, type RawCountRow } from "@/lib/summary/queries/population";
+import {
+  populationCte,
+  runSummaryQuery,
+  type RawCountRow,
+} from "@/lib/summary/queries/population";
+import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import {
   NOT_ANSWERED,
   NOT_COLLECTED,
@@ -55,14 +59,11 @@ import type {
  * eliminated the temp spill entirely and ran ~0.5-0.6s steady state, matching
  * the ~2s "well under" budget with real headroom.
  *
- * `SET LOCAL work_mem` is scoped to one transaction (PgBouncer transaction
- * pooling releases the backend at commit, so this never leaks to another
- * request) and only raises memory for this one aggregation-heavy query; every
- * other query on the connection keeps the server default.
+ * Every school's rows come back (see `populationCte`); `scopeRaw` keeps the
+ * caller's. `runSummaryQuery` raises `work_mem` for this statement only.
  */
-export async function queryLearnerRows(schoolIds: readonly string[]): Promise<RawCountRow[]> {
-  if (schoolIds.length === 0) return [];
-  const pop = populationCte(schoolIds, {
+export async function queryLearnerRows(): Promise<RawCountRow[]> {
+  const pop = populationCte({
     aral: false,
     columns: Prisma.sql`
       l."age",
@@ -103,10 +104,7 @@ export async function queryLearnerRows(schoolIds: readonly string[]): Promise<Ra
       FROM pop CROSS JOIN LATERAL unnest(fil_sub) AS s
       WHERE fil = 'FRUSTRATION_HIGH_EMERGENT' GROUP BY 1, 2, 4
   `;
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SET LOCAL work_mem = '64MB'`;
-    return tx.$queryRaw<RawCountRow[]>(sql);
-  });
+  return runSummaryQuery<RawCountRow>(sql);
 }
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
@@ -151,7 +149,7 @@ function profileGradeLabels(rows: readonly FacetRow[]): Record<string, Record<st
 }
 
 export function shapeLearners(args: {
-  raw: readonly RawCountRow[];
+  raw: ScopedRaw<RawCountRow>;
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   computedAt: string;

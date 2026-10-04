@@ -33,6 +33,16 @@ export function monthStartKey(monthKey: string): string {
   return `${monthKey}-01`;
 }
 
+/** Last day of the month, `YYYY-MM-DD`. */
+export function monthEndKey(monthKey: string): string {
+  return formatLocalDateKey(addDays(parseLocalDateKey(monthStartKey(shiftMonth(monthKey, 1))), -1));
+}
+
+/** True when the whole month is before `todayKey`'s month. */
+export function isPastMonth(monthKey: string, todayKey: string): boolean {
+  return monthKey < monthKeyOf(todayKey);
+}
+
 /** Every month from `from` to `to`, inclusive, oldest first. */
 export function monthsBetween(from: string, to: string): string[] {
   const out: string[] = [];
