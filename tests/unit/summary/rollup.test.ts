@@ -90,6 +90,24 @@ describe("rollUp", () => {
     expect(groups[2]!.district).toBeNull();
   });
 
+  it("lists schools by district (natural order, no district last), then by name", () => {
+    const schools = [
+      school("z1", "Zamora ES", "Alabel 10"),
+      school("n1", "Nowhere ES", null),
+      school("a2", "Aplaya ES", "Glan 1"),
+      school("b1", "Bagacay ES", "Alabel 2"),
+      school("a1", "Alabel CES", "Alabel 2"),
+    ];
+    const groups = rollUp([], schools, "school", { byGrade: false, buckets: BUCKETS }).groups;
+    expect(groups.map((g) => g.label)).toEqual([
+      "Alabel CES",
+      "Bagacay ES",
+      "Zamora ES",
+      "Aplaya ES",
+      "Nowhere ES",
+    ]);
+  });
+
   it("lists every school in scope, even one with no rows, with a null %", () => {
     const groups = rollUp(ROWS.filter((r) => r.schoolId !== "s2"), SCHOOLS, "school", {
       byGrade: false,

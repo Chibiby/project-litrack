@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
+import { AdminShellGate } from "@/components/admin-shell-gate";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { getChatNotifications } from "@/lib/chat/notifications";
 import { isDeveloperAdmin, superAdminLabel } from "@/lib/auth/admin-tier";
@@ -21,24 +22,32 @@ export default async function AdminLayout({
     return children;
   }
 
+  // A signed-in admin can still be on /admin/login (mid sign-in, or a client
+  // navigation that keeps this layout mounted); the gate keeps it bare there.
   return (
-    <>
-      <PostLoginSplash role="admin" />
-      <RoleShell
-        role={user.role}
-        userId={user.id}
-        userName={user.fullName || user.email}
-        avatarPath={user.avatarPath}
-        roleLabel={superAdminLabel(user)}
-        isDeveloperAdmin={isDeveloperAdmin(user)}
-        aiEnabled={geminiConfigured()}
-        // Not awaited: streamed through RoleShell/AppHeader as a promise so the
-        // sidebar and header paint before the notifications query resolves.
-        notifications={getChatNotifications(user)}
-        lastSeenReleaseVersion={user.lastSeenReleaseVersion}
-      >
-        {children}
-      </RoleShell>
-    </>
+    <AdminShellGate
+      shell={
+        <>
+          <PostLoginSplash role="admin" />
+          <RoleShell
+            role={user.role}
+            userId={user.id}
+            userName={user.fullName || user.email}
+            avatarPath={user.avatarPath}
+            roleLabel={superAdminLabel(user)}
+            isDeveloperAdmin={isDeveloperAdmin(user)}
+            aiEnabled={geminiConfigured()}
+            // Not awaited: streamed through RoleShell/AppHeader as a promise so the
+            // sidebar and header paint before the notifications query resolves.
+            notifications={getChatNotifications(user)}
+            lastSeenReleaseVersion={user.lastSeenReleaseVersion}
+          >
+            {children}
+          </RoleShell>
+        </>
+      }
+    >
+      {children}
+    </AdminShellGate>
   );
 }

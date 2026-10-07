@@ -221,6 +221,41 @@ describe("pageSchoolSection sort", () => {
     });
     expect(labels(r.section)).toEqual(["Beta", "Alpha"]);
   });
+
+  it("groups schools by district first, then by name within the district", () => {
+    const sec = section([
+      schoolRow("s1", "Aplaya ES", 1, {}, { district: "Malungon 1" }),
+      schoolRow("s2", "Zamora ES", 1, {}, { district: "Alabel 1" }),
+      schoolRow("s3", "Bagacay ES", 1, {}, { district: null }),
+      schoolRow("s4", "Bala ES", 1, {}, { district: "Alabel 10" }),
+      schoolRow("s5", "Alabel CS", 1, {}, { district: "Alabel 1" }),
+      schoolRow("s6", "Datal ES", 1, {}, { district: "Alabel 2" }),
+    ]);
+    const r = pageSchoolSection(sec, { query: "", params: NAME, schoolCodes: noCodes });
+    // Numeric-aware district order (Alabel 2 before Alabel 10); no district last.
+    expect(labels(r.section)).toEqual([
+      "Alabel CS",
+      "Zamora ES",
+      "Datal ES",
+      "Bala ES",
+      "Aplaya ES",
+      "Bagacay ES",
+    ]);
+  });
+
+  it("keeps districts in order and reverses names within each when sorted by name descending", () => {
+    const sec = section([
+      schoolRow("s1", "Alabel CS", 1, {}, { district: "Alabel 1" }),
+      schoolRow("s2", "Zamora ES", 1, {}, { district: "Alabel 1" }),
+      schoolRow("s3", "Aplaya ES", 1, {}, { district: "Malungon 1" }),
+    ]);
+    const r = pageSchoolSection(sec, {
+      query: "",
+      params: { sort: "name", dir: "desc", page: 1 },
+      schoolCodes: noCodes,
+    });
+    expect(labels(r.section)).toEqual(["Zamora ES", "Alabel CS", "Aplaya ES"]);
+  });
 });
 
 describe("pageSchoolSection blocks", () => {

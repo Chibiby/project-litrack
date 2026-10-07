@@ -88,6 +88,18 @@ function toBlocks(groups: readonly SummaryGroup[]): PageBlock[] {
 /** A unit of paging: one school's or one district's rows, kept together. `id` null sorts last and is never filtered out. */
 export type PageBlock = { id: string | null; rows: SummaryGroup[]; total: SummaryGroup };
 
+const NATURAL = { numeric: true, sensitivity: "base" } as const;
+
+/** District ascending ("Alabel 2" before "Alabel 10"); no district last. Same for both sort directions. */
+function compareDistrict(a: PageBlock, b: PageBlock): number {
+  const da = a.total.district ?? null;
+  const db = b.total.district ?? null;
+  if (da === db) return 0;
+  if (da === null) return 1;
+  if (db === null) return -1;
+  return da.localeCompare(db, undefined, NATURAL);
+}
+
 function compareName(a: PageBlock, b: PageBlock): number {
   return a.total.label.localeCompare(b.total.label) || (a.id ?? "").localeCompare(b.id ?? "");
 }
@@ -103,6 +115,8 @@ export function pageBlocks(
     matches: (block: PageBlock) => boolean;
     params: SchoolTableParams;
     pageSize: number;
+    /** Name sort groups blocks by district first (by-school tables). */
+    districtFirst?: boolean;
   },
 ): {
   section: SummarySection;
@@ -138,7 +152,8 @@ export function pageBlocks(
       return (va - vb) * sign || compareName(a, b);
     });
   } else {
-    matched.sort((a, b) => compareName(a, b) * sign);
+    const district = opts.districtFirst ? compareDistrict : () => 0;
+    matched.sort((a, b) => district(a, b) || compareName(a, b) * sign);
   }
 
   const pageCount = Math.max(1, Math.ceil(matched.length / pageSize));
@@ -164,7 +179,8 @@ export function pageBlocks(
  * "school") form one block that is never filtered out by the search; it has no
  * sort value, so it sorts after real schools and counts as one block.
  *
- * Sort: "name" by label then schoolId; "total" by base; a bucket id from
+ * Sort: "name" by district (always ascending, no district last), then by
+ * label and schoolId in the chosen direction; "total" by base; a bucket id from
  * `section.buckets` by pct (by mean for kind "average"). Null values are
  * always last whatever the direction; ties break by school name ascending.
  * Any other sort id behaves as "name".
@@ -185,6 +201,7 @@ export function pageSchoolSection(
   const r = pageBlocks(section, blocks, {
     params: opts.params,
     pageSize,
+    districtFirst: true,
     matches: (b) => {
       if (!needle) return true;
       if (b.total.label.toLowerCase().includes(needle)) return true;

@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.35.1",
+    date: "2026-10-07",
+    title: "Admin sign-in and By school order",
+    announce: false,
+    fixes: [
+      "The admin sign-in page no longer shows the sidebar and header while you sign in.",
+      "\"By school\" tables on the Division Summary list schools by district first, then by name, so all Alabel 1 schools come first.",
+    ],
+  },
+  {
     version: "2.35.0",
     date: "2026-10-04",
     title: "Faster Division Summary",

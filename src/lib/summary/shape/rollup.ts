@@ -76,8 +76,13 @@ function levelRows(
     }
     return { rows, keyOf };
   }
+  // District first (natural order, no district last), then school name: how
+  // the division reads its school list.
   const sorted = [...schools].sort(
-    (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
+    (a, b) =>
+      compareDistrictName(a.district, b.district) ||
+      a.name.localeCompare(b.name) ||
+      a.id.localeCompare(b.id)
   );
   for (const s of sorted) keyOf.set(s.id, `school:${s.id}`);
   return {
@@ -89,6 +94,13 @@ function levelRows(
     })),
     keyOf,
   };
+}
+
+function compareDistrictName(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
 function districtKey(district: string | null): string {
