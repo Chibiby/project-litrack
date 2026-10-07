@@ -219,22 +219,21 @@ vi.mock("@/lib/demo/provision", () => ({
 }));
 
 let authUserCounter = 0;
-const createUserMock = vi.fn(async (_args?: unknown) => {
+const createUserMock = vi.fn(async (_input?: unknown, _db?: unknown) => {
   authUserCounter += 1;
-  return { data: { user: { id: `auth-${authUserCounter}` } }, error: null };
+  return { authId: `auth-${authUserCounter}` };
 });
-const updateUserByIdMock = vi.fn(async (..._args: unknown[]) => ({ data: {}, error: null }));
-const deleteUserMock = vi.fn(async (_id: string) => ({ data: {}, error: null }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({
-    auth: {
-      admin: {
-        createUser: (args: unknown) => createUserMock(args),
-        updateUserById: (...args: unknown[]) => updateUserByIdMock(...args),
-        deleteUser: (id: string) => deleteUserMock(id),
-      },
-    },
-  }),
+vi.mock("@/lib/auth/identity", () => ({
+  createIdentity: (input: unknown, db?: unknown) => createUserMock(input, db),
+}));
+// `@/lib/auth/test-lab` reads the impersonation session, which pulls in the
+// Better Auth server instance; nothing here exercises it.
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: vi.fn(async () => null),
+}));
+// bcrypt is irrelevant here; a deterministic stand-in keeps the input visible.
+vi.mock("@/lib/auth/password-hash", () => ({
+  hashPassword: async (plain: string) => `hashed(${plain})`,
 }));
 
 const setTeacherAdvisoryMock = vi.fn(
@@ -399,7 +398,7 @@ describe("prepareTestLabFixtures — idempotency", () => {
 });
 
 describe("prepareTestLabFixtures — partial failure", () => {
-  it("removes the persona auth user when its User row cannot be written, so Prepare can be retried", async () => {
+  it("creates the persona identity inside the same transaction as its User row, so a failed User write rolls it back", async () => {
     seedLiveDemoSchool();
     users.push({
       id: "head-1",
@@ -424,7 +423,29 @@ describe("prepareTestLabFixtures — partial failure", () => {
     await expect(prepareTestLabFixtures(ADMIN_ID)).rejects.toBe(poolTimeout);
 
     expect(createUserMock).toHaveBeenCalledTimes(1);
-    expect(deleteUserMock).toHaveBeenCalledWith("auth-1");
+    // The identity write shares the transaction client, so the database
+    // rolls it back with the failed User.create (no compensating delete).
+    const [input, db] = createUserMock.mock.calls[0] as [
+      { email: string; role: string; password: { hash: string }; emailVerified: boolean },
+      unknown,
+    ];
+    expect(db).toBe(prismaMock);
+    expect(input.role).toBe("TEACHER");
+    expect(input.emailVerified).toBe(true);
+    // A generated credential, hashed — never a plaintext password.
+    expect(input.password.hash).toMatch(/^hashed\(.+\)$/);
+  });
+
+  it("gives each persona its own generated credential", async () => {
+    seedLiveDemoSchool();
+    await prepareTestLabFixtures(ADMIN_ID);
+
+    const inputs = createUserMock.mock.calls.map(
+      (c) => c[0] as { email: string; password: { hash: string } }
+    );
+    expect(inputs).toHaveLength(2);
+    expect(new Set(inputs.map((i) => i.email)).size).toBe(2);
+    expect(inputs[0].password.hash).not.toBe(inputs[1].password.hash);
   });
 });
 

@@ -3,15 +3,15 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { resourceNotFound } from "@/lib/errors/app-error";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { readBoundImpersonationSession, type ImpersonationReturnTo } from "@/lib/auth/impersonation";
+import { readImpersonation, type ImpersonationReturnTo } from "@/lib/auth/impersonation-session";
 
 /**
  * Page Test Lab guards (docs/test-lab-spec.md).
  *
  * Test Lab signs a Super Admin in as demo accounts. Everything here exists so
- * that "demo" is decided server-side from the database and the signed,
- * session-bound impersonation ticket — never from anything the browser sends.
+ * that "demo" is decided server-side from the database and the impersonation
+ * recorded on the session row (`impersonatedBy`) — never from anything the
+ * browser sends.
  */
 
 /**
@@ -34,7 +34,7 @@ export async function assertTestableSchool(schoolId: string | null | undefined):
   }
 }
 
-/** Pure: a Test Lab session needs a bound ticket, for this user, in a demo school. */
+/** Pure: a Test Lab session needs an impersonation of this user, in a demo school. */
 export function isTestLabSession(input: {
   ticketTargetUserId: string | null | undefined;
   userId: string;
@@ -50,7 +50,7 @@ export function isTestLabSession(input: {
 
 /**
  * Where "Return to admin" lands: Test Lab for a demo session or for a session
- * Test Lab started on a real account (the signed ticket's `returnTo`, used for
+ * Test Lab started on a real account (the allowlisted `returnTo`, used for
  * "Open as District Admin"), the accounts console otherwise.
  */
 export function impersonationReturnPath(input: {
@@ -62,20 +62,18 @@ export function impersonationReturnPath(input: {
 
 const readTestLabSessionCached = cache(
   async (userId: string, schoolId: string | null): Promise<boolean> => {
-    // Every ordinary request stops before the auth server or the database: no
-    // school returns here, and no ticket cookie returns inside
-    // `readBoundImpersonationSession` before it checks the session.
+    // A school-less user stops here; everyone else pays one cookie-cached
+    // session read, and a school query only while impersonated.
     if (!schoolId) return false;
-    const supabase = await createSupabaseServerClient();
-    const context = await readBoundImpersonationSession(supabase.auth);
-    if (!context || context.ticket.targetUserId !== userId) return false;
+    const context = await readImpersonation();
+    if (!context || context.targetUserId !== userId) return false;
 
     const school = await prisma.school.findFirst({
       where: { id: schoolId, deletedAt: null },
       select: { isDemo: true },
     });
     return isTestLabSession({
-      ticketTargetUserId: context.ticket.targetUserId,
+      ticketTargetUserId: context.targetUserId,
       userId,
       schoolIsDemo: school?.isDemo === true,
     });
@@ -83,12 +81,13 @@ const readTestLabSessionCached = cache(
 );
 
 /**
- * True only when this request is a Super Admin's bound impersonation session of
+ * True only when this request is a Super Admin's impersonation session of
  * `user`, and `user`'s school is a live demo school.
  *
- * An expired-but-bound ticket still counts. That is the conservative direction
- * for this signal: its consumers switch saves to dry-run, so treating the
- * session as a test keeps writes off rather than turning them on.
+ * Read through the session cookie cache, so a just-ended impersonation can
+ * still count for a few minutes. That is the conservative direction for this
+ * signal: its consumers switch saves to dry-run, so treating the session as a
+ * test keeps writes off rather than turning them on.
  *
  * Keyed on primitives so React `cache()` memoizes per request regardless of
  * which `User` object reference a caller holds.

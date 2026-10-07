@@ -43,9 +43,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-const deleteUser = vi.fn();
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({ auth: { admin: { deleteUser } } }),
+const deleteIdentity = vi.fn();
+vi.mock("@/lib/auth/identity", () => ({
+  deleteIdentity: (...a: unknown[]) => deleteIdentity(...a),
+  setPassword: vi.fn(),
+  setRole: vi.fn(),
 }));
 
 const releaseTeacherAdvisory = vi.fn();
@@ -64,7 +66,7 @@ beforeEach(() => {
     { id: "t-a", authId: "auth-a", fullName: "Ana", email: "ana@x.ph", schoolId: "school-1" },
     { id: "t-b", authId: "auth-b", fullName: "Ben", email: "ben@x.ph", schoolId: "school-2" },
   ];
-  deleteUser.mockResolvedValue({ error: null });
+  deleteIdentity.mockResolvedValue(undefined);
   releaseTeacherAdvisory.mockImplementation(async (_tx: unknown, p: { teacherId: string }) => {
     order.push(`release:${p.teacherId}`);
     return { sectionIds: [], learnerCount: 0 };

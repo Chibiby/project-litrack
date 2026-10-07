@@ -2,7 +2,6 @@ import "server-only";
 import crypto from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { getSupabaseServiceEnv } from "@/lib/supabase/env";
 import { AppError } from "@/lib/errors/app-error";
 
 /**
@@ -30,9 +29,10 @@ import { AppError } from "@/lib/errors/app-error";
  * fake schools — but it is still the difference between "admins only" and
  * "anybody", which is the whole of what was asked for.
  *
- * The signing key is SUPABASE_SERVICE_ROLE_KEY: server-only, high-entropy, and
- * already required by the admin surfaces that start a demo session. Rotating it
- * ends outstanding demo sessions, which is the correct failure direction.
+ * The signing key is derived from BETTER_AUTH_SECRET with HKDF (info
+ * "litrack.demo-session.v1"), so the demo cookie never shares a key with the
+ * auth session cookies. Rotating the secret ends outstanding demo sessions,
+ * which is the correct failure direction.
  *
  * It is a browser-session cookie with a signed expiry on top. Closing the
  * browser ends it, `logoutAction` clears it, and `expiresAt` caps a forgotten
@@ -56,15 +56,20 @@ export type DemoSession = {
 };
 
 /**
- * Null when the service role key is unset. Readers must treat that as "no demo
- * session" rather than throwing: `isDemoVisible` runs on `/login`, the page
- * every user starts from, and a missing key must not take it down. Being unable
- * to verify a cookie and the cookie being invalid have the same answer here —
- * hide the demo.
+ * Null when BETTER_AUTH_SECRET is unset or too short. Readers must treat that
+ * as "no demo session" rather than throwing: `isDemoVisible` runs on `/login`,
+ * the page every user starts from, and a missing key must not take it down.
+ * Being unable to verify a cookie and the cookie being invalid have the same
+ * answer here — hide the demo.
  */
+const MIN_SECRET_LENGTH = 32;
+const HKDF_INFO = "litrack.demo-session.v1";
+
 function signingKey(): string | null {
-  const env = getSupabaseServiceEnv();
-  return env.ok ? env.serviceRoleKey : null;
+  const secret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (!secret || secret.length < MIN_SECRET_LENGTH) return null;
+  const derived = crypto.hkdfSync("sha256", secret, Buffer.alloc(0), HKDF_INFO, 32);
+  return Buffer.from(derived).toString("base64url");
 }
 
 function sign(payload: string, key: string): string {
@@ -94,7 +99,7 @@ export function encodeDemoSession(
   const key = signingKey();
   if (!key) {
     throw new AppError("CONFIG_MISSING", {
-      detail: "SUPABASE_SERVICE_ROLE_KEY is required to open a demo session.",
+      detail: "BETTER_AUTH_SECRET is required to open a demo session.",
     });
   }
   const session: DemoSession = { adminUserId, expiresAt: now + DEMO_TTL_MS };

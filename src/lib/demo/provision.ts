@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  createIdentity,
+  deleteIdentity,
+  findIdentityByEmail,
+  setPassword,
+  setRole,
+} from "@/lib/auth/identity";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import {
   DEMO_ADDRESS,
@@ -84,28 +90,6 @@ export async function demoStatus(): Promise<DemoStatus> {
   };
 }
 
-/**
- * Find the Supabase auth user behind an email, or null.
- *
- * `listUsers` is paged rather than searchable in supabase-js v2, so this walks
- * pages. The demo tenant is provisioned once and reset rarely, so the cost is
- * irrelevant next to the correctness of not orphaning an auth user.
- */
-async function findAuthUserByEmail(
-  supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>,
-  email: string
-): Promise<string | null> {
-  const target = email.toLowerCase();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) return null;
-    const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === target);
-    if (hit) return hit.id;
-    if (data.users.length < 200) return null;
-  }
-  return null;
-}
-
 export type ProvisionedSchool = { name: string; schoolId: string; schoolHeadEmail: string };
 
 export type ProvisionResult =
@@ -122,8 +106,7 @@ export type ProvisionResult =
  */
 async function provisionOne(
   spec: DemoSchoolSpec,
-  createdById: string,
-  supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>
+  createdById: string
 ): Promise<{ ok: true; school: ProvisionedSchool } | { ok: false; error: string }> {
   const syntheticEmail = schoolHeadSyntheticEmail(spec.emailCode);
 
@@ -137,35 +120,29 @@ async function provisionOne(
     return { ok: false, error: `Another school is already named "${spec.name}". Rename it first.` };
   }
 
-  // A reset leaves no auth user behind, but a half-failed create can. Reuse it
-  // rather than failing on "email already registered".
-  let authId = await findAuthUserByEmail(supabaseAdmin, syntheticEmail);
-  if (authId) {
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(authId, {
-      password: DEMO_SCHOOL_ID_CODE,
-      app_metadata: { role: "SCHOOL_HEAD" },
-    });
-    if (error) {
-      throw new AppError("AUTH_PROVIDER_ERROR", {
-        cause: error,
-        detail: `demo provision: updating the School Head auth user failed: ${error.message}`,
-      });
+  // A reset leaves no identity behind, but a half-failed create can. Reuse it
+  // rather than failing on "email already in use".
+  let authId: string;
+  try {
+    const found = await findIdentityByEmail(syntheticEmail);
+    if (found) {
+      authId = found.authId;
+      await setPassword(authId, DEMO_SCHOOL_ID_CODE);
+      await setRole(authId, "SCHOOL_HEAD");
+    } else {
+      ({ authId } = await createIdentity({
+        email: syntheticEmail,
+        password: DEMO_SCHOOL_ID_CODE,
+        role: "SCHOOL_HEAD",
+        emailVerified: true,
+      }));
     }
-  } else {
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: syntheticEmail,
-      password: DEMO_SCHOOL_ID_CODE,
-      email_confirm: true,
-      app_metadata: { role: "SCHOOL_HEAD" },
-      user_metadata: { role: "SCHOOL_HEAD" },
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError("AUTH_PROVIDER_ERROR", {
+      cause: err,
+      detail: `demo provision: preparing the School Head identity failed: ${err instanceof Error ? err.message : "unknown"}`,
     });
-    if (error || !data.user) {
-      throw new AppError("AUTH_PROVIDER_ERROR", {
-        cause: error ?? undefined,
-        detail: `demo provision: creating the School Head auth user failed: ${error?.message ?? "no user returned"}`,
-      });
-    }
-    authId = data.user.id;
   }
 
   const school = await prisma.$transaction(async (tx) => {
@@ -183,9 +160,9 @@ async function provisionOne(
     });
 
     await tx.user.upsert({
-      where: { authId: authId! },
+      where: { authId },
       create: {
-        authId: authId!,
+        authId,
         email: syntheticEmail,
         role: "SCHOOL_HEAD",
         schoolId: created.id,
@@ -214,10 +191,6 @@ async function provisionOne(
     return created;
   });
 
-  await supabaseAdmin.auth.admin.updateUserById(authId, {
-    app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
-  });
-
   return {
     ok: true,
     school: { name: school.name, schoolId: school.id, schoolHeadEmail: syntheticEmail },
@@ -233,7 +206,6 @@ async function provisionOne(
  */
 export async function provisionDemoTenant(createdById: string): Promise<ProvisionResult> {
   const status = await demoStatus();
-  const supabaseAdmin = createSupabaseAdminClient();
   const schools: ProvisionedSchool[] = [];
 
   for (const spec of DEMO_SCHOOLS) {
@@ -247,7 +219,7 @@ export async function provisionDemoTenant(createdById: string): Promise<Provisio
       continue;
     }
 
-    const result = await provisionOne(spec, createdById, supabaseAdmin);
+    const result = await provisionOne(spec, createdById);
     // Fail loudly on the first problem rather than pressing on: a partial set is
     // confusing to reason about, and the schools already created are kept, so
     // pressing the button again resumes where this stopped.
@@ -273,17 +245,19 @@ export async function resetDemoTenant(createdById: string): Promise<ProvisionRes
   });
 
   if (existing.length > 0) {
-    const supabaseAdmin = createSupabaseAdminClient();
     for (const school of existing) {
       const { authIds } = await deleteSchoolCompletely(school.id);
 
-      // Supabase auth users have no foreign key into Prisma, so they are removed
-      // after the rows are gone. A failure here leaves a stale auth user, which
+      // Identities have no foreign key into `User`, so they are removed after
+      // the rows are gone. A failure here leaves a stale identity, which
       // `provisionDemoTenant` then reuses rather than tripping over — so it is
       // logged, not fatal.
       for (const authId of authIds) {
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(authId);
-        if (error) console.error("[demo] deleting auth user failed:", error.message);
+        try {
+          await deleteIdentity(authId);
+        } catch (err) {
+          console.error("[demo] deleting identity failed:", err instanceof Error ? err.message : err);
+        }
       }
     }
   }

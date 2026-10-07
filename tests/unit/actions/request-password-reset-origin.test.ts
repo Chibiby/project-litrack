@@ -19,25 +19,48 @@ const checkRateLimit = vi.fn();
 const sendPasswordRecoveryEmail = vi.fn();
 const headersMock = vi.fn();
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const client = {
     user: {
       get findUnique() {
         return userFindUnique;
       },
     },
-  },
+  };
+  return { prisma: client, prismaFresh: client };
+});
+
+// Better Auth is the only auth backend: configured, never actually called here.
+vi.mock("@/lib/auth/better-auth", () => ({
+  isAuthConfigured: () => true,
+  getAuth: vi.fn(),
 }));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({ auth: {} }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  endCurrentSession: vi.fn(),
+  getAuthSession: vi.fn(),
+  revokeAllSessions: vi.fn(),
+  signInWithPassword: vi.fn(),
 }));
-
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
-
-vi.mock("@/lib/supabase/env", () => ({
-  isSupabaseConfigured: () => true,
-  SUPABASE_NOT_CONFIGURED_MESSAGE: "not configured",
+vi.mock("@/lib/auth/identity", () => ({
+  createIdentity: vi.fn(),
+  findIdentityByEmail: vi.fn(),
+  setEmail: vi.fn(),
+  setPassword: vi.fn(),
+  verifyAccountPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-hash", () => ({
+  DUMMY_BCRYPT_HASH: "dummy",
+  hashPassword: vi.fn(),
+  verifyPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-reset", () => ({
+  consumeResetToken: vi.fn(),
+  peekResetToken: vi.fn(),
+}));
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(),
+  isVerifiedImpersonationOf: vi.fn(),
+  readImpersonation: vi.fn(),
 }));
 
 vi.mock("@/lib/audit", () => ({
@@ -80,6 +103,8 @@ vi.mock("@/lib/auth/teacher-registration-helpers", () => ({
 vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: () => false }));
 
 vi.mock("@/lib/auth/recovery-email", () => ({
+  RESET_COOKIE: "litrack_reset",
+  RESET_COOKIE_PATH: "/auth",
   get sendPasswordRecoveryEmail() {
     return sendPasswordRecoveryEmail;
   },
@@ -103,6 +128,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { requestPasswordReset } from "@/lib/actions/auth";
 
+const AUTH_ID = "11111111-1111-1111-1111-111111111111";
+
 function form(email: string): FormData {
   const fd = new FormData();
   fd.set("email", email);
@@ -115,7 +142,7 @@ beforeEach(() => {
   sendPasswordRecoveryEmail.mockResolvedValue(undefined);
   userFindUnique.mockResolvedValue({
     id: "user-1",
-    authId: "11111111-1111-1111-1111-111111111111",
+    authId: AUTH_ID,
     schoolId: "school-1",
     isActive: true,
     deletedAt: null,
@@ -142,7 +169,8 @@ describe("requestPasswordReset — origin resolution", () => {
     expect(result).toEqual({ ok: true });
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://from-env.example"
+      "https://from-env.example",
+      AUTH_ID
     );
   });
 
@@ -154,7 +182,8 @@ describe("requestPasswordReset — origin resolution", () => {
 
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://from-env.example"
+      "https://from-env.example",
+      AUTH_ID
     );
   });
 
@@ -167,7 +196,8 @@ describe("requestPasswordReset — origin resolution", () => {
 
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "http://localhost:3000"
+      "http://localhost:3000",
+      AUTH_ID
     );
   });
 
@@ -183,7 +213,8 @@ describe("requestPasswordReset — origin resolution", () => {
     expect(result).toEqual({ ok: true });
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://arallitrack.com"
+      "https://arallitrack.com",
+      AUTH_ID
     );
   });
 });

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * the REAL guards run — `requireUser`, `requireSchoolUser`,
  * `requireDeveloperAdmin` (all `@/lib/auth/session`) and `requireAdminScope`
  * (`@/lib/auth/district-scope`) — and only their boundaries are faked: the
- * Supabase claims lookup, the Prisma user row, and `next/navigation`
+ * Better Auth session lookup, the Prisma user row, and `next/navigation`
  * (`redirect` throws exactly as the real one does, so the `action()` wrapper's
  * `unstable_rethrow` path is exercised).
  *
@@ -61,26 +61,25 @@ vi.mock("next/cache", () => ({
   unstable_cache: <T,>(fn: T) => fn,
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      getClaims: async () => ({
-        data: { claims: state.claimsSub ? { sub: state.claimsSub } : undefined },
-      }),
-      signOut: async () => ({ error: null }),
-    },
-  }),
+// The Better Auth session boundary: `getAuthSession` is what `requireUser`
+// resolves a caller from. `claimsSub` is the signed-in identity's authId.
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: async () =>
+    state.claimsSub
+      ? { user: { id: state.claimsSub }, session: { impersonatedBy: null } }
+      : null,
+  endCurrentSession: async () => true,
+  revokeAllSessions: async () => 0,
+  signInWithPassword: async () => ({ ok: false }),
 }));
-vi.mock("@/lib/supabase/env", () => ({
-  getSupabasePublicEnv: () => ({ ok: false }),
-}));
-vi.mock("@/lib/supabase/jwks", () => ({ getSharedJwks: async () => undefined }));
 vi.mock("@/lib/db/read-mode", () => ({ primeReadMode: async () => {} }));
 
-vi.mock("@/lib/auth/impersonation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/auth/impersonation")>()),
-  clearImpersonationCookie: async () => {},
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: async () => {},
   isVerifiedImpersonationOf: async () => false,
+  readImpersonation: async () => null,
+  startImpersonationSession: async () => {},
+  stopImpersonationSession: async () => {},
 }));
 
 // Reporting a body failure must not reach the real ErrorEvent writer.

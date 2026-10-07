@@ -71,10 +71,10 @@ describe("avatarPublicUrl", () => {
   const path = `${USER_ID}/${UUID}.webp`;
 
   it("returns null when base is missing", () => {
-    // `undefined` falls through to the NEXT_PUBLIC_SUPABASE_URL default, which a
-    // deploy build (Cloudflare Workers Builds) sets for real. Clear it so this
-    // case tests the missing base, not the build machine.
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    // `undefined` falls through to the NEXT_PUBLIC_AVATAR_BASE_URL default, which
+    // a deploy build may set for real. Clear it so this case tests the missing
+    // base, not the build machine.
+    vi.stubEnv("NEXT_PUBLIC_AVATAR_BASE_URL", "");
     try {
       expect(avatarPublicUrl(path, "full", "")).toBeNull();
       expect(avatarPublicUrl(path, "full", undefined)).toBeNull();
@@ -84,24 +84,33 @@ describe("avatarPublicUrl", () => {
   });
 
   it("returns null when the path is invalid", () => {
-    expect(avatarPublicUrl("not-a-valid-path", "full", "https://proj.supabase.co")).toBeNull();
+    expect(avatarPublicUrl("not-a-valid-path", "full", "https://avatars.example.com")).toBeNull();
   });
 
-  it("builds the full-variant URL", () => {
-    expect(avatarPublicUrl(path, "full", "https://proj.supabase.co")).toBe(
-      `https://proj.supabase.co/storage/v1/object/public/avatars/${USER_ID}/${UUID}.webp`
+  it("builds the full-variant URL as base + key", () => {
+    expect(avatarPublicUrl(path, "full", "https://avatars.example.com")).toBe(
+      `https://avatars.example.com/${USER_ID}/${UUID}.webp`
     );
   });
 
   it("builds the thumb-variant URL with the _128 suffix", () => {
-    expect(avatarPublicUrl(path, "thumb", "https://proj.supabase.co")).toBe(
-      `https://proj.supabase.co/storage/v1/object/public/avatars/${USER_ID}/${UUID}_128.webp`
+    expect(avatarPublicUrl(path, "thumb", "https://avatars.example.com")).toBe(
+      `https://avatars.example.com/${USER_ID}/${UUID}_128.webp`
     );
   });
 
-  it("strips a trailing slash from base", () => {
-    expect(avatarPublicUrl(path, "full", "https://proj.supabase.co/")).toBe(
-      `https://proj.supabase.co/storage/v1/object/public/avatars/${USER_ID}/${UUID}.webp`
+  it("strips trailing slashes from base", () => {
+    expect(avatarPublicUrl(path, "full", "https://avatars.example.com//")).toBe(
+      `https://avatars.example.com/${USER_ID}/${UUID}.webp`
     );
+  });
+
+  it("reads NEXT_PUBLIC_AVATAR_BASE_URL when no base is passed", () => {
+    vi.stubEnv("NEXT_PUBLIC_AVATAR_BASE_URL", "https://cdn.example.org");
+    try {
+      expect(avatarPublicUrl(path, "full")).toBe(`https://cdn.example.org/${USER_ID}/${UUID}.webp`);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

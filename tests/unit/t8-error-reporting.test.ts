@@ -31,9 +31,9 @@ vi.mock("@/lib/auth/session", () => ({
   requireUser: async () => ({ id: "t-1", role: "TEACHER", schoolId: "s-1" }),
 }));
 
-const updateUserById = vi.fn();
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({ auth: { admin: { updateUserById } } }),
+const setRole = vi.fn();
+vi.mock("@/lib/auth/identity", () => ({
+  setRole: (...a: unknown[]) => setRole(...a),
 }));
 
 const writeAudit = vi.fn();
@@ -103,8 +103,8 @@ describe("teacher registration", () => {
     userCreate.mockResolvedValue({ id: "u-1" });
   });
 
-  it("A40: reports an app_metadata failure and still succeeds", async () => {
-    updateUserById.mockResolvedValue({ error: { message: "boom" } });
+  it("A40: reports an identity role-stamp failure and still succeeds", async () => {
+    setRole.mockRejectedValue(new Error("boom"));
     const result = await completeTeacherAuthAfterVerify(params);
     expect(result).toEqual({ ok: true, outcome: "pending" });
     expect(reportError).toHaveBeenCalledTimes(1);
@@ -112,21 +112,20 @@ describe("teacher registration", () => {
     expect(err.severity).toBe("system");
   });
 
-  it("A40: reports when the admin client throws and still succeeds", async () => {
-    updateUserById.mockRejectedValue(new Error("no key"));
-    const result = await completeTeacherAuthAfterVerify(params);
-    expect(result).toEqual({ ok: true, outcome: "pending" });
-    expect(reportError).toHaveBeenCalledTimes(1);
+  it("stamps the TEACHER role on the new identity (invariant I3)", async () => {
+    setRole.mockResolvedValue(undefined);
+    await completeTeacherAuthAfterVerify(params);
+    expect(setRole).toHaveBeenCalledWith("auth-1", "TEACHER");
   });
 
-  it("does not report when app_metadata updates cleanly", async () => {
-    updateUserById.mockResolvedValue({ error: null });
+  it("does not report when the role stamp succeeds", async () => {
+    setRole.mockResolvedValue(undefined);
     await completeTeacherAuthAfterVerify(params);
     expect(reportError).not.toHaveBeenCalled();
   });
 
   it("A8: TEACHER_REGISTER audit metadata has no email", async () => {
-    updateUserById.mockResolvedValue({ error: null });
+    setRole.mockResolvedValue(undefined);
     await completeTeacherAuthAfterVerify(params);
     expect(writeAudit).toHaveBeenCalledTimes(1);
     const [arg] = writeAudit.mock.calls[0] as unknown as [{ metadata: Record<string, unknown> }];

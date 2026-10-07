@@ -7,8 +7,8 @@ import { buildWebpVp8, textBytes } from "../avatars/fixtures";
  *
  * Only leaf infrastructure is mocked: Prisma, `requireUser`, Test Lab,
  * impersonation, the rate limiter, audit, notifications, cache invalidation,
- * and the Supabase admin client (as a fake storage bucket, so the real
- * `putAvatarObjects`/`removeAvatarObjects` in `@/lib/supabase/avatar-storage`
+ * and the Cloudflare context (as a fake R2 `AVATARS` bucket, so the real
+ * `putAvatarObjects`/`removeAvatarObjects` in `@/lib/storage/avatar-objects`
  * run for real). `decideAvatarModeration`, `validateAvatarUpload`, `sniffImage`,
  * `buildAvatarPaths`/`thumbPathFor`, and the Zod schema all run for real —
  * they are the policy this file exists to prove, and each already has its own
@@ -67,9 +67,15 @@ vi.mock("@/lib/auth/test-lab", () => ({
   readTestLabSession: (...args: unknown[]) => readTestLabSession(...args),
 }));
 
-const readImpersonationContext = vi.fn();
-vi.mock("@/lib/auth/impersonation", () => ({
-  readImpersonationContext: () => readImpersonationContext(),
+const readImpersonation = vi.fn();
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: () => readImpersonation(),
+}));
+
+// uploadOwnAvatar reads the session directly (fail closed), not readImpersonation.
+const getAuthSession = vi.fn();
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: (...args: unknown[]) => getAuthSession(...args),
 }));
 
 // ── rate limit ───────────────────────────────────────────────────────────
@@ -101,23 +107,23 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateUserAvatar: (...args: unknown[]) => revalidateUserAvatar(...args),
 }));
 
-// ── Supabase storage — fake bucket behind the real avatar-storage.ts ────
+// ── R2 storage — fake bucket behind the real avatar-objects.ts ──────────
 //
-// Not mocking `@/lib/supabase/avatar-storage` itself: its `putAvatarObjects`/
-// `removeAvatarObjects` are the code that decides `upsert`, `contentType` and
-// `cacheControl`, and that decision is exactly what several tests below pin.
-// Faking only the Supabase client one layer down keeps that logic real while
-// still recording every call.
+// Not mocking `@/lib/storage/avatar-objects` itself: its `putAvatarObjects`/
+// `removeAvatarObjects` are the code that decides `contentType` and
+// `cacheControl`, and that decision is exactly what a test below pins.
+// Faking only the Cloudflare binding one layer down keeps that logic real
+// while still recording every call.
 
 const bucketUpload = vi.fn();
 const bucketRemove = vi.fn();
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({
-    storage: {
-      from: () => ({
-        upload: (...args: unknown[]) => bucketUpload(...args),
-        remove: (...args: unknown[]) => bucketRemove(...args),
-      }),
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: () => ({
+    env: {
+      AVATARS: {
+        put: (...args: unknown[]) => bucketUpload(...args),
+        delete: (...args: unknown[]) => bucketRemove(...args),
+      },
     },
   }),
 }));
@@ -181,7 +187,8 @@ beforeEach(() => {
     avatarPath: null,
   });
   readTestLabSession.mockResolvedValue(false);
-  readImpersonationContext.mockResolvedValue(null);
+  readImpersonation.mockResolvedValue(null);
+  getAuthSession.mockResolvedValue({ session: { impersonatedBy: null } });
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
   userFindUnique.mockResolvedValue(null);
 
@@ -191,11 +198,10 @@ beforeEach(() => {
   });
   bucketUpload.mockImplementation(async () => {
     order.push("storage.upload");
-    return { error: null };
+    return {};
   });
   bucketRemove.mockImplementation(async () => {
     order.push("storage.remove");
-    return { error: null };
   });
   writeAudit.mockImplementation(async () => {
     order.push("writeAudit");
@@ -290,16 +296,22 @@ describe("uploadOwnAvatar", () => {
     expect(bucketRemove).toHaveBeenCalledWith([previous, thumbPathFor(previous)]);
   });
 
-  it("uploads with upsert: false, contentType from the sniffed mime, and cacheControl \"86400\"", async () => {
+  it("uploads under a fresh key per request, with contentType from the sniffed mime and a one-day cacheControl", async () => {
     await uploadOwnAvatar(uploadForm(validFullFile(), validThumbFile()));
+    const firstKeys = bucketUpload.mock.calls.map((c) => c[0] as string);
+    await uploadOwnAvatar(uploadForm(validFullFile(), validThumbFile()));
+    const secondKeys = bucketUpload.mock.calls.slice(2).map((c) => c[0] as string);
 
-    expect(bucketUpload).toHaveBeenCalledTimes(2);
+    expect(bucketUpload).toHaveBeenCalledTimes(4);
+    // No request can overwrite an object another one still points at.
+    expect(secondKeys.some((k) => firstKeys.includes(k))).toBe(false);
+    expect(firstKeys[1]).toBe(thumbPathFor(firstKeys[0]));
     for (const call of bucketUpload.mock.calls) {
-      const options = call[2] as Record<string, unknown>;
-      expect(options).toEqual({
-        contentType: "image/webp",
-        cacheControl: "86400",
-        upsert: false,
+      expect(call[2]).toEqual({
+        httpMetadata: {
+          contentType: "image/webp",
+          cacheControl: "public, max-age=86400",
+        },
       });
     }
   });
@@ -340,10 +352,8 @@ describe("uploadOwnAvatar", () => {
       schoolId: SCHOOL_ID,
       avatarPath: previous,
     });
-    readImpersonationContext.mockResolvedValue({
-      ticket: { targetUserId: IMPERSONATED_ID },
-      expired: false,
-    });
+    readImpersonation.mockResolvedValue({ targetUserId: IMPERSONATED_ID });
+    getAuthSession.mockResolvedValue({ session: { impersonatedBy: "admin-1" } });
 
     const uploadRes = await uploadOwnAvatar(uploadForm(validFullFile(), validThumbFile()));
     expect(uploadRes).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
@@ -357,6 +367,27 @@ describe("uploadOwnAvatar", () => {
       data: { avatarPath: null },
     });
     expect(bucketRemove).toHaveBeenCalledWith([previous, thumbPathFor(previous)]);
+  });
+
+  it("fails closed when the session read throws: refuses, no rate-limit or storage call", async () => {
+    getAuthSession.mockRejectedValue(new Error("session store down"));
+
+    const res = await uploadOwnAvatar(uploadForm(validFullFile(), validThumbFile()));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(bucketUpload).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when there is no readable session (null): refuses, no storage call", async () => {
+    getAuthSession.mockResolvedValue(null);
+
+    const res = await uploadOwnAvatar(uploadForm(validFullFile(), validThumbFile()));
+
+    expect(res).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(bucketUpload).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("a Test Lab session writes nothing: zero storage, Prisma, audit and notification calls", async () => {
@@ -514,7 +545,7 @@ describe("removeUserAvatar", () => {
 
     vi.clearAllMocks();
     updateMany.mockResolvedValue({ count: 1 });
-    bucketRemove.mockResolvedValue({ error: null });
+    bucketRemove.mockResolvedValue(undefined);
     writeAudit.mockResolvedValue(undefined);
     requireUser.mockResolvedValue({ id: ADMIN_ID, role: "SUPER_ADMIN", schoolId: null });
 

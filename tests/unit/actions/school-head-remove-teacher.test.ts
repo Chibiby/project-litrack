@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthApiError } from "@supabase/supabase-js";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 /**
@@ -36,6 +35,8 @@ const userFindFirst = vi.fn(async (args: { where: { id: string; schoolId: string
     : null
 );
 
+const userUpdate = vi.fn(async (..._a: unknown[]) => ({}));
+
 const tx = {
   user: {
     update: vi.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
@@ -61,6 +62,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     user: {
       findFirst: (...a: unknown[]) => userFindFirst(...(a as [never])),
+      update: (...a: unknown[]) => userUpdate(...a),
     },
   },
 }));
@@ -96,9 +98,15 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolsList: vi.fn(),
 }));
 
-const createSupabaseAdminClient = vi.fn();
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: (...a: unknown[]) => createSupabaseAdminClient(...a),
+// The Test Lab check reads the impersonation session; no impersonation here.
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: vi.fn(async () => null),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
+}));
+
+const setRole = vi.fn();
+vi.mock("@/lib/auth/identity", () => ({
+  setRole: (...a: unknown[]) => setRole(...a),
 }));
 
 // `action()` records non-user failures through this; the return value is the
@@ -241,15 +249,18 @@ describe("removeTeacher", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("answers missing service-role config as CONFIG_MISSING, without the setup instructions", async () => {
+  it("keeps connection-config text out of the response when the identity delete fails", async () => {
+    // The Supabase service-role CONFIG_MISSING mapping is gone with Supabase;
+    // the identity delete now fails as AUTH_PROVIDER_ERROR, and setup/connection
+    // text must still reach admins only, never the browser.
     const raw =
-      "SUPABASE_SERVICE_ROLE_KEY is missing or invalid. In Supabase Dashboard → Project Settings → API, copy the service_role secret (JWT) into .env.local — not the anon key.";
+      "DATABASE_URL is missing or invalid. Copy the pooled connection string into .env.local.";
     deleteAuthUser.mockResolvedValue({ ok: false, error: raw });
 
     const res = await removeTeacher(form());
 
-    expect(res).toMatchObject({ ok: false, code: "CONFIG_MISSING", ref: "E-TESTREF1" });
-    expect(JSON.stringify(res)).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(res).toMatchObject({ ok: false, code: "AUTH_PROVIDER_ERROR", ref: "E-TESTREF1" });
+    expect(JSON.stringify(res)).not.toContain("DATABASE_URL");
     expect(JSON.stringify(res)).not.toContain(".env.local");
     expect(transaction).not.toHaveBeenCalled();
   });
@@ -283,24 +294,20 @@ describe("clearRejectedTeacher — provider failures stay out of the response", 
 });
 
 describe("approveTeacher — provider failures stay out of the response", () => {
-  it("classifies a Supabase metadata error instead of returning its message", async () => {
+  it("classifies an identity role-write error instead of returning its message", async () => {
     const { approveTeacher } = await import("@/lib/actions/school-head");
-    const raw = "Database error saving metadata sb_secret_9f3a";
-    createSupabaseAdminClient.mockReturnValue({
-      auth: {
-        admin: {
-          updateUserById: vi.fn(async () => ({
-            error: new AuthApiError(raw, 500, "unexpected_failure"),
-          })),
-        },
-      },
-    });
+    const raw = "Database error saving identity role sb_secret_9f3a";
+    teacherLookup = { ...teacherLookup!, isActive: false } as NonNullable<TeacherLookup>;
+    setRole.mockRejectedValue(new Error(raw));
 
     const res = await approveTeacher(form());
 
     expect(res).toMatchObject({ ok: false });
     expect(typeof (res as { code?: string }).code).toBe("string");
     expect(JSON.stringify(res)).not.toContain("sb_secret_9f3a");
+    expect(setRole).toHaveBeenCalledWith("auth-1", "TEACHER");
+    // The role write fails before the User row is approved.
+    expect(userUpdate).not.toHaveBeenCalled();
     expect(txUserUpdates).toHaveLength(0);
     expect(writeAudit).not.toHaveBeenCalled();
   });

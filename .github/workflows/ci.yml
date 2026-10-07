@@ -11,12 +11,10 @@ jobs:
     name: Typecheck, lint, test, build
     runs-on: ubuntu-latest
     env:
-      # App pages use force-dynamic; build with placeholders (no live DB/Supabase).
+      # App pages use force-dynamic; build with placeholders (no live DB).
       DATABASE_URL: postgresql://user:pass@localhost:5432/db
       DIRECT_URL: postgresql://user:pass@localhost:5432/db
-      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder
-      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder-service
+      BETTER_AUTH_SECRET: placeholder-placeholder-placeholder-32
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

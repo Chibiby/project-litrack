@@ -6,8 +6,7 @@ import { RoleShell } from "@/components/role-shell";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
-import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readImpersonation } from "@/lib/auth/impersonation-session";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 
@@ -23,9 +22,8 @@ export default async function SchoolHeadAppLayout({
   // Read before the profiling gate below: an impersonating admin must be able
   // to reach "Return to admin" even on a school whose head never profiled —
   // which is exactly the kind of stuck account they came here to look at.
-  const supabase = await createSupabaseServerClient();
-  const impersonation = await readBoundImpersonationSession(supabase.auth);
-  const impersonating = impersonation?.ticket.targetUserId === user.id;
+  const impersonation = await readImpersonation();
+  const impersonating = impersonation?.targetUserId === user.id;
 
   // Only gate real school heads — SUPER_ADMIN may view without profiling.
   if (user.role === "SCHOOL_HEAD" && !user.profileCompleted && !impersonating) {

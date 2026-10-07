@@ -7,14 +7,13 @@
  *   npx tsx scripts/retire-super-admin.ts --commit           # retire the account
  *   npx tsx scripts/retire-super-admin.ts --username=admin2 --commit
  *
- * Requires: DIRECT_URL or DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
- * SUPABASE_SERVICE_ROLE_KEY (read from .env.local if the shell has not
- * exported them).
+ * Requires: DIRECT_URL or DATABASE_URL (read from .env.local if the shell has
+ * not exported it).
  *
  * Why a script rather than a migration: the username and `deletedAt` live in
- * our Postgres, but the password lives in Supabase Auth, and only a
- * service-role client can revoke that half. SQL alone cannot sign an account
- * out or stop its password from working.
+ * `User`, and the password lives in the Better Auth tables. This removes the
+ * identity (which also ends its sessions) and tombstones the `User` row
+ * together, in a fixed order.
  *
  * Dry run is the default. It reports exactly which account it would retire,
  * and which named admins it verified as the replacement, before anything is
@@ -25,7 +24,7 @@
  */
 import { UserRole } from "@prisma/client";
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { deleteIdentities } from "./lib/script-identity";
 import { AUDIT_ACTIONS } from "../src/lib/audit-actions";
 
 /** The three replacement logins this script exists to make safe to retire the fallback for. */
@@ -142,21 +141,14 @@ async function main() {
       return;
     }
 
-    const supabase = createSupabaseAdminClient();
-
-    // Supabase first, Prisma second. If the Supabase call fails, nothing here
-    // has touched Postgres yet, so the account is left exactly as it was —
-    // still a working login, not a half-retired one. If it succeeds but the
-    // Prisma update below then fails, the account is already unable to sign
-    // in (its auth user and password are gone) even though the row still
-    // reads `isActive: true`; that is fail-safe rather than fail-open, and
-    // re-running this script finishes the job (the "not found" from Supabase
-    // on the retry is tolerated, same as the teacher bulk-removal path in
-    // src/lib/db/account-reset.ts).
-    const { error } = await supabase.auth.admin.deleteUser(target.authId);
-    if (error && !/not.?found/i.test(error.message)) {
-      throw new Error(`Supabase refused to delete the auth user: ${error.message}`);
-    }
+    // Identity first, User row second. If the identity delete fails, nothing
+    // here has touched `User` yet, so the account is left exactly as it was.
+    // If it succeeds but the update below then fails, the account is already
+    // unable to sign in (its identity and password are gone) even though the
+    // row still reads `isActive: true`; that is fail-safe rather than
+    // fail-open, and re-running this script finishes the job (an already
+    // absent identity counts as success).
+    await deleteIdentities(prisma, [target.authId]);
 
     await prisma.user.update({
       where: { id: target.id },

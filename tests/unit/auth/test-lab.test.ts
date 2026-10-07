@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  *  - assertTestableSchool refuses a non-demo, a deleted/missing, and a null
  *    school with the same generic NOT_FOUND `assertSameSchool` uses.
- *  - isTestLabSession is true only with a ticket, for this user, in a demo school.
- *  - readTestLabSession needs a BOUND ticket (not just a cookie) naming this user.
+ *  - isTestLabSession is true only with an impersonation, of this user, in a demo school.
+ *  - readTestLabSession needs an impersonated session row (`impersonatedBy`, not a
+ *    cookie) whose target is this user.
  *  - impersonationReturnPath: demo -> /admin/test-lab, else /admin/management/teachers.
  *  - isAllowedTestLabNext refuses anything outside the persona's role tree.
  */
@@ -14,15 +15,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const schoolFindFirst = vi.fn(async (_args: unknown): Promise<unknown> => null);
 vi.mock("@/lib/prisma", () => ({ prisma: { school: { findFirst: (a: unknown) => schoolFindFirst(a) } } }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({ auth: {} }),
-}));
-
-const readBoundImpersonationSession = vi.fn(
-  async (..._args: unknown[]) => null as null | { ticket: { targetUserId: string }; expired: boolean }
+const readImpersonation = vi.fn(
+  async (..._args: unknown[]) => null as null | { targetUserId: string; expired: false }
 );
-vi.mock("@/lib/auth/impersonation", () => ({
-  readBoundImpersonationSession: (...a: unknown[]) => readBoundImpersonationSession(...a),
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: (...a: unknown[]) => readImpersonation(...a),
 }));
 
 const { assertTestableSchool, isTestLabSession, readTestLabSession, impersonationReturnPath } =
@@ -55,7 +52,7 @@ function genericNotFoundMessage(): string {
 beforeEach(() => {
   vi.clearAllMocks();
   schoolFindFirst.mockResolvedValue(null);
-  readBoundImpersonationSession.mockResolvedValue(null);
+  readImpersonation.mockResolvedValue(null);
 });
 
 describe("assertTestableSchool", () => {
@@ -114,32 +111,32 @@ describe("isTestLabSession", () => {
 
 describe("readTestLabSession", () => {
   // Distinct ids per case: the inner reader is React cache()'d.
-  it("is false without a bound ticket, and never reads the school", async () => {
-    readBoundImpersonationSession.mockResolvedValue(null);
+  it("is false without an impersonated session, and never reads the school", async () => {
+    readImpersonation.mockResolvedValue(null);
     expect(await readTestLabSession({ id: "r1", schoolId: "s1" })).toBe(false);
     expect(schoolFindFirst).not.toHaveBeenCalled();
   });
 
-  it("is false when the bound ticket names another user", async () => {
-    readBoundImpersonationSession.mockResolvedValue({ ticket: { targetUserId: "someone-else" }, expired: false });
+  it("is false when the impersonated account is someone else", async () => {
+    readImpersonation.mockResolvedValue({ targetUserId: "someone-else", expired: false });
     schoolFindFirst.mockResolvedValue({ isDemo: true });
     expect(await readTestLabSession({ id: "r2", schoolId: "s2" })).toBe(false);
   });
 
-  it("is false for a bound ticket in a non-demo school", async () => {
-    readBoundImpersonationSession.mockResolvedValue({ ticket: { targetUserId: "r3" }, expired: false });
+  it("is false for an impersonation in a non-demo school", async () => {
+    readImpersonation.mockResolvedValue({ targetUserId: "r3", expired: false });
     schoolFindFirst.mockResolvedValue({ isDemo: false });
     expect(await readTestLabSession({ id: "r3", schoolId: "s3" })).toBe(false);
   });
 
-  it("is true for a bound ticket naming this user in a demo school", async () => {
-    readBoundImpersonationSession.mockResolvedValue({ ticket: { targetUserId: "r4" }, expired: false });
+  it("is true for an impersonation of this user in a demo school", async () => {
+    readImpersonation.mockResolvedValue({ targetUserId: "r4", expired: false });
     schoolFindFirst.mockResolvedValue({ isDemo: true });
     expect(await readTestLabSession({ id: "r4", schoolId: "s4" })).toBe(true);
   });
 
   it("is false for a school-less user", async () => {
-    readBoundImpersonationSession.mockResolvedValue({ ticket: { targetUserId: "r5" }, expired: false });
+    readImpersonation.mockResolvedValue({ targetUserId: "r5", expired: false });
     expect(await readTestLabSession({ id: "r5", schoolId: null })).toBe(false);
   });
 });

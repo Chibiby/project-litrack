@@ -1,8 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { authedLoginRedirect, enforceRolePrefix } from "@/lib/auth/roles";
-import { hasSupabaseSessionCookie, loginPath } from "@/lib/auth/session-end";
+import {
+  hasAuthSessionCookie,
+  hasLegacySupabaseCookie,
+  legacySupabaseCookieNames,
+  readEdgeSession,
+} from "@/lib/auth/auth-cookies";
+import { loginPath } from "@/lib/auth/session-end";
 import {
   FRESH_READ_COOKIE,
   FRESH_READ_WINDOW_SECONDS,
@@ -45,58 +49,67 @@ function skipsSessionUpdate(pathname: string) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Vercel must set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY for auth.
-  if (!isSupabaseConfigured()) {
-    if (isPublicPath(pathname)) {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(new URL(loginPath(loginAreaFor(pathname)), request.url));
-  }
-
-  // Anonymous public API: skip updateSession entirely.
-  // Keep updateSession for /login and /admin/login (redirect-if-authed needs user).
+  // Anonymous public API: no session work at all.
   if (skipsSessionUpdate(pathname)) {
     return NextResponse.next();
   }
 
-  // Read BEFORE updateSession: a failed refresh clears these cookies on the
-  // request, and afterwards "your session ended" is indistinguishable from
-  // "you were never signed in".
-  const hadSession = hasSupabaseSessionCookie(
-    request.cookies
-      .getAll()
-      .filter((cookie) => cookie.value)
-      .map((cookie) => cookie.name)
-  );
+  const cookieNames = request.cookies
+    .getAll()
+    .filter((cookie) => cookie.value)
+    .map((cookie) => cookie.name);
+  // Leftover cookies from before the move to Better Auth are expired on
+  // whatever response this request gets. A legacy session cookie counts as
+  // "had a session", so the forced sign-out says "session expired" instead of
+  // showing a bare login page.
+  const legacyCookies = legacySupabaseCookieNames(cookieNames);
+  const hadSession = hasAuthSessionCookie(cookieNames) || hasLegacySupabaseCookie(cookieNames);
 
-  const { supabaseResponse, user } = await updateSession(request);
+  const finish = (response: NextResponse): NextResponse => {
+    for (const name of legacyCookies) {
+      response.cookies.set(name, "", { maxAge: 0, path: "/" });
+    }
+    return response;
+  };
 
-  // Already authenticated users with a known JWT role *loading* a login page →
+  // Role comes from the signed cookie cache only. Non-authoritative: when the
+  // cache has expired the role is null and the request passes through to
+  // `requireUser`, which re-reads the User row.
+  const user = await readEdgeSession(request);
+
+  // Already authenticated users with a known role *loading* a login page →
   // role home. Server Action POSTs to /login must pass; see authedLoginRedirect.
   const loginBounce = authedLoginRedirect(request.method, pathname, user?.role ?? null);
   if (loginBounce) {
-    return NextResponse.redirect(new URL(loginBounce, request.url));
+    return finish(NextResponse.redirect(new URL(loginBounce, request.url)));
   }
 
   if (isPublicPath(pathname)) {
-    return supabaseResponse;
+    return finish(NextResponse.next());
   }
 
   if (!user) {
-    return NextResponse.redirect(
-      new URL(loginPath(loginAreaFor(pathname), hadSession ? "session_expired" : null), request.url)
+    return finish(
+      NextResponse.redirect(
+        new URL(
+          loginPath(loginAreaFor(pathname), hadSession ? "session_expired" : null),
+          request.url
+        )
+      )
     );
   }
 
   const gate = enforceRolePrefix(pathname, user.role);
   if (!gate.ok) {
-    return NextResponse.redirect(new URL(gate.redirectTo, request.url));
+    return finish(NextResponse.redirect(new URL(gate.redirectTo, request.url)));
   }
+
+  const response = finish(NextResponse.next());
 
   // A Server Action is a write. Open this browser's read-your-writes window so
   // the refresh that follows skips Hyperdrive's query cache.
   if (isServerActionRequest(request.method, (name) => request.headers.get(name))) {
-    supabaseResponse.cookies.set(FRESH_READ_COOKIE, "1", {
+    response.cookies.set(FRESH_READ_COOKIE, "1", {
       maxAge: FRESH_READ_WINDOW_SECONDS,
       path: "/",
       httpOnly: true,
@@ -105,7 +118,7 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  return supabaseResponse;
+  return response;
 }
 
 export const config = {

@@ -14,7 +14,7 @@
 -- Bucket "avatars" is PUBLIC (readable by anyone with the object's URL, no
 -- auth check, no RLS involved in a GET) -- that is how the app serves
 -- avatars to <img> tags with no signed-URL plumbing. Every WRITE, however,
--- goes through the service role only: src/lib/supabase/avatar-storage.ts is
+-- goes through the service role only: the former avatar storage module was
 -- the one call site, using the service-role Supabase client, which bypasses
 -- RLS automatically the same way Prisma's service-role Postgres connection
 -- does for every other table in this schema. Nothing under `anon` or

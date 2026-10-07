@@ -8,18 +8,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  * In a Test Lab session (`readTestLabSession(user)` true) each must validate
  * input, return `{ ok: true, data: { dryRun: true, preview } }`, and touch
- * neither Prisma nor Supabase. Outside a Test Lab session, behaviour is the
- * existing real write (pinned in `auth-password-vault-wiring.test.ts`; this
- * file only adds a smoke check that the real path still runs).
- *
- * Mocking style copied from tests/unit/actions/auth-password-vault-wiring.test.ts.
+ * nothing: no password hash computed, no identity write, no transaction, no
+ * `User` write, no audit row. Outside a Test Lab session the real write runs
+ * (pinned in depth in `auth-password-vault-wiring.test.ts`; this file only adds
+ * a smoke check that the real path still runs and writes the identity and the
+ * `User` row together).
  */
 
 const userUpdate = vi.fn();
 const userFindFirst = vi.fn();
+const transaction = vi.fn();
 const signInWithPassword = vi.fn();
-const updateUser = vi.fn();
-const adminUpdateUserById = vi.fn();
+const revokeAllSessions = vi.fn(async (..._args: unknown[]) => 0);
+const revokeOtherSessions = vi.fn(async (..._args: unknown[]) => 0);
+const getAuthSession = vi.fn(async (..._args: unknown[]) => ({ session: { token: "tok-current" } }) as unknown);
+const verifyAccountPassword = vi.fn();
+const setPassword = vi.fn();
+const setEmail = vi.fn();
+const hashPassword = vi.fn();
 const writeAudit = vi.fn();
 const checkRateLimit = vi.fn();
 const requireUser = vi.fn();
@@ -30,6 +36,14 @@ const passwordChangeFields = vi.fn((role: string, plaintext: string) => ({
   role,
   plaintext,
 }));
+
+const tx = {
+  user: {
+    get update() {
+      return userUpdate;
+    },
+  },
+};
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -42,28 +56,69 @@ vi.mock("@/lib/prisma", () => ({
       },
     },
   },
-}));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      signInWithPassword,
-      updateUser,
-      getUser: vi.fn(),
-      signOut: vi.fn(),
+  prismaFresh: {
+    $transaction: async (fn: (t: typeof tx) => unknown) => {
+      transaction();
+      return fn(tx);
     },
-  }),
+  },
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({
-    auth: { admin: { updateUserById: adminUpdateUserById } },
-  }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  get signInWithPassword() {
+    return signInWithPassword;
+  },
+  get revokeAllSessions() {
+    return revokeAllSessions;
+  },
+  get revokeOtherSessions() {
+    return revokeOtherSessions;
+  },
+  get getAuthSession() {
+    return getAuthSession;
+  },
+  endCurrentSession: vi.fn(async () => true),
 }));
 
-vi.mock("@/lib/supabase/env", () => ({
-  isSupabaseConfigured: () => true,
-  SUPABASE_NOT_CONFIGURED_MESSAGE: "not configured",
+vi.mock("@/lib/auth/identity", () => ({
+  get verifyAccountPassword() {
+    return verifyAccountPassword;
+  },
+  get setPassword() {
+    return setPassword;
+  },
+  get setEmail() {
+    return setEmail;
+  },
+  createIdentity: vi.fn(),
+  findIdentityByEmail: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/password-hash", () => ({
+  DUMMY_BCRYPT_HASH: "$2b$10$dummy",
+  get hashPassword() {
+    return hashPassword;
+  },
+  verifyPassword: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/password-reset", () => ({ consumeResetToken: vi.fn(), peekResetToken: vi.fn() }));
+
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: vi.fn(async () => null),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
+  expireImpersonationCookies: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/lib/auth/login-gates", () => ({
+  assertAuthConfigured: vi.fn(),
+  requireActiveSchool: vi.fn(),
+  LOGIN_RATE: { limit: 10, windowMs: 300_000 },
+}));
+
+vi.mock("@/lib/auth/lookup-throttle", () => ({
+  assertLookupAllowed: vi.fn(),
+  recordFailedLookup: vi.fn(),
 }));
 
 vi.mock("@/lib/audit", () => ({
@@ -107,8 +162,19 @@ vi.mock("@/lib/auth/password-vault", () => ({
   },
 }));
 
+vi.mock("@/lib/auth/last-login", () => ({ recordLastLogin: vi.fn() }));
+vi.mock("@/lib/auth/school-head-sign-in", () => ({ findSignInSchoolHead: vi.fn() }));
+vi.mock("@/lib/auth/recovery-email", () => ({
+  RESET_COOKIE: "litrack_reset",
+  RESET_COOKIE_PATH: "/auth",
+  sendPasswordRecoveryEmail: vi.fn(),
+  hasRecentRecoveryToken: vi.fn(),
+}));
+vi.mock("@/lib/demo/session", () => ({ clearDemoSessionCookie: vi.fn(async () => undefined) }));
+
 vi.mock("@/lib/auth/warm-routes", () => ({
   warmAdminRoutes: vi.fn(),
+  warmDistrictRoutes: vi.fn(),
   warmSchoolHeadRoutes: vi.fn(),
   warmTeacherRoutes: vi.fn(),
 }));
@@ -143,10 +209,9 @@ vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-DRYR
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-// No impersonation ticket in this browser: `skipPasswordChange` reads the
-// ticket cookie, and the real `cookies()` throws outside a request.
 vi.mock("next/headers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/headers")>()),
+  headers: async () => new Headers(),
   cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
 }));
 
@@ -199,10 +264,25 @@ function changeEmailForm(overrides: Record<string, string> = {}): FormData {
 
 const HEAD_USER = {
   id: "head-1",
+  authId: "auth-head-1",
   role: "SCHOOL_HEAD" as const,
   schoolId: "school-1",
   email: "sh@example.test",
 };
+
+/** Nothing that could change a credential, an identity, or a User row ran. */
+function expectNothingTouched() {
+  expect(hashPassword).not.toHaveBeenCalled();
+  expect(verifyAccountPassword).not.toHaveBeenCalled();
+  expect(signInWithPassword).not.toHaveBeenCalled();
+  expect(setPassword).not.toHaveBeenCalled();
+  expect(setEmail).not.toHaveBeenCalled();
+  expect(transaction).not.toHaveBeenCalled();
+  expect(userUpdate).not.toHaveBeenCalled();
+  expect(writeAudit).not.toHaveBeenCalled();
+  expect(revokeOtherSessions).not.toHaveBeenCalled();
+  expect(revokeAllSessions).not.toHaveBeenCalled();
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -210,23 +290,29 @@ beforeEach(() => {
   roleHomePath.mockImplementation((..._args: unknown[]) => "/home");
   readTestLabSession.mockResolvedValue(false);
   userFindFirst.mockResolvedValue(null);
-  signInWithPassword.mockResolvedValue({ data: { user: { id: "auth-1" } }, error: null });
-  updateUser.mockResolvedValue({ error: null });
-  adminUpdateUserById.mockResolvedValue({ error: null });
+  verifyAccountPassword.mockResolvedValue(true);
+  hashPassword.mockResolvedValue("$2b$10$hashed");
+  setPassword.mockResolvedValue(undefined);
+  setEmail.mockResolvedValue(undefined);
 });
 
 describe("setPasswordAction — Test Lab dry run", () => {
-  it("returns a preview and touches neither Prisma nor Supabase in a Test Lab session", async () => {
+  it("returns a preview and touches no identity, hash, transaction or User row", async () => {
     requireUser.mockResolvedValue(HEAD_USER);
     readTestLabSession.mockResolvedValue(true);
 
     const result = await run(() => setPasswordAction(setPasswordForm()));
 
     expect(result).toEqual({ ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } });
-    expect(updateUser).not.toHaveBeenCalled();
-    expect(adminUpdateUserById).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
-    expect(writeAudit).not.toHaveBeenCalled();
+    expectNothingTouched();
+  });
+
+  it("never puts the password in the preview", async () => {
+    requireUser.mockResolvedValue(HEAD_USER);
+    readTestLabSession.mockResolvedValue(true);
+
+    const result = await run(() => setPasswordAction(setPasswordForm()));
+    expect(JSON.stringify(result)).not.toContain(NEW_PASSWORD);
   });
 
   it("still returns the validation error in a Test Lab session for a mismatched confirmation", async () => {
@@ -239,8 +325,17 @@ describe("setPasswordAction — Test Lab dry run", () => {
 
     const result = await run(() => setPasswordAction(fd));
     expect((result as { ok: boolean }).ok).toBe(false);
-    expect(updateUser).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
+    expectNothingTouched();
+  });
+
+  it("still rejects a password over 72 bytes in a Test Lab session", async () => {
+    requireUser.mockResolvedValue(HEAD_USER);
+    readTestLabSession.mockResolvedValue(true);
+
+    const tooLong = `${"a1".repeat(37)}`; // 74 bytes
+    const result = await run(() => setPasswordAction(setPasswordForm(tooLong)));
+    expect(result).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expectNothingTouched();
   });
 
   it("performs the real write and redirects outside a Test Lab session", async () => {
@@ -249,8 +344,18 @@ describe("setPasswordAction — Test Lab dry run", () => {
 
     const result = await run(() => setPasswordAction(setPasswordForm()));
     expect(result).toEqual({ redirected: "/home" });
-    expect(updateUser).toHaveBeenCalledTimes(1);
+    expect(hashPassword).toHaveBeenCalledWith(NEW_PASSWORD);
+    expect(setPassword).toHaveBeenCalledTimes(1);
     expect(userUpdate).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    // The other devices are signed out; this one (its token) stays.
+    expect(revokeOtherSessions).toHaveBeenCalledTimes(1);
+    expect(revokeOtherSessions).toHaveBeenCalledWith("auth-head-1", "tok-current");
+    expect(revokeAllSessions).not.toHaveBeenCalled();
+    // ...and only after the credential and User row committed.
+    expect(revokeOtherSessions.mock.invocationCallOrder[0]).toBeGreaterThan(
+      userUpdate.mock.invocationCallOrder[0]
+    );
   });
 });
 
@@ -262,8 +367,7 @@ describe("skipPasswordChange — Test Lab dry run", () => {
     const result = await run(() => skipPasswordChange());
 
     expect(result).toEqual({ ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } });
-    expect(userUpdate).not.toHaveBeenCalled();
-    expect(writeAudit).not.toHaveBeenCalled();
+    expectNothingTouched();
   });
 
   it("performs the real write and redirects outside a Test Lab session", async () => {
@@ -273,21 +377,28 @@ describe("skipPasswordChange — Test Lab dry run", () => {
     const result = await run(() => skipPasswordChange());
     expect(result).toEqual({ redirected: "/home" });
     expect(userUpdate).toHaveBeenCalledTimes(1);
+    // Skipping changes no credential: the identity is never written.
+    expect(setPassword).not.toHaveBeenCalled();
   });
 });
 
 describe("changePasswordAction — Test Lab dry run", () => {
-  it("returns a preview and touches neither Prisma nor Supabase in a Test Lab session", async () => {
+  it("returns a preview and touches no identity, hash, transaction or User row", async () => {
     requireUser.mockResolvedValue(HEAD_USER);
     readTestLabSession.mockResolvedValue(true);
 
     const result = await run(() => changePasswordAction(changePasswordForm()));
 
     expect(result).toEqual({ ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } });
-    expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(updateUser).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
-    expect(writeAudit).not.toHaveBeenCalled();
+    expectNothingTouched();
+  });
+
+  it("does not even check the current password in a Test Lab session", async () => {
+    requireUser.mockResolvedValue(HEAD_USER);
+    readTestLabSession.mockResolvedValue(true);
+
+    await run(() => changePasswordAction(changePasswordForm({ currentPassword: "definitely-wrong" })));
+    expect(verifyAccountPassword).not.toHaveBeenCalled();
   });
 
   it("still returns the validation error in a Test Lab session for a mismatched confirmation", async () => {
@@ -298,24 +409,36 @@ describe("changePasswordAction — Test Lab dry run", () => {
       changePasswordAction(changePasswordForm({ confirmPassword: "nope" }))
     );
     expect((result as { ok: boolean }).ok).toBe(false);
-    expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
+    expectNothingTouched();
   });
 
-  it("performs the real write outside a Test Lab session", async () => {
+  it("performs the real write outside a Test Lab session, without creating a session", async () => {
     requireUser.mockResolvedValue(HEAD_USER);
     readTestLabSession.mockResolvedValue(false);
 
     const result = await run(() => changePasswordAction(changePasswordForm()));
     expect(result).toEqual({ ok: true });
-    expect(signInWithPassword).toHaveBeenCalledTimes(1);
-    expect(updateUser).toHaveBeenCalledTimes(1);
+    expect(verifyAccountPassword).toHaveBeenCalledWith("auth-head-1", CURRENT_PASSWORD);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(setPassword).toHaveBeenCalledTimes(1);
     expect(userUpdate).toHaveBeenCalledTimes(1);
+    expect(revokeOtherSessions).toHaveBeenCalledTimes(1);
+    expect(revokeOtherSessions).toHaveBeenCalledWith("auth-head-1", "tok-current");
+    expect(revokeAllSessions).not.toHaveBeenCalled();
+  });
+
+  it("keeps nothing when the current session token is unknown (null keepToken)", async () => {
+    requireUser.mockResolvedValue(HEAD_USER);
+    readTestLabSession.mockResolvedValue(false);
+    getAuthSession.mockResolvedValueOnce(null);
+
+    await run(() => changePasswordAction(changePasswordForm()));
+    expect(revokeOtherSessions).toHaveBeenCalledWith("auth-head-1", null);
   });
 });
 
 describe("changeEmailAction — Test Lab dry run", () => {
-  it("returns a preview naming the new address and touches neither Prisma nor Supabase in a Test Lab session", async () => {
+  it("returns a preview naming the new address and touches nothing in a Test Lab session", async () => {
     requireUser.mockResolvedValue(HEAD_USER);
     readTestLabSession.mockResolvedValue(true);
 
@@ -325,10 +448,9 @@ describe("changeEmailAction — Test Lab dry run", () => {
       ok: true,
       data: { dryRun: true, preview: { validated: true, changed: false, newEmail: "new@example.test" } },
     });
-    expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(adminUpdateUserById).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
-    expect(writeAudit).not.toHaveBeenCalled();
+    expectNothingTouched();
+    // Not even the "is this address taken" lookup.
+    expect(userFindFirst).not.toHaveBeenCalled();
   });
 
   it("still returns the validation error in a Test Lab session for an unchanged address", async () => {
@@ -341,19 +463,19 @@ describe("changeEmailAction — Test Lab dry run", () => {
       )
     );
     expect((result as { ok: boolean }).ok).toBe(false);
-    expect(adminUpdateUserById).not.toHaveBeenCalled();
-    expect(userUpdate).not.toHaveBeenCalled();
+    expectNothingTouched();
   });
 
-  it("performs the real write outside a Test Lab session", async () => {
+  it("performs the real write outside a Test Lab session: identity and User row in one transaction", async () => {
     requireUser.mockResolvedValue(HEAD_USER);
     readTestLabSession.mockResolvedValue(false);
     userUpdate.mockResolvedValue({});
 
     const result = await run(() => changeEmailAction(changeEmailForm()));
     expect(result).toEqual({ ok: true });
-    expect(signInWithPassword).toHaveBeenCalledTimes(1);
-    expect(adminUpdateUserById).toHaveBeenCalledTimes(1);
-    expect(userUpdate).toHaveBeenCalledTimes(1);
+    expect(verifyAccountPassword).toHaveBeenCalledWith("auth-head-1", CURRENT_PASSWORD);
+    expect(setEmail).toHaveBeenCalledWith("auth-head-1", "new@example.test", tx);
+    expect(userUpdate).toHaveBeenCalledWith({ where: { id: "head-1" }, data: { email: "new@example.test" } });
+    expect(transaction).toHaveBeenCalledTimes(1);
   });
 });

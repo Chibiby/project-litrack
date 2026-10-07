@@ -11,6 +11,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findUnique = vi.fn();
 vi.mock("@/lib/prisma", () => ({ prisma: { school: { findUnique: (...a: unknown[]) => findUnique(...a) } } }));
 
+// The gate only asks whether sign-in is configured; keep the real Better Auth
+// module (and its dependency graph) out of this unit.
+vi.mock("@/lib/auth/better-auth", () => ({ isAuthConfigured: () => true }));
+
 const isDemoVisible = vi.fn(async () => false);
 vi.mock("@/lib/demo/session", () => ({ isDemoVisible: () => isDemoVisible() }));
 

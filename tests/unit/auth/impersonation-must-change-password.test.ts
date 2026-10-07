@@ -5,76 +5,55 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * Admin impersonation.
  *
  * The prompt belongs to the real person, so a VERIFIED impersonation of that
- * person (HMAC-signed ticket, bound to this exact live Supabase session,
- * naming this user) skips the `/account/set-password` redirect and lands on
- * the role page — for every role. Anything short of that proof keeps the
- * redirect: no ticket, a forged or tampered ticket, a ticket bound to another
- * session, a ticket naming someone else, or an auth server that cannot answer.
+ * person (the session row, read fresh, carries `impersonatedBy` and belongs to
+ * this user) skips the `/account/set-password` redirect and lands on the role
+ * page — for every role. Anything short of that proof keeps the redirect: no
+ * impersonation, one the fresh read no longer shows (the cookie cache is stale
+ * after "Return to admin"), a session that belongs to someone else, or a read
+ * that fails.
  *
- * The real `session.ts` and the real `impersonation.ts` run here; tickets are
- * signed with the real encoder. Only the request edges (cookies, Supabase,
- * Prisma, redirect) are faked.
+ * The real `session.ts` and the real `impersonation-session.ts` run here. Only
+ * the request edges (headers/cookies, the Better Auth session read, Prisma,
+ * redirect) are faked.
  */
-
-process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key-for-tests";
-process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-hmac-tests";
 
 const USER_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_USER_ID = "66666666-6666-4666-8666-666666666666";
-const SESSION_ID = "55555555-5555-4555-8555-555555555555";
-const OTHER_SESSION_ID = "77777777-7777-4777-8777-777777777777";
 
 const redirect = vi.fn((path: string) => {
   throw new Error(`NEXT_REDIRECT:${path}`);
 });
 vi.mock("next/navigation", () => ({ redirect: (p: string) => redirect(p) }));
-
-let ticketCookie: string | undefined;
 vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    get: (name: string) =>
-      name === "litrack_impersonator" && ticketCookie !== undefined ? { value: ticketCookie } : undefined,
-    has: (name: string) => name === "litrack_impersonator" && ticketCookie !== undefined,
-    set: vi.fn(),
-    delete: vi.fn(),
-  }),
+  headers: async () => new Headers(),
+  cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
 }));
+// Imported by impersonation-session.ts; the unit never calls the plugin.
+vi.mock("@/lib/auth/better-auth", () => ({ getAuth: () => ({ api: {} }) }));
 
-/** What the auth server says about the current request's session. */
-let liveSessionId: string | null = SESSION_ID;
-let authOutage = false;
-const getClaims = vi.fn(async (jwt?: string) =>
-  // No token: `getCurrentUser` verifying the cookie session locally, which never
-  // asks the auth server and so is unaffected by an outage.
-  jwt === undefined
-    ? { data: { claims: { sub: "auth-target", session_id: liveSessionId } }, error: null }
-    : authOutage
-      ? { data: null, error: { status: 503, name: "AuthApiError", message: "down" } }
-      : { data: { claims: { session_id: liveSessionId } }, error: null }
+type SessionShape = { user: { id: string }; session: { impersonatedBy: string | null } } | null;
+
+/** What the cookie-cached read returns (every ordinary render). */
+let cachedSession: SessionShape;
+/** What the fresh (database row) read returns; may throw. */
+let freshRead: () => SessionShape;
+const getAuthSession = vi.fn(async (options?: { fresh?: boolean }) =>
+  options?.fresh ? freshRead() : cachedSession
 );
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      // Both `getCurrentUser` (no token) and the binding check (with the
-      // session's token) see the impersonated account's live session.
-      getUser: async () => ({ data: { user: { id: "auth-target" } }, error: null }),
-      getSession: async () => ({
-        data: { session: liveSessionId ? { access_token: "access-token" } : null },
-        error: null,
-      }),
-      getClaims,
-      signOut: vi.fn(),
-    },
-  }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: (o?: { fresh?: boolean }) => getAuthSession(o),
+  endCurrentSession: vi.fn(async () => true),
+  revokeAllSessions: vi.fn(async () => 0),
 }));
 
-const userFindUnique = vi.fn();
+let rowAuthIdForUserId = "auth-target";
+let appUser: Record<string, unknown>;
 const userUpdate = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
-      findUnique: (...a: unknown[]) => userFindUnique(...a),
+      findUnique: async (args: { where: { id?: string; authId?: string } }) =>
+        args.where.authId ? appUser : { authId: rowAuthIdForUserId },
       update: (...a: unknown[]) => userUpdate(...a),
     },
   },
@@ -82,20 +61,15 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/db/read-mode", () => ({ primeReadMode: async () => {} }));
 
 const { requireUser } = await import("@/lib/auth/session");
-const { encodeImpersonationTicket } = await import("@/lib/auth/impersonation");
 
-function signedTicket(overrides: Partial<{ targetUserId: string; sessionId: string }> = {}): string {
-  return encodeImpersonationTicket({
-    adminAuthId: "11111111-1111-4111-8111-111111111111",
-    adminUserId: "22222222-2222-4222-8222-222222222222",
-    targetUserId: USER_ID,
-    sessionId: SESSION_ID,
-    ...overrides,
-  }).value;
-}
+const IMPERSONATED: SessionShape = {
+  user: { id: "auth-target" },
+  session: { impersonatedBy: "auth-admin" },
+};
+const PLAIN: SessionShape = { user: { id: "auth-target" }, session: { impersonatedBy: null } };
 
 function signedIn(role: string) {
-  userFindUnique.mockResolvedValue({
+  appUser = {
     id: USER_ID,
     authId: "auth-target",
     role,
@@ -104,14 +78,14 @@ function signedIn(role: string) {
     isActive: true,
     approvalStatus: role === "TEACHER" ? "APPROVED" : null,
     mustChangePassword: true,
-  });
+  };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  ticketCookie = undefined;
-  liveSessionId = SESSION_ID;
-  authOutage = false;
+  rowAuthIdForUserId = "auth-target";
+  cachedSession = IMPERSONATED;
+  freshRead = () => IMPERSONATED;
 });
 
 describe("requireUser — verified impersonation skips the forced password change", () => {
@@ -119,7 +93,6 @@ describe("requireUser — verified impersonation skips the forced password chang
     "lets a Super Admin signed in as a %s reach the role page, flag untouched",
     async (role) => {
       signedIn(role);
-      ticketCookie = signedTicket();
 
       const user = await requireUser(role as "TEACHER");
 
@@ -127,49 +100,42 @@ describe("requireUser — verified impersonation skips the forced password chang
       expect(user.mustChangePassword).toBe(true);
       expect(redirect).not.toHaveBeenCalled();
       expect(userUpdate).not.toHaveBeenCalled();
-      // The proof was actually asked for, not assumed from the cookie.
-      expect(getClaims).toHaveBeenCalled();
+      // The proof was actually asked for from the session row, not assumed
+      // from the cookie cache.
+      expect(getAuthSession).toHaveBeenCalledWith({ fresh: true });
     }
   );
 });
 
 describe("requireUser — anything short of a verified impersonation keeps the redirect", () => {
   const cases: [string, () => void][] = [
-    ["no ticket at all (the real person signing in)", () => {}],
     [
-      "a forged ticket that was never signed",
+      "no impersonation at all (the real person signing in)",
       () => {
-        const parts = signedTicket().split(".");
-        parts[parts.length - 1] = "not-a-real-signature";
-        ticketCookie = parts.join(".");
+        cachedSession = PLAIN;
+        freshRead = () => PLAIN;
       },
     ],
     [
-      "a signed ticket whose target was swapped after signing",
+      "an impersonation the cookie cache still shows but the session row no longer has",
       () => {
-        const parts = signedTicket({ targetUserId: OTHER_USER_ID }).split(".");
-        parts[2] = USER_ID;
-        ticketCookie = parts.join(".");
+        cachedSession = IMPERSONATED;
+        freshRead = () => PLAIN;
+      },
+    ],
+    ["a session row that no longer exists", () => (freshRead = () => null)],
+    [
+      "an impersonated session that belongs to a different account",
+      () => {
+        rowAuthIdForUserId = "auth-someone-else";
       },
     ],
     [
-      "a validly signed ticket bound to a different session (the person re-logged in)",
+      "a fresh session read that fails",
       () => {
-        ticketCookie = signedTicket();
-        liveSessionId = OTHER_SESSION_ID;
-      },
-    ],
-    [
-      "a validly signed, bound ticket naming a different user",
-      () => {
-        ticketCookie = signedTicket({ targetUserId: OTHER_USER_ID });
-      },
-    ],
-    [
-      "a valid ticket when the auth server cannot answer",
-      () => {
-        ticketCookie = signedTicket();
-        authOutage = true;
+        freshRead = () => {
+          throw new Error("database unavailable");
+        };
       },
     ],
   ];
@@ -177,8 +143,19 @@ describe("requireUser — anything short of a verified impersonation keeps the r
   it.each(cases)("redirects to /account/set-password for %s", async (_label, arrange) => {
     signedIn("DISTRICT_ADMIN");
     arrange();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await expect(requireUser("DISTRICT_ADMIN")).rejects.toThrow("NEXT_REDIRECT:/account/set-password");
     expect(userUpdate).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("never treats a different user id as the impersonated person", async () => {
+    signedIn("TEACHER");
+    rowAuthIdForUserId = "auth-target";
+    // The check is keyed on the User.id requireUser resolved; a session for
+    // OTHER_USER_ID's account must not satisfy it.
+    freshRead = () => ({ user: { id: OTHER_USER_ID }, session: { impersonatedBy: "auth-admin" } });
+    await expect(requireUser("TEACHER")).rejects.toThrow("NEXT_REDIRECT:/account/set-password");
   });
 });

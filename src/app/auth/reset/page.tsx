@@ -1,9 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import { PasswordForm } from "@/components/forms/password-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { resetErrorMessage } from "@/lib/auth/reset-messages";
+import { peekResetToken } from "@/lib/auth/password-reset";
+import { RESET_COOKIE } from "@/lib/auth/recovery-email";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,6 @@ export default async function AuthResetPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    code?: string;
     error?: string;
     error_code?: string;
     error_description?: string;
@@ -22,22 +23,12 @@ export default async function AuthResetPage({
   let errorMessage: string | null = resetErrorMessage(params);
 
   try {
-    const supabase = await createSupabaseServerClient();
-    if (params.code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-      if (error) {
-        errorMessage = "This reset link is invalid or has expired. Request a new one.";
-      } else {
-        sessionReady = true;
-      }
-    } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      sessionReady = Boolean(user);
-      if (!sessionReady && !errorMessage) {
-        errorMessage = "Open the link from your email to continue, or request a new reset link.";
-      }
+    // The token arrives only as the httpOnly cookie `/auth/confirm/verify`
+    // set; it is checked here, never used up (the save action consumes it).
+    const token = (await cookies()).get(RESET_COOKIE)?.value;
+    sessionReady = Boolean(token && (await peekResetToken(token)));
+    if (!sessionReady && !errorMessage) {
+      errorMessage = "Open the link from your email to continue, or request a new reset link.";
     }
   } catch {
     errorMessage = "Unable to start password reset. Try again from the forgot-password page.";

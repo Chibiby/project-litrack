@@ -3,8 +3,7 @@
  * Run with: npm run db:seed
  *
  * Requires the following env vars:
- *  - SUPABASE_SERVICE_ROLE_KEY
- *  - NEXT_PUBLIC_SUPABASE_URL
+ *  - DATABASE_URL (and DIRECT_URL for migrations, not used here)
  *  - SEED_SUPER_ADMIN_EMAIL
  *  - SEED_SUPER_ADMIN_PASSWORD
  *
@@ -12,9 +11,15 @@
  *  - SEED_SUPER_ADMIN_USERNAME (defaults to "admin") — the handle typed at
  *    /admin/login. The email above stays the account's identity and is what
  *    password recovery mails; the username is only a lookup handle.
+ *
+ * Identity lives in the Better Auth tables (AuthUser + a credential
+ * AuthAccount) on the same database, built with the shared row builder and
+ * bcrypt hasher so the shape matches the app and the ops scripts.
  */
+import { randomUUID } from "node:crypto";
 import { PrismaClient, UserRole } from "@prisma/client";
-import { createClient } from "@supabase/supabase-js";
+import { buildIdentityRows, normalizeIdentityEmail } from "../src/lib/auth/identity-rows";
+import { hashPassword } from "../src/lib/auth/password-hash";
 
 const prisma = new PrismaClient();
 
@@ -22,18 +27,12 @@ async function main() {
   const email = process.env.SEED_SUPER_ADMIN_EMAIL;
   const password = process.env.SEED_SUPER_ADMIN_PASSWORD;
   const username = (process.env.SEED_SUPER_ADMIN_USERNAME || "admin").trim().toLowerCase();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!email || !password || !supabaseUrl || !serviceKey) {
+  if (!email || !password) {
     throw new Error(
-      "Missing required env vars. See .env.example: SEED_SUPER_ADMIN_EMAIL, SEED_SUPER_ADMIN_PASSWORD, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY"
+      "Missing required env vars. See .env.example: SEED_SUPER_ADMIN_EMAIL, SEED_SUPER_ADMIN_PASSWORD"
     );
   }
-
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 
   // Check if super admin user already exists in app DB
   const existing = await prisma.user.findFirst({
@@ -53,43 +52,45 @@ async function main() {
     return;
   }
 
-  // Create Supabase auth user (or fetch existing)
-  let authId: string;
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+  // Reuse an identity left by an earlier partial run, otherwise mint a new id.
+  const priorIdentity = await prisma.authUser.findUnique({
+    where: { email: normalizeIdentityEmail(email) },
+  });
+  const authId = priorIdentity?.id ?? randomUUID();
+
+  const { user, account } = buildIdentityRows({
+    authId,
     email,
-    password,
-    email_confirm: true,
-    user_metadata: { role: "SUPER_ADMIN" },
+    role: "SUPER_ADMIN",
+    passwordHash: await hashPassword(password),
   });
 
-  if (createErr && !createErr.message.includes("already")) {
-    throw createErr;
-  }
-
-  if (created?.user) {
-    authId = created.user.id;
-  } else {
-    // user existed; look it up
-    const { data: list } = await admin.auth.admin.listUsers();
-    const found = list.users.find((u) => u.email === email);
-    if (!found) throw new Error("Could not create or find super admin auth user");
-    authId = found.id;
-  }
-
-  await prisma.user.create({
-    data: {
-      authId,
-      email,
-      username,
-      role: UserRole.SUPER_ADMIN,
-      // The bootstrap admin needs Developer Controls to set everything else up.
-      adminTier: "DEVELOPER",
-      firstName: "Super",
-      lastName: "Admin",
-      fullName: "Super Admin",
-      isActive: true,
-      profileCompleted: true,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.authUser.upsert({
+      where: { id: user.id },
+      create: user,
+      update: { email: user.email, role: user.role, emailVerified: true, banned: false },
+    });
+    await tx.authAccount.upsert({
+      where: { id: account.id },
+      create: account,
+      update: { password: account.password },
+    });
+    await tx.user.create({
+      data: {
+        authId,
+        email,
+        username,
+        role: UserRole.SUPER_ADMIN,
+        // The bootstrap admin needs Developer Controls to set everything else up.
+        adminTier: "DEVELOPER",
+        firstName: "Super",
+        lastName: "Admin",
+        fullName: "Super Admin",
+        isActive: true,
+        profileCompleted: true,
+      },
+    });
   });
 
   console.log(`✓ Super admin created: ${email}`);

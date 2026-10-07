@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
+import { isAuthConfigured } from "@/lib/auth/better-auth";
 import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { isDemoVisible } from "@/lib/demo/session";
 
@@ -8,13 +8,17 @@ import { isDemoVisible } from "@/lib/demo/session";
 
 export const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
 
-export function assertSupabaseConfigured(): void {
-  if (isSupabaseConfigured()) return;
+/** Admin detail only; the variable names never reach the person. */
+export const AUTH_NOT_CONFIGURED_MESSAGE =
+  "Missing or invalid environment variables: BETTER_AUTH_SECRET (at least 32 characters)";
+
+export function assertAuthConfigured(): void {
+  if (isAuthConfigured()) return;
   // The variable names are admin detail. The person is told the server is not
   // set up, which is the whole of what they can act on.
   throw new AppError("CONFIG_MISSING", {
-    detail: SUPABASE_NOT_CONFIGURED_MESSAGE,
-    context: { reason: "supabase_env_missing" },
+    detail: AUTH_NOT_CONFIGURED_MESSAGE,
+    context: { reason: "auth_env_missing" },
   });
 }
 

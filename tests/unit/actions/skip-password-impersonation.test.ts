@@ -4,67 +4,74 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `skipPasswordChange` during a Super Admin impersonation.
  *
  * `mustChangePassword` is the real person's first-sign-in prompt. An admin
- * signed in as them must never clear it: a verified impersonation is sent to
- * the role home with no write and no audit row, and a signed ticket for this
- * account whose session binding cannot be proven is refused outright. With no
- * ticket in play the ordinary skip (the account holder's own choice) still
- * writes.
+ * signed in as them must never clear it: an impersonation of this account that
+ * the session row proves is sent to the role home with no write and no audit
+ * row, and one that is shown (cookie cache) but cannot be proven against the
+ * session row is refused outright. With no impersonation of this account in
+ * play the ordinary skip (the account holder's own choice) still writes.
  *
- * The real `impersonation.ts` runs, with tickets signed by the real encoder;
- * only the request edges are faked.
+ * Impersonation state is Better Auth session state now, read through
+ * `readImpersonation` (cheap, cookie-cached) and proven with
+ * `isVerifiedImpersonationOf` (fresh session row); both are faked here, as
+ * their own behavior is pinned in tests/unit/auth-flows.
  */
 
-process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key-for-tests";
-process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key-for-hmac-tests";
-
 const USER_ID = "33333333-3333-4333-8333-333333333333";
-const SESSION_ID = "55555555-5555-4555-8555-555555555555";
-const OTHER_SESSION_ID = "77777777-7777-4777-8777-777777777777";
+const OTHER_USER_ID = "44444444-4444-4444-8444-444444444444";
 
 const userUpdate = vi.fn();
 const writeAudit = vi.fn();
 const requireUser = vi.fn();
+const readImpersonation = vi.fn();
+const isVerifiedImpersonationOf = vi.fn();
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const client = {
     user: {
       get update() {
         return userUpdate;
       },
     },
-  },
-}));
+  };
+  return { prisma: client, prismaFresh: client };
+});
 
-let ticketCookie: string | undefined;
-vi.mock("next/headers", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("next/headers")>()),
-  cookies: async () => ({
-    get: (name: string) =>
-      name === "litrack_impersonator" && ticketCookie !== undefined ? { value: ticketCookie } : undefined,
-    has: (name: string) => name === "litrack_impersonator" && ticketCookie !== undefined,
-    set: vi.fn(),
-    delete: vi.fn(),
-  }),
+vi.mock("@/lib/auth/better-auth", () => ({
+  isAuthConfigured: () => true,
+  getAuth: vi.fn(),
 }));
-
-let liveSessionId: string = SESSION_ID;
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      getSession: async () => ({ data: { session: { access_token: "access-token" } }, error: null }),
-      getUser: async () => ({ data: { user: { id: "auth-target" } }, error: null }),
-      getClaims: async () => ({ data: { claims: { session_id: liveSessionId } }, error: null }),
-      signOut: vi.fn(),
-    },
-  }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  endCurrentSession: vi.fn(),
+  getAuthSession: vi.fn(),
+  revokeAllSessions: vi.fn(),
+  signInWithPassword: vi.fn(),
 }));
-
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
-vi.mock("@/lib/supabase/env", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/supabase/env")>()),
-  isSupabaseConfigured: () => true,
-  SUPABASE_NOT_CONFIGURED_MESSAGE: "not configured",
+vi.mock("@/lib/auth/identity", () => ({
+  createIdentity: vi.fn(),
+  findIdentityByEmail: vi.fn(),
+  setEmail: vi.fn(),
+  setPassword: vi.fn(),
+  verifyAccountPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-hash", () => ({
+  DUMMY_BCRYPT_HASH: "dummy",
+  hashPassword: vi.fn(),
+  verifyPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-reset", () => ({
+  consumeResetToken: vi.fn(),
+  peekResetToken: vi.fn(),
+}));
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(),
+  isVerifiedImpersonationOf: (...args: unknown[]) => isVerifiedImpersonationOf(...args),
+  readImpersonation: (...args: unknown[]) => readImpersonation(...args),
+}));
+vi.mock("@/lib/auth/recovery-email", () => ({
+  RESET_COOKIE: "litrack_reset",
+  RESET_COOKIE_PATH: "/auth",
+  sendPasswordRecoveryEmail: vi.fn(),
+  hasRecentRecoveryToken: vi.fn(),
 }));
 vi.mock("@/lib/audit", () => ({
   get writeAudit() {
@@ -101,6 +108,10 @@ vi.mock("@/lib/auth/teacher-registration-helpers", () => ({
   registerConflictCode: vi.fn(),
   registerConflictError: vi.fn(),
 }));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(),
+  cookies: async () => ({ get: vi.fn(), has: vi.fn(), set: vi.fn(), delete: vi.fn() }),
+}));
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
     throw new Error(`NEXT_REDIRECT:${path}`);
@@ -113,15 +124,15 @@ vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TESTREF-SKIP
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const { skipPasswordChange } = await import("@/lib/actions/auth");
-const { encodeImpersonationTicket } = await import("@/lib/auth/impersonation");
 
-function signedTicket(): string {
-  return encodeImpersonationTicket({
+function impersonationOf(targetUserId: string) {
+  return {
     adminAuthId: "11111111-1111-4111-8111-111111111111",
     adminUserId: "22222222-2222-4222-8222-222222222222",
-    targetUserId: USER_ID,
-    sessionId: SESSION_ID,
-  }).value;
+    targetUserId,
+    returnTo: null,
+    expired: false,
+  };
 }
 
 async function run(): Promise<unknown> {
@@ -137,8 +148,8 @@ async function run(): Promise<unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  ticketCookie = undefined;
-  liveSessionId = SESSION_ID;
+  readImpersonation.mockResolvedValue(null);
+  isVerifiedImpersonationOf.mockResolvedValue(false);
 });
 
 describe("skipPasswordChange while a Super Admin is signed in as the account", () => {
@@ -147,39 +158,49 @@ describe("skipPasswordChange while a Super Admin is signed in as the account", (
     ["SCHOOL_HEAD", "/school-head"],
   ])("a verified impersonation of a %s goes to %s without clearing the flag", async (role, home) => {
     requireUser.mockResolvedValue({ id: USER_ID, role, schoolId: null, mustChangePassword: true });
-    ticketCookie = signedTicket();
+    readImpersonation.mockResolvedValue(impersonationOf(USER_ID));
+    isVerifiedImpersonationOf.mockResolvedValue(true);
 
     expect(await run()).toEqual({ redirected: home });
+    expect(isVerifiedImpersonationOf).toHaveBeenCalledWith(USER_ID);
     expect(userUpdate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("refuses when this account's ticket is present but bound to a different session", async () => {
+  it("refuses when the impersonation is shown but the session row cannot prove it", async () => {
     requireUser.mockResolvedValue({ id: USER_ID, role: "DISTRICT_ADMIN", schoolId: null, mustChangePassword: true });
-    ticketCookie = signedTicket();
-    liveSessionId = OTHER_SESSION_ID;
+    readImpersonation.mockResolvedValue(impersonationOf(USER_ID));
+    isVerifiedImpersonationOf.mockResolvedValue(false);
 
     expect(await run()).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
     expect(userUpdate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("still lets the real account holder skip when no ticket is in play (control)", async () => {
+  it("still lets the real account holder skip when no impersonation is in play (control)", async () => {
     requireUser.mockResolvedValue({ id: USER_ID, role: "DISTRICT_ADMIN", schoolId: null, mustChangePassword: true });
 
     expect(await run()).toEqual({ redirected: "/district" });
+    expect(isVerifiedImpersonationOf).not.toHaveBeenCalled();
     expect(userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: USER_ID }, data: { mustChangePassword: false } })
     );
+    expect(writeAudit).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores a forged ticket: it proves nothing, so it is the real holder's own skip", async () => {
+  it("an impersonation of a different account proves nothing about this one: it is the holder's own skip", async () => {
     requireUser.mockResolvedValue({ id: USER_ID, role: "DISTRICT_ADMIN", schoolId: null, mustChangePassword: true });
-    const parts = signedTicket().split(".");
-    parts[parts.length - 1] = "not-a-real-signature";
-    ticketCookie = parts.join(".");
+    readImpersonation.mockResolvedValue(impersonationOf(OTHER_USER_ID));
+    isVerifiedImpersonationOf.mockResolvedValue(true);
 
     expect(await run()).toEqual({ redirected: "/district" });
     expect(userUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("still refuses a teacher, impersonation or not (they must choose a new password)", async () => {
+    requireUser.mockResolvedValue({ id: USER_ID, role: "TEACHER", schoolId: "school-1", mustChangePassword: true });
+
+    expect(await run()).toMatchObject({ ok: false, code: "AUTH_FORBIDDEN" });
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 });

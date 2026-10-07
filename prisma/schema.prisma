@@ -708,7 +708,7 @@ model TermWindowOverride {
 
 model User {
   id                        String                 @id @default(uuid())
-  authId                    String                 @unique // Supabase auth.users.id
+  authId                    String                 @unique // AuthUser.id (Better Auth); no FK by design
   email                     String                 @unique
   /// Login handle for the Super Admin console (`/admin/login`), which signs in
   /// by username rather than email. Nullable because School Heads sign in with
@@ -875,6 +875,76 @@ model User {
   /// it — that query supplies no `schoolId`, so `deletedAt` is never a usable
   /// leading column there. Same reasoning as `Learner`'s twin of this index.
   @@index([deletedAt])
+}
+
+/// Better Auth identity tables. `AuthUser.id` is what `User.authId` holds. There
+/// is deliberately no foreign key from `User.authId`: deleted Users keep a
+/// dangling `authId` and `restoreRemovedTeacher` relies on that. `name` is always
+/// "" (`User.fullName` is authoritative). Excluded from snapshots: credentials
+/// never land in a backup.
+model AuthUser {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String?
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions AuthSession[]
+  accounts AuthAccount[]
+}
+
+model AuthSession {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String?
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthAccount {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model AuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 /// Which districts a DISTRICT_ADMIN supervises. `district` is the exact,

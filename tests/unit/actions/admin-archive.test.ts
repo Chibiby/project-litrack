@@ -12,11 +12,11 @@ import { thumbPathFor } from "@/lib/avatars/paths";
  *     assertion is on the actual control-flow signal, not a stand-in for it.
  *   - Every load carries `deletedAt: { not: null }` — a live row must be
  *     unreachable from this page.
- *   - Teacher restore never restores a login: no Supabase admin client is
- *     constructed, `isActive`/`authId` are untouched, no advisory or learner
+ *   - Teacher restore never restores a login: the identity helpers are not
+ *     called, `isActive`/`authId` are untouched, no advisory or learner
  *     re-attachment is attempted.
- *   - Teacher purge calls Supabase `deleteUser` only after the Prisma
- *     transaction commits, and a Supabase failure does not turn a successful
+ *   - Teacher purge calls `deleteIdentity` only after the Prisma
+ *     transaction commits, and an identity failure does not turn a successful
  *     Prisma purge into a reported failure.
  *   - Audit metadata carries ids/counts/booleans only, never a name or email.
  *   - A refused or blocked operation writes no audit row.
@@ -112,15 +112,17 @@ vi.mock("@/lib/teachers/removed-email", async () => {
   return actual;
 });
 
-// ── supabase admin ───────────────────────────────────────────────────────
+// ── sign-in identity (Better Auth rows in Neon) ──────────────────────────
 
-const deleteUser = vi.fn();
-const createSupabaseAdminClient = vi.fn(() => {
-  order.push("createSupabaseAdminClient");
-  return { auth: { admin: { deleteUser: (...args: unknown[]) => deleteUser(...args) } } };
+const deleteIdentity = vi.fn(async (_authId: string) => {
+  order.push("deleteIdentity");
 });
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => createSupabaseAdminClient(),
+const setPassword = vi.fn();
+const setRole = vi.fn();
+vi.mock("@/lib/auth/identity", () => ({
+  deleteIdentity: (authId: string) => deleteIdentity(authId),
+  setPassword: (...args: unknown[]) => setPassword(...args),
+  setRole: (...args: unknown[]) => setRole(...args),
 }));
 
 // ── avatar storage — invariant 14: a hard purge removes the user's photo
@@ -129,7 +131,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 const removeAvatarObjects = vi.fn(async (paths: string[]) => {
   order.push(`removeAvatarObjects:${paths.length}`);
 });
-vi.mock("@/lib/supabase/avatar-storage", () => ({
+vi.mock("@/lib/storage/avatar-objects", () => ({
   removeAvatarObjects: (...args: unknown[]) => removeAvatarObjects(...(args as [string[]])),
 }));
 
@@ -217,7 +219,9 @@ beforeEach(() => {
     releasedSectionIds: ["section-a"],
     releasedLearnerCount: 2,
   });
-  deleteUser.mockResolvedValue({ error: null });
+  deleteIdentity.mockImplementation(async () => {
+    order.push("deleteIdentity");
+  });
   // A minimal, generic transaction stub. Each action's own tests override the
   // callback behaviour they need by inspecting the `tx` shape they receive,
   // or by re-mocking `transaction` per test.
@@ -402,13 +406,14 @@ describe("restoreRemovedTeacher never restores a login", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("never constructs a Supabase admin client on this path", async () => {
+  it("never touches the sign-in identity on this path", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
 
     await restoreRemovedTeacher(fd(TEACHER_ID));
 
-    expect(createSupabaseAdminClient).not.toHaveBeenCalled();
-    expect(deleteUser).not.toHaveBeenCalled();
+    expect(deleteIdentity).not.toHaveBeenCalled();
+    expect(setPassword).not.toHaveBeenCalled();
+    expect(setRole).not.toHaveBeenCalled();
   });
 
   it("writes only deletedAt: null (isActive and authId are left untouched)", async () => {
@@ -584,15 +589,16 @@ describe("purgeRemovedTeacher", () => {
     // still get busted.
   });
 
-  it("calls Supabase deleteUser only AFTER the Prisma transaction commits", async () => {
+  it("deletes the sign-in identity only AFTER the Prisma transaction commits", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
 
     await purgeRemovedTeacher(fd(TEACHER_ID));
 
     const commitIndex = order.indexOf("transaction:commit");
-    const supabaseIndex = order.indexOf("createSupabaseAdminClient");
+    const identityIndex = order.indexOf("deleteIdentity");
     expect(commitIndex).toBeGreaterThanOrEqual(0);
-    expect(supabaseIndex).toBeGreaterThan(commitIndex);
+    expect(identityIndex).toBeGreaterThan(commitIndex);
+    expect(deleteIdentity).toHaveBeenCalledWith("auth-teacher-1");
   });
 
   it("removes the purged teacher's avatar objects only AFTER the transaction commits (invariant 14)", async () => {
@@ -629,13 +635,13 @@ describe("purgeRemovedTeacher", () => {
     expect(res).toMatchObject({ ok: false });
     expect(order).not.toContain("transaction:commit");
     expect(removeAvatarObjects).not.toHaveBeenCalled();
-    expect(deleteUser).not.toHaveBeenCalled();
+    expect(deleteIdentity).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("a Supabase deleteUser failure does not turn a successful purge into a reported failure", async () => {
+  it("a deleteIdentity failure does not turn a successful purge into a reported failure", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
-    deleteUser.mockRejectedValue(new Error("supabase is down"));
+    deleteIdentity.mockRejectedValue(new Error("database is down"));
 
     const res = await purgeRemovedTeacher(fd(TEACHER_ID));
 
@@ -644,9 +650,9 @@ describe("purgeRemovedTeacher", () => {
     expect(entry.metadata).toMatchObject({ authDeleted: false });
   });
 
-  it("records a system error when the Supabase deleteUser fails (returned or thrown)", async () => {
+  it("records a system error when the deleteIdentity call fails", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
-    deleteUser.mockResolvedValue({ error: { message: "boom" } });
+    deleteIdentity.mockRejectedValue(new Error("boom"));
 
     const res = await purgeRemovedTeacher(fd(TEACHER_ID));
 
@@ -657,9 +663,11 @@ describe("purgeRemovedTeacher", () => {
     expect(err.detail).toContain(TEACHER_ID);
   });
 
-  it("treats a Supabase 'not found' as already deleted and reports nothing", async () => {
+  it("treats an already-missing identity as deleted and reports nothing", async () => {
+    // `deleteIdentity` itself counts a missing identity as success (see
+    // identity.ts), so it resolves rather than throws.
     userFindFirst.mockResolvedValue(removedTeacher());
-    deleteUser.mockResolvedValue({ error: { message: "User not found" } });
+    deleteIdentity.mockResolvedValue(undefined);
 
     const res = await purgeRemovedTeacher(fd(TEACHER_ID));
 
@@ -667,9 +675,9 @@ describe("purgeRemovedTeacher", () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  it("reports authDeleted true when Supabase succeeds", async () => {
+  it("reports authDeleted true when the identity delete succeeds", async () => {
     userFindFirst.mockResolvedValue(removedTeacher());
-    deleteUser.mockResolvedValue({ error: null });
+    deleteIdentity.mockResolvedValue(undefined);
 
     const res = await purgeRemovedTeacher(fd(TEACHER_ID));
 

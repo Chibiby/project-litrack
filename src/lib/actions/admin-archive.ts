@@ -14,8 +14,8 @@ import { archiveRowSchema } from "@/lib/validators/admin-archive.schema";
 import { purgeLearnerRecord, purgeTeacherRecord } from "@/lib/archive/purge";
 import { reactivateEnrollment } from "@/lib/learners/reactivate-enrollment";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { removeAvatarObjects } from "@/lib/supabase/avatar-storage";
+import { deleteIdentity } from "@/lib/auth/identity";
+import { removeAvatarObjects } from "@/lib/storage/avatar-objects";
 import { thumbPathFor } from "@/lib/avatars/paths";
 import {
   revalidateLearnerScoped,
@@ -196,7 +196,7 @@ export type RestoreRemovedTeacherResult = {
  *
  * `deletedAt: null` only. `isActive` stays `false` — that is what keeps
  * `getCurrentUser` refusing the session — `approvalStatus` is untouched, no
- * advisory or learner is re-attached, and no Supabase admin client is ever
+ * advisory or learner is re-attached, and no identity write is ever
  * constructed on this path: `authId` is left as the dangling string removal
  * left behind, which is inert because nothing can present a session for it.
  *
@@ -272,7 +272,7 @@ export type PurgeRemovedTeacherResult = { ok: true; authDeleted: boolean };
  * Permanently delete a soft-deleted teacher's `User` row.
  *
  * Ordering is deliberately the reverse of `clearRejectedTeacher`
- * (`src/lib/actions/school-head.ts`), which deletes the Supabase user first
+ * (`src/lib/actions/school-head.ts`), which deletes the sign-in identity first
  * and has to apologise if Prisma fails afterwards:
  * 1. Load the row (already done above) and its counts (inside the tx, via
  *    `purgeTeacherRecord`).
@@ -280,9 +280,8 @@ export type PurgeRemovedTeacherResult = { ok: true; authDeleted: boolean };
  *    `advisorySectionId`, then deletes the `User` row — all inside one
  *    transaction.
  * 3. Only AFTER that transaction commits: a best-effort removal of the
- *    account's two profile-photo objects, then a best-effort Supabase
- *    `auth.admin.deleteUser(authId)`, tolerating "not found" exactly as
- *    `removeTeacherRows` does.
+ *    account's two profile-photo objects, then a best-effort
+ *    `deleteIdentity(authId)`, where a missing identity counts as success.
  *
  * If step 3 fails, an auth user survives with no Prisma row. That grants no
  * access: `getCurrentUser` resolves a session by `authId` against `User` and
@@ -338,7 +337,7 @@ export const purgeRemovedTeacher = action(
     }
 
     // AFTER the commit, never before, and best-effort: the same ordering rule
-    // the Supabase auth delete below follows. A failed transaction must not
+    // the identity delete below follows. A failed transaction must not
     // leave a live `User` row pointing at objects that are already gone, and a
     // failed removal leaves only an orphan in the bucket. A SOFT delete keeps
     // the photo — this is the hard purge, and it is the only path that deletes.
@@ -349,12 +348,9 @@ export const purgeRemovedTeacher = action(
     let authDeleted = false;
     let authDeleteFailure: string | null = null;
     try {
-      const supabase = createSupabaseAdminClient();
-      const { error } = await supabase.auth.admin.deleteUser(teacher.authId);
-      // "Not found" means the auth user is already gone: that is the goal, not a failure.
-      const alreadyGone = Boolean(error && /not.?found/i.test(error.message));
-      authDeleted = !error || alreadyGone;
-      if (error && !alreadyGone) authDeleteFailure = error.message;
+      // A missing identity is success (already gone is the goal).
+      await deleteIdentity(teacher.authId);
+      authDeleted = true;
     } catch (err) {
       authDeleteFailure = err instanceof Error ? err.message : "unknown error";
     }
@@ -365,8 +361,8 @@ export const purgeRemovedTeacher = action(
       reportError(
         new AppError("AUTH_PROVIDER_ERROR", {
           severity: "system",
-          detail: `Supabase deleteUser failed after purging teacher ${teacher.id}: ${authDeleteFailure}`,
-          context: { service: "supabase-auth", reason: "purge-auth-delete-failed" },
+          detail: `deleteIdentity failed after purging teacher ${teacher.id}: ${authDeleteFailure}`,
+          context: { service: "auth-identity", reason: "purge-auth-delete-failed" },
         }),
         { userId: admin.id, schoolId: teacher.schoolId }
       );

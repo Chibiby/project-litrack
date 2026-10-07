@@ -18,7 +18,7 @@ vi.mock("@/lib/prisma", () => ({
 const requireUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ requireUser: (...a: unknown[]) => requireUser(...a) }));
 vi.mock("@/lib/auth/district-scope", () => ({ requireAdminScope: vi.fn(), loadSchoolInScope: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
+vi.mock("@/lib/auth/identity", () => ({ createIdentity: vi.fn(), setPassword: vi.fn(), setRole: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/cache/unstable", () => ({ cachedQuery: vi.fn() }));
 vi.mock("@/lib/settings/system-settings", () => ({ demoSchoolFilter: vi.fn() }));

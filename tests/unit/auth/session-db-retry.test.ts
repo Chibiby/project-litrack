@@ -9,9 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * The real `session.ts` runs; only the request edges are faked.
  */
 
-process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key-for-tests";
-
 vi.mock("next/navigation", () => ({
   redirect: (p: string) => {
     throw new Error(`NEXT_REDIRECT:${p}`);
@@ -20,15 +17,15 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => undefined, has: () => false, set: vi.fn(), delete: vi.fn() }),
 }));
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      getClaims: async () => ({ data: { claims: { sub: "auth-1" } }, error: null }),
-      signOut: vi.fn(),
-    },
-  }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: async () => ({ user: { id: "auth-1" }, session: { impersonatedBy: null } }),
+  endCurrentSession: vi.fn(async () => true),
+  revokeAllSessions: vi.fn(async () => 0),
 }));
-vi.mock("@/lib/supabase/jwks", () => ({ getSharedJwks: async () => undefined }));
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(async () => {}),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
+}));
 
 const userFindUnique = vi.fn();
 vi.mock("@/lib/prisma", () => ({

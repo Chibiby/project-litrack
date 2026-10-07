@@ -1,7 +1,8 @@
 import "server-only";
 import type { GradeLevelType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createIdentity } from "@/lib/auth/identity";
+import { hashPassword } from "@/lib/auth/password-hash";
 import { assertTestableSchool } from "@/lib/auth/test-lab";
 import { findDemoSchools } from "@/lib/demo/provision";
 import { testLabPersonaEmail } from "@/lib/test-lab/personas";
@@ -199,33 +200,29 @@ async function ensureDemoSchoolHead(schoolId: string): Promise<void> {
   });
 }
 
-/** Create the Supabase auth user + `User` row for a fresh demo teacher persona. */
+/** Create the identity + `User` row for a fresh demo teacher persona. */
 async function createTeacherAuthUser(params: {
   email: string;
   schoolId: string;
   firstName: string;
   lastName: string;
 }): Promise<{ id: string; authId: string }> {
-  const admin = createSupabaseAdminClient();
   // Generated once, never returned or logged: nobody signs in as this account
   // with a password — Test Lab reaches it only through the signed
-  // impersonation ticket.
-  const password = generateActivationCredential();
-  const { data, error } = await admin.auth.admin.createUser({
-    email: params.email,
-    password,
-    email_confirm: true,
-    app_metadata: { role: "TEACHER", schoolId: params.schoolId },
-    user_metadata: { role: "TEACHER" },
-  });
-  if (error || !data.user) {
-    throw error ?? new Error("prepareTestLabFixtures: teacher auth bootstrap failed");
-  }
+  // impersonation ticket. Hashed before the transaction so bcrypt does not
+  // run while it is open.
+  const hash = await hashPassword(generateActivationCredential());
   const fullName = `${params.firstName} ${params.lastName}`;
-  try {
-    const user = await prisma.user.create({
+  // One transaction: the persona's email is fixed, so an identity left behind
+  // by a failed `User.create` would make every later Prepare fail.
+  return prisma.$transaction(async (tx) => {
+    const { authId } = await createIdentity(
+      { email: params.email, password: { hash }, role: "TEACHER", emailVerified: true },
+      tx
+    );
+    const user = await tx.user.create({
       data: {
-        authId: data.user.id,
+        authId,
         email: params.email,
         role: "TEACHER",
         schoolId: params.schoolId,
@@ -236,17 +233,8 @@ async function createTeacherAuthUser(params: {
         mustChangePassword: false,
       },
     });
-    return { id: user.id, authId: data.user.id };
-  } catch (err) {
-    // The persona's email is fixed, and Supabase refuses a duplicate. Leaving
-    // this auth user behind would make every later Prepare fail on "already
-    // registered", so undo it before surfacing the original failure.
-    const { error: deleteError } = await admin.auth.admin.deleteUser(data.user.id);
-    if (deleteError) {
-      console.error("[test-lab] rolling back persona auth user failed:", deleteError.message);
-    }
-    throw err;
-  }
+    return { id: user.id, authId };
+  });
 }
 
 /**
@@ -295,10 +283,6 @@ async function ensureDemoTeacher(params: {
       },
     });
     teacher = { id: created.id };
-    const adminClient = createSupabaseAdminClient();
-    await adminClient.auth.admin.updateUserById(created.authId, {
-      app_metadata: { role: "TEACHER", schoolId: params.schoolId },
-    });
   }
 
   const advisory = await prisma.section.findMany({

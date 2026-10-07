@@ -1,9 +1,9 @@
 /**
  * READ-ONLY diagnostic: "why can't this school's head sign in?"
  *
- * Cross-checks each School Head row against the Supabase auth user it points at,
- * which is what separates a genuinely broken account (missing auth user, email
- * drift, banned, unconfirmed) from a healthy one that is being refused for some
+ * Cross-checks each School Head row against the Better Auth identity it points at,
+ * which is what separates a genuinely broken account (missing identity, email
+ * drift, banned, no credential) from a healthy one that is being refused for some
  * other reason — a rate limit, most likely. See the rate-limit section of
  * docs/runbook.md before concluding a password is wrong.
  *
@@ -11,14 +11,13 @@
  *   npm run diagnose:login -- salimama kawas
  */
 import { schoolHeadSyntheticEmail } from "../src/lib/auth/synthetic-email";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { isBcryptHash } from "../src/lib/auth/password-hash";
 import { connectScriptPrisma, loadEnvFile } from "./lib/script-db";
 
 async function main() {
   loadEnvFile();
   const terms = process.argv.slice(2);
   const prisma = await connectScriptPrisma();
-  const admin = createSupabaseAdminClient();
 
   try {
     // ---- global shape ----
@@ -95,18 +94,32 @@ async function main() {
           console.log(`        passwordIsSchoolId  ${h.passwordIsSchoolId}`);
           console.log(`        mustChangePassword  ${h.mustChangePassword}`);
           console.log(`        createdAt           ${h.createdAt.toISOString()}`);
-          const { data, error } = await admin.auth.admin.getUserById(h.authId);
-          if (error || !data?.user) {
-            console.log(`        SUPABASE            *** MISSING (${error?.message ?? "no user"}) ***`);
+          const u = await prisma.authUser.findUnique({
+            where: { id: h.authId },
+            select: {
+              email: true,
+              emailVerified: true,
+              role: true,
+              banned: true,
+              banExpires: true,
+              updatedAt: true,
+              accounts: { select: { providerId: true, password: true } },
+            },
+          });
+          if (!u) {
+            console.log("        AUTH IDENTITY       *** MISSING (no AuthUser row) ***");
           } else {
-            const u = data.user;
-            const same = (u.email ?? "").toLowerCase() === h.email.toLowerCase();
-            console.log(`        supabase email      ${u.email}  ${same ? "(matches)" : "*** MISMATCH ***"}`);
-            console.log(`        email_confirmed_at  ${u.email_confirmed_at ?? "(null)"}`);
-            console.log(`        banned_until        ${(u as unknown as { banned_until?: string }).banned_until ?? "(none)"}`);
-            console.log(`        app_metadata        ${JSON.stringify(u.app_metadata)}`);
-            console.log(`        last_sign_in_at     ${u.last_sign_in_at ?? "(never)"}`);
-            console.log(`        updated_at          ${u.updated_at ?? "?"}`);
+            const same = u.email.toLowerCase() === h.email.toLowerCase();
+            const credential = u.accounts.find((a) => a.providerId === "credential");
+            console.log(`        auth email          ${u.email}  ${same ? "(matches)" : "*** MISMATCH ***"}`);
+            console.log(`        emailVerified       ${u.emailVerified}`);
+            console.log(`        banned              ${u.banned ?? false}  (expires ${u.banExpires?.toISOString() ?? "never"})`);
+            console.log(`        auth role           ${u.role ?? "(none)"}`);
+            // Presence and shape only; the hash itself is never printed.
+            console.log(
+              `        credential account  ${credential ? (isBcryptHash(credential.password) ? "present (bcrypt)" : "*** present but NOT a bcrypt hash ***") : "*** MISSING ***"}`
+            );
+            console.log(`        updatedAt           ${u.updatedAt.toISOString()}`);
           }
         }
         // is another auth user squatting on the expected address?

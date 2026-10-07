@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * see exactly that district admin's districts on `/district`, never the whole
  * division (docs/specs/district-admin.md I14, I8).
  *
- * `impersonateUser` swaps the Supabase session itself, so on every later
- * request the auth user IS the district admin, while the signed impersonation
- * ticket (naming the Super Admin) sits in its own cookie. This runs the real
- * `getCurrentUser` -> `requireUser` -> `requireAdminScope` chain with the
- * session belonging to the district admin and a ticket present, and pins that
- * the scope comes from the session user's role and assignments — the ticket
- * and the admin it names play no part.
+ * Better Auth's `impersonateUser` swaps the session itself, so on every later
+ * request the auth user IS the district admin, while the session row's
+ * `impersonatedBy` names the Super Admin. This runs the real `getCurrentUser`
+ * -> `requireUser` -> `requireAdminScope` chain with the session belonging to
+ * the district admin and an impersonation present, and pins that the scope
+ * comes from the session user's role and assignments — the impersonation and
+ * the admin it names play no part.
  */
 
 const SA_ID = "sa-1";
@@ -23,14 +23,15 @@ const redirect = vi.fn((path: string) => {
 });
 vi.mock("next/navigation", () => ({ redirect: (p: string) => redirect(p) }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: {
-      // The impersonation session: the district admin's own auth user.
-      getClaims: async () => ({ data: { claims: { sub: DA_AUTH_ID } }, error: null }),
-      signOut: vi.fn(),
-    },
+vi.mock("@/lib/auth/auth-session", () => ({
+  // The impersonation session: the district admin's own auth user, with the
+  // Super Admin's authId on the session row.
+  getAuthSession: async () => ({
+    user: { id: DA_AUTH_ID },
+    session: { impersonatedBy: "auth-sa-1" },
   }),
+  endCurrentSession: vi.fn(async () => true),
+  revokeAllSessions: vi.fn(async () => 0),
 }));
 
 const userFindUnique = vi.fn();
@@ -43,15 +44,16 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/db/read-mode", () => ({ primeReadMode: async () => {} }));
 
-// A valid, bound ticket naming the Super Admin as the impersonator.
-vi.mock("@/lib/auth/impersonation", () => ({
-  clearImpersonationCookie: vi.fn(),
-  readImpersonationTicket: async () => ({
+// An impersonation naming the Super Admin as the impersonator.
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(async () => {}),
+  isVerifiedImpersonationOf: vi.fn(async () => true),
+  readImpersonation: async () => ({
     adminAuthId: "auth-sa-1",
     adminUserId: SA_ID,
     targetUserId: DA_ID,
-    sessionId: "session-1",
-    expiresAt: Date.now() + 60_000,
+    returnTo: null,
+    expired: false,
   }),
 }));
 

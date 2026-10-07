@@ -2,16 +2,17 @@ import "server-only";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { SpanStatusCode, trace, type Attributes, type Span } from "@opentelemetry/api";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabasePublicEnv } from "@/lib/supabase/env";
-import { getSharedJwks } from "@/lib/supabase/jwks";
+import { endCurrentSession, getAuthSession, revokeAllSessions } from "@/lib/auth/auth-session";
+import {
+  expireImpersonationCookies,
+  isVerifiedImpersonationOf,
+} from "@/lib/auth/impersonation-session";
 import { prisma } from "@/lib/prisma";
 import { classifyDbFailure } from "@/lib/db-errors";
 import { primeReadMode } from "@/lib/db/read-mode";
 import { roleHomePath } from "@/lib/auth/roles";
 import { loginPath, type SessionEndReason } from "@/lib/auth/session-end";
 import { noteScopeUser } from "@/lib/errors/context";
-import { clearImpersonationCookie, isVerifiedImpersonationOf } from "@/lib/auth/impersonation";
 import { isDeveloperAdmin } from "@/lib/auth/admin-tier";
 import { AppError } from "@/lib/errors/app-error";
 import type { User, UserRole } from "@prisma/client";
@@ -59,21 +60,34 @@ function isTeacherPendingGate(user: User): boolean {
 
 /**
  * Every session teardown here ends impersonation too, and runs this BEFORE the
- * `signOut` it accompanies.
+ * session teardown it accompanies.
  *
- * Its own try, never the signOut's: these paths run in Server Components as well
+ * Its own try, never the teardown's: these paths run in Server Components as well
  * as actions, and in a Server Component Next throws on any cookie write. That
- * throw must not skip the signOut that follows. It only happens when a ticket is
- * present (`clearImpersonationCookie` checks first), so it is logged. The ticket
- * surviving in that case is not a hole — it is bound to one Supabase session
- * (`@/lib/auth/impersonation`), and the signOut below ends that session.
+ * throw must not skip the teardown that follows. A leftover admin-session cookie
+ * is not a hole — it is bound to the admin's own session row, which the admin
+ * plugin only restores through `stopImpersonating` on a live impersonated session.
  */
 async function dropImpersonationTicket(): Promise<void> {
   try {
-    await clearImpersonationCookie();
+    await expireImpersonationCookies();
   } catch (err) {
-    console.error("[session] clearing impersonation ticket on sign-out failed:", err);
+    console.error("[session] clearing impersonation cookies on sign-out failed:", err);
   }
+}
+
+/**
+ * End this person's sessions: every session of the identity (a database
+ * delete, which works in a Server Component render), then this browser's
+ * cookies, best effort — `nextCookies` swallows cookie writes in an RSC.
+ */
+async function endAllSessions(authId: string, what: string): Promise<void> {
+  try {
+    await revokeAllSessions(authId);
+  } catch (err) {
+    console.error(`[session] revoking sessions for ${what} failed:`, err);
+  }
+  await endCurrentSession();
 }
 
 /** Spans for the two blocking round trips every authenticated request pays for. */
@@ -158,10 +172,9 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   // Before the first query: a user who just wrote must not read their own
   // row, or anything after it, from Hyperdrive's query cache.
   await primeReadMode();
-  const supabase = await createSupabaseServerClient();
 
-  // Session verification against Supabase Auth. Spans the whole verification step, not
-  // one particular client method, so it survives changing how the session is verified.
+  // Session verification. Spans the whole verification step, not one particular
+  // call, so it survives changing how the session is verified.
   const authUser = await tracer.startActiveSpan(
     "litrack.auth.session_verify",
     async (span) => {
@@ -172,18 +185,13 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
       // anonymous request — filter on span status too if you need those two separated.
       let authenticated = false;
       try {
-        // getClaims, not getUser: it verifies the access token locally against the project's
-        // asymmetric signing keys, while getUser is a network call to Supabase Auth on every
-        // render and every route prefetch — about 150k calls a day, and ~80% of the project's
-        // billed log ingestion (each call writes an edge log and an auth log). The cost: a
-        // signed-out session's unexpired token (up to 1h) still verifies here. Deleted, inactive,
-        // and rejected accounts are still refused by the Prisma row checks below, and
-        // impersonation keeps its own server-side session check (`checkCurrentSession`).
-        const env = getSupabasePublicEnv();
-        const jwks = env.ok ? await getSharedJwks(env.url, env.anonKey) : undefined;
-        const { data } = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
-        const sub = data?.claims?.sub;
-        const user = sub ? { id: sub } : null;
+        // The cookie-cached session read: most renders verify the signed cookie cache and
+        // never touch the database for the session. The cost: a revoked session's cache can
+        // live up to five minutes. Deleted, inactive, and rejected accounts are still
+        // refused by the Prisma row checks below, which re-read the User row every request,
+        // and impersonation proof reads the session row fresh (`isVerifiedImpersonationOf`).
+        const session = await getAuthSession();
+        const user = session ? { id: session.user.id } : null;
         authenticated = Boolean(user);
         return user;
       } catch (err) {
@@ -217,11 +225,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   if (user.deletedAt) {
     sessionEndNote().reason = "account_disabled";
     await dropImpersonationTicket();
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("[session] signOut for deleted user failed:", err);
-    }
+    await endAllSessions(authUser.id, "deleted user");
     return null;
   }
 
@@ -230,11 +234,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
       return user;
     }
     await dropImpersonationTicket();
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("[session] signOut for rejected teacher failed:", err);
-    }
+    await endAllSessions(authUser.id, "rejected teacher");
     redirect(loginPath("school", "declined"));
   }
 
@@ -249,11 +249,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
   if (!user.isActive) {
     sessionEndNote().reason = "account_disabled";
     await dropImpersonationTicket();
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("[session] signOut for inactive user failed:", err);
-    }
+    await endAllSessions(authUser.id, "inactive user");
     return null;
   }
 
@@ -290,15 +286,13 @@ export async function peekCurrentUser(): Promise<User | null> {
  * Admin signed in as them ("Sign in as" / Test Lab) goes straight to the role
  * home instead, and the flag is left for the person's own next sign-in.
  *
- * Proven, never assumed: `isVerifiedImpersonationOf` needs the HMAC-signed
- * ticket, bound to this exact live Supabase session, naming this user. No
- * ticket costs nothing (no auth round trip); a forged, mismatched or
- * unverifiable one, or any error, keeps the redirect.
+ * Proven, never assumed: `isVerifiedImpersonationOf` reads this request's
+ * session row fresh and needs `impersonatedBy` set on a session whose user is
+ * this person. Anything else, or any error, keeps the redirect.
  */
 async function isVerifiedImpersonationOfUser(userId: string): Promise<boolean> {
   try {
-    const supabase = await createSupabaseServerClient();
-    return await isVerifiedImpersonationOf(supabase.auth, userId);
+    return await isVerifiedImpersonationOf(userId);
   } catch (err) {
     console.error("[session] impersonation check for mustChangePassword failed:", err);
     return false;
@@ -412,6 +406,16 @@ export function isSuperAdmin(user: User): boolean {
  */
 export async function signOut() {
   await dropImpersonationTicket();
-  const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  const session = await getAuthSession({ fresh: true });
+  if (!session) {
+    await endCurrentSession();
+    return;
+  }
+  // An impersonated session ends alone: revoking the target's other sessions
+  // would sign the real person out of their own devices.
+  if (session.session.impersonatedBy) {
+    await endCurrentSession();
+    return;
+  }
+  await endAllSessions(session.user.id, "sign-out");
 }

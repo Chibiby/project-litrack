@@ -6,12 +6,13 @@ const ROOT = path.resolve(__dirname, "../..");
 const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
 describe("impersonation notice wiring", () => {
-  it("renders only a verified bound context for the current target", () => {
+  it("renders only an impersonation of the current target, read from the session row", () => {
     const notice = read("src/components/admin/impersonation-notice.tsx");
 
-    expect(notice).toContain("impersonation?: ImpersonationContext | null");
+    expect(notice).toContain("impersonation?: ImpersonationState | null");
     expect(notice).toContain("impersonation === undefined");
-    expect(notice).toContain("context?.ticket.targetUserId !== userId");
+    expect(notice).toContain("context?.targetUserId !== userId");
+    expect(notice).toContain('from "@/lib/auth/impersonation-session"');
   });
 
   it.each([
@@ -22,8 +23,9 @@ describe("impersonation notice wiring", () => {
   ])("uses one bound result for the notice and shell decisions in %s", (file) => {
     const layout = read(file);
 
-    expect(layout).toContain("const impersonation = await readBoundImpersonationSession(supabase.auth);");
-    expect(layout).toContain("const impersonating = impersonation?.ticket.targetUserId === user.id;");
+    expect(layout).toContain("const impersonation = await readImpersonation();");
+    expect(layout).toContain("const impersonating = impersonation?.targetUserId === user.id;");
+    expect(layout).toContain('from "@/lib/auth/impersonation-session"');
     expect(layout).toContain("impersonation={impersonation}");
     expect(layout).toContain("<ImpersonationNotice");
     expect(layout).toContain("userId={user.id}");

@@ -30,18 +30,8 @@ import {
 } from "@/components/auth/auth-card";
 import { cn } from "@/lib/utils";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
-import {
-  beginSchoolHeadLogin,
-  beginTeacherLogin,
-  finishSchoolHeadLogin,
-  finishTeacherLogin,
-  reportLoginFailure,
-} from "@/lib/actions/login";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { callAction } from "@/lib/ui/call-action";
 import type { ActionFailure } from "@/lib/errors/result";
-import { formatMessage } from "@/lib/errors/codes";
-import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { strongPassword } from "@/lib/validators/auth.schema";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
@@ -267,92 +257,21 @@ export function LoginForm({
     return formData;
   };
 
-  /**
-   * Send the person into the app once a session exists.
-   *
-   * The navigation is a `router.push`, not a server `redirect`, because the
-   * session cookies were written by the browser Supabase client — the next
-   * request has to be made by that same browser, after those cookies land.
-   */
-  const enterApp = (redirectTo: string) => {
-    markPostLoginSplash();
-    resetSidebarExpandedPreference();
-    router.push(redirectTo);
-    router.refresh();
-  };
-
   const handleTeacherLogin = () => {
     clearErrors();
     startTransition(async () => {
-      const begin = await callAction(() => beginTeacherLogin(schoolId, email));
-      if (!begin.ok) {
-        showFailure(begin);
+      const formData = new FormData();
+      formData.set("schoolId", schoolId);
+      formData.set("email", email.trim());
+      formData.set("password", password);
+      const res = await markSplashOnRedirect(() => callAction(() => loginTeacher(formData)));
+      if (res && !res.ok) {
+        showFailure(res);
         return;
       }
-      // `beginTeacherLogin` never asks for the server fallback — the teacher
-      // supplied the address themselves — but the union allows it, so handle it.
-      if (begin.mode === "server") {
-        await serverSideTeacherLogin();
-        return;
-      }
-
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email: begin.email,
-        password,
-      });
-      if (error) {
-        // The browser made this request, so it is the only place that can tell
-        // "the server said no" from "the request never arrived". Calling a
-        // dropped connection a wrong password is what sends people off to reset
-        // a password that was never the problem.
-        showBrowserGrantFailure(error, { role: "TEACHER", email: begin.email });
-        return;
-      }
-
-      const finish = await callAction(() => finishTeacherLogin(schoolId));
-      if (!finish.ok) {
-        showFailure(finish);
-        return;
-      }
-      enterApp(finish.redirectTo);
+      markPostLoginSplash();
+      resetSidebarExpandedPreference();
     });
-  };
-
-  /**
-   * Show the message first, then tell the server. Awaiting the report before
-   * the message meant nothing appeared while offline, and a slow or failed
-   * report would hold the message back.
-   */
-  const showBrowserGrantFailure = (
-    error: unknown,
-    report: { role: "TEACHER" | "SCHOOL_HEAD"; email?: string }
-  ) => {
-    // Offline is not a sign-in attempt worth auditing, and the report could not be sent anyway.
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      showFailure({ code: "NETWORK_OFFLINE", error: formatMessage("NETWORK_OFFLINE") });
-      return;
-    }
-    const code = mapSupabaseAuthError(error, "browser");
-    showFailure({ code, error: formatMessage(code) });
-    void callAction(() =>
-      reportLoginFailure({ schoolId, ...report, reason: loginFailureReasonFor(code) })
-    );
-  };
-
-  /** Original server-side grant, kept as the fallback path. */
-  const serverSideTeacherLogin = async () => {
-    const formData = new FormData();
-    formData.set("schoolId", schoolId);
-    formData.set("email", email.trim());
-    formData.set("password", password);
-    const res = await markSplashOnRedirect(() => callAction(() => loginTeacher(formData)));
-    if (res && !res.ok) {
-      showFailure(res);
-      return;
-    }
-    markPostLoginSplash();
-    resetSidebarExpandedPreference();
   };
 
   const handleRegisterTeacher = () => {
@@ -394,63 +313,21 @@ export function LoginForm({
     });
   };
 
-  /**
-   * School Head sign-in.
-   *
-   * The password grant is made by the browser rather than by the server action,
-   * so Supabase's per-IP rate limit meters each person separately instead of
-   * pooling every school in the deployment behind one Vercel egress address —
-   * see `@/lib/actions/login` for the full reasoning. Heads whose account uses a
-   * real email address (rather than the synthetic `sh@…` one) still go through
-   * the server action: the server will not hand a personal address to an
-   * unauthenticated page.
-   */
   const handleSchoolHeadSubmit = () => {
-    const typedPassword = password;
     const formData = new FormData();
     formData.set("schoolId", schoolId);
-    formData.set("password", typedPassword);
+    formData.set("password", password);
     clearErrors();
 
     startTransition(async () => {
-      const begin = await callAction(() => beginSchoolHeadLogin(schoolId));
-      if (!begin.ok) {
-        showFailure(begin);
+      const res = await markSplashOnRedirect(() => callAction(() => loginSchoolHead(formData)));
+      if (res && !res.ok) {
+        showFailure(res);
         return;
       }
-      if (begin.mode === "server") {
-        await serverSideSchoolHeadLogin(formData);
-        return;
-      }
-
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email: begin.email,
-        password: typedPassword,
-      });
-      if (error) {
-        showBrowserGrantFailure(error, { role: "SCHOOL_HEAD" });
-        return;
-      }
-
-      const finish = await callAction(() => finishSchoolHeadLogin(schoolId));
-      if (!finish.ok) {
-        showFailure(finish);
-        return;
-      }
-      enterApp(finish.redirectTo);
+      markPostLoginSplash();
+      resetSidebarExpandedPreference();
     });
-  };
-
-  /** Original server-side grant, kept for accounts with a real email address. */
-  const serverSideSchoolHeadLogin = async (formData: FormData) => {
-    const res = await markSplashOnRedirect(() => callAction(() => loginSchoolHead(formData)));
-    if (res && !res.ok) {
-      showFailure(res);
-      return;
-    }
-    markPostLoginSplash();
-    resetSidebarExpandedPreference();
   };
 
   if (screen === "select-role") {

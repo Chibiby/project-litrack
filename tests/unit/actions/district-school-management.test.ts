@@ -11,8 +11,8 @@ import { resourceNotFound as resourceNotFoundReal } from "@/lib/errors/app-error
  *
  * T3 (docs/specs/district-admin.md 8): for each action, a district admin
  * targeting an out-of-scope school gets NOT_FOUND, and — the part that
- * actually matters — no `school.update`/`user.update`, no Supabase Admin
- * call, and no `writeAudit` call happens either. `loadSchoolInScope` is
+ * actually matters — no `school.update`/`user.update`, no identity
+ * write (`setPassword`/`setRole`), and no `writeAudit` call happens either. `loadSchoolInScope` is
  * mocked here as a fake that enforces the scope itself (see `SCHOOLS` and
  * `loadSchoolInScope` below): if any action under test stopped calling it and
  * read straight from `prisma.school.findFirst` instead (whose fake below is
@@ -94,18 +94,19 @@ const schoolUpdate = vi.fn(async (_args: unknown) => ({}));
 const userFindFirst = vi.fn(async (_args: unknown): Promise<unknown> => null);
 const userUpdate = vi.fn(async (_args: unknown) => ({}));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    school: {
-      findFirst: (...a: unknown[]) => schoolFindFirst(...(a as [never])),
-      update: (...a: unknown[]) => schoolUpdate(...(a as [never])),
-    },
-    user: {
-      findFirst: (...a: unknown[]) => userFindFirst(...(a as [never])),
-      update: (...a: unknown[]) => userUpdate(...(a as [never])),
-    },
+const prismaDouble = {
+  school: {
+    findFirst: (...a: unknown[]) => schoolFindFirst(...(a as [never])),
+    update: (...a: unknown[]) => schoolUpdate(...(a as [never])),
   },
-}));
+  user: {
+    findFirst: (...a: unknown[]) => userFindFirst(...(a as [never])),
+    update: (...a: unknown[]) => userUpdate(...(a as [never])),
+  },
+  // The credential reset writes the identity and the User flags in one transaction.
+  $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaDouble),
+};
+vi.mock("@/lib/prisma", () => ({ prisma: prismaDouble, prismaFresh: prismaDouble }));
 
 const findSignInSchoolHead = vi.fn(async (schoolId: string) => ({
   id: "head-1",
@@ -117,11 +118,25 @@ vi.mock("@/lib/auth/school-head-sign-in", () => ({
   findSignInSchoolHead: (...a: unknown[]) => findSignInSchoolHead(...(a as [string])),
 }));
 
-const updateUserById = vi.fn(async (_authId: string, _attrs: unknown) => ({
-  error: null as null | { message: string },
+// `@/lib/auth/session` (pulled in by the actions) reads the Better Auth session
+// and the impersonation state; neither runs here, and the real modules load Better Auth.
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: vi.fn(async () => null),
+  endCurrentSession: vi.fn(async () => true),
+  revokeAllSessions: vi.fn(async () => 0),
 }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({ auth: { admin: { updateUserById } } }),
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(),
+  readImpersonation: vi.fn(async () => null),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
+}));
+
+const setPassword = vi.fn(async (..._args: unknown[]) => {});
+const setRole = vi.fn(async (..._args: unknown[]) => {});
+vi.mock("@/lib/auth/identity", () => ({
+  setPassword: (...a: unknown[]) => setPassword(...a),
+  setRole: (...a: unknown[]) => setRole(...a),
+  createIdentity: vi.fn(),
 }));
 
 const checkRateLimit = vi.fn(async () => ({ ok: true, retryAfterMs: 0 }));
@@ -158,6 +173,7 @@ vi.mock("@/lib/errors/report", () => ({
 
 const { setSchoolActive, updateSchoolAsAdmin } = await import("@/lib/actions/school-management");
 const { regenerateSchoolHeadCredential } = await import("@/lib/actions/school");
+const { verifyPassword } = await import("@/lib/auth/password-hash");
 
 function setActiveForm(schoolId: string, isActive = "true"): FormData {
   const fd = new FormData();
@@ -183,7 +199,8 @@ function editForm(schoolId: string, name = "Renamed School"): FormData {
 function noWritesHappened() {
   expect(schoolUpdate).not.toHaveBeenCalled();
   expect(userUpdate).not.toHaveBeenCalled();
-  expect(updateUserById).not.toHaveBeenCalled();
+  expect(setPassword).not.toHaveBeenCalled();
+  expect(setRole).not.toHaveBeenCalled();
   expect(writeAudit).not.toHaveBeenCalled();
 }
 
@@ -193,7 +210,8 @@ beforeEach(() => {
   actor = { id: DA_ID, role: "DISTRICT_ADMIN", schoolId: null };
   requireAdminScope.mockImplementation(async () => ({ user: actor, scope }));
   checkRateLimit.mockResolvedValue({ ok: true, retryAfterMs: 0 });
-  updateUserById.mockResolvedValue({ error: null });
+  setPassword.mockResolvedValue(undefined);
+  setRole.mockResolvedValue(undefined);
   findSignInSchoolHead.mockImplementation(async (schoolId: string) => ({
     id: "head-1",
     authId: "auth-head-1",
@@ -248,7 +266,7 @@ describe("setSchoolActive — scope", () => {
 });
 
 describe("regenerateSchoolHeadCredential — scope", () => {
-  it("as a district admin, refuses an out-of-scope school before the rate limit, the School Head lookup, Supabase, or the audit row", async () => {
+  it("as a district admin, refuses an out-of-scope school before the rate limit, the School Head lookup, the identity write, or the audit row", async () => {
     const res = await regenerateSchoolHeadCredential(regenForm(SCHOOL_OUT_OF_SCOPE.id));
 
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
@@ -261,10 +279,11 @@ describe("regenerateSchoolHeadCredential — scope", () => {
     const res = await regenerateSchoolHeadCredential(regenForm(SCHOOL_IN_SCOPE.id));
 
     expect(res).toMatchObject({ ok: true, data: { password: SCHOOL_IN_SCOPE.schoolIdCode } });
-    expect(updateUserById).toHaveBeenCalledWith(
-      "auth-head-1",
-      expect.objectContaining({ password: SCHOOL_IN_SCOPE.schoolIdCode })
-    );
+    expect(setPassword).toHaveBeenCalledTimes(1);
+    expect(setPassword.mock.calls[0][0]).toBe("auth-head-1");
+    const { hash } = setPassword.mock.calls[0][1] as { hash: string };
+    expect(await verifyPassword({ hash, password: SCHOOL_IN_SCOPE.schoolIdCode })).toBe(true);
+    expect(setRole).toHaveBeenCalledWith("auth-head-1", "SCHOOL_HEAD", prismaDouble);
     const entry = writeAudit.mock.calls[0]?.[0];
     expect(entry).toMatchObject({
       userId: DA_ID,

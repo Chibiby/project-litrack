@@ -30,6 +30,14 @@
       "database_id": "0a94e4ae-55d1-4d7d-b749-2698bc1308ac"
     }
   ],
+  // Profile photos. Public reads go through the bucket's custom domain
+  // (NEXT_PUBLIC_AVATAR_BASE_URL); the Worker only writes and deletes.
+  "r2_buckets": [
+    {
+      "binding": "AVATARS",
+      "bucket_name": "litrack-avatars"
+    }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

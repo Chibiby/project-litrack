@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { deleteIdentity, setPassword, setRole } from "@/lib/auth/identity";
+import { revokeAllSessions } from "@/lib/auth/auth-session";
+import { hashPassword } from "@/lib/auth/password-hash";
 import { TEACHER_EMAIL_DOMAIN } from "@/lib/auth/synthetic-email";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { releaseTeacherAdvisory } from "@/lib/teachers/release-advisory";
@@ -8,15 +10,13 @@ import { releaseTeacherAdvisory } from "@/lib/teachers/release-advisory";
 /**
  * Bulk account operations for the database console.
  *
- * Both run against Supabase Auth as well as Postgres, and Supabase has no
- * transaction to join. So both are written to be *resumable* rather than
- * atomic: each account is independent, a failure on one is recorded and the
- * rest continue, and re-running finishes the job. The alternative — abort the
- * whole batch on the first failure — leaves the two systems disagreeing with no
- * way to tell how far it got.
+ * Both are written to be *resumable* rather than atomic across accounts: each
+ * account is independent, a failure on one is recorded and the rest continue,
+ * and re-running finishes the job. The alternative — abort the whole batch on
+ * the first failure — leaves no way to tell how far it got.
  */
 
-/** Supabase admin calls are network-bound; a few at a time beats one at a time. */
+/** Bounded parallelism: a few accounts at a time beats one at a time. */
 const CONCURRENCY = 5;
 
 export type BulkResult = {
@@ -48,8 +48,6 @@ function reasonOf(err: unknown): string {
  * With `schoolId` given, only that school's head is reset.
  */
 export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Promise<BulkResult> {
-  const supabaseAdmin = createSupabaseAdminClient();
-
   const heads = await prisma.user.findMany({
     where: {
       role: "SCHOOL_HEAD",
@@ -87,24 +85,26 @@ export async function resetAllSchoolHeadPasswords(schoolId?: string | null): Pro
       return;
     }
     try {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(head.authId, {
-        password: defaultSchoolHeadPassword(head.school.schoolIdCode),
-        app_metadata: { role: "SCHOOL_HEAD", schoolId: head.school.id },
-      });
-      if (error) throw new Error(error.message);
+      const passwordHash = await hashPassword(defaultSchoolHeadPassword(head.school.schoolIdCode));
 
-      await prisma.user.update({
-        where: { id: head.id },
-        data: {
-          passwordIsSchoolId: true,
-          mustChangePassword: false,
-          isActive: true,
-          // The sealed copy described a password that no longer signs anyone
-          // in. `passwordIsSchoolId` is what the console reads now.
-          passwordVaultCipher: null,
-          passwordVaultSetAt: null,
-        },
+      // Identity password and User flags commit together. `isActive` is not
+      // touched: a password reset must never reactivate a deactivated account.
+      await prisma.$transaction(async (tx) => {
+        await setPassword(head.authId, { hash: passwordHash }, tx);
+        await setRole(head.authId, "SCHOOL_HEAD", tx);
+        await tx.user.update({
+          where: { id: head.id },
+          data: {
+            passwordIsSchoolId: true,
+            mustChangePassword: false,
+            // The sealed copy described a password that no longer signs anyone
+            // in. `passwordIsSchoolId` is what the console reads now.
+            passwordVaultCipher: null,
+            passwordVaultSetAt: null,
+          },
+        });
       });
+      await revokeAllSessions(head.authId);
       processed += 1;
     } catch (err) {
       failed.push({ id: head.id, label, reason: reasonOf(err) });
@@ -143,7 +143,7 @@ function tombstoneEmail(userId: string): string {
  * first, is `/admin/archive`'s job and nothing else's.
  *
  * What removal actually means here, and it is complete from every angle a user
- * can see: the Supabase auth user is deleted so the password stops working,
+ * can see: the sign-in identity is deleted so the password stops working,
  * `deletedAt` is set so `getCurrentUser` signs out anyone still holding a
  * session and every list filters the row out, and the login email is
  * tombstoned so the same teacher can register again from scratch. The Prisma
@@ -201,24 +201,21 @@ type TeacherRow = {
  * The removal itself, over whichever teachers the caller selected.
  *
  * Split out so "every teacher" and "these four teachers" cannot drift apart:
- * the tombstoning, the Supabase deletion and the advisory release all have to
+ * the tombstoning, the identity deletion and the advisory release all have to
  * happen together, and a second copy of this loop would eventually forget one
  * of them.
  */
 async function removeTeacherRows(teachers: TeacherRow[]): Promise<BulkResult> {
-  const supabaseAdmin = createSupabaseAdminClient();
-
   const failed: BulkResult["failed"] = [];
   let processed = 0;
 
   await inBatches(teachers, async (teacher) => {
     const label = teacher.fullName || teacher.email;
     try {
-      // Best effort: an auth user already gone (manually deleted, or a previous
-      // run that failed after this step) must not block the Prisma side, or the
-      // account stays visible in the app forever.
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(teacher.authId);
-      if (error && !/not.?found/i.test(error.message)) throw new Error(error.message);
+      // An identity already gone (manually deleted, or a previous run that
+      // failed after this step) is success, so it never blocks the Prisma side
+      // and leaves the account visible in the app forever.
+      await deleteIdentity(teacher.authId);
 
       await prisma.$transaction(async (tx) => {
         // Same release the School Head's Remove performs: sections back to

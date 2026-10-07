@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { requireAdminScope, loadSchoolInScope } from "@/lib/auth/district-scope";
 import { createSchoolSchema } from "@/lib/validators/school.schema";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createIdentity, setPassword, setRole } from "@/lib/auth/identity";
+import { revokeAllSessions } from "@/lib/auth/auth-session";
+import { hashPassword } from "@/lib/auth/password-hash";
 import { schoolHeadSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { defaultSchoolHeadPassword } from "@/lib/auth/school-head-password";
 import { findSignInSchoolHead } from "@/lib/auth/school-head-sign-in";
@@ -25,7 +27,6 @@ import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { action } from "@/lib/errors/action";
 import { AppError, fieldError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
-import { mapSupabaseAuthError } from "@/lib/errors/supabase";
 import { z } from "zod";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -86,21 +87,9 @@ export const createSchool = action("createSchool", async (
   // An extension entered as `130554-3` starts on the bare `130554`, like its mother school;
   // the email below stays on the stored code, which is what keeps it unique.
   const initialPassword = defaultSchoolHeadPassword(parsed.data.schoolIdCode);
-  const supabaseAdmin = createSupabaseAdminClient();
   const syntheticEmail = schoolHeadSyntheticEmail(parsed.data.schoolIdCode);
-
-  const { data: created, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-    email: syntheticEmail,
-    password: initialPassword,
-    email_confirm: true,
-    app_metadata: { role: "SCHOOL_HEAD" },
-    user_metadata: { role: "SCHOOL_HEAD" },
-  });
-  // Raw Supabase text never reaches the browser: classify maps the AuthError.
-  if (authErr) throw authErr;
-  if (!created.user) {
-    throw new AppError("AUTH_PROVIDER_ERROR", { detail: "createUser returned no user" });
-  }
+  // Hashed before the transaction so bcrypt does not hold row locks.
+  const passwordHash = await hashPassword(initialPassword);
 
   const school = await prisma.$transaction(async (tx) => {
     const createdSchool = await tx.school.create({
@@ -115,9 +104,21 @@ export const createSchool = action("createSchool", async (
       },
     });
 
+    // The sign-in identity commits with the User row (invariant I1). An email
+    // already in use surfaces as AUTH_EMAIL_IN_USE and rolls the school back.
+    const { authId } = await createIdentity(
+      {
+        email: syntheticEmail,
+        password: { hash: passwordHash },
+        role: "SCHOOL_HEAD",
+        emailVerified: true,
+      },
+      tx
+    );
+
     await tx.user.create({
       data: {
-        authId: created.user!.id,
+        authId,
         email: syntheticEmail,
         role: "SCHOOL_HEAD",
         schoolId: createdSchool.id,
@@ -135,10 +136,6 @@ export const createSchool = action("createSchool", async (
     });
 
     return createdSchool;
-  });
-
-  await supabaseAdmin.auth.admin.updateUserById(created.user.id, {
-    app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
   });
 
   await writeAudit({
@@ -172,7 +169,7 @@ export const createSchool = action("createSchool", async (
  * alone, which would let a Super Admin through implicitly). `loadSchoolInScope`
  * puts the scope in the `WHERE` of the one query that loads the target school,
  * so an out-of-scope `schoolId` is NOT_FOUND before the rate limit, the
- * School Head lookup, the Supabase call, or the audit row — none of them run
+ * School Head lookup, the identity write, or the audit row — none of them run
  * (spec T3). The School ID is printed on the schools table, so returning it
  * reveals nothing new.
  */
@@ -194,33 +191,36 @@ export const regenerateSchoolHeadCredential = action(
     if (!shUser) throw resourceNotFound("School Head account");
 
     const password = defaultSchoolHeadPassword(school.schoolIdCode);
-    const supabaseAdmin = createSupabaseAdminClient();
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(shUser.authId, {
-      password,
-      app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
-    });
-    if (error) {
-      throw new AppError(mapSupabaseAuthError(error, "server"), {
-        cause: error,
-        detail: `regenerateSchoolHeadCredential: password reset failed for school ${school.id}`,
-      });
-    }
+    const passwordHash = await hashPassword(password);
 
-    await prisma.user.update({
-      where: { id: shUser.id },
-      // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
-      // on the very next sign-in, with no forced interstitial, and the console can
-      // show it because the live password is once again the School ID.
-      data: {
-        mustChangePassword: false,
-        isActive: true,
-        passwordIsSchoolId: true,
-        // Any password the head had chosen is gone from Auth, so the sealed copy
-        // of it must go too — showing it would hand out a dead credential.
-        passwordVaultCipher: null,
-        passwordVaultSetAt: null,
-      },
+    // Identity password and the User flags commit together.
+    await prisma.$transaction(async (tx) => {
+      try {
+        await setPassword(shUser.authId, { hash: passwordHash }, tx);
+        await setRole(shUser.authId, "SCHOOL_HEAD", tx);
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError("AUTH_PROVIDER_ERROR", {
+          cause: err,
+          detail: `regenerateSchoolHeadCredential: password reset failed for school ${school.id}`,
+        });
+      }
+      await tx.user.update({
+        where: { id: shUser.id },
+        // Same post-state as `resetSchoolHeadPasswordToDefault`: the School ID works
+        // on the very next sign-in, with no forced interstitial, and the console can
+        // show it because the live password is once again the School ID.
+        data: {
+          mustChangePassword: false,
+          passwordIsSchoolId: true,
+          // Any password the head had chosen is gone from Auth, so the sealed copy
+          // of it must go too — showing it would hand out a dead credential.
+          passwordVaultCipher: null,
+          passwordVaultSetAt: null,
+        },
+      });
     });
+    await revokeAllSessions(shUser.authId);
 
     // Recorded as a reset-to-default, not a regeneration: the audit trail is how
     // `passwordIsSchoolId` is replayed (see the 20260910000004 backfill), and a

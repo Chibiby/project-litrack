@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { AuthApiError } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors/app-error";
 import { classifyError } from "@/lib/errors/classify";
 import { markDbError } from "@/lib/db-errors";
@@ -68,15 +67,18 @@ describe("classifyError", () => {
     expect(classifyError(err).code).toBe("CONFIG_MISSING");
   });
 
-  it("maps Supabase auth errors thrown on the server", () => {
-    expect(
-      classifyError(new AuthApiError("Request rate limit reached", 429, "over_request_rate_limit")).code
-    ).toBe("AUTH_PROVIDER_RATE_LIMITED");
-    expect(
-      classifyError(
-        new AuthApiError("New password should be different from the old password.", 422, "same_password")
-      ).code
-    ).toBe("AUTH_PASSWORD_SAME");
+  it("maps Better Auth errors thrown on the server", () => {
+    /** Shape of better-call's APIError: name, numeric statusCode, body.code. */
+    const apiError = (statusCode: number, code?: string, message = "refused") =>
+      Object.assign(new Error(message), { name: "APIError", statusCode, body: { code, message } });
+
+    expect(classifyError(apiError(429, undefined, "Too many requests")).code).toBe(
+      "AUTH_PROVIDER_RATE_LIMITED"
+    );
+    expect(classifyError(apiError(401, "INVALID_EMAIL_OR_PASSWORD")).code).toBe(
+      "AUTH_INCORRECT_PASSWORD"
+    );
+    expect(classifyError(apiError(500, "SOMETHING_NEW")).code).toBe("AUTH_PROVIDER_ERROR");
   });
 
   describe("database failures Prisma 6's client engine surfaces", () => {

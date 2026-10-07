@@ -37,14 +37,17 @@ vi.mock("next/navigation", () => ({
     throw new Error(`NEXT_REDIRECT:${path}`);
   },
 }));
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({
-    auth: { getClaims: async () => ({ data: null, error: null }), signOut: vi.fn() },
-  }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: async () => null,
+  endCurrentSession: vi.fn(async () => true),
+  revokeAllSessions: vi.fn(async () => 0),
+}));
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(async () => {}),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/db/read-mode", () => ({ primeReadMode: async () => {} }));
-vi.mock("@/lib/auth/impersonation", () => ({ clearImpersonationCookie: vi.fn() }));
 
 describe("generateActivationCredential", () => {
   it("returns ~14 char base64url without padding", () => {
@@ -194,7 +197,7 @@ describe("roles + middleware gate", () => {
     // The browser has just stored the session; finishSchoolHeadLogin /
     // finishTeacherLogin then POST to /login. Redirecting that request sends
     // the action to /school-head, where Next cannot find it, and the sign-in
-    // Supabase already accepted is thrown away.
+    // the identity layer already accepted is thrown away.
     expect(authedLoginRedirect("POST", "/login", "SCHOOL_HEAD")).toBeNull();
     expect(authedLoginRedirect("POST", "/login", "TEACHER")).toBeNull();
     expect(authedLoginRedirect("POST", "/admin/login", "SUPER_ADMIN")).toBeNull();
@@ -211,8 +214,7 @@ describe("requireUser while signed out (T15)", () => {
   // `landing()` reaches `@/lib/auth/session` with a dynamic `import()` — the
   // only place in this file that does, since every other describe above
   // tests pure helpers that never touch it. That module pulls in
-  // `@opentelemetry/api`, `@/lib/supabase/jwks`, `@/lib/auth/session-end`,
-  // etc.; a cold first `import()` of that whole graph can outrun the default
+  // `@opentelemetry/api`, `@/lib/auth/session-end`, etc.; a cold first `import()` of that whole graph can outrun the default
   // 5000ms test timeout on a loaded CI machine. When it did, the *test*
   // failed, but the in-flight `requireUser(...)` promise kept running in the
   // background (a timeout aborts the assertion, not the promise) and could

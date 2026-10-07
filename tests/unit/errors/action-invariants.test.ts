@@ -96,6 +96,8 @@ function valueExports(source: string): ExportedValue[] {
   // Re-exports and default exports hide what is exported from this scan.
   for (const m of code.matchAll(/^export\s+(?:default\b|\{|\*)[^\n]*/gm)) {
     if (/^export\s+(?:type\s+)?\{[^}]*\}\s*$/.test(m[0]) && /^export\s+type\b/.test(m[0])) continue;
+    // `export {};` exports nothing (a module emptied of its actions, awaiting deletion).
+    if (/^export\s*\{\s*\}\s*;?\s*$/.test(m[0])) continue;
     out.push({ name: m[0].trim(), kind: "unsupported" });
   }
   return out;
@@ -166,6 +168,10 @@ describe("every exported server action is wrapped by action() or allowlisted", (
     it("flags a re-export and a default export", () => {
       expect(valueExports(`export { a, b } from "./x";\n`)[0].kind).toBe("unsupported");
       expect(valueExports(`export default async function () {}\n`).some((e) => e.kind === "unsupported")).toBe(true);
+    });
+    it("ignores an empty `export {};` but still flags a non-empty export list", () => {
+      expect(valueExports(`"use server";\nexport {};\n`)).toEqual([]);
+      expect(valueExports(`export { a };\n`)[0].kind).toBe("unsupported");
     });
     it("accepts action(), action<T>() and a call broken onto the next line", () => {
       const src = [

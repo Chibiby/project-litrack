@@ -1,9 +1,8 @@
 "use server";
 
 import { requireUser } from "@/lib/auth/session";
-import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
+import { readImpersonation } from "@/lib/auth/impersonation-session";
 import { prisma } from "@/lib/prisma";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const WRITE_INTERVAL_MS = 60_000;
 
@@ -30,8 +29,7 @@ export type PresenceActionResult =
  */
 export async function recordTeacherPresence(): Promise<PresenceActionResult> {
   const user = await requireUser("TEACHER", false);
-  const supabase = await createSupabaseServerClient();
-  const impersonation = await readBoundImpersonationSession(supabase.auth);
+  const impersonation = await readImpersonation();
 
   // An admin diagnosing a teacher account is not evidence that the teacher is
   // online. This server gate remains authoritative even if client code is

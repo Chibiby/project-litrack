@@ -108,6 +108,14 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // dropped in that same migration precisely so this pair has one valid order
   // again. See the note above.
   { model: "User", delegate: "user", operational: false },
+  // Better Auth identity tables. Out of snapshots (credentials never land in a
+  // backup, a restore never deletes identities) and non-operational ("clear
+  // operational data" never touches them). No FK from User, so position is free;
+  // within themselves sessions and accounts point at AuthUser.
+  { model: "AuthUser", delegate: "authUser", operational: false, inSnapshot: false },
+  { model: "AuthSession", delegate: "authSession", operational: false, inSnapshot: false },
+  { model: "AuthAccount", delegate: "authAccount", operational: false, inSnapshot: false },
+  { model: "AuthVerification", delegate: "authVerification", operational: false, inSnapshot: false },
   // Right after User, which it points at with a Cascade FK. Structural, not
   // operational: it is who supervises which district, not a record of what a
   // learner did, so "clear operational data" must leave it standing, like the

@@ -5,7 +5,7 @@ import {
   formatOptionalPersonName,
   buildFullName,
 } from "@/lib/names";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { setRole } from "@/lib/auth/identity";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { recordLastLogin } from "@/lib/auth/last-login";
 import {
@@ -88,33 +88,19 @@ function redirectOutcome(user: User): CompleteTeacherAuthResult {
 }
 
 /**
- * Best-effort JWT role stamp. Never throws: the Prisma user row is already the
- * authoritative record, and `createSupabaseAdminClient()` throws outright when
- * SUPABASE_SERVICE_ROLE_KEY is missing or invalid — letting that escape would
- * fail a registration that already succeeded.
+ * Best-effort role stamp on the sign-in identity (invariant I3). Never throws:
+ * the Prisma user row is already the authoritative record, and letting a
+ * failure escape would fail a registration that already succeeded.
  */
 async function setTeacherAppMetadata(authId: string, schoolId: string): Promise<void> {
   try {
-    const admin = createSupabaseAdminClient();
-    const { error } = await admin.auth.admin.updateUserById(authId, {
-      app_metadata: { role: "TEACHER", schoolId },
-    });
-    if (error) {
-      console.error("[teacher-registration] app_metadata update failed:", error.message);
-      reportError(
-        new AppError("AUTH_PROVIDER_ERROR", {
-          cause: error,
-          detail: `Teacher app_metadata (role/schoolId) update failed: ${error.message}`,
-        }),
-        { schoolId }
-      );
-    }
+    await setRole(authId, "TEACHER");
   } catch (err) {
-    console.error("[teacher-registration] app_metadata update threw:", err);
+    console.error("[teacher-registration] identity role update failed:", err);
     reportError(
       new AppError("AUTH_PROVIDER_ERROR", {
         cause: err,
-        detail: "Teacher app_metadata (role/schoolId) update threw",
+        detail: "Teacher identity role update failed",
       }),
       { schoolId }
     );
@@ -130,7 +116,7 @@ async function linkAuthIdIfNeeded(user: User, authId: string): Promise<User> {
 }
 
 /**
- * Once the Supabase session exists: create/link the Prisma TEACHER user and
+ * Once the sign-in identity and session exist: create/link the Prisma TEACHER user and
  * decide pending vs approved vs rejected. Callers handle redirects / sign-out.
  */
 export async function completeTeacherAuthAfterVerify(

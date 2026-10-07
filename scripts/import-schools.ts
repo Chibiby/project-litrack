@@ -11,8 +11,7 @@
  *   --out <path>          write a schoolIdCode -> synthetic email CSV for ops
  *   --allow-row-errors    skip malformed rows instead of aborting
  *
- * Requires DIRECT_URL (preferred) or DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
- * SUPABASE_SERVICE_ROLE_KEY, read from the shell or from `.env.local`.
+ * Requires DIRECT_URL (preferred) or DATABASE_URL, read from the shell or from `.env.local`.
  *
  * WIPING IS IRREVERSIBLE. The wipe does NOT rely on cascade. Several FKs in
  * this subtree are ON DELETE RESTRICT, not CASCADE (verified against
@@ -54,8 +53,13 @@ import { writeFileSync } from "node:fs";
 import { parseSchoolRoster } from "../src/lib/import/school-roster";
 import { assignSchoolCredentials, type CredentialAssignment } from "../src/lib/import/school-credentials";
 import { schoolHeadSyntheticEmail } from "../src/lib/auth/synthetic-email";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
 import { connectScriptPrisma, loadEnvFile } from "./lib/script-db";
+import {
+  deleteIdentities,
+  loadAuthEmailIndex,
+  newAuthId,
+  upsertCredentialIdentity,
+} from "./lib/script-identity";
 
 export type CliOptions = {
   file: string;
@@ -66,7 +70,7 @@ export type CliOptions = {
 };
 
 const ACK_FLAG = "--i-understand-this-deletes-all-data";
-/** The Supabase admin API is rate-sensitive and the roster is in the hundreds. */
+/** bcrypt at cost 10 is CPU-bound and the roster is in the hundreds. */
 const CONCURRENCY = 5;
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -232,7 +236,7 @@ async function main(): Promise<void> {
     console.log(`  TeacherSection      ${teacherSections}`);
     console.log(`  User (school-scoped) ${schoolUsers}`);
     for (const r of byRole) console.log(`    ${r.role.padEnd(16)} ${r._count._all}`);
-    console.log(`  Supabase auth users to delete: ${schoolUsers}`);
+    console.log(`  Auth identities to delete: ${schoolUsers}`);
     console.log(`\n  PRESERVED — User with schoolId = null (Super Admin): ${superAdmins}`);
     console.log("  PRESERVED — AuditLog (no FK to User/School; history outlives the subjects it references)");
 
@@ -246,8 +250,6 @@ async function main(): Promise<void> {
       return;
     }
 
-    const supabaseAdmin = createSupabaseAdminClient();
-
     // ---- Phase 4: wipe ------------------------------------------------------
     if (opts.wipe) {
       heading("PHASE 4 — WIPE");
@@ -255,30 +257,15 @@ async function main(): Promise<void> {
         where: { schoolId: { not: null } },
         select: { id: true, authId: true },
       });
-      console.log(`deleting ${doomed.length} Supabase auth users…`);
-      let authDeleted = 0;
-      const authFailures: { authId: string; message: string }[] = [];
-      await inParallel(doomed, CONCURRENCY, async (u) => {
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(u.authId);
-        // Already gone is success for our purposes — the goal is "no orphan".
-        if (error && !/not found/i.test(error.message)) {
-          authFailures.push({ authId: u.authId, message: error.message });
-        } else {
-          authDeleted += 1;
-        }
-      });
-      console.log(`auth users deleted (or already absent): ${authDeleted}`);
-
-      // A genuine (non "not found") Auth deletion failure means that identity is
-      // still live. Deleting its Prisma row anyway would orphan it the OTHER
-      // direction — a working login with no matching User/School. Abort instead
-      // of racing ahead; the operator re-runs once Supabase is healthy.
-      if (authFailures.length) {
-        for (const f of authFailures) console.error(`  auth user ${f.authId}: ${f.message}`);
-        throw new Error(
-          `${authFailures.length} Supabase auth user(s) failed to delete — aborting before touching Prisma rows.`
-        );
-      }
+      console.log(`deleting ${doomed.length} auth identities…`);
+      // Better Auth rows live in the same database; sessions and accounts cascade.
+      // A thrown error aborts before any Prisma row is touched, so no working login
+      // is orphaned from its User/School. Already-absent identities delete zero rows.
+      const authDeleted = await deleteIdentities(
+        prisma,
+        doomed.map((u) => u.authId)
+      );
+      console.log(`auth identities deleted: ${authDeleted}`);
 
       // Explicit topological delete, children first. Global deleteMany({}) is
       // correct on every table below (this is a total wipe, not a per-school
@@ -394,16 +381,8 @@ async function main(): Promise<void> {
     const failures: { sourceRow: number; name: string; message: string }[] = [];
     const created: { schoolIdCode: string; email: string; name: string }[] = [];
 
-    // Fetched once rather than per row: listUsers is paginated and rate-sensitive.
-    const knownAuth = new Map<string, string>();
-    for (let page = 1; ; page++) {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error) throw new Error(`listUsers failed: ${error.message}`);
-      for (const u of data.users) {
-        if (u.email) knownAuth.set(u.email.toLowerCase(), u.id);
-      }
-      if (data.users.length < 1000) break;
-    }
+    // Fetched once rather than per row.
+    const knownAuth = await loadAuthEmailIndex(prisma);
 
     const createOne = async (a: CredentialAssignment): Promise<void> => {
       const email = schoolHeadSyntheticEmail(a.schoolIdCode);
@@ -418,27 +397,16 @@ async function main(): Promise<void> {
         }
 
         // Resumable: reuse an auth identity left behind by a half-finished run.
-        let authId = knownAuth.get(email.toLowerCase());
-        if (authId) {
-          const { error } = await supabaseAdmin.auth.admin.updateUserById(authId, {
-            password: a.password,
-            app_metadata: { role: "SCHOOL_HEAD" },
-          });
-          if (error) throw new Error(`password reset failed: ${error.message}`);
-        } else {
-          const { data, error } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password: a.password,
-            email_confirm: true,
-            app_metadata: { role: "SCHOOL_HEAD" },
-            user_metadata: { role: "SCHOOL_HEAD" },
-          });
-          // A password-policy rejection must surface verbatim, not as a generic error.
-          if (error || !data.user) throw new Error(error?.message ?? "auth user creation returned no user");
-          authId = data.user.id;
-        }
+        // upsertCredentialIdentity rewrites the password and role on a reused id.
+        const authId = knownAuth.get(email.toLowerCase()) ?? newAuthId();
+        await upsertCredentialIdentity(prisma, {
+          authId,
+          email,
+          role: "SCHOOL_HEAD",
+          password: a.password,
+        });
 
-        const school = await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx) => {
           const s = await tx.school.create({
             data: {
               name: a.name,
@@ -451,7 +419,7 @@ async function main(): Promise<void> {
           });
           await tx.user.create({
             data: {
-              authId: authId!,
+              authId,
               email,
               role: "SCHOOL_HEAD",
               schoolId: s.id,
@@ -475,20 +443,6 @@ async function main(): Promise<void> {
         });
 
         created.push({ schoolIdCode: a.schoolIdCode, email, name: a.name });
-
-        // Best-effort metadata sync (schoolId is a mirror for ops convenience, not
-        // authoritative — middleware's `enforceRolePrefix` checks only the `role`
-        // claim, see src/lib/auth/roles.ts). Matches createSchool's own precedent
-        // in src/lib/actions/school.ts, which doesn't check this call's error either.
-        // Never let it flip a successfully-created School+User row into "failed":
-        // that would make it permanently unretriable, since a resumed run's
-        // `existingSchool` lookup above would find it and skip it forever.
-        const { error: metaErr } = await supabaseAdmin.auth.admin.updateUserById(authId!, {
-          app_metadata: { role: "SCHOOL_HEAD", schoolId: school.id },
-        });
-        if (metaErr) {
-          console.warn(`  warn: row ${a.sourceRow} (${a.name}) created, but app_metadata sync failed: ${metaErr.message}`);
-        }
       } catch (err) {
         failures.push({
           sourceRow: a.sourceRow,

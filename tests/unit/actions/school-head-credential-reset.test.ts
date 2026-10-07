@@ -11,18 +11,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * console flag agrees, and the audit row is the one the `passwordIsSchoolId`
  * replay reads as "readable again".
  *
- * Only leaf infrastructure is mocked (Prisma, session, Supabase admin, audit, cache).
+ * Only leaf infrastructure is mocked (Prisma, session, identity writes, audit, cache).
  */
 
 const SCHOOL_ID = "3f1c2b8e-7d4a-4e6b-9c1f-2a5d8e7b6c40";
 const SCHOOL_ID_CODE = "500648";
 
-const updateUserById = vi.fn(async (_authId: string, _attrs: Record<string, unknown>) => ({
-  error: null as null | { message: string },
-}));
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({ auth: { admin: { updateUserById } } }),
-}));
+const setPassword = vi.fn(async (..._args: unknown[]) => {});
+const setRole = vi.fn(async (..._args: unknown[]) => {});
+vi.mock("@/lib/auth/identity", () => ({ setPassword, setRole }));
+const revokeAllSessions = vi.fn(async (..._args: unknown[]) => 0);
+vi.mock("@/lib/auth/auth-session", () => ({ revokeAllSessions }));
 
 const prismaMock = {
   school: {
@@ -33,7 +32,11 @@ const prismaMock = {
     update: vi.fn(async (_args: unknown) => ({})),
   },
 };
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+const prismaWithTx = {
+  ...prismaMock,
+  $transaction: vi.fn(async (fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock)),
+};
+vi.mock("@/lib/prisma", () => ({ prisma: prismaWithTx, prismaFresh: prismaWithTx }));
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "admin-1", role: "SUPER_ADMIN" })),
@@ -55,6 +58,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
 }));
 
 const { regenerateSchoolHeadCredential } = await import("@/lib/actions/school");
+const { isBcryptHash, verifyPassword } = await import("@/lib/auth/password-hash");
 
 function form() {
   const fd = new FormData();
@@ -67,13 +71,18 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
     vi.clearAllMocks();
   });
 
-  it("sets the Supabase password to the School ID and returns it", async () => {
+  it("writes a bcrypt hash of the School ID through the identity helper and returns it", async () => {
     const res = await regenerateSchoolHeadCredential(form());
 
     expect(res).toEqual({ ok: true, data: { password: SCHOOL_ID_CODE } });
-    expect(updateUserById).toHaveBeenCalledTimes(1);
-    expect(updateUserById.mock.calls[0][0]).toBe("auth-head-1");
-    expect(updateUserById.mock.calls[0][1]).toMatchObject({ password: SCHOOL_ID_CODE });
+    expect(setPassword).toHaveBeenCalledTimes(1);
+    expect(setPassword.mock.calls[0][0]).toBe("auth-head-1");
+    const input = setPassword.mock.calls[0][1] as { hash: string };
+    expect(isBcryptHash(input.hash)).toBe(true);
+    expect(await verifyPassword({ hash: input.hash, password: SCHOOL_ID_CODE })).toBe(true);
+    // Same transaction client as the User row update.
+    expect(setPassword.mock.calls[0][2]).toBe(prismaMock);
+    expect(setRole).toHaveBeenCalledWith("auth-head-1", "SCHOOL_HEAD", prismaMock);
   });
 
   it("records that the live password is the School ID, with no forced change", async () => {
@@ -83,7 +92,8 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
       where: { id: "head-1" },
       data: {
         mustChangePassword: false,
-        isActive: true,
+        // `isActive: true` is no longer written: findSignInSchoolHead only
+        // returns active heads, so the flag is already true.
         passwordIsSchoolId: true,
         // Any password the head had chosen no longer opens the account, so the
         // sealed copy the accounts console reveals is deleted with it —
@@ -120,11 +130,31 @@ describe("regenerateSchoolHeadCredential — back to the School ID", () => {
     const res = await regenerateSchoolHeadCredential(form());
 
     expect(res).toEqual({ ok: true, data: { password: "130554" } });
-    expect(updateUserById.mock.calls[0][1]).toMatchObject({ password: "130554" });
+    const input = setPassword.mock.calls[0][1] as { hash: string };
+    expect(await verifyPassword({ hash: input.hash, password: "130554" })).toBe(true);
   });
 
-  it("changes nothing locally when Supabase refuses the update", async () => {
-    updateUserById.mockResolvedValueOnce({ error: { message: "boom" } });
+  it("signs the head out everywhere, only after the credential transaction commits", async () => {
+    await regenerateSchoolHeadCredential(form());
+
+    expect(revokeAllSessions).toHaveBeenCalledTimes(1);
+    expect(revokeAllSessions).toHaveBeenCalledWith("auth-head-1");
+    const revokeAt = revokeAllSessions.mock.invocationCallOrder[0];
+    expect(revokeAt).toBeGreaterThan(setPassword.mock.invocationCallOrder[0]);
+    expect(revokeAt).toBeGreaterThan(prismaMock.user.update.mock.invocationCallOrder[0]);
+    expect(revokeAt).toBeLessThan(writeAudit.mock.invocationCallOrder[0]);
+  });
+
+  it("revokes nothing when the identity write fails", async () => {
+    setPassword.mockRejectedValueOnce(new Error("boom"));
+
+    await regenerateSchoolHeadCredential(form());
+
+    expect(revokeAllSessions).not.toHaveBeenCalled();
+  });
+
+  it("changes nothing locally when the identity write fails", async () => {
+    setPassword.mockRejectedValueOnce(new Error("boom"));
 
     const res = await regenerateSchoolHeadCredential(form());
 

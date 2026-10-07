@@ -7,19 +7,20 @@
  *   npx tsx scripts/set-super-admin-credentials.ts --username admin --password admin --commit
  *   npx tsx scripts/set-super-admin-credentials.ts --email you@example.com --commit
  *
- * Requires: DIRECT_URL or DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * (read from .env.local if the shell has not exported them).
+ * Requires: DIRECT_URL or DATABASE_URL (read from .env.local if the shell has
+ * not exported it).
  *
- * Why a script and not a migration: the username lives in our Postgres, but the
- * password and the email live in Supabase Auth. Only a service-role client can
- * change those, so the two halves of "the Super Admin's credentials" cannot be
- * set by SQL alone. This puts both behind one command.
+ * Why a script and not a migration: the username lives in `User`, but the
+ * password hash and the sign-in email live in the Better Auth tables
+ * (`AuthUser`/`AuthAccount`), and a hash cannot be produced by SQL alone. This
+ * puts both behind one command.
  *
  * Dry run is the default, and it prints what it *would* change, so you can
  * confirm which account it picked before anything is written.
  */
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { updateIdentity } from "./lib/script-identity";
+import { BCRYPT_MAX_PASSWORD_BYTES } from "../src/lib/auth/password-hash";
 
 type Args = {
   username: string;
@@ -105,7 +106,7 @@ async function main() {
     }
 
     // A handle already taken by another account would fail the unique index
-    // mid-way, after the Supabase side had already been written. Check first so
+    // mid-way, after the auth side had already been written. Check first so
     // the two stores cannot drift apart.
     const clash = await prisma.user.findFirst({
       where: { username: args.username, id: { not: target.id } },
@@ -116,20 +117,15 @@ async function main() {
     }
 
     if (args.password || args.email) {
-      const supabase = createSupabaseAdminClient();
-      const { error } = await supabase.auth.admin.updateUserById(target.authId, {
-        ...(args.password ? { password: args.password } : {}),
-        ...(args.email ? { email: args.email, email_confirm: true } : {}),
-      });
-      if (error) {
-        // The most common rejection by far is Supabase's minimum password
-        // length (6 by default), which no amount of retrying will fix — say
-        // where to change it rather than leaving the raw message to be guessed at.
-        const hint = /password/i.test(error.message)
-          ? "\n  Supabase enforces a minimum password length (6 by default). Change it in\n  Supabase Dashboard -> Authentication -> Policies, or choose a longer password."
-          : "";
-        throw new Error(`Supabase rejected the update: ${error.message}${hint}`);
+      // bcrypt reads only the first 72 bytes; refuse rather than silently truncate.
+      if (args.password && Buffer.byteLength(args.password) > BCRYPT_MAX_PASSWORD_BYTES) {
+        throw new Error(`password is longer than ${BCRYPT_MAX_PASSWORD_BYTES} bytes`);
       }
+      await updateIdentity(prisma, target.authId, {
+        ...(args.password ? { password: args.password } : {}),
+        ...(args.email ? { email: args.email } : {}),
+        role: "SUPER_ADMIN",
+      });
     }
 
     await prisma.user.update({

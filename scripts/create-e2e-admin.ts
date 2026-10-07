@@ -7,20 +7,19 @@
  *
  * Reads LITRACK_E2E_USER and LITRACK_E2E_PASS from `.env.e2e` (gitignored),
  * the same file `node e2e/auth/login.mjs` reads, so the password is typed in
- * exactly one place. Database and Supabase settings come from `.env.local`,
- * like `seed-division-admins.ts`, whose creation steps this copies: the
- * username lives in Postgres but the password lives in Supabase Auth, so only
- * a service-role client can make a working account.
+ * exactly one place. Database settings come from `.env.local`, like
+ * `seed-division-admins.ts`, whose creation steps this copies: the username
+ * lives in `User` and the password hash in the Better Auth tables.
  *
- * Dry run is the default and prints which database and Supabase project it
- * would write to. Idempotent: an existing username or email is skipped, never
+ * Dry run is the default and prints which database it would write to. Idempotent: an existing username or email is skipped, never
  * overwritten.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { UserRole } from "@prisma/client";
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { newAuthId, upsertCredentialIdentity } from "./lib/script-identity";
+import { BCRYPT_MAX_PASSWORD_BYTES } from "../src/lib/auth/password-hash";
 
 const DOMAIN = process.env.SYNTHETIC_EMAIL_DOMAIN || "litrack.local";
 
@@ -60,8 +59,7 @@ async function main() {
   const email = `${username}@${DOMAIN}`;
   console.log("");
   console.log(`Database: ${hostOf(process.env.DIRECT_URL ?? process.env.DATABASE_URL)}`);
-  console.log(`Supabase: ${hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
-  console.log(`Account:  ${username} (${email}) as SUPER_ADMIN`);
+  console.log(`Account: ${username} (${email}) as SUPER_ADMIN`);
   console.log("");
 
   const prisma = await connectScriptPrisma();
@@ -75,20 +73,15 @@ async function main() {
       return;
     }
     if (!commit) {
-      console.log("Dry run. Check the database and Supabase hosts above, then re-run with --commit.");
+      console.log("Dry run. Check the database host above, then re-run with --commit.");
       return;
     }
 
-    const supabase = createSupabaseAdminClient();
-    const { data: created, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { role: "SUPER_ADMIN" },
-    });
-    if (error) throw new Error(`Supabase rejected ${username}: ${error.message}`);
-    const authId = created?.user?.id;
-    if (!authId) throw new Error(`Supabase created no auth user for ${username}`);
+    if (Buffer.byteLength(password) > BCRYPT_MAX_PASSWORD_BYTES) {
+      throw new Error(`Use a password of at most ${BCRYPT_MAX_PASSWORD_BYTES} bytes.`);
+    }
+    const authId = newAuthId();
+    await upsertCredentialIdentity(prisma, { authId, email, role: "SUPER_ADMIN", password });
 
     await prisma.user.create({
       data: {

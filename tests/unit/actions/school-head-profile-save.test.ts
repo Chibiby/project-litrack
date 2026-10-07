@@ -77,7 +77,6 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateTeacherCaches: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/delete-auth-user", () => ({ deleteAuthUser: vi.fn() }));
 
 const readTestLabSession = vi.fn(async () => false);
@@ -203,7 +202,7 @@ describe("saveSchoolHeadProfile — contact email", () => {
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  // The survey address and the Supabase login identity are different things —
+  // The survey address and the sign-in identity are different things —
   // School Heads sign in with school + password against a synthetic address.
   it("never writes the contact address onto the login identity", async () => {
     await saveSchoolHeadProfile(buildFormData());

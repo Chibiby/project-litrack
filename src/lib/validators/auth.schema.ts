@@ -1,12 +1,28 @@
 import { z } from "zod";
 import { nonEmpty, email, optionalString } from "./common";
 
-/** Password: min 8 chars, at least one letter and one number. */
+/**
+ * bcrypt reads only the first 72 bytes of a password and silently ignores the
+ * rest, so two long passwords sharing those bytes would both work. Mirrors
+ * `BCRYPT_MAX_PASSWORD_BYTES` in `@/lib/auth/password-hash`, restated here
+ * because this schema also runs in the browser and must not pull in bcrypt.
+ */
+const MAX_PASSWORD_BYTES = 72;
+
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/** Password: min 8 chars, at least one letter and one number, at most 72 bytes. */
 export const strongPassword = z
   .string()
   .min(8, "Password must be at least 8 characters")
   .regex(/[a-zA-Z]/, "Password must contain a letter")
-  .regex(/[0-9]/, "Password must contain a number");
+  .regex(/[0-9]/, "Password must contain a number")
+  .refine((value) => utf8Length(value) <= MAX_PASSWORD_BYTES, {
+    message:
+      "Password is too long. Use at most 72 characters (accented letters and emoji count as more than one).",
+  });
 
 export const schoolLoginSchema = z.object({
   schoolId: nonEmpty("Please select a school"),
@@ -29,7 +45,7 @@ export const adminUsername = z
   .max(64, "Username is too long");
 
 /**
- * Super Admin sign-in. Username, not email — Supabase Auth still needs an
+ * Super Admin sign-in. Username, not email — the identity signs in on an
  * address, so `loginAdmin` resolves this handle to the account's stored email
  * server-side. Password recovery continues to use that email, never this.
  */
@@ -43,24 +59,6 @@ export const teacherLoginSchema = z.object({
   schoolId: nonEmpty("Please select a school"),
   email,
   password: nonEmpty("Password required"),
-});
-
-/** `School.id` is `@default(uuid())`: any-version 8-4-4-4-12 hex. */
-const SCHOOL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Anonymous, fire-and-forget failure report from the browser sign-in. Bounded
- * on every field: the endpoint takes no session, so nothing here may be free
- * text of arbitrary size. The caller drops the report on any failure instead of
- * answering, so this is never an oracle for what a valid school looks like.
- */
-export const reportLoginFailureSchema = z.object({
-  role: z.enum(["SCHOOL_HEAD", "TEACHER"]),
-  schoolId: z.string().regex(SCHOOL_ID_PATTERN),
-  reason: z.string().max(64),
-  // A mistyped address must not drop the whole report: the attempt still gets
-  // its audit row, just without a subject to credit it to.
-  email: z.string().trim().toLowerCase().max(254).email().optional().catch(undefined),
 });
 
 const teacherRegisterNames = {

@@ -2,53 +2,53 @@ import { describe, expect, it } from "vitest";
 import { authIdFromCookieHeader } from "@/lib/errors/session-cookie";
 
 /**
- * Reading the signed-in account out of the Supabase cookie, for attribution
- * only. @supabase/ssr has shipped several cookie shapes over the versions this
- * app has run, and a page-crash record should still name the person on any of
- * them — but must never fail loudly when it cannot.
+ * Reading the signed-in account out of the Better Auth session cache cookie,
+ * for attribution only (the signature is deliberately not verified here). A
+ * page-crash record should name the person when it can — and must never fail
+ * loudly when it cannot.
  */
 
-function jwt(payload: Record<string, unknown>): string {
-  const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-  return `${part({ alg: "HS256" })}.${part(payload)}.signature`;
-}
-
-function sessionCookie(authId: string): string {
-  const session = { access_token: jwt({ sub: authId }), token_type: "bearer" };
-  return `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
+function sessionData(authId: unknown): string {
+  const data = {
+    session: { session: { id: "s1" }, user: { id: authId, role: "TEACHER" } },
+    expiresAt: Date.now() + 300_000,
+    signature: "sig",
+  };
+  return Buffer.from(JSON.stringify(data)).toString("base64url");
 }
 
 describe("authIdFromCookieHeader", () => {
-  it("reads the auth id out of a base64 session cookie", () => {
-    const header = `theme=dark; sb-abcdefgh-auth-token=${sessionCookie("auth-123")}`;
+  it("reads the auth id out of the session cache cookie", () => {
+    const header = `theme=dark; litrack.session_data=${sessionData("auth-123")}`;
     expect(authIdFromCookieHeader(header)).toBe("auth-123");
   });
 
-  it("joins the chunks of a split cookie in order", () => {
-    const whole = sessionCookie("auth-456");
-    const half = Math.ceil(whole.length / 2);
-    const header = `sb-abcdefgh-auth-token.0=${whole.slice(0, half)}; sb-abcdefgh-auth-token.1=${whole.slice(half)}`;
-    expect(authIdFromCookieHeader(header)).toBe("auth-456");
+  it("reads the __Secure- prefixed cookie used on https", () => {
+    expect(authIdFromCookieHeader(`__Secure-litrack.session_data=${sessionData("auth-456")}`)).toBe(
+      "auth-456"
+    );
   });
 
-  it("reads the older raw-JSON and array cookie formats", () => {
-    const raw = encodeURIComponent(JSON.stringify({ access_token: jwt({ sub: "auth-789" }) }));
-    expect(authIdFromCookieHeader(`sb-x-auth-token=${raw}`)).toBe("auth-789");
-    const arrayForm = encodeURIComponent(JSON.stringify([jwt({ sub: "auth-abc" }), "refresh"]));
-    expect(authIdFromCookieHeader(`sb-x-auth-token=${arrayForm}`)).toBe("auth-abc");
+  it("accepts a url-encoded cookie value and a header array", () => {
+    const encoded = encodeURIComponent(sessionData("auth-789"));
+    expect(authIdFromCookieHeader([`theme=dark`, `litrack.session_data=${encoded}`])).toBe("auth-789");
   });
 
   it("returns null rather than throwing on anything unexpected", () => {
     expect(authIdFromCookieHeader(undefined)).toBeNull();
     expect(authIdFromCookieHeader("")).toBeNull();
-    expect(authIdFromCookieHeader("sb-x-auth-token=not-base64-or-json")).toBeNull();
+    expect(authIdFromCookieHeader("litrack.session_data=not-base64-or-json")).toBeNull();
+    expect(authIdFromCookieHeader("litrack.session_data=")).toBeNull();
     expect(authIdFromCookieHeader("theme=dark")).toBeNull();
+    expect(authIdFromCookieHeader(`litrack.session_data=${sessionData(42)}`)).toBeNull();
+    expect(authIdFromCookieHeader(`litrack.session_data=${sessionData("")}`)).toBeNull();
     expect(
-      authIdFromCookieHeader(`sb-x-auth-token=base64-${Buffer.from("{}").toString("base64url")}`)
+      authIdFromCookieHeader(`litrack.session_data=${Buffer.from("{}").toString("base64url")}`)
     ).toBeNull();
   });
 
-  it("ignores the PKCE verifier cookie, which carries no session", () => {
-    expect(authIdFromCookieHeader("sb-abcdefgh-auth-token-code-verifier=abc123")).toBeNull();
+  it("ignores the session token cookie and any Supabase cookie, which carry no readable id", () => {
+    expect(authIdFromCookieHeader("litrack.session_token=abc.def")).toBeNull();
+    expect(authIdFromCookieHeader("sb-abcdefgh-auth-token=base64-e30")).toBeNull();
   });
 });

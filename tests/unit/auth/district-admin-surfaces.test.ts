@@ -34,9 +34,9 @@ afterEach(() => {
   vi.doUnmock("@/lib/assistant/gemini");
   vi.doUnmock("@/lib/rate-limit");
   vi.doUnmock("next/navigation");
-  vi.doUnmock("@/lib/supabase/server");
+  vi.doUnmock("@/lib/auth/auth-session");
   vi.doUnmock("@/lib/db/read-mode");
-  vi.doUnmock("@/lib/auth/impersonation");
+  vi.doUnmock("@/lib/auth/impersonation-session");
 });
 
 describe("globalSearch — DISTRICT_ADMIN branch", () => {
@@ -224,19 +224,19 @@ describe("requireUser / requireSchoolUser — a signed-in DISTRICT_ADMIN redirec
     vi.doMock("next/navigation", () => ({
       redirect: (path: string) => redirect(path),
     }));
-    vi.doMock("@/lib/supabase/server", () => ({
-      createSupabaseServerClient: async () => ({
-        auth: {
-          getClaims: async () => ({ data: { claims: { sub: "auth-da-1" } }, error: null }),
-          signOut: vi.fn(),
-        },
-      }),
+    vi.doMock("@/lib/auth/auth-session", () => ({
+      getAuthSession: async () => ({ user: { id: "auth-da-1" }, session: { impersonatedBy: null } }),
+      endCurrentSession: vi.fn(async () => true),
+      revokeAllSessions: vi.fn(async () => 0),
     }));
     vi.doMock("@/lib/prisma", () => ({
       prisma: { user: { findUnique: (...a: unknown[]) => userFindUnique(...a) } },
     }));
     vi.doMock("@/lib/db/read-mode", () => ({ primeReadMode: async () => {} }));
-    vi.doMock("@/lib/auth/impersonation", () => ({ clearImpersonationCookie: vi.fn() }));
+    vi.doMock("@/lib/auth/impersonation-session", () => ({
+      expireImpersonationCookies: vi.fn(async () => {}),
+      isVerifiedImpersonationOf: vi.fn(async () => false),
+    }));
   });
 
   it("requireUser([\"SCHOOL_HEAD\"]) redirects a DISTRICT_ADMIN to /district", async () => {

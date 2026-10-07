@@ -234,8 +234,12 @@ vi.mock("@/lib/cache/revalidate", () => ({
   revalidateSchoolsList: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
 vi.mock("@/lib/auth/delete-auth-user", () => ({ deleteAuthUser: vi.fn() }));
+// The Test Lab check reads the impersonation session; no impersonation here.
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: vi.fn(async () => null),
+  isVerifiedImpersonationOf: vi.fn(async () => false),
+}));
 
 import { archiveGradeLevel, restoreGradeLevel } from "@/lib/actions/school-head";
 

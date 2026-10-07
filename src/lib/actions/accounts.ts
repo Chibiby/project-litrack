@@ -1,19 +1,26 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import type {
   AdvisoryMode,
   EmploymentType,
   TeacherApprovalStatus,
   UserRole,
 } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaFresh } from "@/lib/prisma";
 import { requireDeveloperAdmin, requireUser } from "@/lib/auth/session";
 import { roleHomePath } from "@/lib/auth/roles";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { setPassword, setRole } from "@/lib/auth/identity";
+import { revokeAllSessions } from "@/lib/auth/auth-session";
+import { endCurrentSession, getAuthSession } from "@/lib/auth/auth-session";
+import {
+  expireImpersonationCookies,
+  readImpersonation,
+  startImpersonationSession,
+  stopImpersonationSession,
+  type ImpersonationReturnTo,
+} from "@/lib/auth/impersonation-session";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { SECURITY_AUDIT_ACTIONS } from "@/lib/audit-actions";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -26,9 +33,7 @@ import { isSyntheticEmail } from "@/lib/auth/synthetic-email";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { action } from "@/lib/errors/action";
-import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
-import { reportError } from "@/lib/errors/report";
-import { mapSupabaseAuthError } from "@/lib/errors/supabase";
+import { AppError, isAppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { accountUserIdSchema, impersonateUserSchema } from "@/lib/validators/accounts.schema";
 import { startTestLabSessionSchema } from "@/lib/validators/test-lab.schema";
@@ -39,14 +44,6 @@ import {
 } from "@/lib/test-lab/personas";
 import { assertTestableSchool, impersonationReturnPath } from "@/lib/auth/test-lab";
 import type { AccountSignIn } from "@/lib/admin/accounts";
-import {
-  checkCurrentSession,
-  checkSessionToken,
-  clearImpersonationCookie,
-  readImpersonationTicket,
-  setImpersonationCookie,
-  type ImpersonationReturnTo,
-} from "@/lib/auth/impersonation";
 
 /**
  * Super Admin accounts console (`/admin/accounts`).
@@ -77,8 +74,8 @@ import {
  * role refusal where the operation is role-specific, and generic refusal
  * messages so a hand-crafted id cannot be used to probe for what exists.
  *
- * On reveal specifically: Supabase Auth stores a bcrypt hash that no API reads
- * back, so the credential shown comes from LITRACK's own sealed copy
+ * On reveal specifically: the sign-in identity stores a bcrypt hash that
+ * cannot be read back, so the credential shown comes from LITRACK's own sealed copy
  * (`User.passwordVaultCipher`, see `@/lib/auth/password-vault`). That copy is
  * written for `SCHOOL_HEAD` rows only and only for passwords set after that
  * feature shipped — for anything else the action refuses and the admin resets
@@ -301,41 +298,43 @@ export const resetSchoolHeadPasswordToDefault = action("resetSchoolHeadPasswordT
   }
 
   const password = defaultSchoolHeadPassword(target.school.schoolIdCode);
-  const supabaseAdmin = createSupabaseAdminClient();
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
-    password,
-    app_metadata: { role: "SCHOOL_HEAD", schoolId: target.school.id },
-  });
-  if (error) {
-    // `detail` names the account, never the credential.
-    throw new AppError(mapSupabaseAuthError(error, "server"), {
-      cause: error,
-      detail: `resetSchoolHeadPasswordToDefault: password reset failed for user ${target.id}`,
-    });
-  }
+  // Hashed outside the transaction so a ~100 ms bcrypt never holds row locks.
+  const hash = await hashPassword(password);
+  const schoolId = target.school.id;
 
-  await prisma.user.update({
-    where: { id: target.id },
-    data: {
-      passwordIsSchoolId: true,
-      mustChangePassword: false,
-      // The canonical-row guard above admits only an already-active head, so
-      // this preserves the legacy post-state without resurrecting an older row.
-      isActive: true,
-      // Whatever the head had chosen no longer opens the account, so the sealed
-      // copy of it is deleted rather than left to be revealed later.
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    },
-  });
+  // Credential, identity role and `User` flags commit together: a crash can no
+  // longer leave the School ID live while `passwordIsSchoolId` says otherwise.
+  await withIdentityFailureMapped(
+    `resetSchoolHeadPasswordToDefault: password reset failed for user ${target.id}`,
+    () =>
+      prismaFresh.$transaction(async (tx) => {
+        await setPassword(target.authId, { hash }, tx);
+        await setRole(target.authId, "SCHOOL_HEAD", tx);
+        await tx.user.update({
+          where: { id: target.id },
+          data: {
+            passwordIsSchoolId: true,
+            mustChangePassword: false,
+            // The canonical-row guard above admits only an already-active head, so
+            // this preserves the legacy post-state without resurrecting an older row.
+            isActive: true,
+            // Whatever the head had chosen no longer opens the account, so the sealed
+            // copy of it is deleted rather than left to be revealed later.
+            passwordVaultCipher: null,
+            passwordVaultSetAt: null,
+          },
+        });
+      })
+  );
+  await revokeAllSessions(target.authId);
 
   await writeAudit({
     userId: admin.id,
-    schoolId: target.school.id,
+    schoolId,
     action: AUDIT_ACTIONS.SCHOOL_HEAD_PASSWORD_RESET_DEFAULT,
     resource: "User",
     resourceId: target.id,
-    metadata: { schoolId: target.school.id },
+    metadata: { schoolId },
   });
 
   revalidateAdminAccountPages();
@@ -381,32 +380,50 @@ async function issueRandomPassword(
   role: "TEACHER" | "DISTRICT_ADMIN",
   password: string
 ): Promise<void> {
-  // Force the change BEFORE swapping the password. On its own the flag is
-  // harmless, so if the Supabase call below fails nothing is lost; the reverse
-  // order could leave a one-time (for a District Admin, name-guessable)
-  // password live with no forced change.
-  await prisma.user.update({
-    where: { id: target.id },
-    data: {
-      mustChangePassword: true,
-      passwordIsSchoolId: false,
-      passwordVaultCipher: null,
-      passwordVaultSetAt: null,
-    },
-  });
+  // Hashed outside the transaction so a ~100 ms bcrypt never holds row locks.
+  const hash = await hashPassword(password);
 
-  const supabaseAdmin = createSupabaseAdminClient();
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(target.authId, {
-    password,
-    app_metadata: { role, schoolId: target.schoolId },
-  });
-  if (error) {
+  // The forced change and the new password commit together. The old code had
+  // to order them (flag first) because the password lived in another service;
+  // in one transaction a one-time (for a District Admin, name-guessable)
+  // password can never be live without `mustChangePassword`.
+  await withIdentityFailureMapped(
     // `detail` names the account, never the credential — same rule as audit
     // metadata, and `detail` is stored in full on `/admin/errors`.
-    throw new AppError(mapSupabaseAuthError(error, "server"), {
-      cause: error,
-      detail: `issueRandomPassword: ${role} password reset failed for user ${target.id}`,
-    });
+    `issueRandomPassword: ${role} password reset failed for user ${target.id}`,
+    () =>
+      prismaFresh.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: target.id },
+          data: {
+            mustChangePassword: true,
+            passwordIsSchoolId: false,
+            passwordVaultCipher: null,
+            passwordVaultSetAt: null,
+          },
+        });
+        await setPassword(target.authId, { hash }, tx);
+        await setRole(target.authId, role, tx);
+      })
+  );
+  await revokeAllSessions(target.authId);
+}
+
+/**
+ * Run an admin credential write, turning `IDENTITY_NOT_FOUND` (the account has
+ * a `User` row but no sign-in identity, e.g. a restored teacher) into the
+ * `AUTH_PROVIDER_ERROR` these actions raised before the move to Better Auth
+ * when the old auth provider answered `user_not_found`. Everything else propagates unchanged for `action()` to
+ * classify. `detail` names the account, never the credential.
+ */
+async function withIdentityFailureMapped<T>(detail: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (isAppError(err) && err.code === "IDENTITY_NOT_FOUND") {
+      throw new AppError("AUTH_PROVIDER_ERROR", { cause: err, detail });
+    }
+    throw err;
   }
 }
 
@@ -476,7 +493,7 @@ export const resetTeacherPassword = action(
  * replaced rather than reused indefinitely — `skipPasswordChange` already
  * refuses `DISTRICT_ADMIN` for the same reason (spec 3.3). A district admin
  * has no `schoolId` (`User.schoolId` is null by design, spec 3.1), so the
- * audit row carries none, and `app_metadata.role` stays `DISTRICT_ADMIN` —
+ * audit row carries none, and the identity's role stays `DISTRICT_ADMIN` —
  * never widened to `SUPER_ADMIN`, which is exactly the privilege the account
  * must not gain from a password reset.
  *
@@ -526,6 +543,7 @@ export const resetDistrictAdminPassword = action(
 
 const IMPERSONATION_TARGET_SELECT = {
   id: true,
+  authId: true,
   role: true,
   isActive: true,
   approvalStatus: true,
@@ -537,6 +555,7 @@ const IMPERSONATION_TARGET_SELECT = {
 
 type ImpersonationTarget = {
   id: string;
+  authId: string;
   role: UserRole;
   isActive: boolean;
   approvalStatus: TeacherApprovalStatus | null;
@@ -549,17 +568,14 @@ type ImpersonationTarget = {
  * Sign the Super Admin into another account's session without changing its
  * password.
  *
- * Mechanism: `admin.generateLink` mints a magic-link token for the target
- * account (it generates only — Supabase sends no email, which matters because
- * School Head and most teacher addresses are synthetic and undeliverable),
- * `verifyOtp` redeems it on a detached client, and `setSession` installs the
- * result on the SSR client so the session cookies land on this response.
- *
- * The admin's own session is replaced by that, so a signed ticket recording who
- * they were — and which session it is valid from — is written before the
- * install. See `@/lib/auth/impersonation` for why it is signed and bound, and
- * the ORDERING comment below for why minting and installing are split.
- * `endImpersonation` redeems the ticket in reverse.
+ * Mechanism: Better Auth's admin plugin `impersonateUser` (through
+ * `startImpersonationSession`). One response creates a two-hour session row
+ * for the target with `impersonatedBy = <admin authId>`, keeps the admin's own
+ * session token in the signed `litrack.admin_session` cookie, and swaps the
+ * session cookie — no email is sent, which matters because School Head and
+ * most teacher addresses are synthetic and undeliverable. The proof of
+ * impersonation is that server-side `impersonatedBy`, never a client value.
+ * `endImpersonation` reverses it.
  *
  * A PENDING teacher is a legitimate target: "why has this teacher been stuck on
  * Pending for a week" is one of the tickets this console exists to answer, and
@@ -631,7 +647,7 @@ export const impersonateUser = action(
  * `school: { isDemo: true, deletedAt: null }`, then `assertTestableSchool`
  * re-checks the school — so nothing a browser can send reaches a real account
  * through this action. Past the lookup it is `impersonateUser` exactly: same
- * rate-limit bucket, same refusals, same bound ticket, same audit action.
+ * rate-limit bucket, same refusals, same session swap, same audit action.
  */
 export const startTestLabSession = action(
   "startTestLabSession",
@@ -679,19 +695,19 @@ export const startTestLabSession = action(
 
 /**
  * The shared body of `impersonateUser` and `startTestLabSession`: target
- * refusals, mint, bind, install, audit, redirect.
+ * refusals, session swap, audit, redirect.
  *
  * Performs no authorization of its own — both callers have already passed
  * `requireUser("SUPER_ADMIN")`, the rate limit, and their own target lookup.
  * Must never be exported: this is a "use server" module.
  */
 async function startImpersonation(
-  admin: { id: string; authId: string },
+  admin: { id: string },
   target: ImpersonationTarget,
   options: {
     redirectTo: string;
     auditMetadata: Record<string, unknown>;
-    /** Signed into the ticket; only picks where "Return to admin" lands. */
+    /** Allowlisted cookie; only picks where "Return to admin" lands. */
     returnTo?: ImpersonationReturnTo;
   }
 ): Promise<never> {
@@ -718,10 +734,11 @@ async function startImpersonation(
 
   // REFUSAL — STRANDING GUARD, and it must come BEFORE the swap.
   // `getCurrentUser` signs out, on their very next request, every account it
-  // will not serve. If the swap happened first, the admin's own session would
-  // already be gone by the time that fired: they would be bounced to the login
-  // page holding an impersonation ticket they can no longer redeem, with no
-  // way back short of an operator clearing a cookie they cannot see.
+  // will not serve — and that teardown deletes the impersonated session the
+  // swap just installed. If the swap happened first, the admin would be
+  // bounced to the login page with no session to return from, so no banner
+  // and no "Return to admin", and the sign-out would also revoke every real
+  // session the target holds.
   //
   // So this mirrors `getCurrentUserCached` exactly rather than approximating
   // it. A PENDING teacher is `isActive: false` from registration until
@@ -744,55 +761,23 @@ async function startImpersonation(
     });
   }
 
-  // ORDERING — mint, bind, then install. The ticket still lands before the
-  // swap, and here is why that order holds even though the ticket now needs a
-  // session id that does not exist until the session does.
-  //
-  // Stranding is the failure this sequence prevents: the browser holding the
-  // target's session with no ticket, so no banner and no way back. Today's
-  // answer was "write the ticket first", and it still is — the session is
-  // minted OFF the response (a detached client, no cookies touched), its
-  // `session_id` is read, the ticket is written bound to it, and only then is
-  // the session installed into this response's cookies. Every exit leaves one
-  // of two coherent states:
-  //  - the admin's own session, and no ticket that can restore anything: a
-  //    failure while minting writes nothing; a failed install clears the
-  //    ticket; and even a throw between the two leaves a ticket bound to a
-  //    session this browser never received, which `endImpersonation` refuses;
-  //  - the target's session plus a ticket bound to exactly that session.
-  // There is no point at which the target's session is in the cookies without
-  // its ticket, and no ticket ever exists without a binding.
-  //
-  // The rejected alternative — write an unbound placeholder, swap, overwrite
-  // with the bound ticket — leaves an unredeemable placeholder in precisely the
-  // window the placeholder was there to cover.
-  const minted = await mintSessionFor(target.email);
-  if (!minted) {
-    throw new AppError("AUTH_PROVIDER_ERROR", {
-      detail: `impersonateUser: could not mint a session for user ${target.id}`,
-    });
-  }
-
-  await setImpersonationCookie({
-    adminAuthId: admin.authId,
-    adminUserId: admin.id,
-    targetUserId: target.id,
-    sessionId: minted.sessionId,
-    ...(options.returnTo ? { returnTo: options.returnTo } : {}),
-  });
-
-  const supabase = await createSupabaseServerClient();
-  const { error: installError } = await supabase.auth.setSession({
-    access_token: minted.session.access_token,
-    refresh_token: minted.session.refresh_token,
-  });
-  if (installError) {
-    await clearImpersonationCookie();
-    throw new AppError("AUTH_PROVIDER_ERROR", {
-      cause: installError,
-      detail: `impersonateUser: session install failed for user ${target.id}`,
-    });
-  }
+  // THE SWAP — one Better Auth response creates the impersonated session (with
+  // `impersonatedBy` set server-side), stores the admin's own session in the
+  // signed `litrack.admin_session` cookie, and replaces the session cookie.
+  // There is no window where the browser holds the target's session without
+  // the record of who to return to, so no ordering dance is needed. A refusal
+  // from Better Auth throws before any cookie changes: a Super Admin target is
+  // `AUTH_FORBIDDEN` (a third guard after the two above), and a target with no
+  // sign-in identity maps to the `AUTH_PROVIDER_ERROR` this has always raised
+  // when no session could be minted.
+  await withIdentityFailureMapped(
+    `impersonateUser: could not start a session for user ${target.id}`,
+    () =>
+      startImpersonationSession({
+        targetAuthId: target.authId,
+        ...(options.returnTo ? { returnTo: options.returnTo } : {}),
+      })
+  );
 
   await writeAudit({
     userId: admin.id,
@@ -807,255 +792,85 @@ async function startImpersonation(
 }
 
 /**
- * Restore the Super Admin's own session and drop the ticket.
+ * Restore the Super Admin's own session and end the impersonated one.
  *
  * Callable from any impersonated page. Two things must both hold, and neither
  * alone is enough:
- *  - the ticket, which names WHO gets restored, is validly signed and unexpired
- *    — without the signature this would sign the caller in as whichever admin
- *    they named;
- *  - the caller IS the session `impersonateUser` minted, which is what decides
- *    WHETHER they may. The ticket names the target, and the target can sign in
- *    again on the same browser, so matching on user id would hand that person
- *    the admin's session. Matching on the verified, live `session_id` refuses
- *    them: a fresh login is a fresh session.
+ *  - this request's session row, read fresh rather than from the cookie cache,
+ *    carries `impersonatedBy` — set server-side by `impersonateUser` and never
+ *    by anything the browser sends. The target signing in again on the same
+ *    browser gets a new row without it, so they can never be handed the
+ *    admin's session (invariant I7);
+ *  - `impersonatedBy` still names a live, active Super Admin. Better Auth's
+ *    `stopImpersonating` restores whatever admin session the signed cookie
+ *    holds without re-checking the account, so this re-query is LITRACK's.
  *
- * That binding check is this action's auth guard, and it is deliberately not
- * `requireUser`. It is stricter — a live session that is specifically the bound
- * one — and `requireUser` would redirect a PENDING teacher and any
- * `mustChangePassword` account, which are exactly the accounts whose pages
- * (`/pending-approval`, `/account/set-password`) carry the banner.
+ * That pair is this action's auth guard, and it is deliberately not
+ * `requireUser`. It is stricter — specifically an impersonation session — and
+ * `requireUser` would redirect a PENDING teacher and any `mustChangePassword`
+ * account, which are exactly the accounts whose pages (`/pending-approval`,
+ * `/account/set-password`) carry the banner.
+ *
+ * Single use: `stopImpersonating` deletes the impersonated session row, so a
+ * copy of its cookie taken before the return opens nothing afterwards.
  */
 export const endImpersonation = action("endImpersonation", async (): Promise<ActionResult> => {
-  const ticket = await readImpersonationTicket();
-  if (!ticket) return { ok: false, error: "Not impersonating" };
+  // REFUSAL — NOT AN IMPERSONATION. No session, or an ordinary one, gets one
+  // answer, so this says nothing about whose session it is.
+  const session = await getAuthSession({ fresh: true });
+  const adminAuthId = session?.session.impersonatedBy;
+  if (!session || !adminAuthId) return { ok: false, error: "Not impersonating" };
 
-  // REFUSAL — SESSION BINDING. A caller who is definitely not the bound session
-  // — no session, a token that fails verification or was revoked, or simply a
-  // different session — gets the same answer as having no ticket, so this says
-  // nothing about whether one exists or whom it names. The cookie goes with
-  // the refusal: nobody but its session could ever redeem it.
-  //
-  // An auth server that could not be reached is NOT that answer, and the ticket
-  // is kept. Clearing it on a network blip would leave the real admin signed in
-  // as the target with no way back — the stranding the ordering in
-  // `impersonateUser` exists to prevent — and keeping it costs nothing, because
-  // it still opens only for its own session. Nothing is restored either way.
-  const supabase = await createSupabaseServerClient();
-  const caller = await checkCurrentSession(supabase.auth);
-  if (caller.status === "unavailable") {
-    return { ok: false, error: "Could not start that session. Please try again." };
-  }
-  if (caller.status === "none" || caller.sessionId !== ticket.sessionId) {
-    await clearImpersonationCookie();
-    console.warn(
-      `[impersonation] endImpersonation refused: caller is not the bound session (admin ${ticket.adminUserId}, target ${ticket.targetUserId})`
-    );
-    return { ok: false, error: "Not impersonating" };
-  }
-
+  // REFUSAL — THE ADMIN RE-QUERY. An admin deactivated or removed since the
+  // impersonation began must not get their session back. The impersonated
+  // session was theirs to hold, so it ends here too, together with the cookie
+  // that would have restored them, and they sign in again normally.
   const adminUser = await prisma.user.findFirst({
     where: {
-      id: ticket.adminUserId,
-      authId: ticket.adminAuthId,
+      authId: adminAuthId,
       role: "SUPER_ADMIN",
       deletedAt: null,
       isActive: true,
     },
-    select: { id: true, email: true },
+    select: { id: true },
   });
-  // A ticket naming an admin who has since been deactivated or removed must not
-  // restore anything. Drop it and let them log in normally.
   if (!adminUser) {
-    await clearImpersonationCookie();
+    await endCurrentSession();
+    await expireImpersonationCookies();
+    console.warn(
+      `[impersonation] endImpersonation refused: impersonating admin ${adminAuthId} is no longer an active Super Admin`
+    );
     return { ok: false, error: "That admin account is no longer available. Please sign in again." };
   }
 
-  const switched = await switchSessionTo(supabase, adminUser.email);
-  if (!switched.ok) return switched;
+  // Read before the swap: `stopImpersonationSession` deletes this session and
+  // the return cookie. The target row only decides where to land and names the
+  // audit row. No `deletedAt` filter — a demo school reset mid-session is still
+  // a demo session; a hard-deleted row simply returns to the console.
+  const [target, current] = await Promise.all([
+    prisma.user.findFirst({
+      where: { authId: session.user.id },
+      select: { id: true, school: { select: { isDemo: true } } },
+    }),
+    readImpersonation(),
+  ]);
 
-  await clearImpersonationCookie();
-
-  // Single use. Only now, with the admin restored: revoking first would mean a
-  // failed switch left the admin with no session at all. The token is the one
-  // the binding check just verified as the bound session.
-  const revoked = await revokeImpersonationSession(caller.accessToken, {
-    adminUserId: ticket.adminUserId,
-    targetUserId: ticket.targetUserId,
-  });
+  await stopImpersonationSession();
 
   await writeAudit({
     userId: adminUser.id,
     action: AUDIT_ACTIONS.IMPERSONATION_END,
     resource: "User",
-    resourceId: ticket.targetUserId,
-    ...(revoked ? {} : { metadata: { revokeFailed: true } }),
+    resourceId: target?.id ?? null,
   });
-
-  // Where to land, and nothing else: the admin is already restored, so a failed
-  // read falls back to the accounts console rather than reporting a failure.
-  // No `deletedAt` filter — a demo school reset mid-session is still a demo
-  // session; a hard-deleted row simply returns to the console.
-  const target = await prisma.user
-    .findFirst({
-      where: { id: ticket.targetUserId },
-      select: { school: { select: { isDemo: true } } },
-    })
-    .catch(() => null);
 
   redirect(
     impersonationReturnPath({
       targetSchoolIsDemo: target?.school?.isDemo === true,
-      returnTo: ticket.returnTo,
+      returnTo: current?.returnTo ?? undefined,
     })
   );
 }, { verb: "return to your account" });
-
-type AuthClient = SupabaseClient["auth"];
-
-/**
- * Replace the current request's session cookies with a session for `email`.
- *
- * Takes the caller's SSR client rather than making its own, so the binding
- * check's possible token refresh and this swap write through one cookie store.
- *
- * Only `endImpersonation` calls it, after the session-binding check and the
- * live-Super-Admin re-query — this helper performs no authorization of its own
- * and must never be exported.
- */
-async function switchSessionTo(
-  supabase: { auth: AuthClient },
-  email: string
-): Promise<ActionResult> {
-  const supabaseAdmin = createSupabaseAdminClient();
-
-  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (error || !data?.properties?.hashed_token) {
-    console.error("[impersonation] generateLink failed:", error);
-    return { ok: false, error: "Could not start that session. Please try again." };
-  }
-
-  const { error: verifyError } = await supabase.auth.verifyOtp({
-    token_hash: data.properties.hashed_token,
-    type: "magiclink",
-  });
-  if (verifyError) {
-    console.error("[impersonation] verifyOtp failed:", verifyError);
-    return { ok: false, error: "Could not start that session. Please try again." };
-  }
-
-  return { ok: true };
-}
-
-/**
- * Mint a session for `email` WITHOUT touching this request's cookies, and read
- * the `session_id` the impersonation ticket is bound to.
- *
- * Redeemed on a throwaway anon client with in-memory storage, never on the SSR
- * client: when this returns, the browser's session is still the admin's, which
- * is what lets `impersonateUser` write the bound ticket before anything about
- * the session changes. The client is dropped with the function, and the tokens
- * with it, unless `impersonateUser` installs them.
- *
- * Null on any failure — `impersonateUser` owns the one error it turns into.
- * Called only after `requireUser("SUPER_ADMIN")` and the target refusals; it
- * performs no authorization of its own and must never be exported.
- */
-async function mintSessionFor(
-  email: string
-): Promise<{ session: Session; sessionId: string } | null> {
-  const supabaseAdmin = createSupabaseAdminClient();
-  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (error || !data?.properties?.hashed_token) {
-    console.error("[impersonation] generateLink failed:", error);
-    return null;
-  }
-
-  const env = getSupabasePublicEnv();
-  if (!env.ok) {
-    throw new AppError("CONFIG_MISSING", {
-      detail: "NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set",
-      context: { reason: "supabase_env_missing" },
-    });
-  }
-  const detached = createClient(env.url, env.anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-
-  const { data: verified, error: verifyError } = await detached.auth.verifyOtp({
-    token_hash: data.properties.hashed_token,
-    type: "magiclink",
-  });
-  if (verifyError || !verified.session) {
-    console.error("[impersonation] verifyOtp failed:", verifyError);
-    return null;
-  }
-
-  const claim = await checkSessionToken(detached.auth, verified.session.access_token);
-  if (claim.status !== "live") {
-    // Fail closed: a ticket bound to nothing would be refused on return, so
-    // starting an impersonation that cannot end is worse than not starting.
-    console.error(`[impersonation] minted session has no verifiable session_id (${claim.status})`);
-    return null;
-  }
-
-  return { session: verified.session, sessionId: claim.sessionId };
-}
-
-/**
- * End the impersonation session server-side, after a successful return.
- *
- * `admin.signOut(jwt, "local")` is `POST /logout?scope=local` authenticated by
- * that session's own token, which GoTrue answers with `LogoutSession` —
- * `DELETE FROM sessions WHERE id = <that session>`. Only that one session: the
- * target's own phone and laptop are untouched. Its refresh tokens go with the
- * row, and every later `getUser` on its access token is `session_not_found`,
- * which is what makes the ticket single-use — a copy of both cookies taken
- * before the return now fails the binding check in `endImpersonation`.
- *
- * Never throws. Returns whether the revoke succeeded. The admin is already
- * restored when this runs, so a failed revoke must not turn that into a
- * reported failure; it is recorded as a system error (admin log + alert), the
- * caller stamps `revokeFailed` on the IMPERSONATION_END audit row, and the
- * ticket is already gone from this browser. What a failure leaves is the
- * pre-hardening state: that session lives until it expires.
- */
-async function revokeImpersonationSession(
-  accessToken: string,
-  ids: { adminUserId: string; targetUserId: string }
-): Promise<boolean> {
-  let failure: unknown = null;
-  try {
-    const { error } = await createSupabaseAdminClient().auth.admin.signOut(accessToken, "local");
-    if (error) failure = error;
-  } catch (err) {
-    failure = err;
-  }
-  if (!failure) return true;
-
-  // Ids only; the access token is never put in the detail or the cause.
-  const reason =
-    failure instanceof Error
-      ? failure.message
-      : typeof failure === "object" && failure !== null && "message" in failure
-        ? String((failure as { message: unknown }).message)
-        : "unknown error";
-  reportError(
-    new AppError("AUTH_PROVIDER_ERROR", {
-      severity: "system",
-      detail: `Revoking the impersonation session failed after return (admin ${ids.adminUserId}, target ${ids.targetUserId}): ${reason}`,
-      context: { service: "supabase-auth", reason: "impersonation-revoke-failed" },
-    }),
-    { userId: ids.adminUserId }
-  );
-  return false;
-}
 
 // ── Profile modal ──────────────────────────────────────────────────────────
 

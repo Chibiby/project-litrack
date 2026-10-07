@@ -31,11 +31,3 @@ export function loginPath(area: "admin" | "school", reason?: SessionEndReason | 
   const base = area === "admin" ? "/admin/login" : "/login";
   return reason ? `${base}?reason=${reason}` : base;
 }
-
-/** `sb-<project>-auth-token`, whole or chunked — not the PKCE verifier cookie. */
-const SESSION_COOKIE = /^sb-.+-auth-token(?:\.\d+)?$/;
-
-export function hasSupabaseSessionCookie(names: Iterable<string>): boolean {
-  for (const name of names) if (SESSION_COOKIE.test(name)) return true;
-  return false;
-}

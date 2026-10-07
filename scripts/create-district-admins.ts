@@ -7,15 +7,15 @@
  *   npx tsx scripts/create-district-admins.ts --commit   # write
  *
  * Follows `scripts/seed-division-admins.ts` and `scripts/create-e2e-admin.ts`:
- * env through `scripts/lib/script-db.ts`, auth users through
- * `createSupabaseAdminClient`. Reusing a half-created auth user (a previous
- * run that died between the Supabase write and the database write) copies
- * `scripts/import-schools.ts`'s `listUsers` scan + `updateUserById`.
+ * env through `scripts/lib/script-db.ts`, auth identities through
+ * `scripts/lib/script-identity.ts`. Reusing a half-created identity (a previous
+ * run that died between the identity write and the User write) copies
+ * `scripts/import-schools.ts`: look it up by email, then rewrite its password.
  *
  * Dry run is the default and writes nothing — not a User row, not a
  * DistrictAdminAssignment row, not an AuditLog row, not the credentials CSV.
- * It prints the database host and the Supabase host (production's database is
- * the Hyperdrive origin, not the one in `.env.local`), then the full plan.
+ * It prints the database host (production's database is the Hyperdrive
+ * origin, not the one in `.env.local`), then the full plan.
  *
  * Idempotent: after a full success, a re-run prints "exists" for all 14 and
  * writes nothing. After a partial failure, a re-run creates only what is
@@ -26,7 +26,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { UserRole } from "@prisma/client";
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { loadAuthEmailIndex, newAuthId, upsertCredentialIdentity } from "./lib/script-identity";
 import { districtAdminPassword } from "../src/lib/auth/credentials";
 import { AUDIT_ACTIONS } from "../src/lib/audit-actions";
 import {
@@ -36,7 +36,7 @@ import {
 } from "./lib/district-admin-plan";
 
 const DOMAIN = process.env.SYNTHETIC_EMAIL_DOMAIN || "litrack.local";
-/** Supabase's admin API is rate-sensitive; the roster is small (14), so this stays low. */
+/** The roster is small (14), so this stays low. */
 const CONCURRENCY = 3;
 
 /**
@@ -125,7 +125,6 @@ async function main(): Promise<void> {
   try {
     console.log("");
     console.log(`Database: ${hostOf(process.env.DIRECT_URL ?? process.env.DATABASE_URL)}`);
-    console.log(`Supabase: ${hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
     console.log("");
 
     // ---- Step 2: the migration that adds the enum value must already be applied.
@@ -252,10 +251,9 @@ async function main(): Promise<void> {
     }
 
     // ---- Step 6: commit.
-    const supabase = createSupabaseAdminClient();
     const loginUrl = `${loginOrigin()}/admin/login`;
 
-    // Credentials-file safety check, run before any write (Supabase auth user,
+    // Credentials-file safety check, run before any write (auth identity,
     // Postgres row, or audit log) rather than after accounts already exist
     // (LOW-3): if the CSV cannot be written safely, abort here so a re-run
     // finds nothing half-created.
@@ -272,17 +270,8 @@ async function main(): Promise<void> {
       fs.mkdirSync(path.dirname(csvPath), { recursive: true });
     }
 
-    const knownAuth = new Map<string, string>();
-    if (plan.create.length > 0) {
-      for (let page = 1; ; page++) {
-        const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-        if (error) throw new Error(`listUsers failed: ${error.message}`);
-        for (const u of data.users) {
-          if (u.email) knownAuth.set(u.email.toLowerCase(), u.id);
-        }
-        if (data.users.length < 1000) break;
-      }
-    }
+    const knownAuth =
+      plan.create.length > 0 ? await loadAuthEmailIndex(prisma) : new Map<string, string>();
 
     heading("CREATE");
     const createdRows: { name: string; username: string; password: string; districts: readonly string[] }[] = [];
@@ -297,36 +286,29 @@ async function main(): Promise<void> {
         // at it yet (MEDIUM-1). An auth id already claimed by a real user
         // (another person who happens to hold this email under a different
         // or null username) must never have its password or role rewritten.
-        let authId = knownAuth.get(email.toLowerCase());
-        if (authId) {
-          const owner = await prisma.user.findUnique({ where: { authId }, select: { id: true } });
+        const knownId = knownAuth.get(email.toLowerCase());
+        if (knownId) {
+          const owner = await prisma.user.findUnique({ where: { authId: knownId }, select: { id: true } });
           if (owner) {
             throw new Error(
-              `email ${email} is registered in Supabase Auth but the matching auth id already belongs to an existing user (id ${owner.id}) — refusing to overwrite their password/role`
+              `email ${email} already has a sign-in identity and its auth id already belongs to an existing user (id ${owner.id}) — refusing to overwrite their password/role`
             );
           }
-          const { error } = await supabase.auth.admin.updateUserById(authId, {
-            password,
-            app_metadata: { role: "DISTRICT_ADMIN" },
-          });
-          if (error) throw new Error(`password reset failed: ${error.message}`);
-        } else {
-          const { data, error } = await supabase.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            app_metadata: { role: "DISTRICT_ADMIN" },
-            user_metadata: { role: "DISTRICT_ADMIN" },
-          });
-          if (error || !data.user) throw new Error(error?.message ?? "auth user creation returned no user");
-          authId = data.user.id;
         }
+        // upsertCredentialIdentity rewrites the password and role on a reused id.
+        const authId = knownId ?? newAuthId();
+        await upsertCredentialIdentity(prisma, {
+          authId,
+          email,
+          role: "DISTRICT_ADMIN",
+          password,
+        });
 
         const fullName = `${item.firstName} ${item.lastName}`;
         const user = await prisma.$transaction(async (tx) => {
           const created = await tx.user.create({
             data: {
-              authId: authId!,
+              authId,
               email,
               username: item.username,
               role: UserRole.DISTRICT_ADMIN,

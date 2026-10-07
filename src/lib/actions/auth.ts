@@ -2,10 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { prisma } from "@/lib/prisma";
+import { cookies, headers } from "next/headers";
+import { prisma, prismaFresh } from "@/lib/prisma";
 import { canonicalAppUrl } from "@/lib/app-url";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import {
@@ -29,26 +27,43 @@ import { action } from "@/lib/errors/action";
 import { AppError, tooManyAttempts, type AppErrorOptions } from "@/lib/errors/app-error";
 import { formatMessage, type ErrorCode } from "@/lib/errors/codes";
 import { parseInput } from "@/lib/errors/validation";
-import {
-  isAuthServiceUnreachable,
-  loginFailureReasonFor,
-  mapSupabaseAuthError,
-} from "@/lib/errors/supabase";
+import { loginFailureReasonFor } from "@/lib/errors/auth-provider";
 import { reportError } from "@/lib/errors/report";
 import type { ActionFailure } from "@/lib/errors/result";
-import { assertSupabaseConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
+import { assertAuthConfigured, requireActiveSchool, LOGIN_RATE } from "@/lib/auth/login-gates";
 import { assertLookupAllowed, recordFailedLookup } from "@/lib/auth/lookup-throttle";
 import { requireUser, roleHomePath, roleSecurityPath } from "@/lib/auth/session";
 import { readTestLabSession } from "@/lib/auth/test-lab";
 import {
-  clearImpersonationCookie,
-  checkCurrentSession,
+  endCurrentSession,
+  getAuthSession,
+  revokeAllSessions,
+  revokeOtherSessions,
+  signInWithPassword,
+} from "@/lib/auth/auth-session";
+import {
+  createIdentity,
+  findIdentityByEmail,
+  setEmail,
+  setPassword,
+  verifyAccountPassword,
+} from "@/lib/auth/identity";
+import { DUMMY_BCRYPT_HASH, hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { consumeResetToken, peekResetToken } from "@/lib/auth/password-reset";
+import { authCookieName, authCookiesSecure } from "@/lib/auth/auth-cookies";
+import {
+  expireImpersonationCookies,
   isVerifiedImpersonationOf,
-  readImpersonationContext,
-} from "@/lib/auth/impersonation";
+  readImpersonation,
+} from "@/lib/auth/impersonation-session";
 import { clearDemoSessionCookie } from "@/lib/demo/session";
 import { completeTeacherAuthAfterVerify } from "@/lib/auth/teacher-registration";
-import { sendPasswordRecoveryEmail, hasRecentRecoveryToken } from "@/lib/auth/recovery-email";
+import {
+  sendPasswordRecoveryEmail,
+  hasRecentRecoveryToken,
+  RESET_COOKIE,
+  RESET_COOKIE_PATH,
+} from "@/lib/auth/recovery-email";
 import {
   warmAdminRoutes,
   warmDistrictRoutes,
@@ -79,15 +94,58 @@ const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
 // Failed admin sign-ins per client address: 20 per 15 minutes. Generous enough
 // for a school network behind one NAT, far below a credential-stuffing run.
 const ADMIN_FAILED_IP_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+// Failed School Head and teacher sign-ins per client address, shared by both
+// forms: the same 20 per 15 minutes as the admin console. Sign-in now verifies
+// the password in-app, so this is the per-address backstop the hosted
+// provider's limiter used to be.
+const SCHOOL_FAILED_IP_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
 // A failed admin sign-in is never answered sooner than this after it began.
 const ADMIN_FAILURE_MIN_MS = 800;
-// Sign-in target for an unknown admin handle, so it costs the same provider
-// round-trip as a real one. `.invalid` is reserved (RFC 2606) and never resolves
-// to an account.
-const NONEXISTENT_ADMIN_EMAIL = "no-such-admin@litrack.invalid";
-// Supabase keeps one live recovery token per user; resending sooner than
-// this only burns the still-good earlier email for an identical new one.
+// Only one reset link is live per account (issuing one kills the older ones);
+// resending sooner than this only burns the still-good earlier email for an
+// identical new one.
 const RECOVERY_TOKEN_COOLDOWN_MS = 2 * 60 * 1000;
+
+/** Rate-limit key for failed School Head / teacher sign-ins from this address. */
+async function schoolFailedIpKey(): Promise<string> {
+  return `login:school-fail:ip:${clientIpFrom(await headers())}`;
+}
+
+/**
+ * Throw `tooManyAttempts` when this address has used up its failed-sign-in
+ * budget. Peeks only: a success never costs anything.
+ */
+async function assertSchoolIpAllowed(ipKey: string): Promise<void> {
+  const gate = await peekRateLimit(ipKey, SCHOOL_FAILED_IP_RATE);
+  if (!gate.ok) throw tooManyAttempts(gate.retryAfterMs);
+}
+
+/** Charge one wrong password to this address. Never throws (memory fallback). */
+async function chargeSchoolIpFailure(ipKey: string): Promise<void> {
+  await checkRateLimit(ipKey, SCHOOL_FAILED_IP_RATE);
+}
+
+/**
+ * Undo a session `signInWithPassword` created earlier in this same request.
+ *
+ * `endCurrentSession` cannot: it signs out whatever session the INCOMING
+ * request carries, and the new session's cookie only exists on the outgoing
+ * response. So delete the identity's session rows and expire the two cookies
+ * the sign-in just set.
+ */
+async function discardNewSession(authId: string): Promise<void> {
+  await revokeAllSessions(authId);
+  const store = await cookies();
+  for (const name of ["session_token", "session_data"]) {
+    store.set(authCookieName(name), "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: authCookiesSecure(),
+      path: "/",
+      maxAge: 0,
+    });
+  }
+}
 
 /**
  * An `AppError` that also names the form field(s) the message belongs to, so
@@ -131,13 +189,16 @@ function resolveRequestOrigin(): string {
 export const loginSchoolHead = action(
   "loginSchoolHead",
   async (formData: FormData): Promise<never> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const input = parseInput(schoolLoginSchema, {
       schoolId: formData.get("schoolId"),
       role: "SCHOOL_HEAD",
       password: formData.get("password"),
     });
+
+    const ipKey = await schoolFailedIpKey();
+    await assertSchoolIpAllowed(ipKey);
 
     const rate = await checkRateLimit(`login:school-head:${input.schoolId}`, LOGIN_RATE);
     if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
@@ -154,16 +215,13 @@ export const loginSchoolHead = action(
       });
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: shUser.email,
-      password: input.password,
-    });
-    if (error) {
+    const signIn = await signInWithPassword(shUser.email, input.password);
+    if (!signIn.ok) {
       // Once the school is chosen and the account exists, a wrong password is a
       // wrong password — and this used to say "contact your administrator",
       // which is what sent schools off resetting credentials that were fine.
-      const code = mapSupabaseAuthError(error, "server");
+      const { code, error } = signIn;
+      if (code === "AUTH_INCORRECT_PASSWORD") await chargeSchoolIpFailure(ipKey);
       await writeAudit({
         userId: shUser.id,
         schoolId: school.id,
@@ -203,7 +261,7 @@ export const loginSchoolHead = action(
  * Teacher login with email + password only (no OTP / codes).
  */
 export const loginTeacher = action("loginTeacher", async (formData: FormData): Promise<never> => {
-  assertSupabaseConfigured();
+  assertAuthConfigured();
 
   const input = parseInput(teacherLoginSchema, {
     schoolId: formData.get("schoolId"),
@@ -213,6 +271,9 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
 
   const email = input.email.toLowerCase().trim();
   const { schoolId, password } = input;
+
+  const ipKey = await schoolFailedIpKey();
+  await assertSchoolIpAllowed(ipKey);
 
   const rate = await checkRateLimit(`login:teacher:${schoolId}:${email}`, LOGIN_RATE);
   if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
@@ -254,10 +315,10 @@ export const loginTeacher = action("loginTeacher", async (formData: FormData): P
     throw new AppError("AUTH_ACCOUNT_DEACTIVATED");
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    const code = mapSupabaseAuthError(error, "server");
+  const signIn = await signInWithPassword(email, password);
+  if (!signIn.ok) {
+    const { code, error } = signIn;
+    if (code === "AUTH_INCORRECT_PASSWORD") await chargeSchoolIpFailure(ipKey);
     await writeAudit({
       userId: teacher.id,
       schoolId,
@@ -313,19 +374,17 @@ export type TeacherRegisterResult = { ok: true; redirectTo: string } | ActionFai
 const REGISTER_PENDING_PATH = "/account/created";
 
 /**
- * Finish teacher self-register once the Supabase session exists.
+ * Create or link the LITRACK row for a teacher whose identity exists. Runs
+ * BEFORE any session is created, so a refusal leaves nothing to sign out.
  * Returns the page the client should navigate to on success.
  */
-async function finishTeacherRegister(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  params: {
-    authId: string;
-    email: string;
-    schoolId: string;
-    names: TeacherRegisterNames;
-    isAralVolunteer: boolean;
-  }
-): Promise<{ ok: true; redirectTo: string }> {
+async function finishTeacherRegister(params: {
+  authId: string;
+  email: string;
+  schoolId: string;
+  names: TeacherRegisterNames;
+  isAralVolunteer: boolean;
+}): Promise<{ ok: true; redirectTo: string }> {
   const result = await completeTeacherAuthAfterVerify({
     authId: params.authId,
     email: params.email,
@@ -336,7 +395,7 @@ async function finishTeacherRegister(
   });
 
   if (!result.ok) {
-    // Auth is already proven. If PENDING exists, never toast failure / signOut
+    // The password is already proven. If PENDING exists, never toast failure
     // — a peer create or post-create glitch already succeeded for this
     // email+school.
     const existing = await prisma.user.findUnique({
@@ -364,14 +423,8 @@ async function finishTeacherRegister(
       return { ok: true, redirectTo: REGISTER_PENDING_PATH };
     }
 
-    if (result.signOut) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.error("[registerTeacher] signOut failed:", err);
-      }
-    }
-    // An AppError, carried up so the wrapper answers with it.
+    // An AppError, carried up so the wrapper answers with it. No session was
+    // created yet, so there is nothing to sign out.
     throw result.error;
   }
 
@@ -382,52 +435,40 @@ async function finishTeacherRegister(
 }
 
 /**
- * Create the Supabase auth user for a self-registering teacher with the email
- * already confirmed: account creation no longer proves the address with a
+ * Create the sign-in identity for a self-registering teacher with the email
+ * already marked verified: account creation does not prove the address with a
  * one-time code — School Head approval is the gate, and email is kept only for
  * password recovery.
  *
- * An auth user can already exist without a LITRACK row (the Prisma conflict
+ * An identity can already exist without a LITRACK row (the Prisma conflict
  * check above ran first): that is an abandoned earlier attempt, so adopt it
- * when the same password signs in rather than dead-ending the teacher.
+ * when the same password matches rather than dead-ending the teacher.
  */
-async function createOrAdoptTeacherAuthUser(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  params: { email: string; password: string; schoolId: string }
-): Promise<string> {
-  const { email, password, schoolId } = params;
+async function createOrAdoptTeacherIdentity(params: {
+  email: string;
+  password: string;
+}): Promise<string> {
+  const { email, password } = params;
+  // Hashed once, outside any transaction, and reused if the create races.
+  const hash = await hashPassword(password);
 
-  // Throws CONFIG_MISSING when the service-role key is absent or wrong, which
-  // the wrapper turns into "not set up yet" plus a reference — where the old
-  // "temporarily unavailable" implied waiting would fix it.
-  const admin = createSupabaseAdminClient();
-
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    app_metadata: { role: "TEACHER", schoolId },
-  });
-  if (!error && data.user) return data.user.id;
-
-  const message = (error?.message ?? "").toLowerCase();
-  const alreadyRegistered =
-    message.includes("already registered") ||
-    message.includes("already been registered") ||
-    message.includes("already exists");
-
-  if (!alreadyRegistered) {
-    throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error ?? undefined });
+  try {
+    const { authId } = await createIdentity({
+      email,
+      password: { hash },
+      role: "TEACHER",
+      emailVerified: true,
+    });
+    return authId;
+  } catch (err) {
+    if (!(err instanceof AppError && err.code === "AUTH_EMAIL_IN_USE")) throw err;
   }
 
-  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  if (signInError || !signInData.user) {
-    throw new AppError("AUTH_ACCOUNT_EXISTS_SIGN_IN", { cause: signInError ?? undefined });
+  const existing = await findIdentityByEmail(email);
+  if (!existing || !(await verifyAccountPassword(existing.authId, password))) {
+    throw new AppError("AUTH_ACCOUNT_EXISTS_SIGN_IN");
   }
-  return signInData.user.id;
+  return existing.authId;
 }
 
 /**
@@ -441,7 +482,7 @@ async function createOrAdoptTeacherAuthUser(
 export const registerTeacher = action(
   "registerTeacher",
   async (formData: FormData): Promise<{ ok: true; redirectTo: string }> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const input = parseInput(teacherRegisterSchema, {
       schoolId: formData.get("schoolId"),
@@ -478,31 +519,29 @@ export const registerTeacher = action(
       throw new AppError(registerConflictCode(existing, schoolId));
     }
 
-    const supabase = await createSupabaseServerClient();
-    const authId = await createOrAdoptTeacherAuthUser(supabase, { email, password, schoolId });
+    const authId = await createOrAdoptTeacherIdentity({ email, password });
 
-  // Sign in so the browser holds a session for /account/created. If this fails
-  // the auth user exists but no LITRACK row does yet — signing in and creating
-  // the account again recovers it through the adopt path above.
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session || session.user.id !== authId) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
-        // The account exists; only the automatic sign-in failed. Telling them to
-        // sign in is the one instruction that actually works here.
-        throw new AppError("AUTH_REGISTERED_SIGN_IN", { cause: signInError });
-      }
-    }
-
-    return finishTeacherRegister(supabase, {
+    // The LITRACK row first, then the session: a refusal here (a conflict
+    // that appeared since the check above) must not leave a signed-in browser
+    // behind. An identity without a row is recovered by the adopt path above
+    // on the next attempt.
+    const outcome = await finishTeacherRegister({
       authId,
       email,
       schoolId,
       names,
       isAralVolunteer: input.isAralVolunteer,
     });
+
+    // Sign in so the browser holds a session for /account/created.
+    const signIn = await signInWithPassword(email, password);
+    if (!signIn.ok) {
+      // The account exists; only the automatic sign-in failed. Telling them to
+      // sign in is the one instruction that actually works here.
+      throw new AppError("AUTH_REGISTERED_SIGN_IN", { cause: signIn.error });
+    }
+
+    return outcome;
   },
   { verb: "create your account" }
 );
@@ -518,9 +557,9 @@ function isAdminConsoleRole(role: string): role is AdminConsoleRole {
 /**
  * Admin login (Super Admin or district admin): username + password.
  *
- * The console signs in by handle rather than by email, but Supabase Auth only
+ * The console signs in by handle rather than by email, but the identity only
  * authenticates on an address — so the handle is resolved against
- * `User.username` here and the row's `email` is what actually reaches Supabase.
+ * `User.username` here and the row's `email` is what actually signs in.
  * Password recovery is unaffected and still runs entirely off that email.
  *
  * Each role lands on its own home: `/admin` for the division office,
@@ -529,7 +568,7 @@ function isAdminConsoleRole(role: string): role is AdminConsoleRole {
  */
 export const loginAdmin = action("loginAdmin", async (formData: FormData): Promise<never> => {
   const startedAt = Date.now();
-  assertSupabaseConfigured();
+  assertAuthConfigured();
 
   const { username, password } = parseInput(adminLoginSchema, {
     username: formData.get("username"),
@@ -537,7 +576,7 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
   });
 
   // Per-address ceiling on FAILED attempts, checked before the database or
-  // Supabase is touched. Only failures are charged (see `failAdminLogin`), so a
+  // any password check is touched. Only failures are charged (see `failAdminLogin`), so a
   // successful sign-in on a shared school network is refused only once that
   // address has itself burned through the budget.
   const ipKey = `login:admin-fail:ip:${clientIpFrom(await headers())}`;
@@ -548,14 +587,14 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
   if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
   {
-    // Supabase Auth authenticates on an email address, so the handle has to be
+    // The identity authenticates on an email address, so the handle has to be
     // resolved to one before we can hand anything to `signInWithPassword`.
     //
     // Scoping the lookup to an active, non-deleted admin-console account is the
     // point of doing it here rather than after sign-in: a handle that once
     // belonged to a revoked account, or to a School Head or teacher, never
-    // reaches Supabase at all, so a stale username cannot be used to probe for a
-    // live password.
+    // reaches a password check at all, so a stale username cannot be used to
+    // probe for a live password.
     const account = await prisma.user.findFirst({
       where: {
         username,
@@ -565,7 +604,6 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       },
       select: { id: true, email: true, role: true },
     });
-    const supabase = await createSupabaseServerClient();
     if (!account) {
       await writeAudit({
         action: AUDIT_ACTIONS.LOGIN_DENIED,
@@ -575,22 +613,10 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
         // role is unknown too, so the row names the console, not a role.
         metadata: { role: "ADMIN_CONSOLE", reason: "unknown_username" },
       });
-      // Do the same Supabase round-trip a real handle would, against an address
-      // that cannot exist. Otherwise an unknown handle never reaches the provider,
-      // so a provider rate-limit or outage would only ever surface for real
-      // handles (an existence oracle), and a slow provider would stretch only the
-      // known path past the timing floor.
-      const probe = await supabase.auth.signInWithPassword({
-        email: NONEXISTENT_ADMIN_EMAIL,
-        password,
-      });
-      if (probe.data?.user) await supabase.auth.signOut();
-      const probeMapped = probe.error
-        ? mapSupabaseAuthError(probe.error, "server")
-        : "AUTH_INCORRECT_PASSWORD";
-      if (probeMapped !== "AUTH_INCORRECT_PASSWORD") {
-        throw new AppError(probeMapped, { cause: probe.error ?? undefined });
-      }
+      // Spend the same bcrypt work a real handle's password check would, so an
+      // unknown handle is not measurably cheaper to refuse. The result is
+      // ignored: nothing can match a hash of a value nobody knows.
+      await verifyPassword({ hash: DUMMY_BCRYPT_HASH, password });
       // Identical to the wrong-password message below, so the field cannot be
       // used to enumerate which handles exist. This is the one login where the
       // generic message is deliberate: these are the highest-value accounts in
@@ -599,12 +625,9 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       return failAdminLogin(startedAt, ipKey, incorrectAdminCredentials());
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: account.email,
-      password,
-    });
-    if (error || !data.user) {
-      const mapped = error ? mapSupabaseAuthError(error, "server") : "AUTH_INCORRECT_PASSWORD";
+    const signIn = await signInWithPassword(account.email, password);
+    if (!signIn.ok) {
+      const { code: mapped, error } = signIn;
       await writeAudit({
         userId: account.id,
         action: AUDIT_ACTIONS.LOGIN_DENIED,
@@ -615,14 +638,16 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
       // Collapsed to the same message as an unknown handle — but only for the
       // credential case. A rate limit or an outage still says what it is.
       if (mapped === "AUTH_INCORRECT_PASSWORD") {
-        return failAdminLogin(startedAt, ipKey, incorrectAdminCredentials(error ?? undefined));
+        return failAdminLogin(startedAt, ipKey, incorrectAdminCredentials(error));
       }
-      throw new AppError(mapped, { cause: error ?? undefined });
+      throw new AppError(mapped, { cause: error });
     }
 
-    const user = await prisma.user.findUnique({ where: { authId: data.user.id } });
+    const user = await prisma.user.findUnique({ where: { authId: signIn.authId } });
     if (!user || !isAdminConsoleRole(user.role) || !user.isActive || user.deletedAt) {
-      await supabase.auth.signOut();
+      // Only reachable when the identity behind this email maps to some other
+      // (or no) LITRACK row — drift between the two, never a normal sign-in.
+      await discardNewSession(signIn.authId);
       await writeAudit({
         userId: user?.id,
         action: AUDIT_ACTIONS.LOGIN_DENIED,
@@ -658,18 +683,16 @@ export const loginAdmin = action("loginAdmin", async (formData: FormData): Promi
 
     redirect(roleHomePath(user.role));
   }
-  // The try/catch that used to live here sniffed error messages for "SUPABASE",
-  // "Prisma" and "Environment variable not found", then told an anonymous
-  // visitor to set DATABASE_URL on Vercel. Both configuration failures now
-  // throw CONFIG_MISSING from where they happen, and the wrapper gives the
-  // person a reference while the variable names go to the error record.
+  // Configuration failures throw CONFIG_MISSING from where they happen, and
+  // the wrapper gives the person a reference while the variable names go to
+  // the error record.
 }, { verb: "sign you in" });
 
 /**
  * Charge a failed admin sign-in to its address, then hold the response until
  * `ADMIN_FAILURE_MIN_MS` has passed since the action began. An unknown handle
- * skips the Supabase round-trip, so without the floor it would answer
- * measurably faster than a real account with a wrong password.
+ * skips the identity lookup and session write, so without the floor it would
+ * answer measurably faster than a real account with a wrong password.
  */
 async function failAdminLogin(startedAt: number, ipKey: string, err: AppError): Promise<never> {
   // checkRateLimit never throws (it falls back to memory), so the pad always runs.
@@ -700,60 +723,43 @@ function incorrectAdminCredentials(cause?: unknown): AppError {
  * always redirects; anything that escapes is recorded by `onRequestError`.
  */
 export async function logoutAction(): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+  // Fresh: whether this session is an impersonation decides how much of it
+  // ends, so it must come from the session row, not a cookie cache.
+  const session = await getAuthSession({ fresh: true });
   let appUserId: string | null = null;
   let schoolId: string | null = null;
-  if (authUser) {
+  if (session) {
     const row = await prisma.user.findUnique({
-      where: { authId: authUser.id },
+      where: { authId: session.user.id },
       select: { id: true, schoolId: true },
     });
     appUserId = row?.id ?? null;
     schoolId = row?.schoolId ?? null;
   }
 
-  // Whose session is ending decides how much of it ends, and has to be read
-  // before the clear below removes the ticket that says so.
-  //
-  // An admin inside an impersonation ends ONLY the impersonation session: the
-  // default global scope would delete every session the target has, logging a
-  // teacher out of their own phone and laptop because an admin clicked Sign out
-  // in their sidebar. `local` is `POST /logout?scope=local` with this session's
-  // token, which GoTrue answers by deleting this one session row — so it is
-  // still revoked server-side, not merely dropped from this browser.
-  //
-  // Any valid signed ticket makes this browser's session impersonation-related,
-  // even when its binding is stale after a target re-login. Keep that logout
-  // local so an old ticket cannot make a teacher lose unrelated sessions.
-  const ticketContext = await readImpersonationContext();
-  const sessionCheck = ticketContext ? await checkCurrentSession(supabase.auth) : null;
-  if (sessionCheck?.status === "unavailable") {
-    throw new AppError("AUTH_PROVIDER_ERROR", {
-      detail: "Could not verify the impersonated session before sign-out; ticket retained",
-    });
+  const adminAuthId = session?.session.impersonatedBy ?? null;
+  if (adminAuthId) {
+    // An admin inside an impersonation ends ONLY the impersonation session:
+    // revoking every session the target has would log a teacher out of their
+    // own phone and laptop because an admin clicked Sign out in their sidebar.
+    // The row is deleted server-side, not merely dropped from this browser.
+    //
+    // Keep the admin-session cookie until that delete is confirmed: clearing
+    // it first on a failure would strand the admin in the target session with
+    // no way back.
+    if (!(await endCurrentSession())) {
+      throw new AppError("AUTH_PROVIDER_ERROR", {
+        detail: "Ending the impersonated session failed; admin session cookie retained",
+      });
+    }
+    await expireImpersonationCookies();
+  } else {
+    // Everywhere, as the old provider's default global sign-out did. The
+    // revoke is a plain row delete, so it holds even if the cookie-clearing
+    // call above it fails.
+    await endCurrentSession();
+    if (session) await revokeAllSessions(session.user.id);
   }
-  const impersonation =
-    ticketContext && sessionCheck?.status === "live" &&
-    sessionCheck.sessionId === ticketContext.ticket.sessionId
-      ? ticketContext
-      : null;
-
-  // Keep the ticket until Supabase confirms sign-out. Session binding makes a
-  // leftover ticket useless to any later login, while clearing first on a
-  // network failure strands the admin in the target session without a banner.
-  const { error: signOutError } = await supabase.auth.signOut({
-    scope: ticketContext ? "local" : "global",
-  });
-  if (signOutError) {
-    throw new AppError("AUTH_PROVIDER_ERROR", {
-      cause: signOutError,
-      detail: "Supabase sign-out failed; impersonation ticket retained",
-    });
-  }
-  await clearImpersonationCookie();
 
   // Signing out ends the demo too. "Open demo session" promises the training
   // tenant disappears when the sitting ends, and the sitting usually ends here:
@@ -762,13 +768,17 @@ export async function logoutAction(): Promise<void> {
   // on the very next visit to /login in this browser.
   await clearDemoSessionCookie();
 
-  if (impersonation) {
+  if (adminAuthId) {
+    const admin = await prisma.user.findUnique({
+      where: { authId: adminAuthId },
+      select: { id: true },
+    });
     await writeAudit({
-      userId: impersonation.ticket.adminUserId,
+      userId: admin?.id ?? null,
       schoolId,
       action: AUDIT_ACTIONS.IMPERSONATION_END,
       resource: "User",
-      resourceId: impersonation.ticket.targetUserId,
+      resourceId: appUserId,
     });
   }
   await writeAudit({
@@ -782,12 +792,44 @@ export async function logoutAction(): Promise<void> {
 }
 
 /**
+ * Write a new password for a signed-in account: the identity's credential and
+ * the `User` flags/vault (`passwordChangeFields`) commit together or not at
+ * all. bcrypt runs first, outside the transaction, so ~100 ms of hashing never
+ * holds row locks. Every other session of the account is then ended (the
+ * current one stays), as the old provider did on a user-driven change.
+ */
+async function savePassword(
+  user: { id: string; authId: string; role: Parameters<typeof passwordChangeFields>[0] },
+  password: string
+): Promise<void> {
+  const hash = await hashPassword(password);
+  await prismaFresh.$transaction(async (tx) => {
+    await setPassword(user.authId, { hash }, tx);
+    await tx.user.update({
+      where: { id: user.id },
+      data: passwordChangeFields(user.role, password),
+    });
+  });
+  const current = await getAuthSession({ fresh: true });
+  await revokeOtherSessions(user.authId, current?.session.token ?? null);
+}
+
+/**
+ * Re-authentication before a credential change. Checks the stored hash only;
+ * it creates no session and leaves the current one alone.
+ */
+async function assertCurrentPassword(authId: string, currentPassword: string): Promise<void> {
+  if (await verifyAccountPassword(authId, currentPassword)) return;
+  throw errorOnFields("AUTH_CURRENT_PASSWORD_INCORRECT", ["currentPassword"]);
+}
+
+/**
  * Forced first-login / activation password change (current session).
  */
 export const setPasswordAction = action(
   "setPasswordAction",
   async (formData: FormData): Promise<DryRunResult<PasswordDryRunPreview>> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const user = await requireUser(undefined, true, { allowMustChangePassword: true });
 
@@ -803,16 +845,7 @@ export const setPasswordAction = action(
       return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.updateUser({ password: input.password });
-    // A reused or policy-rejected password fails again on the next attempt, so
-    // "please try again" was advice that could not work.
-    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: passwordChangeFields(user.role, input.password),
-    });
+    await savePassword(user, input.password);
 
     await writeAudit({
       userId: user.id,
@@ -859,20 +892,19 @@ export const skipPasswordChange = action(
 
   // A Super Admin signed in as this account never clears the real person's
   // first-sign-in prompt: no write, no audit row, just their role home (which
-  // `requireUser` lets a verified impersonation reach). Same HMAC + session
-  // binding proof as the banner. A signed ticket naming this account whose
-  // binding cannot be proven (auth outage, a different session) is refused
-  // rather than written through: the flag is only ever cleared with no
-  // impersonation ticket for this account in play.
-  const ticketForThisUser = (await readImpersonationContext())?.ticket.targetUserId === user.id;
-  if (ticketForThisUser) {
-    const supabase = await createSupabaseServerClient();
-    if (await isVerifiedImpersonationOf(supabase.auth, user.id)) {
+  // `requireUser` lets a verified impersonation reach). The proof is the
+  // session row's `impersonatedBy`, read fresh. An impersonation of this
+  // account that the cookie cache shows but the fresh read cannot confirm
+  // (a read failure, a session just ended) is refused rather than written
+  // through: the flag is only ever cleared with no impersonation in play.
+  const impersonatingThisUser = (await readImpersonation())?.targetUserId === user.id;
+  if (impersonatingThisUser) {
+    if (await isVerifiedImpersonationOf(user.id)) {
       redirect(roleHomePath(user.role));
     }
     throw new AppError("AUTH_FORBIDDEN", {
       params: { what: "this account" },
-      detail: `skipPasswordChange refused: impersonation ticket for ${user.id} present but not proven bound`,
+      detail: `skipPasswordChange refused: impersonation of ${user.id} shown but not proven by the session row`,
     });
   }
 
@@ -904,7 +936,7 @@ export const changePasswordAction = action(
   async (
     formData: FormData
   ): Promise<{ ok: true; data?: { dryRun: true; preview: PasswordDryRunPreview } }> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const user = await requireUser();
 
@@ -921,30 +953,9 @@ export const changePasswordAction = action(
       return { ok: true, data: { dryRun: true, preview: { validated: true, changed: false } } };
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { error: verifyErr } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: input.currentPassword,
-    });
-    if (verifyErr) {
-      // A 429 here means Supabase declined to check the password at all. Saying
-      // "incorrect" would send the person off to reset a password that is fine.
-      const code = mapSupabaseAuthError(verifyErr, "server");
-      if (code === "AUTH_INCORRECT_PASSWORD") {
-        throw errorOnFields("AUTH_CURRENT_PASSWORD_INCORRECT", ["currentPassword"], {
-          cause: verifyErr,
-        });
-      }
-      throw new AppError(code, { cause: verifyErr });
-    }
+    await assertCurrentPassword(user.authId, input.currentPassword);
 
-    const { error } = await supabase.auth.updateUser({ password: input.password });
-    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: passwordChangeFields(user.role, input.password),
-    });
+    await savePassword(user, input.password);
 
     await writeAudit({
       userId: user.id,
@@ -961,14 +972,15 @@ export const changePasswordAction = action(
 );
 
 /**
- * Change account email — re-auth with current password, then dual-write Auth + Prisma.
+ * Change account email — re-auth with current password, then write the
+ * identity's and the `User` row's address in one transaction.
  */
 export const changeEmailAction = action(
   "changeEmailAction",
   async (
     formData: FormData
   ): Promise<{ ok: true; data?: { dryRun: true; preview: EmailDryRunPreview } }> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const user = await requireUser();
 
@@ -991,20 +1003,7 @@ export const changeEmailAction = action(
       };
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { error: verifyErr } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: input.currentPassword,
-    });
-    if (verifyErr) {
-      const code = mapSupabaseAuthError(verifyErr, "server");
-      if (code === "AUTH_INCORRECT_PASSWORD") {
-        throw errorOnFields("AUTH_CURRENT_PASSWORD_INCORRECT", ["currentPassword"], {
-          cause: verifyErr,
-        });
-      }
-      throw new AppError(code, { cause: verifyErr });
-    }
+    await assertCurrentPassword(user.authId, input.currentPassword);
 
     const taken = await prisma.user.findFirst({
       where: { email: newEmail, deletedAt: null, NOT: { id: user.id } },
@@ -1013,39 +1012,14 @@ export const changeEmailAction = action(
     if (taken) throw new AppError("AUTH_EMAIL_IN_USE");
 
     const previousWasSynthetic = isSyntheticEmail(user.email);
-    const oldEmail = user.email;
 
-    // Throws CONFIG_MISSING when the service-role key is absent, which the
-    // wrapper answers with a reference — the old "temporarily unavailable"
-    // implied waiting would fix a permanent misconfiguration.
-    const admin = createSupabaseAdminClient();
-
-    const { error: authErr } = await admin.auth.admin.updateUserById(user.authId, {
-      email: newEmail,
-      email_confirm: true,
+    // One transaction, so the address a person signs in with and the address
+    // LITRACK knows them by can never disagree (invariant I2). `setEmail`
+    // throws AUTH_EMAIL_IN_USE if another identity already holds the address.
+    await prismaFresh.$transaction(async (tx) => {
+      await setEmail(user.authId, newEmail, tx);
+      await tx.user.update({ where: { id: user.id }, data: { email: newEmail } });
     });
-    if (authErr) throw new AppError(mapSupabaseAuthError(authErr, "server"), { cause: authErr });
-
-    try {
-      await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
-    } catch (dbErr) {
-      // Put the address back, or the person signs in with an address LITRACK
-      // does not know. If even that fails, the two systems disagree about who
-      // this account is — the one failure here that must page a human, because
-      // no amount of retrying by the user can reconcile them.
-      const { error: rollbackErr } = await admin.auth.admin.updateUserById(user.authId, {
-        email: oldEmail,
-        email_confirm: true,
-      });
-      if (rollbackErr) {
-        throw new AppError("AUTH_EMAIL_PARTIAL_UPDATE", {
-          cause: dbErr,
-          detail: `Auth email changed to the new address but the LITRACK row still holds the old one, and the rollback failed: ${rollbackErr.message}`,
-          context: { reason: "email_rollback_failed" },
-        });
-      }
-      throw dbErr;
-    }
 
     await writeAudit({
       userId: user.id,
@@ -1070,7 +1044,7 @@ export const changeEmailAction = action(
 export const requestPasswordReset = action(
   "requestPasswordReset",
   async (formData: FormData): Promise<{ ok: true }> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const input = parseInput(forgotPasswordSchema, { email: formData.get("email") });
 
@@ -1091,7 +1065,7 @@ export const requestPasswordReset = action(
         );
         if (!withinCooldown) {
           try {
-            await sendPasswordRecoveryEmail(email, resolveRequestOrigin());
+            await sendPasswordRecoveryEmail(email, resolveRequestOrigin(), existing.authId);
           } catch (error) {
             // The person must still see "sent" — telling them it failed would
             // tell a stranger the account exists. But a mail sender that has
@@ -1126,62 +1100,93 @@ export const requestPasswordReset = action(
   { verb: "send the reset email" }
 );
 
+/** Expire the reset-token cookie with the attributes `/auth/confirm/verify` set it with. */
+async function expireResetCookie(): Promise<void> {
+  (await cookies()).set(RESET_COOKIE, "", {
+    httpOnly: true,
+    secure: authCookiesSecure(),
+    sameSite: "lax",
+    path: RESET_COOKIE_PATH,
+    maxAge: 0,
+  });
+}
+
 /**
- * Complete password recovery after Supabase redirects to /auth/reset with a recovery session.
+ * Complete password recovery. The emailed token reaches here only as the
+ * httpOnly `litrack_reset` cookie `/auth/confirm/verify` set (scoped to
+ * `/auth`, which is where this action is posted), never in a URL.
+ *
+ * The token is used up in the same transaction that writes the new password,
+ * so a link works exactly once and a failed save leaves it usable. Then the
+ * person is signed in with the new password and sent to their role home.
  */
 export const completePasswordReset = action(
   "completePasswordReset",
   async (formData: FormData): Promise<never> => {
-    assertSupabaseConfigured();
+    assertAuthConfigured();
 
     const input = parseInput(setPasswordSchema, {
       password: formData.get("password"),
       confirmPassword: formData.get("confirmPassword"),
     });
 
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user: authUser },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (!authUser) {
-      // An outage is not an expired link: telling the person to request a new
-      // one would burn a good token while Supabase is down.
-      if (userError && isAuthServiceUnreachable(userError)) {
-        throw new AppError("AUTH_PROVIDER_ERROR", {
-          cause: userError,
-          detail: "Could not read the recovery session: auth service unreachable",
-        });
-      }
-      // The link, not the password: sending them to type a new one again would
-      // fail exactly the same way.
-      throw new AppError("AUTH_RESET_LINK_EXPIRED");
-    }
+    const token = (await cookies()).get(RESET_COOKIE)?.value;
+    const live = await peekResetToken(token);
+    // The link, not the password: sending them to type a new one again would
+    // fail exactly the same way.
+    if (!token || !live) throw new AppError("AUTH_RESET_LINK_EXPIRED");
 
-    const rate = await checkRateLimit(`password:reset:${authUser.id}`, PASSWORD_RATE);
+    const rate = await checkRateLimit(`password:reset:${live.authId}`, PASSWORD_RATE);
     if (!rate.ok) throw tooManyAttempts(rate.retryAfterMs);
 
-    const { error } = await supabase.auth.updateUser({ password: input.password });
-    if (error) throw new AppError(mapSupabaseAuthError(error, "server"), { cause: error });
-
-    const appUser = await prisma.user.findUnique({ where: { authId: authUser.id } });
-    if (appUser) {
-      await prisma.user.update({
-        where: { id: appUser.id },
-        data: passwordChangeFields(appUser.role, input.password),
+    // Outside the transaction: ~100 ms of bcrypt must not hold row locks.
+    const hash = await hashPassword(input.password);
+    const appUser = await prismaFresh.$transaction(async (tx) => {
+      // Throws AUTH_RESET_LINK_EXPIRED unless this request is the one that
+      // used the token up, so of two concurrent submits only one writes.
+      const authId = await consumeResetToken(token, tx);
+      await setPassword(authId, { hash }, tx);
+      const row = await tx.user.findUnique({
+        where: { authId },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          schoolId: true,
+          isActive: true,
+          deletedAt: true,
+        },
       });
-      await writeAudit({
-        userId: appUser.id,
-        schoolId: appUser.schoolId,
-        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
-        resource: "User",
-        resourceId: appUser.id,
-        metadata: { reason: "password_reset" },
-      });
-      redirect(roleHomePath(appUser.role));
-    }
+      if (row) {
+        await tx.user.update({
+          where: { id: row.id },
+          data: passwordChangeFields(row.role, input.password),
+        });
+      }
+      return row;
+    });
 
-    redirect("/login");
+    await expireResetCookie();
+    // Whoever held the old password (or a stolen cookie) is signed out.
+    await revokeAllSessions(live.authId);
+
+    if (!appUser) redirect("/login");
+
+    await writeAudit({
+      userId: appUser.id,
+      schoolId: appUser.schoolId,
+      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+      resource: "User",
+      resourceId: appUser.id,
+      metadata: { reason: "password_reset" },
+    });
+
+    // Only an account that may use LITRACK is signed in; anyone else picks up
+    // the usual explanation at the sign-in page. A failed automatic sign-in
+    // is not a failed reset — the password is saved — so it lands there too.
+    if (!appUser.isActive || appUser.deletedAt) redirect("/login");
+    const signIn = await signInWithPassword(appUser.email, input.password);
+    redirect(signIn.ok ? roleHomePath(appUser.role) : "/login");
   },
   { verb: "save your new password" }
 );

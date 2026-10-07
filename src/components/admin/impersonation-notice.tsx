@@ -1,8 +1,4 @@
-import {
-  readBoundImpersonationSession,
-  type ImpersonationContext,
-} from "@/lib/auth/impersonation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readImpersonation, type ImpersonationState } from "@/lib/auth/impersonation-session";
 import { readTestLabSession } from "@/lib/auth/test-lab";
 import { findTestLabFixtures } from "@/lib/demo/test-fixtures";
 import { buildTestLabChecklist } from "@/lib/test-lab/checklist";
@@ -34,7 +30,7 @@ export async function ImpersonationNotice({
    * A bound result already read by the enclosing layout. Supplying it keeps
    * every layout decision and this notice tied to the same live session check.
    */
-  impersonation?: ImpersonationContext | null;
+  impersonation?: ImpersonationState | null;
   /**
    * The impersonated user's own school id and role. Only passed by the
    * School Head and Teacher app layouts — the pages a Test Lab session
@@ -44,11 +40,8 @@ export async function ImpersonationNotice({
   schoolId?: string | null;
   role?: "SCHOOL_HEAD" | "TEACHER";
 }) {
-  const context =
-    impersonation === undefined
-      ? await readBoundImpersonationSession((await createSupabaseServerClient()).auth)
-      : impersonation;
-  if (context?.ticket.targetUserId !== userId) return null;
+  const context = impersonation === undefined ? await readImpersonation() : impersonation;
+  if (context?.targetUserId !== userId) return null;
 
   const testLab =
     role && (await readTestLabSession({ id: userId, schoolId: schoolId ?? null }))

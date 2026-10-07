@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireUser = vi.fn();
 const updateMany = vi.fn();
-const createSupabaseServerClient = vi.fn();
-const readBoundImpersonationSession = vi.fn();
+const readImpersonation = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...args: unknown[]) => requireUser(...args),
@@ -13,14 +12,8 @@ vi.mock("@/lib/prisma", () => ({
   prisma: { user: { updateMany: (...args: unknown[]) => updateMany(...args) } },
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: (...args: unknown[]) =>
-    createSupabaseServerClient(...args),
-}));
-
-vi.mock("@/lib/auth/impersonation", () => ({
-  readBoundImpersonationSession: (...args: unknown[]) =>
-    readBoundImpersonationSession(...args),
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  readImpersonation: (...args: unknown[]) => readImpersonation(...args),
 }));
 
 import { recordTeacherPresence } from "@/lib/actions/presence";
@@ -38,8 +31,7 @@ describe("recordTeacherPresence", () => {
     vi.clearAllMocks();
     requireUser.mockResolvedValue(TEACHER);
     updateMany.mockResolvedValue({ count: 1 });
-    createSupabaseServerClient.mockResolvedValue({ auth: { getSession: vi.fn() } });
-    readBoundImpersonationSession.mockResolvedValue(null);
+    readImpersonation.mockResolvedValue(null);
   });
 
   it("updates only the authenticated active teacher using server time and an atomic one-minute cutoff", async () => {
@@ -66,8 +58,11 @@ describe("recordTeacherPresence", () => {
   });
 
   it("does not write presence for a bound Super Admin impersonation session", async () => {
-    readBoundImpersonationSession.mockResolvedValue({
-      ticket: { targetUserId: TEACHER.id },
+    readImpersonation.mockResolvedValue({
+      adminAuthId: "admin-auth",
+      adminUserId: "admin-1",
+      targetUserId: TEACHER.id,
+      returnTo: null,
       expired: false,
     });
 

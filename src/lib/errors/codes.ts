@@ -174,6 +174,17 @@ export const ERRORS = {
     message:
       "Your sign-in email changed but LITRACK couldn't save it. Don't try again yet — contact your administrator.",
   },
+  /**
+   * A LITRACK account with no sign-in identity behind it (`AuthUser`), e.g. a
+   * restored teacher whose identity was deleted with the account. Thrown by
+   * `@/lib/auth/identity`; callers usually re-map it to their own code.
+   */
+  IDENTITY_NOT_FOUND: {
+    status: 409,
+    severity: "system",
+    message:
+      "This account has no sign-in set up. Contact your division office to reset its password.",
+  },
 
   // ── Admin accounts console ───────────────────────────────────────────────
   /**

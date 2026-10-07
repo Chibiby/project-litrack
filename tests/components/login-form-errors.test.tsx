@@ -1,55 +1,59 @@
 import { describe, expect, it } from "vitest";
 import { formatMessage } from "@/lib/errors/codes";
-import { loginFailureReasonFor, mapSupabaseAuthError } from "@/lib/errors/supabase";
+import { loginFailureReasonFor, mapAuthError } from "@/lib/errors/auth-provider";
 
 /**
- * What the login form says after the browser's own password grant fails.
+ * What the login form says after the server's Better Auth password check fails.
  *
- * The component hands the error to `mapSupabaseAuthError(err, "browser")` and
- * shows the catalog message for the resulting code, so these cases pin the same
- * decision the form makes without rendering it.
+ * The server action hands the Better Auth error to `mapAuthError` and returns
+ * the catalog message for the resulting code, so these cases pin the same
+ * decision without rendering anything.
  *
- * The browser is the only place that can tell a refusal from a request that
- * never arrived — the server sees nothing either way — which is why the offline
- * case below matters most.
+ * Better Auth only answers with a refusal when it actually checked (or
+ * refused to check) the password; anything that is not one of its APIErrors is
+ * our infrastructure, never "wrong password". A request that never arrived is
+ * the browser's NETWORK_OFFLINE / SERVER_UNREACHABLE, covered in
+ * login-form-failures.test.tsx.
  */
 
-const WRONG_PASSWORD = {
-  status: 400,
-  code: "invalid_credentials",
-  message: "Invalid login credentials",
-};
-const RATE_LIMITED = { status: 429, message: "Request rate limit reached" };
-const OFFLINE = { name: "AuthRetryableFetchError", status: 0, message: "Failed to fetch" };
+/** Shape of better-call's APIError: name, numeric statusCode, body.code. */
+function apiError(statusCode: number, code?: string, message = "refused") {
+  return Object.assign(new Error(message), { name: "APIError", statusCode, body: { code, message } });
+}
 
-describe("browser sign-in failures", () => {
+const WRONG_PASSWORD = apiError(401, "INVALID_EMAIL_OR_PASSWORD", "Invalid email or password");
+const RATE_LIMITED = apiError(429, undefined, "Too many requests. Please try again later.");
+const CRASHED = new TypeError("fetch failed");
+
+describe("sign-in failures", () => {
   it("says the password is wrong only when it was actually checked", () => {
-    const code = mapSupabaseAuthError(WRONG_PASSWORD, "browser");
+    const code = mapAuthError(WRONG_PASSWORD);
     expect(code).toBe("AUTH_INCORRECT_PASSWORD");
     expect(formatMessage(code)).toBe("Incorrect password. Check it and try again.");
   });
 
-  it("blames the connection when the request never arrived", () => {
-    const code = mapSupabaseAuthError(OFFLINE, "browser");
-    expect(code).toBe("AUTH_SERVICE_UNREACHABLE");
-    expect(formatMessage(code)).toMatch(/internet connection/i);
-    expect(formatMessage(code)).not.toMatch(/password/i);
+  it("never blames the password for something that is not a Better Auth refusal", () => {
+    const code = mapAuthError(CRASHED);
+    expect(code).toBe("AUTH_PROVIDER_ERROR");
+    expect(formatMessage(code)).not.toMatch(/incorrect password/i);
+  });
+
+  it("blames the connection, not the password, when the sign-in service cannot be reached", () => {
+    const message = formatMessage("AUTH_SERVICE_UNREACHABLE");
+    expect(message).toMatch(/internet connection/i);
+    expect(message).not.toMatch(/password/i);
   });
 
   it("tells someone rate-limited not to reset a password that is fine", () => {
-    const code = mapSupabaseAuthError(RATE_LIMITED, "browser");
+    const code = mapAuthError(RATE_LIMITED);
+    expect(code).toBe("AUTH_PROVIDER_RATE_LIMITED");
     expect(formatMessage(code)).toMatch(/no need to reset/i);
   });
 
   it("records each cause under its own audit reason", () => {
-    expect(loginFailureReasonFor(mapSupabaseAuthError(WRONG_PASSWORD, "browser"))).toBe(
-      "incorrect_credentials"
-    );
-    expect(loginFailureReasonFor(mapSupabaseAuthError(RATE_LIMITED, "browser"))).toBe(
-      "rate_limited"
-    );
-    expect(loginFailureReasonFor(mapSupabaseAuthError(OFFLINE, "browser"))).toBe(
-      "service_unreachable"
-    );
+    expect(loginFailureReasonFor(mapAuthError(WRONG_PASSWORD))).toBe("incorrect_credentials");
+    expect(loginFailureReasonFor(mapAuthError(RATE_LIMITED))).toBe("rate_limited");
+    expect(loginFailureReasonFor("AUTH_SERVICE_UNREACHABLE")).toBe("service_unreachable");
+    expect(loginFailureReasonFor(mapAuthError(CRASHED))).toBe("provider_error");
   });
 });

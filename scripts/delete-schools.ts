@@ -12,8 +12,7 @@
  * which school you meant. Schools you did not name are never touched, and neither are
  * User rows with no schoolId (Super Admins).
  *
- * Requires DATABASE_URL or DIRECT_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- * read from the shell or from `.env.local`.
+ * Requires DATABASE_URL or DIRECT_URL, read from the shell or from `.env.local`.
  *
  * DELETION IS IRREVERSIBLE. It does NOT rely on cascade: several FKs in this subtree are
  * ON DELETE RESTRICT (verified against prisma/migrations/*​/migration.sql, since Prisma
@@ -51,8 +50,8 @@
  *    silently orphan its accounts with schoolId nulled — indistinguishable from a Super
  *    Admin. User rows are therefore deleted explicitly, by an id list captured up front.
  */
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
 import { connectScriptPrisma, loadEnvFile } from "./lib/script-db";
+import { deleteIdentities } from "./lib/script-identity";
 
 export type DeleteCliOptions = {
   schools: string[];
@@ -61,8 +60,6 @@ export type DeleteCliOptions = {
 
 /** A school subtree is small; the ceiling is latency, not work. */
 const TX_TIMEOUT_MS = 120_000;
-/** The Supabase admin API is rate-sensitive. */
-const CONCURRENCY = 5;
 
 export function parseDeleteCliArgs(argv: string[]): DeleteCliOptions {
   const schools: string[] = [];
@@ -98,20 +95,6 @@ function maskEmail(email: string): string {
   const local = email.slice(0, at);
   const head = local.slice(0, Math.min(3, local.length));
   return `${head}${"*".repeat(Math.max(1, local.length - head.length))}${email.slice(at)}`;
-}
-
-async function inParallel<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    for (;;) {
-      const index = cursor++;
-      if (index >= items.length) return;
-      results[index] = await fn(items[index]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 }
 
 async function main(): Promise<void> {
@@ -239,7 +222,7 @@ async function main(): Promise<void> {
     ];
     for (const [label, value] of rows) console.log(`  ${label.padEnd(22)} ${value}`);
 
-    console.log(`\n  Supabase auth users to delete: ${doomedUsers.length}`);
+    console.log(`\n  Auth identities to delete: ${doomedUsers.length}`);
     for (const u of doomedUsers) {
       console.log(`    ${u.role.padEnd(12)} ${maskEmail(u.email)}`);
     }
@@ -258,30 +241,16 @@ async function main(): Promise<void> {
     }
 
     // ---- Phase 3: delete the auth identities -------------------------------
-    heading("PHASE 3 — DELETE SUPABASE AUTH USERS");
-    const supabaseAdmin = createSupabaseAdminClient();
-    let authDeleted = 0;
-    const authFailures: { authId: string; message: string }[] = [];
-    await inParallel(doomedUsers, CONCURRENCY, async (u) => {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(u.authId);
-      // Already gone counts as success — the goal is "no orphan", not "I did it".
-      if (error && !/not found/i.test(error.message)) {
-        authFailures.push({ authId: u.authId, message: error.message });
-      } else {
-        authDeleted += 1;
-      }
-    });
-    console.log(`auth users deleted (or already absent): ${authDeleted}`);
-
-    // A real failure means that identity is still live. Deleting its Prisma row anyway
-    // would orphan it the other direction — a working login with no User/School behind
-    // it. Abort before touching Prisma; re-run once Supabase is healthy.
-    if (authFailures.length) {
-      for (const f of authFailures) console.error(`  auth user ${f.authId}: ${f.message}`);
-      throw new Error(
-        `${authFailures.length} Supabase auth user(s) failed to delete — aborting before touching Prisma rows.`,
-      );
-    }
+    heading("PHASE 3 — DELETE AUTH IDENTITIES");
+    // Better Auth rows live in the same database. Sessions and accounts cascade
+    // from AuthUser. An already-absent identity simply deletes zero rows. A thrown
+    // error here aborts before any Prisma row is touched, so no working login is
+    // left behind with no User/School behind it; re-run once the database is healthy.
+    const authDeleted = await deleteIdentities(
+      prisma,
+      doomedUsers.map((u) => u.authId),
+    );
+    console.log(`auth identities deleted: ${authDeleted} (of ${doomedUsers.length}; the rest were already absent)`);
 
     // ---- Phase 4: delete the rows ------------------------------------------
     heading("PHASE 4 — DELETE ROWS");

@@ -29,7 +29,7 @@ const prismaMock = {
     ),
   },
 };
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/prisma", () => ({ prisma: prismaMock, prismaFresh: prismaMock }));
 
 const requireUser = vi.fn(async () => ({ id: "admin-1", role: "SUPER_ADMIN" }));
 vi.mock("@/lib/auth/session", () => ({ requireUser: (...a: unknown[]) => requireUser(...(a as [])) }));
@@ -46,14 +46,17 @@ vi.mock("@/lib/audit", async () => {
   };
 });
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({ auth: { admin: {} } }),
+// Reveal never writes an identity; these keep `accounts.ts` from loading Better Auth.
+vi.mock("@/lib/auth/identity", () => ({ setPassword: vi.fn(), setRole: vi.fn() }));
+vi.mock("@/lib/auth/auth-session", () => ({
+  getAuthSession: vi.fn(async () => null),
+  endCurrentSession: vi.fn(async () => true),
 }));
-vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => ({}) }));
-vi.mock("@/lib/auth/impersonation", () => ({
-  clearImpersonationCookie: vi.fn(),
-  readImpersonationTicket: vi.fn(),
-  setImpersonationCookie: vi.fn(),
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(),
+  readImpersonation: vi.fn(async () => null),
+  startImpersonationSession: vi.fn(),
+  stopImpersonationSession: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({

@@ -11,8 +11,7 @@ import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alert
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
-import { readBoundImpersonationSession } from "@/lib/auth/impersonation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readImpersonation } from "@/lib/auth/impersonation-session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +22,8 @@ export default async function TeacherAppLayout({
 }) {
   const user = await requireUser("TEACHER");
 
-  const supabase = await createSupabaseServerClient();
-  const impersonation = await readBoundImpersonationSession(supabase.auth);
-  const impersonating = impersonation?.ticket.targetUserId === user.id;
+  const impersonation = await readImpersonation();
+  const impersonating = impersonation?.targetUserId === user.id;
 
   // Unlike the School Head layout, this gate is NOT bypassed while
   // impersonating. A stuck profiling wizard is one of the two things this

@@ -76,10 +76,8 @@ describe("reportRequestError", () => {
   });
 
   it("attributes the error to the signed-in account when the cookie says who", async () => {
-    const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-    const token = `${part({ alg: "HS256" })}.${part({ sub: "auth-42" })}.sig`;
-    const cookie = `sb-proj-auth-token=base64-${Buffer.from(
-      JSON.stringify({ access_token: token })
+    const cookie = `litrack.session_data=${Buffer.from(
+      JSON.stringify({ session: { session: {}, user: { id: "auth-42" } }, signature: "sig" })
     ).toString("base64url")}`;
     await reportRequestError(new Error("boom"), { ...REQUEST, headers: { cookie } }, CONTEXT);
     expect(reportError.mock.calls[0][1]).toMatchObject({

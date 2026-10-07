@@ -1,17 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { peekResetToken } from "@/lib/auth/password-reset";
+import { authCookiesSecure } from "@/lib/auth/auth-cookies";
+import { RESET_COOKIE, RESET_COOKIE_PATH } from "@/lib/auth/recovery-email";
 
 /**
- * Consumes the emailed recovery `token_hash` — the only place in this flow
- * that does. Reached exclusively via a same-origin form POST from
- * `/auth/confirm` (see that page for why GET must never call `verifyOtp`).
+ * Lands the emailed recovery token. Reached exclusively via a same-origin form
+ * POST from `/auth/confirm` (see that page for why a GET must never act on the
+ * token).
  *
- * Runs as a route handler, not a Server Component render, because the
- * resulting session cookies must actually be written to the response.
+ * The token is checked here but NOT used up: `completePasswordReset` consumes
+ * it in the same transaction that writes the new password, so an abandoned
+ * reset page leaves the link working until it expires. What this route does is
+ * move the token out of the URL and into an httpOnly cookie scoped to `/auth`,
+ * so nothing past `/auth/confirm` ever carries it in a URL (history, Referer,
+ * logs).
  *
- * Only `type=recovery` is accepted: this endpoint exists to land a password
- * reset, not to be a general-purpose OTP verifier for other Supabase link
- * types.
+ * Only `type=recovery` is accepted: this endpoint lands a password reset and
+ * nothing else.
  */
 
 export const dynamic = "force-dynamic";
@@ -26,11 +31,15 @@ function invalidLinkRedirect(request: NextRequest): NextResponse {
   return NextResponse.redirect(url, 303);
 }
 
+function resetPageRedirect(request: NextRequest): NextResponse {
+  return NextResponse.redirect(new URL("/auth/reset", request.url), 303);
+}
+
 /**
  * Only this site's own /auth/confirm page may submit here. A cross-site form
- * could otherwise post an attacker's own token_hash and sign the visitor into
- * the attacker's account (login CSRF). Browsers send Sec-Fetch-Site on every
- * form POST; Origin is the fallback for older ones.
+ * could otherwise post an attacker's own token and plant it in the visitor's
+ * browser (login CSRF). Browsers send Sec-Fetch-Site on every form POST;
+ * Origin is the fallback for older ones.
  */
 function isSameOriginPost(request: NextRequest): boolean {
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -45,33 +54,37 @@ export async function POST(request: NextRequest): Promise<Response> {
     return invalidLinkRedirect(request);
   }
   const formData = await request.formData();
-  const tokenHash = formData.get("token_hash");
+  const token = formData.get("token_hash");
   const type = formData.get("type");
 
-  if (typeof tokenHash !== "string" || !tokenHash || type !== "recovery") {
+  if (typeof token !== "string" || !token || type !== "recovery") {
     return invalidLinkRedirect(request);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
-  if (error) {
-    // Never echo `error.message` — it can distinguish "expired" from
-    // "already used" from "unknown token", which is more than a stranger
-    // holding a stale link needs to learn.
+  const live = await peekResetToken(token);
+  if (!live) {
+    // Never say which: "expired", "already used" and "unknown" are more than a
+    // stranger holding a stale link needs to learn.
     //
-    // But "already used" also covers the ordinary case of a person who
-    // clicked "Continue" once already (a second tab, the back button, a
-    // retried submit): if this request already carries the session that
-    // earlier verifyOtp call set, send them on to the reset page instead of
-    // an error that isn't true for them anymore.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      return NextResponse.redirect(new URL("/auth/reset", request.url), 303);
+    // But "already used" also covers a person who clicked "Continue" once
+    // already (a second tab, the back button, a retried submit) and still
+    // holds a live reset cookie from that click: send them on to the reset
+    // page instead of an error that isn't true for them.
+    const existing = request.cookies.get(RESET_COOKIE)?.value;
+    if (existing && (await peekResetToken(existing))) {
+      return resetPageRedirect(request);
     }
     return invalidLinkRedirect(request);
   }
 
-  return NextResponse.redirect(new URL("/auth/reset", request.url), 303);
+  const response = resetPageRedirect(request);
+  const remainingSeconds = Math.floor((live.expiresAt.getTime() - Date.now()) / 1000);
+  response.cookies.set(RESET_COOKIE, token, {
+    httpOnly: true,
+    secure: authCookiesSecure(),
+    sameSite: "lax",
+    path: RESET_COOKIE_PATH,
+    maxAge: Math.max(remainingSeconds, 1),
+  });
+  return response;
 }

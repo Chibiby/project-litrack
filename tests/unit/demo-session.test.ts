@@ -9,8 +9,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 // Must be set before the module is imported: the HMAC key is read from env.
 beforeAll(() => {
-  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key-for-hmac";
+  process.env.BETTER_AUTH_SECRET = "test-better-auth-secret-for-hmac-0123456789";
 });
 
 const ADMIN_ID = "22222222-2222-4222-8222-222222222222";
@@ -64,16 +63,29 @@ describe("demo session cookie", () => {
     expect(decodeDemoSession(value, session.expiresAt + 1)).toBeNull();
   });
 
-  it("refuses to open a session without the service role key, as CONFIG_MISSING", async () => {
+  it("refuses to open a session without the auth secret, as CONFIG_MISSING", async () => {
     const { encodeDemoSession } = await mod();
-    const saved = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const saved = process.env.BETTER_AUTH_SECRET;
+    delete process.env.BETTER_AUTH_SECRET;
     try {
       expect(() => encodeDemoSession(ADMIN_ID)).toThrowError(
         expect.objectContaining({ name: "AppError", code: "CONFIG_MISSING" })
       );
     } finally {
-      process.env.SUPABASE_SERVICE_ROLE_KEY = saved;
+      process.env.BETTER_AUTH_SECRET = saved;
+    }
+  });
+
+  it("refuses to open a session when the auth secret is too short", async () => {
+    const { encodeDemoSession } = await mod();
+    const saved = process.env.BETTER_AUTH_SECRET;
+    process.env.BETTER_AUTH_SECRET = "too-short";
+    try {
+      expect(() => encodeDemoSession(ADMIN_ID)).toThrowError(
+        expect.objectContaining({ name: "AppError", code: "CONFIG_MISSING" })
+      );
+    } finally {
+      process.env.BETTER_AUTH_SECRET = saved;
     }
   });
 

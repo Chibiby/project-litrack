@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Supabase keeps exactly one live recovery token per user — each new
- * `generateLink` invalidates the previous email's link. Production data
+ * Exactly one live recovery token exists per identity — each new
+ * `issueResetToken` invalidates the previous email's link. Production data
  * showed most resends land within minutes of the last one (median gap 3.3
  * min), so `requestPasswordReset` skips sending again when the user's
  * current token is younger than the cooldown. The check is best-effort: a
@@ -18,25 +18,48 @@ const sendPasswordRecoveryEmail = vi.fn();
 const hasRecentRecoveryToken = vi.fn();
 const headersMock = vi.fn();
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const client = {
     user: {
       get findUnique() {
         return userFindUnique;
       },
     },
-  },
+  };
+  return { prisma: client, prismaFresh: client };
+});
+
+// Better Auth is the only auth backend: configured, never actually called here.
+vi.mock("@/lib/auth/better-auth", () => ({
+  isAuthConfigured: () => true,
+  getAuth: vi.fn(),
 }));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: async () => ({ auth: {} }),
+vi.mock("@/lib/auth/auth-session", () => ({
+  endCurrentSession: vi.fn(),
+  getAuthSession: vi.fn(),
+  revokeAllSessions: vi.fn(),
+  signInWithPassword: vi.fn(),
 }));
-
-vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn() }));
-
-vi.mock("@/lib/supabase/env", () => ({
-  isSupabaseConfigured: () => true,
-  SUPABASE_NOT_CONFIGURED_MESSAGE: "not configured",
+vi.mock("@/lib/auth/identity", () => ({
+  createIdentity: vi.fn(),
+  findIdentityByEmail: vi.fn(),
+  setEmail: vi.fn(),
+  setPassword: vi.fn(),
+  verifyAccountPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-hash", () => ({
+  DUMMY_BCRYPT_HASH: "dummy",
+  hashPassword: vi.fn(),
+  verifyPassword: vi.fn(),
+}));
+vi.mock("@/lib/auth/password-reset", () => ({
+  consumeResetToken: vi.fn(),
+  peekResetToken: vi.fn(),
+}));
+vi.mock("@/lib/auth/impersonation-session", () => ({
+  expireImpersonationCookies: vi.fn(),
+  isVerifiedImpersonationOf: vi.fn(),
+  readImpersonation: vi.fn(),
 }));
 
 vi.mock("@/lib/audit", () => ({
@@ -79,6 +102,8 @@ vi.mock("@/lib/auth/teacher-registration-helpers", () => ({
 vi.mock("@/lib/auth/synthetic-email", () => ({ isSyntheticEmail: () => false }));
 
 vi.mock("@/lib/auth/recovery-email", () => ({
+  RESET_COOKIE: "litrack_reset",
+  RESET_COOKIE_PATH: "/auth",
   get sendPasswordRecoveryEmail() {
     return sendPasswordRecoveryEmail;
   },
@@ -146,7 +171,8 @@ describe("requestPasswordReset — resend cooldown", () => {
 
     expect(sendPasswordRecoveryEmail).toHaveBeenCalledWith(
       "teacher@example.com",
-      "https://litrack.example.org"
+      "https://litrack.example.org",
+      "11111111-1111-1111-1111-111111111111"
     );
     expect(result).toEqual({ ok: true });
   });

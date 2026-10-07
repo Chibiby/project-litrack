@@ -5,12 +5,11 @@
  */
 
 import { ZodError } from "zod";
-import { isAuthError } from "@supabase/supabase-js";
 import { classifyDbFailure, dbFailureCode, isDatabaseError } from "@/lib/db-errors";
 import type { ErrorParams } from "./codes";
 import { AppError, type ErrorContext } from "./app-error";
 import { validationError } from "./validation";
-import { mapSupabaseAuthError } from "./supabase";
+import { authErrorCode, isAuthApiError, mapAuthError } from "./auth-provider";
 
 export type ClassifyOptions = {
   /** Completes "Couldn't {verb}" in database messages, e.g. "save the section". */
@@ -97,13 +96,13 @@ export function classifyError(err: unknown, options: ClassifyOptions = {}): AppE
     return new AppError(appCode, { ...base, params });
   }
 
-  if (isAuthError(err)) {
-    return new AppError(mapSupabaseAuthError(err, "server"), {
+  if (isAuthApiError(err)) {
+    return new AppError(mapAuthError(err), {
       cause: err,
       detail: detailOf(err),
       context: {
-        supabaseCode: typeof err.code === "string" ? err.code : null,
-        supabaseStatus: typeof err.status === "number" ? err.status : null,
+        authCode: authErrorCode(err),
+        authStatus: err.statusCode,
       },
     });
   }

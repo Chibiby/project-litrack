@@ -9,15 +9,15 @@
  *   npx tsx scripts/reset-district-admin-passwords.ts           # dry run (default)
  *   npx tsx scripts/reset-district-admin-passwords.ts --apply   # write
  *
- * Dry run writes nothing and prints no password: it names the database and
- * Supabase hosts, then lists every live (deletedAt null) DISTRICT_ADMIN and
+ * Dry run writes nothing and prints no password: it names the database
+ * host, then lists every live (deletedAt null) DISTRICT_ADMIN and
  * whether `mustChangePassword` is currently true.
  *
  * --apply, per user, in the same order as `issueRandomPassword` in
  * src/lib/actions/accounts.ts: first the Prisma `User` columns
  * (mustChangePassword true, passwordIsSchoolId false, vault columns null;
- * `isActive` is never touched; role re-checked on the write), then Supabase
- * `auth.admin.updateUserById` (password + app_metadata.role), then one
+ * `isActive` is never touched; role re-checked on the write), then the Better
+ * Auth credential hash (`updateIdentity`: password + role), then one
  * DISTRICT_ADMIN_PASSWORD_RESET
  * audit row with metadata { via: "reset_script" } and no credential. Users with
  * no authId are skipped and reported. Failures are reported and counted; the
@@ -32,7 +32,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { UserRole } from "@prisma/client";
 import { loadEnvFile, connectScriptPrisma } from "./lib/script-db";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
+import { updateIdentity } from "./lib/script-identity";
 import { districtAdminPassword } from "../src/lib/auth/credentials";
 import { AUDIT_ACTIONS } from "../src/lib/audit-actions";
 
@@ -86,7 +86,6 @@ async function main(): Promise<void> {
   try {
     console.log("");
     console.log(`Database: ${hostOf(process.env.DIRECT_URL ?? process.env.DATABASE_URL)}`);
-    console.log(`Supabase: ${hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
     console.log("");
 
     const users = await prisma.user.findMany({
@@ -129,7 +128,6 @@ async function main(): Promise<void> {
     }
     fs.mkdirSync(path.dirname(csvPath), { recursive: true });
 
-    const supabase = createSupabaseAdminClient();
     const rows: { name: string; username: string; password: string; districts: string[] }[] = [];
     const failures: { username: string; message: string }[] = [];
     const skipped: string[] = [];
@@ -158,11 +156,7 @@ async function main(): Promise<void> {
         });
         if (flagged.count !== 1) throw new Error("user is no longer a live district admin");
 
-        const { error } = await supabase.auth.admin.updateUserById(u.authId, {
-          password,
-          app_metadata: { role: "DISTRICT_ADMIN", schoolId: null },
-        });
-        if (error) throw new Error(`auth password update failed: ${error.message}`);
+        await updateIdentity(prisma, u.authId, { password, role: "DISTRICT_ADMIN" });
 
         await prisma.auditLog.create({
           data: {

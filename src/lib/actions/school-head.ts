@@ -24,7 +24,7 @@ import {
 } from "@/lib/validators/grade-level.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { lettersNeededToReachCount } from "@/lib/section-letters";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { setRole } from "@/lib/auth/identity";
 import { deleteAuthUser } from "@/lib/auth/delete-auth-user";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { readTestLabSession } from "@/lib/auth/test-lab";
@@ -55,20 +55,14 @@ function partialFailure(err: unknown, route: string, message: string): { ok: fal
 }
 
 /**
- * `deleteAuthUser` returns a plain string that can be raw Supabase text or the
- * service-role setup instructions. Neither is for the browser: the text goes to
- * the admin `detail` only, and the person gets a catalog message.
+ * `deleteAuthUser` returns a plain string that is raw error text. It is not for
+ * the browser: the text goes to the admin `detail` only, and the person gets a
+ * catalog message.
  */
 function authDeleteError(rawError: string): AppError {
-  if (/SUPABASE_SERVICE_ROLE_KEY|isn't set up on the server/i.test(rawError)) {
-    return new AppError("CONFIG_MISSING", {
-      detail: rawError,
-      context: { reason: "service_role_key" },
-    });
-  }
   return new AppError("AUTH_PROVIDER_ERROR", {
     detail: rawError,
-    context: { service: "supabase_auth" },
+    context: { service: "auth_identity" },
   });
 }
 
@@ -259,7 +253,7 @@ function buildSchoolHeadProfileWrite(parsed: z.infer<typeof schoolHeadProfileSch
   // The field is optional, and the schema turns a blank one into `undefined` —
   // which Prisma reads as "leave this column alone". A head who deletes their
   // contact email and saves means to remove it, so an absent value is written as
-  // an explicit null. This is the survey address (P-I4) only; the Supabase login
+  // an explicit null. This is the survey address (P-I4) only; the sign-in
   // identity on `User.email` is never touched here.
   const contactEmail = contactEmailRaw ?? null;
   // Same reason: a cleared Gender has to be written as null, not skipped.
@@ -699,14 +693,8 @@ export const approveTeacher = action("approveTeacher", async (formData: FormData
 
   if (!teacher) return { ok: false, error: "Pending teacher not found" };
 
-  const adminClient = createSupabaseAdminClient();
-  const { error: metaErr } = await adminClient.auth.admin.updateUserById(teacher.authId, {
-    app_metadata: { role: "TEACHER", schoolId: user.schoolId },
-  });
-  if (metaErr) {
-    // Raw Supabase text stays out of the response; classify maps the AuthError.
-    throw metaErr;
-  }
+  // Keep the sign-in identity's role aligned with User.role (invariant I3).
+  await setRole(teacher.authId, "TEACHER");
 
   const now = new Date();
   await prismaFresh.user.update({
@@ -785,7 +773,7 @@ export const rejectTeacher = action("rejectTeacher", async (formData: FormData):
 
 /**
  * Hard-delete a rejected (never-profiled) teacher so they can register again.
- * Deletes Supabase auth first to avoid an orphaned login that would block the email.
+ * Deletes the sign-in identity first to avoid an orphaned login that would block the email.
  */
 export const clearRejectedTeacher = action("clearRejectedTeacher", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");

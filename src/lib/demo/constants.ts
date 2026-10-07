@@ -37,7 +37,7 @@ export type DemoSchoolSpec = {
    *
    * Two reasons it cannot be the bare School ID. A real school may already own
    * 123456 — one does — and its School Head is then already
-   * `sh@123456.<domain>`. `User.email` is unique and Supabase Auth rejects
+   * `sh@123456.<domain>`. `User.email` is unique and the auth system rejects
    * duplicates outright, so the demo school needs its own address:
    * `sh@demo-1-123456.<domain>`.
    *

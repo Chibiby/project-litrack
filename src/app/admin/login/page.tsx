@@ -1,6 +1,7 @@
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { LoginShell } from "@/components/auth/login-shell";
-import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase/env";
+import { isAuthConfigured } from "@/lib/auth/better-auth";
+import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/login-gates";
 import { sessionEndCode } from "@/lib/auth/session-end";
 import { formatMessage } from "@/lib/errors/codes";
 import { AppError } from "@/lib/errors/app-error";
@@ -15,15 +16,15 @@ type AdminLoginPageProps = {
 export default async function AdminLoginPage({ searchParams }: AdminLoginPageProps) {
   const params = await searchParams;
   const endedCode = sessionEndCode(params.reason);
-  const supabaseReady = isSupabaseConfigured();
+  const authReady = isAuthConfigured();
 
-  if (!supabaseReady) {
+  if (!authReady) {
     // Recorded once per render while misconfigured — which is the only time it
     // happens, and the only way anyone learns of it before a school calls.
     reportError(
       new AppError("CONFIG_MISSING", {
-        detail: SUPABASE_NOT_CONFIGURED_MESSAGE,
-        context: { reason: "supabase_env_missing" },
+        detail: AUTH_NOT_CONFIGURED_MESSAGE,
+        context: { reason: "auth_env_missing" },
       }),
       { route: "/admin/login", routeType: "render" }
     );
@@ -33,7 +34,7 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
   return (
     <LoginShell>
       <AdminLoginForm
-        disabled={!supabaseReady}
+        disabled={!authReady}
         notice={
           <>
             {endedCode ? (
@@ -41,7 +42,7 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
                 {formatMessage(endedCode)}
               </div>
             ) : null}
-            {!supabaseReady ? (
+            {!authReady ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <p className="font-medium">Sign-in unavailable</p>
                 {/* The env var names went to the error record, not to this page:

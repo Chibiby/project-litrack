@@ -5,8 +5,6 @@
  * client and needs `avatarPublicUrl` directly.
  */
 
-import { AVATAR_BUCKET } from "./limits";
-
 export type AvatarExt = "webp" | "jpg" | "png";
 
 export type AvatarPaths = {
@@ -67,7 +65,8 @@ export function isValidAvatarPath(path: string, userId?: string): boolean {
 }
 
 /**
- * The only place `/storage/v1/object/public` appears under `src/`.
+ * The one place a public avatar URL is built: `${base}/${encodedKey}`, where
+ * `base` is the R2 bucket's public custom domain.
  *
  * Returns null when `base` is missing or `path` does not have the stored
  * shape — callers fall back to initials rather than requesting a broken URL.
@@ -77,7 +76,7 @@ export function isValidAvatarPath(path: string, userId?: string): boolean {
 export function avatarPublicUrl(
   path: string,
   variant: "full" | "thumb",
-  base: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL
+  base: string | undefined = process.env.NEXT_PUBLIC_AVATAR_BASE_URL
 ): string | null {
   if (!base) return null;
   if (!isValidAvatarPath(path)) return null;
@@ -89,5 +88,5 @@ export function avatarPublicUrl(
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
-  return `${trimmedBase}/storage/v1/object/public/${AVATAR_BUCKET}/${encodedPath}`;
+  return `${trimmedBase}/${encodedPath}`;
 }

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { readTestLabSession } from "@/lib/auth/test-lab";
-import { readImpersonationContext } from "@/lib/auth/impersonation";
+import { getAuthSession } from "@/lib/auth/auth-session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
@@ -12,7 +12,7 @@ import { parseInput } from "@/lib/errors/validation";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { notifyProfilePhotoRemoved } from "@/lib/notifications";
 import { revalidateUserAvatar } from "@/lib/cache/revalidate";
-import { putAvatarObjects, removeAvatarObjects } from "@/lib/supabase/avatar-storage";
+import { putAvatarObjects, removeAvatarObjects } from "@/lib/storage/avatar-objects";
 import {
   AVATAR_FULL_MAX_BYTES,
   AVATAR_THUMB_MAX_BYTES,
@@ -93,14 +93,23 @@ export const uploadOwnAvatar = action(
 
     if (await readTestLabSession(user)) return { ok: true, dryRun: true };
 
-    // An expired-but-valid ticket counts, same conservative direction
-    // `readTestLabSession` takes: for a check whose answer is "refuse", the
-    // unproven case must keep the refusal.
-    const impersonation = await readImpersonationContext();
-    if (impersonation && impersonation.ticket.targetUserId === user.id) {
+    // Cookie-cache read: for a check whose answer is "refuse", a briefly stale
+    // "still impersonating" keeps the refusal, the conservative direction.
+    // Fails closed: `readImpersonation` reads null on an error, which would let
+    // an impersonating admin upload whenever the read breaks, so the session is
+    // read directly and an unreadable one refuses the upload too.
+    let impersonated: boolean;
+    try {
+      const session = await getAuthSession();
+      impersonated = !session || Boolean(session.session.impersonatedBy);
+    } catch (err) {
+      console.error("[avatar] impersonation state unreadable, refusing upload:", err);
+      impersonated = true;
+    }
+    if (impersonated) {
       throw new AppError("AUTH_FORBIDDEN", {
         params: { what: "uploading a photo for an account you are signed in as" },
-        detail: `impersonated upload refused for user ${user.id}`,
+        detail: `upload refused for user ${user.id}: impersonated or session state unreadable`,
         context: { userId: user.id },
       });
     }

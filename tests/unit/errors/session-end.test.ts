@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hasSupabaseSessionCookie, loginPath, sessionEndCode } from "@/lib/auth/session-end";
+import { loginPath, sessionEndCode } from "@/lib/auth/session-end";
+import {
+  hasAuthSessionCookie,
+  hasLegacySupabaseCookie,
+  legacySupabaseCookieNames,
+} from "@/lib/auth/auth-cookies";
 
 /**
  * The login page used to render `?error=<anything>` into a toast, so a crafted
@@ -38,15 +43,43 @@ describe("loginPath", () => {
   });
 });
 
-describe("hasSupabaseSessionCookie", () => {
-  it("recognizes whole and chunked session cookies", () => {
-    expect(hasSupabaseSessionCookie(["theme", "sb-abcdef-auth-token"])).toBe(true);
-    expect(hasSupabaseSessionCookie(["sb-abcdef-auth-token.1"])).toBe(true);
+describe("hasAuthSessionCookie", () => {
+  it("recognizes the session token cookie, with or without the secure prefix", () => {
+    expect(hasAuthSessionCookie(["theme", "litrack.session_token"])).toBe(true);
+    expect(hasAuthSessionCookie(["__Secure-litrack.session_token"])).toBe(true);
   });
 
-  it("ignores other cookies, including Supabase's non-session ones", () => {
-    expect(hasSupabaseSessionCookie(["theme", "litrack-sidebar"])).toBe(false);
-    expect(hasSupabaseSessionCookie(["sb-abcdef-auth-token-code-verifier"])).toBe(false);
-    expect(hasSupabaseSessionCookie([])).toBe(false);
+  it("ignores the cache cookie, other cookies and a Supabase cookie", () => {
+    expect(hasAuthSessionCookie(["theme", "litrack-sidebar"])).toBe(false);
+    expect(hasAuthSessionCookie(["litrack.session_data"])).toBe(false);
+    expect(hasAuthSessionCookie(["other.session_token"])).toBe(false);
+    expect(hasAuthSessionCookie(["sb-abcdef-auth-token"])).toBe(false);
+    expect(hasAuthSessionCookie([])).toBe(false);
+  });
+});
+
+describe("leftover Supabase cookies", () => {
+  it("counts whole and chunked session cookies as a previous session", () => {
+    expect(hasLegacySupabaseCookie(["theme", "sb-abcdef-auth-token"])).toBe(true);
+    expect(hasLegacySupabaseCookie(["sb-abcdef-auth-token.1"])).toBe(true);
+  });
+
+  it("does not count the PKCE verifier or unrelated cookies as a session", () => {
+    expect(hasLegacySupabaseCookie(["sb-abcdef-auth-token-code-verifier"])).toBe(false);
+    expect(hasLegacySupabaseCookie(["theme", "litrack.session_token"])).toBe(false);
+    expect(hasLegacySupabaseCookie([])).toBe(false);
+  });
+
+  it("names every sb-*-auth-token cookie to expire, verifier included, and nothing else", () => {
+    expect(
+      legacySupabaseCookieNames([
+        "theme",
+        "sb-abc-auth-token",
+        "sb-abc-auth-token.0",
+        "sb-abc-auth-token-code-verifier",
+        "litrack.session_token",
+        "sb-other",
+      ])
+    ).toEqual(["sb-abc-auth-token", "sb-abc-auth-token.0", "sb-abc-auth-token-code-verifier"]);
   });
 });
