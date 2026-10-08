@@ -111,6 +111,13 @@ vi.mock("@/lib/prisma", () => {
 
 import { createLearner, archiveLearner, deleteLearners, setLearnerAralTeacher } from "@/lib/actions/learner";
 import { transferLearner, transferLearnerCrossSchool } from "@/lib/actions/enrollment";
+import {
+  transferLearnersToSection,
+  requestSectionTransfers,
+  approveSectionTransferRequests,
+  declineSectionTransferRequests,
+  cancelSectionTransferRequest,
+} from "@/lib/actions/section-transfer";
 import { markAttendance, saveAralWeeklyAttendance } from "@/lib/actions/attendance";
 import { saveAralProfile } from "@/lib/actions/aral";
 import { commitLearnerImport } from "@/lib/actions/import-learners";
@@ -284,6 +291,12 @@ const ACTIONS: Array<{ name: string; fn: ActionFn; guard: GuardKind }> = [
   { name: "commitLearnerImport", fn: commitLearnerImport as ActionFn, guard: "teacher" },
   { name: "setLearnerAralTeacher", fn: setLearnerAralTeacher as ActionFn, guard: "schoolHead" },
   { name: "transferLearner", fn: transferLearner as ActionFn, guard: "schoolHead" },
+  // Section transfers: the School Head moves and decides, the teacher asks and withdraws.
+  { name: "transferLearnersToSection", fn: transferLearnersToSection as ActionFn, guard: "schoolHead" },
+  { name: "approveSectionTransferRequests", fn: approveSectionTransferRequests as ActionFn, guard: "schoolHead" },
+  { name: "declineSectionTransferRequests", fn: declineSectionTransferRequests as ActionFn, guard: "schoolHead" },
+  { name: "requestSectionTransfers", fn: requestSectionTransfers as ActionFn, guard: "teacher" },
+  { name: "cancelSectionTransferRequest", fn: cancelSectionTransferRequest as ActionFn, guard: "teacher" },
   // School head: sections, school year, school info
   { name: "createSection", fn: createSection as ActionFn, guard: "schoolHead" },
   { name: "deleteSection", fn: deleteSection as ActionFn, guard: "schoolHead" },

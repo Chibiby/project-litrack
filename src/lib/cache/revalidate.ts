@@ -226,6 +226,48 @@ export function revalidateLearnerScoped(opts: {
 }
 
 /**
+ * Learners moved to another section of the same grade (a School Head's direct
+ * transfer, or an approved teacher request).
+ *
+ * - The rosters and the grade page that list them, on both sides of the move,
+ *   plus the School Head Learners page they were moved from.
+ * - `revalidateSchoolHeadTeachers`, which also busts `schoolDashboard` and so
+ *   the per-section counts and the pending-request figure.
+ * - Each affected teacher's dashboard and sidebar: the previous advisers, the
+ *   new adviser and each learner's ARAL tutor. `revalidateTeacherCaches` per id
+ *   is what `revalidateLearnerScoped({ teacherShell: true })` does per teacher,
+ *   without re-expiring the school dashboard once per id.
+ *
+ * `teacherIds` may hold nulls and duplicates; both are dropped here.
+ */
+export function revalidateSectionTransfer(opts: {
+  schoolId: string;
+  gradeLevelId: string;
+  teacherIds: (string | null | undefined)[];
+}) {
+  revalidatePath("/teacher/learners");
+  revalidatePath(`/teacher/grade/${opts.gradeLevelId}`);
+  revalidatePath("/teacher/aral");
+  revalidatePath(SCHOOL_HEAD_ROUTES.learners);
+  revalidateSchoolHeadTeachers(opts.schoolId);
+  const ids = new Set(
+    opts.teacherIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+  );
+  for (const id of ids) revalidateTeacherCaches(id);
+}
+
+/**
+ * A section transfer request was created, decided or withdrawn without moving
+ * anybody: the School Head panel, the teacher's own request strip, and the
+ * dashboard's "Review transfer requests" count (`schoolDashboard`).
+ */
+export function revalidateTransferRequests(schoolId: string) {
+  revalidatePath(SCHOOL_HEAD_ROUTES.learners);
+  revalidatePath("/teacher/learners");
+  revalidateSchoolDashboard(schoolId);
+}
+
+/**
  * A support ticket changed state.
  *
  * Busts the admin inbox and the requester's own list. Takes the requester id

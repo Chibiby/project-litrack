@@ -17,7 +17,20 @@ import { SchoolHeadPage, schoolHeadHref } from "@/components/school-head/school-
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { MetricsGridSkeleton, TableSectionSkeleton } from "@/components/loading";
-import { LearnersDirectory } from "@/components/admin/management/learners-directory";
+import { prisma } from "@/lib/prisma";
+import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
+import {
+  countPendingTransferRequests,
+  listPendingTransferRequests,
+  listTransferDestinations,
+  pendingTransfersByLearner,
+  type PendingTransfer,
+  type PendingTransferRequestRow,
+  type TransferDestination,
+} from "@/lib/learners/section-transfer-queries";
+import { SchoolHeadLearnersDirectory } from "@/components/school-head/learners/school-head-learners-directory";
+import { TransferRequestsPanel } from "@/components/school-head/learners/transfer-requests-panel";
+import type { ChangeGradeOptions } from "@/components/school-head/learners/change-grade-dialog";
 import type { ListFilterField } from "@/components/admin/management/list-filter-bar";
 import { gradeField, sectionField, yesNoField } from "@/components/admin/management/filter-fields";
 import { SummaryGrid, SummaryUnavailable } from "@/components/admin/management/summary-cards";
@@ -79,28 +92,116 @@ async function directoryFilters(params: LearnersHubParams): Promise<ListFilterFi
   ];
 }
 
+/** Change grade's choices, as the retired transfer page loaded them. */
+async function loadChangeGradeOptions(schoolId: string): Promise<ChangeGradeOptions> {
+  const [grades, sections, teachers, activeYear] = await Promise.all([
+    prisma.gradeLevel.findMany({
+      // FLOATING is offered by the dialog as its own choice (the row is created
+      // on demand), so it must not also appear as a normal grade.
+      where: { schoolId, deletedAt: null, type: { not: "FLOATING" } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, type: true },
+    }),
+    prisma.section.findMany({
+      where: { schoolId, deletedAt: null },
+      select: { id: true, name: true, gradeLevelId: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }),
+    prisma.user.findMany({
+      where: { schoolId, role: "TEACHER", deletedAt: null, isActive: true },
+      select: {
+        id: true,
+        fullName: true,
+        advisorySections: {
+          where: { deletedAt: null },
+          select: { name: true, gradeLevelId: true },
+          orderBy: { name: "asc" },
+        },
+      },
+      orderBy: { fullName: "asc" },
+    }),
+    prisma.schoolYear.findFirst({ where: { schoolId, isActive: true }, select: { id: true } }),
+  ]);
+  return {
+    grades: grades.map((g) => ({ id: g.id, label: GRADE_LEVEL_LABELS[g.type] ?? g.type })),
+    sections,
+    teachers: teachers.map((t) => ({
+      id: t.id,
+      fullName: t.fullName,
+      advisories: t.advisorySections.map((s) => ({ gradeLevelId: s.gradeLevelId, sectionName: s.name })),
+    })),
+    hasActiveYear: activeYear !== null,
+  };
+}
+
+async function TransferRequestsBody({ view, readOnly }: { view: SchoolHeadView; readOnly: boolean }) {
+  let requests: PendingTransferRequestRow[] = [];
+  let totalCount = 0;
+  let loadFailed = false;
+  try {
+    [requests, totalCount] = await Promise.all([
+      listPendingTransferRequests(view.schoolId),
+      countPendingTransferRequests(view.schoolId),
+    ]);
+  } catch (err) {
+    console.error("[SchoolHeadLearnersPage] failed to load transfer requests:", err);
+    loadFailed = true;
+  }
+  if (loadFailed) {
+    return (
+      <p role="status" className="text-sm text-destructive">
+        Couldn&apos;t load transfer requests. Refresh the page to try again.
+      </p>
+    );
+  }
+  return <TransferRequestsPanel requests={requests} readOnly={readOnly} totalCount={totalCount} />;
+}
+
 async function LearnersDirectoryBody({
   view,
   params,
+  readOnly,
 }: {
   view: SchoolHeadView;
   params: LearnersHubParams;
+  readOnly: boolean;
 }) {
   let rows: LearnerHubRow[] = [];
   let totalCount = 0;
   let filters: ListFilterField[] = [];
+  let destinations: TransferDestination[] = [];
+  let pendingByLearner: Record<string, PendingTransfer> = {};
+  let changeGrade: ChangeGradeOptions | null = null;
   let dbAvailable = true;
+  let transfersFailed = false;
   try {
-    const [page, loadedFilters] = await Promise.all([
+    const [page, loadedFilters, gradeOptions] = await Promise.all([
       getSchoolLearnersPage(view.schoolId, params),
       directoryFilters(params),
+      readOnly ? null : loadChangeGradeOptions(view.schoolId),
     ]);
     rows = page.rows;
     totalCount = page.totalCount;
     filters = loadedFilters;
+    changeGrade = gradeOptions;
   } catch (err) {
     console.error("[SchoolHeadLearnersPage] failed to load directory:", err);
     dbAvailable = false;
+  }
+
+  // A failed transfer read turns off only the transfer controls, never the directory.
+  if (dbAvailable) {
+    try {
+      const [loadedDestinations, pending] = await Promise.all([
+        readOnly ? [] : listTransferDestinations(view.schoolId, [...new Set(rows.map((r) => r.gradeLevelId))]),
+        pendingTransfersByLearner(view.schoolId, rows.map((r) => r.id)),
+      ]);
+      destinations = loadedDestinations;
+      pendingByLearner = Object.fromEntries(pending);
+    } catch (err) {
+      console.error("[SchoolHeadLearnersPage] failed to load transfer data:", err);
+      transfersFailed = true;
+    }
   }
 
   return (
@@ -110,11 +211,15 @@ async function LearnersDirectoryBody({
           Could not load learners right now. The database may be unavailable.
         </p>
       ) : null}
-      <LearnersDirectory
+      <SchoolHeadLearnersDirectory
+        readOnly={readOnly}
+        transfersUnavailable={transfersFailed}
+        destinations={destinations}
+        pendingByLearner={pendingByLearner}
+        changeGrade={changeGrade}
         rows={rows}
         filters={filters}
         basePath={SCHOOL_HEAD_ROUTES.learners}
-        hideSchool
         emptyDescription="Learners appear here once you add them."
         keepParams={view.isSuperAdminView ? ["schoolId"] : undefined}
         clearHref={schoolHeadHref(view, SCHOOL_HEAD_ROUTES.learners)}
@@ -131,12 +236,15 @@ async function LearnersDirectoryBody({
 }
 
 /**
- * Read-only directory of this school's learners. The school comes only from the
- * session (or the Super Admin's resolved `?schoolId=` view), never from a filter.
+ * This school's learners, with transfers, Change grade and teachers' transfer
+ * requests. The school comes only from the session (or the Super Admin's
+ * resolved `?schoolId=` view), never from a filter. A Super Admin drill-down is
+ * read-only: the actions need a School Head's own school.
  */
 export default async function SchoolHeadLearnersPage({ searchParams }: PageProps) {
   const raw = await searchParams;
-  const { view } = await resolveSchoolHeadView(raw.schoolId, SCHOOL_HEAD_ROUTES.learners);
+  const { user, view } = await resolveSchoolHeadView(raw.schoolId, SCHOOL_HEAD_ROUTES.learners);
+  const readOnly = view.isSuperAdminView || user.role !== "SCHOOL_HEAD";
   const params = parseSchoolLearnersParams(
     { page: raw.page, q: raw.q, grade: raw.grade, section: raw.section, ip: raw.ip, aral: raw.aral },
     view.schoolId
@@ -159,11 +267,15 @@ export default async function SchoolHeadLearnersPage({ searchParams }: PageProps
         <LearnersCards view={view} />
       </Suspense>
 
+      <Suspense fallback={<TableSectionSkeleton rows={3} columns={4} showToolbar={false} />}>
+        <TransferRequestsBody view={view} readOnly={readOnly} />
+      </Suspense>
+
       <Suspense
         key={listKey(raw, LEARNERS_LIST_KEYS)}
         fallback={<TableSectionSkeleton rows={10} columns={5} />}
       >
-        <LearnersDirectoryBody view={view} params={params} />
+        <LearnersDirectoryBody view={view} params={params} readOnly={readOnly} />
       </Suspense>
     </SchoolHeadPage>
   );

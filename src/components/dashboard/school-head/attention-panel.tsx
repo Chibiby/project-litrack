@@ -116,7 +116,7 @@ export function SchoolQuickActionsPanel({
     },
     {
       id: "transfer",
-      label: "Transfer a learner",
+      label: "Transfer learners",
       icon: ArrowRightLeft,
       href: transferHref,
       tone: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200",

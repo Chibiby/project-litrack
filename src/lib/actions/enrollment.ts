@@ -23,6 +23,7 @@ import {
   revalidateSchoolHeadTeachers,
   revalidateSchoolsList,
   revalidateTeacherCaches,
+  revalidateTransferRequests,
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
@@ -143,6 +144,16 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
     if (!targetGrade) return { ok: false, error: "Target grade level not found" };
     resolvedGradeLevelId = targetGrade.id;
     toFloating = targetGrade.type === "FLOATING";
+    // This action is "Change grade" now. A move between sections of the grade
+    // the learner is already in belongs to the section transfer, which checks
+    // the destination adviser and pending requests and keeps one record of it.
+    // Same id and not FLOATING means neither side is Floating.
+    if (!toFloating && targetGrade.id === learner.gradeLevelId) {
+      throw fieldError(
+        "targetGradeLevelId",
+        "This learner is already in that grade. To move them to another section, use Transfer on the Learners page."
+      );
+    }
   }
 
   // Every non-floating grade still requires a teacher, and that teacher must
@@ -267,7 +278,7 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
   revalidatePath(`/teacher/grade/${resolvedGradeLevelId}`);
   revalidatePath("/teacher/learners");
   revalidatePath("/teacher/aral");
-  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+  revalidatePath(SCHOOL_HEAD_ROUTES.learners);
   revalidateSchoolHeadTeachers(user.schoolId);
   // A first floating placement creates the FLOATING grade row, which the Grade
   // Levels page renders.
@@ -439,6 +450,14 @@ export const transferLearnerCrossSchool = action(
         },
       });
 
+      // A request still waiting at the old school would block every future
+      // request for this learner (the pending unique index is per learner) and
+      // nobody at the new school can see it. Cancel it with the acting admin.
+      await tx.sectionTransferRequest.updateMany({
+        where: { learnerId: learner.id, status: "PENDING" },
+        data: { status: "CANCELLED", decidedById: user.id, decidedAt: new Date() },
+      });
+
       if (activeYear) {
         await tx.enrollment.create({
           data: {
@@ -478,10 +497,11 @@ export const transferLearnerCrossSchool = action(
     revalidatePath("/teacher/aral");
     revalidatePath(ADMIN_ROUTES.learnerTransfers);
     revalidatePath(ADMIN_ROUTES.schools);
-    revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+    revalidatePath(SCHOOL_HEAD_ROUTES.learners);
     revalidatePath(DISTRICT_ROUTES.transfers);
     revalidateSchoolDashboard(fromSchoolId);
     revalidateSchoolDashboard(targetSchoolId);
+    revalidateTransferRequests(fromSchoolId);
     revalidateSchoolsList();
     if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
     revalidateTeacherCaches(targetTeacherId);

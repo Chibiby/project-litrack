@@ -360,6 +360,7 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         profiledHead,
         gradesNeedingSections,
         pendingTeacherCount,
+        pendingTransferRequestCount,
       ] = await Promise.all([
         prisma.learner.count({
           where: { schoolId, deletedAt: null, archivedAt: null },
@@ -402,6 +403,13 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         // One indexed count against `[schoolId, approvalStatus]` on `User`.
         prisma.user.count({
           where: { ...teacherRosterScope(schoolId), ...TEACHER_ROSTER_STATE.pending },
+        }),
+        // Teacher section-transfer requests waiting on the head. Served by the
+        // `[schoolId, status, createdAt]` index; every create, decision and
+        // withdrawal busts `schoolDashboard(schoolId)` through
+        // `revalidateTransferRequests`.
+        prisma.sectionTransferRequest.count({
+          where: { schoolId, status: "PENDING" },
         }),
       ]);
 
@@ -447,13 +455,15 @@ export async function getSchoolHeadMetricCounts(schoolId: string) {
         activeYear,
         setupTasks,
         pendingTeacherCount,
+        pendingTransferRequestCount,
       };
     },
     {
-      // `-v2`: gained `pendingTeacherCount`. Bumped so a stale entry from
-      // before this change (missing the field) cannot be read as the new
-      // shape — same reason `school-head-recent-activity` carries a version.
-      keyParts: ["school-head-metric-counts-v2", schoolId],
+      // `-v2`: gained `pendingTeacherCount`. `-v3`: gained
+      // `pendingTransferRequestCount`. Bumped so a stale entry from before
+      // each change (missing the field) cannot be read as the new shape —
+      // same reason `school-head-recent-activity` carries a version.
+      keyParts: ["school-head-metric-counts-v3", schoolId],
       tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }

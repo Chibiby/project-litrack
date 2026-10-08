@@ -39,6 +39,8 @@ export type SchoolHeadOverview = {
   activeYear: { label: string } | null;
   setupTasks: { id: string; label: string; href: string }[];
   pendingTeacherCount: number;
+  /** Teacher section-transfer requests waiting for this School Head's decision. */
+  pendingTransferRequestCount: number;
   ipLearners: number;
   totalLearners: number;
   ipPercent: string;
@@ -67,6 +69,7 @@ export async function getSchoolHeadOverview(
     activeYear: metrics.activeYear,
     setupTasks: metrics.setupTasks,
     pendingTeacherCount: metrics.pendingTeacherCount,
+    pendingTransferRequestCount: metrics.pendingTransferRequestCount,
     ipLearners: ipMetrics.ipLearners,
     totalLearners: ipMetrics.totalLearners,
     ipPercent: ipMetrics.ipPercent,
@@ -102,6 +105,11 @@ export type SchoolHeadAttentionHrefs = {
   gradeLevels: string;
   years: string;
   profiling: string;
+  /**
+   * The Learners page's requests panel:
+   * `schoolHeadHref(view, SCHOOL_HEAD_ROUTES.learners) + "#transfer-requests"`.
+   */
+  transferRequests: string;
 };
 
 /** `setupTasks` ids that have a drill-down-safe replacement in `hrefs`. */
@@ -117,8 +125,8 @@ const SETUP_TASK_HREF: Record<string, keyof SchoolHeadAttentionHrefs> = {
  * `buildDashboardTasks` in `src/lib/dashboard/teacher-overview.ts`.
  *
  * Order is severity, an explicit operator decision: no active school year
- * outranks adviserless sections, which outrank pending teacher approvals.
- * `setupTasks` entries follow, then the "all clear" row when the list would
+ * outranks adviserless sections, which outrank pending teacher approvals, which
+ * outrank waiting section-transfer requests. `setupTasks` entries follow, then the "all clear" row when the list would
  * otherwise be empty.
  *
  * De-dupes the school-year nudge: `getSchoolHeadMetricCounts` already pushes a
@@ -162,6 +170,17 @@ export function buildSchoolHeadAttention(
       detail: "They cannot sign in until you decide",
       href: hrefs.teachers,
       badge: `${data.pendingTeacherCount} waiting`,
+      tone: "amber",
+    });
+  }
+
+  if (data.pendingTransferRequestCount > 0) {
+    items.push({
+      id: "transfers",
+      label: "Review transfer requests",
+      detail: "Advisers asked to move learners to another section",
+      href: hrefs.transferRequests,
+      badge: `${data.pendingTransferRequestCount} waiting`,
       tone: "amber",
     });
   }

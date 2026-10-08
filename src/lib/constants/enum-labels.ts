@@ -701,6 +701,14 @@ export const UNLOCK_SCOPE_LABELS = {
   MONTHLY_READING_LEVEL: "Monthly reading level",
 } as const;
 
+/** `SectionTransferRequestStatus`; "Declined" matches the teachers-declined wording. */
+export const SECTION_TRANSFER_REQUEST_STATUS_LABELS = {
+  PENDING: "Waiting",
+  APPROVED: "Approved",
+  REJECTED: "Declined",
+  CANCELLED: "Withdrawn",
+} as const;
+
 /**
  * `UserRole`, as a person is named in the UI.
  *

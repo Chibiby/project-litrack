@@ -57,7 +57,6 @@ export const SCHOOL_HEAD_ROUTES = {
   aralTutors: "/school-head/aral-tutors",
 
   aral: "/school-head/aral",
-  transfer: "/school-head/transfer",
   announcements: "/school-head/announcements",
   /** End of Terms subject list per grade (sidebar item). */
   termSubjects: "/school-head/term-subjects",
@@ -88,4 +87,6 @@ export const SCHOOL_HEAD_LEGACY_ROUTES = {
   "/school-head/school-info": SCHOOL_HEAD_ROUTES.schoolInfo,
   /** Soft-deprecated well before this restructure: sections live under grade levels. */
   "/school-head/sections": SCHOOL_HEAD_ROUTES.schoolGradeLevels,
+  /** Transfers and Change grade start from a learner's row on the Learners page. */
+  "/school-head/transfer": SCHOOL_HEAD_ROUTES.learners,
 } as const;

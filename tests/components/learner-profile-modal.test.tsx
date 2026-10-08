@@ -159,6 +159,7 @@ function renderModal(
     initialIsAralLearner: boolean;
     initialMode: "view" | "edit";
     onClose: () => void;
+    transferAction: { label: string; onSelect: () => void };
   }> = {}
 ) {
   const onClose = props.onClose ?? vi.fn();
@@ -170,6 +171,7 @@ function renderModal(
       isSuperAdmin={props.isSuperAdmin ?? false}
       initialIsAralLearner={props.initialIsAralLearner ?? false}
       initialMode={props.initialMode ?? "view"}
+      transferAction={props.transferAction}
     />
   );
   return { ...view, onClose };
@@ -380,12 +382,9 @@ describe("LearnerProfileModal — footer actions", () => {
 
     // The skeleton is up and the footer is already its final shape — the lone
     // Close it used to show here made the footer change size mid-load.
-    await waitFor(() => expect(footerLabels()).toHaveLength(3));
-    expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
-      "Enroll as ARAL",
-      "Edit",
-    ]);
+    // No transfer action is supplied by the host here, so the button is absent.
+    await waitFor(() => expect(footerLabels()).toHaveLength(2));
+    expect(footerLabels()).toEqual(["Enroll as ARAL", "Edit"]);
     // Drawn, but not yet usable: there is no learner to act on.
     for (const button of footer().querySelectorAll("button")) {
       expect(button, button.textContent ?? "").toHaveProperty("disabled", true);
@@ -395,11 +394,7 @@ describe("LearnerProfileModal — footer actions", () => {
     await awaitLoaded();
 
     // Same three controls, now live — nothing was swapped in or out.
-    expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
-      "Enroll as ARAL",
-      "Edit",
-    ]);
+    expect(footerLabels()).toEqual(["Enroll as ARAL", "Edit"]);
     expect(screen.getByRole("button", { name: "Edit" })).toHaveProperty(
       "disabled",
       false
@@ -418,17 +413,13 @@ describe("LearnerProfileModal — footer actions", () => {
     expect(aralActionLabel()).toBe("Remove from ARAL");
   });
 
-  it("replaces Close with the three actions in one row", async () => {
+  it("replaces Close with the actions in one row", async () => {
     renderModal();
     await awaitLoaded();
 
-    // "3 buttons in the same row", in the drawn order, sharing one footer.
-    // The Soon badge abuts the label with no space, hence "studentSoon".
-    expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
-      "Enroll as ARAL",
-      "Edit",
-    ]);
+    // Both buttons share one footer, in the drawn order. The transfer button
+    // only exists when the host supplies one (see the next case).
+    expect(footerLabels()).toEqual(["Enroll as ARAL", "Edit"]);
     // The comp's single Close is gone from the footer. The header ✕ stays: it is
     // the only way to leave the dialog without acting.
     expect(within(footer()).queryByRole("button", { name: "Close" })).toBeNull();
@@ -437,12 +428,30 @@ describe("LearnerProfileModal — footer actions", () => {
     ).not.toBeNull();
   });
 
-  it("keeps Transfer disabled and says who owns it", async () => {
+  it("hides the transfer button when the host supplies no transfer action", async () => {
     renderModal();
     await awaitLoaded();
-    const transfer = screen.getByRole("button", { name: /Transfer student/ });
-    expect(transfer).toHaveProperty("disabled", true);
-    expect(transfer.parentElement?.getAttribute("title")).toMatch(/School Head/);
+    expect(screen.queryByRole("button", { name: /Transfer student/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /request transfer/i })).toBeNull();
+    expect(footer().textContent).not.toMatch(/Soon/);
+  });
+
+  it("draws the host's transfer action first and calls it on click", async () => {
+    const onSelect = vi.fn();
+    renderModal({ transferAction: { label: "Request transfer", onSelect } });
+    await awaitLoaded();
+
+    expect(footerLabels()).toEqual(["Request transfer", "Enroll as ARAL", "Edit"]);
+    const button = within(footer()).getByRole("button", { name: "Request transfer" });
+    expect(button).toHaveProperty("disabled", false);
+    fireEvent.click(button);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the host's label, e.g. cancelling a waiting request", async () => {
+    renderModal({ transferAction: { label: "Cancel transfer request", onSelect: vi.fn() } });
+    await awaitLoaded();
+    expect(footerLabels()[0]).toBe("Cancel transfer request");
   });
 
   it("edits in place instead of navigating to a page", async () => {
@@ -547,12 +556,7 @@ describe("LearnerProfileModal — footer actions", () => {
     });
     renderModal();
     await awaitLoaded();
-    expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
-      "Transfer tutor",
-      "Remove from ARAL",
-      "Edit",
-    ]);
+    expect(footerLabels()).toEqual(["Transfer tutor", "Remove from ARAL", "Edit"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove from ARAL" }));
 
@@ -629,16 +633,16 @@ describe("LearnerProfileModal — Transfer tutor", () => {
       }),
     });
 
-  it("stands immediately right of Transfer student", async () => {
+  it("stands immediately right of the section transfer action", async () => {
     enrolledUnder("Jun Dela Cruz", "vol-1");
-    renderModal();
+    renderModal({ transferAction: { label: "Request transfer", onSelect: vi.fn() } });
     await awaitLoaded();
 
     // The two belong together: both move a learner from one person's care to
     // another's, and a teacher hunting for either looks at the row of actions
     // rather than opening a tab.
     expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
+      "Request transfer",
       "Transfer tutor",
       "Remove from ARAL",
       "Edit",
@@ -798,11 +802,7 @@ describe("LearnerProfileModal — edit mode", () => {
 
     expect(await screen.findByRole("tab", { name: "Profile" })).not.toBeNull();
     expect(screen.queryByText("learner form stub")).toBeNull();
-    expect(footerLabels()).toEqual([
-      "Transfer studentSoon",
-      "Enroll as ARAL",
-      "Edit",
-    ]);
+    expect(footerLabels()).toEqual(["Enroll as ARAL", "Edit"]);
     expect(onClose).not.toHaveBeenCalled();
   });
 

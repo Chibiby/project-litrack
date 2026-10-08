@@ -53,9 +53,10 @@ import {
  *             the comp draws, the slot keeps its geometry and carries the
  *             nearest real fact; see the truth notes in profile-panel.tsx.
  *
- * The comp's single "Close" button is replaced, per the brief, by three actions
- * in one row: Transfer student, Enroll as ARAL, Edit. The ✕ in the header is
- * the only way this dialog closes without acting.
+ * The comp's single "Close" button is replaced, per the brief, by the actions
+ * in one row: the host's transfer action (when it supplies one), Enroll as
+ * ARAL, Edit. The ✕ in the header is the only way this dialog closes without
+ * acting.
  *
  * Enroll as ARAL asks who will tutor the learner before it enrolls them, so it
  * opens the tutor picker instead of a bare confirmation. Removal is the one
@@ -111,6 +112,16 @@ export type LearnerProfileModalProps = {
    * dialog rather than falling back to tabs the host is already showing.
    */
   initialMode?: "view" | "edit";
+  /**
+   * The footer's section-transfer action for this learner, when the host
+   * offers one. Hidden when absent.
+   */
+  transferAction?: LearnerProfileTransferAction;
+};
+
+export type LearnerProfileTransferAction = {
+  label: string;
+  onSelect: () => void;
 };
 
 export function LearnerProfileModal({
@@ -119,6 +130,7 @@ export function LearnerProfileModal({
   isSuperAdmin,
   initialIsAralLearner = false,
   initialMode = "view",
+  transferAction,
 }: LearnerProfileModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<ProfileTabKey>("profile");
@@ -438,30 +450,21 @@ export function LearnerProfileModal({
             <footer className="flex shrink-0 flex-col gap-2 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               {showActions ? (
                 <>
-                  {/* Teachers cannot transfer learners — `transferLearner` is
-                      School-Head-only. The control is drawn where the comp puts it
-                      and stays disabled until the teacher-facing flow exists. */}
-                  <span
-                    className="w-full sm:w-auto"
-                    title="Transfers are handled by your School Head. Coming soon for teachers."
-                  >
+                  {/* Supplied by the host for a learner it can act on (the
+                      roster: request a transfer, or cancel a waiting one);
+                      absent, there is nothing to show. */}
+                  {transferAction ? (
                     <Button
                       type="button"
                       variant="outline"
-                      disabled
-                      aria-describedby="transfer-student-disabled-reason"
-                      className="w-full justify-center gap-2"
+                      disabled={learner === null || pending}
+                      className="w-full justify-center gap-2 sm:w-auto"
+                      onClick={transferAction.onSelect}
                     >
                       <ArrowLeftRight className="h-4 w-4" aria-hidden />
-                      Transfer student
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Soon
-                      </span>
+                      {transferAction.label}
                     </Button>
-                    <span id="transfer-student-disabled-reason" className="sr-only">
-                      Transfers are handled by your School Head.
-                    </span>
-                  </span>
+                  ) : null}
 
                   {transferTutorButton}
 

@@ -159,6 +159,7 @@ function makeTx() {
         return {};
       }),
     },
+    sectionTransferRequest: { updateMany: vi.fn(async () => ({ count: 0 })) },
   };
 }
 
@@ -253,6 +254,7 @@ const revalidateSchoolDashboard = vi.fn();
 const revalidateSchoolHeadTeachers = vi.fn();
 const revalidateSchoolsList = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
+  revalidateTransferRequests: vi.fn(),
   revalidateTeacherCaches: (...a: unknown[]) => revalidateTeacherCaches(...(a as [])),
   revalidateSchoolDashboard: (...a: unknown[]) =>
     revalidateSchoolDashboard(...(a as [])),
@@ -332,6 +334,33 @@ describe("transferLearner — teacher cache fan-out", () => {
     // only `Enrollment` and `Learner`, so it changes nothing the cached tutor list
     // holds.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
+
+    // The transfer page is retired; the learner now shows on the Learners page.
+    expect(revalidatePath).toHaveBeenCalledWith("/school-head/learners");
+    expect(revalidatePath).not.toHaveBeenCalledWith("/school-head/transfer");
+  });
+
+  it("refuses a same-grade move and points the School Head to Transfer", async () => {
+    // Same grade, non-Floating: a section move belongs to the section transfer.
+    learnerRow = makeLearner({ gradeLevelId: TO_GRADE_ID });
+
+    const result = await transferLearner(sameSchoolFormData());
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "VALIDATION_FAILED",
+      fieldErrors: { targetGradeLevelId: expect.stringMatching(/Transfer/) },
+    });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("still lets a Floating learner be placed into a grade", async () => {
+    // From FLOATING to a real grade is a grade change, not a section move.
+    learnerRow = makeLearner({ gradeLevelId: "grade-floating", teacherId: null });
+
+    const result = await transferLearner(sameSchoolFormData());
+    expect(result).toEqual({ ok: true });
   });
 
   it("makes no third call when the learner has no designated ARAL tutor", async () => {
@@ -440,6 +469,9 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_IN);
     // The incoming call here is unconditional, so distinct ids keep this at 3.
     expect(revalidateTeacherCaches).toHaveBeenCalledTimes(3);
+
+    expect(revalidatePath).toHaveBeenCalledWith("/school-head/learners");
+    expect(revalidatePath).not.toHaveBeenCalledWith("/school-head/transfer");
   });
 
   it("clears aralTeacherId so no pointer to the old school's tutor survives", async () => {

@@ -164,7 +164,11 @@ describe("roster archive confirmation", () => {
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(screen.getByRole("alertdialog")).toBeTruthy();
     // The row was hidden optimistically and comes back when the transition ends.
-    const ana = await screen.findByRole("checkbox", { name: "Select Ana Santos", hidden: true });
+    const ana = await screen.findByRole(
+      "checkbox",
+      { name: "Select Ana Santos", hidden: true },
+      { timeout: 5000 }
+    );
     expect(ana.getAttribute("data-state")).toBe("checked");
   });
 

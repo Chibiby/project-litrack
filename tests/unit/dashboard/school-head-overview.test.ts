@@ -17,6 +17,7 @@ const HREFS: SchoolHeadAttentionHrefs = {
   gradeLevels: "/school-head/school",
   years: "/school-head/school/years",
   profiling: "/school-head/profiling",
+  transferRequests: "/school-head/learners#transfer-requests",
 };
 
 /** A fully set-up school: nothing should appear in the attention list. */
@@ -30,6 +31,7 @@ function overview(over: Partial<SchoolHeadOverview> = {}): SchoolHeadOverview {
     activeYear: { label: "SY 2026-2027" },
     setupTasks: [],
     pendingTeacherCount: 0,
+    pendingTransferRequestCount: 0,
     ipLearners: 5,
     totalLearners: 120,
     ipPercent: "4%",
@@ -77,6 +79,39 @@ describe("buildSchoolHeadAttention — N pending teachers", () => {
     const items = buildSchoolHeadAttention(overview({ pendingTeacherCount: 5 }), HREFS);
 
     expect(items.find((i) => i.id === "approvals")?.badge).toBe("5 waiting");
+  });
+});
+
+describe("buildSchoolHeadAttention — transfer requests", () => {
+  it("renders a transfers row with the waiting count, linking to the requests panel", () => {
+    const items = buildSchoolHeadAttention(overview({ pendingTransferRequestCount: 3 }), HREFS);
+
+    const transfers = items.find((i) => i.id === "transfers");
+    expect(transfers).toEqual({
+      id: "transfers",
+      label: "Review transfer requests",
+      detail: "Advisers asked to move learners to another section",
+      href: HREFS.transferRequests,
+      badge: "3 waiting",
+      tone: "amber",
+    });
+  });
+
+  it("does not render the row when nothing is waiting", () => {
+    const items = buildSchoolHeadAttention(overview({ pendingTransferRequestCount: 0 }), HREFS);
+    expect(items.some((i) => i.id === "transfers")).toBe(false);
+  });
+
+  it("sits right after teacher approvals and before setup tasks", () => {
+    const items = buildSchoolHeadAttention(
+      overview({
+        pendingTeacherCount: 1,
+        pendingTransferRequestCount: 2,
+        setupTasks: [{ id: "profile", label: "Complete School Head profiling", href: HREFS.profiling }],
+      }),
+      HREFS
+    );
+    expect(items.map((i) => i.id)).toEqual(["approvals", "transfers", "setup:profile"]);
   });
 });
 

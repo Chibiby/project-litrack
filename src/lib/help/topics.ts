@@ -345,6 +345,30 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
     routes: ["/teacher/learners"],
   },
+  {
+    id: "learner-section-transfer-teacher",
+    title: "Move a learner to another section",
+    keywords: ["transfer", "section", "move", "change section", "request", "adviser", "advisory"],
+    body: [
+      "Open Learners, select the learners in your advisory section, and choose Request transfer from the row menu or from Bulk actions. Pick a section in the same grade and add a note for your School Head if you like.",
+      "Your School Head approves or declines the request. Until then the learners stay in your section, and Your transfer requests on the Learners page shows each request as Waiting, Approved, Declined or Withdrawn. You can cancel a request while it is still waiting.",
+    ],
+    roles: ["TEACHER"],
+    routes: ["/teacher/learners"],
+    action: { label: "Open Learners", href: "/teacher/learners" },
+  },
+  {
+    id: "learner-section-transfer-school-head",
+    title: "Move a learner to another section",
+    keywords: ["transfer", "section", "move", "change section", "request", "approve", "change grade", "floating"],
+    body: [
+      "Open Learners, select one or more learners on the page, and choose Transfer selected, or use Transfer on a learner's row. Pick a section in the same grade; the learners take that section's adviser, and their attendance, reading levels and grades go with them.",
+      "Teachers can ask to move learners from their advisory section. Their requests wait in Transfer requests at the top of the Learners page, where you approve or decline them. To move a learner to a different grade or to Floating, use Change grade on the learner's row.",
+    ],
+    roles: ["SCHOOL_HEAD"],
+    routes: ["/school-head/learners"],
+    action: { label: "Open Learners", href: "/school-head/learners" },
+  },
 
   // ── Reports ───────────────────────────────────────────────────────────────
   {

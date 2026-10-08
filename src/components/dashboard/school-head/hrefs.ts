@@ -53,9 +53,14 @@ export function announcementsHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.announcements);
 }
 
-/** "Transfer a learner" quick action. */
-export function transferHref(view: SchoolHeadView): string {
-  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.transfer);
+/** "Transfer learners" quick action: transfers start from the Learners page. */
+export function learnersHref(view: SchoolHeadView): string {
+  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.learners);
+}
+
+/** The "transfers" attention item: the requests panel on the Learners page. */
+export function transferRequestsHref(view: SchoolHeadView): string {
+  return `${learnersHref(view)}#transfer-requests`;
 }
 
 /** "Generate a report" quick action. */

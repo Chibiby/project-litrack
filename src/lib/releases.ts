@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.37.0",
+    date: "2026-10-08",
+    title: "Transfer learners right from the Learners page",
+    announce: true,
+    fixes: [
+      "School Heads: select one or many learners on the Learners page and move them to another section of the same grade. Their adviser changes to that section's adviser.",
+      "Teachers: you can now ask to move learners from your advisory to another section. Your School Head approves or declines the request, and you can follow it under Your transfer requests.",
+      "School Heads see waiting transfer requests at the top of the Learners page and on the dashboard, and can approve or decline many at once.",
+      "Changing a learner's grade, or placing a Floating learner, is now Change grade in the learner's menu on the Learners page. The separate Learner Transfers page is gone.",
+    ],
+  },
+  {
     version: "2.36.1",
     date: "2026-10-08",
     title: "Faster page loads after the sign-in update",

@@ -35,7 +35,8 @@ import {
   schoolYearsHref,
   profilingHref,
   announcementsHref,
-  transferHref,
+  learnersHref,
+  transferRequestsHref,
   reportsHref,
 } from "./hrefs";
 import {
@@ -123,6 +124,7 @@ export async function loadSchoolHeadDashboard({
     gradeLevels: schoolGradeLevelsHref(view),
     years: schoolYearsHref(view),
     profiling: profilingHref(view),
+    transferRequests: transferRequestsHref(view),
   };
   const attentionItems = buildSchoolHeadAttention(data, attentionHrefs);
 
@@ -278,7 +280,7 @@ export async function loadSchoolHeadDashboard({
       <SchoolQuickActionsPanel
         isSuperAdminView={view.isSuperAdminView}
         announcementsHref={announcementsHref(view)}
-        transferHref={transferHref(view)}
+        transferHref={learnersHref(view)}
         teachersHref={teachersHref(view)}
         reportsHref={reportsHref(view)}
       />

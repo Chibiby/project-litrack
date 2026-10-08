@@ -259,7 +259,6 @@ export function getNavGroups(
           items: [
             { id: "school-head-school", label: "School Setup", href: SCHOOL_HEAD_ROUTES.school, icon: School },
             { id: "school-head-term-subjects", label: "End-of-Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
-            { id: "school-head-transfer", label: "Learner Transfers", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
           ],
         },
         {

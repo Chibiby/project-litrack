@@ -78,6 +78,11 @@ import {
   type ArchiveTarget,
 } from "@/components/learners/archive-confirm-copy";
 import { cn } from "@/lib/utils";
+import {
+  useTeacherTransfers,
+  type TeacherTransferConfig,
+} from "@/components/learners/use-teacher-transfers";
+import { TransferRequestedBadge } from "@/components/learners/transfer-requested-badge";
 
 /*
  * DIRECTION CONTRACT — teacher roster (/teacher/learners), v2
@@ -123,6 +128,8 @@ export type LearnerListRow = {
   /** Grade owning this learner — used for the detail link in multi-advisory lists. */
   gradeLevelId: string;
   gradeType: string;
+  /** The transfer request waiting for this learner, if any. */
+  pendingTransfer?: { requestId: string; toSectionName: string; requestedById: string | null } | null;
 };
 
 export type LearnerListClientProps = {
@@ -151,6 +158,8 @@ export type LearnerListClientProps = {
   archivedView?: boolean;
   /** The streamed Add New Learner control, rendered beside the switcher. */
   addControl?: React.ReactNode;
+  /** Request transfer data; absent (Super Admin) hides the transfer actions. */
+  transfer?: TeacherTransferConfig;
 };
 
 const HEAD_CLASS =
@@ -211,6 +220,7 @@ function LearnerListPanel({
   q,
   archivedView = false,
   addControl,
+  transfer,
 }: LearnerListClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -238,6 +248,10 @@ function LearnerListPanel({
   /** Learners awaiting archive confirmation; `null` when no confirm is open. */
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<PurgeTarget | null>(null);
+  const transfers = useTeacherTransfers({
+    config: isSuperAdmin ? undefined : transfer,
+    onDone: () => setSelected(new Set()),
+  });
 
   // Adopt the URL's `q` (e.g. browser back/forward) during render, per the
   // React docs "adjusting state when a prop changes" pattern.
@@ -458,7 +472,8 @@ function LearnerListPanel({
   const rowMenu = (l: LearnerListRow, withView: boolean) => {
     const canEnroll = !isSuperAdmin && !l.isAralLearner && !l.archivedAt;
     const canArchive = !isSuperAdmin && !l.archivedAt;
-    if (!withView && !canEnroll && !canArchive) return null;
+    const transferItem = transfers.menuItem(l);
+    if (!withView && !canEnroll && !canArchive && !transferItem) return null;
     return (
       // Not modal: its items open dialogs, and a modal menu handing focus to a
       // modal dialog loops between the two focus traps.
@@ -491,6 +506,7 @@ function LearnerListPanel({
               Enroll as ARAL
             </DropdownMenuItem>
           ) : null}
+          {transferItem}
           {canArchive ? (
             <DropdownMenuItem onSelect={() => requestArchive([l])}>
               <Archive className="size-4" aria-hidden />
@@ -567,6 +583,11 @@ function LearnerListPanel({
                   requestArchive(learners.filter((l) => selected.has(l.id)))
                 }
                 onEnrollAral={openBulkAral}
+                onRequestTransfer={
+                  transfers.enabled
+                    ? () => transfers.openFor(learners.filter((l) => selected.has(l.id)))
+                    : undefined
+                }
                 pending={pending}
               />
             ) : null
@@ -663,6 +684,9 @@ function LearnerListPanel({
                               {l.archivedAt && (
                                 <Badge variant="outline">Archived</Badge>
                               )}
+                              {l.pendingTransfer ? (
+                                <TransferRequestedBadge toSectionName={l.pendingTransfer.toSectionName} />
+                              ) : null}
                             </span>
                           </span>
                         </TableCell>
@@ -765,6 +789,12 @@ function LearnerListPanel({
                         Age {l.age} · {gradeAndSection(l)}
                         {l.isAralLearner ? " · ARAL" : ""}
                       </span>
+                      {l.pendingTransfer ? (
+                        <TransferRequestedBadge
+                          toSectionName={l.pendingTransfer.toSectionName}
+                          className="mt-0.5"
+                        />
+                      ) : null}
                     </Button>
                     <ReadingBandPill
                       profile={pill}
@@ -803,7 +833,13 @@ function LearnerListPanel({
         initialIsAralLearner={
           learners.find((l) => l.id === profileLearnerId)?.isAralLearner ?? false
         }
+        transferAction={transfers.profileAction(
+          learners.find((l) => l.id === profileLearnerId),
+          () => setProfileLearnerId(null)
+        )}
       />
+
+      {transfers.dialogs}
 
       {/* Also one instance, and for the same reason: the row menu and the bulk
           menu are two ways into one decision, so they set its subject rather

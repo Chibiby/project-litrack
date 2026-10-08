@@ -553,23 +553,24 @@ model School {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  users               User[]
-  gradeLevels         GradeLevel[]
-  learners            Learner[]
-  schoolYears         SchoolYear[]
-  teacherInvites      TeacherInvite[]
-  sections            Section[]
-  enrollments         Enrollment[]
-  announcements       Announcement[]
-  notifications       Notification[]
-  reports             Report[]
-  supportTickets      SupportTicket[]
-  unlockGrants        UnlockGrant[]
-  schoolUnlockGrants  SchoolUnlockGrant[]
-  chatChannels        ChatChannel[]
-  termWindowOverrides TermWindowOverride[]
-  termSubjects        TermSubject[]
-  aralMosyDecisions   AralMosyDecision[]
+  users                   User[]
+  gradeLevels             GradeLevel[]
+  learners                Learner[]
+  schoolYears             SchoolYear[]
+  teacherInvites          TeacherInvite[]
+  sections                Section[]
+  enrollments             Enrollment[]
+  announcements           Announcement[]
+  notifications           Notification[]
+  reports                 Report[]
+  supportTickets          SupportTicket[]
+  unlockGrants            UnlockGrant[]
+  schoolUnlockGrants      SchoolUnlockGrant[]
+  chatChannels            ChatChannel[]
+  termWindowOverrides     TermWindowOverride[]
+  termSubjects            TermSubject[]
+  aralMosyDecisions       AralMosyDecision[]
+  sectionTransferRequests SectionTransferRequest[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -866,6 +867,8 @@ model User {
   /// for every other role — see `DistrictAdminAssignment`.
   districtAssignments        DistrictAdminAssignment[] @relation("DistrictAdminAssignments")
   aralMosyDecisionsTutored   AralMosyDecision[]        @relation("AralMosyTutor")
+  sectionTransfersRequested  SectionTransferRequest[]  @relation("SectionTransferRequester")
+  sectionTransfersDecided    SectionTransferRequest[]  @relation("SectionTransferDecider")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1140,13 +1143,15 @@ model Section {
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
-  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  gradeLevel     GradeLevel       @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
-  adviser        User?            @relation("SectionAdviser", fields: [adviserId], references: [id], onDelete: SetNull)
+  school         School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeLevel     GradeLevel               @relation(fields: [gradeLevelId], references: [id], onDelete: Cascade)
+  adviser        User?                    @relation("SectionAdviser", fields: [adviserId], references: [id], onDelete: SetNull)
   teachers       TeacherSection[]
   learners       Learner[]
   enrollments    Enrollment[]
   teacherInvites TeacherInvite[]
+  transfersFrom  SectionTransferRequest[] @relation("SectionTransferFrom")
+  transfersTo    SectionTransferRequest[] @relation("SectionTransferTo")
 
   /// One name per grade, case-insensitively and among live sections only, via
   /// the SQL-only partial functional index `Section_gradeLevelId_name_folded_key`.
@@ -1301,6 +1306,7 @@ model Learner {
   enrollments             Enrollment[]
   aralProfile             AralProfile?
   mosyDecisions           AralMosyDecision[]
+  sectionTransferRequests SectionTransferRequest[]
   attendances             Attendance[]
   readingLevels           ReadingLevelRecord[]
   termGrades              TermGrade[]
@@ -1493,6 +1499,54 @@ model AralMosyDecision {
   @@index([schoolYearId, tutorId]) // page scope branch 2 + SchoolYear cascade
   @@index([tutorId]) // User SetNull FK side
   @@index([schoolId]) // School cascade + bySchoolId snapshot/clear
+}
+
+enum SectionTransferRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// A teacher's request to move a learner to another section of the same grade,
+/// awaiting School Head decision. Holds teacher requests only: a School Head's
+/// direct transfer writes no row here. See docs/specs/learner-section-transfers.md.
+/// SQL-only constraints (Prisma cannot express them) — PRESERVE when editing:
+///   SectionTransferRequest_learner_pending_unique (partial unique index, one
+///   PENDING row per learner), SectionTransferRequest_decided_iff_not_pending
+///   and SectionTransferRequest_sections_differ (CHECKs).
+model SectionTransferRequest {
+  id            String                       @id @default(uuid())
+  schoolId      String
+  learnerId     String
+  /// SetNull: see Attendance.recordedById.
+  requestedById String?
+  fromSectionId String
+  toSectionId   String
+  status        SectionTransferRequestStatus @default(PENDING)
+  /// Teacher note, <=300 (Zod). Never in audit metadata.
+  reason        String?
+  /// Approver/decliner, or the requester on cancel. SetNull.
+  decidedById   String?
+  decidedAt     DateTime?
+  /// Decline note, <=300 (Zod). Never in audit metadata.
+  decisionNote  String?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+
+  school      School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner     Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  requestedBy User?   @relation("SectionTransferRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  decidedBy   User?   @relation("SectionTransferDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  fromSection Section @relation("SectionTransferFrom", fields: [fromSectionId], references: [id], onDelete: Cascade)
+  toSection   Section @relation("SectionTransferTo", fields: [toSectionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status, createdAt]) // School Head panel + dashboard count
+  @@index([learnerId, status]) // per-row pending lookup on both rosters
+  @@index([requestedById, status]) // teacher's own requests + SetNull lookup
+  @@index([decidedById])
+  @@index([fromSectionId])
+  @@index([toSectionId])
 }
 
 model Attendance {

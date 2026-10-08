@@ -58,6 +58,15 @@ import type {
   AdvisoryOption,
   RosterUrlState,
 } from "@/components/learners/learner-list-toolbar";
+import {
+  listTeacherTransferRequests,
+  listTransferDestinations,
+  pendingTransfersByLearner,
+  type PendingTransfer,
+  type TeacherTransferRequestRow,
+  type TransferDestination,
+} from "@/lib/learners/section-transfer-queries";
+import { TeacherTransferRequests } from "@/components/learners/teacher-transfer-requests";
 
 export const dynamic = "force-dynamic";
 
@@ -312,6 +321,22 @@ async function LearnersBody({
   const learners =
     requestedLearners && skip === requestedSkip ? requestedLearners : await fetchLearners(skip);
 
+  // Request transfer reaches only the teacher's own advisory sections, so its
+  // destinations are their grades' sections; a Super Admin view offers none.
+  // A failed read hides the transfer actions rather than the whole roster.
+  let pendingTransfers = new Map<string, PendingTransfer>();
+  let transferDestinations: TransferDestination[] | null = null;
+  try {
+    [pendingTransfers, transferDestinations] = await Promise.all([
+      pendingTransfersByLearner(schoolId, learners.map((l) => l.id)),
+      isSuperAdmin
+        ? []
+        : listTransferDestinations(schoolId, [...new Set(placements.map((p) => p.gradeLevelId))]),
+    ]);
+  } catch (err) {
+    console.error("[TeacherLearnersPage] failed to load transfer data:", err);
+  }
+
   const rows: LearnerListRow[] = learners.map((l) => ({
     id: l.id,
     fullName: l.fullName,
@@ -325,6 +350,7 @@ async function LearnersBody({
     section: l.section,
     gradeLevelId: l.gradeLevelId,
     gradeType: l.gradeLevel.type,
+    pendingTransfer: pendingTransfers.get(l.id) ?? null,
   }));
 
   const gradeOptions = assignedGrades.map((g) => ({
@@ -353,7 +379,34 @@ async function LearnersBody({
       totalCount={totalCount}
       q={list.q}
       archivedView={list.filter === "archived"}
+      transfer={
+        isSuperAdmin || transferDestinations === null
+          ? undefined
+          : {
+              destinations: transferDestinations,
+              advisedSectionIds: placements.map((p) => p.sectionId),
+              viewerId: teacherId,
+            }
+      }
     />
+  );
+}
+
+/** "Your transfer requests": waiting ones plus those decided in the last 14 days. */
+async function TeacherTransferStrip({ schoolId, teacherId }: { schoolId: string; teacherId: string }) {
+  let requests: TeacherTransferRequestRow[] = [];
+  let loadFailed = false;
+  try {
+    requests = await listTeacherTransferRequests(schoolId, teacherId);
+  } catch (err) {
+    console.error("[TeacherLearnersPage] failed to load transfer requests:", err);
+    loadFailed = true;
+  }
+  if (!loadFailed && requests.length === 0) return null;
+  return (
+    <div className="mt-4">
+      <TeacherTransferRequests requests={requests} loadFailed={loadFailed} />
+    </div>
   );
 }
 
@@ -547,6 +600,12 @@ export default async function TeacherLearnersPage({
             />
           </Suspense>
           </div>
+
+          {!isSuperAdmin ? (
+            <Suspense fallback={null}>
+              <TeacherTransferStrip schoolId={schoolId} teacherId={user.id} />
+            </Suspense>
+          ) : null}
 
           <div className="mt-4">
             <Suspense

@@ -749,11 +749,16 @@ export type LearnerHubRow = {
   gender: "MALE" | "FEMALE";
   grade: GradeLevelType;
   gradeLabel: string;
+  /** Placement ids, for the School Head transfer dialog's eligibility check. */
+  gradeLevelId: string;
+  sectionId: string | null;
   sectionName: string | null;
   school: { id: string; name: string };
   isAral: boolean;
   /** Computed server-side; the ethnicity itself never leaves this module. */
   isIp: boolean;
+  /** Archived learners are listed but cannot be transferred. */
+  archived: boolean;
 };
 
 /**
@@ -827,6 +832,9 @@ async function queryLearnersHub(
         isAralLearner: true,
         ethnicity: true,
         secondaryEthnicity: true,
+        gradeLevelId: true,
+        sectionId: true,
+        archivedAt: true,
         gradeLevel: { select: { type: true } },
         section: { select: { name: true } },
         school: { select: { id: true, name: true } },
@@ -843,10 +851,13 @@ async function queryLearnersHub(
       gender: l.gender,
       grade: l.gradeLevel.type,
       gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+      gradeLevelId: l.gradeLevelId,
+      sectionId: l.sectionId,
       sectionName: l.section?.name ?? null,
       school: l.school,
       isAral: l.isAralLearner,
       isIp: isIpLearner(l.ethnicity, l.secondaryEthnicity),
+      archived: l.archivedAt !== null,
     })),
   };
 }

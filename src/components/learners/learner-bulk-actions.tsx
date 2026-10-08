@@ -19,15 +19,15 @@ import {
 
 /**
  * The roster's bulk action menu, occupying the slot the comp gives to Filter
- * and Export. Archive and Enroll in ARAL are wired; the rest are declared but
- * inert on purpose, so the menu shows where those capabilities will land
- * without pretending they work yet. Each inert row is disabled and labelled
- * "Soon" — never a silent no-op the teacher would read as a failure.
+ * and Export. Archive, Enroll in ARAL and Request transfer are wired; the rest
+ * are declared but inert on purpose, so the menu shows where those
+ * capabilities will land without pretending they work yet. Each inert row is
+ * disabled and labelled "Soon" — never a silent no-op the teacher would read
+ * as a failure.
  */
 
 /** Actions the menu will grow into. Keep the labels, wire them one at a time. */
 const PLANNED = [
-  { key: "transfer", label: "Transfer student", icon: ArrowLeftRight },
   { key: "export", label: "Export selected", icon: Download },
 ] as const;
 
@@ -35,6 +35,7 @@ export function LearnerBulkActions({
   selectedCount,
   onArchive,
   onEnrollAral,
+  onRequestTransfer,
   pending = false,
 }: {
   selectedCount: number;
@@ -45,6 +46,8 @@ export function LearnerBulkActions({
    * is a choice, not a confirmation.
    */
   onEnrollAral: () => void;
+  /** Opens the transfer request dialog for the selection; omitted, the item is hidden. */
+  onRequestTransfer?: () => void;
   pending?: boolean;
 }) {
   const hasSelection = selectedCount > 0;
@@ -91,6 +94,19 @@ export function LearnerBulkActions({
             <Sparkles className="h-4 w-4" aria-hidden />
             Enroll in ARAL
           </DropdownMenuItem>
+
+          {onRequestTransfer ? (
+            <DropdownMenuItem
+              disabled={!hasSelection || pending}
+              onSelect={(e) => {
+                e.preventDefault();
+                requestAnimationFrame(onRequestTransfer);
+              }}
+            >
+              <ArrowLeftRight className="h-4 w-4" aria-hidden />
+              Request transfer
+            </DropdownMenuItem>
+          ) : null}
 
           <DropdownMenuSeparator />
 

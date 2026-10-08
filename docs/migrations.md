@@ -60,6 +60,15 @@ CREATE UNIQUE INDEX "Enrollment_learner_active_unique"
 
 Prisma’s schema language cannot express partial unique indexes, so this lives only in the SQL migration. Keep it when editing Enrollment-related migrations.
 
+`SectionTransferRequest` (migration `20261008000001_section_transfer_request`) allows at most one `PENDING` row per learner, also SQL-only:
+
+```sql
+CREATE UNIQUE INDEX "SectionTransferRequest_learner_pending_unique"
+  ON "SectionTransferRequest"("learnerId") WHERE "status" = 'PENDING';
+```
+
+It also carries two SQL-only CHECK constraints: `SectionTransferRequest_decided_iff_not_pending` (`("status" = 'PENDING') = ("decidedAt" IS NULL)`) and `SectionTransferRequest_sections_differ` (`"fromSectionId" <> "toSectionId"`). Preserve all three when editing this table's migrations.
+
 `SchoolYear` allows at most one active row per school
 (`20261003000003_school_year_one_active`): `CREATE UNIQUE INDEX "SchoolYear_school_active_unique" ON "SchoolYear"("schoolId") WHERE "isActive";` — SQL-only, keep it; run the dedupe pre-flight in that migration's header first, as it fails on existing duplicates.
 

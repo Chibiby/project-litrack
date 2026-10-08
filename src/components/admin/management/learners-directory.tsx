@@ -3,6 +3,7 @@
 import { GraduationCap } from "lucide-react";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Surface } from "@/components/ui/surface";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
@@ -44,7 +45,50 @@ type LearnersDirectoryProps = {
   clearHref?: string;
   /** Empty-state line when no learner exists at all; the default speaks to the division-wide view. */
   emptyDescription?: string;
+  /**
+   * Row checkboxes for a host that acts on learners (the School Head page).
+   * Absent means a read-only directory, as on the admin page.
+   */
+  selection?: LearnersDirectorySelection;
+  /** Drawn beside the directory heading, e.g. "Transfer selected". */
+  bulkActions?: React.ReactNode;
+  /** Per-row controls in a trailing Actions column. */
+  rowActions?: (row: LearnerHubRow) => React.ReactNode;
+  /** Status shown under the learner's name, e.g. a waiting transfer request. */
+  rowBadge?: (row: LearnerHubRow) => React.ReactNode;
 };
+
+export type LearnersDirectorySelection = {
+  selectedIds: ReadonlySet<string>;
+  onChange: (next: Set<string>) => void;
+};
+
+function SelectAll({ rows, selection }: { rows: LearnerHubRow[]; selection: LearnersDirectorySelection }) {
+  const picked = rows.filter((r) => selection.selectedIds.has(r.id)).length;
+  const all = rows.length > 0 && picked === rows.length;
+  return (
+    <Checkbox
+      checked={all ? true : picked > 0 ? "indeterminate" : false}
+      onCheckedChange={(v) => selection.onChange(v === true ? new Set(rows.map((r) => r.id)) : new Set())}
+      aria-label="Select all learners on this page"
+    />
+  );
+}
+
+function SelectOne({ row, selection, where }: { row: LearnerHubRow; selection: LearnersDirectorySelection; where?: string }) {
+  return (
+    <Checkbox
+      checked={selection.selectedIds.has(row.id)}
+      onCheckedChange={(v) => {
+        const next = new Set(selection.selectedIds);
+        if (v === true) next.add(row.id);
+        else next.delete(row.id);
+        selection.onChange(next);
+      }}
+      aria-label={`Select ${row.listingName}${where ? ` ${where}` : ""}`}
+    />
+  );
+}
 
 function ProgramBadges({ row }: { row: LearnerHubRow }) {
   if (!row.isAral && !row.isIp) return <span className="text-muted-foreground">—</span>;
@@ -88,6 +132,10 @@ function LearnersDirectoryInner({
   keepParams,
   clearHref,
   emptyDescription = "Learners appear here once a school adds them.",
+  selection,
+  bulkActions,
+  rowActions,
+  rowBadge,
 }: LearnersDirectoryProps) {
   const active = describeActiveFilters(filters, list.q);
 
@@ -110,9 +158,18 @@ function LearnersDirectoryInner({
             Learner directory{" "}
             <span className="text-muted-foreground">({list.totalCount.toLocaleString()})</span>
           </h2>
-          <span className="text-xs text-muted-foreground">
-            Page {list.page} of {list.totalPages}
-          </span>
+          {bulkActions ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {bulkActions}
+              <span className="text-xs text-muted-foreground">
+                Page {list.page} of {list.totalPages}
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Page {list.page} of {list.totalPages}
+            </span>
+          )}
         </div>
         <ListBusyRegion
           label="learners"
@@ -154,18 +211,35 @@ function LearnersDirectoryInner({
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {selection ? (
+                        <TableHead className="w-10 pl-4">
+                          <SelectAll rows={rows} selection={selection} />
+                        </TableHead>
+                      ) : null}
                       <TableHead className="pl-4 text-xs">Name</TableHead>
                       <TableHead className="text-xs">Sex</TableHead>
                       <TableHead className="text-xs">Grade</TableHead>
                       <TableHead className="text-xs">Section</TableHead>
                       {hideSchool ? null : <TableHead className="text-xs">School</TableHead>}
                       <TableHead className="pr-4 text-xs">Programs</TableHead>
+                      {rowActions ? <TableHead className="pr-4 text-right text-xs">Actions</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="py-2.5 pl-4 text-sm font-medium">{row.listingName}</TableCell>
+                      <TableRow
+                        key={row.id}
+                        data-state={selection?.selectedIds.has(row.id) ? "selected" : undefined}
+                      >
+                        {selection ? (
+                          <TableCell className="w-10 py-2.5 pl-4">
+                            <SelectOne row={row} selection={selection} />
+                          </TableCell>
+                        ) : null}
+                        <TableCell className="py-2.5 pl-4 text-sm font-medium">
+                          {row.listingName}
+                          {rowBadge ? rowBadge(row) : null}
+                        </TableCell>
                         <TableCell className="py-2.5 text-sm">{GENDER_LABELS[row.gender]}</TableCell>
                         <TableCell className="py-2.5 text-sm">{row.gradeLabel}</TableCell>
                         <TableCell className="py-2.5 text-sm">{row.sectionName ?? "—"}</TableCell>
@@ -175,6 +249,9 @@ function LearnersDirectoryInner({
                         <TableCell className="py-2.5 pr-4">
                           <ProgramBadges row={row} />
                         </TableCell>
+                        {rowActions ? (
+                          <TableCell className="py-2.5 pr-4 text-right">{rowActions(row)}</TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -183,8 +260,14 @@ function LearnersDirectoryInner({
               <ul className="divide-y divide-border/60 lg:hidden" aria-label="Learners">
                 {rows.map((row) => (
                   <li key={row.id} className="flex items-start gap-3 px-4 py-3">
+                    {selection ? (
+                      <span className="pt-0.5">
+                        <SelectOne row={row} selection={selection} where="in list" />
+                      </span>
+                    ) : null}
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-foreground">{row.listingName}</p>
+                      {rowBadge ? rowBadge(row) : null}
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {GENDER_LABELS[row.gender]} · {row.gradeLabel}
                         {row.sectionName ? ` · ${row.sectionName}` : ""}
@@ -196,6 +279,7 @@ function LearnersDirectoryInner({
                     <div className="shrink-0">
                       <ProgramBadges row={row} />
                     </div>
+                    {rowActions ? <div className="shrink-0">{rowActions(row)}</div> : null}
                   </li>
                 ))}
               </ul>

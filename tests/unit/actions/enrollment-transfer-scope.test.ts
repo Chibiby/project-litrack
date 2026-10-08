@@ -131,6 +131,7 @@ const userFindFirst = vi.fn(async (args: { where: { id: string; schoolId: string
   return null;
 });
 
+const requestUpdateMany = vi.fn(async (_args: Record<string, unknown>) => ({ count: 0 }));
 function makeTx() {
   return {
     enrollment: {
@@ -140,6 +141,7 @@ function makeTx() {
     },
     schoolYear: { findFirst: vi.fn(async () => null) },
     learner: { update: vi.fn(async () => ({})) },
+    sectionTransferRequest: { updateMany: (a: Record<string, unknown>) => requestUpdateMany(a) },
   };
 }
 const transaction = vi.fn(async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx()));
@@ -178,7 +180,9 @@ vi.mock("@/lib/audit", async () => {
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const revalidateTransferRequests = vi.fn();
 vi.mock("@/lib/cache/revalidate", () => ({
+  revalidateTransferRequests: (...a: unknown[]) => revalidateTransferRequests(...a),
   revalidateSchoolDashboard: vi.fn(),
   revalidateSchoolHeadTeachers: vi.fn(),
   revalidateSchoolsList: vi.fn(),
@@ -253,6 +257,23 @@ describe("transferLearnerCrossSchool — district admin scope (I12, T7)", () => 
       action: "LEARNER_TRANSFER_CROSS_SCHOOL",
       metadata: expect.objectContaining({ actorRole: "DISTRICT_ADMIN" }),
     });
+  });
+});
+
+describe("transferLearnerCrossSchool — stale section-transfer requests", () => {
+  it("cancels the learner's PENDING requests in the transaction and refreshes the old school's panel", async () => {
+    const res = await transferLearnerCrossSchool(crossForm(SCHOOL_B.id));
+
+    expect(res).toMatchObject({ ok: true });
+    expect(requestUpdateMany).toHaveBeenCalledTimes(1);
+    const args = requestUpdateMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(args.where).toEqual({ learnerId: LEARNER_ID, status: "PENDING" });
+    expect(args.data).toMatchObject({ status: "CANCELLED", decidedById: DA_ID });
+    expect(args.data.decidedAt).toBeInstanceOf(Date);
+    expect(revalidateTransferRequests).toHaveBeenCalledWith(SCHOOL_A.id);
   });
 });
 

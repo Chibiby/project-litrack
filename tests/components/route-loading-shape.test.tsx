@@ -30,7 +30,6 @@ import TeacherAralReadingLevelLoading from "@/app/teacher/(app)/aral/[gradeId]/r
 import TeacherAralTermsReportsLoading from "@/app/teacher/(app)/aral/[gradeId]/terms-reports/loading";
 import TeacherTermsReportsLoading from "@/app/teacher/(app)/terms-reports/loading";
 import SchoolHeadDashboardLoading from "@/app/school-head/(app)/loading";
-import SchoolHeadTransferLoading from "@/app/school-head/(app)/transfer/loading";
 import SchoolHeadAralLoading from "@/app/school-head/(app)/aral/loading";
 import SchoolHeadAnnouncementsLoading from "@/app/school-head/(app)/announcements/loading";
 import SchoolWorkspaceLoading from "@/app/school-head/(app)/school/loading";
@@ -449,7 +448,6 @@ interface SchoolHeadHeroRoute {
  * compact title block on purpose, and are asserted separately below.
  */
 const SCHOOL_HEAD_HERO_ROUTES: SchoolHeadHeroRoute[] = [
-  { label: "transfer", Boundary: SchoolHeadTransferLoading, tabs: 0 },
   { label: "aral", Boundary: SchoolHeadAralLoading, tabs: 0 },
   { label: "announcements", Boundary: SchoolHeadAnnouncementsLoading, tabs: 0 },
   {

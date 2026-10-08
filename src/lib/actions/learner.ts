@@ -1147,7 +1147,7 @@ export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
-  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+  revalidatePath(SCHOOL_HEAD_ROUTES.learners);
   revalidatePath("/teacher/aral");
   // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived
   // from the learners they track, so both have to be busted.

@@ -234,6 +234,31 @@ export const ERRORS = {
     message: "Move the {learners} in {section} to another section first.",
   },
 
+  // ── Transfers ────────────────────────────────────────────────────────────
+  // {learners} is already counted and pluralised ("3 learners"); {have} is
+  // "has" or "have" to agree with it; {reason} is a TRANSFER_BLOCK_REASON_LABELS
+  // sentence fragment.
+  TRANSFER_BLOCKED: {
+    status: 409,
+    severity: "user",
+    message: "{learners} can't move to {section}: {reason}.",
+  },
+  TRANSFER_REQUEST_PENDING: {
+    status: 409,
+    severity: "user",
+    message: "{learners} already {have} a transfer request waiting for a decision.",
+  },
+  TRANSFER_STALE: {
+    status: 409,
+    severity: "user",
+    message: "{learners} can no longer move as requested: {reason}. Decline the request instead.",
+  },
+  TRANSFER_REQUESTS_CHANGED: {
+    status: 409,
+    severity: "user",
+    message: "Some of these were already changed or decided. Refresh to see the current list.",
+  },
+
   // ── MOSY ─────────────────────────────────────────────────────────────────
   /** MOSY saves are closed by the Super Admin submission lock (the default). */
   MOSY_LOCKED: {
@@ -411,6 +436,10 @@ const DEFAULT_PARAMS: Readonly<Record<string, string>> = {
   wait: "a few minutes",
   what: "this",
   message: "Check the highlighted field and try again.",
+  learners: "Some learners",
+  section: "that section",
+  reason: "something changed",
+  have: "have",
 };
 
 export function isErrorCode(value: unknown): value is ErrorCode {
