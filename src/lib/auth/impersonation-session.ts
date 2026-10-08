@@ -149,7 +149,7 @@ export type ImpersonationState = {
 /**
  * The impersonation on this request, or null. Reads the session through the
  * cookie cache (cheap on every render: layouts and the banner call it), so a
- * just-ended impersonation can show for up to five minutes on another tab —
+ * just-ended impersonation can show for up to 15 minutes on another tab —
  * UI only. Anything that grants or narrows access uses
  * `isVerifiedImpersonationOf`, which reads the session row.
  *

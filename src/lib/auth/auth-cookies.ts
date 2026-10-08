@@ -6,7 +6,7 @@
  * HMAC check) and the pure role parser.
  *
  * Middleware is not authoritative. It reads the role from the HMAC-verified
- * compact cookie cache, which lives at most `cookieCache.maxAge` (5 minutes)
+ * compact cookie cache, which lives at most `cookieCache.maxAge` (15 minutes)
  * after the last server-side session read. When it has expired the role is
  * null and the request passes through — the same "legacy role-less" path
  * Supabase sessions without `app_metadata.role` took — and `requireUser`,
@@ -21,6 +21,21 @@ export const AUTH_COOKIE_PREFIX = "litrack";
 
 /** `session.cookieCache.version` in the Better Auth config; both sides must agree. */
 export const AUTH_COOKIE_CACHE_VERSION = "1";
+
+/**
+ * `session.cookieCache.maxAge` in the Better Auth config: how long the signed
+ * session cookie is trusted before a page render must read the session row.
+ * 15 minutes. Only server actions and `SESSION_REFRESH_PATH` can renew it
+ * (RSC renders cannot write cookies), so it is also the staleness window for a
+ * session revoked on another device (risk R4).
+ */
+export const AUTH_COOKIE_CACHE_SECONDS = 900;
+
+/** Route the browser POSTs to renew the cookie cache, where cookies can be written. */
+export const SESSION_REFRESH_PATH = "/api/session-refresh";
+
+/** How often the browser calls `SESSION_REFRESH_PATH`; must stay under the cache lifetime. */
+export const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
 const SECURE_PREFIX = "__Secure-";
 

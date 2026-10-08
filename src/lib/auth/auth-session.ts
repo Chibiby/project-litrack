@@ -24,7 +24,7 @@ export type AuthSessionData = NonNullable<
 const loadSession = cache(async (fresh: boolean): Promise<AuthSessionData | null> => {
   const session = await getAuth().api.getSession({
     headers: await headers(),
-    // `fresh` skips the 5-minute signed cookie cache and reads the session row,
+    // `fresh` skips the 15-minute signed cookie cache and reads the session row,
     // for checks that must see a revocation at once (impersonation proof,
     // sign-out scope). Ordinary page renders take the cache.
     query: { disableCookieCache: fresh },
@@ -104,7 +104,7 @@ export async function endCurrentSession(): Promise<boolean> {
  * Delete every session of one identity, on every device. A plain database
  * delete, so it works from a Server Component render too (where cookie writes
  * are impossible). Signed cookie caches already issued stay readable for up
- * to five minutes (risk R4); `requireUser` re-reads the `User` row every
+ * to 15 minutes (risk R4); `requireUser` re-reads the `User` row every
  * request, so deactivation is still immediate.
  *
  * Returns how many sessions were deleted.

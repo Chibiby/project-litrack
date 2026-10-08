@@ -12,6 +12,7 @@ import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 import { TeacherPresenceHeartbeat } from "@/components/presence/teacher-presence-heartbeat";
+import { SessionKeepAlive } from "@/components/session/session-keep-alive";
 
 const RoleShellContext = createContext(false);
 
@@ -178,6 +179,8 @@ export function RoleShell({
           ) : null}
 
           {trackTeacherPresence ? <TeacherPresenceHeartbeat /> : null}
+
+          <SessionKeepAlive />
 
           {/* Last, after the page: a dialog portals out of this tree so its
               place here does not affect layout, but it does set tab order, and

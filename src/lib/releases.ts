@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.36.1",
+    date: "2026-10-08",
+    title: "Faster page loads after the sign-in update",
+    announce: true,
+    fixes: [
+      "Pages open faster again: LITRACK no longer re-checks your sign-in with the database on every click.",
+      "Your sign-in is now renewed quietly in the background while you work.",
+    ],
+  },
+  {
     version: "2.36.0",
     date: "2026-10-08",
     title: "Sign-in moved to LITRACK's own system",

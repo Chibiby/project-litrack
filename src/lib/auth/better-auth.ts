@@ -9,6 +9,7 @@ import { prismaFresh } from "@/lib/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import {
+  AUTH_COOKIE_CACHE_SECONDS,
   AUTH_COOKIE_CACHE_VERSION,
   AUTH_COOKIE_PREFIX,
   authCookiesSecure,
@@ -72,7 +73,7 @@ function createAuth(secret: string) {
       updateAge: AUTH_SESSION_LIFETIME.updateAgeSeconds,
       cookieCache: {
         enabled: true,
-        maxAge: 300,
+        maxAge: AUTH_COOKIE_CACHE_SECONDS,
         strategy: "compact",
         version: AUTH_COOKIE_CACHE_VERSION,
       },

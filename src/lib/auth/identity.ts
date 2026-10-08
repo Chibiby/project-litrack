@@ -158,7 +158,7 @@ export async function setEmail(
 
 /**
  * Mirror `User.role` onto the identity (invariant I3). Middleware reads it
- * from the cookie cache, so a stale value is visible for up to five minutes.
+ * from the cookie cache, so a stale value is visible for up to 15 minutes.
  * Throws `IDENTITY_NOT_FOUND` when there is no identity.
  */
 export async function setRole(

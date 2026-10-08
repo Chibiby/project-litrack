@@ -187,7 +187,7 @@ const getCurrentUserCached = cache(async (allowPending: boolean): Promise<User |
       try {
         // The cookie-cached session read: most renders verify the signed cookie cache and
         // never touch the database for the session. The cost: a revoked session's cache can
-        // live up to five minutes. Deleted, inactive, and rejected accounts are still
+        // live up to 15 minutes. Deleted, inactive, and rejected accounts are still
         // refused by the Prisma row checks below, which re-read the User row every request,
         // and impersonation proof reads the session row fresh (`isVerifiedImpersonationOf`).
         const session = await getAuthSession();
