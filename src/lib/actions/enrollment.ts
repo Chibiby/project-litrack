@@ -106,12 +106,14 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
     // Preserve distinction: missing key → undefined; "__none__" → clear
     targetSectionId: rawSection === null ? undefined : rawSection,
     targetTeacherId: formData.get("targetTeacherId"),
+    reason: formData.get("reason"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
 
-  const { learnerId, targetGradeLevelId, targetSectionId, targetTeacherId } = parsed.data;
+  const { learnerId, targetGradeLevelId, targetSectionId, targetTeacherId, reason } =
+    parsed.data;
 
   const learner = await prisma.learner.findFirst({
     where: { id: learnerId, deletedAt: null },
@@ -225,10 +227,13 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
       schoolYearId = activeYear?.id ?? null;
     }
 
+    // The reason goes on both rows: the closed one says why that placement
+    // ended, the new one why this placement began. `LEARNER_TRANSFER` is not a
+    // security audit action, so `AuditLog` would drop it.
     if (active) {
       await tx.enrollment.update({
         where: { id: active.id },
-        data: { status: "TRANSFERRED", endedAt: new Date() },
+        data: { status: "TRANSFERRED", endedAt: new Date(), notes: reason },
       });
     }
 
@@ -252,6 +257,7 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
           sectionId: resolvedSectionId,
           teacherId: resolvedTeacherId,
           status: "ACTIVE",
+          notes: reason,
         },
       });
     }

@@ -54,12 +54,31 @@ const optionalTransferTeacherId = z
     return trimmed ? trimmed : undefined;
   });
 
+export const TRANSFER_REASON_MIN = 5;
+export const TRANSFER_REASON_MAX = 500;
+
+/**
+ * Why a School Head moved a learner. Required: a grade or section change
+ * rewrites the learner's placement for every report downstream, so the person
+ * who made it has to say why. Stored on the learner's `Enrollment.notes`.
+ */
+export const transferReasonSchema = z
+  // `invalid_type_error` too: a FormData field that was never set arrives as null.
+  .string({
+    required_error: "Give a reason for this change",
+    invalid_type_error: "Give a reason for this change",
+  })
+  .trim()
+  .min(TRANSFER_REASON_MIN, `Give a reason for this change (at least ${TRANSFER_REASON_MIN} characters)`)
+  .max(TRANSFER_REASON_MAX, `Keep the reason under ${TRANSFER_REASON_MAX} characters`);
+
 /** SCHOOL_HEAD same-school transfer (grade / section / teacher). */
 export const transferLearnerSchema = z.object({
   learnerId: nonEmpty("Learner required"),
   targetGradeLevelId: nonEmpty("Target grade level required"),
   targetSectionId: optionalTransferSectionId,
   targetTeacherId: optionalTransferTeacherId,
+  reason: transferReasonSchema,
 });
 
 export type TransferLearnerInput = z.infer<typeof transferLearnerSchema>;

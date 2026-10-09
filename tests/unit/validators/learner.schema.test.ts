@@ -358,11 +358,14 @@ describe("learnerIdSchema", () => {
   });
 });
 
+const REASON = "Wrong grade level was encoded";
+
 describe("transferLearnerSchema", () => {
   it("accepts same-school transfer payload", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: "g2",
+      reason: REASON,
       targetTeacherId: "t2",
     });
     expect(result.success).toBe(true);
@@ -375,6 +378,7 @@ describe("transferLearnerSchema", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: "g2",
+      reason: REASON,
       targetSectionId: "s1",
       targetTeacherId: "t2",
     });
@@ -388,6 +392,7 @@ describe("transferLearnerSchema", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: "g2",
+      reason: REASON,
       targetSectionId: "",
       targetTeacherId: "t2",
     });
@@ -401,6 +406,7 @@ describe("transferLearnerSchema", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: "g2",
+      reason: REASON,
       targetSectionId: SECTION_CLEAR,
       targetTeacherId: "t2",
     });
@@ -423,6 +429,7 @@ describe("transferLearnerSchema", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: "g2",
+      reason: REASON,
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -434,6 +441,7 @@ describe("transferLearnerSchema", () => {
     const result = transferLearnerSchema.safeParse({
       learnerId: "l1",
       targetGradeLevelId: GRADE_FLOATING,
+      reason: REASON,
       targetTeacherId: "   ",
     });
     expect(result.success).toBe(true);
@@ -441,6 +449,23 @@ describe("transferLearnerSchema", () => {
       expect(result.data.targetTeacherId).toBeUndefined();
       expect(result.data.targetGradeLevelId).toBe(GRADE_FLOATING);
     }
+  });
+
+  it("requires a reason of at least 5 characters", () => {
+    const base = { learnerId: "l1", targetGradeLevelId: "g2", targetTeacherId: "t2" };
+    expect(transferLearnerSchema.safeParse(base).success).toBe(false);
+    expect(transferLearnerSchema.safeParse({ ...base, reason: null }).success).toBe(false);
+    expect(transferLearnerSchema.safeParse({ ...base, reason: "  ab  " }).success).toBe(false);
+    expect(transferLearnerSchema.safeParse({ ...base, reason: "x".repeat(501) }).success).toBe(false);
+  });
+
+  it("trims the reason", () => {
+    const result = transferLearnerSchema.safeParse({
+      learnerId: "l1",
+      targetGradeLevelId: "g2",
+      reason: "  Learner was promoted  ",
+    });
+    expect(result.success && result.data.reason).toBe("Learner was promoted");
   });
 });
 

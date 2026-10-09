@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.38.0",
+    date: "2026-10-09",
+    title: "Grade changes now ask for a reason and a confirmation",
+    announce: true,
+    fixes: [
+      "School Heads: Change grade now asks why the learner is moving. Pick a common reason or type your own. The reason is saved with the learner's enrolment record.",
+      "Before a grade change goes through, you see a review of the old grade, the new grade and your reason, and confirm it with Yes, change grade.",
+    ],
+  },
+  {
     version: "2.37.0",
     date: "2026-10-08",
     title: "Transfer learners right from the Learners page",

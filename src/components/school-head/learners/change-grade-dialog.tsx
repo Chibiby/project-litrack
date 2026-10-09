@@ -15,11 +15,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { transferLearner } from "@/lib/actions/enrollment";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
-import { GRADE_FLOATING, SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
+import {
+  GRADE_FLOATING,
+  SECTION_CLEAR,
+  TRANSFER_REASON_MAX,
+  TRANSFER_REASON_MIN,
+} from "@/lib/validators/enrollment.schema";
+
+/** One tap fills the reason box; the head can still edit or add detail. */
+const COMMON_REASONS = [
+  "Wrong grade level was encoded",
+  "Learner was promoted",
+  "Learner was retained",
+  "Requested by parent or guardian",
+] as const;
 
 /** What the School Head Learners page loads for Change grade (never for a Super Admin view). */
 export type ChangeGradeOptions = {
@@ -60,7 +74,12 @@ export function ChangeGradeDialog({
   const [gradeId, setGradeId] = useState("");
   const [sectionId, setSectionId] = useState(SECTION_CLEAR);
   const [teacherId, setTeacherId] = useState("");
+  const [reason, setReason] = useState("");
+  // The move rewrites the learner's placement in every report, so it is asked
+  // twice: once with the form, once on a review of exactly what will change.
+  const [confirming, setConfirming] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const trimmedReason = reason.trim();
 
   const [prevLearner, setPrevLearner] = useState(learner);
   if (learner !== prevLearner) {
@@ -68,6 +87,8 @@ export function ChangeGradeDialog({
     setGradeId("");
     setSectionId(SECTION_CLEAR);
     setTeacherId("");
+    setReason("");
+    setConfirming(false);
     setErrors({});
   }
 
@@ -78,10 +99,22 @@ export function ChangeGradeDialog({
   const grade = grades.find((g) => g.id === gradeId);
   const section = sections.find((s) => s.id === sectionId);
   const teacher = teachers.find((t) => t.id === teacherId);
-  const ready = toFloating || (grade !== undefined && teacher !== undefined);
+  const placed = toFloating || (grade !== undefined && teacher !== undefined);
+  const ready = placed && trimmedReason.length >= TRANSFER_REASON_MIN;
 
   const close = () => {
     if (!pending) onClose();
+  };
+
+  const review = () => {
+    if (!learner || !placed) return;
+    if (trimmedReason.length < TRANSFER_REASON_MIN) {
+      setErrors({ reason: `Give a reason for this change (at least ${TRANSFER_REASON_MIN} characters).` });
+      document.getElementById("change-grade-reason")?.focus();
+      return;
+    }
+    setErrors({});
+    setConfirming(true);
   };
 
   const submit = () => {
@@ -94,10 +127,13 @@ export function ChangeGradeDialog({
       // Floating carries no section and no teacher; the action refuses them.
       fd.set("targetSectionId", toFloating ? SECTION_CLEAR : sectionId || SECTION_CLEAR);
       fd.set("targetTeacherId", toFloating ? "" : teacherId);
+      fd.set("reason", trimmedReason);
       const res = await callAction(() => transferLearner(fd));
       if (!res.ok) {
         toastFailure(res);
         if ("fieldErrors" in res && res.fieldErrors) setErrors(res.fieldErrors);
+        // Back to the form so the field the server refused is on screen.
+        setConfirming(false);
         return;
       }
       toast.success(
@@ -112,9 +148,9 @@ export function ChangeGradeDialog({
   const summary = !learner
     ? null
     : toFloating
-      ? `Moves ${learner.name} (${learner.gradeLabel}) to Floating — no grade, no section, no adviser. Their ARAL designation is kept.`
+      ? `Moves ${learner.name} from ${learner.gradeLabel} to Floating — no grade, no section, no adviser. Their ARAL designation is kept.`
       : grade && teacher
-        ? `Moves ${learner.name} (${learner.gradeLabel}) to ${grade.label}${
+        ? `Moves ${learner.name} from ${learner.gradeLabel} to ${grade.label}${
             section ? `, section ${section.name}` : ", no section"
           }, under ${teacher.fullName}.`
         : null;
@@ -133,6 +169,23 @@ export function ChangeGradeDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {confirming && summary ? (
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
+            <Callout title={toFloating ? "Confirm move to Floating" : "Confirm grade change"}>
+              This changes the learner&apos;s grade in their records and in every report. Check the details below.
+            </Callout>
+            <dl className="space-y-3 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm">
+              <div>
+                <dt className="text-xs font-medium text-muted-foreground">Change</dt>
+                <dd className="text-foreground">{summary}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-muted-foreground">Reason</dt>
+                <dd className="whitespace-pre-wrap break-words text-foreground">{trimmedReason}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : (
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           {!options.hasActiveYear ? (
             <Callout title="No active school year">
@@ -226,20 +279,77 @@ export function ChangeGradeDialog({
             </>
           )}
 
+          <div className="space-y-2">
+            <Label htmlFor="change-grade-reason">Reason for this change</Label>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Common reasons">
+              {COMMON_REASONS.map((r) => (
+                <Button
+                  key={r}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => {
+                    setReason(r);
+                    setErrors((prev) => ({ ...prev, reason: "" }));
+                  }}
+                  aria-pressed={trimmedReason === r}
+                  className="rounded-full text-xs aria-pressed:border-primary aria-pressed:bg-primary/10"
+                >
+                  {r}
+                </Button>
+              ))}
+            </div>
+            <Textarea
+              id="change-grade-reason"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                if (errors.reason) setErrors((prev) => ({ ...prev, reason: "" }));
+              }}
+              maxLength={TRANSFER_REASON_MAX}
+              disabled={pending}
+              placeholder="Why is this learner's grade being changed?"
+              aria-invalid={errors.reason ? true : undefined}
+              aria-describedby="change-grade-reason-hint"
+            />
+            <p
+              id="change-grade-reason-hint"
+              className={errors.reason ? "text-sm text-destructive" : "text-xs text-muted-foreground"}
+            >
+              {errors.reason ||
+                `Required. Saved with the learner's enrolment record. ${reason.length}/${TRANSFER_REASON_MAX}`}
+            </p>
+          </div>
+
           {summary ? (
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground" aria-live="polite">
               {summary}
             </p>
           ) : null}
         </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" onClick={close} disabled={pending}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submit} loading={pending} loadingText="Moving…" disabled={!ready}>
-            {toFloating ? "Move to Floating" : "Change grade"}
-          </Button>
+          {confirming ? (
+            <>
+              <Button type="button" variant="outline" onClick={() => setConfirming(false)} disabled={pending}>
+                Back
+              </Button>
+              <Button type="button" onClick={submit} loading={pending} loadingText="Moving…" disabled={!ready}>
+                {toFloating ? "Yes, move to Floating" : "Yes, change grade"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={close} disabled={pending}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={review} disabled={!placed || pending}>
+                Review change
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

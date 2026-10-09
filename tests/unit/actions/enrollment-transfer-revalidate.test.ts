@@ -144,11 +144,14 @@ const schoolFindFirst = vi.fn(async (args: { where: { id: string } }) => ({
 /** Must never be reached by these fixtures — see fixture note 2. */
 const sectionFindFirst = vi.fn(async () => null);
 
+/** Null by default: no ACTIVE enrollment is the shortest green path. */
+let activeEnrollment: { id: string; schoolYearId: string } | null = null;
+let lastTx: ReturnType<typeof makeTx> | null = null;
+
 function makeTx() {
   return {
     enrollment: {
-      // No ACTIVE enrollment: the shortest green path through both transactions.
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async () => activeEnrollment),
       update: vi.fn(async () => ({})),
       create: vi.fn(async () => ({})),
     },
@@ -164,7 +167,10 @@ function makeTx() {
 }
 
 const transaction = vi.fn(
-  async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx())
+  async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => {
+    lastTx = makeTx();
+    return cb(lastTx);
+  }
 );
 
 vi.mock("@/lib/prisma", () => ({
@@ -275,6 +281,7 @@ function sameSchoolFormData(): FormData {
   fd.set("learnerId", LEARNER_ID);
   fd.set("targetGradeLevelId", TO_GRADE_ID);
   fd.set("targetTeacherId", TEACHER_IN);
+  fd.set("reason", "Wrong grade level was encoded");
   return fd;
 }
 
@@ -291,6 +298,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   learnerRow = makeLearner();
   txCalls = { learnerUpdate: [] };
+  activeEnrollment = null;
+  lastTx = null;
   requireSchoolUser.mockResolvedValue({ id: HEAD_ID, schoolId: SCHOOL_ID });
   requireAdminScope.mockResolvedValue({
     user: { id: ADMIN_ID, schoolId: null, role: "SUPER_ADMIN" },
@@ -497,5 +506,44 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     });
     // The old tutor's caches are still busted from the pre-update row value.
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ARAL);
+  });
+});
+
+describe("transferLearner — reason for the change", () => {
+  it("refuses a change with no reason and writes nothing", async () => {
+    const fd = sameSchoolFormData();
+    fd.delete("reason");
+
+    const result = await transferLearner(fd);
+
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/reason/i) });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reason that is only whitespace", async () => {
+    const fd = sameSchoolFormData();
+    fd.set("reason", "     ");
+
+    const result = await transferLearner(fd);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("stores the trimmed reason on the closed and the new enrollment", async () => {
+    activeEnrollment = { id: "enr-active", schoolYearId: "sy-1" };
+    const fd = sameSchoolFormData();
+    fd.set("reason", "  Learner was promoted  ");
+
+    const result = await transferLearner(fd);
+    expect(result).toEqual({ ok: true });
+
+    expect(lastTx?.enrollment.update).toHaveBeenCalledWith({
+      where: { id: "enr-active" },
+      data: expect.objectContaining({ status: "TRANSFERRED", notes: "Learner was promoted" }),
+    });
+    expect(lastTx?.enrollment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: "ACTIVE", notes: "Learner was promoted" }),
+    });
   });
 });
