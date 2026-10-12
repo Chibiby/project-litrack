@@ -365,7 +365,12 @@ describe("saveMosyDecision — guards", () => {
     const cases: Record<string, string>[] = [
       { decision: "STAY", mosyLevel: "INDEPENDENT_GRADE_READY" },
       { decision: "", mosyLevel: "INSTRUCTIONAL_DEVELOPING" },
-      { decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", mosyLevel: "FRUSTRATION_HIGH_EMERGENT" },
+      {
+        decision: "MOVE_OUT",
+        reason: "IMPROVED_READING_LEVEL",
+        improvedToLevel: "INDEPENDENT_GRADE_READY",
+        mosyLevel: "FRUSTRATION_HIGH_EMERGENT",
+      },
     ];
     for (const fields of cases) {
       const res = await saveMosyDecision(form(fields));
@@ -422,15 +427,22 @@ describe("saveMosyDecision — guards", () => {
     });
   });
 
-  it("G3: an LSEN move out at Low Emergent is still rejected on mosyLevel", async () => {
-    learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });
-    const res = await saveMosyDecision(
-      form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN", mosyLevel: "NON_DECODER_LOW_EMERGENT" })
-    );
-    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
-    expect((res as { fieldErrors?: Record<string, string> }).fieldErrors).toHaveProperty("mosyLevel");
-    expect(upsert).not.toHaveBeenCalled();
-  });
+  it.each(["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"])(
+    "G3: an LSEN move out (%s) saves at Low Emergent and moves the learner out",
+    async (reason) => {
+      learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });
+      const res = await saveMosyDecision(
+        form({ decision: "MOVE_OUT", reason, mosyLevel: "NON_DECODER_LOW_EMERGENT" })
+      );
+      expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
+      expect(upsert.mock.calls[0][0].create).toMatchObject({
+        mosyLevel: "NON_DECODER_LOW_EMERGENT",
+        reason,
+        improvedToLevel: null,
+      });
+      expect(learnerUpdate).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it("G3: Transferred out with the legacy combined level is rejected on mosyLevel", async () => {
     learnerRow = taggedLearner({ gradeLevel: { type: "G3" } });

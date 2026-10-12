@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.38.1",
+    date: "2026-10-12",
+    title: "LSEN move-outs can record any reading level",
+    announce: true,
+    fixes: [
+      "MOSY Report: when you move a learner out because they were diagnosed as LSEN or recommended for LSEN assessment, the MOSY reading level list now shows every level, the same as Transferred out.",
+    ],
+  },
+  {
     version: "2.38.0",
     date: "2026-10-09",
     title: "Grade changes now ask for a reason and a confirmation",

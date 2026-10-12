@@ -49,7 +49,10 @@ export type MosyRow = {
     STAY: MosyLevelOption[];
     MOVE_OUT: MosyLevelOption[];
     NONE: MosyLevelOption[];
-    /** Move out with the reason "Transferred out": any level of the grade. */
+    /**
+     * Move out with a reason that allows any level (the LSEN reasons and
+     * "Transferred out", see `mosyReasonAllowsAnyLevel`): any level of the grade.
+     */
     TRANSFERRED_OUT: MosyLevelOption[];
   };
   /** Move-out reasons offered to this learner (see `mosyReasonChoices`). */

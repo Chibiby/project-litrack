@@ -721,15 +721,32 @@ describe("resolveMosySave — Transferred out", () => {
     expect(res.row.improvedToLevel).toBeNull();
   });
 
-  it("G3: DIAGNOSED_LSEN at Low Emergent is still LEVEL_NOT_ALLOWED", () => {
-    expectFail(
-      resolve({
-        learner: tagged({ gradeType: "G3" }),
-        submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" },
-      }),
-      "LEVEL_NOT_ALLOWED"
-    );
-  });
+  it.each(["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"] as const)(
+    "G3: MOVE_OUT + %s saves at Low Emergent (a stay level) and moves the learner out",
+    (reason) => {
+      const res = expectOk(
+        resolve({
+          learner: tagged({ gradeType: "G3" }),
+          submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "MOVE_OUT", reason },
+        })
+      );
+      expect(res.transition).toBe("MOVED_OUT");
+      expect(res.row).toMatchObject({ mosyLevel: "NON_DECODER_LOW_EMERGENT", reason });
+    }
+  );
+
+  it.each(["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"] as const)(
+    "G3: %s with the legacy combined level is LEVEL_NOT_ALLOWED",
+    (reason) => {
+      expectFail(
+        resolve({
+          learner: tagged({ gradeType: "G3" }),
+          submitted: { mosyLevel: "INSTRUCTIONAL_DEVELOPING", decision: "MOVE_OUT", reason },
+        }),
+        "LEVEL_NOT_ALLOWED"
+      );
+    }
+  );
 
   it("G3: IMPROVED_READING_LEVEL at Low Emergent is still LEVEL_NOT_ALLOWED", () => {
     expectFail(
@@ -886,9 +903,9 @@ describe("resolveMosySave — rejected paths", () => {
   });
 
   it.each(["G1", "G2", "G3", "G4", "G10"])(
-    "%s: an LSEN reason is allowed with every move-out level",
+    "%s: an LSEN reason is allowed with every level of the grade",
     (g) => {
-      for (const o of mosyLevelOptions(g, "MOVE_OUT")) {
+      for (const o of mosyTransferLevelOptions(g)) {
         for (const reason of ["DIAGNOSED_LSEN", "RECOMMENDED_LSEN_ASSESSMENT"] as const) {
           const res = expectOk(
             resolve({
@@ -909,7 +926,12 @@ describe("resolveMosySave — rejected paths", () => {
       expectFail(
         resolve({
           learner,
-          submitted: { mosyLevel: "NON_DECODER_LOW_EMERGENT", decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" },
+          submitted: {
+            mosyLevel: "NON_DECODER_LOW_EMERGENT",
+            decision: "MOVE_OUT",
+            reason: "IMPROVED_READING_LEVEL",
+            improvedToLevel: "INDEPENDENT_GRADE_READY",
+          },
         }),
         "LEVEL_NOT_ALLOWED"
       );

@@ -66,10 +66,26 @@ export function mosyLevelOptions(
   return scale.filter((o) => wanted.includes(o.value));
 }
 
+/** Move-out reasons that may record any level of the grade (`mosyTransferLevelOptions`). */
+const ANY_LEVEL_MOVE_OUT_REASONS: ReadonlySet<string> = new Set([
+  "DIAGNOSED_LSEN",
+  "RECOMMENDED_LSEN_ASSESSMENT",
+  "TRANSFERRED_OUT",
+]);
+
 /**
- * Levels a learner may be saved at when the move-out reason is "Transferred
- * out": the grade's whole scale, minus a legacy combined value that is no longer
- * accepted (Grade 1 to 3 "Instructional / Developing").
+ * True when a move out with this reason may be saved at any level of the grade:
+ * the two LSEN reasons and "Transferred out". Such a learner leaves ARAL for a
+ * reason other than reading progress, so the level is not tied to the move-out band.
+ */
+export function mosyReasonAllowsAnyLevel(reason: string | null | undefined): boolean {
+  return reason != null && ANY_LEVEL_MOVE_OUT_REASONS.has(reason);
+}
+
+/**
+ * Levels a learner may be saved at when the move-out reason allows any level
+ * (`mosyReasonAllowsAnyLevel`): the grade's whole scale, minus a legacy combined
+ * value that is no longer accepted (Grade 1 to 3 "Instructional / Developing").
  */
 export function mosyTransferLevelOptions(gradeType: string): MosyLevelOption[] {
   return readingProfileOptionsForGrade(gradeType).filter(
@@ -397,11 +413,11 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
 
   // Scope (advisory section) is the caller's job: `saveMosyDecision` checks
   // `teacherOwnsMosyRow` on the locked learner row before calling this.
-  // "Transferred out" may record any level of the grade; every other
-  // combination uses the decision's own list.
-  const isTransfer =
-    submitted.decision === "MOVE_OUT" && submitted.reason === "TRANSFERRED_OUT";
-  const levelList = isTransfer
+  // The LSEN reasons and "Transferred out" may record any level of the grade;
+  // every other combination uses the decision's own list.
+  const anyLevel =
+    submitted.decision === "MOVE_OUT" && mosyReasonAllowsAnyLevel(submitted.reason);
+  const levelList = anyLevel
     ? mosyTransferLevelOptions(learner.gradeType)
     : mosyLevelOptions(learner.gradeType, submitted.decision);
   if (!levelList.some((o) => o.value === submitted.mosyLevel)) {

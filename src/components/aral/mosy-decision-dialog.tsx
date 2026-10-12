@@ -36,7 +36,11 @@ import { toastFailure } from "@/lib/ui/toast-failure";
 import { ARAL_MOSY_OUTCOME_CHOICE_LABELS } from "@/lib/constants/enum-labels";
 import { aralMosyDecisionSchema, MOSY_REMARKS_MAX } from "@/lib/validators/aral-mosy.schema";
 import type { MosyRow } from "@/lib/aral/mosy-queries";
-import { MOSY_LEVEL_LANGUAGE_NAMES, type MosyTransition } from "@/lib/aral/mosy";
+import {
+  MOSY_LEVEL_LANGUAGE_NAMES,
+  mosyReasonAllowsAnyLevel,
+  type MosyTransition,
+} from "@/lib/aral/mosy";
 import { cn } from "@/lib/utils";
 
 export type MosyDialogState = {
@@ -94,7 +98,7 @@ function MosyDecisionForm({
         )
       : undefined;
   const initialLevelList =
-    foundChoice?.reason === "TRANSFERRED_OUT"
+    foundChoice && mosyReasonAllowsAnyLevel(foundChoice.reason)
       ? row.levelOptionsByDecision.TRANSFERRED_OUT
       : row.levelOptionsByDecision[initialDecision || "NONE"];
   const levelIsValid =
@@ -128,8 +132,8 @@ function MosyDecisionForm({
 
   const decision = form.watch("decision");
   const watchedReason = form.watch("reason");
-  const isTransferredOut = decision === "MOVE_OUT" && watchedReason === "TRANSFERRED_OUT";
-  const levelOptions = isTransferredOut
+  const anyLevel = decision === "MOVE_OUT" && mosyReasonAllowsAnyLevel(watchedReason);
+  const levelOptions = anyLevel
     ? row.levelOptionsByDecision.TRANSFERRED_OUT
     : row.levelOptionsByDecision[decision || "NONE"];
 
@@ -324,7 +328,7 @@ function MosyDecisionForm({
                     setStaleLevelLabel(null);
                     form.clearErrors("mosyLevel");
                   } else if (
-                    choice.reason !== "TRANSFERRED_OUT" &&
+                    !mosyReasonAllowsAnyLevel(choice.reason) &&
                     currentLevel &&
                     !moveOutLevels.some((o) => o.value === currentLevel)
                   ) {

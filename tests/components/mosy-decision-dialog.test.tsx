@@ -316,12 +316,56 @@ describe("MosyDecisionDialog Transferred out", () => {
     expect(levelTrigger().textContent).toBe("Developing");
   });
 
-  it("clears a Stay level when switching back to an LSEN reason", () => {
+  it("keeps a Stay level when switching to an LSEN reason", () => {
     renderMoveOut();
     pick(reasonTrigger(), "Transferred out");
     pick(levelTrigger(), "Low Emergent");
     pick(reasonTrigger(), "Diagnosed LSEN");
-    expect(levelTrigger().textContent).toBe("Select level");
+    expect(levelTrigger().textContent).toBe("Low Emergent");
+  });
+
+  it("an LSEN reason widens the level list like Transferred out", () => {
+    renderMoveOut();
+    pick(reasonTrigger(), "Diagnosed LSEN");
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual([
+      "Low Emergent",
+      "High Emergent",
+      "Developing",
+      "Transitioning",
+    ]);
+  });
+
+  it("opens a saved LSEN row at a Stay level with its level intact", () => {
+    const row = splitRow({
+      isAralLearner: false,
+      decision: "MOVE_OUT",
+      mosyLevel: "NON_DECODER_LOW_EMERGENT",
+      mosyLevelLabel: "Low Emergent",
+      reason: "DIAGNOSED_LSEN",
+      reasonLabel: "Diagnosed LSEN",
+      levelOptionsByDecision: {
+        ...LEVELS_BY_DECISION,
+        TRANSFERRED_OUT: [
+          { value: "NON_DECODER_LOW_EMERGENT", label: "Low Emergent" },
+          { value: "DEVELOPING", label: "Developing" },
+        ],
+      },
+    });
+    render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
+    expect(levelTrigger().textContent).toBe("Low Emergent");
+    expect(reasonTrigger().textContent).toBe("Diagnosed LSEN");
+    expect(screen.queryByText(/no longer an option/)).toBeNull();
+  });
+
+  it("an Improved reason clears the wider list back to the move-out levels", () => {
+    renderMoveOut();
+    pick(reasonTrigger(), "Diagnosed LSEN");
+    pick(levelTrigger(), "Low Emergent");
+    pick(reasonTrigger(), "Improved to Developing");
+    expect(levelTrigger().textContent).toBe("Developing");
+    openSelect(levelTrigger());
+    expect(optionNames()).toEqual(["Developing", "Transitioning"]);
   });
 
   it("opens a saved Transferred out row with its level intact", () => {
