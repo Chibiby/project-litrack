@@ -29,14 +29,20 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 afterEach(cleanup);
 
 describe("PostLoginSplash — developer credit", () => {
-  it("names Apache Spark, with the mark, on the splash it opens with", () => {
+  it("names Apspark, with the mark, on the splash it opens with", () => {
     render(<PostLoginSplash />);
 
     const overlay = document.querySelector("[data-post-login-splash]");
     expect(overlay).not.toBeNull();
 
-    expect(screen.getByText("Developed by Apache Spark")).toBeTruthy();
-    // The mark is the only inline SVG in the overlay.
-    expect(overlay?.querySelector("svg")).not.toBeNull();
+    const credit = screen.getByText("Developed by Apspark").closest("a");
+    // The credit opens Apspark's page in a new tab, leaving the app as it was.
+    expect(credit?.getAttribute("href")).toBe(
+      "https://www.facebook.com/profile.php?id=61594549658337"
+    );
+    expect(credit?.getAttribute("target")).toBe("_blank");
+    expect(credit?.getAttribute("rel")).toContain("noopener");
+    // The mark is the only inline SVG in the overlay, and it sits in the link.
+    expect(credit?.querySelector("svg")).not.toBeNull();
   });
 });

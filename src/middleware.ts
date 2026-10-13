@@ -128,7 +128,7 @@ export const config = {
      * - _next/static, _next/image
      * - favicon, public assets
      * - /brand/** — static brand files served from public/. The extension list
-     *   below covers images only, so the Apache Spark preloader (.js) would
+     *   below covers images only, so the Apspark preloader (.js) would
      *   otherwise be treated as a page and redirected to /login for anonymous
      *   visitors — which is exactly who sees the first-load intro.
      */

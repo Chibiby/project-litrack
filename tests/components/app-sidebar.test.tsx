@@ -138,17 +138,24 @@ describe("AppSidebar — teacher", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("credits Apache Spark on the version line, above the account menu", () => {
+  it("credits Apspark on the version line, above the account menu", () => {
     renderTeacherSidebar();
-    const credit = screen.getAllByText(`LITRACK v${APP_VERSION} by Apache Spark`)[0];
-    const link = credit.closest("a");
-    expect(link?.getAttribute("href")).toBe("/releases");
-    // The mark rides in the same link, in both colourways (one hidden per theme).
-    expect(link?.querySelectorAll("svg")).toHaveLength(2);
+    const version = screen.getAllByText(`LITRACK v${APP_VERSION}`)[0];
+    expect(version.closest("a")?.getAttribute("href")).toBe("/releases");
+
+    // The credit is its own link, to Apspark's page, in a new tab — with the
+    // mark inside it in both colourways (one hidden per theme).
+    const credit = screen.getAllByText("Apspark")[0].closest("a");
+    expect(credit?.getAttribute("href")).toBe(
+      "https://www.facebook.com/profile.php?id=61594549658337"
+    );
+    expect(credit?.getAttribute("target")).toBe("_blank");
+    expect(credit?.getAttribute("rel")).toContain("noopener");
+    expect(credit?.querySelectorAll("svg")).toHaveLength(2);
 
     const account = screen.getAllByRole("button", { name: "Account menu" })[0];
     expect(
-      link!.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING
+      credit!.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 

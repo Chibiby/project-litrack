@@ -319,12 +319,12 @@
 }
 
 /* -------------------------------------------------------------------------
-   Developer credit — Apache Spark.
+   Developer credit — Apspark.
 
    Anchored to the bottom of the overlay rather than the centred column, so it
    never shifts when the shelf and status label retire during the ARAL reveal.
    It fades in after the stage and then stays put for the whole splash: it is a
-   footnote, not a beat in the sequence. Colour is the Apache Spark "soft"
+   footnote, not a beat in the sequence. Colour is the Apspark "soft"
    token (#7C7568), the palette's own secondary type colour, held at 0.72
    opacity so it reads as an attribution line and never competes with ARAL na!.
    ------------------------------------------------------------------------- */
@@ -342,8 +342,21 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #7c7568;
+  text-decoration: none;
+  /* Comfortable tap target around 10px type; it links to Apspark's page. */
+  padding: 8px 10px;
+  border-radius: 4px;
   opacity: 0;
   animation: pls-credit-in 0.5s ease-out 0.55s forwards;
+}
+
+.credit:hover {
+  color: #14181c;
+}
+
+.credit:focus-visible {
+  outline: 2px solid #9e5430;
+  outline-offset: 2px;
 }
 
 .creditMark {

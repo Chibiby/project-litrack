@@ -7,14 +7,14 @@ import {
   SPARK_PRELOADER_SRC,
 } from "@/lib/brand/spark-intro";
 
-type SparkPreloaderApi = {
+type ApsparkPreloaderApi = {
   play: (opts?: { onDone?: () => void }) => Promise<void>;
   done: Promise<void> | null;
 };
 
 declare global {
   interface Window {
-    SparkPreloader?: SparkPreloaderApi;
+    ApsparkPreloader?: ApsparkPreloaderApi;
     [SPARK_INTRO_WINDOW_KEY]?: "pending" | "played";
   }
 }
@@ -26,18 +26,19 @@ function removeCover(): void {
 }
 
 /**
- * Plays the Apache Spark brand animation on the first load of the site.
+ * Plays the Apspark brand animation on the first load of the site.
  *
  * The decision was already made in `SparkIntroScript` before first paint —
  * this only acts on it. That split matters: the cover has to exist during head
  * parse, but the 15 KB animation is not worth blocking the login form on, so
  * it loads normally and slides in under the cover it inherits.
  *
- * `spark-preloader.js` ships from the brand kit and is loaded verbatim (only
- * its two font stacks are wired to the app's `next/font` variables). It is
- * dependency-free, appends its own fixed overlay, locks scroll, re-measures on
- * resize, honours `prefers-reduced-motion` and guards against a backgrounded
- * tab, so there is nothing here to re-implement. `data-auto="off"` keeps its
+ * `apspark-preloader.js` ships from the brand kit with local edits listed in
+ * its header (font stacks wired to the app's `next/font` variables, a clamped
+ * timeline, and a fixed run time that page load and input cannot shorten or
+ * stretch). It is dependency-free, appends its own fixed overlay, locks
+ * scroll, re-measures on resize, honours `prefers-reduced-motion` and guards
+ * against a backgrounded tab, so there is nothing here to re-implement. `data-auto="off"` keeps its
  * built-in autoplay out of the way — the once-per-tab gate is ours.
  *
  * Every exit path clears the cover, including a script that never loads: the
@@ -51,7 +52,7 @@ export function SparkIntro() {
     let cancelled = false;
 
     const play = () => {
-      const api = window.SparkPreloader;
+      const api = window.ApsparkPreloader;
       if (cancelled || !api) {
         removeCover();
         return;
@@ -67,7 +68,7 @@ export function SparkIntro() {
       `script[src="${SPARK_PRELOADER_SRC}"]`
     );
     if (existing) {
-      if (window.SparkPreloader) play();
+      if (window.ApsparkPreloader) play();
       else existing.addEventListener("load", play, { once: true });
       return () => {
         cancelled = true;

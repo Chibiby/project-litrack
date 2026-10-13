@@ -1,17 +1,18 @@
 /**
- * Apache Spark mark — pure geometry, inlined.
+ * Apspark mark — pure geometry, inlined.
  *
- * The shipped asset (`design/apache-spark-brand-animation/brand/svg/
- * apache-spark-mark.svg`) is the same four lines and four vertex squares, but
- * it carries a ~8 KB C2PA manifest and would cost a request wherever it
- * appears at 12px. The mark-only SVGs need no font, so inlining is lossless.
+ * The shipped asset (`design/apspark-brand/apspark-mark.svg`) is the same
+ * four lines and four vertex squares, but it carries a ~8 KB C2PA manifest and
+ * would cost a request wherever it appears at 12px. The mark-only SVGs need no
+ * font, so inlining is lossless.
  * One deliberate divergence from the kit: strokes and vertex squares are
  * scaled up (12/18 vs the kit's 7/12) because this renders at 12px, where the
  * kit's weights fall under half a device pixel and vanish.
- * Brand palette: ink #14181C outline, accent #9E5430 inner diamond — never
+ * Brand palette: ink #14181C outline, accent #9E5430 inner diamond; the
+ * reverse (dark) colourway is paper #F2EFE8 with accent #D08A5E — never
  * recoloured outside those.
  */
-export type ApacheSparkMarkProps = {
+export type ApsparkMarkProps = {
   className?: string;
   /** Outline + vertex colour. Defaults to the brand ink. */
   ink?: string;
@@ -19,11 +20,11 @@ export type ApacheSparkMarkProps = {
   accent?: string;
 };
 
-export function ApacheSparkMark({
+export function ApsparkMark({
   className,
   ink = "#14181C",
   accent = "#9E5430",
-}: ApacheSparkMarkProps) {
+}: ApsparkMarkProps) {
   return (
     <svg
       className={className}
@@ -54,4 +55,4 @@ export function ApacheSparkMark({
   );
 }
 
-export default ApacheSparkMark;
+export default ApsparkMark;

@@ -1,5 +1,5 @@
 /**
- * Shared constants for the Apache Spark first-load intro.
+ * Shared constants for the Apspark first-load intro.
  *
  * Split out of the components so the blocking head script, the player and any
  * test can agree on the flag, the cover element and the entry routes without
@@ -16,11 +16,11 @@ export const SPARK_INTRO_COVER_ATTR = "data-spark-intro-cover";
 /** `window` property the head script sets when the intro is claimed. */
 export const SPARK_INTRO_WINDOW_KEY = "__litrackSparkIntro";
 
-/** Apache Spark "paper" — the preloader's own background, so cover → intro is seamless. */
+/** Apspark "paper" — the preloader's own background, so cover → intro is seamless. */
 export const SPARK_PAPER = "#F2EFE8";
 
 /** Public path of the brand-supplied, dependency-free preloader. */
-export const SPARK_PRELOADER_SRC = "/brand/apache-spark/spark-preloader.js";
+export const SPARK_PRELOADER_SRC = "/brand/apspark/apspark-preloader.js";
 
 /**
  * Where the intro is allowed to play: the site's entry points only.

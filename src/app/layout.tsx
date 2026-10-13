@@ -16,8 +16,8 @@ const inter = Inter({
 });
 
 /**
- * Apache Spark brand faces, used only by the first-load intro overlay
- * (`spark-preloader.js` reads these two variables). `preload: false` because
+ * Apspark brand faces, used only by the first-load intro overlay
+ * (`apspark-preloader.js` reads these two variables). `preload: false` because
  * the intro plays on the entry routes once per tab: preloading them from every
  * page in the app would spend a request on the ~99% of navigations that never
  * draw the lockup. They are still self-hosted and swap in on the play.

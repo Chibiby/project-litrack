@@ -26,7 +26,8 @@ import {
 import { NavPrefetcher } from "@/components/nav-prefetcher";
 import { UserAccountMenu } from "@/components/user-account-menu";
 import { SignOutButton } from "@/components/sign-out-button";
-import { ApacheSparkMark } from "@/components/brand/apache-spark-mark";
+import { ApsparkMark } from "@/components/brand/apspark-mark";
+import { APSPARK_NAME, APSPARK_URL } from "@/lib/brand/apspark";
 import { logoutAction } from "@/lib/actions/auth";
 import { APP_VERSION } from "@/lib/releases";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
@@ -429,33 +430,49 @@ export function AppSidebar({
             Above the account block, the quietest line in the rail: it answers
             "which version am I on" and leads to what changed, and nobody needs
             it on the way to anything else. The collapsed rail is icon-width, so
-            it keeps only the version rather than force the rail wider. The mark
+            it keeps only the version rather than force the rail wider. Two
+            links share the line: the version leads to what changed, the
+            Apspark credit opens the developer's page in a new tab. The mark
             swaps to the brand kit's paper colourway in dark mode — the ink one
             vanishes on a dark rail.
           */}
-          <Link
-            href="/releases"
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md py-1 text-xs text-muted-foreground/80 transition-colors hover:text-foreground",
-              isCollapsed ? "justify-center" : "px-3"
-            )}
-            title={`LITRACK v${APP_VERSION} — what's new`}
-          >
-            {isCollapsed ? (
-              `v${APP_VERSION}`
-            ) : (
-              <>
-                <ApacheSparkMark className="h-3.5 w-3.5 shrink-0 dark:hidden" />
-                <ApacheSparkMark
+          {isCollapsed ? (
+            <Link
+              href="/releases"
+              onClick={onNavigate}
+              className="flex items-center justify-center rounded-md py-1 text-xs text-muted-foreground/80 transition-colors hover:text-foreground"
+              title={`LITRACK v${APP_VERSION} — what's new`}
+            >
+              {`v${APP_VERSION}`}
+            </Link>
+          ) : (
+            <div className="flex items-center gap-1 px-3 py-1 text-xs text-muted-foreground/80">
+              <Link
+                href="/releases"
+                onClick={onNavigate}
+                className="rounded-sm transition-colors hover:text-foreground"
+                title={`LITRACK v${APP_VERSION} — what's new`}
+              >
+                {`LITRACK v${APP_VERSION}`}
+              </Link>
+              <span>by</span>
+              <a
+                href={APSPARK_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-sm transition-colors hover:text-foreground"
+                title={`${APSPARK_NAME} on Facebook (opens in a new tab)`}
+              >
+                <ApsparkMark className="h-3.5 w-3.5 shrink-0 dark:hidden" />
+                <ApsparkMark
                   className="hidden h-3.5 w-3.5 shrink-0 dark:block"
                   ink="#F2EFE8"
-                  accent="#C97A4A"
+                  accent="#D08A5E"
                 />
-                <span>{`LITRACK v${APP_VERSION} by Apache Spark`}</span>
-              </>
-            )}
-          </Link>
+                <span>{APSPARK_NAME}</span>
+              </a>
+            </div>
+          )}
           {showAccount ? (
             <>
               <UserAccountMenu

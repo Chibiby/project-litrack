@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ApacheSparkMark } from "@/components/brand/apache-spark-mark";
+import { ApsparkMark } from "@/components/brand/apspark-mark";
+import { APSPARK_NAME, APSPARK_URL } from "@/lib/brand/apspark";
 import {
   POST_LOGIN_FLAG,
   clearPendingPostLoginSplash,
@@ -419,10 +420,16 @@ export function PostLoginSplash({ role }: PostLoginSplashProps) {
       {/* Attribution footnote — anchored to the overlay, not the centred
           column, so it holds its place when the shelf and the status label
           retire for the ARAL na! reveal. */}
-      <div className={styles.credit}>
-        <ApacheSparkMark className={styles.creditMark} />
-        <span>Developed by Apache Spark</span>
-      </div>
+      <a
+        className={styles.credit}
+        href={APSPARK_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`${APSPARK_NAME} on Facebook (opens in a new tab)`}
+      >
+        <ApsparkMark className={styles.creditMark} />
+        <span>{`Developed by ${APSPARK_NAME}`}</span>
+      </a>
     </div>
   );
 

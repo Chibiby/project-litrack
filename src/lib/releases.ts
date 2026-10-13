@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.40.0",
+    date: "2026-10-13",
+    title: "LITRACK's developer is now credited as Apspark",
+    announce: true,
+    fixes: [
+      "The developer credit now reads Apspark, with the new Apspark logo, in the sidebar and on the opening screen after you sign in.",
+      "Tap the Apspark name or logo to open Apspark's Facebook page in a new tab. Tap the version number to see what changed, as before.",
+      "The Apspark opening animation on the sign-in page now always plays in full for the same short time, whether the page loads fast or slow.",
+    ],
+  },
+  {
     version: "2.39.0",
     date: "2026-10-13",
     title: "Non-compliance now counts MOSY and says why each school is flagged",

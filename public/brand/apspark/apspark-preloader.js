@@ -1,28 +1,35 @@
-/* Apache Spark — drop-in site preloader. Vendored from the brand kit at
-   design/apache-spark-brand-animation/brand/web/. Only change from the
-   original: SANS/MONO resolve the app's next/font variables first, so the
+/* Apspark — drop-in site preloader (renamed from the Apache Spark kit). Vendored from the brand kit at
+   design/apspark-brand/. Only change from the
+   original: Wordmark now reads AP (soft, 400) + SPARK (ink, 700). SANS/MONO resolve the app's next/font variables first, so the
    lockup renders in real Archivo and IBM Plex Mono instead of the fallbacks.
    Second local change: the timeline advances on clamped frame deltas rather
    than the wall clock, so a main thread blocked by hydration or a slow route
    cannot fast-forward (visibly cut short) the draw.
-   Re-apply both edits if this file is refreshed from the kit.
+   Third local change: the run time is fixed. The finished lockup holds for
+   exactly MIN_HOLD whether the page loaded early or late, and no click or key
+   skips it, so every visitor sees the same full branding beat. Reduced motion
+   shows the static lockup for the same total time.
+   Re-apply all three edits if this file is refreshed from the kit.
    Responsive by construction: guides span the viewport, the lockup scales in vmin.
-   Usage:  <script src="spark-preloader.js" data-once="session"></script>
-   API:    SparkPreloader.play()   replay on demand
-           SparkPreloader.done     promise resolved when the page is revealed */
+   Usage:  <script src="apspark-preloader.js" data-once="session"></script>
+   API:    ApsparkPreloader.play()   replay on demand
+           ApsparkPreloader.done     promise resolved when the page is revealed */
 (function () {
   var INK = "#14181C", PAPER = "#F2EFE8", ACCENT = "#9E5430", SOFT = "#7C7568";
   var SANS = "var(--font-archivo, Archivo), 'Helvetica Neue', Helvetica, Arial, sans-serif";
   var MONO = "var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, monospace";
   var TAGS = ["SOFTWARE", "SYSTEMS", "NETWORKS", "INFRASTRUCTURE"];
-  var TOTAL = 3.0, LOCATE = 0.0, DRAFT = 0.62, SET = 1.42, PRINT = 2.5, MIN_HOLD = 1.1, HOLD_CAP = 4.0;
+  var TOTAL = 3.0, LOCATE = 0.0, DRAFT = 0.62, SET = 1.42, PRINT = 2.5, MIN_HOLD = 1.1;
+  /* Fixed time on screen: the draw, the hold on the finished lockup, the print. */
+  var RUN_MS = (TOTAL + MIN_HOLD) * 1000;
   /* Longest slice of wall time one frame may add to the timeline. The page
      loading behind the overlay blocks the main thread in bursts; without this
      clamp the next frame reads a large elapsed time and jumps the draw ahead. */
   var MAX_FRAME_MS = 100;
-  /* Hard ceiling on wall time under the overlay. Higher than the old
-     (TOTAL + HOLD_CAP) budget because a clamped timeline can outlast it. */
-  var MAX_WALL_MS = (TOTAL + HOLD_CAP) * 1000 + 6000;
+  /* Hard ceiling on wall time under the overlay, for a throttled or
+     backgrounded tab. Well above RUN_MS because a clamped timeline can run
+     longer than wall time while the page hydrates behind it. */
+  var MAX_WALL_MS = RUN_MS + 7000;
 
   var eOutQuart = function (t) { return 1 - Math.pow(1 - t, 4); };
   var eOutCubic = function (t) { return 1 - Math.pow(1 - t, 3); };
@@ -115,7 +122,7 @@
     var wordRow = el("div", "display:flex;justify-content:center;white-space:nowrap;line-height:1.02;" +
       "font-family:" + SANS + ";font-size:clamp(30px,8.4vmin,92px);letter-spacing:-0.01em;");
     var w1 = el("span", "display:inline-block;font-weight:400;color:" + SOFT +
-      ";clip-path:inset(0 100% 0 0);", "APACHE\u00A0");
+      ";clip-path:inset(0 100% 0 0);", "AP");
     var w2 = el("span", "display:inline-block;font-weight:700;color:" + INK +
       ";clip-path:inset(0 100% 0 0);", "SPARK");
     wordRow.appendChild(w1); wordRow.appendChild(w2);
@@ -199,7 +206,6 @@
       if (!P.root.isConnected) return;
       clearTimeout(guard);
       window.removeEventListener("resize", measure);
-      window.removeEventListener("keydown", skip);
       document.documentElement.style.overflow = prevOverflow;
       P.root.remove();
       if (typeof opts.onDone === "function") opts.onDone();
@@ -207,9 +213,10 @@
     }
 
     if (reduce) {
-      /* honour reduced motion: hold the finished lockup briefly, then reveal */
+      /* honour reduced motion: no drawing, but the finished lockup stays up
+         for the same fixed run time before the reveal */
       frame(PRINT);
-      setTimeout(finish, 900);
+      setTimeout(finish, RUN_MS);
       return done;
     }
 
@@ -265,8 +272,8 @@
 
     /* The sequence always runs 0 → PRINT, so the lockup is fully drawn and
        readable before anything lifts. At PRINT it HOLDS on that finished frame
-       until the page has loaded (or HOLD_CAP passes), then prints and reveals.
-       A click or keypress ends the hold early; it can never truncate the draw.
+       for exactly MIN_HOLD, then prints and reveals. Page load and input do
+       not move that: a fast page waits, a slow page is revealed on time.
 
        `clock` is animation time, accumulated from per-frame deltas clamped to
        MAX_FRAME_MS — not wall time. That is the point: while the page hydrates
@@ -274,16 +281,7 @@
        a stretch, and a wall-clock timeline resumed several keyframes further on,
        so the draw appeared to cut short. Clamped deltas spend stalled time on
        nothing, so every stage of the draw still renders. */
-    var pageReady = (document.readyState === "complete");
     var clock = 0, held = 0, last = t0;
-    if (!pageReady) {
-      window.addEventListener("load", function () { pageReady = true; });
-    }
-    function skip() {
-      if (clock >= PRINT * 1000) { pageReady = true; held = MIN_HOLD * 1000; }
-    }
-    P.root.addEventListener("pointerdown", skip);
-    window.addEventListener("keydown", skip);
 
     function tick() {
       var now = nowMs();
@@ -294,10 +292,9 @@
 
       /* Hold on the finished frame: waiting time goes to `held`, never to
          `clock`, so the print resumes exactly where the draw paused. */
-      if (clock + dt >= PRINT * 1000 && (!pageReady || held < MIN_HOLD * 1000)) {
+      if (clock + dt >= PRINT * 1000 && held < MIN_HOLD * 1000) {
         held += clock + dt - PRINT * 1000;
         clock = PRINT * 1000;
-        if (held >= HOLD_CAP * 1000) pageReady = true;
         frame(PRINT);
         requestAnimationFrame(tick);
         return;
@@ -315,7 +312,8 @@
   }
 
   var api = { play: play, done: null };
-  window.SparkPreloader = api;
+  window.ApsparkPreloader = api;
+  window.SparkPreloader = api; /* legacy alias */
 
   /* auto-play on load unless data-auto="off"; data-once="session" shows it once per tab */
   var tag = document.currentScript;
