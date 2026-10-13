@@ -64,6 +64,7 @@ function Cell({
   const override =
     group.gradeType && section.gradeBucketLabels?.[group.gradeType]?.[bucket.id];
   const gradeLabel = override && override !== bucket.label ? override : null;
+  const notes = section.cellNotes?.[group.key]?.[bucket.id];
 
   let primary: string;
   let secondary: string;
@@ -90,6 +91,13 @@ function Cell({
       <span className="block text-xs text-muted-foreground">{secondary}</span>
       {gradeLabel ? (
         <span className="mt-0.5 block text-xs italic text-muted-foreground">{gradeLabel}</span>
+      ) : null}
+      {notes && notes.length > 0 ? (
+        <ul className="ml-auto mt-1 max-w-[14rem] space-y-0.5 text-left text-xs text-foreground/80">
+          {notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
       ) : null}
     </td>
   );

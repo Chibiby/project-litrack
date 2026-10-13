@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { languagesForGrade } from "@/lib/reading/policy";
+import { resolveMosyWindow } from "@/lib/reports/mosy-window";
 import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
 import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import { lastFullWeek, monthKeyOf, monthStartKey, shiftMonth } from "@/lib/summary/shape/months";
@@ -10,9 +11,10 @@ import {
   COMPLIANCE_FLAG_DEFINITIONS,
   COMPLIANCE_FLAG_LABELS,
   COMPLIANCE_REASON_FLAG,
-  COMPLIANCE_REASON_LABELS,
   classifyCompliance,
+  describeComplianceReason,
   recentAttendanceFloorKey,
+  type ComplianceFlag,
   type ComplianceFlags,
   type SchoolComplianceFacts,
 } from "@/lib/summary/shape/compliance";
@@ -45,6 +47,14 @@ export type RawComplianceRow = {
   reading: number;
   last_week: number;
   has_admin: boolean;
+  mosy_not_updated: number;
+  mosy_for_decision: number;
+  /** Active school year's `startDate` as an ISO instant, or null for no active year. */
+  sy_start: string | null;
+  /** The School Head's Second Term (MOSY) override for that year, or nulls. */
+  mosy_override_start: string | null;
+  mosy_override_end: string | null;
+  mosy_override_deadline: string | null;
 };
 
 /** Grade types that do not record English, from the reading policy — never hard-coded in SQL. */
@@ -137,6 +147,29 @@ export async function queryComplianceRows(todayKey: string): Promise<RawComplian
       FROM "Attendance" a JOIN aral_pop a2 ON a2."id" = a."learnerId"
       WHERE a."date" >= ${week.monday}::date AND a."date" <= ${week.friday}::date
       GROUP BY 1
+    ),
+    -- The MOSY page's roster (live, non-archived, ARAL-tagged) against the
+    -- active year's decisions. A MOVE_OUT on a still-tagged learner reads
+    -- "for decision", as mosyRowStatus does.
+    mosy AS (
+      SELECT l."schoolId",
+             (COUNT(*) FILTER (WHERE d."id" IS NULL))::int AS not_updated,
+             (COUNT(*) FILTER (
+               WHERE d."id" IS NOT NULL AND (d."decision" IS NULL OR d."decision" = 'MOVE_OUT')
+             ))::int AS for_decision
+      FROM "Learner" l
+      JOIN "SchoolYear" sy ON sy."schoolId" = l."schoolId" AND sy."isActive" = true
+      LEFT JOIN "AralMosyDecision" d ON d."learnerId" = l."id" AND d."schoolYearId" = sy."id"
+      WHERE l."deletedAt" IS NULL AND l."archivedAt" IS NULL AND l."isAralLearner" = true
+      GROUP BY 1
+    ),
+    sy AS (
+      SELECT y."schoolId",
+             to_char(y."startDate", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS start_iso,
+             o."startKey" AS o_start, o."endKey" AS o_end, o."deadlineKey" AS o_deadline
+      FROM "SchoolYear" y
+      LEFT JOIN "TermWindowOverride" o ON o."schoolYearId" = y."id" AND o."term" = 'SECOND'
+      WHERE y."isActive" = true
     )
     SELECT s."id" AS school_id,
            COALESCE(lrn.live, 0) AS live,
@@ -150,6 +183,12 @@ export async function queryComplianceRows(todayKey: string): Promise<RawComplian
            att.last_key AS last_attendance,
            COALESCE(rd.n, 0) AS reading,
            COALESCE(wk.n, 0) AS last_week,
+           COALESCE(mosy.not_updated, 0) AS mosy_not_updated,
+           COALESCE(mosy.for_decision, 0) AS mosy_for_decision,
+           sy.start_iso AS sy_start,
+           sy.o_start AS mosy_override_start,
+           sy.o_end AS mosy_override_end,
+           sy.o_deadline AS mosy_override_deadline,
            EXISTS (
              SELECT 1 FROM "DistrictAdminAssignment" da
              JOIN "User" du ON du."id" = da."userId"
@@ -166,12 +205,34 @@ export async function queryComplianceRows(todayKey: string): Promise<RawComplian
     LEFT JOIN att ON att."schoolId" = s."id"
     LEFT JOIN rd ON rd."schoolId" = s."id"
     LEFT JOIN wk ON wk."schoolId" = s."id"
+    LEFT JOIN mosy ON mosy."schoolId" = s."id"
+    LEFT JOIN sy ON sy."schoolId" = s."id"
     WHERE s."deletedAt" IS NULL
   `;
   return runSummaryQuery<RawComplianceRow>(sql);
 }
 
-export function complianceFacts(r: RawComplianceRow): SchoolComplianceFacts {
+/**
+ * Whether MOSY counts against the school on `todayKey`: its active year's MOSY
+ * (Second Term) window has started, honouring the School Head's override.
+ */
+export function isMosyDue(r: RawComplianceRow, todayKey: string): boolean {
+  if (!r.sy_start) return false;
+  const override =
+    r.mosy_override_start && r.mosy_override_end && r.mosy_override_deadline
+      ? [
+          {
+            term: "SECOND" as const,
+            startKey: r.mosy_override_start,
+            endKey: r.mosy_override_end,
+            deadlineKey: r.mosy_override_deadline,
+          },
+        ]
+      : [];
+  return todayKey >= resolveMosyWindow(new Date(r.sy_start), override).startKey;
+}
+
+export function complianceFacts(r: RawComplianceRow, todayKey: string): SchoolComplianceFacts {
   return {
     liveLearners: Number(r.live),
     pendingTeachers: Number(r.pending),
@@ -184,6 +245,9 @@ export function complianceFacts(r: RawComplianceRow): SchoolComplianceFacts {
     activeEnrollments: Number(r.enrollments),
     pointerDrift: Number(r.drift),
     lastWeekMarkedLearners: Number(r.last_week),
+    mosy: isMosyDue(r, todayKey)
+      ? { notUpdated: Number(r.mosy_not_updated), forDecision: Number(r.mosy_for_decision) }
+      : null,
   };
 }
 
@@ -200,13 +264,23 @@ export function shapeCompliance(args: {
   const { schools, level, todayKey } = args;
   const bySchool = new Map(args.raw.map((r) => [r.school_id, r]));
   const classified = new Map<string, ComplianceFlags>();
+  const factsBySchool = new Map<string, SchoolComplianceFacts>();
+  const whyOf = (schoolId: string, flag: ComplianceFlag): string[] => {
+    const facts = factsBySchool.get(schoolId)!;
+    return classified
+      .get(schoolId)!
+      .reasons.filter((reason) => COMPLIANCE_REASON_FLAG[reason] === flag)
+      .map((reason) => describeComplianceReason(reason, facts));
+  };
   const rows: FacetRow[] = [];
   const baseRows: FacetRow[] = [];
   for (const s of schools) {
     const raw = bySchool.get(s.id);
     if (!raw) continue;
-    const result = classifyCompliance(complianceFacts(raw), todayKey);
+    const facts = complianceFacts(raw, todayKey);
+    const result = classifyCompliance(facts, todayKey);
     classified.set(s.id, result);
+    factsBySchool.set(s.id, facts);
     baseRows.push({ schoolId: s.id, gradeType: null, field: "schools", bucket: "ALL", count: 1 });
     const buckets = result.flags.length > 0 ? result.flags : [COMPLIANT];
     for (const flag of buckets) {
@@ -227,11 +301,7 @@ export function shapeCompliance(args: {
         s.name,
         s.schoolIdCode,
         s.district ?? NO_DISTRICT_LABEL,
-        classified
-          .get(s.id)!
-          .reasons.filter((reason) => COMPLIANCE_REASON_FLAG[reason] === flag)
-          .map((reason) => COMPLIANCE_REASON_LABELS[reason])
-          .join("; "),
+        whyOf(s.id, flag).join("; "),
       ]),
   }));
   const unsupervised = schools.filter((s) => bySchool.get(s.id) && !bySchool.get(s.id)!.has_admin);
@@ -242,6 +312,33 @@ export function shapeCompliance(args: {
     columns: ["School", "School ID", "District"],
     rows: unsupervised.map((s) => [s.name, s.schoolIdCode, s.district ?? NO_DISTRICT_LABEL]),
   });
+
+  const flagsSection = buildSection({
+    schools,
+    level,
+    id: "flags",
+    title: "Schools flagged",
+    kind: "multi",
+    byGrade: false,
+    buckets: bucketsFrom([...COMPLIANCE_FLAGS, COMPLIANT], {
+      ...COMPLIANCE_FLAG_LABELS,
+      [COMPLIANT]: "No flags",
+    }),
+    rows,
+    baseRows,
+    baseLabel: "% of active schools (a school may have more than one flag; does not add up to 100)",
+  });
+  // One row per school: print why each flag fired under its count.
+  if (level === "school") {
+    const cellNotes: Record<string, Record<string, string[]>> = {};
+    for (const [schoolId, result] of classified) {
+      if (result.flags.length === 0) continue;
+      cellNotes[`school:${schoolId}`] = Object.fromEntries(
+        result.flags.map((flag) => [flag, whyOf(schoolId, flag)])
+      );
+    }
+    flagsSection.cellNotes = cellNotes;
+  }
 
   return {
     facetId: "compliance",
@@ -256,23 +353,7 @@ export function shapeCompliance(args: {
       "Inactive schools are not included.",
     ],
     gaps: [],
-    sections: [
-      buildSection({
-        schools,
-        level,
-        id: "flags",
-        title: "Schools flagged",
-        kind: "multi",
-        byGrade: false,
-        buckets: bucketsFrom([...COMPLIANCE_FLAGS, COMPLIANT], {
-          ...COMPLIANCE_FLAG_LABELS,
-          [COMPLIANT]: "No flags",
-        }),
-        rows,
-        baseRows,
-        baseLabel: "% of active schools (a school may have more than one flag; does not add up to 100)",
-      }),
-    ],
+    sections: [flagsSection],
     lists,
     computedAt: args.computedAt,
   };

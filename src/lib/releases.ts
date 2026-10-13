@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.39.0",
+    date: "2026-10-13",
+    title: "Non-compliance now counts MOSY and says why each school is flagged",
+    announce: true,
+    fixes: [
+      "Non-compliance: once the MOSY period has started, a school is flagged Not updated when an ARAL learner has no MOSY update, and Pending when a MOSY level is saved but the stay or move-out decision is not.",
+      "Non-compliance: the table now shows why each school is flagged, with the school's own numbers, for example \"2 teachers awaiting approval\" or \"5 ARAL learners have no MOSY update\". The lists and the export use the same wording.",
+    ],
+  },
+  {
     version: "2.38.1",
     date: "2026-10-12",
     title: "LSEN move-outs can record any reading level",

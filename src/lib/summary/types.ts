@@ -111,6 +111,11 @@ export type SummarySection = {
   baseLabel: string;
   note?: string;
   table: SummaryTable;
+  /**
+   * Short lines printed under a cell's count, keyed by group key then bucket
+   * id. Compliance uses it at school level to say why each flag fired.
+   */
+  cellNotes?: Record<string, Record<string, string[]>>;
 };
 
 /** A plain list printed alongside the tables (schools flagged, schools with no attendance). */

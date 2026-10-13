@@ -209,6 +209,12 @@ function complianceRow(id: string, i: number): RawComplianceRow {
     reading: i === 5 ? 0 : 3,
     last_week: i,
     has_admin: i % 3 !== 0,
+    mosy_not_updated: i,
+    mosy_for_decision: i % 2,
+    sy_start: i === 0 ? null : "2026-06-01T00:00:00.000Z",
+    mosy_override_start: null,
+    mosy_override_end: null,
+    mosy_override_deadline: null,
   };
 }
 

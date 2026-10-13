@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyCompliance,
   complianceFlagSlug,
+  describeComplianceReason,
   filterComplianceResult,
   filterComplianceResultForExport,
   isComplianceFlagFilter,
@@ -32,6 +33,7 @@ function healthy(overrides: Partial<SchoolComplianceFacts> = {}): SchoolComplian
     activeEnrollments: 40,
     pointerDrift: 0,
     lastWeekMarkedLearners: 10,
+    mosy: { notUpdated: 0, forDecision: 0 },
     ...overrides,
   };
 }
@@ -117,12 +119,54 @@ describe("classifyCompliance", () => {
     expect(r.reasons).toEqual(["reading_roster_mismatch"]);
   });
 
+  it("Not updated: an ARAL learner has no MOSY update once the window has started", () => {
+    const r = classifyCompliance(healthy({ mosy: { notUpdated: 3, forDecision: 0 } }), TODAY);
+    expect(r.flags).toEqual(["NOT_UPDATED"]);
+    expect(r.reasons).toEqual(["mosy_not_updated"]);
+  });
+
+  it("Pending: an ARAL learner's MOSY level is saved without a decision", () => {
+    const r = classifyCompliance(healthy({ mosy: { notUpdated: 0, forDecision: 2 } }), TODAY);
+    expect(r.flags).toEqual(["PENDING"]);
+    expect(r.reasons).toEqual(["mosy_for_decision"]);
+  });
+
+  it("MOSY counts nothing before the window starts (mosy = null)", () => {
+    expect(classifyCompliance(healthy({ mosy: null }), TODAY)).toEqual({ flags: [], reasons: [] });
+  });
+
   it("reports several flags in a fixed order", () => {
     const r = classifyCompliance(
       healthy({ pointerDrift: 1, incompleteLearners: 1, pendingTeachers: 1 }),
       TODAY
     );
     expect(r.flags).toEqual(["PENDING", "INCOMPLETE", "DISCREPANCIES"]);
+  });
+});
+
+describe("describeComplianceReason", () => {
+  it("says what to fix, with the school's own numbers", () => {
+    expect(describeComplianceReason("pending_teachers", healthy({ pendingTeachers: 2 }))).toBe(
+      "2 teachers awaiting approval"
+    );
+    expect(describeComplianceReason("grades_without_adviser", healthy({ gradesWithoutAdviser: 1 }))).toBe(
+      "1 grade has no active adviser"
+    );
+    expect(
+      describeComplianceReason("mosy_not_updated", healthy({ mosy: { notUpdated: 4, forDecision: 0 } }))
+    ).toBe("4 ARAL learners have no MOSY update");
+    expect(
+      describeComplianceReason("mosy_for_decision", healthy({ mosy: { notUpdated: 0, forDecision: 1 } }))
+    ).toBe("1 ARAL learner waits for a MOSY stay or move-out decision");
+    expect(describeComplianceReason("no_recent_attendance", healthy({ lastAttendanceKey: "2026-09-01" }))).toBe(
+      "No ARAL attendance since 2026-09-01"
+    );
+    expect(describeComplianceReason("enrollment_count_mismatch", healthy({ activeEnrollments: 39 }))).toBe(
+      "40 learners but 39 active enrollments"
+    );
+    expect(describeComplianceReason("attendance_roster_mismatch", healthy({ lastWeekMarkedLearners: 8 }))).toBe(
+      "Last week's attendance covers 8 of 10 ARAL learners"
+    );
   });
 });
 

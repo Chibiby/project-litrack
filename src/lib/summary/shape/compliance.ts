@@ -35,6 +35,17 @@ export type SchoolComplianceFacts = {
   pointerDrift: number;
   /** Distinct ARAL learners marked in the last full Mon–Fri week (0 = nothing recorded that week). */
   lastWeekMarkedLearners: number;
+  /**
+   * MOSY facts for the active school year, or null when MOSY is not due yet:
+   * the school has no active year, or today is before the MOSY (Second Term)
+   * window starts.
+   */
+  mosy: {
+    /** ARAL learners with no MOSY row this school year (no level saved). */
+    notUpdated: number;
+    /** ARAL learners whose level is saved but who still wait for a stay or move-out decision. */
+    forDecision: number;
+  } | null;
 };
 
 export type ComplianceFlag =
@@ -64,9 +75,9 @@ export const COMPLIANCE_FLAG_LABELS: Record<ComplianceFlag, string> = {
 export const COMPLIANCE_FLAG_DEFINITIONS: Record<ComplianceFlag, string> = {
   NO_ENCODED_DATA: "The school has no learners encoded.",
   PENDING:
-    "A teacher is waiting for approval, or a grade (other than Floating) has no section with an active adviser.",
+    "A teacher is waiting for approval, a grade (other than Floating) has no section with an active adviser, or an ARAL learner's MOSY level is saved but the stay or move-out decision is not.",
   NOT_UPDATED:
-    "The school has ARAL learners, and no attendance was recorded in the last 14 days or no reading level was recorded this month.",
+    "The school has ARAL learners, and no attendance was recorded in the last 14 days, no reading level was recorded this month, or (once the MOSY window has started) an ARAL learner has no MOSY update.",
   INCOMPLETE:
     "An enrolled learner is missing nutritional status, or an English reading level in a grade that records English.",
   DISCREPANCIES:
@@ -77,7 +88,9 @@ export type ComplianceReason =
   | "no_learners"
   | "pending_teachers"
   | "grades_without_adviser"
+  | "mosy_for_decision"
   | "no_recent_attendance"
+  | "mosy_not_updated"
   | "no_reading_this_month"
   | "incomplete_learners"
   | "enrollment_count_mismatch"
@@ -118,6 +131,10 @@ export function classifyCompliance(
     flags.add("PENDING");
     reasons.push("grades_without_adviser");
   }
+  if (facts.mosy && facts.mosy.forDecision > 0) {
+    flags.add("PENDING");
+    reasons.push("mosy_for_decision");
+  }
 
   if (facts.aralLearners > 0) {
     const floor = recentAttendanceFloorKey(todayKey);
@@ -129,6 +146,10 @@ export function classifyCompliance(
       flags.add("NOT_UPDATED");
       reasons.push("no_reading_this_month");
     }
+  }
+  if (facts.mosy && facts.mosy.notUpdated > 0) {
+    flags.add("NOT_UPDATED");
+    reasons.push("mosy_not_updated");
   }
 
   if (facts.incompleteLearners > 0) {
@@ -161,8 +182,10 @@ export const COMPLIANCE_REASON_FLAG: Record<ComplianceReason, ComplianceFlag> = 
   no_learners: "NO_ENCODED_DATA",
   pending_teachers: "PENDING",
   grades_without_adviser: "PENDING",
+  mosy_for_decision: "PENDING",
   no_recent_attendance: "NOT_UPDATED",
   no_reading_this_month: "NOT_UPDATED",
+  mosy_not_updated: "NOT_UPDATED",
   incomplete_learners: "INCOMPLETE",
   enrollment_count_mismatch: "DISCREPANCIES",
   grade_pointer_drift: "DISCREPANCIES",
@@ -210,14 +233,59 @@ export const COMPLIANCE_REASON_LABELS: Record<ComplianceReason, string> = {
   no_learners: "No learners encoded",
   pending_teachers: "Teacher awaiting approval",
   grades_without_adviser: "Grade with no active adviser",
+  mosy_for_decision: "MOSY decision not made",
   no_recent_attendance: "No attendance in the last 14 days",
   no_reading_this_month: "No reading level this month",
+  mosy_not_updated: "MOSY not updated",
   incomplete_learners: "Learner profile incomplete",
   enrollment_count_mismatch: "Learner and enrollment counts differ",
   grade_pointer_drift: "Learner grade differs from enrollment",
   attendance_roster_mismatch: "Last week's attendance does not cover the ARAL roster",
   reading_roster_mismatch: "This month's reading records do not cover the ARAL roster",
 };
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * One reason in words with the school's own numbers, e.g. "2 teachers awaiting
+ * approval" — what the table cells and the lists' "Why" column print, so a
+ * reader sees what to fix without opening the school.
+ */
+export function describeComplianceReason(
+  reason: ComplianceReason,
+  facts: SchoolComplianceFacts
+): string {
+  switch (reason) {
+    case "no_learners":
+      return "No learners encoded";
+    case "pending_teachers":
+      return `${plural(facts.pendingTeachers, "teacher", "teachers")} awaiting approval`;
+    case "grades_without_adviser":
+      return `${plural(facts.gradesWithoutAdviser, "grade has", "grades have")} no active adviser`;
+    case "mosy_for_decision":
+      return `${plural(facts.mosy?.forDecision ?? 0, "ARAL learner waits", "ARAL learners wait")} for a MOSY stay or move-out decision`;
+    case "no_recent_attendance":
+      return facts.lastAttendanceKey
+        ? `No ARAL attendance since ${facts.lastAttendanceKey}`
+        : `No ARAL attendance in the last ${NOT_UPDATED_ATTENDANCE_DAYS} days`;
+    case "no_reading_this_month":
+      return `No reading level recorded this month for ${plural(facts.aralLearners, "ARAL learner", "ARAL learners")}`;
+    case "mosy_not_updated":
+      return `${plural(facts.mosy?.notUpdated ?? 0, "ARAL learner has", "ARAL learners have")} no MOSY update`;
+    case "incomplete_learners":
+      return `${plural(facts.incompleteLearners, "learner is", "learners are")} missing nutritional status or English reading level`;
+    case "enrollment_count_mismatch":
+      return `${plural(facts.nonArchivedLearners, "learner", "learners")} but ${plural(facts.activeEnrollments, "active enrollment", "active enrollments")}`;
+    case "grade_pointer_drift":
+      return `${plural(facts.pointerDrift, "learner's grade differs", "learners' grades differ")} from their enrollment`;
+    case "attendance_roster_mismatch":
+      return `Last week's attendance covers ${facts.lastWeekMarkedLearners} of ${plural(facts.aralLearners, "ARAL learner", "ARAL learners")}`;
+    case "reading_roster_mismatch":
+      return `This month's reading levels cover ${facts.readingLearnersThisMonth} of ${plural(facts.aralLearners, "ARAL learner", "ARAL learners")}`;
+  }
+}
 
 /**
  * Narrow a compliance `FacetResult` to one flag's list, for the page's Flag
