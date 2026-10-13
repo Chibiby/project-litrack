@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import {
   SPARK_INTRO_COVER_ATTR,
+  SPARK_INTRO_FLAG,
   SPARK_INTRO_WINDOW_KEY,
   SPARK_PRELOADER_SRC,
 } from "@/lib/brand/spark-intro";
@@ -23,6 +24,24 @@ function removeCover(): void {
   document
     .querySelectorAll(`[${SPARK_INTRO_COVER_ATTR}]`)
     .forEach((node) => node.remove());
+}
+
+/**
+ * The play reached its end: only now does this tab count the intro as seen.
+ * Storage can be unavailable (private mode, blocked site data); then the
+ * intro simply plays again on the next entry page.
+ */
+function markSeen(): void {
+  try {
+    sessionStorage.setItem(SPARK_INTRO_FLAG, "1");
+  } catch {
+    // Nothing to record into; replaying is the safe outcome.
+  }
+}
+
+function onPlayed(): void {
+  markSeen();
+  removeCover();
 }
 
 /**
@@ -60,7 +79,7 @@ export function SparkIntro() {
       // The preloader's own overlay is above the cover, so dropping the cover
       // now is invisible — and it must go before the reveal, or it would be
       // the thing left covering the page.
-      void api.play({ onDone: removeCover });
+      void api.play({ onDone: onPlayed });
       removeCover();
     };
 

@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.40.1",
+    date: "2026-10-13",
+    title: "The Apspark opening animation plays in full",
+    announce: false,
+    fixes: [
+      "Opening LITRACK from its plain web address no longer cuts the Apspark animation short: you go straight to the sign-in page, and the animation plays there from start to end.",
+      "If the animation is interrupted, for example by reloading the page, it plays again on the next visit to the sign-in page instead of being skipped.",
+    ],
+  },
+  {
     version: "2.40.0",
     date: "2026-10-13",
     title: "LITRACK's developer is now credited as Apspark",

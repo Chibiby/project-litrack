@@ -7,7 +7,11 @@
  * keep them JSON-serialisable.
  */
 
-/** sessionStorage key — the intro plays once per browser tab. */
+/**
+ * sessionStorage key — the intro plays once per browser tab. Set only when a
+ * play reaches its end (`SparkIntro`), never when the head script claims it:
+ * a page that unloads mid-animation must replay it on the next entry page.
+ */
 export const SPARK_INTRO_FLAG = "litrack:spark-intro";
 
 /** Marks the cover element so the head script and the player can find it. */
@@ -25,12 +29,13 @@ export const SPARK_PRELOADER_SRC = "/brand/apspark/apspark-preloader.js";
 /**
  * Where the intro is allowed to play: the site's entry points only.
  *
- * `/` redirects to `/login`, and both login screens are the first thing a
- * visitor sees. Deliberately excludes the app routes, which have their own
+ * Both login screens are the first thing a visitor sees. `/` is not listed:
+ * it only redirects to `/login`, and an intro started there dies with the
+ * redirect. Deliberately excludes the app routes, which have their own
  * full-screen opener in `PostLoginSplash` — two full-screen overlays on one
  * hard navigation is the failure mode this list exists to prevent.
  */
-export const SPARK_INTRO_PATHS = ["/", "/login", "/admin/login"] as const;
+export const SPARK_INTRO_PATHS = ["/login", "/admin/login"] as const;
 
 /**
  * Longest the cover may survive on its own.

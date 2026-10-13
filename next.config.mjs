@@ -137,6 +137,17 @@ const nextConfig = {
       static: 600,
     },
   },
+  /**
+   * `/` is only a doorway to `/login`, so answer it with a real 307 before
+   * any page renders. `redirect()` in `src/app/page.tsx` streams under the
+   * root layout instead: production answered 200 with a 1-second meta
+   * refresh, and the layout's head script had already started the Apspark
+   * intro on that throwaway page — the full reload to `/login` cut it short.
+   * The page's own `redirect()` stays as a fallback.
+   */
+  async redirects() {
+    return [{ source: "/", destination: "/login", permanent: false }];
+  },
   // CSP deferred: Next.js App Router relies on inline scripts/styles that make a
   // strict CSP non-trivial without nonces/hashes. Tracked in docs/backlog.md.
   async headers() {

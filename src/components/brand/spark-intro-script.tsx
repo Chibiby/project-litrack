@@ -21,8 +21,11 @@ import {
  * below body content. `document.body` does not exist yet at this point, hence
  * the cover is appended to `documentElement`.
  *
- * The intro is claimed exactly once per tab, and only on the entry routes
- * (`SPARK_INTRO_PATHS`) — the app's own routes open with `PostLoginSplash`.
+ * The intro is claimed only on the entry routes (`SPARK_INTRO_PATHS`) — the
+ * app's own routes open with `PostLoginSplash` — and on every entry load
+ * until one play has finished. This script only reads the once-per-tab flag;
+ * `SparkIntro` sets it at the end of a play, so a page that unloads
+ * mid-animation does not use up the tab's intro.
  */
 export function SparkIntroScript() {
   const js = `(function(){try{
@@ -30,7 +33,6 @@ var paths=${JSON.stringify(SPARK_INTRO_PATHS)};
 var p=location.pathname.replace(/\\/+$/,"")||"/";
 if(paths.indexOf(p)<0)return;
 if(sessionStorage.getItem(${JSON.stringify(SPARK_INTRO_FLAG)})==="1")return;
-sessionStorage.setItem(${JSON.stringify(SPARK_INTRO_FLAG)},"1");
 window[${JSON.stringify(SPARK_INTRO_WINDOW_KEY)}]="pending";
 var c=document.createElement("div");
 c.setAttribute(${JSON.stringify(SPARK_INTRO_COVER_ATTR)},"");
