@@ -319,8 +319,19 @@ export function filterComplianceResultForExport(
     flag === "noDistrictAdmin"
       ? "No district admin is assigned to the school's district, or the school has no district."
       : COMPLIANCE_FLAG_DEFINITIONS[flag];
+  // The flagged-schools export list narrows to the same schools; it has no
+  // meaning for the no-district-admin list, which is not a flag.
+  const exportList = result.exportList;
+  const keep = new Set(filtered.lists[0]?.rows.map((r) => r[1]));
+  const narrowed =
+    exportList && flag !== "noDistrictAdmin"
+      ? { exportList: { ...exportList, note: undefined, rows: exportList.rows.filter((r) => keep.has(r[1])) } }
+      : {};
+  const { exportList: _dropped, ...rest } = filtered;
+  void _dropped;
   return {
-    ...filtered,
+    ...rest,
+    ...narrowed,
     sections: [],
     schoolCount: filtered.lists[0]?.rows.length ?? 0,
     notes: [`${COMPLIANCE_FLAG_FILTER_LABELS[flag]}: ${definition}`, "Inactive schools are not included."],

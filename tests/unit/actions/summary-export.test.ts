@@ -243,7 +243,8 @@ describe("exportSummary scope (T9)", () => {
   it("narrows to one assigned district", async () => {
     queryRaw.mockResolvedValueOnce([
       complianceRaw("s-alabel-ces", 0),
-      complianceRaw("s-bagacay", 5),
+      // One pending teacher: the school-level export lists flagged schools only.
+      { ...complianceRaw("s-bagacay", 5), pending: 1 },
       complianceRaw("s-glan-ces", 0),
       complianceRaw("s-demo", 0),
     ]);

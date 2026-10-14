@@ -340,6 +340,31 @@ export function shapeCompliance(args: {
     flagsSection.cellNotes = cellNotes;
   }
 
+  // Export only, school level: each flagged school once, with what it misses.
+  let exportList: SummaryList | undefined;
+  if (level === "school") {
+    const flagged = schools
+      .filter((s) => (classified.get(s.id)?.flags.length ?? 0) > 0)
+      .sort((a, b) => (a.district ?? "").localeCompare(b.district ?? "") || a.name.localeCompare(b.name));
+    const unflagged = schools.filter((s) => classified.has(s.id)).length - flagged.length;
+    exportList = {
+      id: "flagged-schools",
+      title: "Schools flagged",
+      note: `${unflagged} ${unflagged === 1 ? "school has" : "schools have"} no flags.`,
+      columns: ["School", "School ID", "District", "Non-compliance", "Remarks"],
+      rows: flagged.map((s) => {
+        const flags = classified.get(s.id)!.flags;
+        return [
+          s.name,
+          s.schoolIdCode,
+          s.district ?? NO_DISTRICT_LABEL,
+          flags.map((f) => COMPLIANCE_FLAG_LABELS[f]).join(", "),
+          flags.map((f) => `${COMPLIANCE_FLAG_LABELS[f]}: ${whyOf(s.id, f).join("; ")}`).join("\n"),
+        ];
+      }),
+    };
+  }
+
   return {
     facetId: "compliance",
     title: "Non-compliance",
@@ -355,6 +380,7 @@ export function shapeCompliance(args: {
     gaps: [],
     sections: [flagsSection],
     lists,
+    ...(exportList ? { exportList } : {}),
     computedAt: args.computedAt,
   };
 }

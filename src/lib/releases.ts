@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.42.0",
+    date: "2026-10-14",
+    title: "The Non-compliance export lists each flagged school once, with what it is missing",
+    announce: true,
+    fixes: [
+      "Exporting Non-compliance by school now gives one row per flagged school, for example Alabel Central with No encoded data, Pending, Not updated, instead of six rows for every school.",
+      "A new Remarks column says what each non-compliance is, such as how many teachers are awaiting approval or which records are missing.",
+      "Schools with no flags are left out of that list; the sheet tells you how many there are.",
+    ],
+  },
+  {
     version: "2.41.0",
     date: "2026-10-14",
     title: "Archive is now Remove, with 30 days to change your mind",

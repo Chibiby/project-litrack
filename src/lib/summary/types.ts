@@ -143,6 +143,12 @@ export type FacetResult = {
   gaps: string[];
   sections: SummarySection[];
   lists: SummaryList[];
+  /**
+   * Export-only: a list the file prints in place of the tables. The on-screen
+   * view ignores it. Compliance sets it at school level (one row per flagged
+   * school, with a Remarks column).
+   */
+  exportList?: SummaryList;
   /** Choices for the facet's own selects, e.g. `schoolYearLabels` for end-of-term. */
   options?: Record<string, string[]>;
   /** ISO instant the figures were computed, for "Figures as of HH:MM". */

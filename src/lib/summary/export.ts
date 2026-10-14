@@ -96,6 +96,31 @@ function sectionBlock(section: SummarySection, level: SummaryLevel): ReportBlock
   };
 }
 
+/**
+ * Non-compliance's `toReportTable`. When the result carries an `exportList`
+ * (school level) it replaces the Category/Count block, so each flagged school
+ * prints once with its Remarks; otherwise it is the default table.
+ */
+export function complianceReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
+  const list = result.exportList;
+  if (!list) return summaryReportTable(result, frame);
+  const table = summaryReportTable(
+    { ...result, sections: result.sections.filter((s) => s.id !== "flags") },
+    frame
+  );
+  const block: ReportBlock = {
+    heading: list.title,
+    columns: list.columns.map((header) => ({
+      header,
+      width: header === "School" ? 36 : header === "Remarks" ? 60 : header === "Non-compliance" ? 30 : 18,
+    })),
+    rows: list.rows,
+    note: list.note,
+    wrap: true,
+  };
+  return { ...table, blocks: [block, ...(table.blocks ?? [])] };
+}
+
 /** A facet result as a report table. Every facet's `toReportTable`. */
 export function summaryReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
   const level = (SUMMARY_LEVELS as readonly string[]).includes(result.level) ? result.level : "overall";
