@@ -44,6 +44,8 @@ export const ADMIN_ROUTES = {
   errors: "/admin/errors",
   testLab: "/admin/test-lab",
   archive: "/admin/archive",
+  /** Soft-deleted (30 days after removal) learners; Developer and Division admins restore. */
+  deletedLearners: "/admin/deleted-learners",
   database: "/admin/database",
   adminAccounts: "/admin/admin-accounts",
 

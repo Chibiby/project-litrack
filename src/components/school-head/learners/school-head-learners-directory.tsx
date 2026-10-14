@@ -159,7 +159,7 @@ export function SchoolHeadLearnersDirectory({
               Transfer
               {transfersUnavailable || row.archived || floating ? (
                 <span className="ml-auto text-xs text-muted-foreground">
-                  {transfersUnavailable ? "Unavailable" : row.archived ? "Archived" : "Use Change grade"}
+                  {transfersUnavailable ? "Unavailable" : row.archived ? "Removed" : "Use Change grade"}
                 </span>
               ) : null}
             </DropdownMenuItem>
@@ -178,7 +178,7 @@ export function SchoolHeadLearnersDirectory({
           >
             <GraduationCap className="size-4" aria-hidden />
             Change grade
-            {row.archived ? <span className="ml-auto text-xs text-muted-foreground">Archived</span> : null}
+            {row.archived ? <span className="ml-auto text-xs text-muted-foreground">Removed</span> : null}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

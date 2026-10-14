@@ -78,7 +78,7 @@ function renderRoster(archivedView: boolean, isSuperAdmin = false) {
   );
 }
 
-const REMOVE = { name: "Remove Ana Santos permanently" };
+const REMOVE = { name: "Delete Ana Santos permanently" };
 
 async function openDialog() {
   fireEvent.click(screen.getAllByRole("button", REMOVE)[0]);
@@ -101,7 +101,7 @@ describe("Remove archived learner", () => {
     renderRoster(true);
     const dialog = await openDialog();
     const input = dialog.querySelector("input") as HTMLInputElement;
-    const confirm = screen.getByRole("button", { name: "Remove permanently" });
+    const confirm = screen.getByRole("button", { name: "Delete permanently" });
 
     expect(input.value).toBe("");
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
@@ -120,7 +120,7 @@ describe("Remove archived learner", () => {
     fireEvent.change(dialog.querySelector("input")!, {
       target: { value: "Ana Santos" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Remove permanently" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(purgeArchivedLearner).toHaveBeenCalledTimes(1));
     const fd = purgeArchivedLearner.mock.calls[0][0] as FormData;
@@ -142,7 +142,7 @@ describe("Remove archived learner", () => {
     const dialog = await openDialog();
     const input = dialog.querySelector("input") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "Ana Santos" } });
-    fireEvent.click(screen.getByRole("button", { name: "Remove permanently" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(toastSuccess).not.toHaveBeenCalled();

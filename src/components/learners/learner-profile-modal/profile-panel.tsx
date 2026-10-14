@@ -91,7 +91,7 @@ export function ProfilePanel({ learner }: { learner: LearnerProfileData }) {
           {learner.archivedAt ? (
             <p className="mt-2">
               <StatusPill tone="warning">
-                Archived {formatDateKey(learner.archivedAt)}
+                Removed {formatDateKey(learner.archivedAt)}
               </StatusPill>
             </p>
           ) : null}

@@ -42,7 +42,8 @@ import {
   LEGACY_READING_VALUE_MESSAGE, allowedReadingValuesForGrade, isLegacyReadingValue, languagesForGrade,
 } from "@/lib/reading/policy";
 import { action } from "@/lib/errors/action";
-import { resourceNotFound } from "@/lib/errors/app-error";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
+import { isRemovalExpired } from "@/lib/learners/removal";
 import { parseInput } from "@/lib/errors/validation";
 
 type ActionResult<T = unknown> =
@@ -403,7 +404,7 @@ export const archiveLearner = action("archiveLearner", async (formData: FormData
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
   if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
-  if (learner.archivedAt) return { ok: false, error: "Learner is already archived" };
+  if (learner.archivedAt) return { ok: false, error: "Learner is already removed" };
 
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
@@ -443,33 +444,33 @@ export const archiveLearner = action("archiveLearner", async (formData: FormData
     teacherShell: learner.isAralLearner,
   });
   return { ok: true };
-}, { verb: "archive the learner" });
+}, { verb: "remove the learner" });
 
 export const restoreLearner = action("restoreLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser(["TEACHER", "SCHOOL_HEAD"]);
   const parsed = { data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }) };
 
+  // Only a removed (archivedAt) learner that is not yet soft-deleted. Soft-deleted
+  // rows are restored by admins through the Deleted learners screen, never here.
   const learner = await prisma.learner.findFirst({
-    where: {
-      id: parsed.data.id,
-      OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
-    },
+    where: { id: parsed.data.id, deletedAt: null, archivedAt: { not: null } },
   });
-  if (!learner) throw resourceNotFound("Learner");
+  if (!learner || !learner.archivedAt) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  // Rows with `deletedAt` were removed by a School Head / admin; only they (or a
-  // Super Admin impersonating) may bring them back. Same NOT_FOUND as a missing
-  // row so a teacher learns nothing about it.
-  if (user.role === "TEACHER" && (learner.deletedAt || !teacherCanAccessLearner(learner, user.id))) {
+  if (user.role === "TEACHER" && !teacherCanAccessLearner(learner, user.id)) {
     throw resourceNotFound("Learner");
+  }
+  // Past the window the nightly job is about to soft-delete this learner; the
+  // teacher side is closed now. Checked after the tenancy checks so nothing is
+  // revealed to someone who could not see the row.
+  if (user.role !== "SUPER_ADMIN" && isRemovalExpired(learner.archivedAt, new Date())) {
+    throw new AppError("LEARNER_REMOVAL_EXPIRED");
   }
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
-      // `deletedAt` is also cleared so records removed by the old teacher
-      // "Delete" control reappear in the active roster after restoration.
-      data: { archivedAt: null, deletedAt: null },
+      data: { archivedAt: null },
     });
 
     await reactivateEnrollment(tx, learner);
@@ -571,96 +572,6 @@ export const archiveLearners = action("archiveLearners", async (
   }
 
   return { ok: true, data: { archived: learners.length } };
-}, { verb: "archive the learners" });
-
-/**
- * Bulk soft-delete from the roster selection bar.
- *
- * Sets `deletedAt`, which every learner query in the app already filters on, so
- * the learners drop out of lists, counts, exports and reports at once. Their
- * attendance, reading-level history and ARAL profile rows are deliberately left
- * intact — this is the reversible delete the schema was designed for, not a
- * cascade.
- *
- * The batch is all-or-nothing: if any selected id is outside the caller's
- * school or care, nothing is deleted. A partial success here would silently
- * misreport what the teacher just did.
- */
-export const deleteLearners = action("deleteLearners", async (
-  formData: FormData
-): Promise<ActionResult<{ deleted: number }>> => {
-  const user = await requireSchoolUser("TEACHER");
-  const parsed = {
-    data: parseInput(deleteLearnersSchema, {
-      learnerIds: formData.getAll("learnerIds").map(String),
-    }),
-  };
-
-  const ids = Array.from(new Set(parsed.data.learnerIds));
-  const learners = await prisma.learner.findMany({
-    where: { id: { in: ids }, deletedAt: null },
-    select: {
-      id: true,
-      schoolId: true,
-      teacherId: true,
-      aralTeacherId: true,
-      gradeLevelId: true,
-      isAralLearner: true,
-    },
-  });
-
-  // Checked before the count so a cross-tenant id is still recorded as security
-  // severity; a missing id and another school's id read identically to the user.
-  for (const learner of learners) {
-    assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-    if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
-  }
-  if (learners.length !== ids.length) throw resourceNotFound("Learner");
-
-  const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    const { count } = await tx.learner.updateMany({
-      where: { id: { in: ids }, schoolId: user.schoolId, deletedAt: null },
-      data: { deletedAt: now },
-    });
-    // Rolls the whole batch back if a row changed since the read above.
-    if (count !== ids.length) throw resourceNotFound("Learner");
-    // End the active enrollment too, so the learner does not keep a live seat
-    // in the school year they were removed from.
-    await tx.enrollment.updateMany({
-      where: { learnerId: { in: ids }, schoolId: user.schoolId, status: "ACTIVE" },
-      data: { status: "ARCHIVED", endedAt: now },
-    });
-  });
-
-  await writeAuditMany(
-    learners.map((learner) => ({
-      userId: user.id,
-      schoolId: user.schoolId,
-      action: AUDIT_ACTIONS.LEARNER_DELETE,
-      resource: "Learner",
-      resourceId: learner.id,
-      metadata: { schoolId: user.schoolId, learnerId: learner.id },
-    }))
-  );
-
-  const gradeIds = Array.from(new Set(learners.map((l) => l.gradeLevelId)));
-  for (const gradeId of gradeIds) {
-    revalidatePath(`/teacher/grade/${gradeId}`);
-  }
-  revalidatePath("/teacher/learners");
-  revalidatePath("/teacher/aral");
-  for (const learner of learners) {
-    revalidateLearnerScoped({
-      schoolId: learner.schoolId,
-      teacherId: learner.teacherId,
-      aralTeacherId: learner.aralTeacherId,
-      adminDashboard: true,
-      teacherShell: learner.isAralLearner,
-    });
-  }
-
-  return { ok: true, data: { deleted: learners.length } };
 }, { verb: "remove the learners" });
 
 export const toggleAralLearner = action("toggleAralLearner", async (formData: FormData): Promise<ActionResult> => {

@@ -2,10 +2,10 @@
 
 import {
   ArrowLeftRight,
-  Archive,
   ChevronDown,
   Download,
   Sparkles,
+  UserMinus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,7 @@ import {
 
 /**
  * The roster's bulk action menu, occupying the slot the comp gives to Filter
- * and Export. Archive, Enroll in ARAL and Request transfer are wired; the rest
+ * and Export. Remove, Enroll in ARAL and Request transfer are wired; the rest
  * are declared but inert on purpose, so the menu shows where those
  * capabilities will land without pretending they work yet. Each inert row is
  * disabled and labelled "Soon" — never a silent no-op the teacher would read
@@ -83,7 +83,7 @@ export function LearnerBulkActions({
 
           <DropdownMenuItem
             disabled={!hasSelection || pending}
-            // Same reason as Archive: Radix unmounts the trigger before the
+            // Same reason as Remove: Radix unmounts the trigger before the
             // dialog mounts, so opening on the next frame keeps focus from
             // returning to something that is no longer there.
             onSelect={(e) => {
@@ -130,8 +130,8 @@ export function LearnerBulkActions({
           disabled={pending}
           onClick={onArchive}
         >
-          <Archive className="h-4 w-4" aria-hidden />
-          Archive
+          <UserMinus className="h-4 w-4" aria-hidden />
+          Remove
         </Button>
       ) : null}
 

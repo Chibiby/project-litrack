@@ -31,7 +31,7 @@ type Props = {
 };
 
 /**
- * Permanent removal of an archived learner, gated on typing their full name.
+ * Permanent deletion of a removed learner, gated on typing their full name.
  * Mounted only while a learner is targeted, so the typed text starts empty
  * every time and survives a failed attempt.
  */
@@ -58,7 +58,7 @@ export function LearnerPurgeConfirm({ target, onClose, onPurged }: Props) {
         toastFailure(res);
         return;
       }
-      toast.success(`${target.fullName} was permanently removed`);
+      toast.success(`${target.fullName} was permanently deleted`);
       onPurged();
       onClose();
     } finally {
@@ -75,7 +75,7 @@ export function LearnerPurgeConfirm({ target, onClose, onPurged }: Props) {
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove {target.fullName} permanently?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {target.fullName} permanently?</AlertDialogTitle>
           <AlertDialogDescription>
             {target.fullName} and all of their records, including attendance,
             reading levels, MOSY, grades, and ARAL profile, will be permanently
@@ -119,10 +119,10 @@ export function LearnerPurgeConfirm({ target, onClose, onPurged }: Props) {
             {pending ? (
               <>
                 <Loader2 className="animate-spin" aria-hidden />
-                Removing…
+                Deleting…
               </>
             ) : (
-              "Remove permanently"
+              "Delete permanently"
             )}
           </Button>
         </AlertDialogFooter>

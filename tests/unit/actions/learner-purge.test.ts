@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Teacher "Delete permanently" on the Archived Learners tab. Pins: only
@@ -90,6 +90,9 @@ function archived(overrides: Record<string, unknown> = {}) {
     aralTeacherId: null,
     isAralLearner: false,
     gradeLevelId: "grade-1",
+    // Recent, so inside the 30-day window whatever the real clock says.
+    archivedAt: new Date(),
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -147,7 +150,7 @@ it("does not purge when the learner was restored before the in-transaction re-ch
     id: LEARNER_ID,
     schoolId: SCHOOL_ID,
     AND: [
-      { OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }] },
+      { deletedAt: null, archivedAt: { not: null } },
       { OR: [{ teacherId: TEACHER_ID }, { aralTeacherId: TEACHER_ID }] },
     ],
   });
@@ -182,12 +185,79 @@ describe("purgeArchivedLearner", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/admin/archive");
   });
 
-  it("only looks up archived or removed learners in the caller's school", async () => {
+  it("only looks up removed, not-yet-deleted learners in the caller's school", async () => {
     await purgeArchivedLearner(fd(NAME));
     expect(learnerFindFirst.mock.calls[0][0].where).toEqual({
       id: LEARNER_ID,
       schoolId: SCHOOL_ID,
-      OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+      deletedAt: null,
+      archivedAt: { not: null },
+    });
+  });
+
+  describe("30-day window", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const removedAt = new Date("2026-10-20T00:00:00Z");
+
+    it("refuses after the window with LEARNER_REMOVAL_EXPIRED and deletes nothing", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-19T00:00:00.001Z"));
+      learnerFindFirst.mockResolvedValue(archived({ archivedAt: removedAt }));
+
+      const res = await purgeArchivedLearner(fd(NAME));
+
+      expect(res).toMatchObject({ ok: false, code: "LEARNER_REMOVAL_EXPIRED" });
+      expect(transaction).not.toHaveBeenCalled();
+      expect(purgeLearnerRecord).not.toHaveBeenCalled();
+      expect(writeAudit).not.toHaveBeenCalled();
+    });
+
+    it("allows the last instant inside the window", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-19T00:00:00.000Z"));
+      learnerFindFirst.mockResolvedValue(archived({ archivedAt: removedAt }));
+
+      expect(await purgeArchivedLearner(fd(NAME))).toEqual({ ok: true });
+      expect(purgeLearnerRecord).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a soft-deleted row as not found, never as expired", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
+      learnerFindFirst.mockResolvedValue(
+        archived({ archivedAt: removedAt, deletedAt: new Date("2026-11-25T00:00:00Z") })
+      );
+
+      const res = await purgeArchivedLearner(fd(NAME));
+
+      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+      expect(purgeLearnerRecord).not.toHaveBeenCalled();
+    });
+
+    it("answers NOT_FOUND for another school's expired row (tenancy before expiry)", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
+      learnerFindFirst.mockResolvedValue(archived({ schoolId: "school-2", archivedAt: removedAt }));
+
+      const res = await purgeArchivedLearner(fd(NAME));
+
+      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+      expect(purgeLearnerRecord).not.toHaveBeenCalled();
+    });
+
+    it("answers NOT_FOUND for an expired row the teacher cannot access", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
+      learnerFindFirst.mockResolvedValue(
+        archived({ teacherId: "other", aralTeacherId: null, archivedAt: removedAt })
+      );
+
+      const res = await purgeArchivedLearner(fd(NAME));
+
+      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     });
   });
 

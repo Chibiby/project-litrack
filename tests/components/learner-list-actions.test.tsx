@@ -170,7 +170,7 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
 
     expect(
-      screen.getByRole("link", { name: "Archived Learners" }).getAttribute("href")
+      screen.getByRole("link", { name: "Removed Learners" }).getAttribute("href")
     ).toBe("/teacher/learners?filter=archived");
     expect(
       screen.getByRole("link", { name: "Learner Profiling" }).getAttribute("href")
@@ -180,8 +180,8 @@ describe("LearnerListClient — Actions column", () => {
   it("archives a selected learner instead of deleting their record", async () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
   });
@@ -193,8 +193,8 @@ describe("LearnerListClient — Actions column", () => {
     );
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() =>
       expect(
@@ -212,8 +212,8 @@ describe("LearnerListClient — Actions column", () => {
     archiveLearners.mockResolvedValueOnce({ ok: false, error: "Nope" } as never);
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Archive learner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
     // The row returns only when the async transition (action -> callAction ->
@@ -258,7 +258,7 @@ describe("LearnerListClient — Actions column", () => {
     // Ana is not in ARAL, so enrolling her is still an option.
     let menu = await openRowMenu("Ana Santos");
     expect(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" })).toBeTruthy();
-    expect(within(menu).getByRole("menuitem", { name: "Archive" })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: "Remove" })).toBeTruthy();
     fireEvent.keyDown(menu, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 

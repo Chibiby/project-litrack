@@ -21,6 +21,8 @@ export const DISTRICT_ROUTES = {
   announcements: "/district/announcements",
   transfers: "/district/transfers",
   unlocks: "/district/unlocks",
+  /** Soft-deleted learners in the admin's districts, with restore. */
+  deletedLearners: "/district/deleted-learners",
 
   settings: "/district/settings",
   settingsProfile: "/district/settings/profile",

@@ -338,9 +338,15 @@ describe("restoreRemovedLearner", () => {
   it("clears deletedAt and reactivates the enrollment, then audits ids and the outcome only", async () => {
     learnerFindFirst.mockResolvedValue(liveLearner());
     reactivateEnrollment.mockResolvedValue({ outcome: "revived", enrollmentId: "enrollment-9" });
+    const stub = txStub();
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(stub));
 
     const res = await restoreRemovedLearner(fd(LEARNER_ID));
 
+    expect(stub.learner.update).toHaveBeenCalledWith({
+      where: { id: LEARNER_ID },
+      data: { deletedAt: null, archivedAt: null },
+    });
     expect(res).toEqual({ ok: true, enrollmentOutcome: "revived" });
     expect(writeAudit).toHaveBeenCalledTimes(1);
     const entry = writeAudit.mock.calls[0][0];

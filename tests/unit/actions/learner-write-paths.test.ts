@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildFullName } from "@/lib/names";
+import { REMOVAL_CLOCK_START } from "@/lib/learners/removal";
 
 /**
  * Success-path coverage for the learner write paths that mutate Enrollment
- * (audit B6): createLearner, updateLearner, archiveLearners, deleteLearners,
+ * (audit B6): createLearner, updateLearner, archiveLearners,
  * restoreLearner and setLearnerAralTeacher in src/lib/actions/learner.ts.
  *
  * The neighbouring suites only exercise the refusal paths, so deleting the
@@ -121,7 +122,6 @@ const {
   createLearner,
   updateLearner,
   archiveLearners,
-  deleteLearners,
   restoreLearner,
   setLearnerAralTeacher,
 } = await import("@/lib/actions/learner");
@@ -407,77 +407,6 @@ describe("archiveLearners — ends the enrollment", () => {
   });
 });
 
-describe("deleteLearners — soft delete ends the enrollment", () => {
-  beforeEach(() => {
-    m.learnerFindMany.mockResolvedValue([
-      {
-        id: LEARNER_A,
-        schoolId: SCHOOL_ID,
-        teacherId: TEACHER_ID,
-        aralTeacherId: null,
-        gradeLevelId: GRADE_ID,
-        isAralLearner: false,
-      },
-    ]);
-    m.txLearnerUpdateMany.mockResolvedValue({ count: 1 });
-    m.txEnrollmentUpdateMany.mockResolvedValue({ count: 1 });
-  });
-
-  it("sets deletedAt (not archivedAt) and ARCHIVES the ACTIVE enrollment with the same endedAt", async () => {
-    const res = await deleteLearners(ids(LEARNER_A));
-
-    expect(res).toEqual({ ok: true, data: { deleted: 1 } });
-
-    // Binds to `tx.learner.updateMany({... data: { deletedAt: now }})`.
-    const learnerWrite = firstArg(m.txLearnerUpdateMany);
-    expect(learnerWrite.where).toEqual({
-      id: { in: [LEARNER_A] },
-      schoolId: SCHOOL_ID,
-      deletedAt: null,
-    });
-    const data = learnerWrite.data as Record<string, unknown>;
-    expect(Object.keys(data)).toEqual(["deletedAt"]);
-    const deletedAt = data.deletedAt as Date;
-    expect(deletedAt).toBeInstanceOf(Date);
-
-    // Binds to the enrollment.updateMany in deleteLearners ("does not keep a live seat").
-    expect(m.txEnrollmentUpdateMany).toHaveBeenCalledTimes(1);
-    const enrollmentWrite = firstArg(m.txEnrollmentUpdateMany);
-    expect(enrollmentWrite.where).toEqual({
-      learnerId: { in: [LEARNER_A] },
-      schoolId: SCHOOL_ID,
-      status: "ACTIVE",
-    });
-    expect(enrollmentWrite.data).toEqual({ status: "ARCHIVED", endedAt: deletedAt });
-  });
-
-  it("audits one LEARNER_DELETE row per learner", async () => {
-    await deleteLearners(ids(LEARNER_A));
-
-    // Binds to the `writeAuditMany` call and its LEARNER_DELETE action.
-    expect(m.writeAuditMany).toHaveBeenCalledWith([
-      {
-        userId: TEACHER_ID,
-        schoolId: SCHOOL_ID,
-        action: "LEARNER_DELETE",
-        resource: "Learner",
-        resourceId: LEARNER_A,
-        metadata: { schoolId: SCHOOL_ID, learnerId: LEARNER_A },
-      },
-    ]);
-  });
-
-  it("does not end any enrollment when the learner update matched fewer rows than requested", async () => {
-    m.txLearnerUpdateMany.mockResolvedValue({ count: 0 });
-
-    const res = await deleteLearners(ids(LEARNER_A));
-
-    // Binds to `if (count !== ids.length) throw` placed before the enrollment write.
-    expect(res.ok).toBe(false);
-    expect(m.txEnrollmentUpdateMany).not.toHaveBeenCalled();
-  });
-});
-
 describe("restoreLearner — reactivates the enrollment", () => {
   const archivedLearner = {
     id: LEARNER_A,
@@ -487,7 +416,8 @@ describe("restoreLearner — reactivates the enrollment", () => {
     teacherId: TEACHER_ID,
     aralTeacherId: null,
     isAralLearner: false,
-    archivedAt: new Date("2026-08-01T00:00:00Z"),
+    // Recent, so it is inside the 30-day window whatever the real clock says.
+    archivedAt: new Date(),
     deletedAt: null,
   };
 
@@ -500,26 +430,23 @@ describe("restoreLearner — reactivates the enrollment", () => {
     m.txEnrollmentCreate.mockResolvedValue({ id: "enr-new" });
   });
 
-  it("clears archivedAt AND deletedAt on the learner", async () => {
+  it("clears only archivedAt on the learner", async () => {
     const res = await restoreLearner(form({ id: LEARNER_A }));
 
     expect(res).toEqual({ ok: true });
-    // Binds to `data: { archivedAt: null, deletedAt: null }`.
+    // Binds to `data: { archivedAt: null }`.
     expect(m.txLearnerUpdate).toHaveBeenCalledWith({
       where: { id: LEARNER_A },
-      data: { archivedAt: null, deletedAt: null },
+      data: { archivedAt: null },
     });
   });
 
-  it("looks the learner up by id among archived or deleted rows only", async () => {
+  it("looks the learner up among removed, not-yet-deleted rows only", async () => {
     await restoreLearner(form({ id: LEARNER_A }));
 
-    // Binds to the findFirst `where` (an active learner is not "restorable").
+    // Binds to the findFirst `where` (soft-deleted rows are admin-restore only).
     expect(firstArg(m.learnerFindFirst)).toEqual({
-      where: {
-        id: LEARNER_A,
-        OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
-      },
+      where: { id: LEARNER_A, deletedAt: null, archivedAt: { not: null } },
     });
   });
 
@@ -619,53 +546,124 @@ describe("restoreLearner — reactivates the enrollment", () => {
     expect(m.txLearnerUpdate).not.toHaveBeenCalled();
   });
 
-  describe("rows removed by a School Head / admin (deletedAt set)", () => {
-    const removed = {
-      ...archivedLearner,
-      archivedAt: null,
-      deletedAt: new Date("2026-08-02T00:00:00Z"),
-    };
+  it("cannot reach a soft-deleted row: the lookup excludes it, so a TEACHER gets NOT_FOUND", async () => {
+    // The findFirst `where` carries `deletedAt: null`, so a soft-deleted row is not returned.
+    m.learnerFindFirst.mockResolvedValue(null);
 
-    it("refuses a TEACHER (even the learner's own adviser) with NOT_FOUND and writes nothing", async () => {
-      m.learnerFindFirst.mockResolvedValue(removed);
+    const res = await restoreLearner(form({ id: LEARNER_A }));
+
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(m.txLearnerUpdate).not.toHaveBeenCalled();
+    expect(m.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("lets a SCHOOL_HEAD of the same school restore a removal inside the window", async () => {
+    m.currentUser.current = head;
+
+    const res = await restoreLearner(form({ id: LEARNER_A }));
+
+    expect(res).toEqual({ ok: true });
+    expect(m.txLearnerUpdate).toHaveBeenCalledWith({
+      where: { id: LEARNER_A },
+      data: { archivedAt: null },
+    });
+  });
+
+  it("still refuses a SCHOOL_HEAD for another school's row", async () => {
+    m.currentUser.current = head;
+    m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, schoolId: OTHER_SCHOOL_ID });
+
+    const res = await restoreLearner(form({ id: LEARNER_A }));
+
+    expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(m.txLearnerUpdate).not.toHaveBeenCalled();
+  });
+
+  describe("teacher restore window (30 days)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const removedAt = new Date("2026-10-20T00:00:00Z");
+
+    it("restores on the last instant of the window", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-19T00:00:00Z")); // removedAt + exactly 30 days
+      m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, archivedAt: removedAt });
 
       const res = await restoreLearner(form({ id: LEARNER_A }));
 
-      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
+      expect(res).toEqual({ ok: true });
+    });
+
+    it("refuses a TEACHER one ms after the window with the expiry message and writes nothing", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-19T00:00:00.001Z"));
+      m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, archivedAt: removedAt });
+
+      const res = await restoreLearner(form({ id: LEARNER_A }));
+
+      expect(res).toMatchObject({ ok: false, code: "LEARNER_REMOVAL_EXPIRED" });
+      expect((res as { error: string }).error).toMatch(/more than 30 days ago/);
       expect(m.txLearnerUpdate).not.toHaveBeenCalled();
       expect(m.txEnrollmentCreate).not.toHaveBeenCalled();
       expect(m.writeAudit).not.toHaveBeenCalled();
     });
 
-    it("lets a SCHOOL_HEAD of the same school restore it", async () => {
+    it("also refuses a SCHOOL_HEAD after the window", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
       m.currentUser.current = head;
-      m.learnerFindFirst.mockResolvedValue(removed);
+      m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, archivedAt: removedAt });
+
+      const res = await restoreLearner(form({ id: LEARNER_A }));
+
+      expect(res).toMatchObject({ ok: false, code: "LEARNER_REMOVAL_EXPIRED" });
+      expect(m.txLearnerUpdate).not.toHaveBeenCalled();
+    });
+
+    it("lets a SUPER_ADMIN restore after the window and clears archivedAt", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
+      m.currentUser.current = {
+        id: "super-1",
+        schoolId: SCHOOL_ID,
+        role: "SUPER_ADMIN",
+        profileCompleted: true,
+      };
+      m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, archivedAt: removedAt });
 
       const res = await restoreLearner(form({ id: LEARNER_A }));
 
       expect(res).toEqual({ ok: true });
       expect(m.txLearnerUpdate).toHaveBeenCalledWith({
         where: { id: LEARNER_A },
-        data: { archivedAt: null, deletedAt: null },
+        data: { archivedAt: null },
       });
     });
 
-    it("still refuses a SCHOOL_HEAD for another school's row", async () => {
-      m.currentUser.current = head;
-      m.learnerFindFirst.mockResolvedValue({ ...removed, schoolId: OTHER_SCHOOL_ID });
-
-      const res = await restoreLearner(form({ id: LEARNER_A }));
-
-      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
-      expect(m.txLearnerUpdate).not.toHaveBeenCalled();
-    });
-
-    it("a TEACHER can still restore an archived-only row of their own", async () => {
-      m.learnerFindFirst.mockResolvedValue({ ...removed, deletedAt: null, archivedAt: new Date() });
+    it("counts a pre-release removal from the clock start, not from its own date", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(REMOVAL_CLOCK_START.getTime() + 30 * 24 * 60 * 60 * 1000)); // clock start + exactly 30 days
+      m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, archivedAt: new Date("2026-01-01T00:00:00Z") });
 
       const res = await restoreLearner(form({ id: LEARNER_A }));
 
       expect(res).toEqual({ ok: true });
+    });
+
+    it("does not reveal expiry for another school's row (tenancy check comes first)", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z"));
+      m.learnerFindFirst.mockResolvedValue({
+        ...archivedLearner,
+        schoolId: OTHER_SCHOOL_ID,
+        archivedAt: removedAt,
+      });
+
+      const res = await restoreLearner(form({ id: LEARNER_A }));
+
+      expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     });
   });
 });

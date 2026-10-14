@@ -22,7 +22,7 @@ import {
  * Per-row removals from the Super Admin school page.
  *
  * These exist because the equivalent actions elsewhere are School-scoped:
- * `deleteLearners` guards with `requireSchoolUser("TEACHER")`, which a Super
+ * The teacher actions guard with `requireSchoolUser("TEACHER")`, which a Super
  * Admin — whose `schoolId` is null — cannot satisfy. Rather than loosen that
  * guard and weaken the teacher path, the admin path is its own module with its
  * own guard.
@@ -128,7 +128,7 @@ export const removeSchoolTeachers = action("removeSchoolTeachers", async (
 /**
  * Remove learners from one school.
  *
- * Mirrors `deleteLearners` in the teacher path — soft delete plus archiving the
+ * Soft delete plus archiving the
  * active enrollment, in one transaction, so a removed learner does not keep a
  * live seat in the school year they were removed from.
  */

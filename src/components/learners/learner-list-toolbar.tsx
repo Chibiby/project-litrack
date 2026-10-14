@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, ClipboardList, SlidersHorizontal, Users } from "lucide-react";
+import { ClipboardList, UserMinus, SlidersHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import {
@@ -186,8 +186,8 @@ export function LearnerRosterNav({
             href={archivedHref}
             aria-current={state.archivedView ? "page" : undefined}
           >
-            <Archive className="size-4" aria-hidden />
-            Archived Learners
+            <UserMinus className="size-4" aria-hidden />
+            Removed Learners
           </Link>
         </Button>
         {showProfiling ? (

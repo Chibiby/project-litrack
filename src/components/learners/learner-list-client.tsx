@@ -55,7 +55,7 @@ import {
   type LearnerListGradeFilter,
   type LearnerListSort,
 } from "@/lib/learners/pagination";
-import { Archive, Eye, MoreVertical, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Eye, MoreVertical, RotateCcw, Sparkles, Trash2, UserMinus } from "lucide-react";
 import {
   LearnerPurgeConfirm,
   type PurgeTarget,
@@ -75,6 +75,8 @@ import {
   archiveConfirmDescription,
   archiveConfirmLabel,
   archiveConfirmTitle,
+  REMOVE_CANCEL_LABEL,
+  removalDeletionLabel,
   type ArchiveTarget,
 } from "@/components/learners/archive-confirm-copy";
 import { cn } from "@/lib/utils";
@@ -415,7 +417,7 @@ function LearnerListPanel({
       const res = await callAction(() => archiveLearners(fd));
       await settleActionResult(
         res,
-        `${ids.length} learner${ids.length === 1 ? "" : "s"} archived`
+        `${ids.length} learner${ids.length === 1 ? "" : "s"} removed`
       );
       setSelected(new Set());
       invalidateNavWarm();
@@ -454,7 +456,7 @@ function LearnerListPanel({
     // archived or wholly active — never mixed. The action would refuse them with
     // a message about the roster, which is not the reason.
     if (picked.every((l) => l.archivedAt)) {
-      toast.error("Archived learners cannot be enrolled in ARAL");
+      toast.error("Removed learners cannot be enrolled in ARAL");
       return;
     }
     const rows = picked.filter((l) => !l.archivedAt);
@@ -509,8 +511,8 @@ function LearnerListPanel({
           {transferItem}
           {canArchive ? (
             <DropdownMenuItem onSelect={() => requestArchive([l])}>
-              <Archive className="size-4" aria-hidden />
-              Archive
+              <UserMinus className="size-4" aria-hidden />
+              Remove
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -543,10 +545,10 @@ function LearnerListPanel({
         className="rounded-xl text-destructive hover:text-destructive"
         disabled={pending}
         onClick={() => setPurgeTarget({ id: l.id, fullName: l.fullName })}
-        aria-label={`Remove ${l.fullName} permanently`}
+        aria-label={`Delete ${l.fullName} permanently`}
       >
         <Trash2 className="size-4" aria-hidden />
-        <span className="hidden sm:inline">Remove</span>
+        <span className="hidden sm:inline">Delete</span>
       </Button>
     </>
   );
@@ -606,7 +608,7 @@ function LearnerListPanel({
                   : filtered
                     ? "No learners match these filters"
                     : archivedView
-                      ? "No archived learners"
+                      ? "No removed learners"
                       : "No learners yet"
               }
               description={
@@ -615,7 +617,7 @@ function LearnerListPanel({
                   : filtered
                     ? "Clear a filter to widen the list."
                     : archivedView
-                      ? "Learners you archive will appear here and can be restored."
+                      ? "Learners you remove appear here for 30 days and can be restored."
                       : "Add a learner using the Add New Learner button."
               }
             />
@@ -682,7 +684,12 @@ function LearnerListPanel({
                                 {l.listingName}
                               </span>
                               {l.archivedAt && (
-                                <Badge variant="outline">Archived</Badge>
+                                <>
+                                  <Badge variant="outline">Removed</Badge>
+                                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                    {removalDeletionLabel(l.archivedAt)}
+                                  </span>
+                                </>
                               )}
                               {l.pendingTransfer ? (
                                 <TransferRequestedBadge toSectionName={l.pendingTransfer.toSectionName} />
@@ -789,6 +796,11 @@ function LearnerListPanel({
                         Age {l.age} · {gradeAndSection(l)}
                         {l.isAralLearner ? " · ARAL" : ""}
                       </span>
+                      {l.archivedAt ? (
+                        <span className="line-clamp-1 text-xs font-normal text-muted-foreground sm:text-sm">
+                          {removalDeletionLabel(l.archivedAt)}
+                        </span>
+                      ) : null}
                       {l.pendingTransfer ? (
                         <TransferRequestedBadge
                           toSectionName={l.pendingTransfer.toSectionName}
@@ -871,6 +883,7 @@ function LearnerListPanel({
           title={archiveConfirmTitle(archiveTarget)}
           description={archiveConfirmDescription(archiveTarget)}
           confirmLabel={archiveConfirmLabel(archiveTarget)}
+          cancelLabel={REMOVE_CANCEL_LABEL}
           variant="destructive"
           onConfirm={() => archive(archiveTarget.ids)}
         />

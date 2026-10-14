@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.41.0",
+    date: "2026-10-14",
+    title: "Archive is now Remove, with 30 days to change your mind",
+    announce: true,
+    fixes: [
+      "Teachers: Archive is now called Remove. Before a learner is removed you are asked to confirm with Yes, remove or No.",
+      "Removed learners move to the Removed list, which replaces Archived. You can restore them from there for 30 days, and each one shows the date it will be deleted.",
+      "After 30 days a removed learner is deleted from your school's lists and counts. Learners archived before this update get the full 30 days.",
+      "Division, District and Developer Admins: the new Deleted learners page lists learners deleted from the schools you oversee, so you can restore one to their school.",
+    ],
+  },
+  {
     version: "2.40.1",
     date: "2026-10-13",
     title: "The Apspark opening animation plays in full",

@@ -509,6 +509,7 @@ describe("getNavGroups — admin", () => {
     expect(groups[0].items[0].href).toBe("/admin");
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
+      "Deleted learners",
       "Teachers",
       "ARAL Tutors",
       "School Heads",
@@ -541,6 +542,7 @@ describe("getNavGroups — admin", () => {
       "admin-school-heads": "/admin/management/school-heads",
       "admin-schools": "/admin/management/schools",
       "admin-district-admins": "/admin/management/district-admins",
+      "admin-deleted-learners": "/admin/deleted-learners",
       "admin-school-years": "/admin/school-setup/school-years",
       "admin-term-subjects": "/admin/school-setup/term-subjects",
       "admin-submissions": "/admin/school-setup/report-submissions",
@@ -699,15 +701,29 @@ describe("getNavGroups — district admin", () => {
     ]);
   });
 
-  it("orders Operations as Announcements, Transfers, Revision access, Support", () => {
+  it("orders Operations as Announcements, Transfers, Deleted learners, Revision access, Support", () => {
     const groups = getNavGroups("DISTRICT_ADMIN");
     const operations = groups.find((g) => g.label === "Operations");
     expect(operations?.items.map((i) => i.label)).toEqual([
       "Announcements",
       "Transfers",
+      "Deleted learners",
       "Revision access",
       "Support",
     ]);
+  });
+
+  it("lists Deleted learners for both Super Admin tiers and the district admin", () => {
+    for (const options of [{}, { isDeveloperAdmin: true }]) {
+      const row = flattenNavGroups(getNavGroups("SUPER_ADMIN", [], options)).find(
+        (i) => i.id === "admin-deleted-learners"
+      );
+      expect(row).toMatchObject({ label: "Deleted learners", href: "/admin/deleted-learners" });
+    }
+    const district = flattenNavGroups(getNavGroups("DISTRICT_ADMIN")).find(
+      (i) => i.id === "district-deleted-learners"
+    );
+    expect(district).toMatchObject({ label: "Deleted learners", href: "/district/deleted-learners" });
   });
 
   it("labels the unlocks row 'Revision access', matching the page's H1", () => {

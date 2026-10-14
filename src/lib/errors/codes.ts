@@ -259,6 +259,14 @@ export const ERRORS = {
     message: "Some of these were already changed or decided. Refresh to see the current list.",
   },
 
+  /** A teacher restore after the 30-day removal window; only admins can restore now. */
+  LEARNER_REMOVAL_EXPIRED: {
+    status: 409,
+    severity: "user",
+    message:
+      "This learner was removed more than 30 days ago. Ask your division or district office to restore them.",
+  },
+
   // ── MOSY ─────────────────────────────────────────────────────────────────
   /** MOSY saves are closed by the Super Admin submission lock (the default). */
   MOSY_LOCKED: {

@@ -7,7 +7,8 @@ import { requireSchoolUser } from "@/lib/auth/session";
 import { assertSameSchool } from "@/lib/auth/tenant";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { action } from "@/lib/errors/action";
-import { fieldError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { AppError, fieldError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
+import { isRemovalExpired } from "@/lib/learners/removal";
 import { parseInput } from "@/lib/errors/validation";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { purgeLearnerRecord } from "@/lib/archive/purge";
@@ -26,14 +27,15 @@ const purgeArchivedLearnerSchema = z.object({
 });
 
 /**
- * Permanently delete ONE teacher-archived learner from the teacher's Archived
- * Learners tab. Cannot be undone; the teacher confirms by typing the learner's
- * name.
+ * Permanently delete ONE removed learner from the teacher's Removed tab. Cannot
+ * be undone; the teacher confirms by typing the learner's name.
  *
  * Reach is the TEACHER branch of `restoreLearner` and no wider: the learner must
- * be archived (an active learner is NOT_FOUND), in the caller's school, NOT
- * removed by a School Head (`deletedAt` set is NOT_FOUND, as restore refuses a
- * teacher there), and the caller must be the adviser or designated ARAL teacher.
+ * be removed (an active learner is NOT_FOUND), in the caller's school, NOT yet
+ * soft-deleted (`deletedAt` set is NOT_FOUND), the caller must be the adviser or
+ * designated ARAL teacher, and the removal must still be inside the 30-day window
+ * (past it: LEARNER_REMOVAL_EXPIRED, checked only after the tenancy and access
+ * checks so nothing leaks across tenants).
  * Unlike restore, purge is TEACHER-only: a School Head cannot purge here, and a
  * Super Admin passes `requireSchoolUser` but is neither pointer, so is refused
  * as NOT_FOUND — Super Admins purge from `/admin/archive` instead.
@@ -55,7 +57,8 @@ export const purgeArchivedLearner = action(
       where: {
         id: input.id,
         schoolId: user.schoolId,
-        OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+        deletedAt: null,
+        archivedAt: { not: null },
       },
       select: {
         id: true,
@@ -66,15 +69,20 @@ export const purgeArchivedLearner = action(
         isAralLearner: true,
         gradeLevelId: true,
         deletedAt: true,
+        archivedAt: true,
       },
     });
     if (!learner) throw resourceNotFound("Learner");
 
     assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-    // A `deletedAt` row was removed by a School Head / admin; a teacher may not
-    // restore it, so may not permanently purge it either (same NOT_FOUND).
+    // A `deletedAt` row is already soft-deleted (admin territory); the lookup
+    // excludes it, and this stays as a second guard (same NOT_FOUND).
     if (learner.deletedAt || !teacherCanAccessLearner(learner, user.id)) {
       throw resourceNotFound("Learner");
+    }
+    // Tenancy and access are settled; only now may the expiry be revealed.
+    if (!learner.archivedAt || isRemovalExpired(learner.archivedAt, new Date())) {
+      throw new AppError("LEARNER_REMOVAL_EXPIRED");
     }
 
     if (normalizePersonName(input.confirmName) !== normalizePersonName(learner.fullName)) {
@@ -93,7 +101,7 @@ export const purgeArchivedLearner = action(
           // Archived-or-removed AND adviser-or-ARAL-tutor: both `OR`s, so they
           // sit in an `AND` rather than competing for one key.
           AND: [
-            { OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }] },
+            { deletedAt: null, archivedAt: { not: null } },
             teacherLearnerScope(user.id),
           ],
         },

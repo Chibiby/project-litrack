@@ -333,6 +333,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     keywords: [
       "delete",
       "remove",
+      "removed",
+      "restore",
       "archive",
       "transfer",
       "dropped",
@@ -340,7 +342,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       "left school",
     ],
     body: [
-      "Archive them rather than deleting. Archiving keeps their attendance and reading history intact for reporting while taking them out of your active roster.",
+      "Remove them from your roster. They move to Removed Learners, where you can restore them for 30 days; their attendance and reading history stay intact while they are there.",
+      "After 30 days a removed learner is deleted from your school's lists. Only your division or district office can restore them after that.",
       "If they moved to another school in the division, ask your school head to record a transfer instead — that carries the record across properly.",
     ],
     routes: ["/teacher/learners"],

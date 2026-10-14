@@ -2,6 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import { reportError } from "@/lib/errors/report";
+import { removalExpiryCutoff } from "@/lib/learners/removal";
+import { revalidateAllCachedData } from "@/lib/cache/revalidate";
 import {
   AUDIT_LOG_RETENTION,
   deleteInBatches,
@@ -31,10 +33,17 @@ export type RulePurge =
   | { status: "disabled" }
   | { status: "failed" };
 
+/** `idle`: the first removal window has not lapsed yet, so nothing was queried. */
+export type RemovalExpiry =
+  | { status: "ran"; expired: number }
+  | { status: "idle" }
+  | { status: "failed" };
+
 export type RetentionReport = {
   notificationsRead: RulePurge;
   notifications: RulePurge;
   auditLogs: RulePurge;
+  removedLearners: RemovalExpiry;
   /** Present (true) only when at least one rule failed; absent on a clean run. */
   retentionFailed?: true;
 };
@@ -108,7 +117,42 @@ export function purgeExpiredAuditLogs(now: Date = new Date()): Promise<RulePurge
 }
 
 /**
- * All three, one after another. Never throws: each rule reports `failed`
+ * Soft-deletes learners whose 30-day removal window has lapsed. One bounded
+ * `updateMany` (the predicate is the bound); active enrollments were ended when
+ * the learner was removed, so nothing else is written. Never throws.
+ */
+export async function expireRemovedLearners(now: Date = new Date()): Promise<RemovalExpiry> {
+  const cutoff = removalExpiryCutoff(now);
+  if (cutoff === null) return { status: "idle" };
+  try {
+    const { count } = await prisma.learner.updateMany({
+      where: { deletedAt: null, archivedAt: { not: null, lt: cutoff } },
+      data: { deletedAt: now },
+    });
+    if (count > 0) {
+      try {
+        // Once a day, so a broad bust is cheaper than naming every school.
+        revalidateAllCachedData();
+      } catch (err) {
+        console.error("[retention] cache revalidation after removal expiry failed:", err instanceof Error ? err.message : err);
+      }
+    }
+    return { status: "ran", expired: count };
+  } catch (err) {
+    console.error("[retention] removed-learner expiry failed:", err instanceof Error ? err.message : err);
+    reportError(
+      new AppError("DB_ERROR", {
+        cause: err,
+        detail: `Retention "removed learners" failed: ${err instanceof Error ? err.message : "unknown error"}`,
+      }),
+      { route: "retention/purge", routeType: "cron" }
+    );
+    return { status: "failed" };
+  }
+}
+
+/**
+ * All rules, one after another. Never throws: each rule reports `failed`
  * instead, because retention is housekeeping and must not fail the backup it
  * runs beside.
  */
@@ -118,8 +162,11 @@ export async function runDailyRetention(now: Date = new Date()): Promise<Retenti
   const notificationsRead = await purgeReadNotifications(now);
   const notifications = await purgeExpiredNotifications(now);
   const auditLogs = await purgeExpiredAuditLogs(now);
-  const failed = [notificationsRead, notifications, auditLogs].some((r) => r.status === "failed");
+  const removedLearners = await expireRemovedLearners(now);
+  const failed = [notificationsRead, notifications, auditLogs, removedLearners].some(
+    (r) => r.status === "failed"
+  );
   return failed
-    ? { notificationsRead, notifications, auditLogs, retentionFailed: true }
-    : { notificationsRead, notifications, auditLogs };
+    ? { notificationsRead, notifications, auditLogs, removedLearners, retentionFailed: true }
+    : { notificationsRead, notifications, auditLogs, removedLearners };
 }

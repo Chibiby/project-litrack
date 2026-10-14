@@ -243,7 +243,7 @@ describe("archiveLearner", () => {
     const res = await archiveLearner(form({ id: "11111111-1111-4111-8111-111111111111" }));
 
     expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
-    expect((res as { error: string }).error).toContain("Couldn't archive the learner");
+    expect((res as { error: string }).error).toContain("Couldn't remove the learner");
   });
 
   it("answers a learner from another school exactly like a missing one", async () => {

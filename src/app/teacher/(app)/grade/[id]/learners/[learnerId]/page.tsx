@@ -236,7 +236,7 @@ export default async function LearnerDetailPage({
             <CardTitle className="text-base flex items-center gap-2">
               Section A — Profile
               {learner.isAralLearner && <Badge variant="violet">ARAL</Badge>}
-              {learner.archivedAt && <Badge variant="outline">Archived</Badge>}
+              {learner.archivedAt && <Badge variant="outline">Removed</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">

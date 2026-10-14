@@ -109,7 +109,7 @@ vi.mock("@/lib/prisma", () => {
   return { prisma: deep([]), prismaFresh: deep([]) };
 });
 
-import { createLearner, archiveLearner, deleteLearners, setLearnerAralTeacher } from "@/lib/actions/learner";
+import { createLearner, archiveLearner, setLearnerAralTeacher } from "@/lib/actions/learner";
 import { transferLearner, transferLearnerCrossSchool } from "@/lib/actions/enrollment";
 import {
   transferLearnersToSection,
@@ -284,7 +284,6 @@ const ACTIONS: Array<{ name: string; fn: ActionFn; guard: GuardKind }> = [
   // Learner / enrollment / attendance / ARAL / import
   { name: "createLearner", fn: createLearner as ActionFn, guard: "teacher" },
   { name: "archiveLearner", fn: archiveLearner as ActionFn, guard: "teacher" },
-  { name: "deleteLearners", fn: deleteLearners as ActionFn, guard: "teacher" },
   { name: "markAttendance", fn: markAttendance as ActionFn, guard: "teacher" },
   { name: "saveAralWeeklyAttendance", fn: saveAralWeeklyAttendance as ActionFn, guard: "teacher" },
   { name: "saveAralProfile", fn: saveAralProfile as ActionFn, guard: "teacher" },

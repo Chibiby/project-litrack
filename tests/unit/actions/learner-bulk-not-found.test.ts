@@ -36,7 +36,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock("@/lib/cache/revalidate", () => ({ revalidateLearnerScoped: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({ notifyAralAssigned: vi.fn() }));
 
-const { archiveLearners, deleteLearners } = await import("@/lib/actions/learner");
+const { archiveLearners } = await import("@/lib/actions/learner");
 
 function form(ids: string[]) {
   const fd = new FormData();
@@ -57,7 +57,6 @@ beforeEach(() => {
 
 describe.each([
   ["archiveLearners", archiveLearners],
-  ["deleteLearners", deleteLearners],
 ])("%s — id existence does not leak", (_name, run) => {
   it("gives the same message for a missing id and another school's id", async () => {
     const missing = await run(form([MINE, MISSING]));

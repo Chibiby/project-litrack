@@ -178,7 +178,7 @@ describe("TransferLearnersDialog — selections that cannot go ahead", () => {
     const leftOut = screen.getByRole("region", { name: "Left out" });
     expect(within(leftOut).getByText("Left out (3)")).toBeTruthy();
     expect(within(leftOut).getByText("Archie Old")).toBeTruthy();
-    expect(within(leftOut).getByText("Archived")).toBeTruthy();
+    expect(within(leftOut).getByText("Removed")).toBeTruthy();
     expect(within(leftOut).getByText("Penny Wait")).toBeTruthy();
     expect(within(leftOut).getByText("A transfer request is already waiting")).toBeTruthy();
     expect(within(leftOut).getByText("Flo Ating")).toBeTruthy();

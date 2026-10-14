@@ -95,7 +95,12 @@ export const restoreRemovedLearner = action(
     if (learner.school.deletedAt) throw resourceNotFound("Learner");
 
     const outcome = await prisma.$transaction(async (tx) => {
-      await tx.learner.update({ where: { id: learner.id }, data: { deletedAt: null } });
+      // `archivedAt` too: left set, the learner would reappear in the teacher's
+      // Removed list with an expired clock and the nightly job would delete it again.
+      await tx.learner.update({
+        where: { id: learner.id },
+        data: { deletedAt: null, archivedAt: null },
+      });
       return reactivateEnrollment(tx, learner);
     });
 

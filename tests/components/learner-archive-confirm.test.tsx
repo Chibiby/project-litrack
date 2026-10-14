@@ -113,25 +113,25 @@ describe("roster archive confirmation", () => {
   it("asks before a bulk archive, stating count, recovery and the ARAL effect", async () => {
     renderRoster();
     selectBoth();
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 
     const alert = await screen.findByRole("alertdialog");
-    expect(within(alert).getByText("Archive 2 learners?")).toBeTruthy();
-    expect(alert.textContent).toContain("hidden from active lists");
-    expect(alert.textContent).toContain("restored from Archived Learners");
+    expect(within(alert).getByText("Remove 2 learners?")).toBeTruthy();
+    expect(alert.textContent).toContain("will move to Removed");
+    expect(alert.textContent).toContain("restore them from Removed for 30 days");
     expect(alert.textContent).toContain("1 of them is in ARAL");
     expect(alert.textContent).toContain("ARAL weekly grids");
-    expect(within(alert).getByRole("button", { name: "Archive 2 learners" })).toBeTruthy();
-    expect(within(alert).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(within(alert).getByRole("button", { name: "Yes, remove" })).toBeTruthy();
+    expect(within(alert).getByRole("button", { name: "No" })).toBeTruthy();
     expect(archiveLearners).not.toHaveBeenCalled();
   });
 
   it("writes nothing when the confirmation is cancelled", async () => {
     renderRoster();
     selectBoth();
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = await screen.findByRole("alertdialog");
-    fireEvent.click(within(alert).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "No" }));
 
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(archiveLearners).not.toHaveBeenCalled();
@@ -141,14 +141,14 @@ describe("roster archive confirmation", () => {
   it("archives the selected ids once confirmed, then closes", async () => {
     renderRoster();
     selectBoth();
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = await screen.findByRole("alertdialog");
-    fireEvent.click(within(alert).getByRole("button", { name: "Archive 2 learners" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
     const fd = archiveLearners.mock.calls[0][0] as FormData;
     expect(fd.getAll("learnerIds")).toEqual(["learner-1", "learner-2"]);
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("2 learners archived"));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("2 learners removed"));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   });
 
@@ -156,9 +156,9 @@ describe("roster archive confirmation", () => {
     archiveLearners.mockResolvedValue({ ok: false, error: "Not allowed" });
     renderRoster();
     selectBoth();
-    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = await screen.findByRole("alertdialog");
-    fireEvent.click(within(alert).getByRole("button", { name: "Archive 2 learners" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Not allowed"));
     expect(toastSuccess).not.toHaveBeenCalled();
@@ -178,13 +178,13 @@ describe("roster archive confirmation", () => {
     const trigger = within(table).getByRole("button", { name: "More actions for Ana Santos" });
     fireEvent.keyDown(trigger, { key: "Enter" });
     const menu = await screen.findByRole("menu");
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Archive" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Remove" }));
 
     const alert = await screen.findByRole("alertdialog");
-    expect(within(alert).getByText("Archive Ana Santos?")).toBeTruthy();
+    expect(within(alert).getByText("Remove Ana Santos?")).toBeTruthy();
     // Ana is not in ARAL, so the ARAL sentence would be noise.
     expect(alert.textContent).not.toContain("ARAL");
-    expect(within(alert).getByRole("button", { name: "Archive learner" })).toBeTruthy();
+    expect(within(alert).getByRole("button", { name: "Yes, remove" })).toBeTruthy();
     expect(archiveLearners).not.toHaveBeenCalled();
   });
 });

@@ -3,12 +3,13 @@
 import { useOptimistic, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/confirm-action";
-import { Archive, ArchiveRestore } from "lucide-react";
+import { ArchiveRestore, UserMinus } from "lucide-react";
 import { archiveLearner, restoreLearner } from "@/lib/actions/learner";
 import {
   archiveConfirmDescription,
   archiveConfirmLabel,
   archiveConfirmTitle,
+  REMOVE_CANCEL_LABEL,
 } from "@/components/learners/archive-confirm-copy";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
@@ -56,7 +57,7 @@ export function LearnerArchiveButton({
       const fd = new FormData();
       fd.set("id", learnerId);
       const res = await archiveLearner(fd);
-      await settleActionResult(res, "Learner archived");
+      await settleActionResult(res, "Learner removed");
       invalidateNavWarm();
     });
 
@@ -91,12 +92,13 @@ export function LearnerArchiveButton({
       title={archiveConfirmTitle(target)}
       description={archiveConfirmDescription(target)}
       confirmLabel={archiveConfirmLabel(target)}
+      cancelLabel={REMOVE_CANCEL_LABEL}
       variant="destructive"
       disabled={pending}
       trigger={
-        <Button size="sm" variant="outline" loading={pending} loadingText="Archiving…">
-          <Archive className="h-4 w-4" />
-          Archive
+        <Button size="sm" variant="outline" loading={pending} loadingText="Removing…">
+          <UserMinus className="h-4 w-4" />
+          Remove
         </Button>
       }
       onConfirm={handle}

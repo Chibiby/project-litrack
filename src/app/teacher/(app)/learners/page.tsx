@@ -48,6 +48,7 @@ import {
   LEARNER_LIST_DEFAULT_PAGE_SIZE,
   type LearnerListGradeFilter,
 } from "@/lib/learners/pagination";
+import { removedListArchivedAtFilter } from "@/lib/learners/removal";
 import { formatListingNameFromRecord } from "@/lib/names";
 import { listKey } from "@/lib/nav/list-params";
 import { Sparkles } from "lucide-react";
@@ -117,9 +118,15 @@ function learnerListWhere(opts: {
   list: ReturnType<typeof parseLearnerListParams>;
 }): Prisma.LearnerWhereInput {
   const { assignedGradeIds, teacherId, isSuperAdmin, list } = opts;
+  // Removed list: still inside the 30-day window. Rows past it are about to be
+  // soft-deleted by the nightly job and the teacher can no longer restore them,
+  // so they are hidden here (and from the count) without waiting for the job.
   const stateScope: Prisma.LearnerWhereInput =
     list.filter === "archived"
-      ? { OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }] }
+      ? {
+          deletedAt: null,
+          archivedAt: removedListArchivedAtFilter(new Date()),
+        }
       : { archivedAt: null, deletedAt: null };
   const accessScope: Prisma.LearnerWhereInput = isSuperAdmin
     ? {}
@@ -344,7 +351,7 @@ async function LearnersBody({
     age: l.age,
     gender: l.gender,
     isAralLearner: l.isAralLearner,
-    archivedAt: (l.archivedAt ?? l.deletedAt)?.toISOString() ?? null,
+    archivedAt: l.archivedAt?.toISOString() ?? null,
     englishReadingProfile: l.englishReadingProfile,
     filipinoReadingProfile: l.filipinoReadingProfile,
     section: l.section,

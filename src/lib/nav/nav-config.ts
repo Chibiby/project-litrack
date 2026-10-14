@@ -27,6 +27,7 @@ import {
   Sparkles,
   Unlock,
   UserCog,
+  UserX,
   Users,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
@@ -188,6 +189,7 @@ export function getNavGroups(
           label: "Management",
           items: [
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
+            { id: "admin-deleted-learners", label: "Deleted learners", href: ADMIN_ROUTES.deletedLearners, icon: UserX, heavy: true },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
             { id: "admin-aral-tutors", label: "ARAL Tutors", href: ADMIN_ROUTES.aralTutors, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
@@ -391,6 +393,7 @@ export function getNavGroups(
           items: [
             { id: "district-announcements", label: "Announcements", href: DISTRICT_ROUTES.announcements, icon: Megaphone },
             { id: "district-transfers", label: "Transfers", href: DISTRICT_ROUTES.transfers, icon: ArrowRightLeft },
+            { id: "district-deleted-learners", label: "Deleted learners", href: DISTRICT_ROUTES.deletedLearners, icon: UserX, heavy: true },
             { id: "district-unlocks", label: "Revision access", href: DISTRICT_ROUTES.unlocks, icon: Unlock },
             { id: "district-support", label: "Support", href: DISTRICT_ROUTES.support, icon: LifeBuoy },
           ],

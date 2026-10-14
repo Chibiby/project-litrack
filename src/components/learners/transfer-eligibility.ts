@@ -121,7 +121,7 @@ export function destinationVerdict(
 
 /** Short reasons for the dialog's "Left out" list. */
 export const LEFT_OUT_LABELS: Record<TransferBlockReason, string> = {
-  "learner-unavailable": "Archived",
+  "learner-unavailable": "Removed",
   floating: "Floating — no grade placement yet",
   "different-grade": "In another grade",
   "section-unavailable": "Section no longer available",
