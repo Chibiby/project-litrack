@@ -17,7 +17,7 @@ import {
 } from "@/lib/validators/summary.schema";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { scopeRaw, type ScopableRow, type ScopedRaw } from "@/lib/summary/scoped-raw";
-import { complianceReportTable, summaryReportTable } from "@/lib/summary/export";
+import { aralReportTable, complianceReportTable, summaryReportTable } from "@/lib/summary/export";
 import { SUMMARY_FACET_META } from "@/lib/summary/facet-meta";
 import {
   defaultJulyMonth,
@@ -258,7 +258,12 @@ function defineFacet<S extends z.ZodTypeAny, R extends ResolvedParams, T extends
       const { input, past } = plan({});
       await loadDivisionRaw(def.id, input, def.query, past, [divisionSummary]);
     },
-    toReportTable: def.id === "compliance" ? complianceReportTable : summaryReportTable,
+    toReportTable:
+      def.id === "compliance"
+        ? complianceReportTable
+        : def.id === "aral"
+          ? aralReportTable
+          : summaryReportTable,
   };
 }
 

@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.43.0",
+    date: "2026-10-29",
+    title: "The ARAL learners and tutors export gives one row per school, and exported text no longer spills or gets cut off",
+    announce: true,
+    fixes: [
+      "Exporting ARAL learners and tutors now gives one row per school: ARAL learners, DepEd tutors, Non-DepEd tutors and total tutors first, then the percentages, then learners per grade, with a Total row at the bottom.",
+      "In every Division Summary export, long text such as the Why column in Non-compliance now fits its column or wraps onto more lines instead of running over the next cell.",
+      "The header at the top of exported sheets, including the region, division, report date and reporting period, now shows in full instead of being cut off.",
+    ],
+  },
+  {
     version: "2.42.0",
     date: "2026-10-14",
     title: "The Non-compliance export lists each flagged school once, with what it is missing",

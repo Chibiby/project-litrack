@@ -335,7 +335,7 @@ describe("renderExcel wrap option", () => {
   ];
   const rows = [["A", "Improved to Developing or higher after remedial sessions"]];
 
-  it("sets wrapText on data cells only when the block opts in", async () => {
+  it("sets wrapText on data cells when the block opts in", async () => {
     for (const purpose of ["PRINT", "RECORDS"] as const) {
       const on = await load(
         await renderExcel(
@@ -343,14 +343,26 @@ describe("renderExcel wrap option", () => {
           { purpose }
         )
       );
-      const off = await load(await renderExcel({ ...TABLE, columns: cols, rows }, { purpose }));
       const cellOf = (wb: Workbook) => {
         const ws = wb.worksheets[0]!;
         return ws.getRow(rowStarting(ws, "A")).getCell(2);
       };
       expect(cellOf(on).value).toBe(rows[0]![1]);
       expect(cellOf(on).alignment?.wrapText).toBe(true);
-      expect(cellOf(off).alignment?.wrapText).toBeFalsy();
+    }
+  });
+
+  it("without the opt-in, widens a column to fit its text instead of wrapping, and wraps only text too long for that", async () => {
+    const short = [["A", "Improved after remedial sessions"]];
+    const long = [["A", "Improved to Developing or higher after remedial sessions held twice a week"]];
+    for (const purpose of ["PRINT", "RECORDS"] as const) {
+      const fits = (await load(await renderExcel({ ...TABLE, columns: cols, rows: short }, { purpose }))).worksheets[0]!;
+      const cell = fits.getRow(rowStarting(fits, "A")).getCell(2);
+      expect(cell.alignment?.wrapText).toBeFalsy();
+      expect(fits.getColumn(2).width ?? 0).toBeGreaterThanOrEqual(short[0]![1]!.length);
+
+      const over = (await load(await renderExcel({ ...TABLE, columns: cols, rows: long }, { purpose }))).worksheets[0]!;
+      expect(over.getRow(rowStarting(over, "A")).getCell(2).alignment?.wrapText).toBe(true);
     }
   });
 });

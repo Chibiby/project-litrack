@@ -152,6 +152,14 @@ const EXTRA_COL_WIDTH = 12;
 const PRIMARY_MIN_WIDTH = 28;
 /** Header, info and signature rows need at least this many columns to lay out. */
 const MIN_TEMPLATE_COLUMNS = 3;
+/** A column grows to fit its longest cell up to this width; longer text wraps instead. */
+const CONTENT_MAX_WIDTH = 60;
+/**
+ * A print sheet narrower than this (in character widths) has every column
+ * widened in proportion until it reaches it, so the letterhead, title and info
+ * rows fit across the sheet instead of being cut off.
+ */
+const MIN_PRINT_SHEET_WIDTH = 110;
 
 const EMU_PER_PX = 9525;
 const SEAL_PX = 100;
@@ -257,15 +265,47 @@ function headerMinWidth(header: string): number {
   return Math.ceil(Math.max(longest, perLine) * 1.2) + 1;
 }
 
+/** Wide enough for the column's longest cell line, capped at `CONTENT_MAX_WIDTH`. */
+function contentMinWidth(rows: readonly TemplateCell[][], col: number): number {
+  let longest = 0;
+  for (const row of rows) {
+    const v = row[col];
+    if (v === null || v === undefined || v === "") continue;
+    for (const line of String(v).split("\n")) longest = Math.max(longest, line.length);
+  }
+  return longest === 0 ? 0 : Math.min(CONTENT_MAX_WIDTH, Math.ceil(longest * 1.1) + 2);
+}
+
 function templateWidths(sheet: TemplateSheet, templateCols: number): number[] {
   const primary = sheet.primaryColumn ?? defaultPrimaryColumn(sheet.columns);
   return Array.from({ length: templateCols }, (_, i) => {
     const col = sheet.columns[i];
     if (!col) return EXTRA_COL_WIDTH;
-    let w = Math.max(col.width ?? DEFAULT_COL_WIDTH, headerMinWidth(col.header));
+    let w = Math.max(
+      col.width ?? DEFAULT_COL_WIDTH,
+      headerMinWidth(col.header),
+      contentMinWidth(sheet.rows, i)
+    );
     if (i === primary) w = Math.max(w, PRIMARY_MIN_WIDTH);
     return w;
   });
+}
+
+/** `widths` scaled up in proportion until they add up to at least `min`. */
+function atLeastTotal(widths: number[], min: number): number[] {
+  const total = widths.reduce((a, b) => a + b, 0);
+  if (total >= min || total === 0) return widths;
+  const scale = min / total;
+  return widths.map((w) => Math.ceil(w * scale * 10) / 10);
+}
+
+/** Lines the row's longest cell wraps onto at these widths; 1 when everything fits. */
+function rowLines(values: readonly TemplateCell[], widths: readonly number[]): number {
+  return values.reduce<number>(
+    (m, v, i) =>
+      typeof v === "string" ? Math.max(m, wrappedLines(v, widths[i] ?? DEFAULT_COL_WIDTH)) : m,
+    1
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -313,9 +353,17 @@ function escapeHeaderFooter(text: string): string {
   return text.replace(/&/g, "&&");
 }
 
-/** Rough wrapped-line count for a merged text cell `widthChars` wide. */
+/** Rough wrapped-line count for a text cell `widthChars` wide; each `\n` starts a line. */
 function wrappedLines(text: string, widthChars: number): number {
-  return Math.max(1, Math.ceil((text.length * 1.1) / Math.max(widthChars, 1)));
+  const lines = text
+    .split("\n")
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil((line.length * 1.1) / Math.max(widthChars, 1))), 0);
+  return Math.max(1, lines);
+}
+
+/** Character widths of columns `from`..`to` (1-based, inclusive). */
+function spanWidth(widths: readonly number[], from: number, to: number): number {
+  return widths.slice(from - 1, to).reduce((a, b) => a + b, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +384,7 @@ export function writePrintSheet(
 ): number {
   const n = sheet.columns.length;
   const cols = Math.max(n, MIN_TEMPLATE_COLUMNS);
-  const widths = templateWidths(sheet, cols);
+  const widths = atLeastTotal(templateWidths(sheet, cols), MIN_PRINT_SHEET_WIDTH);
   widths.forEach((w, i) => {
     ws.getColumn(i + 1).width = w;
   });
@@ -349,9 +397,11 @@ export function writePrintSheet(
   // Row 1: the seal, drawn after widths are final so its centre is right.
   blankRow(ws, 90);
 
-  // Rows 2..: the centred header lines.
+  // Rows 2..: the centred header lines. A long one (several region spellings)
+  // wraps, and its row grows to show every line.
   for (const line of templateHeaderLines(ctx.frame)) {
-    const r = blankRow(ws, 23);
+    const lines = wrappedLines(line.text, (totalChars * 11) / line.size);
+    const r = blankRow(ws, Math.max(23, Math.ceil(line.size * 1.45 * lines) + 4));
     mergedText(ws, r, 1, cols, line.text, {
       font: font(line.size, line.color, { bold: line.bold }),
       alignment: center,
@@ -365,8 +415,9 @@ export function writePrintSheet(
   });
 
   // Title.
-  const titleRow = blankRow(ws, 30);
-  mergedText(ws, titleRow, 1, cols, (sheet.sheetTitle ?? sheet.reportTitle).toUpperCase(), {
+  const titleText = (sheet.sheetTitle ?? sheet.reportTitle).toUpperCase();
+  const titleRow = blankRow(ws, Math.max(30, 21 * wrappedLines(titleText, (totalChars * 11) / 14 / 1.15) + 6));
+  mergedText(ws, titleRow, 1, cols, titleText, {
     font: font(14, TEMPLATE_INK, { bold: true }),
     alignment: center,
   });
@@ -379,16 +430,24 @@ export function writePrintSheet(
     reportingPeriod: sheet.reportingPeriod,
     reportDate: ctx.generatedOn,
   });
-  const info1 = blankRow(ws, 23);
-  splitColumns(cols, [0.4, 0.3, 0.3]).forEach(([a, b], i) => {
+  // Bold text runs wider than the 1.1 estimate, hence the 1.15 on the span.
+  const infoHeight = (texts: readonly string[], spans: [number, number][]) =>
+    Math.max(
+      23,
+      ...spans.map(([a, b], i) => 15 * wrappedLines(texts[i] ?? "", spanWidth(widths, a, b) / 1.15) + 6)
+    );
+  const spans1 = splitColumns(cols, [0.4, 0.3, 0.3]);
+  const info1 = blankRow(ws, infoHeight(info.first, spans1));
+  spans1.forEach(([a, b], i) => {
     mergedText(ws, info1, a, b, info.first[i]!, {
       font: font(11, TEMPLATE_INK, { bold: true }),
       fill: solid(INFO_FILL),
       alignment: center,
     });
   });
-  const info2 = blankRow(ws, 23);
-  splitColumns(cols, [0.4, 0.6]).forEach(([a, b], i) => {
+  const spans2 = splitColumns(cols, [0.4, 0.6]);
+  const info2 = blankRow(ws, infoHeight(info.second, spans2));
+  spans2.forEach(([a, b], i) => {
     mergedText(ws, info2, a, b, info.second[i]!, {
       font: font(11, TEMPLATE_INK, { bold: true }),
       alignment: center,
@@ -412,19 +471,15 @@ export function writePrintSheet(
   const boldRows = new Set(sheet.boldRowIndices ?? []);
   const averageCol = sheet.columns.findIndex((c) => /general average/i.test(c.header));
   const rule = { bottom: { style: "thin" as const, color: { argb: DATA_RULE } } };
-  const wrapWidths = sheet.wrap ? templateWidths(sheet, n) : [];
   sheet.rows.forEach((values, rowIdx) => {
     const row = ws.addRow(values.map((v) => (v === null ? "" : v)));
-    row.height = 22;
-    if (sheet.wrap) {
-      // An explicit height stops Excel autofitting, so size the row to its
-      // longest wrapped cell.
-      const lines = values.reduce<number>(
-        (m, v, i) => Math.max(m, wrappedLines(v === null ? "" : String(v), wrapWidths[i] ?? DEFAULT_COL_WIDTH)),
-        1
-      );
-      row.height = Math.max(22, 15 * lines + 4);
-    }
+    // A cell longer than its column (past `CONTENT_MAX_WIDTH`, or a multi-line
+    // one) wraps even without `sheet.wrap`, so no text spills over its
+    // neighbours or is cut off. An explicit height stops Excel autofitting, so
+    // the row is sized to its longest wrapped cell.
+    const lines = rowLines(values, widths);
+    const wrap = sheet.wrap || lines > 1;
+    row.height = wrap ? Math.max(22, 15 * lines + 4) : 22;
     const isBold = boldRows.has(rowIdx);
     for (let c = 1; c <= n; c++) {
       const cell = row.getCell(c);
@@ -433,9 +488,10 @@ export function writePrintSheet(
       cell.fill = solid(isBold ? TOTAL_FILL : shaded ? SHADED_FILL : DATA_FILL);
       cell.border = rule;
       cell.alignment = {
-        horizontal: c - 1 === primary ? "left" : "center",
+        // Wrapped paragraphs (Remarks, Why) read better left-aligned.
+        horizontal: c - 1 === primary || rowLines([values[c - 1] ?? null], [widths[c - 1]!]) > 1 ? "left" : "center",
         vertical: "middle",
-        ...(sheet.wrap ? { wrapText: true } : {}),
+        ...(wrap ? { wrapText: true } : {}),
       };
       if (typeof cell.value === "number" && Number.isInteger(cell.value)) cell.numFmt = "0";
     }
@@ -584,22 +640,28 @@ export function writeRecordsSheet(ws: Worksheet, ctx: TemplateContext, sheet: Te
     fill: solid(RECORDS_HEADER_FILL),
   });
 
+  // Same content sizing as PRINT, without the header-driven minimums.
+  const widths = sheet.columns.map((c, i) =>
+    Math.max(c.width ?? DEFAULT_COL_WIDTH, contentMinWidth(sheet.rows, i))
+  );
   const boldRows = new Set(sheet.boldRowIndices ?? []);
   sheet.rows.forEach((values, rowIdx) => {
     const row = ws.addRow(values.map((v) => (v === null ? "" : v)));
     if (boldRows.has(rowIdx)) row.font = { bold: true };
-    if (sheet.wrap) {
+    const lines = rowLines(values, widths);
+    if (sheet.wrap || lines > 1) {
       for (let c = 1; c <= sheet.columns.length; c++) {
         row.getCell(c).alignment = { wrapText: true, vertical: "top" };
       }
+      if (lines > 1) row.height = 15 * lines + 2;
     }
     sheet.shadedCells?.[rowIdx]?.forEach((shaded, c) => {
       if (shaded) row.getCell(c + 1).fill = solid(SHADED_FILL);
     });
   });
 
-  sheet.columns.forEach((c, i) => {
-    ws.getColumn(i + 1).width = c.width ?? DEFAULT_COL_WIDTH;
+  widths.forEach((w, i) => {
+    ws.getColumn(i + 1).width = w;
   });
 
   if (sheet.columns.length > 0) {

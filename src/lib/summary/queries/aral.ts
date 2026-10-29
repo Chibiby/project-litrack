@@ -5,11 +5,15 @@ import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { populationCte, runSummaryQuery } from "@/lib/summary/queries/population";
 import type { ScopedRaw } from "@/lib/summary/scoped-raw";
 import { NOT_ANSWERED, buildSection, bucketsFrom } from "@/lib/summary/shape/section";
+import { pct } from "@/lib/summary/shape/pct";
+import { NO_DISTRICT_LABEL } from "@/lib/summary/shape/rollup";
 import type {
   FacetResult,
   FacetRow,
   ScopeSchool,
   SummaryLevel,
+  SummaryList,
+  SummarySection,
 } from "@/lib/summary/types";
 
 /**
@@ -152,6 +156,27 @@ export function shapeAral(args: {
   const common = { schools, level, byGrade: false };
   const gradeRows = rows.filter((r) => r.field === "grade");
   const gradeBuckets = presentGradeBuckets(gradeRows);
+  const learnersSection = buildSection({
+    ...common,
+    id: "learnersByGrade",
+    title: "ARAL learners by grade level",
+    kind: "single",
+    buckets: bucketsFrom(gradeBuckets, GRADE_LEVEL_LABELS),
+    rows: gradeRows,
+    baseLabel: "% of ARAL learners",
+  });
+  const tutorsSection = buildSection({
+    ...common,
+    id: "tutors",
+    title: "Teachers serving as ARAL tutors",
+    kind: "single",
+    buckets: bucketsFrom(
+      [ARAL_TUTOR_DEPED, ARAL_TUTOR_NON_DEPED, NOT_ANSWERED],
+      { [ARAL_TUTOR_DEPED]: "DepEd teacher", [ARAL_TUTOR_NON_DEPED]: "Non-DepEd" }
+    ),
+    rows: rows.filter((r) => r.field === "tutor"),
+    baseLabel: "% of ARAL tutors",
+  });
 
   return {
     facetId: "aral",
@@ -165,30 +190,96 @@ export function shapeAral(args: {
       "Names, contact numbers and email addresses are not included.",
     ],
     gaps: [],
-    sections: [
-      buildSection({
-        ...common,
-        id: "learnersByGrade",
-        title: "ARAL learners by grade level",
-        kind: "single",
-        buckets: bucketsFrom(gradeBuckets, GRADE_LEVEL_LABELS),
-        rows: gradeRows,
-        baseLabel: "% of ARAL learners",
-      }),
-      buildSection({
-        ...common,
-        id: "tutors",
-        title: "Teachers serving as ARAL tutors",
-        kind: "single",
-        buckets: bucketsFrom(
-          [ARAL_TUTOR_DEPED, ARAL_TUTOR_NON_DEPED, NOT_ANSWERED],
-          { [ARAL_TUTOR_DEPED]: "DepEd teacher", [ARAL_TUTOR_NON_DEPED]: "Non-DepEd" }
-        ),
-        rows: rows.filter((r) => r.field === "tutor"),
-        baseLabel: "% of ARAL tutors",
-      }),
-    ],
+    sections: [learnersSection, tutorsSection],
     lists: [],
+    exportList: aralExportList({ schools, level, learnersSection, tutorsSection }),
     computedAt: args.computedAt,
+  };
+}
+
+const EXPORT_LEVEL_COLUMN: Record<SummaryLevel, string> = {
+  overall: "Scope",
+  district: "District",
+  school: "School",
+};
+
+/**
+ * Export only: one row per school (or district, or the whole scope) with the
+ * counts first — ARAL learners, DepEd tutors, Non-DepEd tutors, all tutors —
+ * then the tutor percentages, then the learner count per grade. A "Tutor type
+ * not answered" column appears only when some tutor has no designation. At
+ * school and district level, a Total row closes the list.
+ */
+function aralExportList(args: {
+  schools: readonly ScopeSchool[];
+  level: SummaryLevel;
+  learnersSection: SummarySection;
+  tutorsSection: SummarySection;
+}): SummaryList {
+  const { schools, level, learnersSection, tutorsSection } = args;
+  const byId = new Map(schools.map((s) => [s.id, s]));
+  const tutorsByKey = new Map(tutorsSection.table.groups.map((g) => [g.key, g]));
+  const gradeBuckets = learnersSection.buckets;
+  const tutorCount = (key: string, bucket: string) => tutorsByKey.get(key)?.cells[bucket]?.count ?? 0;
+  const showNotAnswered = tutorsSection.table.groups.some((g) => (g.cells[NOT_ANSWERED]?.count ?? 0) > 0);
+
+  const lead = (label: string, schoolId?: string): (string | number | null)[] => {
+    if (level !== "school") return [label];
+    const s = schoolId ? byId.get(schoolId) : undefined;
+    return [label, s?.schoolIdCode ?? "", s?.district ?? NO_DISTRICT_LABEL];
+  };
+  const figures = (learners: number, deped: number, nonDeped: number, notAnswered: number, grades: number[]) => {
+    const tutors = deped + nonDeped + notAnswered;
+    return [
+      learners,
+      deped,
+      nonDeped,
+      ...(showNotAnswered ? [notAnswered] : []),
+      tutors,
+      pct(deped, tutors),
+      pct(nonDeped, tutors),
+      ...grades,
+    ];
+  };
+
+  const totals = { learners: 0, deped: 0, nonDeped: 0, notAnswered: 0, grades: gradeBuckets.map(() => 0) };
+  const rows = learnersSection.table.groups.map((g) => {
+    const deped = tutorCount(g.key, ARAL_TUTOR_DEPED);
+    const nonDeped = tutorCount(g.key, ARAL_TUTOR_NON_DEPED);
+    const notAnswered = tutorCount(g.key, NOT_ANSWERED);
+    const grades = gradeBuckets.map((b) => g.cells[b.id]?.count ?? 0);
+    totals.learners += g.base;
+    totals.deped += deped;
+    totals.nonDeped += nonDeped;
+    totals.notAnswered += notAnswered;
+    grades.forEach((n, i) => (totals.grades[i] += n));
+    return [...lead(g.label, g.schoolId), ...figures(g.base, deped, nonDeped, notAnswered, grades)];
+  });
+  if (level !== "overall" && rows.length > 1) {
+    const blanks = level === "school" ? ["", ""] : [];
+    rows.push([
+      "Total",
+      ...blanks,
+      ...figures(totals.learners, totals.deped, totals.nonDeped, totals.notAnswered, totals.grades),
+    ]);
+  }
+
+  return {
+    id: "aral-per-school",
+    title: "ARAL learners and tutors",
+    note: "% DepEd and % Non-DepEd are of the row's ARAL tutors; a blank % means the row has no tutors. Grade columns count ARAL learners.",
+    columns: [
+      EXPORT_LEVEL_COLUMN[level],
+      ...(level === "school" ? ["School ID", "District"] : []),
+      "ARAL learners",
+      "DepEd tutors",
+      "Non-DepEd tutors",
+      ...(showNotAnswered ? ["Tutor type not answered"] : []),
+      "Total tutors",
+      "% DepEd",
+      "% Non-DepEd",
+      ...gradeBuckets.map((b) => b.label),
+    ],
+    rows,
   };
 }

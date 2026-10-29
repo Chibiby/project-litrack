@@ -121,6 +121,29 @@ export function complianceReportTable(result: FacetResult, frame: ReportFrame): 
   return { ...table, blocks: [block, ...(table.blocks ?? [])] };
 }
 
+/**
+ * ARAL learners and tutors' `toReportTable`: the result's `exportList` (one
+ * row per school, district or scope, counts before percentages) replaces both
+ * Category/Count blocks, at every level.
+ */
+export function aralReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
+  const list = result.exportList;
+  const table = summaryReportTable(result, frame);
+  if (!list) return table;
+  // No heading: the report title already says "ARAL learners and tutors".
+  const block: ReportBlock = {
+    columns: list.columns.map((header, i) => ({ header, width: i === 0 ? 36 : header === "District" ? 18 : 11 })),
+    rows: list.rows,
+    note: list.note,
+    // The Total row, when the list has one, is always last.
+    ...(list.rows.at(-1)?.[0] === "Total" && result.level !== "overall"
+      ? { boldRowIndices: [list.rows.length - 1] }
+      : {}),
+    freezeColumns: 1,
+  };
+  return { ...table, blocks: [block] };
+}
+
 /** A facet result as a report table. Every facet's `toReportTable`. */
 export function summaryReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
   const level = (SUMMARY_LEVELS as readonly string[]).includes(result.level) ? result.level : "overall";
@@ -131,6 +154,8 @@ export function summaryReportTable(result: FacetResult, frame: ReportFrame): Rep
       columns: list.columns.map((header) => ({ header, width: header === "School" ? 36 : 18 })),
       rows: list.rows,
       note: list.note,
+      // Reason columns ("Why") run long; wrap them instead of cutting them off.
+      wrap: true,
     });
   }
   return {

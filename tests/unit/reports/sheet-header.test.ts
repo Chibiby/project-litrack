@@ -394,3 +394,68 @@ describe("writeRecordsSheet", () => {
     expect(merges("R")).toBe(0);
   });
 });
+
+describe("column sizing and overflow", () => {
+  const WHY = "ARAL learners wait for a MOSY stay or move-out decision";
+  const LIST = {
+    reportTitle: "Non-compliance summary",
+    reportingPeriod: "Active schools",
+    columns: [
+      { header: "School", width: 36 },
+      { header: "School ID", width: 18 },
+      { header: "District", width: 18 },
+      { header: "Why", width: 18 },
+    ],
+    rows: [["Alabel Integrated SPED Center", "500282", "Alabel 1", WHY]] as (string | number | null)[][],
+  };
+  const LONG = "Grades 1, 2, 3 and 4 have no active adviser; 12 ARAL learners wait for a MOSY decision; the last attendance was 40 days ago";
+
+  it("PRINT: a column grows to fit its longest cell, so the text is not cut off", async () => {
+    const wb = await newBook();
+    writePrintSheet(wb, wb.addWorksheet("Pending"), CTX, LIST);
+    const out = (await roundTrip(wb)).worksheets[0]!;
+    expect(out.getColumn(4).width ?? 0).toBeGreaterThanOrEqual(WHY.length);
+  });
+
+  it("PRINT: a cell longer than the widest a column may grow wraps, left-aligned, in a taller row", async () => {
+    const wb = await newBook();
+    writePrintSheet(wb, wb.addWorksheet("Pending"), CTX, { ...LIST, rows: [["Alabel CES", "1", "Alabel 1", LONG]] });
+    const out = (await roundTrip(wb)).worksheets[0]!;
+    const r = rowOf(out, "Alabel CES");
+    const cell = out.getRow(r).getCell(4);
+    expect(cell.alignment?.wrapText).toBe(true);
+    expect(cell.alignment?.horizontal).toBe("left");
+    expect(out.getRow(r).height ?? 0).toBeGreaterThan(22);
+    expect(out.getColumn(4).width).toBeLessThanOrEqual(60);
+  });
+
+  it("PRINT: a narrow table is widened to the minimum sheet width so the letterhead fits", async () => {
+    const wb = await newBook();
+    writePrintSheet(wb, wb.addWorksheet("Narrow"), CTX, {
+      ...LIST,
+      columns: [{ header: "School", width: 20 }, { header: "Count", width: 8 }],
+      rows: [["A", 1]],
+    });
+    const out = (await roundTrip(wb)).worksheets[0]!;
+    const total = [1, 2, 3].reduce((sum, c) => sum + (out.getColumn(c).width ?? 0), 0);
+    expect(total).toBeGreaterThanOrEqual(110);
+  });
+
+  it("PRINT: a header line too long for the sheet gets a taller row instead of being cut off", async () => {
+    const region = Array.from({ length: 12 }, (_, i) => `Region XII variant ${i}`).join("; ");
+    const wb = await newBook();
+    writePrintSheet(wb, wb.addWorksheet("Long"), { ...CTX, frame: { ...FRAME, region } }, LIST);
+    const out = (await roundTrip(wb)).worksheets[0]!;
+    const r = rowOf(out, region);
+    expect(out.getRow(r).height ?? 0).toBeGreaterThan(23);
+  });
+
+  it("RECORDS: columns grow to their content and long cells wrap", async () => {
+    const wb = await newBook();
+    writeRecordsSheet(wb.addWorksheet("Pending"), CTX, { ...LIST, rows: [["Alabel CES", "1", "Alabel 1", WHY], ["B", "2", "X", LONG]] });
+    const out = (await roundTrip(wb)).worksheets[0]!;
+    expect(out.getColumn(4).width ?? 0).toBeGreaterThanOrEqual(WHY.length);
+    const r = rowOf(out, "B");
+    expect(out.getRow(r).getCell(4).alignment?.wrapText).toBe(true);
+  });
+});
