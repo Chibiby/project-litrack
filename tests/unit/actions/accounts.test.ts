@@ -823,7 +823,15 @@ describe("logoutAction", () => {
   });
 });
 
-describe("resetTeacherPassword", () => {
+/**
+ * The password resets below hash with the real bcrypt (cost 10) so the stored
+ * hash can be verified. That takes ~100 ms here but over 6 s on a loaded CI
+ * builder, past the 5 s default, and a timed-out call keeps running and eats
+ * the next test's `mock*Once` values. Give these blocks room instead.
+ */
+const BCRYPT_TIMEOUT = { timeout: 30_000 };
+
+describe("resetTeacherPassword", BCRYPT_TIMEOUT, () => {
   it("refuses a non-Super-Admin caller", async () => {
     requireUser.mockRejectedValueOnce(new Error("NEXT_REDIRECT:/login"));
     await expect(resetTeacherPassword(form())).rejects.toThrow("NEXT_REDIRECT:/login");
@@ -896,7 +904,7 @@ describe("resetTeacherPassword", () => {
   });
 });
 
-describe("session revocation after an admin password reset", () => {
+describe("session revocation after an admin password reset", BCRYPT_TIMEOUT, () => {
   it("resetTeacherPassword revokes every session of the target, after the transaction commits", async () => {
     prismaMock.user.findFirst.mockResolvedValueOnce({
       id: TARGET_ID,
@@ -967,7 +975,7 @@ describe("session revocation after an admin password reset", () => {
   });
 });
 
-describe("resetDistrictAdminPassword", () => {
+describe("resetDistrictAdminPassword", BCRYPT_TIMEOUT, () => {
   it("refuses a non-Super-Admin caller — a district admin cannot reset its own or another's password this way", async () => {
     // T13: "resetDistrictAdminPassword as a DA is forbidden." `requireUser`
     // itself redirects a signed-in DISTRICT_ADMIN caller (the real gate lives
