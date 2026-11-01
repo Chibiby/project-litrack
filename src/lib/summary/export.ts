@@ -2,7 +2,7 @@ import type { SummaryScope } from "@/lib/auth/admin-scope";
 import type { ReportBlock, ReportTable } from "@/lib/reports/render";
 import type { ReportFrame } from "@/lib/reports/report-frame";
 import { SUMMARY_LEVELS } from "@/lib/summary/types";
-import type { FacetResult, ScopeSchool, SummaryLevel, SummarySection } from "@/lib/summary/types";
+import type { FacetResult, ScopeSchool, SummaryLevel, SummaryList, SummarySection } from "@/lib/summary/types";
 
 /**
  * Turning a facet result into the Reports hub's `ReportTable`, so the existing
@@ -121,6 +121,42 @@ export function complianceReportTable(result: FacetResult, frame: ReportFrame): 
   return { ...table, blocks: [block, ...(table.blocks ?? [])] };
 }
 
+const MAX_PDF_PART_COLUMNS = 14;
+
+/**
+ * PDF-only split of a wide export list: one "Overall" part (lead + overall
+ * columns), then parts of whole grade groups, each led by the name column and
+ * at most MAX_PDF_PART_COLUMNS wide. Empty when the list is narrow or has no
+ * grade groups.
+ */
+function pdfPartsFor(list: SummaryList): { pdfParts?: { heading?: string; columns: number[] }[] } {
+  const groups = list.groups;
+  if (list.columns.length <= MAX_PDF_PART_COLUMNS || !groups || groups.length === 0) return {};
+  const firstGrade = Math.min(...groups.map((g) => g.start));
+  const range = (start: number, count: number) => Array.from({ length: count }, (_, i) => start + i);
+  const parts: { heading?: string; columns: number[] }[] = [
+    { heading: "Overall", columns: range(0, firstGrade) },
+  ];
+  let current: typeof groups = [];
+  const flush = () => {
+    if (current.length === 0) return;
+    const first = current[0]!.label;
+    const last = current[current.length - 1]!.label;
+    parts.push({
+      heading: current.length === 1 ? first : `${first} to ${last}`,
+      columns: [0, ...current.flatMap((g) => range(g.start, g.count))],
+    });
+    current = [];
+  };
+  for (const g of groups) {
+    const used = 1 + current.reduce((n, x) => n + x.count, 0);
+    if (current.length > 0 && used + g.count > MAX_PDF_PART_COLUMNS) flush();
+    current.push(g);
+  }
+  flush();
+  return { pdfParts: parts };
+}
+
 /**
  * ARAL learners' and ARAL teachers' and Advisory's `toReportTable`: the result's `exportList`
  * (one row per school, district or scope, counts before percentages) replaces
@@ -140,6 +176,7 @@ export function exportListReportTable(result: FacetResult, frame: ReportFrame): 
       ? { boldRowIndices: [list.rows.length - 1] }
       : {}),
     freezeColumns: 1,
+    ...pdfPartsFor(list),
   };
   return { ...table, blocks: [block] };
 }

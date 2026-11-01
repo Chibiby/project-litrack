@@ -30,6 +30,22 @@ describe("legacy ARAL teacher routes redirect", () => {
     expect(found!.permanent).toBe(false);
   });
 
+  // On Cloudflare (OpenNext) an empty `:path*` is not substituted, so the bare
+  // old page redirected to a literal ".../:path*". The bare path needs its own
+  // rule, listed before the sub-path rule.
+  it.each([
+    ["/admin/management", "/admin/management/aral-teachers"],
+    ["/school-head", "/school-head/aral-teachers"],
+  ])("bare legacy page under %s -> %s with no path parameter", async (base, dest) => {
+    const all = await redirects();
+    const exact = all.findIndex((r) => r.source === `${base}/${LEGACY}`);
+    const sub = all.findIndex((r) => r.source === `${base}/${LEGACY}/:path*`);
+    expect(exact, `no exact redirect for ${base}/${LEGACY}`).toBeGreaterThanOrEqual(0);
+    expect(all[exact].destination).toBe(dest);
+    expect(all[exact].permanent).toBe(false);
+    expect(exact).toBeLessThan(sub);
+  });
+
   it("the old route folders are gone", () => {
     const app = path.resolve(__dirname, "../../src/app");
     expect(existsSync(path.join(app, "admin/management", LEGACY))).toBe(false);

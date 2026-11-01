@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.44.1",
+    date: "2026-11-02",
+    title: "Division Summary PDFs are readable, and exports start as PDF",
+    announce: true,
+    fixes: [
+      "The ARAL teachers, ARAL learners and Advisory PDFs no longer squeeze every grade into one table. They print an Overall table first, then a few grades per table, with the school name on each, so the column headings are readable.",
+      "Exporting from the Division Summary now starts on PDF. Excel is still in the Format list.",
+      "A bookmark or link to the old ARAL Tutors page now opens the ARAL Teachers page instead of a page that does not exist.",
+    ],
+  },
+  {
     version: "2.44.0",
     date: "2026-11-01",
     title: "ARAL tutors are now ARAL teachers, with their own summary page, and a new Advisory summary",

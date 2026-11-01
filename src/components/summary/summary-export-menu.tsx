@@ -63,7 +63,8 @@ export function SummaryExportMenu({
   request: SummaryExportRequest;
 }) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<Format>("EXCEL");
+  // PDF first: Division Summary exports are mostly printed and passed on.
+  const [format, setFormat] = useState<Format>("PDF");
   const [purpose, setPurpose] = useExportPurpose();
   const [pending, startTransition] = useTransition();
 
@@ -107,8 +108,8 @@ export function SummaryExportMenu({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="EXCEL">Excel (.xlsx)</SelectItem>
               <SelectItem value="PDF">PDF (.pdf)</SelectItem>
+              <SelectItem value="EXCEL">Excel (.xlsx)</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -127,6 +127,11 @@ export type SummaryList = {
   note?: string;
   columns: string[];
   rows: (string | number | null)[][];
+  /**
+   * Per-grade runs of contiguous `columns` (label e.g. "Grade 3"), so the PDF
+   * can print wide lists in readable parts. Excel ignores it.
+   */
+  groups?: { label: string; start: number; count: number }[];
 };
 
 export type FacetResult = {

@@ -60,6 +60,12 @@ export type ReportBlock = {
    * ellipsised rows every other report relies on.
    */
   wrap?: boolean;
+  /**
+   * Opt-in, PDF only (Excel ignores it): draw the block as one table per part,
+   * in order, each with its own header row and every row. `columns` are
+   * indices into this block's `columns`. Unset keeps one table of all columns.
+   */
+  pdfParts?: { heading?: string; columns: number[] }[];
 };
 
 export type ReportTable = {
@@ -292,7 +298,23 @@ export async function renderPdf(table: ReportTable, opts: RenderOptions = {}): P
     doc.y += 10;
 
     // --- Tables. ---
-    blocks.forEach((block, idx) => {
+    blocks.forEach((fullBlock, idx) => {
+     // A block without `pdfParts` is one part holding every column, unchanged.
+     const parts = fullBlock.pdfParts && fullBlock.pdfParts.length > 0 ? fullBlock.pdfParts : null;
+     (parts ?? [null]).forEach((part, partIdx) => {
+      const isLastPart = !parts || partIdx === parts.length - 1;
+      const block: ReportBlock = part
+        ? {
+            ...fullBlock,
+            columns: part.columns.map((c) => fullBlock.columns[c]!),
+            rows: fullBlock.rows.map((r) => part.columns.map((c) => r[c] ?? null)),
+            shadedCells: fullBlock.shadedCells?.map((r) => part.columns.map((c) => r[c] ?? false)),
+            note: isLastPart ? fullBlock.note : undefined,
+          }
+        : fullBlock;
+      const headingText = part
+        ? [partIdx === 0 ? fullBlock.heading : undefined, part.heading].filter(Boolean).join(" - ") || undefined
+        : block.heading;
       // Column widths are proportional to the declared character widths, so
       // a narrow "Grade" column stays narrow instead of every column equal.
       const weights = block.columns.map((c) => c.width ?? DEFAULT_COL_WIDTH);
@@ -402,12 +424,12 @@ export async function renderPdf(table: ReportTable, opts: RenderOptions = {}): P
         doc.y = y + rowH;
       }
 
-      if (block.heading && blocks.length > 1) {
+      if (headingText && (blocks.length > 1 || part)) {
         // A heading that cannot fit itself plus the header and two rows
         // starts a new page, so it never orphans at the foot of a page.
         ensureSpace(20 + headerH + rowH * 2);
         doc.font("Helvetica-Bold").fontSize(10).fillColor(INK);
-        doc.text(block.heading, left, doc.y);
+        doc.text(headingText, left, doc.y);
         doc.y += 4;
       } else {
         ensureSpace(headerH + rowH * 2);
@@ -437,6 +459,8 @@ export async function renderPdf(table: ReportTable, opts: RenderOptions = {}): P
         doc.fillColor(INK).text(block.note, left, doc.y, { width: usable });
       }
 
+      if (!isLastPart) doc.y += 12;
+     });
       if (idx < blocks.length - 1) doc.y += 14;
     });
 

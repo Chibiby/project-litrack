@@ -455,6 +455,7 @@ function advisoryExportList(args: {
       "Total advisers",
       ...gradeBuckets.map((b) => `${b.label} advisers`),
     ],
+    groups: gradeBuckets.map((b, i) => ({ label: b.label, start: leadColumns(level).length + 3 + i, count: 1 })),
     rows: buildExportRows({
       schools,
       level,
@@ -499,6 +500,7 @@ function aralLearnerExportList(args: {
       "ARAL learners",
       ...gradeBuckets.flatMap((b) => [b.label, `${b.label} %`]),
     ],
+    groups: gradeBuckets.map((b, i) => ({ label: b.label, start: leadColumns(level).length + 1 + i * 2, count: 2 })),
     rows: buildExportRows({
       schools,
       level,
@@ -553,6 +555,12 @@ function aralTeacherExportList(args: {
         return [`${label} ARAL teachers`, `${label} DepEd`, `${label} Non-DepEd`];
       }),
     ],
+    groups: presentGrades.map((b, i) => ({
+      label: b.label.replace(/ total$/, ""),
+      // lead + DepEd, Non-DepEd, [Not answered], Total, % DepEd, % Non-DepEd
+      start: leadColumns(level).length + (showNotAnswered ? 6 : 5) + i * 3,
+      count: 3,
+    })),
     rows: buildExportRows({
       schools,
       level,

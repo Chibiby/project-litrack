@@ -149,7 +149,20 @@ const nextConfig = {
     return [
       { source: "/", destination: "/login", permanent: false },
       // "ARAL tutor" became "ARAL teacher": old bookmarks and links keep working.
-      // Query strings are carried over by Next's redirect handling.
+      // Query strings are carried over by Next's redirect handling. The bare
+      // paths get their own rules first: on Cloudflare (OpenNext) an empty
+      // `:path*` is not substituted and the redirect lands on a literal
+      // ".../:path*".
+      {
+        source: "/admin/management/aral-tutors",
+        destination: "/admin/management/aral-teachers",
+        permanent: false,
+      },
+      {
+        source: "/school-head/aral-tutors",
+        destination: "/school-head/aral-teachers",
+        permanent: false,
+      },
       {
         source: "/admin/management/aral-tutors/:path*",
         destination: "/admin/management/aral-teachers/:path*",
